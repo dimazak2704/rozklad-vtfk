@@ -1,0 +1,25 @@
+# Секрети
+.env
+.env.*
+!.env.example
+
+# Збірка
+target/
+node_modules/
+dist/
+coverage/
+*.log
+
+# IDE та ОС
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Артефакти тестів і локальні дані
+playwright-report/
+test-results/
+blob-report/
+/data/
+/tmp/
