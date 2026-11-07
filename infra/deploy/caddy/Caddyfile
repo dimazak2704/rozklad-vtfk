@@ -7,6 +7,8 @@
 # Caddy gets and renews Let's Encrypt certificates for every name above by itself; the names must
 # resolve to this server and ports 80/443 must be open. {$VAR} values come from the container
 # environment (set in compose.prod.yml) and are substituted when the file is loaded.
+# compose.prod.yml mounts this directory, not the file: after `git pull` the container sees the new
+# file, and deploy.sh runs `caddy reload` (a bind-mounted single file would keep the old inode).
 {
 	email {$ACME_EMAIL}
 	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
@@ -28,6 +30,18 @@
 
 (compress) {
 	encode zstd gzip
+}
+
+# Forwarding headers a client could forge. Caddy itself replaces X-Forwarded-For, -Proto and -Host
+# (it trusts no proxy in front of it), but passes these through. The gateway reads forwarding
+# headers (SERVER_FORWARD_HEADERS_STRATEGY=native) and Reactor Netty prefers RFC 7239 `Forwarded`
+# over X-Forwarded-For, so `Forwarded: for=<random>` would give every request its own bucket of the
+# per-IP rate limit. Every site imports this before anything is proxied.
+(strip_client_forwarding) {
+	request_header -Forwarded
+	request_header -X-Forwarded-Port
+	request_header -X-Forwarded-Prefix
+	request_header -X-Real-IP
 }
 
 # /api/* -> gateway. Used by the main site and by the optional api.{$DOMAIN} site.
@@ -65,6 +79,7 @@
 }
 (api_site_1) {
 	api.{$DOMAIN} {
+		import strip_client_forwarding
 		import security_headers
 		import api_routes
 		handle {
@@ -76,6 +91,7 @@
 # ---- sites -----------------------------------------------------------------------------------------
 
 {$DOMAIN} {
+	import strip_client_forwarding
 	import security_headers
 	import api_routes
 
@@ -91,6 +107,7 @@
 }
 
 auth.{$DOMAIN} {
+	import strip_client_forwarding
 	import security_headers
 	import compress
 

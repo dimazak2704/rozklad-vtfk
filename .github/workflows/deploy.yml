@@ -3,8 +3,9 @@
 #
 # Inert until configured: without the repository secrets VPS_HOST, VPS_USER and VPS_SSH_KEY only
 # CI runs. Settings (docs/DEPLOY.md, "GitHub Actions"):
-#   secrets   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), optional VPS_PORT, VPS_KNOWN_HOSTS
+#   secrets   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), VPS_KNOWN_HOSTS, optional VPS_PORT
 #   variables DOMAIN (required for images), optional IMAGE_PLATFORMS, VPS_APP_DIR, TELEGRAM_BOT_USERNAME
+# Only main is deployed: a manual run on another branch runs CI and nothing else.
 name: Deploy
 
 on:
@@ -36,14 +37,25 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           DOMAIN: ${{ vars.DOMAIN }}
         run: |
           # GHCR wants lower-case names
           echo "image-prefix=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rozklad" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Not deployed::Only main is deployed; $GITHUB_REF ran CI only."
+            exit 0
+          fi
           if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=Deployment is off::Add the repository secrets VPS_HOST, VPS_USER and VPS_SSH_KEY to deploy (docs/DEPLOY.md)."
             exit 0
+          fi
+          # a runner is new on every run: without a pinned host key it would trust whatever answers
+          if [ -z "$VPS_KNOWN_HOSTS" ]; then
+            echo "::error title=VPS_KNOWN_HOSTS is missing::Add the secret VPS_KNOWN_HOSTS: the output of ssh-keyscan -t ed25519 <host>, checked against the host key the provider console shows (docs/DEPLOY.md, section 13)."
+            exit 1
           fi
           if [ -z "$DOMAIN" ]; then
             echo "::error title=DOMAIN is missing::Add the repository variable DOMAIN (same value as DOMAIN in infra/deploy/.env on the VPS)."
@@ -54,7 +66,7 @@ jobs:
   jars:
     name: Jars
     needs: [ci, config]
-    if: needs.config.outputs.enabled == 'true'
+    if: github.ref == 'refs/heads/main' && needs.config.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -76,7 +88,7 @@ jobs:
   images:
     name: Image ${{ matrix.service }}
     needs: [config, jars]
-    if: needs.config.outputs.enabled == 'true'
+    if: github.ref == 'refs/heads/main' && needs.config.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -131,7 +143,7 @@ jobs:
   deploy:
     name: Roll out on the VPS
     needs: [config, images]
-    if: needs.config.outputs.enabled == 'true'
+    if: github.ref == 'refs/heads/main' && needs.config.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -154,20 +166,21 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          if [ -n "$VPS_KNOWN_HOSTS" ]; then
-            printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            echo "::warning::VPS_KNOWN_HOSTS is not set: trusting the host key ssh-keyscan sees now"
-            ssh-keyscan -p "$VPS_PORT" -T 15 "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-          fi
+          # pinned host key only (the config job requires it), never ssh-keyscan on the runner
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
       - name: Pull ${{ github.sha }} on the VPS and restart
         env:
           IMAGE_PREFIX: ${{ needs.config.outputs.image-prefix }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOMAIN: ${{ vars.DOMAIN }}
         run: |
-          # The job token lets the VPS pull the images while this job runs; it is logged out after.
-          printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
-            "$VPS_USER@$VPS_HOST" \
-            "set -e; read -r token; printf '%s' \"\$token\" | docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin >/dev/null; trap 'docker logout ghcr.io >/dev/null' EXIT; cd '$APP_DIR'; IMAGE_PREFIX='$IMAGE_PREFIX' IMAGE_TAG='$GITHUB_SHA' bash infra/deploy/scripts/deploy.sh --pull-images"
+          # Everything travels on stdin. infra/deploy/scripts/ci-entry.sh checks it, compares DOMAIN
+          # with the server's .env, logs the server in to GHCR with the job token (valid while this
+          # job runs), deploys and logs out. With the forced command of docs/DEPLOY.md the server
+          # runs ci-entry.sh whatever command is sent.
+          printf '%s\n' "$GITHUB_SHA" "$IMAGE_PREFIX" "$GITHUB_ACTOR" "$GHCR_TOKEN" "$DOMAIN" |
+            ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+              "$VPS_USER@$VPS_HOST" \
+              "bash '$APP_DIR/infra/deploy/scripts/ci-entry.sh'"

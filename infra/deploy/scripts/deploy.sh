@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # Deploys or updates «Розклад ВТФК» on the VPS. One command for the first start and for updates.
 #
-#   infra/deploy/scripts/deploy.sh                 git pull, build the images here, start, check
+#   infra/deploy/scripts/deploy.sh                 git pull, build or pull the images, start, check
 #   infra/deploy/scripts/deploy.sh --no-pull       deploy the working tree as it is
 #   infra/deploy/scripts/deploy.sh --pull-images   use prebuilt images (IMAGE_PREFIX, IMAGE_TAG)
 #   infra/deploy/scripts/deploy.sh --build         build here even if IMAGE_PREFIX is a registry
 #
-# IMAGE_PREFIX with a registry (ghcr.io/<user>/rozklad) switches to pulling automatically; the
-# GitHub workflow passes IMAGE_PREFIX/IMAGE_TAG in the environment, which wins over .env.
-# After the stack is healthy it syncs Keycloak with .env, creates the demo accounts and runs smoke
-# checks through Caddy. Guide: docs/DEPLOY.md.
+# Images: IMAGE_PREFIX/IMAGE_TAG from the environment (the GitHub workflow), else from .env, else
+# the ones the last deploy recorded in infra/deploy/.env.images, else localhost/rozklad:prod (built
+# here). A registry prefix (ghcr.io/<user>/rozklad) means pulling. The images it starts are recorded
+# in .env.images, so compose.sh and restore-db.sh keep using them. After the stack is healthy it
+# reloads Caddy, syncs Keycloak and the demo accounts with .env and runs smoke checks. docs/DEPLOY.md
 set -Eeuo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$here/lib.sh"
 
-usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 original_args=("$@")
 git_pull=1
@@ -31,6 +32,8 @@ while (($#)); do
   esac
   shift
 done
+
+app_services=(core scheduler importer notification gateway web)
 
 version_ge() { [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" == "$2" ]]; }
 
@@ -81,6 +84,36 @@ preflight() {
   ok "preflight: $(uname -m), Docker Compose $compose_version, $ROZKLAD_ENV_FILE"
 }
 
+# image_setting KEY DEFAULT: environment, then .env, then (unless --build) the record of the last
+# deploy, then DEFAULT. --build ignores the record: it builds local images under the local name.
+image_setting() {
+  local key=$1 default=$2 value
+  value=$(env_get "$key")
+  if [[ -z $value && $mode != build ]]; then
+    value=$(env_file_value "$ROZKLAD_IMAGES_FILE" "$key")
+  fi
+  printf '%s' "${value:-$default}"
+}
+
+app_images_present() {
+  local service
+  for service in "${app_services[@]}"; do
+    docker image inspect "$prefix/$service:$tag" >/dev/null 2>&1 || return 1
+  done
+}
+
+# what runs from now on; compose.sh, restore-db.sh and backup-db.sh read it through lib.sh
+record_images() {
+  local tmp="$ROZKLAD_IMAGES_FILE.tmp"
+  {
+    printf '# Written by deploy.sh (%s): the images that run now. Do not edit; to change them set\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '# IMAGE_PREFIX/IMAGE_TAG in .env and run deploy.sh.\n'
+    printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\n' "$prefix" "$tag"
+  } >"$tmp"
+  mv "$tmp" "$ROZKLAD_IMAGES_FILE"
+}
+
 build_jars() {
   # Maven runs in a container, so the VPS needs neither a JDK nor Maven; the jars are platform
   # independent, the images are then built for the architecture of this machine.
@@ -97,11 +130,24 @@ build_jars() {
     mvn -B -q -ntp -Duser.home=/var/maven -DskipTests package
 }
 
+# The Caddyfile directory is bind-mounted, so the container already sees the pulled file, but
+# Caddy reads it only on start or reload, and compose does not recreate Caddy for a changed file.
+reload_caddy() {
+  local out
+  if out=$(compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1); then
+    ok "Caddy        configuration reloaded from infra/deploy/caddy/Caddyfile"
+  else
+    printf '%s\n' "$out" >&2
+    warn "caddy reload failed, Caddy keeps the previous configuration. Check the file with:
+     infra/deploy/scripts/compose.sh exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile"
+  fi
+}
+
 # https request to the local Caddy with the right SNI, whatever DNS says
 probe() { curl -sS --max-time 20 --resolve "$1:443:127.0.0.1" "${@:3}" "https://$1$2"; }
 
 smoke_checks() {
-  local domain auth status headers discovery csp
+  local domain auth status headers discovery csp index asset body found rate burst count limited
   domain=$(env_get DOMAIN)
   auth="auth.$domain"
   log "Smoke checks through Caddy"
@@ -118,6 +164,27 @@ smoke_checks() {
   status=$(awk 'NR == 1 {print $2}' <<<"$headers")
   if grep -qi '^x-request-id:' <<<"$headers" && [[ ${status:-500} -lt 500 ]]; then
     ok "API          https://$domain/api/... reaches the gateway (HTTP $status)"
+
+    # Forged forwarding headers must not give a client a new bucket of the per-IP limit for every
+    # request. Many requests, each with its own forged address: some of them must get 429. Only the
+    # bucket of this server's own address is used up, for a second or two.
+    rate=$(env_get PUBLIC_RATE_LIMIT_PER_SECOND 20)
+    burst=$(env_get PUBLIC_RATE_LIMIT_BURST 40)
+    if [[ $rate =~ ^[0-9]+$ && $burst =~ ^[0-9]+$ ]]; then
+      count=$(((rate + burst) * 3))
+      ((count <= 900)) || count=900
+      limited=$(seq 1 "$count" | xargs -P 32 -I{} curl -sS -k --max-time 20 \
+        --resolve "$domain:443:127.0.0.1" -o /dev/null -w '%{http_code}\n' \
+        -H 'Forwarded: for="[2001:db8::{}]"' -H 'X-Forwarded-For: 2001:db8::{}' \
+        "https://$domain/api/public/deploy-check" 2>/dev/null | grep -c '^429$' || true)
+      if ((${limited:-0} > 0)); then
+        ok "Rate limit   per client: $limited of $count requests with forged Forwarded headers got 429"
+      else
+        warn "Rate limit   none of $count requests with forged Forwarded/X-Forwarded-For headers got 429:
+     either the per-IP limit of /api/public/** can be bypassed (check strip_client_forwarding in the
+     Caddyfile) or this server sent the requests too slowly."
+      fi
+    fi
   else
     warn "API          https://$domain/api/... -> ${status:-no answer}; see: compose.sh logs gateway core"
   fi
@@ -127,6 +194,27 @@ smoke_checks() {
     ok "Keycloak     issuer https://$auth/realms/rozklad"
   else
     warn "Keycloak discovery at https://$auth/realms/rozklad does not show the expected issuer; see: compose.sh logs keycloak"
+  fi
+
+  # VITE_OIDC_AUTHORITY is baked into the SPA when the web image is built. It has to be the issuer
+  # the services validate, or the login goes to another host and every API call returns 401.
+  index=$(probe "$domain" / -k 2>/dev/null || true)
+  if [[ -n $index ]]; then
+    found=0
+    while IFS= read -r asset; do
+      body=$(probe "$domain" "$asset" -k 2>/dev/null || true)
+      if [[ $body == *"https://$auth/realms/rozklad"* ]]; then
+        found=1
+        break
+      fi
+    done < <(grep -oE '/assets/[A-Za-z0-9._-]+\.js' <<<"$index" | sort -u)
+    if ((found)); then
+      ok "SPA          logs in at https://$auth/realms/rozklad"
+    else
+      warn "the SPA was built for another Keycloak than https://$auth/realms/rozklad (VITE_OIDC_AUTHORITY),
+     so the login will fail. GitHub-built images: set the repository variable DOMAIN to '$domain' and
+     run the Deploy workflow again. Images built here: run deploy.sh --build."
+    fi
   fi
 
   status=$(probe "$auth" /admin/ -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
@@ -155,6 +243,24 @@ smoke_checks() {
   fi
 }
 
+# Pulled images keep their commit tags, so `docker image prune` never removes them. Keep the
+# current and the previous deploy (for a quick rollback) and remove the other tags of this prefix.
+prune_images() {
+  local keep_previous='' old
+  docker image prune -f >/dev/null 2>&1 || true
+  [[ $mode == pull ]] || return 0
+  if [[ $previous_prefix == "$prefix" ]]; then
+    keep_previous=$previous_tag
+  fi
+  old=$(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+    awk -v p="$prefix/" -v t="$tag" -v k="$keep_previous" '
+      index($0, p) == 1 { n = split($0, part, ":"); if (part[n] != t && part[n] != k && part[n] != "<none>") print }')
+  if [[ -n $old ]]; then
+    log "Removing the images of older deploys (keeping :$tag${keep_previous:+ and :$keep_previous})"
+    xargs -r docker image rm <<<"$old" >/dev/null 2>&1 || true
+  fi
+}
+
 summary() {
   local domain
   domain=$(env_get DOMAIN)
@@ -165,6 +271,7 @@ summary() {
   if [[ $(env_get API_SITE_ENABLED 0) == 1 ]]; then
     printf '  API host:  https://api.%s/api\n' "$domain"
   fi
+  printf '  Images:    %s/<service>:%s (recorded in %s)\n' "$prefix" "$tag" "$ROZKLAD_IMAGES_FILE"
   printf '  Accounts:  admin, krentsin, nepyivoda (passwords: DEMO_*_PASSWORD in %s)\n' "$ROZKLAD_ENV_FILE"
   printf '  Logs:      infra/deploy/scripts/compose.sh logs -f --tail=100 <service>\n'
   if [[ -n $(env_get TELEGRAM_BOT_TOKEN) ]]; then
@@ -186,11 +293,19 @@ fi
 
 preflight
 
-prefix=$(env_get IMAGE_PREFIX rozklad)
-tag=$(env_get IMAGE_TAG prod)
+prefix=$(image_setting IMAGE_PREFIX "$ROZKLAD_DEFAULT_IMAGE_PREFIX")
+tag=$(image_setting IMAGE_TAG "$ROZKLAD_DEFAULT_IMAGE_TAG")
+# the values end up in .env.images: keep them to what an image reference allows
+[[ $prefix =~ ^[a-z0-9]([a-z0-9._/:-]*[a-z0-9])?$ ]] || die "IMAGE_PREFIX is not a valid image name prefix: '$prefix'"
+[[ $tag =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || die "IMAGE_TAG is not a valid image tag: '$tag'"
 if [[ $mode == auto ]]; then
-  if [[ $prefix == */* ]]; then mode=pull; else mode=build; fi
+  # a registry prefix means pulling; local names (localhost/rozklad) are built here
+  if [[ $prefix == */* && $prefix != localhost/* ]]; then mode=pull; else mode=build; fi
 fi
+# the process environment wins over .env and .env.images in every compose call below
+export IMAGE_PREFIX=$prefix IMAGE_TAG=$tag
+previous_prefix=$(env_file_value "$ROZKLAD_IMAGES_FILE" IMAGE_PREFIX)
+previous_tag=$(env_file_value "$ROZKLAD_IMAGES_FILE" IMAGE_TAG)
 
 if [[ $mode == build ]]; then
   build_jars
@@ -198,10 +313,15 @@ if [[ $mode == build ]]; then
   compose build --pull
   # patch releases of the pinned third-party images (Caddy, PostgreSQL, RabbitMQ, Redis, Keycloak)
   compose pull --ignore-buildable --quiet
+elif [[ $tag =~ ^[0-9a-f]{40}$ ]] && app_images_present; then
+  # a commit tag never changes: no registry login needed to deploy it again
+  log "$prefix/<service>:$tag is already here; pulling only the third-party images"
+  compose pull --ignore-buildable --quiet
 else
   log "Pulling $prefix/<service>:$tag"
   compose pull
 fi
+record_images
 
 log "Starting the stack (the first start takes a few minutes: Keycloak builds itself and imports the realm)"
 if ! compose up -d --no-build --remove-orphans --wait --wait-timeout "${DEPLOY_WAIT_TIMEOUT:-900}"; then
@@ -209,12 +329,12 @@ if ! compose up -d --no-build --remove-orphans --wait --wait-timeout "${DEPLOY_W
   die "not every service became healthy; see: infra/deploy/scripts/compose.sh logs --tail=200 <service>"
 fi
 
+reload_caddy
 bash "$here/keycloak-sync.sh"
-if [[ -n "$(env_get DEMO_ADMIN_PASSWORD)$(env_get DEMO_TEACHER_PASSWORD)" ]]; then
-  bash "$here/create-demo-users.sh"
-fi
+# always: an empty DEMO_*_PASSWORD disables the account (after the defense)
+bash "$here/create-demo-users.sh"
 
 smoke_checks
 compose ps --format 'table {{.Service}}\t{{.Status}}'
-docker image prune -f >/dev/null 2>&1 || true
+prune_images
 summary

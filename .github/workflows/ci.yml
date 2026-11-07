@@ -96,7 +96,7 @@ jobs:
           for toggle in 0 1; do
             docker run --rm -e DOMAIN=rozklad.example.org -e ACME_EMAIL=ci@rozklad.example.org \
               -e KC_ADMIN_ALLOWED="$toggle" -e API_SITE_ENABLED="$toggle" \
-              -v "$PWD/infra/deploy:/etc/caddy:ro" caddy:2.11-alpine \
+              -v "$PWD/infra/deploy/caddy:/etc/caddy:ro" caddy:2.11-alpine \
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
 

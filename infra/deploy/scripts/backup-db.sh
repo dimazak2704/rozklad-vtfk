@@ -7,7 +7,9 @@
 #   15 3 * * * $HOME/rozklad/infra/deploy/scripts/backup-db.sh >>$HOME/rozklad-backup.log 2>&1
 #
 # Restore: infra/deploy/scripts/restore-db.sh <file> --yes. A dump is useless without the matching
-# infra/deploy/.env, so keep a copy of that file next to your off-site copies of the dumps.
+# infra/deploy/.env: keep that file in a password manager, not next to the dumps. A dump holds every
+# account, Keycloak's client secrets and password hashes: encrypt it before it leaves this server
+# (docs/DEPLOY.md, section 12).
 set -Eeuo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

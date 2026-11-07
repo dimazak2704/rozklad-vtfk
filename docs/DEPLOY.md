@@ -25,12 +25,13 @@ Internal network only (no published ports): postgres, rabbitmq, redis, keycloak,
 | File | What it does |
 |---|---|
 | `infra/deploy/compose.prod.yml` | Overlay on `infra/docker-compose.yml`: Caddy, no published ports for anything else, Keycloak in production mode, secrets from env, memory limits, log rotation |
-| `infra/deploy/Caddyfile` | Sites, TLS, routing, `/admin` of Keycloak closed, CSP fix for the SPA |
+| `infra/deploy/caddy/Caddyfile` | Sites, TLS, routing, `/admin` of Keycloak closed, CSP fix for the SPA, forged forwarding headers removed |
 | `infra/deploy/.env.example` → `infra/deploy/.env` | Every setting with comments. `.env` is gitignored |
 | `infra/deploy/keycloak/rozklad-realm.prod.json` | Production realm: no dev users, no localhost URLs, secrets via `${ENV}` placeholders |
 | `infra/deploy/keycloak/demo-users.json` | Demo accounts for the defense (no passwords inside) |
 | `infra/deploy/postgres/20-prod-passwords.sh` | Replaces the dev passwords of `init.sql` on the first start |
-| `infra/deploy/scripts/` | `deploy.sh`, `gen-secrets.sh`, `compose.sh`, `keycloak-sync.sh`, `create-demo-users.sh`, `backup-db.sh`, `restore-db.sh` |
+| `infra/deploy/scripts/` | `deploy.sh`, `gen-secrets.sh`, `compose.sh`, `keycloak-sync.sh`, `create-demo-users.sh`, `backup-db.sh`, `restore-db.sh`, `ci-entry.sh` (what the GitHub key may run) |
+| `infra/deploy/.env.images` | Written by `deploy.sh`: which images run now (gitignored, do not edit) |
 | `web/netlify.toml`, `infra/deploy/netlify/postbuild.mjs` | Variant B: the client on Netlify |
 | `.github/workflows/ci.yml`, `deploy.yml` | CI and auto-deploy |
 
@@ -48,7 +49,11 @@ How this covers the coursework requirements (level A):
 
 ## 2. Create the server
 
-Minimum: 2 vCPU, 4 GB RAM, 40 GB disk, Ubuntu 24.04, x86_64 or ARM64. Comfortable: 4 vCPU, 8+ GB.
+Recommended: 4 vCPU, 8+ GB RAM, 40+ GB disk, Ubuntu 24.04, x86_64 or ARM64; for the defense take
+8 GB or the Oracle A1 VM below. The memory limits of the containers add up to about 6 GB (they are
+caps, not reservations). 2 vCPU / 4 GB with 2 GB of swap is best effort and has not been measured:
+on such a server let GitHub Actions build the images (section 13) instead of building on the VPS,
+and watch `docker stats --no-stream` while the solver runs.
 
 **Oracle Cloud Always Free (recommended, 4 OCPU / 24 GB ARM64, free).**
 
@@ -70,8 +75,9 @@ Minimum: 2 vCPU, 4 GB RAM, 40 GB disk, Ubuntu 24.04, x86_64 or ARM64. Comfortabl
 Log in: `ssh ubuntu@<public-ip>`.
 
 **Other options.** Azure for Students ($100 credit, no card): a `B2s` / `B2als v2` VM with 4 GB and
-Ubuntu 24.04 lasts a few months on the credit. Any other VPS with 4 GB works the same way; the user
-name may be `root` or `azureuser` instead of `ubuntu`.
+Ubuntu 24.04 lasts a few months on the credit (a 4 GB size is best effort, see above; `B2ms` has
+8 GB). Any other VPS works the same way; the user name may be `root` or `azureuser` instead of
+`ubuntu`.
 
 ## 3. Open ports 80 and 443, prepare the OS
 
@@ -164,7 +170,7 @@ Set by hand in `infra/deploy/.env`:
 | `ACME_EMAIL` | your real e-mail (Let's Encrypt refuses example.com) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_BOT_USERNAME` | from @BotFather / your chat (section 10) |
 | `ANTHROPIC_API_KEY` | from console.anthropic.com; empty disables AI import |
-| memory block at the end | uncomment it on Oracle A1 (24 GB); keep the defaults on 4 GB |
+| memory block at the end | uncomment it on Oracle A1 (24 GB); keep the defaults on 4–8 GB |
 
 Everything else has a working default or was generated. The secrets never leave this file: compose
 passes each service only what it needs. Keep a copy of `.env` in a password manager — backups and
@@ -184,13 +190,20 @@ What it does:
 2. Preflight: Docker and Compose versions, no `change-me` left, sane `DOMAIN`/`ACME_EMAIL`, the
    compose configuration renders, warning about RAM without swap.
 3. Builds the jars with Maven in a `maven:3.9.11-eclipse-temurin-25` container (no JDK on the host,
-   dependencies cached in `~/.m2`), then the images for this CPU (`compose build --pull`).
+   dependencies cached in `~/.m2`), then the images `localhost/rozklad/<service>:prod` for this CPU
+   (`compose build --pull`). With GitHub-built images it pulls them instead (section 13). Either way
+   it records the images in `infra/deploy/.env.images`, so `compose.sh` and `restore-db.sh` keep
+   using exactly those.
 4. `compose up -d --wait`: PostgreSQL creates the databases (dev `init.sql`, then the production
    passwords), Keycloak builds itself and imports the realm, the services start, Caddy requests the
    certificates.
-5. `keycloak-sync.sh` writes the web origins and client secrets from `.env` into Keycloak;
-   `create-demo-users.sh` creates the demo accounts.
-6. Smoke checks through Caddy (SPA, API, issuer, `/admin` closed, CSP, certificates) and a summary.
+5. `caddy reload` (a changed Caddyfile takes effect), `keycloak-sync.sh` writes the web origins and
+   client secrets from `.env` into Keycloak, `create-demo-users.sh` creates, updates or disables the
+   demo accounts.
+6. Smoke checks through Caddy (SPA, API, per-client rate limit with forged `Forwarded` headers,
+   issuer, OIDC authority baked into the SPA, `/admin` closed, CSP, certificates) and a summary.
+   In pull mode it then removes the images of older deploys, keeping the current and the previous
+   one.
 
 The first run downloads a lot (Maven dependencies, LibreOffice packages for two images, npm
 packages) and takes roughly 15–30 minutes; Keycloak alone needs about 2 minutes on its first start.
@@ -241,8 +254,10 @@ For the explanatory note, run Lighthouse (mobile) against `https://DOMAIN` here.
 
 Give them in the explanatory note or on paper, never in the repository. They keep the ids of the
 development realm, so demo data that links the teachers «Кренцін» and «Непийвода» to those ids works
-on the server too. To change a password, edit `.env` and run `infra/deploy/scripts/create-demo-users.sh`;
-an empty password disables the account (do that after the defense). Real teachers join through
+on the server too. To change a password, edit `.env` and run `infra/deploy/scripts/create-demo-users.sh`.
+After the defense empty both `DEMO_*_PASSWORD` values and run the same script: an empty password
+disables the account, and every later `deploy.sh` (also the GitHub one) and `restore-db.sh` keeps it
+disabled. Check with the `kcadm` commands of section 11 (`enabled` is `false`). Real teachers join through
 invites (`/invite/{token}`); self-registration is off. Passwords need at least 8 characters and must
 differ from the login and the e-mail; five wrong attempts lock an account for a minute or more.
 
@@ -266,11 +281,11 @@ everything:
 
 ```bash
 cd ~/rozklad
-infra/deploy/scripts/deploy.sh                               # update to the latest main
+infra/deploy/scripts/deploy.sh                               # update to the latest main (see below)
 infra/deploy/scripts/compose.sh ps                           # status and health
 infra/deploy/scripts/compose.sh logs -f --tail=100 core      # follow one service
 infra/deploy/scripts/compose.sh logs --since=1h notification | grep -i error
-infra/deploy/scripts/compose.sh restart notification
+infra/deploy/scripts/compose.sh restart notification         # same container, same environment
 infra/deploy/scripts/compose.sh up -d                        # apply .env changes (recreates what changed)
 infra/deploy/scripts/compose.sh exec postgres psql -U postgres -d core
 infra/deploy/scripts/compose.sh exec rabbitmq rabbitmqctl list_queues name messages consumers
@@ -281,9 +296,26 @@ The Java services log JSON (ECS). Readable view: `sudo apt-get install -y jq`, t
 `infra/deploy/scripts/compose.sh logs --no-log-prefix core | jq -r '"\(.["@timestamp"]) \(.["log.level"]) \(.message)"'`.
 Docker rotates the logs: 5 files × 10 MB per container.
 
-Changes in `.env` that need a rebuild: `DOMAIN` and `TELEGRAM_BOT_USERNAME` are baked into the SPA, so
-run `deploy.sh`, not only `compose.sh up -d`. A new `DOMAIN` also gets new certificates and new
-Keycloak redirect URIs automatically.
+`compose.sh` always uses the images recorded in `infra/deploy/.env.images` by the last `deploy.sh`
+(also the one GitHub ran), so `compose.sh up -d` never switches images behind your back. `restart`
+keeps a container's old environment: after changing `.env` use `up -d`.
+
+Which images `deploy.sh` rolls out: `IMAGE_PREFIX`/`IMAGE_TAG` from the environment, else from `.env`,
+else the recorded ones, else `localhost/rozklad/<service>:prod` built on the server. So on a server fed
+by GitHub Actions a manual `deploy.sh` pulls the scripts and compose files of `main` and starts the
+same images again; new images come only from the Deploy workflow. `deploy.sh --build` builds on the
+server instead.
+
+`DOMAIN` and `TELEGRAM_BOT_USERNAME` are baked into the SPA when the web image is built:
+
+- images built on the server: change `.env`, then run `deploy.sh` (not only `compose.sh up -d`);
+- images from GitHub Actions: change `.env` on the server **and** the repository variables `DOMAIN` /
+  `TELEGRAM_BOT_USERNAME`, then run the Deploy workflow (Actions → Deploy → Run workflow on `main`).
+  A manual `deploy.sh` only pulls the existing web image, which still points to the old Keycloak.
+  `ci-entry.sh` refuses to deploy while the two `DOMAIN` values differ, and the smoke checks warn when
+  the SPA was built for another Keycloak than the one in `.env`.
+
+A new `DOMAIN` also gets new certificates and new Keycloak redirect URIs automatically.
 
 Rollback to an earlier commit:
 
@@ -294,8 +326,10 @@ git checkout main                              # later, to follow main again
 ```
 
 With images from GitHub Actions: `IMAGE_TAG=<good-commit-sha> infra/deploy/scripts/deploy.sh --no-pull
---pull-images`. Database migrations only go forward (Flyway), so roll back only to a commit with the
-same schema, or restore a backup.
+--pull-images` (the prefix comes from the record). The previous deploy's images stay on the server;
+older ones are pulled again, which needs `docker login ghcr.io` for private packages (section 13).
+Database migrations only go forward (Flyway), so roll back only to a commit with the same schema, or
+restore a backup.
 
 Keycloak admin console: set `KC_ADMIN_ALLOWED=1`, run `infra/deploy/scripts/compose.sh up -d caddy`,
 open `https://auth.DOMAIN/admin/` and log in with `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD`;
@@ -321,8 +355,21 @@ crontab -e                               # daily at 03:15, keeps BACKUP_KEEP_DAY
 15 3 * * * $HOME/rozklad/infra/deploy/scripts/backup-db.sh >>$HOME/rozklad-backup.log 2>&1
 ```
 
-Copy the dumps off the server now and then (from your PC: `scp ubuntu@<ip>:/var/backups/rozklad/*.gz .`)
-together with a copy of `infra/deploy/.env`.
+A dump is the whole cluster: every account, Telegram chat bindings, Keycloak's client secrets and
+password hashes. On the server the files are readable by your user only. Copy them off now and then,
+but **encrypted**, and never next to `.env` (that file belongs in a password manager, section 5).
+With [age](https://age-encryption.org) (Windows: `winget install FiloSottile.age`), on your PC:
+
+```bash
+age-keygen -o rozklad-backup.key        # once; keep this file in the password manager, not with the dumps
+# the public key is the "public key: age1..." line it printed
+ssh ubuntu@<ip> 'cat /var/backups/rozklad/rozklad-20261107-031500.sql.gz' |
+  age -r age1... -o rozklad-20261107-031500.sql.gz.age      # the plain dump never lands on the PC
+age -d -i rozklad-backup.key -o rozklad-20261107-031500.sql.gz rozklad-20261107-031500.sql.gz.age   # to restore
+```
+
+A password-protected 7-Zip archive with encrypted file names (`7z a -p -mhe=on`) works too; delete the
+plain `.sql.gz` copies afterwards.
 
 Restore (destructive: every database is replaced):
 
@@ -330,9 +377,11 @@ Restore (destructive: every database is replaced):
 infra/deploy/scripts/restore-db.sh /var/backups/rozklad/rozklad-20261107-031500.sql.gz --yes
 ```
 
-It stops everything except PostgreSQL, loads the dump (two errors about the role `postgres` are
-expected), sets the service passwords from the current `.env` again, starts the stack and syncs the
-Keycloak clients and demo accounts with `.env`. On a new server: deploy first, then restore.
+It first checks that the recorded images are on the server (otherwise it stops before touching
+anything), then stops everything except PostgreSQL, loads the dump (two errors about the role
+`postgres` are expected), sets the service passwords from the current `.env` again, starts the same
+images and syncs the Keycloak clients and demo accounts with `.env`. On a new server: deploy first,
+then restore.
 
 Volumes: `pgdata` holds all data. `rabbitdata` (queued messages), `redisdata` (caches, bot dialogs)
 and `caddy_data` (certificates, re-issued automatically) can be lost without harm.
@@ -347,7 +396,8 @@ and `caddy_data` (certificates, re-issued automatically) can be lost without har
 - **Deploy** (`.github/workflows/deploy.yml`) runs on every push to `main` and by hand: it calls CI,
   and only if CI passes builds the images for `linux/amd64` and `linux/arm64`, pushes them to
   `ghcr.io/<owner>/rozklad/<service>:<commit-sha>` and `:latest`, then connects to the server over
-  SSH and runs `deploy.sh --pull-images` with that tag.
+  SSH and runs `infra/deploy/scripts/ci-entry.sh`, which runs `deploy.sh --pull-images` with that
+  tag. A manual run on any branch other than `main` runs CI only.
 
 Deploy does nothing but CI until it is configured (GitHub → repository → Settings → Secrets and
 variables → Actions):
@@ -357,28 +407,48 @@ variables → Actions):
 | secret | `VPS_HOST` | server IP or DOMAIN |
 | secret | `VPS_USER` | `ubuntu` (the user that owns `~/rozklad` and is in the `docker` group) |
 | secret | `VPS_SSH_KEY` | private key of a key pair made for GitHub (below) |
+| secret | `VPS_KNOWN_HOSTS` | the server's host key (below); the deploy job fails without it |
 | secret, optional | `VPS_PORT` | SSH port if not 22 |
-| secret, optional | `VPS_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 <host>`; without it the host key is trusted on first use |
 | variable | `DOMAIN` | the same value as in `.env` (it is baked into the web image) |
 | variable, optional | `IMAGE_PLATFORMS` | `linux/arm64` for Oracle A1 only: about half the build time |
 | variable, optional | `VPS_APP_DIR` | clone directory on the server, default `rozklad` (= `~/rozklad`) |
 | variable, optional | `TELEGRAM_BOT_USERNAME` | bot link on the About page |
 
-Deploy key for GitHub (on your PC):
+Deploy key for GitHub. The `docker` group is root-equivalent, so the key must not open a shell: it
+gets a forced command and may run `ci-entry.sh` only. On your PC:
 
 ```bash
 ssh-keygen -t ed25519 -C github-deploy -f rozklad_github -N ''
-ssh-copy-id -i rozklad_github.pub ubuntu@<ip>    # or append the .pub line to ~/.ssh/authorized_keys on the server
-# paste the content of rozklad_github (private key) into the VPS_SSH_KEY secret, then delete both files
+cat rozklad_github.pub                         # one line: ssh-ed25519 AAAA... github-deploy
 ```
 
-On the server, put the same image source into `.env`, so manual runs of `deploy.sh` pull the images
-CI built instead of building them: `IMAGE_PREFIX=ghcr.io/<owner-lowercase>/rozklad` and
-`IMAGE_TAG=latest`. The workflow logs the server in to GHCR with the job's own token for the
-duration of the job, so the packages may stay private; manual pulls of private packages need
-`docker login ghcr.io` with a token that has `read:packages`, or make the packages public. The
-server still runs `git pull` for the compose files and scripts (deploy key for a private repo,
-section 5).
+On the server, append that line to `~/.ssh/authorized_keys` **with this prefix** (adjust the path if
+the clone is not `~/rozklad` of the user `ubuntu`):
+
+```
+restrict,command="bash /home/ubuntu/rozklad/infra/deploy/scripts/ci-entry.sh" ssh-ed25519 AAAA... github-deploy
+```
+
+`restrict` turns off port forwarding, agent forwarding and the terminal; `command` makes sshd run
+`ci-entry.sh` whatever the client asks. The script reads the commit sha, image prefix, user name,
+token and `DOMAIN` from stdin, accepts only a 40-character sha and `ghcr.io/<owner>/rozklad`, and runs
+`deploy.sh --pull-images`. Paste the private key (`rozklad_github`) into the `VPS_SSH_KEY` secret,
+then delete both files.
+
+Host key: on the server run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`; on your PC run
+`ssh-keyscan -t ed25519 <VPS_HOST>` (the same name or IP as the secret; `-p <port>` if not 22), check with `ssh-keygen -lf -` on that
+output that the fingerprint is the same, and paste the `ssh-keyscan` line into `VPS_KNOWN_HOSTS`. The
+runner never trusts a key it has not been given.
+
+Also, in GitHub → Settings → Environments → `production` → Deployment branches and tags, allow only
+`main`. The workflow already skips other branches; the rule makes GitHub enforce it too.
+
+Leave `IMAGE_PREFIX`/`IMAGE_TAG` unset in the server's `.env`. `deploy.sh` records what the workflow
+deployed in `infra/deploy/.env.images`, and manual runs start those images again. The workflow logs
+the server in to GHCR with the job's own token for the duration of the job, so the packages may stay
+private; pulling other tags by hand needs `docker login ghcr.io` with a token that has
+`read:packages`, or public packages. The server still runs `git pull` for the compose files and
+scripts (deploy key for a private repo, section 5).
 
 The first image build takes long (ARM64 is emulated with QEMU, LibreOffice and npm run inside it);
 later builds reuse the GitHub Actions cache.
@@ -412,14 +482,15 @@ The site on the VPS keeps working in parallel. Netlify builds on every push by i
 
 **`exec format error`, a container restarts at once.** The image was built for another CPU. Build on
 the server (`deploy.sh --build`) or include its platform in `IMAGE_PLATFORMS`. Check with
-`docker image inspect rozklad/core:prod --format '{{.Architecture}}'` and `uname -m`
+`docker image inspect localhost/rozklad/core:prod --format '{{.Architecture}}'` (or the ghcr.io name) and `uname -m`
 (`aarch64` = `arm64`).
 
 **No certificate / the browser warns.** DNS of `DOMAIN` and `auth.DOMAIN` must point to the server,
 TCP 80 and 443 must be open in both firewalls. `infra/deploy/scripts/compose.sh logs caddy | grep -iE
 'error|challenge'`. After too many failures Let's Encrypt pauses for an hour: switch `ACME_CA` to the
-staging URL while experimenting, then back, and `compose.sh restart caddy`. With `ACME_CA` on staging
-browsers always warn.
+staging URL while experimenting, then back, and run `compose.sh up -d caddy` each time (`restart`
+keeps the old environment, so Caddy would stay on the old CA). With `ACME_CA` on staging browsers
+always warn.
 
 **Ports are open in the cloud but connections time out (Oracle).** `sudo iptables -L INPUT -n
 --line-numbers` (section 3); `sudo iptables -L FORWARD -n | head`: Docker's chains must come before
@@ -446,8 +517,9 @@ rejected; so are tokens issued before `DOMAIN` changed: log in again.
 
 **Login page does not open, browser console says "Refused to connect … Content-Security-Policy".**
 The SPA's CSP must allow `https://auth.DOMAIN`. Caddy rewrites `http://localhost:8180` in the CSP of
-`web/nginx.conf`; if nginx.conf no longer contains that value, update `header_down` in the Caddyfile.
-`deploy.sh` warns about this.
+`web/nginx.conf`; if nginx.conf no longer contains that value, update `header_down` in
+`infra/deploy/caddy/Caddyfile` and run `deploy.sh`, which reloads Caddy (by hand: `compose.sh exec
+caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`). `deploy.sh` warns about this.
 
 **Live updates (SSE) arrive late, in bursts, or stop.** The Caddyfile flushes `/api/events/stream`
 immediately and does not compress it; the gateway route has no response timeout; core sends `ping`
@@ -462,7 +534,10 @@ same-origin and needs no CORS.
 **429 Too Many Requests on public pages.** The gateway limits `/api/public/**` per client IP
 (`PUBLIC_RATE_LIMIT_PER_SECOND`, `PUBLIC_RATE_LIMIT_BURST`). Behind Caddy the gateway reads the real
 client IP from `X-Forwarded-For` (`SERVER_FORWARD_HEADERS_STRATEGY=native`), so one user cannot
-exhaust the limit of everyone. Raise the values in `.env` if needed and run `compose.sh up -d`.
+exhaust the limit of everyone. Caddy writes that header itself and removes the client's `Forwarded`,
+`X-Forwarded-Port` and `X-Forwarded-Prefix` (snippet `strip_client_forwarding`); otherwise a forged
+`Forwarded: for=...` would give every request a fresh bucket. Raise the values in `.env` if needed
+and run `compose.sh up -d`.
 
 **PostgreSQL: "password authentication failed for user core".** The init scripts run only when the
 volume is created. If the first start failed half-way, on a fresh server remove the volumes and start
@@ -477,7 +552,9 @@ restarts them.
 **Telegram: `409 Conflict`.** Another instance polls the same token (section 10).
 
 **Disk full.** `docker system df`; `docker builder prune -f` and `docker image prune -f` free most of
-it (`deploy.sh` prunes dangling images itself).
+it. `deploy.sh` prunes dangling images itself and, with GitHub-built images, removes the commit tags
+of older deploys (it keeps the current and the previous one). Pulled tags of another prefix are not
+touched: `docker image ls` and `docker image rm` them by hand.
 
 ## 16. For the explanatory note (section 4.7.9)
 
@@ -515,6 +592,12 @@ carried the public issuer, the dev secret and dev users are gone, `keycloak-sync
 `restore-db.sh` worked, the service passwords from `.env` are required and the dev ones are refused;
 `gen-secrets.sh` was tested on throwaway files; the scripts pass `bash -n` and ShellCheck, the
 workflows pass actionlint, the Netlify post-build produces the same script hash as `web/nginx.conf`.
+After the review: Caddy (2.11) was checked to drop client `Forwarded`, `X-Forwarded-Port`,
+`X-Forwarded-Prefix` and `X-Real-IP` and to replace `X-Forwarded-For` before proxying; the overlay
+renders with `.env.images` taking precedence over `.env`; `docker compose config --images` lists the
+images `restore-db.sh` checks; the default `localhost/rozklad` prefix cannot be resolved on Docker Hub.
 
 Not verified yet: the full stack on a real VPS (the application images were not built here), the
-GitHub workflows on GitHub, certificates from Let's Encrypt, the timings above (estimates).
+memory use of the whole stack (so 4 GB is only best effort), the GitHub workflows on GitHub, the
+forced-command SSH key, certificates from Let's Encrypt, the new smoke checks (rate limit, OIDC
+authority in the SPA) against a running gateway, the timings above (estimates).

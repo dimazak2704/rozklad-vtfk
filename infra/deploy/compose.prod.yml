@@ -12,7 +12,12 @@
 #   value is missing. `env_file: !reset []` keeps the development ../.env out of the containers.
 # - Relative paths are resolved against infra/ (the directory of the first compose file).
 # - Needs Docker Compose 2.24.4+ for the !reset / !override tags.
-# - Memory: the defaults fit a 4 GB VPS; bigger values for a 24 GB VM are in .env.example.
+# - Memory: the mem_limit values are caps, not reservations; they add up to about 6 GB. A 4 GB VPS
+#   with 2 GB of swap is best effort and has not been measured; 8 GB or more is recommended.
+#   Bigger values for a 24 GB VM are in .env.example.
+# - Images: deploy.sh records the IMAGE_PREFIX/IMAGE_TAG it started in deploy/.env.images, and
+#   scripts/lib.sh passes that file after .env, so every later compose call uses the running images.
+#   The default prefix localhost/rozklad can never be pulled from Docker Hub by mistake.
 
 x-logging: &logging
   driver: json-file
@@ -53,7 +58,8 @@ services:
       API_SITE_ENABLED: ${API_SITE_ENABLED:-0}
       WEB_UPSTREAM: web:${WEB_CONTAINER_PORT:-80}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # the directory, not the file: a single-file bind mount keeps the old inode after git pull
+      - ./deploy/caddy:/etc/caddy:ro
       - caddy_data:/data # certificates and ACME account: keep this volume
       - caddy_config:/config
     healthcheck:
@@ -144,7 +150,7 @@ services:
 
   # --- Application services ---------------------------------------------------------------------------
   core:
-    image: ${IMAGE_PREFIX:-rozklad}/core:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/core:${IMAGE_TAG:-prod}
     env_file: !reset []
     ports: !reset []
     environment:
@@ -159,7 +165,7 @@ services:
     logging: *logging
 
   scheduler:
-    image: ${IMAGE_PREFIX:-rozklad}/scheduler:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/scheduler:${IMAGE_TAG:-prod}
     env_file: !reset []
     ports: !reset []
     environment:
@@ -171,7 +177,7 @@ services:
     logging: *logging
 
   importer:
-    image: ${IMAGE_PREFIX:-rozklad}/importer:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/importer:${IMAGE_TAG:-prod}
     env_file: !reset []
     ports: !reset []
     environment:
@@ -189,7 +195,7 @@ services:
     logging: *logging
 
   notification:
-    image: ${IMAGE_PREFIX:-rozklad}/notification:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/notification:${IMAGE_TAG:-prod}
     env_file: !reset []
     ports: !reset []
     environment:
@@ -210,7 +216,7 @@ services:
     logging: *logging
 
   gateway:
-    image: ${IMAGE_PREFIX:-rozklad}/gateway:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/gateway:${IMAGE_TAG:-prod}
     env_file: !reset []
     ports: !reset []
     environment:
@@ -219,8 +225,9 @@ services:
       CORS_ALLOWED_ORIGINS: https://${DOMAIN:?}${EXTRA_WEB_ORIGIN:+,${EXTRA_WEB_ORIGIN}}
       PUBLIC_RATE_LIMIT_PER_SECOND: ${PUBLIC_RATE_LIMIT_PER_SECOND:-20}
       PUBLIC_RATE_LIMIT_BURST: ${PUBLIC_RATE_LIMIT_BURST:-40}
-      # Only Caddy can reach the gateway, and Caddy replaces X-Forwarded-For with the real client
-      # address. Reading it keeps the per-IP limit of /api/public/** per browser, not per Caddy.
+      # Only Caddy can reach the gateway. Caddy replaces X-Forwarded-For with the real client address
+      # and removes the client's Forwarded / X-Forwarded-Port / -Prefix headers (Caddyfile,
+      # strip_client_forwarding), so the per-IP limit of /api/public/** is per browser, not per Caddy.
       SERVER_FORWARD_HEADERS_STRATEGY: native
       JAVA_TOOL_OPTIONS: -Xmx${GATEWAY_HEAP:-256m}
     stop_grace_period: 30s
@@ -229,7 +236,7 @@ services:
 
   # --- SPA (nginx with the Vite build) -----------------------------------------------------------------
   web:
-    image: ${IMAGE_PREFIX:-rozklad}/web:${IMAGE_TAG:-prod}
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/web:${IMAGE_TAG:-prod}
     build:
       # Vite reads VITE_* at build time, so the production URLs are baked into the image
       args:

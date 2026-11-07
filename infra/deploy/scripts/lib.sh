@@ -4,6 +4,10 @@
 ROZKLAD_DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROZKLAD_REPO_DIR="$(cd "$ROZKLAD_DEPLOY_DIR/../.." && pwd)"
 ROZKLAD_ENV_FILE="${ROZKLAD_ENV_FILE:-$ROZKLAD_DEPLOY_DIR/.env}"
+# IMAGE_PREFIX/IMAGE_TAG of the images that run now, written by deploy.sh (gitignored)
+ROZKLAD_IMAGES_FILE="${ROZKLAD_IMAGES_FILE:-$ROZKLAD_DEPLOY_DIR/.env.images}"
+# shellcheck disable=SC2034 # used by deploy.sh
+ROZKLAD_DEFAULT_IMAGE_PREFIX=localhost/rozklad ROZKLAD_DEFAULT_IMAGE_TAG=prod
 
 if [[ -t 1 ]]; then
   _c_info=$'\033[1;34m' _c_ok=$'\033[1;32m' _c_warn=$'\033[1;33m' _c_err=$'\033[1;31m' _c_off=$'\033[0m'
@@ -30,34 +34,60 @@ require_server() {
   esac
 }
 
-# env_get KEY [default]: the value of KEY like docker compose sees it. The process environment
-# wins over the env file, the file is parsed (never executed), empty means "use the default".
-env_get() {
-  local key=$1 default=${2-} line value
-  if [[ -n "${!key+set}" ]]; then
-    printf '%s' "${!key}"
-    return
-  fi
-  line=''
-  if [[ -f "$ROZKLAD_ENV_FILE" ]]; then
-    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$ROZKLAD_ENV_FILE" | tail -n 1 || true)
+# env_file_value FILE KEY: the last KEY=value of FILE without quotes; empty if FILE or KEY is
+# missing. The file is parsed, never executed.
+env_file_value() {
+  local file=$1 key=$2 line='' value
+  if [[ -f $file ]]; then
+    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file" | tail -n 1 || true)
   fi
   value=${line#*=}
   value=${value%$'\r'}
   if [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]]; then
     value=${BASH_REMATCH[1]}
   fi
+  printf '%s' "$value"
+}
+
+# env_get KEY [default]: the value of KEY like docker compose sees it. The process environment
+# wins over the env file, empty means "use the default".
+env_get() {
+  local key=$1 default=${2-} value
+  if [[ -n "${!key+set}" ]]; then
+    printf '%s' "${!key}"
+    return
+  fi
+  value=$(env_file_value "$ROZKLAD_ENV_FILE" "$key")
   printf '%s' "${value:-$default}"
 }
 
-# docker compose with the base file, the production overlay and the production env file
+# docker compose with the base file, the production overlay and the production env file. The image
+# record of deploy.sh comes after .env and wins over it, so compose.sh, restore-db.sh and a manual
+# `compose.sh up -d` keep the images that run now. A variable of the process environment (deploy.sh
+# exports the images it is rolling out) still wins over both files.
 compose() {
+  local env_files=(--env-file "$ROZKLAD_ENV_FILE")
+  if [[ -f $ROZKLAD_IMAGES_FILE ]]; then
+    env_files+=(--env-file "$ROZKLAD_IMAGES_FILE")
+  fi
   docker compose \
     -f "$ROZKLAD_REPO_DIR/infra/docker-compose.yml" \
     -f "$ROZKLAD_DEPLOY_DIR/compose.prod.yml" \
-    --env-file "$ROZKLAD_ENV_FILE" \
+    "${env_files[@]}" \
     --profile app \
     "$@"
+}
+
+# require_images: stops if an image of the stack is missing on this server. Call it before stopping
+# anything: `up --no-build` would try to pull the image and fail half-way.
+require_images() {
+  local image missing=()
+  while IFS= read -r image; do
+    [[ -z $image ]] || docker image inspect "$image" >/dev/null 2>&1 || missing+=("$image")
+  done < <(compose config --images)
+  ((${#missing[@]} == 0)) ||
+    die "these images are not on this server: ${missing[*]}
+       Run infra/deploy/scripts/deploy.sh first; it records the images it starts in $ROZKLAD_IMAGES_FILE."
 }
 
 # kc_run CODE: runs bash CODE inside the keycloak container. CODE can call `kc ...` (kcadm.sh
