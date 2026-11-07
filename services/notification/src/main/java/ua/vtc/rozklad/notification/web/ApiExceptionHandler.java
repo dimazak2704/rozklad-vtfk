@@ -28,6 +28,10 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.util.DisconnectedClientHelper;
+import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
+import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
+import ua.vtc.rozklad.notification.documents.ConverterUnavailableException;
+import ua.vtc.rozklad.notification.documents.DocumentRenderingException;
 
 /** RFC 9457 ProblemDetail with Ukrainian titles; validation errors carry {@code errors[{field,message}]}. */
 @RestControllerAdvice
@@ -76,9 +80,58 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .toList());
     }
 
+    @ExceptionHandler(FieldValidationException.class)
+    ResponseEntity<Object> handleFieldValidation(FieldValidationException ex) {
+        return validationProblem(List.of(new FieldErrorDto(ex.getField(), ex.getMessage())));
+    }
+
     @ExceptionHandler(NotFoundException.class)
     ResponseEntity<Object> handleNotFound(NotFoundException ex, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "not-found", "Не знайдено", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ForbiddenOperationException.class)
+    ResponseEntity<Object> handleForbiddenOperation(ForbiddenOperationException ex, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "forbidden", "Доступ заборонено", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    ResponseEntity<Object> handleServiceUnavailable(ServiceUnavailableException ex, HttpServletRequest request) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Сервіс тимчасово недоступний",
+                ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(UpstreamUnavailableException.class)
+    ResponseEntity<Object> handleUpstreamUnavailable(UpstreamUnavailableException ex, HttpServletRequest request) {
+        log.warn("Upstream {} unavailable: {}", ex.service(), ex.getMessage());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Сервіс тимчасово недоступний",
+                "Сервіс розкладу тимчасово недоступний. Спробуйте за хвилину.", request);
+    }
+
+    @ExceptionHandler(UpstreamRejectedException.class)
+    ResponseEntity<Object> handleUpstreamRejected(UpstreamRejectedException ex, HttpServletRequest request) {
+        log.warn("Upstream rejected a call of notification: {}", ex.getMessage());
+        return problem(HttpStatus.BAD_GATEWAY, "bad-gateway", "Помилка суміжного сервісу",
+                "Сервіс розкладу відхилив запит notification. Повідомте адміністратора код запиту.", request);
+    }
+
+    @ExceptionHandler(ConverterUnavailableException.class)
+    ResponseEntity<Object> handleConverterUnavailable(ConverterUnavailableException ex, HttpServletRequest request) {
+        log.warn("{}", ex.getMessage());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", ConverterUnavailableException.MESSAGE,
+                "Конвертер PDF недоступний: на цьому сервері немає LibreOffice. DOCX доступний.", request);
+    }
+
+    @ExceptionHandler(DocumentRenderingException.class)
+    ResponseEntity<Object> handleDocumentRendering(DocumentRenderingException ex, HttpServletRequest request) {
+        log.error("Document rendering failed: {}", ex.getMessage(), ex);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "document-rendering", "Не вдалося сформувати документ",
+                "Не вдалося сформувати документ. Спробуйте ще раз або завантажте DOCX.", request);
+    }
+
+    @ExceptionHandler(BadGatewayException.class)
+    ResponseEntity<Object> handleBadGateway(BadGatewayException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_GATEWAY, "bad-gateway", "Помилка суміжного сервісу", ex.getMessage(), request);
     }
 
     @ExceptionHandler(BusinessRuleException.class)

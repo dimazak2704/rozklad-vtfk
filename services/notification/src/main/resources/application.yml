@@ -26,6 +26,8 @@ spring:
     password: ${RABBIT_PASSWORD:rozklad}
     listener:
       simple:
+        # ручний запуск без споживання спільної черги: EVENTS_LISTENER_ENABLED=false
+        auto-startup: ${EVENTS_LISTENER_ENABLED:true}
         default-requeue-rejected: false
         retry:
           enabled: true
@@ -37,6 +39,11 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  http:
+    clients:
+      # виклики core та importer (розбір тексту ШІ може тривати кілька секунд)
+      connect-timeout: 3s
+      read-timeout: 20s
   security:
     oauth2:
       client:
@@ -81,8 +88,19 @@ app:
     owner-chat-id: ${TELEGRAM_OWNER_CHAT_ID:}
     mode: ${TELEGRAM_MODE:POLLING}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+    webhook-url: ${TELEGRAM_WEBHOOK_URL:}
+    # BOUND_ONLY: бот пише лише в чат власника та в чати, прив'язані через систему; OPEN — усім
+    access: ${TELEGRAM_ACCESS:BOUND_ONLY}
   office:
     soffice-path: ${SOFFICE_PATH:}
+  delivery:
+    worker-enabled: ${DELIVERY_WORKER_ENABLED:true}
+    global-per-second: ${DELIVERY_GLOBAL_PER_SECOND:25}
+    group-chat-per-minute: ${DELIVERY_GROUP_CHAT_PER_MINUTE:18}
+  documents:
+    cache-dir: ${DOCUMENTS_CACHE_DIR:${java.io.tmpdir}/rozklad-notification}
+  bot:
+    digest-enabled: ${BOT_DIGEST_ENABLED:true}
 
 management:
   endpoints:
