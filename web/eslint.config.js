@@ -6,7 +6,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules', '.impeccable']),
+  // public/mockServiceWorker.js генерує MSW (npx msw init) — не редагуємо й не перевіряємо
+  globalIgnores(['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules', '.impeccable', 'public/mockServiceWorker.js']),
   {
     files: ['src/**/*.{ts,tsx}'],
     extends: [
@@ -40,6 +41,13 @@ export default defineConfig(
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/unbound-method': 'off',
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    // MSW: кинута з обробника Response стає відповіддю (mswjs.io/docs/http/mocking-responses)
+    files: ['src/mocks/**/*.ts'],
+    rules: {
+      '@typescript-eslint/only-throw-error': ['error', { allow: [{ from: 'lib', name: 'Response' }] }],
     },
   },
   {

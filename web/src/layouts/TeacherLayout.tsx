@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router';
+import { MOCK_API } from '@/api/client';
 import { useLiveConnection } from '@/api/live';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -11,7 +12,8 @@ import { SkipLink } from '@/components/shell/SkipLink';
  */
 export function TeacherLayout() {
   const { status, isDevBypass } = useCurrentUser();
-  useLiveConnection(status === 'authenticated' && !isDevBypass);
+  // у фіктивного dev-користувача немає токена: потік подій тоді дає лише мок-API
+  useLiveConnection(status === 'authenticated' && (!isDevBypass || MOCK_API));
 
   return (
     <div className="flex min-h-dvh flex-col [--sticky-top:var(--header-height)]">

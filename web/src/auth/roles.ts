@@ -38,3 +38,20 @@ export function parseRoleList(raw: string | undefined): Role[] {
     .map((r) => r.trim().toUpperCase())
     .filter((role): role is Role => KNOWN_ROLES.has(role));
 }
+
+/** Ключ sessionStorage, яким у мок-режимі можна змінити ролі фіктивного користувача (e2e, ручна перевірка). */
+export const MOCK_ROLES_STORAGE_KEY = 'rozklad.mockRoles';
+
+/**
+ * Ролі фіктивного dev-користувача: з `VITE_DEV_AUTH_ROLES`, а зі змокованим API (VITE_USE_MOCKS=1) —
+ * ще й із sessionStorage[MOCK_ROLES_STORAGE_KEY], що має перевагу: `''` — гість, `'TEACHER'` — лише викладач.
+ * З реальним бекендом сховище не читається: там ролі дає лише токен або змінна середовища.
+ */
+export function devRoles(
+  envRoles: string | undefined,
+  mocksEnabled: boolean,
+  storage: Pick<Storage, 'getItem'> | null,
+): Role[] {
+  const override = mocksEnabled ? storage?.getItem(MOCK_ROLES_STORAGE_KEY) : null;
+  return override !== null && override !== undefined ? parseRoleList(override) : parseRoleList(envRoles);
+}

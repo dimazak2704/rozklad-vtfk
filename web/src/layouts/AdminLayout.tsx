@@ -1,5 +1,6 @@
 import { Dialog as RadixDialog } from 'radix-ui';
 import { Outlet } from 'react-router';
+import { MOCK_API } from '@/api/client';
 import { useLiveConnection } from '@/api/live';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { AdminSidebar } from '@/components/shell/AdminSidebar';
@@ -18,7 +19,8 @@ export function AdminLayout() {
   const mobileOpen = useSidebarStore((state) => state.mobileOpen);
   const setMobileOpen = useSidebarStore((state) => state.setMobileOpen);
   const { status, isDevBypass } = useCurrentUser();
-  const live = useLiveConnection(status === 'authenticated' && !isDevBypass);
+  // у фіктивного dev-користувача немає токена: потік подій тоді дає лише мок-API
+  const live = useLiveConnection(status === 'authenticated' && (!isDevBypass || MOCK_API));
 
   return (
     <div className="min-h-dvh bg-canvas [--sticky-top:3.5rem]">

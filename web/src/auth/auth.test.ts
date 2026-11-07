@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canAccessPath, isSafeReturnPath, postLoginPath, returnToFromState } from './postLogin';
-import { decodeJwtPayload, parseRoleList, rolesFromAccessToken } from './roles';
+import { decodeJwtPayload, devRoles, MOCK_ROLES_STORAGE_KEY, parseRoleList, rolesFromAccessToken } from './roles';
 
 function fakeJwt(payload: object): string {
   const encode = (value: object) =>
@@ -30,6 +30,25 @@ describe('ролі з токена Keycloak', () => {
   it('розбирає список ролей для dev-режиму', () => {
     expect(parseRoleList('admin, TEACHER,unknown')).toEqual(['ADMIN', 'TEACHER']);
     expect(parseRoleList(undefined)).toEqual([]);
+  });
+});
+
+describe('ролі фіктивного користувача в мок-режимі', () => {
+  const storage = (value: string | null) => ({
+    getItem: (key: string) => (key === MOCK_ROLES_STORAGE_KEY ? value : null),
+  });
+
+  it('бере ролі зі сховища вкладки, коли API змоковане', () => {
+    expect(devRoles('ADMIN,TEACHER', true, storage('TEACHER'))).toEqual(['TEACHER']);
+    // порожнє значення — гість, навіть якщо змінна середовища дає ролі
+    expect(devRoles('ADMIN,TEACHER', true, storage(''))).toEqual([]);
+    expect(devRoles('ADMIN', true, storage(null))).toEqual(['ADMIN']);
+  });
+
+  it('з реальним бекендом сховище ігнорується', () => {
+    expect(devRoles(undefined, false, storage('ADMIN'))).toEqual([]);
+    expect(devRoles('TEACHER', false, storage('ADMIN'))).toEqual(['TEACHER']);
+    expect(devRoles('ADMIN', true, null)).toEqual(['ADMIN']);
   });
 });
 

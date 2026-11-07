@@ -7,9 +7,9 @@ const port = Number(process.env.PW_PORT || 5180);
 const baseURL = `http://localhost:${port}`;
 
 /**
- * E2E-тести SPA. Запуск: `npm run e2e` (піднімає dev-сервер на 5180, якщо він ще не працює).
- * Бекенд для цих тестів не потрібен: перевіряються оболонка, маршрути, тема й компоненти.
- * Браузер встановлюється окремо: `npx playwright install chromium`.
+ * E2E-тести SPA. Запуск: `npm run e2e` (піднімає власний dev-сервер на PW_PORT, типово 5180).
+ * Бекенд не потрібен: сервер стартує з мок-API (VITE_USE_MOCKS=1, src/mocks), користувач — гість.
+ * Ролі в тесті: e2e/support/mock-auth.ts. Браузер встановлюється окремо: `npx playwright install chromium`.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -32,7 +32,10 @@ export default defineConfig({
   webServer: {
     command: `npx vite --port ${port} --strictPort`,
     url: baseURL,
-    reuseExistingServer: true,
+    // лише свій сервер з моками: чужий dev-сервер на тому ж порту (без моків чи з ролями) дав би хибні результати
+    reuseExistingServer: false,
     timeout: 60_000,
+    // змінні процесу важливіші за .env*-файли: локальний VITE_DEV_AUTH_ROLES не зробить тести «залогіненими»
+    env: { VITE_USE_MOCKS: '1', VITE_DEV_AUTH_ROLES: '', VITE_MOCK_DELAY: 'real' },
   },
 });

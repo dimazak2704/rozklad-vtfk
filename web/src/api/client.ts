@@ -9,6 +9,9 @@ import { ApiError, errorFromResponse } from './errors';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '');
 
+/** Чи відповідає мок-API (src/mocks) замість бекенду: лише dev з VITE_USE_MOCKS=1, у production — завжди false. */
+export const MOCK_API = import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === '1';
+
 export type QueryValue = string | number | boolean | null | undefined | ReadonlyArray<string | number>;
 export type QueryParams = Record<string, QueryValue>;
 

@@ -16,6 +16,12 @@ TanStack Query, типи — лише з `types.ts`, ключі — лише з 
 | `sse.ts`, `useEventStream.ts` | Потік `GET /api/events/stream` через fetch (з Bearer), перепідключення з backoff, `Last-Event-ID` |
 | `live.ts` | `useLiveConnection()` (уже викликано в макетах адмінки й кабінету) і `useServerEvent(type, handler)` для сторінок |
 
+## Мок-API
+
+Без бекенду: `npm run dev:mock` — MSW відповідає на `/api` даними з реального розкладу (Vitest і e2e — теж
+з моками). Свою область змокуйте поруч з її хуками: `src/mocks/handlers/<область>.ts`. Правила, дані й
+прапорці `?mockError=` / `?mockDelay=` — `src/mocks/README.md`.
+
 ## Як додати свою область
 
 ```ts

@@ -9,6 +9,10 @@ interface ImportMetaEnv {
   readonly VITE_OIDC_SCOPE?: string;
   /** Лише для `npm run dev`: ролі фіктивного користувача без Keycloak, напр. `ADMIN` або `TEACHER`. */
   readonly VITE_DEV_AUTH_ROLES?: string;
+  /** `1` — у dev відповідає мок-API (MSW, src/mocks) замість бекенду. У production-збірці ігнорується. */
+  readonly VITE_USE_MOCKS?: string;
+  /** Затримка мок-API: мс, `real` (типово, 100–400 мс) або `infinite`. */
+  readonly VITE_MOCK_DELAY?: string;
   /** Куди Vite-проксі веде /api (за замовчуванням gateway :8080). */
   readonly VITE_DEV_API_TARGET?: string;
   /** `1` — показати панель TanStack Query Devtools у `npm run dev`. */

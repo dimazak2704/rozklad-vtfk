@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from 'react-oidc-context';
 import type { Role } from '@/api/types';
-import { parseRoleList, rolesFromAccessToken } from './roles';
+import { devRoles, rolesFromAccessToken } from './roles';
 import type { SigninState } from './postLogin';
 
 export interface CurrentUser {
@@ -31,8 +31,19 @@ export interface CurrentUserState {
   isDevBypass: boolean;
 }
 
+function sessionStorageOrNull(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    // сховище вимкнене налаштуваннями браузера
+    return null;
+  }
+}
+
 // import.meta.env.DEV у production-збірці замінюється на false, і гілка зникає з бандла
-const DEV_ROLES: Role[] = import.meta.env.DEV ? parseRoleList(import.meta.env.VITE_DEV_AUTH_ROLES) : [];
+const DEV_ROLES: Role[] = import.meta.env.DEV
+  ? devRoles(import.meta.env.VITE_DEV_AUTH_ROLES, import.meta.env.VITE_USE_MOCKS === '1', sessionStorageOrNull())
+  : [];
 
 function displayName(profile: Record<string, unknown>, fallback: string): string {
   const name = typeof profile.name === 'string' ? profile.name.trim() : '';

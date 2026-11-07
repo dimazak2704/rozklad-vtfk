@@ -1,9 +1,19 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { server } from '@/mocks/server';
+import { resetMockStores } from '@/mocks/store';
 
 // Файли з `// @vitest-environment node` (скрипти) не мають DOM — заглушки лише для jsdom
 const hasDom = typeof window !== 'undefined';
+
+// Мок-API (src/mocks): запит без обробника — помилка тесту, а не тихий похід у мережу
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => {
+  server.resetHandlers();
+  resetMockStores();
+});
+afterAll(() => server.close());
 
 afterEach(() => {
   if (!hasDom) return;
