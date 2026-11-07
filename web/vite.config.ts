@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
+      // кілька агентів збирають паралельно: обмежуємо кількість воркерів, щоб не забрати всю пам'ять
+      maxWorkers: 3,
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
       css: false,

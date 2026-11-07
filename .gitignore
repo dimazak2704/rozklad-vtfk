@@ -11,6 +11,9 @@ dist/
 coverage/
 *.log
 
+# Робочі копії паралельних агентів
+.claude/worktrees/
+
 # IDE та ОС
 .idea/
 *.iml

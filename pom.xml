@@ -152,7 +152,7 @@
                     <configuration>
                         <!-- Mockito/ByteBuddy підключає агент динамічно (прапорець прибирає попередження JDK 25);
                              UTC та en_US — щоб тести не залежали від налаштувань машини розробника -->
-                        <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Duser.language=en -Duser.country=US</argLine>
+                        <argLine>@{argLine} -Xmx768m -XX:+UseSerialGC -XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Duser.language=en -Duser.country=US</argLine>
                         <includes>
                             <include>**/*Test.java</include>
                             <include>**/*Tests.java</include>
@@ -166,7 +166,7 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <configuration>
-                        <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Duser.language=en -Duser.country=US</argLine>
+                        <argLine>@{argLine} -Xmx768m -XX:+UseSerialGC -XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Duser.language=en -Duser.country=US</argLine>
                         <includes>
                             <include>**/*IT.java</include>
                         </includes>
