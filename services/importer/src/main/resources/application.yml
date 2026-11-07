@@ -25,8 +25,9 @@ spring:
       port: ${REDIS_PORT:6379}
   servlet:
     multipart:
-      max-file-size: ${UPLOAD_MAX_FILE_SIZE:25MB}
-      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:30MB}
+      # трохи більше за app.import.max-file-size: точну межу 20 МБ перевіряє сервіс з українським повідомленням
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:21MB}
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:22MB}
   security:
     oauth2:
       client:
@@ -65,9 +66,42 @@ app:
     core-url: ${CORE_URL:http://localhost:8081}
   ai:
     api-key: ${ANTHROPIC_API_KEY:}
+    # anthropic — справжні виклики; fake — лише заздалегідь підготовлені відповіді (тести)
+    provider: ${AI_PROVIDER:anthropic}
+    base-url: ${AI_BASE_URL:}
     model-text: ${AI_MODEL_TEXT:claude-haiku-5-5}
     model-vision: ${AI_MODEL_VISION:claude-sonnet-5-5}
     daily-budget-usd: ${AI_DAILY_BUDGET_USD:2.00}
+    timeout: ${AI_TIMEOUT:180s}
+    max-retries: ${AI_MAX_RETRIES:2}
+    effort-text: ${AI_EFFORT_TEXT:low}
+    effort-vision: ${AI_EFFORT_VISION:medium}
+    max-tokens: ${AI_MAX_TOKENS:16000}
+    # USD за мільйон токенів (оцінка вартості для денного бюджету)
+    prices:
+      "[claude-haiku-5-5]":
+        input-per-mtok: 0.10
+        output-per-mtok: 0.50
+        long-context-threshold: 100000
+        long-input-per-mtok: 0.50
+        long-output-per-mtok: 2.50
+      "[claude-sonnet-5-5]":
+        input-per-mtok: 2.00
+        output-per-mtok: 10.00
+      "[claude-opus-5-5]":
+        input-per-mtok: 4.00
+        output-per-mtok: 20.00
+    # для невідомих моделей — найдорожча ціна, щоб бюджет не занижувався
+    default-price:
+      input-per-mtok: 10.00
+      output-per-mtok: 50.00
+  import:
+    max-file-size: ${IMPORT_MAX_FILE_SIZE:20MB}
+    # DATABASE — bytea в import_file; FILESYSTEM — каталог (том у compose)
+    storage: ${IMPORT_STORAGE:DATABASE}
+    storage-dir: ${IMPORT_STORAGE_DIR:./data/import-files}
+    workers: ${IMPORT_WORKERS:2}
+    queue-capacity: ${IMPORT_QUEUE_CAPACITY:50}
   office:
     soffice-path: ${SOFFICE_PATH:}
 

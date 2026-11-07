@@ -1,0 +1,144 @@
+package ua.vtc.rozklad.importer.program;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import ua.vtc.rozklad.contracts.LessonKind;
+import ua.vtc.rozklad.importer.ai.AiBudgetExceededException;
+import ua.vtc.rozklad.importer.ai.AiExtractionException;
+import ua.vtc.rozklad.importer.ai.AiExtractionService;
+import ua.vtc.rozklad.importer.ai.AiExtractions.ProgramHoursExtraction;
+import ua.vtc.rozklad.importer.ai.AiUnavailableException;
+import ua.vtc.rozklad.importer.apply.ApplyException;
+import ua.vtc.rozklad.importer.apply.CatalogKeys;
+import ua.vtc.rozklad.importer.apply.CoreImportClient;
+import ua.vtc.rozklad.importer.apply.CoreImportPayloads;
+import ua.vtc.rozklad.importer.apply.LoadApplier;
+import ua.vtc.rozklad.importer.job.FileType;
+import ua.vtc.rozklad.importer.job.ImportHandler;
+import ua.vtc.rozklad.importer.job.ImportKind;
+import ua.vtc.rozklad.importer.job.JobOptions;
+import ua.vtc.rozklad.importer.normalize.EntityCandidate;
+import ua.vtc.rozklad.importer.normalize.EntityType;
+import ua.vtc.rozklad.importer.program.ProgramDraft.Hours;
+import ua.vtc.rozklad.importer.report.Issues;
+import ua.vtc.rozklad.importer.report.RowType;
+import ua.vtc.rozklad.importer.web.ProblemException;
+
+/**
+ * DISCIPLINE_PROGRAM: deterministic table parsing first; the text model is used only when the
+ * structure table is missing. Applying adds one load item per target group (options.groupCodes)
+ * with the program's classroom hours as planned hours.
+ */
+@Component
+public class ProgramImportHandler implements ImportHandler {
+
+    private final ProgramDocumentReader reader;
+    private final ProgramStructureExtractor extractor;
+    private final AiExtractionService ai;
+    private final CoreImportClient core;
+    private final JsonMapper jsonMapper;
+
+    public ProgramImportHandler(ProgramDocumentReader reader, ProgramStructureExtractor extractor, AiExtractionService ai,
+                                CoreImportClient core, JsonMapper jsonMapper) {
+        this.reader = reader;
+        this.extractor = extractor;
+        this.ai = ai;
+        this.core = core;
+        this.jsonMapper = jsonMapper;
+    }
+
+    @Override
+    public ImportKind kind() {
+        return ImportKind.DISCIPLINE_PROGRAM;
+    }
+
+    @Override
+    public boolean acceptUpload(FileType type, JobOptions options) {
+        if (type != FileType.DOCX && type != FileType.DOC && type != FileType.PDF) {
+            throw ProblemException.unsupportedFile("Програму дисципліни можна завантажити як DOCX, DOC або PDF, а завантажено "
+                    + type.label() + ".");
+        }
+        return false;
+    }
+
+    @Override
+    public ParseOutcome parse(ParseInput input) {
+        Issues issues = new Issues();
+        ProgramDocument document = reader.read(input.type(), input.content());
+        ProgramStructureExtractor.Extraction extraction = extractor.extract(document, issues);
+        Hours hours = extraction.hours();
+        ProgramDraft.Source source = extraction.source();
+        String name = extraction.disciplineName();
+        Integer semester = extraction.semester();
+        Double hoursPerWeek = extraction.hoursPerWeek();
+        if (hours == null) {
+            try {
+                ProgramHoursExtraction fallback = ai.extractProgramHours(document.fullText(), input.jobId()).value();
+                hours = new Hours(fallback.totalHours(), fallback.classroomHours(), fallback.selfStudyHours(),
+                        fallback.lectures(), fallback.practice(), fallback.labs(), fallback.seminars(), null,
+                        fallback.exam(), fallback.credit());
+                source = ProgramDraft.Source.AI;
+                name = name != null ? name : fallback.disciplineName();
+                semester = semester != null ? semester : fallback.semester();
+                hoursPerWeek = hoursPerWeek != null ? hoursPerWeek : fallback.hoursPerWeek();
+                issues.warn(RowType.HOURS, null, null, "Таблицю «Структура навчальної дисципліни…» не знайдено — години "
+                        + "визначено за допомогою ШІ з тексту програми. Звірте їх із документом.");
+                fallback.warnings().forEach(warning -> issues.warn(RowType.HOURS, null, null, "ШІ: " + warning));
+            } catch (AiUnavailableException | AiExtractionException | AiBudgetExceededException e) {
+                issues.error(RowType.HOURS, null, null, "Таблицю «Структура навчальної дисципліни…» не знайдено, а "
+                        + "розпізнати години за допомогою ШІ не вдалося: " + e.getMessage());
+            }
+        }
+        String label = name != null ? name : baseName(input.fileName());
+        ProgramDraft draft = new ProgramDraft(name, label, extraction.cycleCommission(), hours, semester, hoursPerWeek,
+                extraction.credits(), source, extraction.location());
+        return new ParseOutcome(draft, issues.rows());
+    }
+
+    @Override
+    public List<EntityCandidate> entities(JsonNode draftJson, JobOptions options) {
+        ProgramDraft draft = jsonMapper.treeToValue(draftJson, ProgramDraft.class);
+        List<EntityCandidate> entities = new ArrayList<>();
+        entities.add(new EntityCandidate(EntityType.DISCIPLINE, draft.disciplineRaw(), List.of(), draft.disciplineName(),
+                "титульна сторінка"));
+        options.groupCodes().forEach(code -> entities.add(EntityCandidate.of(EntityType.GROUP, code, "параметри імпорту")));
+        return entities;
+    }
+
+    @Override
+    public JsonNode apply(ApplyInput input) {
+        ProgramDraft draft = jsonMapper.treeToValue(input.draft(), ProgramDraft.class);
+        UUID semesterId = LoadApplier.requireSemester(input);
+        CatalogKeys keys = new CatalogKeys(input.normalization(), input.catalog());
+        List<String> groups = LoadApplier.requireGroups(input, keys);
+        Hours hours = draft.hours();
+        if (hours == null || hours.classroom() == null) {
+            throw new ApplyException("HOURS_REQUIRED", "У програмі не визначено годин на заняттях — застосувати неможливо.");
+        }
+        BigDecimal hoursPerWeek = input.options().hoursPerWeek() != null ? input.options().hoursPerWeek()
+                : draft.hoursPerWeek() == null ? null : BigDecimal.valueOf(draft.hoursPerWeek());
+        if (hoursPerWeek == null || hoursPerWeek.signum() <= 0) {
+            throw new ApplyException("HOURS_PER_WEEK_REQUIRED", "У програмі не вказано тижневих годин — задайте "
+                    + "options.hoursPerWeek під час завантаження.");
+        }
+        LoadApplier.createNewDisciplines(input, keys, List.of(draft.disciplineRaw()), core, jsonMapper);
+        String discipline = keys.key(EntityType.DISCIPLINE, draft.disciplineRaw(), "shortName");
+        String controlForm = hours.exam() ? "EXAM" : hours.credit() ? "CREDIT" : "NONE";
+        List<CoreImportPayloads.LoadItem> items = groups.stream()
+                .map(group -> new CoreImportPayloads.LoadItem(group, discipline, LessonKind.MIXED, hoursPerWeek,
+                        hours.classroom(), controlForm, "PROGRAM", "Програма: " + input.fileName()))
+                .toList();
+        LoadApplier.sendLoad(input, semesterId, items, core);
+        return input.steps().all();
+    }
+
+    private static String baseName(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+}

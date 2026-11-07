@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.RestClient;
@@ -57,10 +58,40 @@ class ImporterApplicationIT {
     }
 
     @Test
-    void botServiceMayParseAbsenceText() throws Exception {
-        // ендпоінта ще немає: будь-яка відповідь, крім 401/403, означає, що безпека пропустила SERVICE
-        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE")))
-                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
+    void botServiceParsesAbsenceTextByRulesWhenAiIsDisabled() throws Exception {
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"з 4 по 6 листопада відрядження, 1-2 пари\",\"today\":\"2026-11-07\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateFrom").value("2026-11-04"))
+                .andExpect(jsonPath("$.dateTo").value("2026-11-06"))
+                .andExpect(jsonPath("$.pairs[1]").value(2))
+                .andExpect(jsonPath("$.reasonCategory").value("BUSINESS_TRIP"))
+                .andExpect(jsonPath("$.source").value("RULES"));
+        // правила не впевнені, а ШІ вимкнено — відповідь усе одно є, з проханням уточнити
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"не зможу провести пари\",\"today\":\"2026-11-07\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateFrom").value("2026-11-07"))
+                .andExpect(jsonPath("$.clarification").isNotEmpty());
+    }
+
+    @Test
+    void parseAbsenceValidatesInputAndRejectsTeachers() throws Exception {
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("text"))
+                .andExpect(jsonPath("$.errors[1].field").value("today"));
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"завтра\",\"today\":\"2026-11-07\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/import/ai/usage").with(token("SERVICE"))).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/import/ai/usage").with(token("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.model.text").value("claude-haiku-5-5"));
     }
 
     @Test

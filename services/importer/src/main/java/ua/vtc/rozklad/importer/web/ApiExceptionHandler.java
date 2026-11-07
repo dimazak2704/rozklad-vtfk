@@ -28,6 +28,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.util.DisconnectedClientHelper;
+import ua.vtc.rozklad.importer.ai.AiBudgetExceededException;
 
 /** RFC 9457 ProblemDetail with Ukrainian titles; validation errors carry {@code errors[{field,message}]}. */
 @RestControllerAdvice
@@ -79,6 +80,27 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     ResponseEntity<Object> handleNotFound(NotFoundException ex, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "not-found", "Не знайдено", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    ResponseEntity<Object> handleInvalidRequest(InvalidRequestException ex) {
+        return validationProblem(ex.errors().stream()
+                .map(error -> new FieldErrorDto(error.getKey(), error.getValue()))
+                .toList());
+    }
+
+    @ExceptionHandler(ProblemException.class)
+    ResponseEntity<Object> handleProblem(ProblemException ex, HttpServletRequest request) {
+        return problem(ex.status(), ex.type(), ex.title(), ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AiBudgetExceededException.class)
+    ResponseEntity<Object> handleAiBudget(AiBudgetExceededException ex, HttpServletRequest request) {
+        ProblemDetail body = body(HttpStatus.TOO_MANY_REQUESTS, "ai-budget-exceeded", "Вичерпано денний бюджет ШІ",
+                ex.getMessage(), request);
+        body.setProperty("spentUsd", ex.spentUsd());
+        body.setProperty("dailyBudgetUsd", ex.budgetUsd());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
     }
 
     @ExceptionHandler(BusinessRuleException.class)
