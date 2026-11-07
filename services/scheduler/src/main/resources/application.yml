@@ -24,6 +24,8 @@ spring:
     port: ${RABBIT_PORT:5672}
     username: ${RABBIT_USER:rozklad}
     password: ${RABBIT_PASSWORD:rozklad}
+    # generation.completed чекає підтвердження брокера саме для свого повідомлення (CorrelationData)
+    publisher-confirm-type: correlated
     listener:
       simple:
         default-requeue-rejected: false
@@ -50,10 +52,27 @@ server:
     include-message: never
     include-stacktrace: never
 
+timefold:
+  solver-manager:
+    # одночасно розв'язуваних задач; решта чекає в черзі (QUEUED)
+    parallel-solver-count: ${SCHEDULER_PARALLEL_SOLVERS:1}
+  solver:
+    termination:
+      # запобіжник: кожна задача задає власний ліміт часу (timeLimitSeconds)
+      spent-limit: 15m
+
 app:
   keycloak:
     issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
     jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+  scheduler:
+    progress-interval: ${SCHEDULER_PROGRESS_INTERVAL:2s}
+    max-time-limit: ${SCHEDULER_MAX_TIME_LIMIT:15m}
+    min-unimproved-limit: ${SCHEDULER_MIN_UNIMPROVED_LIMIT:15s}
+    unimproved-ratio: ${SCHEDULER_UNIMPROVED_RATIO:0.25}
+    discipline-repeat-weight: ${SCHEDULER_DISCIPLINE_REPEAT_WEIGHT:5}
+    completion-resend-interval: 30s
+    retention: 30d
 
 management:
   endpoints:

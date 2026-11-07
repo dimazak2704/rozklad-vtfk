@@ -8,24 +8,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ai.timefold.solver.core.api.score.stream.ConstraintMetaModel;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.scheduler.config.KeycloakRealmRoleConverter;
-import ua.vtc.rozklad.scheduler.support.TestcontainersConfiguration;
+import ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint;
+import ua.vtc.rozklad.scheduler.support.SchedulerIntegrationTest;
 
 /** Smoke test: the scheduler boots against real PostgreSQL and RabbitMQ with its security rules. */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@SchedulerIntegrationTest
 class SchedulerApplicationIT {
 
     @Autowired
@@ -33,6 +30,9 @@ class SchedulerApplicationIT {
 
     @Autowired
     private AmqpAdmin amqpAdmin;
+
+    @Autowired
+    private ConstraintMetaModel constraintMetaModel;
 
     @Test
     void healthIsUp() throws Exception {
@@ -61,5 +61,12 @@ class SchedulerApplicationIT {
         assertThat(amqpAdmin.getQueueInfo(RozkladEvents.Queues.SCHEDULER_GENERATION)).isNotNull();
         assertThat(amqpAdmin.getQueueInfo(RozkladEvents.Queues.deadLetterQueue(
                 RozkladEvents.Queues.SCHEDULER_GENERATION))).isNotNull();
+    }
+
+    @Test
+    void solverKnowsExactlyTheDocumentedConstraints() {
+        assertThat(constraintMetaModel.getConstraints())
+                .extracting(constraint -> TimetableConstraint.byId(constraint.getConstraintRef().id()))
+                .containsExactlyInAnyOrder(TimetableConstraint.values());
     }
 }
