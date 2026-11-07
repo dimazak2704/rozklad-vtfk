@@ -1,0 +1,258 @@
+# Розклад ВТФК — локальний стенд.
+#   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis, keycloak
+#   docker compose -f infra/docker-compose.yml --profile app up -d --build    # + усі сервіси та web
+# Перед --profile app зберіть jar-и: mvn -q -DskipTests package (Dockerfile копіює target/app.jar).
+# Секрети (TELEGRAM_*, ANTHROPIC_API_KEY, *_CLIENT_SECRET) беруться з ../.env, якщо він є.
+name: rozklad
+
+x-java-env: &java-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  RABBIT_HOST: rabbitmq
+  RABBIT_PORT: "5672"
+  RABBIT_USER: rozklad
+  RABBIT_PASSWORD: rozklad
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  # токени видає Keycloak з issuer http://localhost:8180/realms/rozklad, а ключі сервіси беруть усередині мережі
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/rozklad
+  KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
+  KEYCLOAK_URL: http://keycloak:8080
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+
+x-java-service: &java-service
+  restart: unless-stopped
+  profiles: [app]
+  env_file:
+    - path: ../.env
+      required: false
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    profiles: [infra, app]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      # PostgreSQL 18: том монтується на /var/lib/postgresql (PGDATA = /var/lib/postgresql/18/docker)
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      # під час init сервер слухає лише unix-сокет, тож TCP-перевірка проходить тільки після створення баз
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4.4-management-alpine
+    profiles: [infra, app]
+    restart: unless-stopped
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rozklad
+      RABBITMQ_DEFAULT_PASS: rozklad
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:8.8-alpine
+    profiles: [infra, app]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    profiles: [infra, app]
+    restart: unless-stopped
+    # --import-realm пропускає реалм, якщо він уже є в БД: після зміни JSON видаліть реалм або том pgdata
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/rozklad-realm.json:/opt/keycloak/data/import/rozklad-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # в образі Keycloak немає curl: HTTP-запит через /dev/tcp до management-порту 9000
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  core:
+    <<: *java-service
+    build: ../services/core
+    image: rozklad/core:dev
+    environment:
+      <<: *java-env
+      DB_NAME: core
+      DB_USER: core
+      DB_PASSWORD: core
+      PUBLIC_WEB_URL: http://localhost:8088
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    healthcheck: &java-healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  scheduler:
+    <<: *java-service
+    build: ../services/scheduler
+    image: rozklad/scheduler:dev
+    environment:
+      <<: *java-env
+      DB_NAME: scheduler
+      DB_USER: scheduler
+      DB_PASSWORD: scheduler
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      <<: *java-healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+
+  importer:
+    <<: *java-service
+    build: ../services/importer
+    image: rozklad/importer:dev
+    environment:
+      <<: *java-env
+      DB_NAME: importer
+      DB_USER: importer
+      DB_PASSWORD: importer
+      CORE_URL: http://core:8081
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+    healthcheck:
+      <<: *java-healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+
+  notification:
+    <<: *java-service
+    build: ../services/notification
+    image: rozklad/notification:dev
+    environment:
+      <<: *java-env
+      DB_NAME: notification
+      DB_USER: notification
+      DB_PASSWORD: notification
+      CORE_URL: http://core:8081
+      IMPORTER_URL: http://importer:8083
+      PUBLIC_WEB_URL: http://localhost:8088
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+    healthcheck:
+      <<: *java-healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8084 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+
+  gateway:
+    <<: *java-service
+    build: ../services/gateway
+    image: rozklad/gateway:dev
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CORE_URL: http://core:8081
+      SCHEDULER_URL: http://scheduler:8082
+      IMPORTER_URL: http://importer:8083
+      NOTIFICATION_URL: http://notification:8084
+      CORS_ALLOWED_ORIGINS: http://localhost:5180,http://localhost:8088
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    healthcheck:
+      <<: *java-healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+
+  web:
+    # Dockerfile пише агент web/: nginx віддає SPA; порт у контейнері — WEB_CONTAINER_PORT (типово 80)
+    profiles: [app]
+    restart: unless-stopped
+    build: ../web
+    image: rozklad/web:dev
+    environment:
+      API_BASE_URL: http://localhost:8080
+      OIDC_AUTHORITY: http://localhost:8180/realms/rozklad
+      OIDC_CLIENT_ID: rozklad-web
+    ports:
+      - "8088:${WEB_CONTAINER_PORT:-80}"
+    depends_on:
+      gateway:
+        condition: service_started
+
+volumes:
+  pgdata:
+  rabbitdata:
+  redisdata:
