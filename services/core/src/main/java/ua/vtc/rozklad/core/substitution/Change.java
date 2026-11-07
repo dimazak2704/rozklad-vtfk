@@ -93,6 +93,12 @@ public class Change extends BaseEntity {
     @Column(name = "order_id")
     private UUID orderId;
 
+    @Column(name = "swap_lesson_id")
+    private UUID swapLessonId;
+
+    @Column(name = "reminded_at")
+    private Instant remindedAt;
+
     @Column(name = "created_by", length = 100, updatable = false)
     private String createdBy;
 
@@ -199,6 +205,27 @@ public class Change extends BaseEntity {
         this.reasonText = reasonText;
     }
 
+    /**
+     * Reason as printed in the order's «Причина заміни» column (DOMAIN §7–§8): BLOCK, ADDITIONAL
+     * and room-only rows have none, a finished discipline is always «Вичит.», OTHER prints the free
+     * text (may be empty), every other code its abbreviation («Відп.», «Зв.зам.», «Відр.»).
+     */
+    public String printedReason() {
+        if (kind == ChangeKind.BLOCK || kind == ChangeKind.ADDITIONAL || kind == ChangeKind.ROOM_CHANGE) {
+            return null;
+        }
+        if (kind == ChangeKind.DISCIPLINE_FINISHED) {
+            return ReasonCode.FINISHED.orderText();
+        }
+        if (reasonCode == null) {
+            return null;
+        }
+        if (reasonCode == ReasonCode.OTHER) {
+            return reasonText == null || reasonText.isBlank() ? null : reasonText.strip();
+        }
+        return reasonCode.orderText();
+    }
+
     public UUID getAbsenceId() {
         return absenceId;
     }
@@ -253,7 +280,45 @@ public class Change extends BaseEntity {
         this.orderId = orderId;
     }
 
+    /** SWAP: the later lesson of the group that moves into this change's slot. */
+    public UUID getSwapLessonId() {
+        return swapLessonId;
+    }
+
+    public void setSwapLessonId(UUID swapLessonId) {
+        this.swapLessonId = swapLessonId;
+    }
+
+    /** When the overdue-confirmation reminder was sent for the current confirmation round. */
+    public Instant getRemindedAt() {
+        return remindedAt;
+    }
+
+    public void markReminded(Instant at) {
+        this.remindedAt = Objects.requireNonNull(at, "at");
+    }
+
+    /** Starts a new confirmation round: new deadline, no reminder sent yet. */
+    public void startConfirmationRound(Instant deadline) {
+        this.confirmDeadline = Objects.requireNonNull(deadline, "deadline");
+        this.remindedAt = null;
+    }
+
     public String getCreatedBy() {
         return createdBy;
+    }
+
+    public int pairCount() {
+        return pairTo - pairFrom + 1;
+    }
+
+    public boolean coversPair(int pair) {
+        return pair >= pairFrom && pair <= pairTo;
+    }
+
+    /** DRAFT, PENDING_CONFIRMATION or CONFIRMED: a decision that is still in force but not applied yet. */
+    public boolean isOpen() {
+        return status == ChangeStatus.DRAFT || status == ChangeStatus.PENDING_CONFIRMATION
+                || status == ChangeStatus.CONFIRMED;
     }
 }

@@ -12,6 +12,9 @@ public interface TeacherPreferenceRepository extends JpaRepository<TeacherPrefer
 
     List<TeacherPreference> findAllBySemesterId(UUID semesterId);
 
+    /** Preferences of all teachers for one weekday × pair (candidate ranking). */
+    List<TeacherPreference> findAllBySemesterIdAndWeekdayAndPairNumber(UUID semesterId, int weekday, int pairNumber);
+
     /** Bulk delete before saving a replacement grid of a teacher. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from TeacherPreference p where p.teacherId = :teacherId and p.semesterId = :semesterId")

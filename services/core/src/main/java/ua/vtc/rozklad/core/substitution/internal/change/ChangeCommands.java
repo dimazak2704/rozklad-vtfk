@@ -1,0 +1,362 @@
+package ua.vtc.rozklad.core.substitution.internal.change;
+
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.contracts.ChangeKind;
+import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.catalog.StudentGroup;
+import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
+import ua.vtc.rozklad.core.shared.error.ConflictDto;
+import ua.vtc.rozklad.core.shared.error.ConflictException;
+import ua.vtc.rozklad.core.shared.error.NotFoundException;
+import ua.vtc.rozklad.core.substitution.Absence;
+import ua.vtc.rozklad.core.substitution.AbsenceRepository;
+import ua.vtc.rozklad.core.substitution.Change;
+import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.ReasonCode;
+import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffect;
+import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffectPlanner;
+import ua.vtc.rozklad.core.substitution.internal.effect.DatedSlotChecker;
+import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
+import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
+import ua.vtc.rozklad.core.timetable.Lesson;
+import ua.vtc.rozklad.core.timetable.LessonRepository;
+
+/**
+ * Dispatcher commands on changes: create (with approval rules and a conflict check), edit the room
+ * or reason, cancel, ask the teacher again, confirm on the teacher's behalf. Decisions about one
+ * group-day are serialized with {@code lessonRepository.lockGroupDay}; concurrent edits of one
+ * change are caught by optimistic locking.
+ */
+@Service
+@Transactional
+public class ChangeCommands {
+
+    private final ChangeRepository changes;
+    private final AbsenceRepository absences;
+    private final LessonRepository lessons;
+    private final CatalogLookup catalog;
+    private final SubstitutionCalendar calendar;
+    private final ChangeEffectPlanner planner;
+    private final DatedSlotChecker checker;
+    private final ChangeWorkflow workflow;
+    private final ChangeNotifications notifications;
+    private final ChangeViews views;
+
+    public ChangeCommands(ChangeRepository changes, AbsenceRepository absences, LessonRepository lessons,
+                          CatalogLookup catalog, SubstitutionCalendar calendar, ChangeEffectPlanner planner,
+                          DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
+                          ChangeViews views) {
+        this.changes = changes;
+        this.absences = absences;
+        this.lessons = lessons;
+        this.catalog = catalog;
+        this.calendar = calendar;
+        this.planner = planner;
+        this.checker = checker;
+        this.workflow = workflow;
+        this.notifications = notifications;
+        this.views = views;
+    }
+
+    public ChangeDto create(CreateChangeRequest request, String actor) {
+        StudentGroup group = catalog.group(request.groupId());
+        // спершу блокуємо день групи, потім читаємо заняття: так рішення не перетинаються
+        List<Lesson> groupDay = lessons.lockGroupDay(group.getId(), request.date());
+        Change change = new Change(request.kind(), request.date(), request.pairFrom(), request.lastPair(),
+                group.getId(), cohortOf(request, groupDay), actor);
+        if (request.originalLessonId() != null) {
+            Lesson original = lessonOfDay(request.originalLessonId(), groupDay, request);
+            change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
+                    original.getRoomId());
+        } else {
+            requireClassesFor(group, request.date());
+        }
+        fillReplacement(change, request, groupDay);
+        change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
+        if (request.absenceId() != null) {
+            change.setAbsenceId(activeAbsenceFor(request.absenceId(), change).getId());
+        }
+
+        ChangeEffect effect = planner.plan(change);
+        requireNoCompetingDecision(change, effect);
+        List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(), true);
+        if (!conflicts.isEmpty()) {
+            throw ConflictException.schedule(conflicts);
+        }
+        changes.save(change);
+        workflow.open(change, actor);
+        return finish(change);
+    }
+
+    public ChangeDto update(UUID id, UpdateChangeRequest request, String actor) {
+        Change change = find(id);
+        if (request.version() != null && request.version() != change.getVersion()) {
+            throw new ObjectOptimisticLockingFailureException(Change.class, id);
+        }
+        if (!change.isOpen() && change.getStatus() != ChangeStatus.DECLINED) {
+            throw new BusinessRuleException("CHANGE_NOT_EDITABLE", "Зміну зі статусом «%s» редагувати не можна."
+                    .formatted(ChangeStatusMachine.label(change.getStatus())));
+        }
+        if (change.getKind() == ChangeKind.DISCIPLINE_FINISHED
+                && request.reasonCode() != ReasonCode.FINISHED) {
+            throw new BusinessRuleException("CHANGE_INVALID", "Для вичитаної дисципліни причина — «Вичит.».");
+        }
+        if (change.getKind() == ChangeKind.ROOM_CHANGE && request.newRoomId() == null) {
+            throw new BusinessRuleException("CHANGE_INVALID", "Для заміни аудиторії вкажіть нову аудиторію.");
+        }
+        if (change.getKind() == ChangeKind.CANCEL && request.newRoomId() != null) {
+            throw new BusinessRuleException("CHANGE_INVALID", "Скасована пара не має аудиторії.");
+        }
+        if (request.newRoomId() != null) {
+            catalog.room(request.newRoomId());
+        }
+        lessons.lockGroupDay(change.getGroupId(), change.getDate());
+        change.setReplacement(change.getNewDisciplineId(), change.getNewTeacherId(), request.newRoomId());
+        change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
+        if (change.isOpen()) {
+            ChangeEffect effect = planner.plan(change);
+            List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(),
+                    true);
+            if (!conflicts.isEmpty()) {
+                throw ConflictException.schedule(conflicts);
+            }
+        }
+        return finish(change);
+    }
+
+    /** DELETE: cancels the change; cancelling a cancelled change is a no-op. */
+    public void cancel(UUID id, String actor) {
+        Change change = find(id);
+        if (change.getStatus() == ChangeStatus.CANCELLED) {
+            return;
+        }
+        if (change.getStatus() == ChangeStatus.APPLIED) {
+            throw new BusinessRuleException("CHANGE_ALREADY_APPLIED",
+                    "Зміна вже застосована в опублікованому розпорядженні. Щоб повернути пару, створіть нову зміну.");
+        }
+        workflow.moveTo(change, ChangeStatus.CANCELLED, actor, "Скасовано диспетчером");
+        finish(change);
+    }
+
+    /** Asks the assigned teacher again; the slot is checked once more because time has passed. */
+    public ChangeDto requestConfirmation(UUID id, String actor) {
+        Change change = find(id);
+        if (change.getStatus() == ChangeStatus.DRAFT || change.getStatus() == ChangeStatus.DECLINED) {
+            lessons.lockGroupDay(change.getGroupId(), change.getDate());
+            ChangeEffect effect = planner.plan(change);
+            List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(),
+                    true);
+            if (!conflicts.isEmpty()) {
+                throw ConflictException.schedule(conflicts);
+            }
+        }
+        workflow.requestConfirmation(change, actor);
+        return finish(change);
+    }
+
+    /** The dispatcher confirms instead of the teacher (e.g. after a phone call). */
+    public ChangeDto confirm(UUID id, String actor) {
+        Change change = find(id);
+        if (change.getStatus() == ChangeStatus.DECLINED) {
+            throw new BusinessRuleException("CHANGE_DECLINED",
+                    "Викладач відмовився від цієї заміни. Надішліть запит ще раз або оберіть іншого викладача.");
+        }
+        workflow.moveTo(change, ChangeStatus.CONFIRMED, actor, "Підтверджено диспетчером");
+        return finish(change);
+    }
+
+    /** Cancels the not yet applied changes of an absence that match {@code which}. */
+    public void cancelForAbsence(UUID absenceId, Predicate<Change> which, String actor, String comment) {
+        changes.findAllByAbsenceId(absenceId).stream()
+                .filter(change -> change.isOpen() || change.getStatus() == ChangeStatus.DECLINED)
+                .filter(which)
+                .forEach(change -> {
+                    workflow.moveTo(change, ChangeStatus.CANCELLED, actor, comment);
+                    finish(change);
+                });
+    }
+
+    private ChangeDto finish(Change change) {
+        changes.flush();
+        notifications.pushUpdate(change);
+        return views.toDto(change);
+    }
+
+    private Change find(UUID id) {
+        return changes.findById(id).orElseThrow(() -> NotFoundException.of("Зміну", id));
+    }
+
+    private static int cohortOf(CreateChangeRequest request, List<Lesson> groupDay) {
+        if (request.originalLessonId() != null) {
+            return groupDay.stream().filter(lesson -> lesson.getId().equals(request.originalLessonId()))
+                    .findFirst().map(Lesson::getSubgroupNumber)
+                    .orElse(request.subgroup() == null ? 0 : request.subgroup());
+        }
+        return request.subgroup() == null ? 0 : request.subgroup();
+    }
+
+    /** The original lesson must belong to the requested group, date and pair and still take place. */
+    private Lesson lessonOfDay(UUID lessonId, List<Lesson> groupDay, CreateChangeRequest request) {
+        Lesson lesson = groupDay.stream().filter(candidate -> candidate.getId().equals(lessonId)).findFirst()
+                .orElse(null);
+        if (lesson == null) {
+            if (!lessons.existsById(lessonId)) {
+                throw NotFoundException.of("Заняття", lessonId);
+            }
+            throw mismatch();
+        }
+        if (lesson.getPairNumber() != request.pairFrom()
+                || (request.subgroup() != null && request.subgroup() != lesson.getSubgroupNumber())) {
+            throw mismatch();
+        }
+        if (!lesson.isScheduled()) {
+            throw new ConflictException("Це заняття вже скасоване або змінене опублікованим розпорядженням.");
+        }
+        return lesson;
+    }
+
+    private static BusinessRuleException mismatch() {
+        return new BusinessRuleException("CHANGE_LESSON_MISMATCH",
+                "Дата, пара, група або підгрупа не збігаються з вибраним заняттям.");
+    }
+
+    private void requireClassesFor(StudentGroup group, LocalDate date) {
+        Semester semester = calendar.requireStudyDate(date);
+        SubstitutionCalendar.noClassesReason(calendar.periods(semester, date, date), group, date)
+                .ifPresent(reason -> {
+                    throw new BusinessRuleException("NO_CLASSES",
+                            "У групи %s %s занять немає: %s.".formatted(group.getCode(),
+                                    date.format(SubstitutionCalendar.DATE), reason));
+                });
+    }
+
+    private void fillReplacement(Change change, CreateChangeRequest request, List<Lesson> groupDay) {
+        UUID room = request.newRoomId() == null ? null : catalog.room(request.newRoomId()).getId();
+        switch (change.getKind()) {
+            case REPLACE_TEACHER -> {
+                UUID teacher = catalog.teacher(request.newTeacherId()).getId();
+                if (teacher.equals(change.getOrigTeacherId())) {
+                    throw new BusinessRuleException("CHANGE_SAME_TEACHER",
+                            "Новий викладач збігається з тим, кого замінюють.");
+                }
+                if (request.newDisciplineId() != null && !request.newDisciplineId().equals(change.getOrigDisciplineId())) {
+                    throw new BusinessRuleException("CHANGE_INVALID",
+                            "Заміна викладача не змінює дисципліну. Для іншої дисципліни оберіть «Заміна дисципліни».");
+                }
+                change.setReplacement(change.getOrigDisciplineId(), teacher, room);
+            }
+            case REPLACE_DISCIPLINE -> {
+                UUID discipline = catalog.discipline(request.newDisciplineId()).getId();
+                if (discipline.equals(change.getOrigDisciplineId())) {
+                    throw new BusinessRuleException("CHANGE_INVALID",
+                            "Дисципліна та сама. Для іншого викладача оберіть «Заміна викладача».");
+                }
+                change.setReplacement(discipline, catalog.teacher(request.newTeacherId()).getId(), room);
+            }
+            case ROOM_CHANGE -> {
+                if (room.equals(change.getOrigRoomId())) {
+                    throw new BusinessRuleException("CHANGE_INVALID", "Нова аудиторія збігається з поточною.");
+                }
+                change.setReplacement(null, null, room);
+            }
+            case CANCEL -> change.setReplacement(null, null, null);
+            case DISCIPLINE_FINISHED -> change.setReplacement(
+                    request.newDisciplineId() == null ? null : catalog.discipline(request.newDisciplineId()).getId(),
+                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId()).getId(), room);
+            case SWAP -> {
+                Lesson moved = swappedLesson(request, change, groupDay);
+                change.setSwapLessonId(moved.getId());
+                change.setReplacement(moved.getDisciplineId(), moved.getTeacherId(), room);
+            }
+            case ADDITIONAL, BLOCK -> change.setReplacement(catalog.discipline(request.newDisciplineId()).getId(),
+                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId()).getId(), room);
+        }
+    }
+
+    /** SWAP moves a later lesson of the same cohort into the slot; its teacher must not be the absent one. */
+    private Lesson swappedLesson(CreateChangeRequest request, Change change, List<Lesson> groupDay) {
+        Lesson moved = groupDay.stream().filter(lesson -> lesson.getId().equals(request.swapLessonId())).findFirst()
+                .orElseThrow(() -> new BusinessRuleException("SWAP_INVALID",
+                        "Переставити можна лише пару тієї самої групи в той самий день."));
+        if (!moved.isScheduled() || moved.getPairNumber() <= change.getPairFrom()
+                || moved.getSubgroupNumber() != change.getSubgroupNumber()) {
+            throw new BusinessRuleException("SWAP_INVALID",
+                    "Переставити можна лише одну з наступних пар тієї самої (під)групи.");
+        }
+        if (moved.getTeacherId() == null || moved.getTeacherId().equals(change.getOrigTeacherId())) {
+            throw new BusinessRuleException("SWAP_INVALID", "Цю пару веде той самий відсутній викладач.");
+        }
+        return moved;
+    }
+
+    private Absence activeAbsenceFor(UUID absenceId, Change change) {
+        Absence absence = absences.findById(absenceId)
+                .orElseThrow(() -> NotFoundException.of("Відсутність", absenceId));
+        if (!absence.isActive()) {
+            throw new BusinessRuleException("ABSENCE_CANCELLED", "Ця відсутність уже скасована.");
+        }
+        if (change.getOrigTeacherId() != null && !absence.getTeacherId().equals(change.getOrigTeacherId())) {
+            throw new BusinessRuleException("ABSENCE_MISMATCH", "Відсутність належить іншому викладачу.");
+        }
+        return absence;
+    }
+
+    /**
+     * One open decision per lesson: a lesson this change cancels must not be the subject of another
+     * open change. A block may still cover lessons whose other decision only cancels them.
+     */
+    private void requireNoCompetingDecision(Change candidate, ChangeEffect effect) {
+        Set<UUID> concerned = new HashSet<>(effect.cancelledIds());
+        if (candidate.getOriginalLessonId() != null) {
+            concerned.add(candidate.getOriginalLessonId());
+        }
+        if (candidate.getSwapLessonId() != null) {
+            concerned.add(candidate.getSwapLessonId());
+        }
+        if (concerned.isEmpty()) {
+            return;
+        }
+        Stream.concat(changes.findAllByOriginalLessonIdIn(concerned).stream(),
+                        changes.findAllBySwapLessonIdIn(concerned).stream())
+                .filter(Change::isOpen)
+                .filter(other -> !other.getId().equals(candidate.getId()))
+                .filter(other -> candidate.getKind() != ChangeKind.BLOCK || createsLessons(other))
+                .findFirst()
+                .ifPresent(other -> {
+                    throw new ConflictException("Для цього заняття вже є рішення: %s («%s»). Скасуйте його, щоб обрати інше."
+                            .formatted(kindLabel(other.getKind()), ChangeStatusMachine.label(other.getStatus())));
+                });
+    }
+
+    private static boolean createsLessons(Change change) {
+        return change.getKind() != ChangeKind.CANCEL
+                && !(change.getKind() == ChangeKind.DISCIPLINE_FINISHED && change.getNewDisciplineId() == null);
+    }
+
+    static String kindLabel(ChangeKind kind) {
+        return switch (kind) {
+            case REPLACE_TEACHER -> "заміна викладача";
+            case REPLACE_DISCIPLINE -> "заміна дисципліни";
+            case SWAP -> "перестановка пар";
+            case CANCEL -> "пари не буде";
+            case ADDITIONAL -> "додаткова пара";
+            case ROOM_CHANGE -> "заміна аудиторії";
+            case BLOCK -> "блок";
+            case DISCIPLINE_FINISHED -> "вичитано";
+        };
+    }
+
+    private static String blankToNull(String text) {
+        return text == null || text.isBlank() ? null : text.strip();
+    }
+}

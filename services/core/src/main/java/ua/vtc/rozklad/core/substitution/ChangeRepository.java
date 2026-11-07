@@ -15,13 +15,19 @@ public interface ChangeRepository extends JpaRepository<Change, UUID> {
 
     List<Change> findAllByDateAndStatusIn(LocalDate date, Collection<ChangeStatus> statuses);
 
+    List<Change> findAllByDateBetweenAndStatusIn(LocalDate from, LocalDate to, Collection<ChangeStatus> statuses);
+
     List<Change> findAllByNewTeacherIdAndStatusIn(UUID newTeacherId, Collection<ChangeStatus> statuses);
+
+    List<Change> findAllByNewTeacherIdOrderByDateDescPairFromAsc(UUID newTeacherId);
 
     List<Change> findAllByAbsenceId(UUID absenceId);
 
     List<Change> findAllByOrderId(UUID orderId);
 
     List<Change> findAllByOriginalLessonIdIn(Collection<UUID> lessonIds);
+
+    List<Change> findAllBySwapLessonIdIn(Collection<UUID> lessonIds);
 
     /** Pending confirmations whose deadline has passed (reminders, DOMAIN §7). */
     @Query("""
@@ -30,4 +36,14 @@ public interface ChangeRepository extends JpaRepository<Change, UUID> {
               and c.confirmDeadline < :now
             """)
     List<Change> findOverduePending(Instant now);
+
+    /** Overdue pending confirmations of the current round that have not been reminded yet. */
+    @Query("""
+            select c.id from Change c
+            where c.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
+              and c.confirmDeadline < :now
+              and c.remindedAt is null
+            order by c.confirmDeadline
+            """)
+    List<UUID> findIdsToRemind(Instant now);
 }

@@ -125,3 +125,7 @@ app.timetable:
   generation:
     timeout-grace: ${GENERATION_TIMEOUT_GRACE:10m}
     watchdog-interval: ${GENERATION_WATCHDOG_INTERVAL:PT1M}
+
+app.substitution:
+  # як часто шукати прострочені підтвердження замін, щоб нагадати (DOMAIN §7)
+  reminder-check-interval: ${SUBSTITUTION_REMINDER_INTERVAL:PT1M}
