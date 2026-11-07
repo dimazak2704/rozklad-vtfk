@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Тести: без DEBUG-логів кожного кроку Timefold (вони сповільнюють розв'язування) -->
+<configuration>
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="ai.timefold.solver" level="INFO"/>
+  <logger name="org.testcontainers" level="INFO"/>
+  <logger name="tc" level="INFO"/>
+  <logger name="com.github.dockerjava" level="WARN"/>
+  <logger name="org.springframework" level="INFO"/>
+  <logger name="org.hibernate" level="WARN"/>
+  <logger name="ua.vtc.rozklad" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Конфігурація Timefold для генератора розкладу (див. docs/modules/scheduler.md).
+  Ліміт часу задає кожна задача окремо (SolverConfigOverride), тут лише фази.
+-->
+<solver xmlns="https://timefold.ai/xsd/solver">
+  <environmentMode>NO_ASSERT</environmentMode>
+  <solutionClass>ua.vtc.rozklad.scheduler.solver.domain.Timetable</solutionClass>
+  <entityClass>ua.vtc.rozklad.scheduler.solver.domain.LessonUnit</entityClass>
+  <scoreDirectorFactory>
+    <constraintProviderClass>ua.vtc.rozklad.scheduler.solver.score.TimetableConstraintProvider</constraintProviderClass>
+  </scoreDirectorFactory>
+
+  <!-- Аудиторії вже мають початкові значення: евристика обирає лише слот і парність -->
+  <constructionHeuristic>
+    <constructionHeuristicType>FIRST_FIT_DECREASING</constructionHeuristicType>
+    <cartesianProductMoveSelector>
+      <changeMoveSelector>
+        <valueSelector variableName="timeslot"/>
+      </changeMoveSelector>
+      <changeMoveSelector>
+        <valueSelector variableName="parity"/>
+      </changeMoveSelector>
+    </cartesianProductMoveSelector>
+  </constructionHeuristic>
+
+  <localSearch>
+    <unionMoveSelector>
+      <changeMoveSelector>
+        <valueSelector variableName="timeslot"/>
+      </changeMoveSelector>
+      <changeMoveSelector>
+        <valueSelector variableName="room"/>
+      </changeMoveSelector>
+      <changeMoveSelector>
+        <valueSelector variableName="parity"/>
+      </changeMoveSelector>
+      <swapMoveSelector>
+        <variableNameIncludes>
+          <variableNameInclude>timeslot</variableNameInclude>
+        </variableNameIncludes>
+      </swapMoveSelector>
+      <swapMoveSelector>
+        <variableNameIncludes>
+          <variableNameInclude>room</variableNameInclude>
+        </variableNameIncludes>
+      </swapMoveSelector>
+    </unionMoveSelector>
+    <!-- Бенчмарк 56 груп × 16 одиниць (docs/modules/scheduler.md §11): з 16 прийнятими ходами на
+         крок 0 hard так само за кілька секунд, а штраф м'яких обмежень за 90 с у 2–4 рази менший,
+         ніж з 1 чи 4 ходами; табу й імітація відпалу досягали 0 hard лише за ~28 с -->
+    <acceptor>
+      <lateAcceptanceSize>400</lateAcceptanceSize>
+    </acceptor>
+    <forager>
+      <acceptedCountLimit>16</acceptedCountLimit>
+    </forager>
+  </localSearch>
+</solver>
