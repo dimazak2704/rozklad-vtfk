@@ -1,0 +1,116 @@
+# core — усі значення беруться з env (ARCHITECTURE §7); значення за замовчуванням — для запуску на хості
+spring:
+  application:
+    name: core
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:core}
+    username: ${DB_USER:core}
+    password: ${DB_PASSWORD:core}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        # order_inserts вимкнено свідомо: між модулями посилання лише за id (без асоціацій),
+        # тож Hibernate не знає залежностей FK і міг би вставити дочірні рядки раніше за батьківські
+        order_updates: true
+  flyway:
+    locations: classpath:db/migration
+    # модулі мають власні діапазони версій (V1_1xx, V1_4xx, ...) і додають міграції паралельно
+    out-of-order: ${FLYWAY_OUT_OF_ORDER:true}
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:rozklad}
+    password: ${RABBIT_PASSWORD:rozklad}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 2
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  modulith:
+    events:
+      republish-outstanding-events-on-restart: true
+      rabbitmq:
+        # RabbitTemplate бере наш MessageConverter (Jackson 3 + довірений пакет contracts),
+        # а не власний конвертер Modulith без trusted packages
+        enable-json: false
+  web:
+    locale: uk
+    locale-resolver: fixed
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  public-web-url: ${PUBLIC_WEB_URL:http://localhost:5180}
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8180}
+    realm: ${KEYCLOAK_REALM:rozklad}
+    issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
+    jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+    admin:
+      client-id: ${CORE_ADMIN_CLIENT_ID:rozklad-core-admin}
+      client-secret: ${CORE_ADMIN_CLIENT_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      roles: ADMIN
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: Розклад ВТФК — core
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
+  level:
+    root: INFO
+    ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
