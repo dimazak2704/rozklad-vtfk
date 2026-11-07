@@ -1,0 +1,164 @@
+/* Базові стилі: корінь документа, браузерні поверхні (виділення, фокус, скролбари), View Transitions. */
+
+@layer base {
+  :root {
+    color-scheme: light;
+    scroll-padding-block-start: calc(var(--header-height) + 0.5rem);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-size: 100%;
+    background-color: var(--background-color-canvas);
+    color: var(--text-color-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scrollbar-color: var(--border-color-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: var(--text-ui);
+    line-height: var(--text-ui--line-height);
+  }
+
+  ::selection {
+    background-color: var(--background-color-selected-hover);
+    color: var(--text-color-primary);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--outline-color-focus);
+    outline-offset: 2px;
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: from-font;
+  }
+
+  abbr[title] {
+    text-decoration: underline dotted;
+    text-decoration-color: var(--text-decoration-color-muted);
+    cursor: help;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button,
+  [role='button'],
+  a,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--placeholder-color-muted);
+    opacity: 1;
+  }
+
+  input,
+  textarea {
+    caret-color: var(--caret-color-accent);
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  /* Іконки lucide: однакова товщина лінії 1.75 px за будь-якого розміру */
+  svg.lucide {
+    stroke-width: 1.75;
+    flex-shrink: 0;
+  }
+
+  svg.lucide * {
+    vector-effect: non-scaling-stroke;
+  }
+}
+
+/* Штрихування: знаменник, «блок» пар, вимкнені слоти. Нейтральні лінії, не декоративний градієнт. */
+@utility hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch-color, var(--border-color-default)) 0 1px,
+    transparent 1px 7px
+  );
+}
+
+/* Рядок таблиці/сітки: числа однакової ширини, щоб колонки часу не «танцювали» */
+@utility figures {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Зміна теми — як табло-«жалюзі» трамвая: нова тема опускається згори вниз */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme-switching] ::view-transition-new(root) {
+    animation: blind-roll 380ms var(--ease-out) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme-switching] ::view-transition-new(root) {
+    animation: theme-fade 160ms linear both;
+  }
+
+  .animate-shimmer,
+  .animate-live {
+    animation: none;
+  }
+}
+
+@keyframes blind-roll {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes theme-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    background: #fff;
+  }
+}

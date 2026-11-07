@@ -1,0 +1,149 @@
+/*
+ * Рух накладених шарів (Radix ставить data-state="open|closed").
+ * Вхід — коротко з ease-out, вихід — ще коротший і менший. Без вподобання руху — лише прозорість.
+ */
+
+@layer components {
+  .anim-tooltip[data-state='delayed-open'],
+  .anim-tooltip[data-state='instant-open'] {
+    animation: fade-in 120ms var(--ease-out);
+  }
+
+  .anim-tooltip[data-state='closed'] {
+    animation: fade-out 80ms var(--ease-in) forwards;
+  }
+
+  .anim-pop[data-state='open'] {
+    animation: fade-in 160ms var(--ease-out);
+  }
+
+  .anim-pop[data-state='closed'] {
+    animation: fade-out 100ms var(--ease-in) forwards;
+  }
+
+  .anim-overlay[data-state='open'] {
+    animation: fade-in 200ms var(--ease-out);
+  }
+
+  .anim-overlay[data-state='closed'] {
+    animation: fade-out 150ms var(--ease-in) forwards;
+  }
+
+  .anim-dialog[data-state='open'] {
+    animation: fade-in 200ms var(--ease-out);
+  }
+
+  .anim-dialog[data-state='closed'] {
+    animation: fade-out 150ms var(--ease-in) forwards;
+  }
+
+  .anim-sheet-left[data-state='open'] {
+    animation: fade-in 200ms var(--ease-out);
+  }
+
+  .anim-sheet-left[data-state='closed'] {
+    animation: fade-out 150ms var(--ease-in) forwards;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-tooltip[data-state='delayed-open'],
+    .anim-tooltip[data-state='instant-open'] {
+      animation-name: pop-in;
+    }
+
+    .anim-pop[data-state='open'] {
+      animation-name: pop-in;
+    }
+
+    .anim-pop[data-state='closed'] {
+      animation-name: pop-out;
+    }
+
+    .anim-dialog[data-state='open'] {
+      animation: dialog-in 240ms var(--ease-out);
+    }
+
+    .anim-dialog[data-state='closed'] {
+      animation: dialog-out 150ms var(--ease-in) forwards;
+    }
+
+    .anim-sheet-left[data-state='open'] {
+      animation: sheet-left-in 260ms var(--ease-out);
+    }
+
+    .anim-sheet-left[data-state='closed'] {
+      animation: sheet-left-out 200ms var(--ease-in) forwards;
+    }
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Зсув у бік від тригера: Radix ставить data-side */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+    filter: blur(4px);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+    filter: blur(4px);
+  }
+}
+
+@keyframes sheet-left-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sheet-left-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* Поява нового рядка з живого оновлення: колір «наливається» і тримається, поки не побачили */
+@keyframes live-flash {
+  from {
+    background-color: var(--background-color-selected-hover);
+  }
+}
+
+@keyframes nav-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}

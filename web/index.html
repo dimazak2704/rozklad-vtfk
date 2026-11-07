@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Розклад ВТФК</title>
+    <meta
+      name="description"
+      content="Розклад занять і заміни Вінницького технічного фахового коледжу: групи, викладачі, аудиторії, дзвінки."
+    />
+    <meta name="theme-color" content="#0c3669" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('rozklad.theme');
+          var pref = raw ? JSON.parse(raw).state.preference : 'system';
+          var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Для роботи розкладу потрібен увімкнений JavaScript.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

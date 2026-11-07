@@ -1,0 +1,310 @@
+/*
+ * Дизайн-токени «Розклад ВТФК». Світ: трамвайний розклад зупинки (див. web/DESIGN.md).
+ * Два рівні: примітиви (лише тут, без утиліт) → семантичні ролі (утиліти Tailwind).
+ * Ролі розкладені по просторах імен Tailwind 4, тож `bg-*` бачить лише фони,
+ * `text-*` — лише кольори тексту, `border-*` — лише межі. Палітру Tailwind вимкнено.
+ * Усі пари перевірені на WCAG 2.2 AA в обох темах (скрипт і таблиця — у DESIGN.md).
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ---------- Примітиви (OKLCH, всередині sRGB) ---------- */
+:root {
+  --grey-0: oklch(100% 0 0);
+  --grey-25: oklch(97.2% 0.006 258);
+  --grey-50: oklch(96.2% 0.007 258);
+  --grey-75: oklch(94.8% 0.009 258);
+  --grey-100: oklch(92.8% 0.011 258);
+  --grey-150: oklch(91.2% 0.01 258);
+  --grey-200: oklch(87.2% 0.013 258);
+  --grey-400: oklch(63.5% 0.02 258);
+  --grey-500: oklch(56% 0.022 258);
+  --grey-550: oklch(50.5% 0.022 258);
+  --grey-600: oklch(42% 0.028 258);
+  --grey-850: oklch(24.5% 0.03 258);
+
+  /* Ніч: та сама емаль, що й смуга, — темно-синя, а не сірий «нуль» */
+  --night-50: oklch(95.5% 0.008 258);
+  --night-200: oklch(80% 0.016 258);
+  --night-300: oklch(72% 0.016 258);
+  --night-500: oklch(54% 0.022 258);
+  --night-550: oklch(60% 0.022 258);
+  --night-600: oklch(50% 0.014 258);
+  --night-750: oklch(32% 0.024 256);
+  --night-775: oklch(29% 0.024 256);
+  --night-800: oklch(27% 0.022 256);
+  --night-825: oklch(25.5% 0.022 256);
+  --night-850: oklch(24.5% 0.022 256);
+  --night-900: oklch(21% 0.022 256);
+  --night-925: oklch(17.8% 0.02 256);
+  --night-950: oklch(16.3% 0.018 256);
+
+  /* Маршрутний синій: емаль табличок зупинок, фірмова смуга і «живий» колір */
+  --route-50: oklch(95.5% 0.022 253);
+  --route-100: oklch(92.7% 0.036 252);
+  --route-300: oklch(76% 0.09 256);
+  --route-400: oklch(74% 0.13 256);
+  --route-450: oklch(77% 0.119 256);
+  --route-500: oklch(55% 0.17 256);
+  --route-550: oklch(56% 0.15 256);
+  --route-600: oklch(49% 0.16 256);
+  --route-650: oklch(50% 0.15 256);
+  --route-700: oklch(44% 0.15 256);
+  --route-720: oklch(47% 0.15 256);
+  --route-750: oklch(50% 0.11 256);
+  --route-800: oklch(39.5% 0.105 256);
+  --route-850: oklch(33.5% 0.1 256);
+  --route-870: oklch(31% 0.07 256);
+  --route-880: oklch(32% 0.065 256);
+  --route-890: oklch(28% 0.05 256);
+  --route-900: oklch(29% 0.085 256);
+  --route-920: oklch(25.5% 0.06 256);
+  --route-940: oklch(22.5% 0.05 256);
+  --route-onshell-day: oklch(85% 0.04 256);
+  --route-onshell-night: oklch(80% 0.035 256);
+  --route-shellsep-day: oklch(45% 0.085 256);
+  --route-shellsep-night: oklch(36% 0.06 256);
+
+  /* Бурштин — заміна / «обʼїзд» */
+  --amber-50: oklch(95.4% 0.044 81);
+  --amber-300: oklch(80% 0.13 70);
+  --amber-500: oklch(64.5% 0.149 62);
+  --amber-700: oklch(46% 0.11 58);
+  --amber-n-subtle: oklch(30% 0.055 70);
+  --amber-n-border: oklch(52% 0.1 70);
+  --amber-n-solid: oklch(80% 0.15 70);
+  --amber-n-text: oklch(85.5% 0.117 72);
+
+  /* Червоний — скасовано / небезпечна дія */
+  --red-50: oklch(95.9% 0.02 29);
+  --red-300: oklch(80% 0.09 27);
+  --red-550: oklch(55% 0.2 27);
+  --red-600: oklch(50% 0.19 27);
+  --red-700: oklch(47% 0.17 27);
+  --red-n-subtle: oklch(28.5% 0.06 27);
+  --red-n-border: oklch(50% 0.13 27);
+  --red-n-solid: oklch(68% 0.18 27);
+  --red-n-text: oklch(81% 0.1 27);
+
+  /* Зелений — додаткова пара / успіх */
+  --green-50: oklch(96.2% 0.035 150);
+  --green-300: oklch(80% 0.1 150);
+  --green-550: oklch(58% 0.15 150);
+  --green-700: oklch(44% 0.12 150);
+  --green-n-subtle: oklch(28.5% 0.05 150);
+  --green-n-border: oklch(50% 0.1 150);
+  --green-n-solid: oklch(73% 0.15 150);
+  --green-n-text: oklch(84% 0.12 150);
+
+  /* Блакитний — зміна аудиторії */
+  --azure-50: oklch(96% 0.028 221);
+  --azure-300: oklch(80% 0.08 222);
+  --azure-550: oklch(56.7% 0.108 226);
+  --azure-700: oklch(45.7% 0.088 226);
+  --azure-n-subtle: oklch(28.5% 0.045 222);
+  --azure-n-border: oklch(50% 0.08 222);
+  --azure-n-solid: oklch(72% 0.11 222);
+  --azure-n-text: oklch(83% 0.08 222);
+
+  /* Тривалості (утиліти duration-* беруть числа, ці змінні — для JS і власних правил) */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --duration-live: 1600ms;
+
+  --header-height: 3.5rem;
+  --tabbar-height: 3.5rem;
+}
+
+/* ---------- Семантичні ролі (світла тема за замовчуванням) ---------- */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-*: initial;
+  --font-sans: 'Fira Sans', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-condensed: 'Fira Sans Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+
+  /* Шкала тексту: фіксовані rem, крок ~1.15; ролі замість xs…9xl */
+  --text-*: initial;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.35;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.4;
+  --text-ui: 0.875rem;
+  --text-ui--line-height: 1.45;
+  --text-body: 1rem;
+  --text-body--line-height: 1.55;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.35;
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.25;
+  --text-headline: 1.75rem;
+  --text-headline--line-height: 1.15;
+  --text-display: 2.5rem;
+  --text-display--line-height: 1.05;
+  --text-numeral: 3.5rem;
+  --text-numeral--line-height: 1;
+
+  /* Радіуси: дрібні, як у емальованих табличках */
+  --radius-*: initial;
+  --radius-plate: 3px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-dialog: 12px;
+  --radius-full: 9999px;
+
+  /* Тіні лише для накладених шарів; панелі тримаються на лініях */
+  --shadow-*: initial;
+  --shadow-popover: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 4px 12px -2px oklch(24.5% 0.03 258 / 0.12),
+    0 12px 32px -8px oklch(24.5% 0.03 258 / 0.14);
+  --shadow-dialog: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 16px 48px -12px oklch(24.5% 0.03 258 / 0.28);
+  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22);
+
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --animate-*: initial;
+  --animate-spin: spin 0.9s linear infinite;
+  --animate-shimmer: shimmer 1.6s var(--ease-in-out) infinite;
+  --animate-live: live-pulse var(--duration-live) var(--ease-out) infinite;
+
+  /* Фони */
+  --background-color-canvas: light-dark(var(--grey-25), var(--night-925));
+  --background-color-surface: light-dark(var(--grey-0), var(--night-900));
+  --background-color-raised: light-dark(var(--grey-0), var(--night-850));
+  --background-color-sunken: light-dark(var(--grey-50), var(--night-950));
+  --background-color-hover: light-dark(var(--grey-75), var(--night-825));
+  --background-color-active: light-dark(var(--grey-100), var(--night-775));
+  --background-color-skeleton: light-dark(var(--grey-100), var(--night-800));
+  --background-color-selected: light-dark(var(--route-50), var(--route-890));
+  --background-color-selected-hover: light-dark(var(--route-100), var(--route-880));
+  --background-color-shell: light-dark(var(--route-850), var(--route-920));
+  --background-color-shell-hover: light-dark(var(--route-800), var(--route-870));
+  --background-color-shell-raised: light-dark(var(--route-900), var(--route-940));
+  --background-color-plate: light-dark(var(--grey-0), var(--night-50));
+  --background-color-scrim: light-dark(oklch(24.5% 0.03 258 / 0.45), oklch(8% 0.01 258 / 0.62));
+  --background-color-inverse: light-dark(var(--grey-850), var(--night-50));
+  --background-color-accent: light-dark(var(--route-600), var(--route-550));
+  --background-color-accent-hover: light-dark(var(--route-700), var(--route-650));
+  --background-color-danger: light-dark(var(--red-550), var(--red-550));
+  --background-color-danger-hover: light-dark(var(--red-600), var(--red-600));
+  --background-color-danger-subtle: light-dark(var(--red-50), var(--red-n-subtle));
+  --background-color-change: light-dark(var(--amber-300), var(--amber-n-solid));
+  --background-color-change-subtle: light-dark(var(--amber-50), var(--amber-n-subtle));
+  --background-color-cancel-subtle: light-dark(var(--red-50), var(--red-n-subtle));
+  --background-color-add: light-dark(var(--green-550), var(--green-n-solid));
+  --background-color-add-subtle: light-dark(var(--green-50), var(--green-n-subtle));
+  --background-color-room-subtle: light-dark(var(--azure-50), var(--azure-n-subtle));
+  --background-color-block-subtle: light-dark(var(--grey-50), var(--night-950));
+
+  /* Текст */
+  --text-color-primary: light-dark(var(--grey-850), var(--night-50));
+  --text-color-secondary: light-dark(var(--grey-600), var(--night-200));
+  --text-color-muted: light-dark(var(--grey-550), var(--night-300));
+  --text-color-disabled: light-dark(var(--grey-400), var(--night-600));
+  --text-color-inverse: light-dark(var(--grey-0), var(--night-925));
+  --text-color-on-accent: light-dark(var(--grey-0), var(--grey-0));
+  --text-color-on-shell: light-dark(oklch(99% 0.004 256), oklch(97% 0.006 256));
+  --text-color-on-shell-muted: light-dark(var(--route-onshell-day), var(--route-onshell-night));
+  --text-color-on-change: light-dark(var(--grey-850), var(--night-925));
+  --text-color-plate: light-dark(var(--route-850), var(--route-920));
+  --text-color-accent: light-dark(var(--route-720), var(--route-450));
+  --text-color-danger: light-dark(var(--red-700), var(--red-n-text));
+  --text-color-change: light-dark(var(--amber-700), var(--amber-n-text));
+  --text-color-cancel: light-dark(var(--red-700), var(--red-n-text));
+  --text-color-add: light-dark(var(--green-700), var(--green-n-text));
+  --text-color-room: light-dark(var(--azure-700), var(--azure-n-text));
+
+  /* Межі */
+  --border-color-separator: light-dark(var(--grey-150), var(--night-800));
+  --border-color-default: light-dark(var(--grey-200), var(--night-750));
+  --border-color-control: light-dark(var(--grey-400), var(--night-500));
+  --border-color-strong: light-dark(var(--grey-500), var(--night-550));
+  --border-color-accent: light-dark(var(--route-600), var(--route-400));
+  --border-color-accent-subtle: light-dark(var(--route-300), var(--route-750));
+  --border-color-danger: light-dark(var(--red-550), var(--red-n-solid));
+  --border-color-change: light-dark(var(--amber-300), var(--amber-n-border));
+  --border-color-cancel: light-dark(var(--red-300), var(--red-n-border));
+  --border-color-add: light-dark(var(--green-300), var(--green-n-border));
+  --border-color-room: light-dark(var(--azure-300), var(--azure-n-border));
+  --border-color-shell: light-dark(var(--route-shellsep-day), var(--route-shellsep-night));
+
+  --outline-color-focus: light-dark(var(--route-500), var(--route-400));
+  --outline-color-focus-on-shell: light-dark(var(--route-onshell-day), var(--route-onshell-night));
+
+  --fill-accent: light-dark(var(--route-600), var(--route-400));
+  --fill-change: light-dark(var(--amber-500), var(--amber-n-solid));
+  --fill-cancel: light-dark(var(--red-550), var(--red-n-solid));
+  --fill-add: light-dark(var(--green-550), var(--green-n-solid));
+  --fill-room: light-dark(var(--azure-550), var(--azure-n-solid));
+  --fill-muted: light-dark(var(--grey-400), var(--night-500));
+  --fill-surface: light-dark(var(--grey-0), var(--night-900));
+  --stroke-accent: light-dark(var(--route-600), var(--route-400));
+  --stroke-rule: light-dark(var(--grey-200), var(--night-750));
+  --stroke-muted: light-dark(var(--grey-400), var(--night-500));
+  --stroke-change: light-dark(var(--amber-500), var(--amber-n-solid));
+  --stroke-cancel: light-dark(var(--red-550), var(--red-n-solid));
+
+  --text-decoration-color-cancel: light-dark(var(--red-550), var(--red-n-solid));
+  --text-decoration-color-accent: light-dark(var(--route-300), var(--route-750));
+  --text-decoration-color-muted: light-dark(var(--grey-400), var(--night-500));
+  --caret-color-accent: light-dark(var(--route-600), var(--route-400));
+  --placeholder-color-muted: light-dark(var(--grey-550), var(--night-300));
+}
+
+/* ---------- Теми ----------
+ * Кольори вже задані через light-dark() у @theme: їх вибирає color-scheme найближчого предка.
+ * Тому тема працює і для вкладених «острівців» — напр., аркуш розпорядження завжди світлий
+ * (`<div data-theme="light">`) навіть у темній темі. Тут лише те, що не є кольором: тіні. */
+[data-theme='light'] {
+  color-scheme: light;
+  --shadow-popover: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 4px 12px -2px oklch(24.5% 0.03 258 / 0.12), 0 12px 32px -8px oklch(24.5% 0.03 258 / 0.14);
+  --shadow-dialog: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 16px 48px -12px oklch(24.5% 0.03 258 / 0.28);
+  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --shadow-popover: 0 0 0 1px oklch(100% 0 0 / 0.08), 0 8px 24px -6px oklch(0% 0 0 / 0.6);
+  --shadow-dialog: 0 0 0 1px oklch(100% 0 0 / 0.09), 0 20px 56px -12px oklch(0% 0 0 / 0.7);
+  --shadow-lift: 0 0 0 1px oklch(100% 0 0 / 0.1), 0 8px 20px -6px oklch(0% 0 0 / 0.6);
+}
+
+/* Підвищений контраст: розсуваємо вторинний текст і межі, окремо для кожної теми */
+@media (prefers-contrast: more) {
+  :root {
+    --text-color-secondary: light-dark(var(--grey-850), var(--night-50));
+    --text-color-muted: light-dark(var(--grey-600), var(--night-200));
+    --border-color-default: light-dark(var(--grey-400), var(--night-500));
+    --border-color-control: light-dark(var(--grey-500), var(--night-550));
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 oklch(55% 0.17 256 / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px oklch(55% 0.17 256 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(55% 0.17 256 / 0);
+  }
+}

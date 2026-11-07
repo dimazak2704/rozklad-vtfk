@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T01:05:00Z",
+  "title": "Design System: Розклад ВТФК",
+  "extensions": {
+    "colorMeta": {
+      "enamel-shell": {
+        "role": "primary",
+        "displayName": "Емальована смуга",
+        "canonical": "oklch(33.5% 0.1 256)",
+        "tonalRamp": ["oklch(22.5% 0.05 256)", "oklch(29% 0.085 256)", "oklch(33.5% 0.1 256)", "oklch(39.5% 0.105 256)", "oklch(49% 0.16 256)", "oklch(56% 0.15 256)", "oklch(76% 0.09 256)", "oklch(95.5% 0.022 253)"]
+      },
+      "route-blue": {
+        "role": "primary",
+        "displayName": "Маршрутний синій",
+        "canonical": "oklch(49% 0.16 256)",
+        "tonalRamp": ["oklch(28% 0.05 256)", "oklch(39.5% 0.105 256)", "oklch(44% 0.15 256)", "oklch(49% 0.16 256)", "oklch(55% 0.17 256)", "oklch(74% 0.13 256)", "oklch(92.7% 0.036 252)", "oklch(95.5% 0.022 253)"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Емаль дня",
+        "canonical": "oklch(97.2% 0.006 258)",
+        "tonalRamp": ["oklch(24.5% 0.03 258)", "oklch(42% 0.028 258)", "oklch(50.5% 0.022 258)", "oklch(63.5% 0.02 258)", "oklch(87.2% 0.013 258)", "oklch(92.8% 0.011 258)", "oklch(96.2% 0.007 258)", "oklch(97.2% 0.006 258)"]
+      },
+      "canvas-dark": {
+        "role": "neutral",
+        "displayName": "Емаль ночі",
+        "canonical": "oklch(17.8% 0.02 256)",
+        "tonalRamp": ["oklch(16.3% 0.018 256)", "oklch(17.8% 0.02 256)", "oklch(21% 0.022 256)", "oklch(24.5% 0.022 256)", "oklch(29% 0.024 256)", "oklch(32% 0.024 256)", "oklch(54% 0.022 258)", "oklch(95.5% 0.008 258)"]
+      },
+      "detour-amber": {
+        "role": "tertiary",
+        "displayName": "Бурштин обʼїзду (заміна)",
+        "canonical": "oklch(80% 0.13 70)",
+        "tonalRamp": ["oklch(30% 0.055 70)", "oklch(46% 0.11 58)", "oklch(52% 0.1 70)", "oklch(64.5% 0.149 62)", "oklch(80% 0.13 70)", "oklch(85.5% 0.117 72)", "oklch(90% 0.08 75)", "oklch(95.4% 0.044 81)"]
+      },
+      "cancel-red": {
+        "role": "tertiary",
+        "displayName": "Червоний скасування",
+        "canonical": "oklch(55% 0.2 27)",
+        "tonalRamp": ["oklch(28.5% 0.06 27)", "oklch(47% 0.17 27)", "oklch(50% 0.19 27)", "oklch(55% 0.2 27)", "oklch(68% 0.18 27)", "oklch(80% 0.09 27)", "oklch(88% 0.05 28)", "oklch(95.9% 0.02 29)"]
+      },
+      "added-green": {
+        "role": "tertiary",
+        "displayName": "Зелений додаткової пари",
+        "canonical": "oklch(58% 0.15 150)",
+        "tonalRamp": ["oklch(28.5% 0.05 150)", "oklch(44% 0.12 150)", "oklch(50% 0.1 150)", "oklch(58% 0.15 150)", "oklch(73% 0.15 150)", "oklch(80% 0.1 150)", "oklch(84% 0.12 150)", "oklch(96.2% 0.035 150)"]
+      },
+      "room-azure": {
+        "role": "tertiary",
+        "displayName": "Блакитний зміни аудиторії",
+        "canonical": "oklch(56.7% 0.108 226)",
+        "tonalRamp": ["oklch(28.5% 0.045 222)", "oklch(45.7% 0.088 226)", "oklch(50% 0.08 222)", "oklch(56.7% 0.108 226)", "oklch(72% 0.11 222)", "oklch(80% 0.08 222)", "oklch(83% 0.08 222)", "oklch(96% 0.028 221)"]
+      }
+    },
+    "typographyMeta": {
+      "numeral": { "displayName": "Numeral", "purpose": "Великий зворотний відлік «35 хв до кінця», 404." },
+      "display": { "displayName": "Display", "purpose": "Код групи на сторінці розкладу, великі цифри." },
+      "headline": { "displayName": "Headline", "purpose": "Заголовки публічних сторінок; цифри пар у лінії (Condensed)." },
+      "title": { "displayName": "Title", "purpose": "h1 робочих екранів, h2 розділів." },
+      "heading": { "displayName": "Heading", "purpose": "Заголовки панелей, діалогів, днів." },
+      "body": { "displayName": "Body", "purpose": "Пояснювальний текст до 65ch." },
+      "ui": { "displayName": "UI", "purpose": "Кнопки, поля, таблиці, меню." },
+      "caption": { "displayName": "Caption", "purpose": "Другий рядок клітинки, підказки." },
+      "meta": { "displayName": "Meta", "purpose": "Час пар, лічильники, бейджі (табличні цифри)." }
+    },
+    "shadows": [
+      { "name": "popover", "value": "0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 4px 12px -2px oklch(24.5% 0.03 258 / 0.12), 0 12px 32px -8px oklch(24.5% 0.03 258 / 0.14)", "purpose": "Спливні панелі, меню, підказки, картка заняття, тости." },
+      { "name": "dialog", "value": "0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 16px 48px -12px oklch(24.5% 0.03 258 / 0.28)", "purpose": "Діалоги, шторки, палітра команд." },
+      { "name": "lift", "value": "0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22)", "purpose": "Маркер «зараз», перетягуваний елемент." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Входи шарів і зміни стану." },
+      { "name": "ease-in", "value": "cubic-bezier(0.4, 0, 1, 1)", "purpose": "Виходи шарів." },
+      { "name": "duration-instant", "value": "100ms", "purpose": "Наведення на рядки, вкладки, кольори." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Натискання (scale 0.96), перемикачі." },
+      { "name": "duration-base", "value": "200ms", "purpose": "Спливні панелі, підкладка." },
+      { "name": "duration-slow", "value": "300ms", "purpose": "Діалоги, шторки." },
+      { "name": "duration-live", "value": "1600ms", "purpose": "Пульс «наживо» (вимкнено при зменшеному русі)." },
+      { "name": "theme-blind", "value": "380ms clip-path inset(0 0 100% 0) → inset(0)", "purpose": "Зміна теми через View Transitions — «жалюзі» табло; при зменшеному русі — прозорість 160 мс." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Одна головна дія на екран: «Опублікувати», «Зберегти».",
+      "html": "<button class=\"ds-btn-primary\">Опублікувати</button>",
+      "css": ".ds-btn-primary { background: oklch(49% 0.16 256); color: #fff; height: 36px; padding: 0 14px; border: 0; border-radius: 6px; font: 600 0.875rem/1 'Fira Sans', system-ui, sans-serif; transition: background-color 150ms ease-out, scale 150ms ease-out; cursor: pointer; } .ds-btn-primary:hover { background: oklch(44% 0.15 256); } .ds-btn-primary:active { scale: 0.96; } .ds-btn-primary:focus-visible { outline: 2px solid oklch(55% 0.17 256); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Другорядні дії поруч з головною.",
+      "html": "<button class=\"ds-btn-secondary\">Зберегти чернетку</button>",
+      "css": ".ds-btn-secondary { background: #fff; color: oklch(24.5% 0.03 258); height: 36px; padding: 0 14px; border: 1px solid oklch(87.2% 0.013 258); border-radius: 6px; font: 600 0.875rem/1 'Fira Sans', system-ui, sans-serif; transition: background-color 150ms ease-out, border-color 150ms ease-out; cursor: pointer; } .ds-btn-secondary:hover { background: oklch(94.8% 0.009 258); border-color: oklch(56% 0.022 258); } .ds-btn-secondary:focus-visible { outline: 2px solid oklch(55% 0.17 256); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Поле з межею ≥ 3:1 і синім фокусом.",
+      "html": "<input class=\"ds-input\" placeholder=\"Код групи, напр. 4КІ1\" />",
+      "css": ".ds-input { width: 240px; height: 36px; padding: 0 12px; border: 1px solid oklch(63.5% 0.02 258); border-radius: 6px; background: #fff; color: oklch(24.5% 0.03 258); font: 400 0.875rem/1.45 'Fira Sans', system-ui, sans-serif; } .ds-input::placeholder { color: oklch(50.5% 0.022 258); } .ds-input:hover { border-color: oklch(56% 0.022 258); } .ds-input:focus-visible { outline: 2px solid oklch(55% 0.17 256); outline-offset: 1px; }"
+    },
+    {
+      "name": "Shell Band",
+      "kind": "nav",
+      "refersTo": "shell-band",
+      "description": "Емальована смуга з табличкою «ВТФК» і розділами.",
+      "html": "<nav class=\"ds-shell\"><span class=\"ds-mark\">Розклад <b>ВТФК</b></span><a class=\"ds-link is-active\">Розклад</a><a class=\"ds-link\">Заміни</a><a class=\"ds-link\">Дзвінки</a></nav>",
+      "css": ".ds-shell { display: flex; align-items: center; gap: 4px; height: 56px; padding: 0 16px; background: oklch(33.5% 0.1 256); font-family: 'Fira Sans', system-ui, sans-serif; } .ds-mark { margin-right: 16px; color: #fff; font: 700 1.375rem/1 'Fira Sans Condensed', 'Arial Narrow', sans-serif; } .ds-mark b { margin-left: 6px; padding: 4px 6px; border-radius: 3px; background: #fff; color: oklch(33.5% 0.1 256); font-size: 0.9375rem; font-weight: 800; letter-spacing: 0.04em; } .ds-link { padding: 8px 12px; border-radius: 6px; color: oklch(85% 0.04 256); font-weight: 600; font-size: 0.875rem; cursor: pointer; } .ds-link:hover { background: oklch(39.5% 0.105 256); color: #fff; } .ds-link.is-active { background: oklch(29% 0.085 256); color: #fff; }"
+    },
+    {
+      "name": "State Badge",
+      "kind": "chip",
+      "refersTo": "lesson-cell-change",
+      "description": "Бейдж стану заняття: колір завжди з текстом.",
+      "html": "<span class=\"ds-badge ds-badge-change\">Заміна</span> <span class=\"ds-badge ds-badge-cancel\">Пари не буде</span> <span class=\"ds-badge ds-badge-add\">Додаткова</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid; border-radius: 3px; font: 600 0.8125rem/1 'Fira Sans', system-ui, sans-serif; } .ds-badge-change { background: oklch(95.4% 0.044 81); border-color: oklch(80% 0.13 70); color: oklch(46% 0.11 58); } .ds-badge-cancel { background: oklch(95.9% 0.02 29); border-color: oklch(80% 0.09 27); color: oklch(47% 0.17 27); } .ds-badge-add { background: oklch(96.2% 0.035 150); border-color: oklch(80% 0.1 150); color: oklch(44% 0.12 150); }"
+    },
+    {
+      "name": "Lesson Cell (substitution)",
+      "kind": "custom",
+      "refersTo": "lesson-cell-change",
+      "description": "Заміна поверх розкладу: новий предмет, бейдж, закреслений оригінал і причина.",
+      "html": "<button class=\"ds-lesson\"><span class=\"ds-lesson-top\"><i></i><b>НДЕКСМ</b><em>Заміна</em></span><span class=\"ds-lesson-sub\">Непийвода · ауд. 6</span><span class=\"ds-lesson-orig\"><s>СТП · Кренцін</s> <strong>Зв.зам.</strong></span></button>",
+      "css": ".ds-lesson { display: flex; flex-direction: column; gap: 2px; width: 220px; padding: 6px 8px; border: 0; border-radius: 3px; background: oklch(95.4% 0.044 81); box-shadow: inset 0 0 0 1px oklch(80% 0.13 70); text-align: left; font-family: 'Fira Sans', system-ui, sans-serif; cursor: pointer; } .ds-lesson:focus-visible { outline: 2px solid oklch(55% 0.17 256); outline-offset: -2px; } .ds-lesson-top { display: flex; align-items: center; gap: 6px; } .ds-lesson-top i { width: 8px; height: 8px; border-radius: 50%; background: #7174d1; } .ds-lesson-top b { font: 700 0.9375rem/1.2 'Fira Sans Condensed', 'Arial Narrow', sans-serif; color: oklch(24.5% 0.03 258); } .ds-lesson-top em { margin-left: auto; padding: 0 6px; height: 20px; display: inline-flex; align-items: center; border: 1px solid oklch(80% 0.13 70); border-radius: 3px; font: normal 600 0.75rem/1 'Fira Sans', sans-serif; color: oklch(46% 0.11 58); } .ds-lesson-sub { font-size: 0.8125rem; color: oklch(42% 0.028 258); } .ds-lesson-orig { font-size: 0.75rem; color: oklch(50.5% 0.022 258); } .ds-lesson-orig strong { color: oklch(42% 0.028 258); }"
+    },
+    {
+      "name": "Route Plate",
+      "kind": "chip",
+      "refersTo": "route-plate",
+      "description": "Код групи як номер маршруту на табличці.",
+      "html": "<span class=\"ds-plate\">4КІ1</span>",
+      "css": ".ds-plate { display: inline-flex; align-items: center; height: 36px; padding: 0 10px; border: 1px solid oklch(56% 0.022 258); border-radius: 3px; background: #fff; color: oklch(24.5% 0.03 258); font: 800 1.125rem/1 'Fira Sans Condensed', 'Arial Narrow', sans-serif; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Route Line (now)",
+      "kind": "custom",
+      "refersTo": "lesson-cell",
+      "description": "Пари як зупинки: пройдене синім, маркер «зараз» між зупинками.",
+      "html": "<div class=\"ds-route\"><div class=\"ds-route-line\"><span class=\"ds-route-done\"></span><span class=\"ds-stop is-past\" style=\"left:0%\"></span><span class=\"ds-stop is-now\" style=\"left:25%\"></span><span class=\"ds-stop\" style=\"left:50%\"></span><span class=\"ds-stop\" style=\"left:75%\"></span><span class=\"ds-now\" style=\"left:35%\"></span></div></div>",
+      "css": ".ds-route { width: 360px; padding: 16px 12px; } .ds-route-line { position: relative; height: 6px; border-radius: 9999px; background: oklch(87.2% 0.013 258); } .ds-route-done { position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 9999px; background: oklch(49% 0.16 256); } .ds-stop { position: absolute; top: 50%; width: 16px; height: 16px; border: 2px solid oklch(56% 0.022 258); border-radius: 50%; background: #fff; transform: translate(-50%, -50%); } .ds-stop.is-past { border-color: oklch(49% 0.16 256); background: oklch(49% 0.16 256); } .ds-stop.is-now { border-color: oklch(49% 0.16 256); } .ds-now { position: absolute; top: 50%; width: 20px; height: 20px; border: 3px solid #fff; border-radius: 50%; background: oklch(49% 0.16 256); transform: translate(-50%, -50%); box-shadow: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Трамвайний розклад на зупинці",
+    "overview": "Розклад коледжу читається так, як вінничани читають розклад трамвая: велика цифра пари зліва, дрібний час поруч, лінія маршруту з зупинками, де «живий» маркер показує, у якій точці дня ми зараз. Зміни їдуть поверх розкладу, як оголошення про обʼїзд: оригінал лишається видимим закресленим, заміна підсвічена своїм кольором. Це система для роботи, а не вітрина: щільна, таблична, спокійна, точна.",
+    "keyCharacteristics": [
+      "Маршрутний синій — єдиний «живий» колір: зараз, вибране, головна дія, фокус.",
+      "Пʼять зарезервованих чорнил для станів занять; колір завжди дублюється текстом або іконкою.",
+      "Структура на лініях 1 px і просторі; тіні лише в накладених шарів.",
+      "Табличні цифри всюди, де числа стоять стовпчиком; конденсований шрифт — для цифр пар, кодів і клітинок.",
+      "Пласкі кольорові поля: жодних градієнтів, крім нейтрального штрихування для «блоку» пар."
+    ],
+    "rules": [
+      { "name": "The One Live Colour Rule", "body": "Маршрутний синій означає «живе й вибране» і більше нічого. Декоративно його не використовують; одна заповнена кнопка на екран.", "section": "colors" },
+      { "name": "The Detour Ink Rule", "body": "Бурштин, червоний, зелений і блакитний зарезервовані для станів занять. Колір ніколи не єдиний носій змісту.", "section": "colors" },
+      { "name": "The Original Stays Visible Rule", "body": "Зміна не перефарбовує розклад мовчки: оригінал лишається в клітинці закресленим.", "section": "colors" },
+      { "name": "The Tabular Figures Rule", "body": "Будь-яке число в стовпчику або таке, що змінюється, — з табличними цифрами.", "section": "typography" },
+      { "name": "The Condensed For Codes Rule", "body": "Конденсований шрифт — лише для цифр пар, кодів груп, коротких назв дисциплін і табличок.", "section": "typography" },
+      { "name": "The 16px Input Rule", "body": "На телефоні поля мають 16 px, щоб iOS не збільшував сторінку.", "section": "typography" },
+      { "name": "The Lines Not Shadows Rule", "body": "Панелі, картки й таблиці тримаються на межах 1 px; тінь означає «цей шар над сторінкою».", "section": "elevation" }
+    ],
+    "dos": [
+      "Do брати кольори лише з семантичних утиліт (bg-surface, text-secondary, border-change); палітру Tailwind вимкнено.",
+      "Do дублювати колір стану текстом: бейдж «Заміна», «Пари не буде», закреслення, стрілка «301 → 309».",
+      "Do показувати завантаження силуетом форми вмісту (Skeleton), помилку — на місці з «Спробувати ще раз», порожнечу — з поясненням і наступною дією.",
+      "Do вмикати рух лише як відповідь на стан (150–250 мс, ease-out cubic-bezier(0.2,0,0,1)); переміщення й масштаб — лише під prefers-reduced-motion: no-preference, інакше прозорість.",
+      "Do використовувати іконки lucide з товщиною лінії 1.75 px (задано глобально) і aria-hidden поруч із текстом.",
+      "Do тримати аркуш розпорядження світлим у темній темі: <div data-theme=\"light\">."
+    ],
+    "donts": [
+      "Don't використовувати градієнти, скло, неонове світіння й градієнтний текст (перевіряє npm run lint).",
+      "Don't ставити емодзі чи «іскри» як іконки в інтерфейсі сайту (у Telegram-боті емодзі доречні).",
+      "Don't робити однакові картки з тінню, іконки в кружечках і надписи капсом над заголовками.",
+      "Don't писати порожні фрази («Welcome back», «Ласкаво просимо») і lorem ipsum.",
+      "Don't використовувати маршрутний синій для декору, а бурштин/червоний/зелений/блакитний — поза станами.",
+      "Don't ставити кольорові бічні смуги понад 1 px на картках і рядках."
+    ]
+  }
+}
