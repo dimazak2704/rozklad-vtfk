@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -17,11 +18,16 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 
 /**
  * Timetable generation job as seen by core: request {@code params} (JSON), live {@code progress}
- * points ({@code [{t, hard, soft}]}), result version. The scheduler keeps its own job table.
+ * points ({@code [{t, hard, soft}]}, {@code t} in seconds), result version. {@code plan} keeps the
+ * units sent to the scheduler so that its assignments can be turned into template lessons;
+ * {@code analysis}, {@code metricsBefore} and {@code metricsAfter} are filled on completion.
+ * The scheduler keeps its own job table.
  */
 @Entity
 @Table(name = "generation_job")
 public class GenerationJob extends BaseEntity {
+
+    private static final Set<GenerationStatus> ACTIVE = Set.of(GenerationStatus.QUEUED, GenerationStatus.RUNNING);
 
     @Column(name = "semester_id", nullable = false, updatable = false)
     private UUID semesterId;
@@ -55,6 +61,28 @@ public class GenerationJob extends BaseEntity {
 
     @Column(name = "requested_by", length = 100)
     private String requestedBy;
+
+    @Column(name = "base_version_id")
+    private UUID baseVersionId;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "plan", columnDefinition = "jsonb")
+    private JsonNode plan;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "analysis", columnDefinition = "jsonb")
+    private JsonNode analysis;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metrics_before", columnDefinition = "jsonb")
+    private JsonNode metricsBefore;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metrics_after", columnDefinition = "jsonb")
+    private JsonNode metricsAfter;
+
+    @Column(name = "last_progress_at")
+    private Instant lastProgressAt;
 
     protected GenerationJob() {
     }
@@ -132,5 +160,86 @@ public class GenerationJob extends BaseEntity {
 
     public String getRequestedBy() {
         return requestedBy;
+    }
+
+    /** QUEUED or RUNNING: the scheduler may still send progress or a result. */
+    public boolean isActive() {
+        return ACTIVE.contains(status);
+    }
+
+    /** Progress from the scheduler: the first one moves QUEUED → RUNNING. Times come from core's clock. */
+    public void recordProgress(Instant receivedAt, JsonNode progressPoints, String bestScore) {
+        requireActive();
+        if (status == GenerationStatus.QUEUED) {
+            status = GenerationStatus.RUNNING;
+            startedAt = receivedAt;
+        }
+        this.progress = Objects.requireNonNull(progressPoints, "progressPoints");
+        this.bestScore = bestScore;
+        this.lastProgressAt = receivedAt;
+    }
+
+    /** Terminal transition (SOLVED, FAILED or CANCELLED); the job no longer accepts scheduler events. */
+    public void finish(GenerationStatus terminalStatus, Instant finishedAt, String error) {
+        requireActive();
+        if (!terminalStatus.isTerminal()) {
+            throw new IllegalArgumentException("status must be terminal: " + terminalStatus);
+        }
+        this.status = terminalStatus;
+        this.finishedAt = Objects.requireNonNull(finishedAt, "finishedAt");
+        if (startedAt == null && terminalStatus == GenerationStatus.SOLVED) {
+            startedAt = finishedAt;
+        }
+        this.error = error;
+    }
+
+    private void requireActive() {
+        if (!isActive()) {
+            throw new IllegalStateException("Generation job " + getId() + " is already " + status);
+        }
+    }
+
+    public UUID getBaseVersionId() {
+        return baseVersionId;
+    }
+
+    public void setBaseVersionId(UUID baseVersionId) {
+        this.baseVersionId = baseVersionId;
+    }
+
+    public JsonNode getPlan() {
+        return plan;
+    }
+
+    public void setPlan(JsonNode plan) {
+        this.plan = plan;
+    }
+
+    public JsonNode getAnalysis() {
+        return analysis;
+    }
+
+    public void setAnalysis(JsonNode analysis) {
+        this.analysis = analysis;
+    }
+
+    public JsonNode getMetricsBefore() {
+        return metricsBefore;
+    }
+
+    public void setMetricsBefore(JsonNode metricsBefore) {
+        this.metricsBefore = metricsBefore;
+    }
+
+    public JsonNode getMetricsAfter() {
+        return metricsAfter;
+    }
+
+    public void setMetricsAfter(JsonNode metricsAfter) {
+        this.metricsAfter = metricsAfter;
+    }
+
+    public Instant getLastProgressAt() {
+        return lastProgressAt;
     }
 }

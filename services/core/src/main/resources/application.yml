@@ -119,3 +119,9 @@ logging:
 app.identity:
   # термін дії посилання-запрошення (DOMAIN: 7 днів)
   invite-ttl: ${INVITE_TTL:7d}
+
+# timetable: задача генерації без вістей від планувальника довше за запас вважається збійною
+app.timetable:
+  generation:
+    timeout-grace: ${GENERATION_TIMEOUT_GRACE:10m}
+    watchdog-interval: ${GENERATION_WATCHDOG_INTERVAL:PT1M}
