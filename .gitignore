@@ -3,8 +3,9 @@
 .env.*
 !.env.example
 
-# Збірка
+# Збірка (target-*/ — окремі каталоги паралельних збірок: -Dbuild.dir='${project.basedir}/target-<name>')
 target/
+target-*/
 node_modules/
 dist/
 coverage/
