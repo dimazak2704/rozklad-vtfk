@@ -1,9 +1,12 @@
 package ua.vtc.rozklad.core.timetable;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 
 public interface TimetableVersionRepository extends JpaRepository<TimetableVersion, UUID> {
 
@@ -15,4 +18,20 @@ public interface TimetableVersionRepository extends JpaRepository<TimetableVersi
     }
 
     Optional<TimetableVersion> findFirstBySemesterIdAndStatus(UUID semesterId, VersionStatus status);
+
+    /**
+     * Locks the version row ({@code SELECT … FOR UPDATE}): edits of a draft and its publication are
+     * serialized, so a lesson cannot be added while the draft is being published.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select v from TimetableVersion v where v.id = :id")
+    Optional<TimetableVersion> findByIdForUpdate(UUID id);
+
+    /** Serializes publications of one semester with a transaction-scoped PostgreSQL advisory lock. */
+    default void lockPublication(UUID semesterId) {
+        acquireAdvisoryLock("timetable-publication:" + semesterId);
+    }
+
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:key, 0))", nativeQuery = true)
+    Integer acquireAdvisoryLock(String key);
 }
