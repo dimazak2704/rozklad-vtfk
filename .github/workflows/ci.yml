@@ -1,0 +1,110 @@
+# CI: backend (Maven verify: unit tests + Testcontainers integration tests), web (lint, tests,
+# build) and the production deployment config (compose overlay, Caddyfile, scripts, realm JSON).
+#
+# Runs on pull requests and on pushes to branches other than main. For main the Deploy workflow
+# calls this one (workflow_call) and rolls out only when it passes, so main is tested exactly once.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Maven verify)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      # Testcontainers uses the Docker engine of the runner (PostgreSQL, RabbitMQ, Redis)
+      - name: Build, unit and integration tests
+        run: mvn -B -ntp verify
+
+      - name: Keep the test reports of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web:
+    name: Web (lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  deploy-config:
+    name: Deployment config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Production compose overlay renders and only Caddy publishes ports
+        run: |
+          compose() {
+            docker compose -f infra/docker-compose.yml -f infra/deploy/compose.prod.yml \
+              --env-file infra/deploy/.env.example --profile app "$@"
+          }
+          compose config --quiet
+          compose config --format json | python3 -c '
+          import json, sys
+          services = json.load(sys.stdin)["services"]
+          published = {n: [p.get("published") for p in s.get("ports", [])] for n, s in services.items() if s.get("ports")}
+          print("published ports:", published)
+          sys.exit(0 if set(published) == {"caddy"} else 1)'
+
+      - name: Caddyfile
+        run: |
+          # every snippet once: both toggles off, then both on
+          for toggle in 0 1; do
+            docker run --rm -e DOMAIN=rozklad.example.org -e ACME_EMAIL=ci@rozklad.example.org \
+              -e KC_ADMIN_ALLOWED="$toggle" -e API_SITE_ENABLED="$toggle" \
+              -v "$PWD/infra/deploy:/etc/caddy:ro" caddy:2.11-alpine \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done
+
+      - name: Shell scripts
+        run: |
+          for f in infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh; do bash -n "$f"; done
+          command -v shellcheck >/dev/null || sudo apt-get install -y -qq shellcheck
+          shellcheck -x -P infra/deploy/scripts infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh
+
+      - name: Keycloak JSON
+        run: for f in infra/deploy/keycloak/*.json; do python3 -m json.tool "$f" >/dev/null && echo "ok $f"; done
