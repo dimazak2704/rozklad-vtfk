@@ -1,0 +1,137 @@
+{
+  "realm": "rozklad",
+  "displayName": "Розклад ВТФК",
+  "displayNameHtml": "<strong>Розклад ВТФК</strong>",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(8) and notUsername and notEmail",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 3600,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeoutRememberMe": 604800,
+  "ssoSessionMaxLifespanRememberMe": 2592000,
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["uk", "en"],
+  "defaultLocale": "uk",
+  "roles": {
+    "realm": [
+      {
+        "name": "ADMIN",
+        "description": "Диспетчер розкладу / заступник директора з навчальної роботи"
+      },
+      {
+        "name": "TEACHER",
+        "description": "Викладач"
+      },
+      {
+        "name": "SERVICE",
+        "description": "Службові акаунти сервісів (notification, importer)"
+      }
+    ]
+  },
+  "users": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000010",
+      "username": "service-account-rozklad-core-admin",
+      "enabled": true,
+      "serviceAccountClientId": "rozklad-core-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users"]
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000011",
+      "username": "service-account-rozklad-notification",
+      "enabled": true,
+      "serviceAccountClientId": "rozklad-notification",
+      "realmRoles": ["SERVICE"]
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000012",
+      "username": "service-account-rozklad-importer",
+      "enabled": true,
+      "serviceAccountClientId": "rozklad-importer",
+      "realmRoles": ["SERVICE"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "rozklad-web",
+      "name": "Розклад ВТФК — веб-застосунок",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "baseUrl": "${ROZKLAD_WEB_ORIGIN}/",
+      "redirectUris": ["${ROZKLAD_WEB_ORIGIN}/*", "${ROZKLAD_WEB_ORIGIN_EXTRA}/*"],
+      "webOrigins": ["${ROZKLAD_WEB_ORIGIN}", "${ROZKLAD_WEB_ORIGIN_EXTRA}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${ROZKLAD_WEB_ORIGIN}/*##${ROZKLAD_WEB_ORIGIN_EXTRA}/*"
+      }
+    },
+    {
+      "clientId": "rozklad-core-admin",
+      "name": "core: керування користувачами Keycloak (запрошення викладачів)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${CORE_ADMIN_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "rozklad-notification",
+      "name": "notification: виклики core та importer",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${NOTIFICATION_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "rozklad-importer",
+      "name": "importer: застосування імпорту через core",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${IMPORTER_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ]
+}

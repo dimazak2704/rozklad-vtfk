@@ -1,0 +1,43 @@
+{
+  "users": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Диспетчер",
+      "lastName": "Розкладу",
+      "email": "admin@rozklad.local",
+      "attributes": {
+        "locale": ["uk"]
+      },
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "username": "krentsin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "М. Д.",
+      "lastName": "Кренцін",
+      "email": "krentsin@rozklad.local",
+      "attributes": {
+        "locale": ["uk"]
+      },
+      "realmRoles": ["TEACHER"]
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "username": "nepyivoda",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "М. В.",
+      "lastName": "Непийвода",
+      "email": "nepyivoda@rozklad.local",
+      "attributes": {
+        "locale": ["uk"]
+      },
+      "realmRoles": ["TEACHER"]
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+# Edge proxy of «Розклад ВТФК» in production (infra/deploy/compose.prod.yml, docs/DEPLOY.md).
+#
+#   https://{$DOMAIN}        SPA (web:80) + /api/* -> gateway:8080 (same origin, no CORS needed)
+#   https://auth.{$DOMAIN}   Keycloak: only the paths a browser needs; /admin is closed
+#   https://api.{$DOMAIN}    optional (API_SITE_ENABLED=1): API for the Netlify-hosted SPA
+#
+# Caddy gets and renews Let's Encrypt certificates for every name above by itself; the names must
+# resolve to this server and ports 80/443 must be open. {$VAR} values come from the container
+# environment (set in compose.prod.yml) and are substituted when the file is loaded.
+{
+	email {$ACME_EMAIL}
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+}
+
+# ---- snippets (defined before use) ----------------------------------------------------------------
+
+(security_headers) {
+	header {
+		# one year; no includeSubDomains, so other hosts of the domain are not affected
+		>Strict-Transport-Security "max-age=31536000"
+		>X-Content-Type-Options "nosniff"
+		# only if the upstream did not set a stricter one (Keycloak sends no-referrer)
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+}
+
+(compress) {
+	encode zstd gzip
+}
+
+# /api/* -> gateway. Used by the main site and by the optional api.{$DOMAIN} site.
+(api_routes) {
+	# Server-sent events: no compression, every event is flushed at once, no timeout
+	handle /api/events/stream {
+		reverse_proxy gateway:8080 {
+			flush_interval -1
+		}
+	}
+	handle /api/* {
+		import compress
+		reverse_proxy gateway:8080 {
+			flush_interval -1
+		}
+	}
+}
+
+# Keycloak admin console and the master realm: closed unless KC_ADMIN_ALLOWED=1
+(keycloak_admin_0) {
+	@kc_admin path /admin /admin/* /realms/master /realms/master/*
+	handle @kc_admin {
+		respond "Not found" 404
+	}
+}
+(keycloak_admin_1) {
+	@kc_admin path /admin /admin/* /realms/master /realms/master/*
+	handle @kc_admin {
+		reverse_proxy keycloak:8080
+	}
+}
+
+# Optional API host for the "SPA on Netlify, API on the VPS" layout
+(api_site_0) {
+}
+(api_site_1) {
+	api.{$DOMAIN} {
+		import security_headers
+		import api_routes
+		handle {
+			respond "Not found" 404
+		}
+	}
+}
+
+# ---- sites -----------------------------------------------------------------------------------------
+
+{$DOMAIN} {
+	import security_headers
+	import api_routes
+
+	# SPA: nginx in the web container (static files, SPA fallback to index.html, cache headers)
+	handle {
+		import compress
+		reverse_proxy {$WEB_UPSTREAM:web:80} {
+			# The image's Content-Security-Policy allows the development Keycloak
+			# (http://localhost:8180); the browser has to reach https://auth.{$DOMAIN} instead.
+			header_down Content-Security-Policy "http://localhost:8180" "https://auth.{$DOMAIN}"
+		}
+	}
+}
+
+auth.{$DOMAIN} {
+	import security_headers
+	import compress
+
+	import keycloak_admin_{$KC_ADMIN_ALLOWED:0}
+
+	# What a browser and the services' OIDC clients need: the application realm, static resources
+	# of the login pages and RFC 8414 metadata. The Keycloak docs recommend exposing nothing else.
+	@kc_public path /realms/* /resources/* /.well-known/*
+	handle @kc_public {
+		reverse_proxy keycloak:8080
+	}
+
+	handle / {
+		redir https://{$DOMAIN}/ 302
+	}
+
+	# /metrics, /health and everything else stay internal
+	handle {
+		respond "Not found" 404
+	}
+}
+
+import api_site_{$API_SITE_ENABLED:0}

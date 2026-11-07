@@ -1,0 +1,247 @@
+# Production overlay for one Linux VPS. The service definitions stay in infra/docker-compose.yml;
+# this file only changes what production needs. Guide: docs/DEPLOY.md.
+#
+#   docker compose -f infra/docker-compose.yml -f infra/deploy/compose.prod.yml \
+#     --env-file infra/deploy/.env --profile app up -d
+#
+# infra/deploy/scripts/compose.sh runs exactly that from any directory.
+#
+# - Only Caddy publishes ports (80/443, TLS from Let's Encrypt). Everything else is reachable only
+#   inside the compose network: `ports: !reset []` drops the development port mappings.
+# - Every secret comes from infra/deploy/.env (gitignored). `${VAR:?}` stops compose when a required
+#   value is missing. `env_file: !reset []` keeps the development ../.env out of the containers.
+# - Relative paths are resolved against infra/ (the directory of the first compose file).
+# - Needs Docker Compose 2.24.4+ for the !reset / !override tags.
+# - Memory: the defaults fit a 4 GB VPS; bigger values for a 24 GB VM are in .env.example.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Production values shared by the Java services (they override the dev values of x-java-env).
+x-prod-java-env: &prod-java-env
+  RABBIT_USER: ${RABBIT_USER:-rozklad}
+  RABBIT_PASSWORD: ${RABBIT_PASSWORD:?}
+  # Spring Boot binds SPRING_DATA_REDIS_PASSWORD to spring.data.redis.password
+  SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+  # Browsers get tokens from https://auth.<domain>, so that is the issuer to validate.
+  # The signing keys are still fetched inside the network.
+  KEYCLOAK_ISSUER: https://auth.${DOMAIN:?}/realms/rozklad
+  KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
+  KEYCLOAK_URL: http://keycloak:8080
+  # services are not reachable from the internet; keep their Swagger UI off anyway
+  API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+
+services:
+  # --- Edge: TLS termination and routing (the only published ports) -------------------------------
+  caddy:
+    image: caddy:2.11-alpine
+    profiles: [app]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3; browsers fall back to TCP if the cloud firewall blocks UDP
+    environment:
+      DOMAIN: ${DOMAIN:?}
+      ACME_EMAIL: ${ACME_EMAIL:?}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      KC_ADMIN_ALLOWED: ${KC_ADMIN_ALLOWED:-0}
+      API_SITE_ENABLED: ${API_SITE_ENABLED:-0}
+      WEB_UPSTREAM: web:${WEB_CONTAINER_PORT:-80}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificates and ACME account: keep this volume
+      - caddy_config:/config
+    healthcheck:
+      # admin API listens on localhost inside the container only
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: ${CADDY_MEM_LIMIT:-128m}
+    logging: *logging
+
+  # --- Data ------------------------------------------------------------------------------------------
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # read once by 20-prod-passwords.sh when the data volume is initialised
+      CORE_DB_PASSWORD: ${CORE_DB_PASSWORD:?}
+      SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?}
+      IMPORTER_DB_PASSWORD: ${IMPORTER_DB_PASSWORD:?}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?}
+    volumes:
+      # runs after 10-init.sql and replaces its development passwords
+      - ./deploy/postgres/20-prod-passwords.sh:/docker-entrypoint-initdb.d/20-prod-passwords.sh:ro
+    shm_size: 128m
+    mem_limit: ${POSTGRES_MEM_LIMIT:-512m}
+    logging: *logging
+
+  rabbitmq:
+    ports: !reset []
+    environment:
+      # applied when the rabbitdata volume is created
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-rozklad}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?}
+    mem_limit: ${RABBITMQ_MEM_LIMIT:-512m}
+    logging: *logging
+
+  redis:
+    ports: !reset []
+    # volatile-lru evicts only keys with a TTL (caches, rate limits), never state without one
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?}",
+              "--maxmemory", "${REDIS_MAXMEMORY:-96mb}", "--maxmemory-policy", "volatile-lru"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?} # lets the healthcheck's redis-cli authenticate
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+    mem_limit: ${REDIS_MEM_LIMIT:-160m}
+    logging: *logging
+
+  # --- Identity ----------------------------------------------------------------------------------------
+  keycloak:
+    ports: !reset []
+    # production mode; the realm is imported only if it does not exist yet
+    command: !override ["start", "--import-realm"]
+    environment:
+      KC_HOSTNAME: https://auth.${DOMAIN:?}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true" # services use http://keycloak:8080 inside the network
+      KC_PROXY_HEADERS: xforwarded # Caddy overwrites X-Forwarded-* (it trusts no client values)
+      KC_HTTP_ENABLED: "true" # TLS ends at Caddy; port 8080 is not published
+      KC_HEALTH_ENABLED: "true"
+      KC_CACHE: local # single node: no cluster discovery
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      # heap relative to mem_limit (Keycloak's default is 70 %, which leaves too little for metaspace)
+      JAVA_OPTS_KC_HEAP: -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25
+      # values for the ${...} placeholders of rozklad-realm.prod.json (first import only;
+      # later changes are applied by scripts/keycloak-sync.sh)
+      ROZKLAD_WEB_ORIGIN: https://${DOMAIN:?}
+      ROZKLAD_WEB_ORIGIN_EXTRA: ${EXTRA_WEB_ORIGIN:-https://${DOMAIN:?}}
+      CORE_ADMIN_CLIENT_SECRET: ${CORE_ADMIN_CLIENT_SECRET:?}
+      NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?}
+      IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:?}
+    volumes: !override
+      - ./deploy/keycloak/rozklad-realm.prod.json:/opt/keycloak/data/import/rozklad-realm.json:ro
+    healthcheck:
+      # HTTP status instead of `grep UP`: while Keycloak is still starting, /health/ready answers
+      # 503 with {"status":"DOWN","checks":[{..."status":"UP"}...]}, which `grep UP` takes for ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      start_period: 120s # the first start also builds the server and imports the realm
+      retries: 60
+    stop_grace_period: 30s
+    mem_limit: ${KEYCLOAK_MEM_LIMIT:-1g}
+    logging: *logging
+
+  # --- Application services ---------------------------------------------------------------------------
+  core:
+    image: ${IMAGE_PREFIX:-rozklad}/core:${IMAGE_TAG:-prod}
+    env_file: !reset []
+    ports: !reset []
+    environment:
+      <<: *prod-java-env
+      DB_PASSWORD: ${CORE_DB_PASSWORD:?}
+      PUBLIC_WEB_URL: https://${DOMAIN:?}
+      CORE_ADMIN_CLIENT_SECRET: ${CORE_ADMIN_CLIENT_SECRET:?}
+      # -Xmx in JAVA_TOOL_OPTIONS wins over -XX:MaxRAMPercentage=75 of the image entrypoint
+      JAVA_TOOL_OPTIONS: -Xmx${CORE_HEAP:-384m}
+    stop_grace_period: 30s
+    mem_limit: ${CORE_MEM_LIMIT:-768m}
+    logging: *logging
+
+  scheduler:
+    image: ${IMAGE_PREFIX:-rozklad}/scheduler:${IMAGE_TAG:-prod}
+    env_file: !reset []
+    ports: !reset []
+    environment:
+      <<: *prod-java-env
+      DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?}
+      JAVA_TOOL_OPTIONS: -Xmx${SCHEDULER_HEAP:-384m}
+    stop_grace_period: 30s
+    mem_limit: ${SCHEDULER_MEM_LIMIT:-768m}
+    logging: *logging
+
+  importer:
+    image: ${IMAGE_PREFIX:-rozklad}/importer:${IMAGE_TAG:-prod}
+    env_file: !reset []
+    ports: !reset []
+    environment:
+      <<: *prod-java-env
+      DB_PASSWORD: ${IMPORTER_DB_PASSWORD:?}
+      IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:?}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL_TEXT: ${AI_MODEL_TEXT:-claude-haiku-5-5}
+      AI_MODEL_VISION: ${AI_MODEL_VISION:-claude-sonnet-5-5}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-2.00}
+      # small heap on purpose: LibreOffice runs in the same container next to the JVM
+      JAVA_TOOL_OPTIONS: -Xmx${IMPORTER_HEAP:-320m}
+    stop_grace_period: 30s
+    mem_limit: ${IMPORTER_MEM_LIMIT:-896m}
+    logging: *logging
+
+  notification:
+    image: ${IMAGE_PREFIX:-rozklad}/notification:${IMAGE_TAG:-prod}
+    env_file: !reset []
+    ports: !reset []
+    environment:
+      <<: *prod-java-env
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?}
+      NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?}
+      PUBLIC_WEB_URL: https://${DOMAIN:?}
+      # one bot token = one polling instance: stop the local bot before starting this one
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_OWNER_CHAT_ID: ${TELEGRAM_OWNER_CHAT_ID:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-scheduler_vtfk_bot}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-POLLING}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      # small heap on purpose: LibreOffice runs in the same container next to the JVM
+      JAVA_TOOL_OPTIONS: -Xmx${NOTIFICATION_HEAP:-320m}
+    stop_grace_period: 30s
+    mem_limit: ${NOTIFICATION_MEM_LIMIT:-896m}
+    logging: *logging
+
+  gateway:
+    image: ${IMAGE_PREFIX:-rozklad}/gateway:${IMAGE_TAG:-prod}
+    env_file: !reset []
+    ports: !reset []
+    environment:
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+      # the SPA is same-origin with /api; the extra origin is the optional Netlify-hosted copy
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:?}${EXTRA_WEB_ORIGIN:+,${EXTRA_WEB_ORIGIN}}
+      PUBLIC_RATE_LIMIT_PER_SECOND: ${PUBLIC_RATE_LIMIT_PER_SECOND:-20}
+      PUBLIC_RATE_LIMIT_BURST: ${PUBLIC_RATE_LIMIT_BURST:-40}
+      # Only Caddy can reach the gateway, and Caddy replaces X-Forwarded-For with the real client
+      # address. Reading it keeps the per-IP limit of /api/public/** per browser, not per Caddy.
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      JAVA_TOOL_OPTIONS: -Xmx${GATEWAY_HEAP:-256m}
+    stop_grace_period: 30s
+    mem_limit: ${GATEWAY_MEM_LIMIT:-512m}
+    logging: *logging
+
+  # --- SPA (nginx with the Vite build) -----------------------------------------------------------------
+  web:
+    image: ${IMAGE_PREFIX:-rozklad}/web:${IMAGE_TAG:-prod}
+    build:
+      # Vite reads VITE_* at build time, so the production URLs are baked into the image
+      args:
+        VITE_API_BASE: /api
+        VITE_OIDC_AUTHORITY: https://auth.${DOMAIN:?}/realms/rozklad
+        VITE_OIDC_CLIENT_ID: rozklad-web
+        VITE_TELEGRAM_BOT_URL: https://t.me/${TELEGRAM_BOT_USERNAME:-scheduler_vtfk_bot}
+    environment: !reset {} # the base file's runtime variables are not read by the image
+    ports: !reset []
+    mem_limit: ${WEB_MEM_LIMIT:-64m}
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:
