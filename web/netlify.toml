@@ -1,0 +1,41 @@
+# Alternative layout: the SPA on Netlify, the API and Keycloak on the VPS (docs/DEPLOY.md,
+# "Variant B: client on Netlify"). The main layout serves the SPA from the VPS and needs no Netlify.
+#
+# Netlify site settings
+#   Base directory: web            (this file is read from there)
+#   Environment variables (all read at build time):
+#     VITE_API_BASE         https://api.<DOMAIN>/api
+#     VITE_OIDC_AUTHORITY   https://auth.<DOMAIN>/realms/rozklad
+#     VITE_OIDC_CLIENT_ID   rozklad-web
+#     VITE_TELEGRAM_BOT_URL https://t.me/<bot username>
+# VPS (infra/deploy/.env): API_SITE_ENABLED=1, EXTRA_WEB_ORIGIN=https://<site>.netlify.app, then
+# infra/deploy/scripts/deploy.sh (adds the origin to CORS and to the Keycloak client).
+
+[build]
+  # postbuild.mjs writes dist/_headers with the Content-Security-Policy for the API and Keycloak
+  # origins taken from the variables above, and removes the source maps
+  command = "npm run build && node ../infra/deploy/netlify/postbuild.mjs dist"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+# React Router: any path that is not a file gets index.html (status 200, the URL stays)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=31536000"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+
+# Vite puts a content hash into every file name under /assets: cache them for a year
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
