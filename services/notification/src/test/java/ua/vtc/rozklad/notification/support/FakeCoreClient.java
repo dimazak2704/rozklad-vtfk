@@ -1,0 +1,183 @@
+package ua.vtc.rozklad.notification.support;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
+import ua.vtc.rozklad.notification.core.CoreClient;
+import ua.vtc.rozklad.notification.core.CoreDtos.BellSchedule;
+import ua.vtc.rozklad.notification.core.CoreDtos.ChangeSummary;
+import ua.vtc.rozklad.notification.core.CoreDtos.CurrentUser;
+import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
+import ua.vtc.rozklad.notification.core.CoreDtos.PublicMeta;
+import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
+import ua.vtc.rozklad.notification.core.CoreDtos.Schedule;
+import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
+import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleOwner;
+import ua.vtc.rozklad.notification.core.CoreDtos.SearchHit;
+import ua.vtc.rozklad.notification.core.OwnerType;
+import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
+
+/** core stand-in with the fixtures of {@link CoreFixtures}; records commands and can be switched off. */
+public class FakeCoreClient implements CoreClient {
+
+    public record Reply(UUID changeId, UUID teacherId, ConfirmationDecision decision) {
+    }
+
+    private final List<Reply> replies = new CopyOnWriteArrayList<>();
+    private final List<AbsenceReport> absences = new CopyOnWriteArrayList<>();
+    private final AtomicInteger scheduleCalls = new AtomicInteger();
+    private volatile boolean unavailable;
+    private volatile RuntimeException replyFailure;
+    private volatile RuntimeException absenceFailure;
+    private volatile LocalDate today = LocalDate.of(2026, 10, 19);
+
+    public void reset() {
+        replies.clear();
+        absences.clear();
+        scheduleCalls.set(0);
+        unavailable = false;
+        replyFailure = null;
+        absenceFailure = null;
+        today = LocalDate.of(2026, 10, 19);
+    }
+
+    public void setUnavailable(boolean value) {
+        this.unavailable = value;
+    }
+
+    public void failReplies(RuntimeException failure) {
+        this.replyFailure = failure;
+    }
+
+    public void failAbsences(RuntimeException failure) {
+        this.absenceFailure = failure;
+    }
+
+    public void setToday(LocalDate value) {
+        this.today = value;
+    }
+
+    public List<Reply> replies() {
+        return List.copyOf(replies);
+    }
+
+    public List<AbsenceReport> absences() {
+        return List.copyOf(absences);
+    }
+
+    public int scheduleCalls() {
+        return scheduleCalls.get();
+    }
+
+    @Override
+    public PublicMeta meta() {
+        available();
+        return CoreFixtures.meta(today);
+    }
+
+    @Override
+    public List<PublicGroup> groups() {
+        available();
+        return CoreFixtures.groups();
+    }
+
+    @Override
+    public List<PublicTeacher> teachers() {
+        available();
+        return CoreFixtures.teachers();
+    }
+
+    @Override
+    public List<SearchHit> search(String query, int limit) {
+        available();
+        String normalized = query.strip().toLowerCase(Locale.forLanguageTag("uk"));
+        List<SearchHit> hits = switch (normalized) {
+            case "4кі1", "4ki1" -> List.of(group("4КІ1", CoreFixtures.GROUP_4KI1));
+            case "4кі" -> List.of(group("4КІ1", CoreFixtures.GROUP_4KI1), group("4КІ2", CoreFixtures.GROUP_4KI2));
+            case "кренц", "кренцін" -> List.of(new SearchHit("TEACHER", CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.",
+                    "Циклова комісія КІ", "/t/" + CoreFixtures.TEACHER_KRENTSIN));
+            case "6" -> List.of(new SearchHit("ROOM", CoreFixtures.ROOM_6, "ауд. 6", "Комп’ютерний клас", "/r/6"));
+            default -> List.of();
+        };
+        return hits.stream().limit(limit).toList();
+    }
+
+    @Override
+    public BellSchedule bells(LocalDate date) {
+        available();
+        return CoreFixtures.bells(date.getDayOfWeek().getValue());
+    }
+
+    @Override
+    public Schedule schedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
+        available();
+        scheduleCalls.incrementAndGet();
+        boolean weekday = from.getDayOfWeek().getValue() <= 5;
+        return switch (type) {
+            case GROUP -> {
+                String code = CoreFixtures.groups().stream().filter(group -> group.id().equals(ownerId))
+                        .map(PublicGroup::code).findFirst().orElse("?");
+                ScheduleDay day = ownerId.equals(CoreFixtures.GROUP_4KI1) && weekday
+                        ? CoreFixtures.day4ki1(from)
+                        : new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of());
+                yield new Schedule(new ScheduleOwner("GROUP", ownerId, code), from, to, List.of(day));
+            }
+            case TEACHER -> {
+                String name = CoreFixtures.teachers().stream().filter(teacher -> teacher.id().equals(ownerId))
+                        .map(PublicTeacher::label).findFirst().orElse("?");
+                ScheduleDay day = ownerId.equals(CoreFixtures.TEACHER_NEPYIVODA) && weekday
+                        ? CoreFixtures.teacherDay(from)
+                        : new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of());
+                yield new Schedule(new ScheduleOwner("TEACHER", ownerId, name), from, to, List.of(day));
+            }
+            case ROOM -> new Schedule(new ScheduleOwner("ROOM", ownerId, "ауд. 6"), from, to, List.of(
+                    new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of())));
+        };
+    }
+
+    @Override
+    public CurrentUser currentUser(String bearerToken) {
+        available();
+        return switch (bearerToken) {
+            case "teacher-token" -> new CurrentUser(UUID.randomUUID(), "nepyivoda", List.of("TEACHER"),
+                    CoreFixtures.teachers().get(1));
+            default -> new CurrentUser(UUID.randomUUID(), "someone", List.of("TEACHER"), null);
+        };
+    }
+
+    @Override
+    public ChangeSummary replyToChange(UUID changeId, UUID teacherId, ConfirmationDecision decision, String comment) {
+        available();
+        if (replyFailure != null) {
+            throw replyFailure;
+        }
+        replies.add(new Reply(changeId, teacherId, decision));
+        return new ChangeSummary(changeId, decision == ConfirmationDecision.CONFIRM
+                ? ChangeStatus.CONFIRMED
+                : ChangeStatus.DECLINED);
+    }
+
+    @Override
+    public void reportAbsence(AbsenceReport report) {
+        available();
+        if (absenceFailure != null) {
+            throw absenceFailure;
+        }
+        absences.add(report);
+    }
+
+    private void available() {
+        if (unavailable) {
+            throw new UpstreamUnavailableException("core", "test: core is down", null);
+        }
+    }
+
+    private static SearchHit group(String code, UUID id) {
+        return new SearchHit("GROUP", id, code, "Комп’ютерна інженерія", "/g/" + code);
+    }
+}
