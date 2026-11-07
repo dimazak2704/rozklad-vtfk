@@ -69,6 +69,9 @@ public class OrderDocument extends BaseEntity {
     @Column(name = "notes", nullable = false, columnDefinition = "jsonb")
     private List<String> notes = new ArrayList<>();
 
+    @Column(name = "notes_edited", nullable = false)
+    private boolean notesEdited;
+
     @Column(name = "published_at")
     private Instant publishedAt;
 
@@ -182,6 +185,19 @@ public class OrderDocument extends BaseEntity {
 
     public void setNotes(List<String> notes) {
         this.notes = new ArrayList<>(notes == null ? List.of() : notes);
+    }
+
+    /** Notes typed by the dispatcher: refreshing the draft no longer replaces them with calendar notes. */
+    public void editNotes(List<String> notes) {
+        if (!isDraft()) {
+            throw new IllegalStateException("Notes of a published order cannot be changed");
+        }
+        setNotes(notes);
+        this.notesEdited = true;
+    }
+
+    public boolean isNotesEdited() {
+        return notesEdited;
     }
 
     public Instant getPublishedAt() {
