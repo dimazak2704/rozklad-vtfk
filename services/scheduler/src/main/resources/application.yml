@@ -1,0 +1,87 @@
+# scheduler — усі значення з env (ARCHITECTURE §7); значення за замовчуванням — для запуску на хості
+spring:
+  application:
+    name: scheduler
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:scheduler}
+    username: ${DB_USER:scheduler}
+    password: ${DB_PASSWORD:scheduler}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:rozklad}
+    password: ${RABBIT_PASSWORD:rozklad}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 2
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
+  web:
+    locale: uk
+    locale-resolver: fixed
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8082}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  keycloak:
+    issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
+    jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      roles: ADMIN
+
+info:
+  app:
+    name: Розклад ВТФК — scheduler
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
+  level:
+    root: INFO
+    ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}

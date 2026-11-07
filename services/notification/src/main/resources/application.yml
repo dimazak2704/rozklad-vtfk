@@ -1,0 +1,116 @@
+# notification — усі значення з env (ARCHITECTURE §7); значення за замовчуванням — для запуску на хості
+spring:
+  application:
+    name: notification
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:notification}
+    username: ${DB_USER:notification}
+    password: ${DB_PASSWORD:notification}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:rozklad}
+    password: ${RABBIT_PASSWORD:rozklad}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 2
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  security:
+    oauth2:
+      client:
+        registration:
+          rozklad-service:
+            provider: keycloak
+            client-id: ${NOTIFICATION_CLIENT_ID:rozklad-notification}
+            client-secret: ${NOTIFICATION_CLIENT_SECRET:}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            # з контейнера це http://keycloak:8080; issuer токена все одно http://localhost:8180/realms/rozklad
+            token-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${KEYCLOAK_REALM:rozklad}/protocol/openid-connect/token
+  web:
+    locale: uk
+    locale-resolver: fixed
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  keycloak:
+    issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
+    jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+  services:
+    core-url: ${CORE_URL:http://localhost:8081}
+    importer-url: ${IMPORTER_URL:http://localhost:8083}
+    public-web-url: ${PUBLIC_WEB_URL:http://localhost:5180}
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:scheduler_vtfk_bot}
+    owner-chat-id: ${TELEGRAM_OWNER_CHAT_ID:}
+    mode: ${TELEGRAM_MODE:POLLING}
+    webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+  office:
+    soffice-path: ${SOFFICE_PATH:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      roles: ADMIN
+
+info:
+  app:
+    name: Розклад ВТФК — notification
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
+  level:
+    root: INFO
+    ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}

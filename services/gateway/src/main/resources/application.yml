@@ -1,0 +1,90 @@
+# gateway — маршрути з ARCHITECTURE §1; адреси сервісів з env (у compose — імена контейнерів)
+spring:
+  application:
+    name: gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:5000}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:120s}
+          default-filters:
+            # Host клієнта (localhost:8080) потрапляє в сервіси → правильні абсолютні Location
+            - PreserveHostHeader
+            # якщо сервіс колись додасть власні CORS-заголовки, браузер не отримає дублікатів
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_UNIQUE
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              "[/**]":
+                allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5180,http://localhost:8088}
+                allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+                allowed-headers: "*"
+                exposed-headers: Location,Content-Disposition,X-Request-Id,X-RateLimit-Remaining,X-RateLimit-Replenish-Rate,X-RateLimit-Burst-Capacity
+                allow-credentials: false
+                max-age: 3600
+          routes:
+            - id: importer
+              uri: ${IMPORTER_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/import/**
+            - id: notification
+              uri: ${NOTIFICATION_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/notify/**,/api/documents/**
+            - id: scheduler
+              uri: ${SCHEDULER_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/scheduler/**
+            # SSE: без response-timeout, інакше потік обривався б кожні 120 с
+            - id: core-events
+              uri: ${CORE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/events/stream
+              metadata:
+                response-timeout: -1
+            - id: core-public
+              uri: ${CORE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/public/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@clientAddressKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${PUBLIC_RATE_LIMIT_PER_SECOND:20}
+                    redis-rate-limiter.burstCapacity: ${PUBLIC_RATE_LIMIT_BURST:40}
+                    redis-rate-limiter.requestedTokens: 1
+            - id: core
+              uri: ${CORE_URL:http://localhost:8081}
+              order: 100
+              predicates:
+                - Path=/api/**
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${GATEWAY_ACTUATOR_EXPOSURE:health,info}
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+info:
+  app:
+    name: Розклад ВТФК — gateway
+
+logging:
+  level:
+    root: INFO
+    ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}
