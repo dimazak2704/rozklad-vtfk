@@ -3,44 +3,49 @@
  * Публікація вносить у розклад саме ті зміни, що були в чернетці (що бачив диспетчер — те й публікує).
  */
 import type { OrderStatus, Page, Uuid } from '@/api/types';
-import { compareIsoDates, isIsoDate } from '@/lib/date';
+import { compareIsoDates, formatNumericDate, isIsoDate, isoWeekday } from '@/lib/date';
 import { matchScore } from '@/lib/search';
 import { findGroupByCode } from '../../fixtures';
 import { emitServerEvent } from '../../events';
-import { badRequest, businessRule, conflict, paginate } from '../../kit';
+import { badRequest, businessRule, paginate } from '../../kit';
 import { currentSettings } from '../settings';
 import { recordOrderDeliveries } from '../telegram';
 import { applyChanges } from './change-commands';
-import { buildDraft, isWithinActiveSemester, nextOrderNumber, toSummary } from './orders';
+import { buildDraft, isWithinActiveSemester, nextOrderNumber, orderTitle, toSummary } from './orders';
 import { getOrder, world } from './state';
-import { ADMIN_ACTOR, toOrderDto, type OrderRecord } from './world';
+import { ADMIN_ACTOR, type OrderRecord } from './world';
 
 const MAX_NOTES = 20;
 const MAX_NOTE_LENGTH = 500;
 
 export function draftFor(date: string | null, now: Date): OrderRecord {
   if (!isIsoDate(date)) throw badRequest('Вкажіть дату у форматі РРРР-ММ-ДД.', [{ field: 'date', message: 'Формат РРРР-ММ-ДД' }]);
+  // як OrderCalendar.requireOrderDate у core
+  if (isoWeekday(date) > 5) throw businessRule('NOT_A_STUDY_DAY', `${formatNumericDate(date)} — вихідний день: розпорядження складають на робочі дні.`);
   if (!isWithinActiveSemester(date)) {
-    throw businessRule('OUT_OF_SEMESTER', 'Розпорядження складають лише на дати активного семестру.');
+    throw businessRule('DATE_OUTSIDE_SEMESTER', `Дата ${formatNumericDate(date)} не входить у жоден семестр.`);
   }
   return buildDraft(world(), date, currentSettings(), now);
 }
 
 export function updateNotes(id: Uuid, notes: unknown): OrderRecord {
   const order = getOrder(id);
-  if (order.status === 'PUBLISHED') {
-    throw conflict('Опубліковане розпорядження змінювати не можна. Нові рядки підуть у доповнення.');
-  }
+  if (order.status === 'PUBLISHED') throw businessRule('ORDER_ALREADY_PUBLISHED', 'Опубліковане розпорядження змінювати не можна.');
   if (!Array.isArray(notes) || notes.some((note) => typeof note !== 'string')) {
     throw badRequest('Примітки мають бути списком рядків.', [{ field: 'notes', message: 'Список рядків' }]);
   }
-  const cleaned = (notes as string[]).map((note) => note.trim()).filter(Boolean);
-  const errors = cleaned.flatMap((note, index) =>
-    note.length > MAX_NOTE_LENGTH ? [{ field: `notes[${index}]`, message: `Не довше ${MAX_NOTE_LENGTH} символів` }] : [],
+  // як NotesRequest у core: кожна примітка непорожня (@NotBlank) і до 500 символів; зберігаються обрізаними
+  const errors = (notes as string[]).flatMap((note, index) =>
+    !note.trim()
+      ? [{ field: `notes[${index}]`, message: 'Примітка не може бути порожньою' }]
+      : note.length > MAX_NOTE_LENGTH
+        ? [{ field: `notes[${index}]`, message: `Не довше ${MAX_NOTE_LENGTH} символів` }]
+        : [],
   );
+  const cleaned = (notes as string[]).map((note) => note.trim());
   if (cleaned.length > MAX_NOTES) errors.push({ field: 'notes', message: `Не більше ${MAX_NOTES} приміток` });
   if (errors.length > 0) throw badRequest('Перевірте примітки.', errors);
-  const next = { ...order, notes: cleaned };
+  const next = { ...order, notes: cleaned, version: order.version + 1 };
   world().orders.set(id, next);
   return next;
 }
@@ -48,17 +53,20 @@ export function updateNotes(id: Uuid, notes: unknown): OrderRecord {
 /** POST …/publish: номер = останній у семестрі + 1, зміни → APPLIED, події й розсилка. */
 export function publishOrder(id: Uuid, now: Date): OrderRecord {
   const order = getOrder(id);
-  if (order.status === 'PUBLISHED') throw conflict(`Розпорядження вже опубліковано під №${order.number ?? '—'}.`);
-  if (order.items.length + order.roomChanges.length + order.notes.length === 0) {
-    throw businessRule('EMPTY_ORDER', 'Розпорядження порожнє: немає жодної підтвердженої зміни чи примітки.');
+  if (order.status === 'PUBLISHED') throw businessRule('ORDER_ALREADY_PUBLISHED', 'Розпорядження вже опубліковане.');
+  if (order.kind === 'AMENDMENT' && order.items.length + order.roomChanges.length === 0) {
+    throw businessRule('AMENDMENT_EMPTY', 'У доповненні немає нових змін — публікувати нічого.');
   }
   const number = nextOrderNumber(world(), order.semesterId);
+  const parentNumber = order.parentId ? (world().orders.get(order.parentId)?.number ?? null) : null;
   const published: OrderRecord = {
     ...order,
     number,
+    title: orderTitle(order.kind, number, parentNumber),
     status: 'PUBLISHED',
     publishedAt: now.toISOString(),
     publishedBy: ADMIN_ACTOR,
+    version: order.version + 1,
   };
   world().orders.set(id, published);
 
@@ -75,7 +83,8 @@ export function publishOrder(id: Uuid, now: Date): OrderRecord {
     const group = findGroupByCode(item.groupCode);
     if (group) groupIds.add(group.id);
   }
-  emitServerEvent('order.published', toOrderDto(published));
+  // core шле в SSE короткий запис розпорядження (як рядок архіву), а не весь документ
+  emitServerEvent('order.published', toSummary(published));
   emitServerEvent('schedule.changed', {
     dates: [order.date],
     groupIds: [...groupIds],

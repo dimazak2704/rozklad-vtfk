@@ -18,8 +18,11 @@ export function invalidateFor(queryClient: QueryClient, event: ServerEvent): voi
       invalidate(qk.me.all);
       break;
     case 'absence.created':
+    case 'absence.updated':
+      // змінена чи скасована відсутність звільняє або додає пари: оновлюємо список, панель і кабінет
       invalidate(qk.admin.absences.all);
       invalidate(['admin', 'dashboard']);
+      invalidate(qk.me.all);
       break;
     case 'generation.completed':
       invalidate(qk.admin.generation.all);

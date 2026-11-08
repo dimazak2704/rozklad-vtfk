@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 import { reasonHint } from '../schedule/schedule-utils';
-import type { ChangeGroup } from './changes-filter';
+import { changeGroupKey, isMyGroup, type ChangeGroup } from './changes-filter';
 
 const ROW_BADGE: Record<OrderRowType, { label: string; tone: BadgeTone }> = {
   REPLACEMENT: { label: 'Заміна', tone: 'change' },
@@ -130,9 +130,9 @@ export function ChangesList({ groups, date, myGroupIds }: ChangesListProps) {
             </tr>
           </thead>
           {groups.map(({ group, items }) => {
-            const own = myGroupIds.has(group.id);
+            const own = isMyGroup(myGroupIds, group.id);
             return (
-              <tbody key={group.id} className={cn('border-b border-default last:border-b-0', own && 'bg-selected')}>
+              <tbody key={changeGroupKey(group)} className={cn('border-b border-default last:border-b-0', own && 'bg-selected')}>
                 {items.map((item, index) => (
                   <tr key={`${item.pairLabel}-${index}`} className="align-top">
                     {index === 0 ? (
@@ -173,9 +173,9 @@ export function ChangesList({ groups, date, myGroupIds }: ChangesListProps) {
 
       <ul className="flex flex-col gap-3 md:hidden">
         {groups.map(({ group, items }) => {
-          const own = myGroupIds.has(group.id);
+          const own = isMyGroup(myGroupIds, group.id);
           return (
-            <li key={group.id} className={cn('rounded-panel border bg-surface', own ? 'border-accent' : 'border-default')}>
+            <li key={changeGroupKey(group)} className={cn('rounded-panel border bg-surface', own ? 'border-accent' : 'border-default')}>
               <div className="flex items-center justify-between gap-3 border-b border-separator px-3.5 py-2.5">
                 <GroupPlate code={group.code} date={date} own={own} />
                 <Link

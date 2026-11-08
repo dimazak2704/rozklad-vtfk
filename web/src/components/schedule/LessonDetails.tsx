@@ -6,7 +6,7 @@ import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL, PARITY_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
-import { LESSON_TONE, roomLabel } from '@/lib/schedule';
+import { LESSON_TONE, lessonTime, roomLabel } from '@/lib/schedule';
 import { Badge } from '../ui/Badge';
 import { Plate } from '../ui/Plate';
 import { TONE_BADGE } from './tones';
@@ -28,7 +28,7 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 interface LessonDetailsProps {
   lesson: LessonView;
   date?: IsoDate;
-  dayParity?: WeekParity;
+  dayParity?: WeekParity | null;
 }
 
 /** Скорочення з розпорядження («Зв.зам.») — словами («взаємна заміна»): у публічній картці кодів не лишаємо. */
@@ -76,7 +76,8 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
       <div className="flex flex-col gap-1.5">
         <Row icon={<Clock />} label="Час">
           <span className="figures">
-            {pairOrdinalLabel(lesson.pair)} · {lesson.startsAt}–{lesson.endsAt}
+            {pairOrdinalLabel(lesson.pair)}
+            {lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}
           </span>
           {date ? <span className="block text-caption text-secondary">{formatWeekdayDate(date)}</span> : null}
         </Row>

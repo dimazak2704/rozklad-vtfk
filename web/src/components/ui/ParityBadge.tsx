@@ -38,9 +38,10 @@ const PARITY_TIP: Record<WeekParity, string> = {
 };
 
 interface ParityBadgeProps {
-  parity: WeekParity;
+  /** null — дата поза семестром: парності немає, значок не показуємо (не вигадуємо її). */
+  parity: WeekParity | null;
   /** Номер навчального тижня семестру. */
-  weekNumber?: number;
+  weekNumber?: number | null;
   /** Слово перед парністю (необовʼязково; у шапці його немає). */
   prefix?: string;
   tone?: 'default' | 'on-shell';
@@ -63,6 +64,7 @@ export function ParityBadge({
   plain = false,
   className,
 }: ParityBadgeProps) {
+  if (!parity) return null;
   const onShell = tone === 'on-shell';
   const quiet = onShell ? 'text-on-shell-muted' : 'text-secondary';
   const content = (

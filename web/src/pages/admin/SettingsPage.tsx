@@ -26,7 +26,7 @@ function FormSkeleton() {
 export default function SettingsPage() {
   const settings = useSettings();
   const meta = usePublicMeta();
-  const semester = meta.data ? { startsOn: meta.data.semester.startsOn, endsOn: meta.data.semester.endsOn } : undefined;
+  const semester = meta.data?.semester ?? undefined;
 
   return (
     <div className="flex flex-col gap-6">

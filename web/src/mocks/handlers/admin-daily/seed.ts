@@ -4,6 +4,7 @@
  * решта без рішення. День — найближчий навчальний від «сьогодні», тож демо видно в будь-який день семестру.
  * Сценарій повторює розпорядження №35: Крисак Л. на лікарняному (Відп.), підгрупова пара — «Пари не буде».
  */
+import { DEFAULT_CONFIRM_TIMEOUT_MINUTES } from '@/api/settings-limits';
 import type { AbsenceDto, AbsenceReasonCategory, AbsenceSource, IsoDate, LessonView, TeacherDto } from '@/api/types';
 import { compareIsoDates, shiftStudyDay } from '@/lib/date';
 import { ACTIVE_SEMESTER, teacherNamed, teacherRef } from '../../fixtures';
@@ -15,7 +16,7 @@ import { affectedLessons, optionsFor } from './rules';
 import { ADMIN_ACTOR, emptyWorld, type ChangeRecord, type World } from './world';
 
 /** Налаштування, з якими «створювалися» демо-рішення (як типові в settings.ts). */
-const SEED_APPROVAL = { mode: 'CONFIRM', timeoutMinutes: 15 } as const;
+const SEED_APPROVAL = { mode: 'CONFIRM', timeoutMinutes: DEFAULT_CONFIRM_TIMEOUT_MINUTES } as const;
 
 const minutesAgo = (now: Date, minutes: number) => new Date(now.getTime() - minutes * 60_000);
 
@@ -56,7 +57,9 @@ function addAbsence(
     comment: null,
     source: input.source,
     status: 'ACTIVE',
+    createdBy: input.source === 'BOT' ? 'telegram-bot' : input.source === 'WEB' ? input.teacher.shortName : ADMIN_ACTOR,
     createdAt: input.at.toISOString(),
+    version: 0,
   };
   world.absences.set(absence.id, absence);
   return absence;
@@ -133,19 +136,19 @@ export function seedWorld(now: Date): World {
     pairs: null,
     reason: 'SICK_LEAVE',
     source: 'BOT',
-    at: minutesAgo(now, 74),
+    at: minutesAgo(now, 190),
   });
   const sickLessons = affectedLessons(world, sick)
     .filter((item) => item.date === date)
     .map((item) => item.lesson);
   const [first, second, third] = sickLessons;
   if (first) {
-    if (first.subgroup > 0) cancelLesson(world, date, first, sick, 'krysak-1', minutesAgo(now, 66));
-    else reply(world, replaceWithTop(world, date, first, sick, 'krysak-1', minutesAgo(now, 66)), 'CONFIRMED', minutesAgo(now, 58));
+    if (first.subgroup > 0) cancelLesson(world, date, first, sick, 'krysak-1', minutesAgo(now, 182));
+    else reply(world, replaceWithTop(world, date, first, sick, 'krysak-1', minutesAgo(now, 182)), 'CONFIRMED', minutesAgo(now, 170));
   }
-  if (second) reply(world, replaceWithTop(world, date, second, sick, 'krysak-2', minutesAgo(now, 63)), 'CONFIRMED', minutesAgo(now, 47));
-  // запит без відповіді довше за тайм-аут: на панелі — «прострочено», диспетчер може нагадати
-  if (third) replaceWithTop(world, date, third, sick, 'krysak-3', minutesAgo(now, 22));
+  if (second) reply(world, replaceWithTop(world, date, second, sick, 'krysak-2', minutesAgo(now, 178)), 'CONFIRMED', minutesAgo(now, 160));
+  // запит без відповіді довше за тайм-аут (типово 120 хв): на панелі — «прострочено», диспетчер може нагадати
+  if (third) replaceWithTop(world, date, third, sick, 'krysak-3', minutesAgo(now, 140));
 
   // 2. Відрядження на день: перший кандидат відмовився, друга пара чекає відповіді
   const travelling = pickTeacher(['Кренцін', 'Охота О.Я.', 'Масловата Д.Р.', 'Вернигора', 'Погосян'], date, [krysak]);

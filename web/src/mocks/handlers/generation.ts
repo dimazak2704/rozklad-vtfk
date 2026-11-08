@@ -9,11 +9,11 @@
  * щоб демо й e2e не чекали хвилинами (справжній розвʼязувач працює до ліміту часу).
  */
 import { http, HttpResponse } from 'msw';
-import type { GenerationJobView } from '@/api/generation';
 import type {
   ConstraintAnalysisDto,
   FieldErrorDto,
   GenerationJobCreated,
+  GenerationJobDto,
   GenerationJobRequest,
   GenerationJobStatus,
   GenerationProgressPoint,
@@ -32,6 +32,7 @@ import { findGroup, findRoom, GROUPS, ROOMS, roomRef, SEMESTERS } from '../fixtu
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, notFound, readJson } from '../kit';
 import { createMockStore } from '../store';
+import { ADMIN_ACTOR } from './admin-daily/world';
 import { analyzeLessons, cohortsOverlap, groupOf, LATE_PAIR_FROM, maxParallelOf, shiftWindowOf, timetableMock } from './timetable';
 
 /** Ваги за замовчуванням, як GenerationWeights.DEFAULT у core (CHANGELOG-CONTRACTS). */
@@ -450,6 +451,8 @@ function constraintAnalysis(lessons: readonly TemplateLessonDto[], weights: Gene
 interface JobRecord {
   id: Uuid;
   semesterId: Uuid;
+  /** База: задана версія або опублікована (як у core). */
+  baseVersionId: Uuid;
   params: GenerationJobRequest;
   weights: GenerationWeights;
   createdAt: number;
@@ -522,22 +525,27 @@ function jobStatus(job: JobRecord, now: number): GenerationJobStatus {
   return 'SOLVED';
 }
 
-function jobView(job: JobRecord, now = Date.now()): GenerationJobView {
+/** GenerationJobDto core: адитивні semesterId, createdAt, baseVersionId, timeLimitSeconds, requestedBy. */
+function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
   const status = jobStatus(job, now);
   const { solution, startedAtMs } = job;
-  const view: GenerationJobView = {
+  const view: GenerationJobDto = {
     id: job.id,
+    semesterId: job.semesterId,
     status,
+    createdAt: iso(job.createdAt),
     startedAt: null,
     finishedAt: null,
     bestScore: null,
     progress: [],
     resultVersionId: null,
+    baseVersionId: job.baseVersionId,
+    timeLimitSeconds: job.params.timeLimitSeconds,
     analysis: null,
     metricsBefore: solution?.metricsBefore ?? null,
     metricsAfter: null,
     error: null,
-    params: job.params,
+    requestedBy: ADMIN_ACTOR,
   };
   if (status === 'CANCELLED' && job.cancelledAt !== null) view.finishedAt = iso(job.cancelledAt);
   if (!solution || startedAtMs === null || now < startedAtMs) return view;
@@ -653,6 +661,7 @@ export const handlers = [
     const job: JobRecord = {
       id,
       semesterId: request_.semesterId,
+      baseVersionId: baseVersion.id,
       params: { ...request_, weights },
       weights,
       createdAt: now,
@@ -692,6 +701,7 @@ export const handlers = [
       return conflict('Генерацію вже завершено — скасовувати нічого.');
     }
     job.cancelledAt = Date.now();
-    return new HttpResponse(null, { status: 202 });
+    // як core: 202 із задачею
+    return HttpResponse.json(jobView(job), { status: 202 });
   }),
 ];

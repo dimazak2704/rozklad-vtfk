@@ -152,9 +152,9 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                       ) : (
                         <div className="flex h-full flex-col divide-y divide-[var(--border-color-separator)]">
                           {lessons.map((lesson) => {
-                            const start = timeToMinutes(lesson.startsAt);
-                            const end = timeToMinutes(lesson.endsAt);
-                            const current = isLiveDay && nowMinutes >= start && nowMinutes < end;
+                            const start = lesson.startsAt ? timeToMinutes(lesson.startsAt) : null;
+                            const end = lesson.endsAt ? timeToMinutes(lesson.endsAt) : null;
+                            const current = isLiveDay && start !== null && end !== null && nowMinutes >= start && nowMinutes < end;
                             return (
                               <LessonCell
                                 key={lesson.id}
@@ -163,7 +163,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                 date={day.date}
                                 dayParity={day.parity}
                                 now={current}
-                                progress={current ? (nowMinutes - start) / (end - start) : 0}
+                                progress={current && start !== null && end !== null ? (nowMinutes - start) / (end - start) : 0}
                                 showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
                                 className="flex-1"
                               />

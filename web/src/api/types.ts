@@ -142,6 +142,10 @@ export interface ProblemDetail {
   instance?: string;
   errors?: FieldErrorDto[];
   conflicts?: Conflict[];
+  /** Код бізнес-правила (лише 422): `ABSENCE_STARTED`, `teacher-not-linked` … */
+  code?: string;
+  /** Ідентифікатор запиту для пошуку в журналах (є в усіх сервісів). */
+  requestId?: string;
 }
 
 export interface PageQuery {
@@ -169,17 +173,20 @@ export interface PairTimeDto {
   minutesLeft?: number;
 }
 
-/** GET /api/public/meta */
+/**
+ * GET /api/public/meta. `semester`, `weekNumber`, `parity`, `bellProfile` — null, коли семестру немає або
+ * сьогодні між семестрами (парність поза семестром не вигадуємо); `nextPair` без `minutesLeft`.
+ */
 export interface PublicMetaDto {
   collegeName: string;
-  semester: SemesterRef;
+  semester: Nullable<SemesterRef>;
   today: IsoDate;
-  weekNumber: number;
-  parity: WeekParity;
+  weekNumber: Nullable<number>;
+  parity: Nullable<WeekParity>;
   studyDay: boolean;
-  currentPair?: Nullable<PairTimeDto>;
-  nextPair?: Nullable<PairTimeDto>;
-  bellProfile: { id: Uuid; name: string };
+  currentPair: Nullable<PairTimeDto>;
+  nextPair: Nullable<PairTimeDto>;
+  bellProfile: Nullable<{ id: Uuid; name: string }>;
 }
 
 /** GET /api/public/search?q=&limit=10 */
@@ -191,22 +198,25 @@ export interface SearchResultDto {
   url: string;
 }
 
-/** GET /api/public/groups */
+/** GET /api/public/groups (лише активні). */
 export interface PublicGroupDto {
   id: Uuid;
   code: string;
   course: number;
   specialty: { letters: string; name: string };
-  department: string;
+  /** Назва відділення; null — у спеціальності його не вказано. */
+  department: Nullable<string>;
   shift: ShiftNumber;
 }
 
-/** GET /api/public/teachers */
+/** GET /api/public/teachers (лише активні). */
 export interface PublicTeacherDto {
   id: Uuid;
   shortName: string;
   displayName: string;
   cycleCommission: Nullable<string>;
+  /** Повне імʼя — лише коли налаштування `showTeacherFullNames` це дозволяє і імʼя відоме. */
+  fullName: Nullable<string>;
 }
 
 /** GET /api/public/rooms */
@@ -228,21 +238,27 @@ export interface BellProfileSlotDto extends BellSlotDto {
   weekday: Weekday;
 }
 
-/** Профіль дзвінків (адмінка) і список профілів у /api/public/bells без дати. @inferred */
+/** Профіль дзвінків (адмінка) і список профілів у /api/public/bells без дати. */
 export interface BellProfileDto {
   id: Uuid;
   name: string;
   active: boolean;
+  defaultProfile: boolean;
   slots: BellProfileSlotDto[];
+  version: number;
 }
 
-/** GET /api/public/bells?date= */
+/** GET /api/public/bells?date= (404, коли профілю дзвінків немає). */
 export interface BellsDto {
   profile: { id: Uuid; name: string };
-  weekday: Weekday;
+  /** Дата, на яку дзвінки; null — запит без дати. */
+  date: Nullable<IsoDate>;
+  /** ISO 1..7: на вихідних `slots` порожні. */
+  weekday: number;
+  studyDay: boolean;
   slots: BellSlotDto[];
-  /** Повертається, коли дату не передано. */
-  profiles?: Nullable<BellProfileDto[]>;
+  /** Активні профілі зі слотами — лише без `date`. */
+  profiles: Nullable<BellProfileDto[]>;
 }
 
 export interface ScheduleOwner {
@@ -252,37 +268,43 @@ export interface ScheduleOwner {
 }
 
 export interface LessonOriginal {
-  discipline?: Nullable<DisciplineRef>;
-  teacher?: Nullable<TeacherRef>;
-  room?: Nullable<RoomRef>;
-  pair?: Nullable<number>;
+  discipline: Nullable<DisciplineRef>;
+  teacher: Nullable<TeacherRef>;
+  room: Nullable<RoomRef>;
+  /** Пара, з якої перенесли заняття (лише MOVED). */
+  pair: Nullable<number>;
 }
 
 export interface LessonView {
   id: Uuid;
   pair: number;
-  startsAt: IsoTime;
-  endsAt: IsoTime;
+  /** null — не налаштовано профіль дзвінків (час пари невідомий). */
+  startsAt: Nullable<IsoTime>;
+  /** null — без профілю дзвінків; для BLOCK — кінець останньої пари блоку. */
+  endsAt: Nullable<IsoTime>;
   discipline: DisciplineRef;
-  teacher?: Nullable<TeacherRef>;
-  room?: Nullable<RoomRef>;
+  teacher: Nullable<TeacherRef>;
+  room: Nullable<RoomRef>;
   group: GroupRef;
   /** 0 — уся група, 1..n — підгрупа. */
   subgroup: number;
   kind: LessonViewKind;
   online: boolean;
-  original?: Nullable<LessonOriginal>;
-  reasonText?: Nullable<string>;
-  changeId?: Nullable<Uuid>;
+  original: Nullable<LessonOriginal>;
+  /** Надрукована причина розпорядження; null для ADDITIONAL, BLOCK і заміни аудиторії. */
+  reasonText: Nullable<string>;
+  changeId: Nullable<Uuid>;
 }
 
 export interface DayDto {
   date: IsoDate;
   weekday: Weekday;
+  /** Великими літерами, як у розкладі: «ПОНЕДІЛОК», «ПʼЯТНИЦЯ». Для показу — `weekdayTitle()`. */
   weekdayLabel: string;
-  parity: WeekParity;
+  /** null — дата поза семестром. */
+  parity: Nullable<WeekParity>;
   studyDay: boolean;
-  note?: Nullable<string>;
+  note: Nullable<string>;
   lessons: LessonView[];
 }
 
@@ -301,20 +323,23 @@ export interface ScheduleDto {
 export interface ChangeView {
   pairLabel: string;
   rowType: OrderRowType;
-  from: { discipline?: Nullable<string>; teacher?: Nullable<string> };
-  reasonText?: Nullable<string>;
-  to: { discipline?: Nullable<string>; teacher?: Nullable<string> };
-  room?: Nullable<string>;
-  subgroupNote?: Nullable<string>;
+  from: { discipline: Nullable<string>; teacher: Nullable<string> };
+  reasonText: Nullable<string>;
+  to: { discipline: Nullable<string>; teacher: Nullable<string> };
+  room: Nullable<string>;
+  subgroupNote: Nullable<string>;
 }
 
 /** GET /api/public/changes?date= */
 export interface PublicChangesDto {
   date: IsoDate;
-  parity: WeekParity;
+  /** null — дата поза семестром. */
+  parity: Nullable<WeekParity>;
+  /** «Понеділок» (з великої літери, на відміну від DayDto). */
   weekdayLabel: string;
-  order?: Nullable<{ id: Uuid; number: number; publishedAt: IsoInstant }>;
-  groups: Array<{ group: GroupRef; items: ChangeView[] }>;
+  order: Nullable<{ id: Uuid; number: Nullable<number>; publishedAt: Nullable<IsoInstant> }>;
+  /** Рядок групи, якої немає в каталозі, має `group.id = null`. */
+  groups: Array<{ group: Omit<GroupRef, 'id'> & { id: Nullable<Uuid> }; items: ChangeView[] }>;
 }
 
 /** GET /api/public/invites/{token} */
@@ -652,24 +677,34 @@ export interface ConstraintAnalysisDto {
   score: string;
 }
 
+/**
+ * GET /api/admin/generation/jobs[/{id}] (список без `semesterId` — останні 50). Адитивно до контракту:
+ * `semesterId`, `createdAt`, `baseVersionId`, `timeLimitSeconds`, `requestedBy`.
+ */
 export interface GenerationJobDto {
   id: Uuid;
+  semesterId: Uuid;
   status: GenerationJobStatus;
+  createdAt: IsoInstant;
   startedAt: Nullable<IsoInstant>;
   finishedAt: Nullable<IsoInstant>;
-  /** Рядок Timefold на кшталт `0hard/-42soft`. @inferred */
+  /** `"{hard}hard/{soft}soft"`, напр. `0hard/-42soft`; null — ще немає повного розкладу. */
   bestScore: Nullable<string>;
   progress: GenerationProgressPoint[];
-  resultVersionId?: Nullable<Uuid>;
-  analysis?: Nullable<ConstraintAnalysisDto[]>;
-  metricsBefore?: Nullable<MetricsDto>;
-  metricsAfter?: Nullable<MetricsDto>;
-  error?: Nullable<string>;
+  resultVersionId: Nullable<Uuid>;
+  baseVersionId: Nullable<Uuid>;
+  /** Ліміт часу запуску, 10..600 с. */
+  timeLimitSeconds: Nullable<number>;
+  analysis: Nullable<ConstraintAnalysisDto[]>;
+  metricsBefore: Nullable<MetricsDto>;
+  metricsAfter: Nullable<MetricsDto>;
+  error: Nullable<string>;
+  requestedBy: Nullable<string>;
 }
 
 // ───────────────────────── 2. Admin: заміни ─────────────────────────
 
-/** @inferred — склад відповіді GET /api/admin/absences */
+/** GET /api/admin/absences (масив активних, що перетинають `[from, to]`), GET /api/me/absences. */
 export interface AbsenceDto {
   id: Uuid;
   teacher: TeacherRef;
@@ -678,26 +713,46 @@ export interface AbsenceDto {
   /** null — увесь день */
   pairs: Nullable<number[]>;
   reasonCategory: AbsenceReasonCategory;
-  comment?: Nullable<string>;
+  comment: Nullable<string>;
   source: AbsenceSource;
   status: AbsenceStatus;
-  createdAt?: IsoInstant;
+  createdBy: Nullable<string>;
+  createdAt: IsoInstant;
+  /** Для оптимістичного блокування: PUT надсилає її назад (застаріла → 409 `stale-data`). */
+  version: number;
 }
 
-/** POST/PUT /api/admin/absences */
+/**
+ * Подія SSE `absence.created` / `absence.updated`: без причини й коментаря (DOMAIN §7 — вони приватні).
+ */
+export interface AbsenceSummaryDto {
+  id: Uuid;
+  teacher: TeacherRef;
+  dateFrom: IsoDate;
+  dateTo: IsoDate;
+  pairs: Nullable<number[]>;
+  source: AbsenceSource;
+  status: AbsenceStatus;
+}
+
+/** POST/PUT /api/admin/absences. Викладача відсутності змінити не можна (422 `ABSENCE_TEACHER_FIXED`). */
 export interface AbsenceRequest {
   teacherId: Uuid;
   dateFrom: IsoDate;
   dateTo: IsoDate;
   pairs?: Nullable<number[]>;
   reasonCategory: AbsenceReasonCategory;
+  /** До 1000 символів. */
   comment?: Nullable<string>;
+  /** Лише в PUT: версія, яку бачив диспетчер. */
+  version?: Nullable<number>;
 }
 
 /** GET /api/admin/absences/{id}/affected */
 export interface AffectedLessonDto {
   lesson: LessonView;
-  decision?: Nullable<{ changeId: Uuid; status: ChangeStatus; kind: ChangeKind }>;
+  /** null або DECLINED — пара ще потребує рішення. */
+  decision: Nullable<{ changeId: Uuid; status: ChangeStatus; kind: ChangeKind }>;
 }
 
 export interface OptionDto {
@@ -706,11 +761,14 @@ export interface OptionDto {
   score: number;
   title: string;
   reasons: string[];
-  teacher?: Nullable<TeacherRef>;
-  discipline?: Nullable<DisciplineRef>;
-  room?: Nullable<RoomRef>;
-  swapLesson?: Nullable<LessonView>;
+  teacher: Nullable<TeacherRef>;
+  discipline: Nullable<DisciplineRef>;
+  room: Nullable<RoomRef>;
+  swapLesson: Nullable<LessonView>;
   warnings: string[];
+  /** Адитивно: дата й пара відпрацювання (лише ADDITIONAL). */
+  date: Nullable<IsoDate>;
+  pair: Nullable<number>;
 }
 
 /** GET /api/admin/lessons/{lessonId}/options */
@@ -746,51 +804,88 @@ export interface ChangeHistoryEntry {
 }
 
 export interface ChangeParties {
-  discipline?: Nullable<DisciplineRef>;
-  teacher?: Nullable<TeacherRef>;
-  room?: Nullable<RoomRef>;
+  discipline: Nullable<DisciplineRef>;
+  teacher: Nullable<TeacherRef>;
+  room: Nullable<RoomRef>;
 }
 
+/**
+ * ChangeDto з core. Пари — діапазон `[pairFrom, pairTo]` (`pairTo` = `pairFrom` для однієї пари; ширший лише
+ * в BLOCK/ADDITIONAL). Для SWAP `pairFrom` — звільнений слот, а пара, з якої переставили заняття, — `swapFromPair`.
+ * Адитивні поля core: `approvalMode` … `version` (CHANGELOG-CONTRACTS, розділ Substitutions).
+ */
 export interface ChangeDto {
   id: Uuid;
   kind: ChangeKind;
   status: ChangeStatus;
   date: IsoDate;
   pairFrom: number;
-  pairTo: Nullable<number>;
+  pairTo: number;
   group: GroupRef;
   subgroup: number;
   original: ChangeParties;
   new: ChangeParties;
   reasonCode: ReasonCode;
   reasonText: Nullable<string>;
-  absenceId?: Nullable<Uuid>;
-  confirmDeadline?: Nullable<IsoInstant>;
-  respondedAt?: Nullable<IsoInstant>;
-  orderId?: Nullable<Uuid>;
+  absenceId: Nullable<Uuid>;
+  confirmDeadline: Nullable<IsoInstant>;
+  respondedAt: Nullable<IsoInstant>;
+  orderId: Nullable<Uuid>;
   history: ChangeHistoryEntry[];
+  approvalMode: ApprovalMode;
+  originalLessonId: Nullable<Uuid>;
+  swapLessonId: Nullable<Uuid>;
+  /** SWAP: пара, з якої переставили заняття (інакше null). */
+  swapFromPair: Nullable<number>;
+  /** Що друкує розпорядження в колонці «Причина» («Відп.», «Зв.зам.»); null — без причини. */
+  printedReason: Nullable<string>;
+  /** Коментар викладача до відповіді. */
+  responseComment: Nullable<string>;
+  remindedAt: Nullable<IsoInstant>;
+  createdBy: Nullable<string>;
+  createdAt: IsoInstant;
+  /** Версія для оптимістичного блокування: PUT надсилає її назад (застаріла → 409 `stale-data`). */
+  version: number;
 }
 
-/** @inferred — склад елемента `alerts` контракт не описує */
+/**
+ * PUT /api/admin/changes/{id}: лише аудиторія й причина (інший викладач чи дисципліна = DELETE + POST).
+ * `newRoomId` замінює аудиторію рішення, тож щоб її зберегти, надсилаємо поточну.
+ */
+export interface UpdateChangeRequest {
+  newRoomId: Nullable<Uuid>;
+  reasonCode: ReasonCode;
+  /** До 100 символів. */
+  reasonText?: Nullable<string>;
+  version: number;
+}
+
+/** Види сповіщень панелі, які надсилає core (CHANGELOG-CONTRACTS, Dashboard). */
+export type DashboardAlertKind = 'NO_SEMESTER' | 'DECLINED' | 'UNCOVERED_LESSONS' | 'PENDING_OVERDUE' | 'ORDER_NOT_PUBLISHED';
+
 export interface DashboardAlert {
-  kind: string;
+  /** Стабільний код; невідомий новий код показуємо за `severity`. */
+  kind: DashboardAlertKind | (string & {});
   severity: 'INFO' | 'WARN' | 'ERROR';
   message: string;
-  link?: Nullable<string>;
+  /** Маршрут SPA з датою, напр. `/admin/changes?date=2026-10-19`; null — без переходу. */
+  link: Nullable<string>;
 }
 
 /** GET /api/admin/dashboard?date */
 export interface DashboardDto {
   date: IsoDate;
-  parity: WeekParity;
+  /** null — дата поза семестром. */
+  parity: Nullable<WeekParity>;
   absences: number;
   uncoveredLessons: number;
   pending: number;
   confirmed: number;
   declined: number;
-  orderDraft?: Nullable<{ id: Uuid; itemCount: number }>;
-  generation?: Nullable<{ status: GenerationJobStatus }>;
-  aiSpendToday?: Nullable<number>;
+  orderDraft: Nullable<{ id: Uuid; itemCount: number }>;
+  generation: Nullable<{ status: GenerationJobStatus }>;
+  /** Завжди null: витрати ШІ рахує importer (`GET /api/import/ai/usage`). */
+  aiSpendToday: Nullable<number>;
   alerts: DashboardAlert[];
 }
 
@@ -818,7 +913,7 @@ export interface OrderItemDto {
   toDiscipline: Nullable<string>;
   toTeacher: Nullable<string>;
   roomText: Nullable<string>;
-  changeId?: Nullable<Uuid>;
+  changeId: Nullable<Uuid>;
 }
 
 export interface OrderDto {
@@ -826,12 +921,10 @@ export interface OrderDto {
   number: Nullable<number>;
   date: IsoDate;
   kind: OrderKind;
-  parentId?: Nullable<Uuid>;
+  parentId: Nullable<Uuid>;
   status: OrderStatus;
-  /** Core: «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ до розпорядження №N»; старий мок клав сюди рядок-підзаголовок. */
+  /** «РОЗПОРЯДЖЕННЯ» (чернетка), «РОЗПОРЯДЖЕННЯ №35», «ДОПОВНЕННЯ до розпорядження №35» (власний номер — `number`). */
   title: string;
-  /** Рядок під заголовком («По коледжу про деякі зміни в розкладі занять»), адитивне поле core. */
-  subtitle?: Nullable<string>;
   weekdayLabel: string;
   parityLabel: string;
   items: OrderItemDto[];
@@ -839,6 +932,13 @@ export interface OrderDto {
   notes: string[];
   signatoryPosition: string;
   signatoryName: string;
+  /** Адитивні поля core: рядок під заголовком («По коледжу про деякі зміни в розкладі занять»). */
+  subtitle: string;
+  /** «На 19 жовтня 2026 р.» */
+  dateLabel: string;
+  publishedAt: Nullable<IsoInstant>;
+  publishedBy: Nullable<string>;
+  version: number;
 }
 
 export interface UpdateOrderNotesRequest {
@@ -898,7 +998,7 @@ export interface InviteDto {
   createdAt: Nullable<IsoInstant>;
 }
 
-/** GET/PUT /api/admin/settings */
+/** GET/PUT /api/admin/settings (межі — SETTINGS_LIMITS у api/settings-limits.ts, як у core SystemSettings). */
 export interface SettingsDto {
   approvalMode: ApprovalMode;
   confirmTimeoutMinutes: number;
@@ -1029,26 +1129,47 @@ export interface ScoredRef {
   score: number;
 }
 
+/** Рядок звіту імпорту. importer не пише null-поля (`@JsonInclude(NON_NULL)`): їх просто немає. */
 export interface ReportRow {
   severity: ReportSeverity;
   type: string;
   raw: string;
-  matched?: Nullable<ScoredRef>;
+  matched?: ScoredRef;
   suggestions: ScoredRef[];
   location: string;
+  /** Пояснення українською (адитивне поле importer). */
+  message?: string;
 }
 
+/** Формат файлу за вмістом (магічні байти), а не за назвою. */
+export type ImportFileType = 'XLSX' | 'DOCX' | 'DOC' | 'PDF' | 'JPEG' | 'PNG' | 'WEBP' | 'GIF';
+
+/**
+ * ImportJobDto importer: контракт + адитивні `fileType`, `fileSize`, `updatedAt`, `createdBy`, `semesterId`,
+ * `options`, `mappings`, `result`, `canApply`. null-поля не пишуться (`NON_NULL`). У списку `report` порожній,
+ * а `draft`, `options`, `mappings`, `result` відсутні.
+ */
 export interface ImportJobDto {
   id: Uuid;
   kind: ImportKind;
   fileName: string;
+  fileType: ImportFileType;
+  fileSize: number;
   status: ImportJobStatus;
   createdAt: IsoInstant;
+  updatedAt: IsoInstant;
+  createdBy?: string;
+  semesterId?: Uuid;
   summary: { recognized: number; unknown: number; conflicts: number; warnings: number };
   report: ReportRow[];
-  draft: unknown;
-  ai?: Nullable<{ model: string; inputTokens: number; outputTokens: number; costUsd: number }>;
-  error?: Nullable<string>;
+  draft?: unknown;
+  options?: unknown;
+  mappings?: ImportMapping[];
+  ai?: { model: string; inputTokens: number; outputTokens: number; costUsd: number };
+  result?: unknown;
+  error?: string;
+  /** Чи можна застосувати зараз (READY або FAILED з чернеткою без блокувальних рядків). */
+  canApply: boolean;
 }
 
 export interface ImportMapping {
@@ -1080,11 +1201,15 @@ export interface ParseAbsenceResponse {
   clarification?: Nullable<string>;
 }
 
-/** GET /api/import/ai/usage */
+/** GET /api/import/ai/usage (адитивно: `remainingUsd`, `enabled`). */
 export interface AiUsageDto {
   today: { calls: number; inputTokens: number; outputTokens: number; costUsd: number };
   dailyBudgetUsd: number;
+  /** Скільки ще можна витратити сьогодні (не менше 0). */
+  remainingUsd: number;
   model: { text: string; vision: string };
+  /** Чи налаштовано ШІ (є ключ API). */
+  enabled: boolean;
 }
 
 // ───────────────────────── 6. Notification ─────────────────────────
@@ -1098,17 +1223,21 @@ export interface BotStatusDto {
   link: string;
   mode: BotMode;
   connected: boolean;
+  /** Чому бот не працює (лише коли `connected=false`), адитивне поле notification. */
+  problem?: Nullable<string>;
 }
 
-/** GET /api/notify/bindings */
+/** GET /api/notify/bindings. Адитивно до контракту: `groupCode`, `digestEnabled`. */
 export interface ChatBindingDto {
   id: Uuid;
   type: BindingType;
-  /** Маскований id чату. */
+  /** Маскований id чату: `-•••7890` (група) або `•••7890` (особистий). */
   chatId: string;
   title: string;
-  groupId?: Nullable<Uuid>;
-  teacherId?: Nullable<Uuid>;
+  groupId: Nullable<Uuid>;
+  groupCode: Nullable<string>;
+  teacherId: Nullable<Uuid>;
+  digestEnabled: boolean;
   createdAt: IsoInstant;
 }
 
@@ -1119,25 +1248,59 @@ export interface BindingCodeRequest {
   teacherId?: Nullable<Uuid>;
 }
 
+/**
+ * POST /api/notify/bindings/codes → 200. Адитивно: `type`, `label` (код групи чи імʼя викладача),
+ * `groupLink` (`?startgroup=` — додає бота в групу) і `command` (`/bind XXXX-XXXX`) — лише для чатів, що
+ * можуть бути групою (GROUP_CHAT, ADMIN_CHAT). 422 `teacher-not-linked` — обліковий запис викладача не привʼязано.
+ */
 export interface BindingCodeDto {
+  /** Як показувати людині: `ABCD-EFGH`. */
   code: string;
+  /** `https://t.me/<bot>?start=<code>` — особистий чат. */
   deepLink: string;
   expiresAt: IsoInstant;
+  type: BindingType;
+  label: string;
+  groupLink: Nullable<string>;
+  command: Nullable<string>;
 }
 
 export type DeliveryStatus = 'QUEUED' | 'SENT' | 'FAILED' | 'RETRYING';
+/** Навіщо поставили повідомлення в чергу (фільтр журналу). */
+export type DeliveryPurpose =
+  | 'ORDER_GROUP'
+  | 'ORDER_TEACHER'
+  | 'ORDER_ADMIN'
+  | 'SUBSTITUTION_REQUEST'
+  | 'SUBSTITUTION_REMINDER'
+  | 'SUBSTITUTION_STATUS'
+  | 'SUBSTITUTION_ADMIN'
+  | 'ABSENCE_ADMIN'
+  | 'GENERATION_ADMIN'
+  | 'DIGEST'
+  | 'TEST';
+export type OutboundKind = 'TEXT' | 'PHOTO' | 'EDIT_TEXT';
 
-/** Запис журналу GET /api/notify/deliveries. Контракт називає лише «delivery log». @inferred */
+/** Запис журналу GET /api/notify/deliveries (сторінка `Page<DeliveryDto>`, нові спершу). */
 export interface DeliveryDto {
   id: Uuid;
-  orderId?: Nullable<Uuid>;
-  chatTitle: string;
-  bindingType: BindingType;
+  orderId: Nullable<Uuid>;
+  /** Маскований id чату. */
+  chatId: string;
+  /** Назва чату на момент постановки в чергу; null — тестове повідомлення власнику. */
+  chatTitle: Nullable<string>;
+  /** null — чат без привʼязки (тестове повідомлення власнику). */
+  bindingType: Nullable<BindingType>;
+  purpose: DeliveryPurpose;
+  kind: OutboundKind;
   status: DeliveryStatus;
   attempts: number;
-  error?: Nullable<string>;
+  /** Остання причина збою. */
+  error: Nullable<string>;
   createdAt: IsoInstant;
-  sentAt?: Nullable<IsoInstant>;
+  sentAt: Nullable<IsoInstant>;
+  /** Коли наступна спроба (лише для QUEUED/RETRYING). */
+  nextAttemptAt: Nullable<IsoInstant>;
 }
 
 export type DocumentFormat = 'docx' | 'pdf' | 'png';
@@ -1162,10 +1325,12 @@ export interface GenerationProgressPayload {
 
 export interface ServerEventMap {
   'change.updated': ChangeDto;
-  'absence.created': AbsenceDto;
+  'absence.created': AbsenceSummaryDto;
+  'absence.updated': AbsenceSummaryDto;
   'generation.progress': GenerationProgressPayload;
   'generation.completed': GenerationJobDto;
-  'order.published': OrderDto;
+  /** Короткий запис розпорядження (як рядок списку), а не повний OrderDto. */
+  'order.published': OrderSummaryDto;
   'schedule.changed': ScheduleChangedPayload;
   ping: unknown;
 }

@@ -101,11 +101,14 @@ describe('побажання', () => {
 describe('схема відсутності', () => {
   const schema = absenceSchema('2026-11-09');
 
-  it('минула дата, кінець раніше початку, порожні пари — помилки', () => {
+  it('минула відсутність, кінець раніше початку, порожні пари — помилки; та, що вже триває, — можна', () => {
     const result = schema.safeParse({ dateFrom: '2026-11-06', dateTo: '2026-11-05', wholeDay: false, pairs: [], reasonCategory: 'OTHER', comment: '' });
     expect(result.success).toBe(false);
     const paths = result.error?.issues.map((issue) => issue.path.join('.')).sort();
-    expect(paths).toEqual(['dateFrom', 'dateTo', 'pairs']);
+    // як core (ABSENCE_IN_PAST): минулою є відсутність, що вже закінчилась
+    expect(paths).toEqual(['dateTo', 'dateTo', 'pairs']);
+    const ongoing = schema.safeParse({ dateFrom: '2026-11-06', dateTo: '2026-11-10', wholeDay: true, pairs: [], reasonCategory: 'SICK_LEAVE', comment: '' });
+    expect(ongoing.success).toBe(true);
     expect(schema.safeParse({ dateFrom: '2026-11-09', dateTo: '2026-11-09', wholeDay: true, pairs: [], comment: '' }).success).toBe(false);
   });
 

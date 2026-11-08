@@ -456,7 +456,7 @@ export default function ChangesPage() {
         onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
         date={date}
         absence={dialog.absence}
-        semester={meta.data ? { startsOn: meta.data.semester.startsOn, endsOn: meta.data.semester.endsOn } : null}
+        semester={meta.data?.semester ?? null}
         onSaved={(absence, created) => {
           updateParams({ absence: absence.id, lesson: null, filter: null });
           notify.success(created ? `Відсутність додано: ${absence.teacher.shortName}` : `Відсутність змінено: ${absence.teacher.shortName}`, {

@@ -12,6 +12,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { api } from './client';
+import { isApiError } from './errors';
 import { useServerEvent } from './live';
 import { qk } from './queryKeys';
 import type {
@@ -29,6 +30,7 @@ import type {
   OrderStatus,
   OrderSummaryDto,
   Page,
+  UpdateChangeRequest,
   Uuid,
 } from './types';
 
@@ -36,23 +38,35 @@ import type {
 
 /**
  * Зачеплена пара з датою: відсутність може тривати кілька днів, а LessonView дати не має.
- * Поле `date` — додаткове до контракту (docs/CHANGELOG-CONTRACTS.md, розділ admin-daily).
+ * Клієнт потребує `date` (групування за днями й `POST /changes {date}`), але core його поки не надсилає
+ * (docs/modules/integration.md §5) — див. `withLessonDates`.
  */
 export interface AffectedLesson extends AffectedLessonDto {
   date: IsoDate;
 }
 
-/** Варіант; для відпрацювання сервер додає дату й пару нового заняття (додаткові поля). */
-export interface ChangeOption extends OptionDto {
-  date?: IsoDate | null;
-  pair?: number | null;
+/** Як приходить з сервера: `date` — запитане адитивне поле, якого core може ще не мати. */
+type AffectedLessonWire = AffectedLessonDto & { date?: IsoDate | null };
+
+/** Пояснення для диспетчера, коли сервер не дав дат пар відсутності на кілька днів. */
+export const AFFECTED_DATE_MISSING =
+  'Сервер не надіслав дати зачеплених пар (поле date). Для відсутності на кілька днів пари не можна розкласти за датами — потрібне оновлення core.';
+
+/**
+ * Дата кожної зачепленої пари. Без поля `date` її можна вивести напевно лише для одноденної відсутності;
+ * для довшої вгадувати не можна (пара з понеділка опинилась би у вівторку), тому — явна помилка, а не тиша.
+ */
+export function withLessonDates(absence: Pick<AbsenceDto, 'dateFrom' | 'dateTo'>, items: readonly AffectedLessonWire[]): AffectedLesson[] {
+  return items.map((item) => {
+    if (item.date) return { ...item, date: item.date };
+    if (absence.dateFrom === absence.dateTo) return { ...item, date: absence.dateFrom };
+    throw new Error(AFFECTED_DATE_MISSING);
+  });
 }
 
-export interface LessonOptions extends LessonOptionsDto {
-  /** Дата заняття (додаткове поле, як у зачеплених парах). */
-  date?: IsoDate | null;
-  options: ChangeOption[];
-}
+/** Варіант рішення (адитивні `date`/`pair` має лише відпрацювання ADDITIONAL). */
+export type ChangeOption = OptionDto;
+export type LessonOptions = LessonOptionsDto;
 
 export interface OrdersQuery {
   from?: IsoDate;
@@ -64,16 +78,6 @@ export interface OrdersQuery {
   sort?: string;
 }
 
-/** Відомі види сповіщень панелі (поле `kind` у DashboardAlert — рядок, нові види показуються як «інфо»). */
-export type DashboardAlertKind =
-  | 'UNCOVERED_SOON'
-  | 'UNCOVERED'
-  | 'DECLINED'
-  | 'PENDING_OVERDUE'
-  | 'ORDER_NOT_PUBLISHED'
-  | 'DISCIPLINE_FINISHED'
-  | 'WILL_UNDERRUN'
-  | 'WILL_OVERRUN';
 
 // ───────────────────────── Запити ─────────────────────────
 
@@ -97,10 +101,11 @@ export function useAbsences(from: IsoDate, to: IsoDate) {
 }
 
 /** Опції запиту зачеплених пар відсутності (для useQuery/useQueries). */
-export function affectedLessonsQuery(absenceId: Uuid) {
+export function affectedLessonsQuery(absence: Pick<AbsenceDto, 'id' | 'dateFrom' | 'dateTo'>) {
   return queryOptions({
-    queryKey: qk.admin.absences.affected(absenceId),
-    queryFn: ({ signal }) => api.get<AffectedLesson[]>(`/admin/absences/${absenceId}/affected`, undefined, { signal }),
+    queryKey: qk.admin.absences.affected(absence.id),
+    queryFn: async ({ signal }) =>
+      withLessonDates(absence, await api.get<AffectedLessonWire[]>(`/admin/absences/${absence.id}/affected`, undefined, { signal })),
   });
 }
 
@@ -128,8 +133,8 @@ function combineResults<T>(results: ReadonlyArray<{ data: T | undefined; isPendi
 }
 
 /** Зачеплені пари кожної відсутності (окремий запит на відсутність, як у контракті). */
-export function useAffectedLessons(absenceIds: readonly Uuid[]): Combined<AffectedLesson[]> {
-  return useQueries({ queries: absenceIds.map((id) => affectedLessonsQuery(id)), combine: combineResults<AffectedLesson[]> });
+export function useAffectedLessons(absences: ReadonlyArray<Pick<AbsenceDto, 'id' | 'dateFrom' | 'dateTo'>>): Combined<AffectedLesson[]> {
+  return useQueries({ queries: absences.map((absence) => affectedLessonsQuery(absence)), combine: combineResults<AffectedLesson[]> });
 }
 
 /** Зміни кількох дат (тиждень на екрані «Заміни»). */
@@ -206,11 +211,15 @@ export function useCreateAbsence() {
   });
 }
 
+/** PUT відсутності з `version` (оптимістичне блокування): на 409 `stale-data` одразу перечитуємо дані. */
 export function useUpdateAbsence() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: Uuid; body: AbsenceRequest }) => api.put<AbsenceDto>(`/admin/absences/${id}`, body),
     onSuccess: () => invalidateDaily(queryClient),
+    onError: (error) => {
+      if (isApiError(error) && error.isStaleData) invalidateDaily(queryClient);
+    },
   });
 }
 
@@ -227,6 +236,21 @@ export function useCreateChange() {
   return useMutation({
     mutationFn: (body: CreateChangeRequest) => api.post<ChangeDto>('/admin/changes', body),
     onSuccess: () => invalidateDaily(queryClient),
+  });
+}
+
+/**
+ * Змінити причину чи аудиторію рішення (PUT з `version`). Інший викладач чи дисципліна — лише через
+ * скасування й нове рішення. На 409 `stale-data` (рішення вже змінив бот чи інший диспетчер) перечитуємо зміни.
+ */
+export function useUpdateChange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: Uuid; body: UpdateChangeRequest }) => api.put<ChangeDto>(`/admin/changes/${id}`, body),
+    onSuccess: () => invalidateDaily(queryClient),
+    onError: (error) => {
+      if (isApiError(error) && error.isStaleData) invalidateDaily(queryClient);
+    },
   });
 }
 
@@ -286,6 +310,9 @@ export function useDailyLiveSync(): void {
     void queryClient.invalidateQueries({ queryKey: qk.admin.orders.all });
   });
   useServerEvent('absence.created', () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'lesson-options'] });
+  });
+  useServerEvent('absence.updated', () => {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'lesson-options'] });
   });
 }

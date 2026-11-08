@@ -4,7 +4,7 @@ import { useDeliveries } from '@/api/telegram';
 import type { DeliveryDto, DeliveryStatus } from '@/api/types';
 import { Badge, Chip, DataTable, EmptyState, type DataTableColumn } from '@/components/ui';
 import { formatInstant } from '@/lib/date';
-import { BINDING_TYPE_LABEL, deliveryKind, DELIVERY_STATUS } from './labels';
+import { BINDING_TYPE_LABEL, deliveryChat, deliveryKind, DELIVERY_STATUS } from './labels';
 
 const PAGE_SIZE = 12;
 const FILTERS: ReadonlyArray<{ value: DeliveryStatus | null; label: string }> = [
@@ -19,11 +19,11 @@ const FILTERS: ReadonlyArray<{ value: DeliveryStatus | null; label: string }> = 
 export function DeliveriesTable() {
   const [status, setStatus] = useState<DeliveryStatus | null>(null);
   const [page, setPage] = useState(0);
-  const deliveries = useDeliveries({ status: status ?? undefined });
+  // сторінки рахує сервер: журнал може бути довгим, тож не тягнемо його весь
+  const deliveries = useDeliveries({ status: status ?? undefined, page, size: PAGE_SIZE });
   const orders = useOrders({ status: 'PUBLISHED', size: 100 });
   const numberOf = useMemo(() => new Map((orders.data?.items ?? []).map((o) => [o.id, o.number])), [orders.data]);
-  const rows = deliveries.data ?? [];
-  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const data = deliveries.data;
 
   const columns: Array<DataTableColumn<DeliveryDto>> = [
     {
@@ -38,8 +38,8 @@ export function DeliveriesTable() {
       rowHeader: true,
       cell: (row) => (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate">{row.chatTitle}</span>
-          <span className="text-meta font-normal text-muted">{BINDING_TYPE_LABEL[row.bindingType]}</span>
+          <span className="truncate">{deliveryChat(row)}</span>
+          <span className="text-meta font-normal text-muted">{row.bindingType ? BINDING_TYPE_LABEL[row.bindingType] : 'Без привʼязки'}</span>
         </span>
       ),
     },
@@ -58,6 +58,9 @@ export function DeliveriesTable() {
             {DELIVERY_STATUS[row.status].label}
           </Badge>
           {row.error ? <span className="text-meta font-normal text-danger">{row.error}</span> : null}
+          {row.nextAttemptAt ? (
+            <span className="text-meta font-normal text-muted figures">Наступна спроба {formatInstant(row.nextAttemptAt)}</span>
+          ) : null}
         </span>
       ),
     },
@@ -83,7 +86,7 @@ export function DeliveriesTable() {
       <DataTable
         caption="Журнал розсилки Telegram"
         columns={columns}
-        rows={deliveries.data ? pageRows : undefined}
+        rows={data?.items}
         getRowId={(row) => row.id}
         loading={deliveries.isPending}
         error={deliveries.error ?? undefined}
@@ -96,7 +99,7 @@ export function DeliveriesTable() {
             description={status ? 'Оберіть інший стан.' : 'Після публікації розпорядження тут зʼявляться повідомлення в чати груп.'}
           />
         }
-        pagination={rows.length > PAGE_SIZE ? { page, size: PAGE_SIZE, total: rows.length, onPageChange: setPage, noun: 'записів' } : undefined}
+        pagination={data && data.total > PAGE_SIZE ? { page, size: PAGE_SIZE, total: data.total, onPageChange: setPage, noun: 'записів' } : undefined}
       />
     </div>
   );

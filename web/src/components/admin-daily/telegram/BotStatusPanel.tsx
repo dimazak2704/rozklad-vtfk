@@ -15,8 +15,15 @@ export function BotStatusPanel({ bindings }: { bindings: readonly ChatBindingDto
 
   const sendTest = async () => {
     try {
-      await test.mutateAsync();
-      notify.success('Тестове повідомлення надіслано', { description: 'Перевірте чат власника бота в Telegram.' });
+      const delivery = await test.mutateAsync();
+      if (delivery.status === 'SENT') {
+        notify.success('Тестове повідомлення надіслано', { description: 'Перевірте чат власника бота в Telegram.' });
+      } else {
+        // RETRYING: Telegram тимчасово недоступний, сервіс повторить сам — це не успіх, але й не відмова
+        notify.info('Тестове повідомлення в черзі', {
+          description: delivery.error ? `Telegram поки не відповів: ${delivery.error}` : 'Сервіс повторить спробу автоматично.',
+        });
+      }
     } catch (error) {
       notify.error(error, 'Не вдалося надіслати тестове повідомлення');
     }
@@ -38,9 +45,12 @@ export function BotStatusPanel({ bindings }: { bindings: readonly ChatBindingDto
               {bot.data.connected ? (
                 <StatusDot tone="live" pulse label="На звʼязку" showLabel />
               ) : (
-                <StatusDot tone="cancel" label="Не підключений — перевірте токен і мережу сервісу notification" showLabel />
+                <StatusDot tone="cancel" label="Не підключений" showLabel />
               )}
             </p>
+            {!bot.data.connected ? (
+              <p className="text-caption text-danger">{bot.data.problem ?? 'Перевірте токен і мережу сервісу notification.'}</p>
+            ) : null}
             <p className="text-caption text-secondary">{MODE_TEXT[bot.data.mode]}</p>
             <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-ui">
               <div className="flex items-baseline gap-1.5">

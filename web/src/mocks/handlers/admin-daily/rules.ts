@@ -180,11 +180,8 @@ export function affectedLessons(world: World, absence: AbsenceDto): AffectedItem
 
 // ───────────────────────── Варіанти ─────────────────────────
 
-/** Варіант з датою й парою для відпрацювання (додаткове поле до Option, див. CHANGELOG-CONTRACTS). */
-export interface MockOption extends OptionDto {
-  date?: IsoDate | null;
-  pair?: number | null;
-}
+/** Варіант — рівно OptionDto core: усі поля є завжди (null, коли не стосуються), `date`/`pair` — лише у відпрацювання. */
+export type MockOption = OptionDto;
 
 interface DayFit {
   score: number;
@@ -252,6 +249,8 @@ function replaceTeacherOptions(world: World, date: IsoDate, lesson: LessonView):
           room: lesson.room ?? null,
           swapLesson: null,
           warnings: fit.warnings,
+          date: null,
+          pair: null,
         },
       };
     })
@@ -285,6 +284,8 @@ function replaceDisciplineOptions(world: World, date: IsoDate, lesson: LessonVie
       room: lesson.room ?? null,
       swapLesson: null,
       warnings: fit.warnings,
+      date: null,
+      pair: null,
     });
   }
   return options.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, 'uk')).slice(0, TOP_DISCIPLINES);
@@ -316,6 +317,8 @@ function swapOptions(world: World, date: IsoDate, lesson: LessonView): MockOptio
       room: later.room ?? null,
       swapLesson: later,
       warnings: isLast ? [] : [`Утвориться вікно на ${later.pair} парі`],
+      date: null,
+      pair: null,
     });
   }
   return options.sort((a, b) => b.score - a.score);
@@ -351,6 +354,8 @@ function cancelOption(world: World, date: IsoDate, lesson: LessonView): MockOpti
     room: null,
     swapLesson: null,
     warnings,
+    date: null,
+    pair: null,
   };
 }
 

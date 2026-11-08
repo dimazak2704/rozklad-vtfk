@@ -37,7 +37,12 @@ const LEGEND: ReadonlyArray<{ lesson: LessonView; text: string }> = [
     lesson: example('SUBSTITUTED', {
       discipline: { id: 'example-ndeksm', shortName: 'НДЕКСМ', name: 'Надійність, діагностика та експлуатація компʼютерних систем і мереж', color: null },
       teacher: { id: 'example-teacher-2', shortName: 'Непийвода', displayName: 'Непийвода' },
-      original: { discipline: { id: 'example-stp', shortName: 'СТП', name: 'Сучасні технології проєктування', color: null }, teacher: { id: 'example-teacher', shortName: 'Кренцін', displayName: 'Кренцін' } },
+      original: {
+        discipline: { id: 'example-stp', shortName: 'СТП', name: 'Сучасні технології проєктування', color: null },
+        teacher: { id: 'example-teacher', shortName: 'Кренцін', displayName: 'Кренцін' },
+        room: null,
+        pair: null,
+      },
       reasonText: 'Зв.зам.',
     }),
     text: 'Що було — закреслено, причина — як у розпорядженні («Відп.», «Зв.зам.»).',
@@ -45,7 +50,7 @@ const LEGEND: ReadonlyArray<{ lesson: LessonView; text: string }> = [
   { lesson: example('CANCELLED', { reasonText: 'Відп.' }), text: 'Група приходить пізніше чи йде раніше.' },
   { lesson: example('ADDITIONAL', { pair: 5 }), text: 'Відпрацювання чи перенесене заняття.' },
   {
-    lesson: example('ROOM_CHANGED', { room: { id: 'example-room-2', name: '309', type: 'CLASSROOM' }, original: { room: { id: 'example-room', name: '301', type: 'CLASSROOM' } } }),
+    lesson: example('ROOM_CHANGED', { room: { id: 'example-room-2', name: '309', type: 'CLASSROOM' }, original: { discipline: null, teacher: null, room: { id: 'example-room', name: '301', type: 'CLASSROOM' }, pair: null } }),
     text: 'Та сама пара в іншій аудиторії: стара → нова.',
   },
 ];

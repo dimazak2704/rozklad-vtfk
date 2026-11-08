@@ -5,6 +5,7 @@
 import type { EntityType, PublicGroupDto, PublicRoomDto, PublicTeacherDto, SearchResultDto } from '@/api/types';
 import { paths } from '@/app/routes';
 import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
+import { groupSpecialtyName } from '@/lib/names';
 import { roomLabel } from '@/lib/schedule';
 import { matchScore } from '@/lib/search';
 
@@ -24,13 +25,13 @@ const UK = new Intl.Collator('uk');
 
 export function groupItems(groups: readonly PublicGroupDto[]): FinderItem[] {
   return groups.map((group) => {
-    const specialty = group.specialty.name !== group.specialty.letters ? group.specialty.name : group.department;
+    const specialty = groupSpecialtyName(group);
     return {
       key: `GROUP:${group.id}`,
       type: 'GROUP',
       id: group.id,
       label: group.code,
-      sublabel: `${group.course} курс · ${specialty}`,
+      sublabel: [`${group.course} курс`, specialty].filter(Boolean).join(' · '),
       url: paths.group(group.code),
       texts: [group.code],
     };

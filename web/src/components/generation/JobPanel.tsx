@@ -1,7 +1,7 @@
 import { CircleCheck, CircleStop, CircleX, FileDiff, FolderOpen, Hourglass, LoaderCircle } from 'lucide-react';
 import { Link } from 'react-router';
-import { isJobActive, parseScore, type GenerationJobView } from '@/api/generation';
-import type { Uuid } from '@/api/types';
+import { isJobActive, parseScore } from '@/api/generation';
+import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, buttonClass, Panel, StatusDot } from '@/components/ui';
 import { formatInstant } from '@/lib/date';
 import { comparisonRows, elapsedSeconds, formatSeconds } from './model';
@@ -9,7 +9,7 @@ import { ConstraintAnalysis, MetricsComparison } from './ResultSummary';
 import { ScoreCharts } from './ScoreCharts';
 
 interface JobPanelProps {
-  job: GenerationJobView;
+  job: GenerationJobDto;
   /** Опублікована версія — для «Порівняти з поточним». */
   publishedId: Uuid | null;
   cancelling: boolean;
@@ -17,7 +17,7 @@ interface JobPanelProps {
   onRestart: () => void;
 }
 
-const STATUS_TITLE: Record<GenerationJobView['status'], string> = {
+const STATUS_TITLE: Record<GenerationJobDto['status'], string> = {
   QUEUED: 'У черзі',
   RUNNING: 'Розвʼязується',
   SOLVED: 'Готово',
@@ -28,7 +28,7 @@ const STATUS_TITLE: Record<GenerationJobView['status'], string> = {
 /** Поточна (або вибрана з історії) задача: стан, хід розвʼязання наживо, результат і що з ним робити. */
 export function JobPanel({ job, publishedId, cancelling, onCancel, onRestart }: JobPanelProps) {
   const active = isJobActive(job.status);
-  const limit = job.params?.timeLimitSeconds ?? null;
+  const limit = job.timeLimitSeconds;
   const elapsed = elapsedSeconds(job);
   const score = parseScore(job.bestScore);
   const rows = comparisonRows(job);

@@ -39,8 +39,23 @@ export function NowPanel({ className }: { className?: string }) {
   }
 
   const data = meta.data;
-  const semesterOver = compareIsoDates(data.today, data.semester.endsOn) > 0;
-  const semesterAhead = compareIsoDates(data.today, data.semester.startsOn) < 0;
+  const semester = data.semester;
+  if (!semester) {
+    // core: семестру немає або сьогодні між семестрами — тоді немає ні парності, ні номера тижня
+    return (
+      <section aria-labelledby={headingId} className={frame}>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 id={headingId} className="text-heading font-semibold text-primary">
+            Зараз
+          </h2>
+          <p className="text-caption text-secondary">{formatWeekdayDate(data.today)}</p>
+        </div>
+        <p className="text-ui text-secondary">Навчального семестру зараз немає — пар не заплановано.</p>
+      </section>
+    );
+  }
+  const semesterOver = compareIsoDates(data.today, semester.endsOn) > 0;
+  const semesterAhead = compareIsoDates(data.today, semester.startsOn) < 0;
 
   return (
     <section aria-labelledby={headingId} className={frame}>
@@ -50,7 +65,7 @@ export function NowPanel({ className }: { className?: string }) {
             Зараз
           </h2>
           <p className="text-caption text-secondary">
-            {formatWeekdayDate(data.today)} · {data.semester.name}
+            {formatWeekdayDate(data.today)} · {semester.name}
           </p>
         </div>
         {data.studyDay ? <ParityBadge parity={data.parity} weekNumber={data.weekNumber} size="sm" /> : null}
@@ -65,7 +80,7 @@ export function NowPanel({ className }: { className?: string }) {
           <Skeleton className="h-16 w-full" />
         )
       ) : semesterOver ? (
-        <p className="text-ui text-secondary">{capitalize(data.semester.name)} завершився {formatLongDate(data.semester.endsOn)}.</p>
+        <p className="text-ui text-secondary">{capitalize(semester.name)} завершився {formatLongDate(semester.endsOn)}.</p>
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-body font-semibold text-primary">
@@ -73,7 +88,7 @@ export function NowPanel({ className }: { className?: string }) {
           </p>
           <p className="flex flex-wrap items-center gap-2 text-ui text-secondary">
             {semesterAhead ? 'Заняття починаються' : 'Наступний навчальний день —'}{' '}
-            <span className="font-semibold text-primary">{formatWeekdayDate(semesterAhead ? data.semester.startsOn : home.date)}</span>
+            <span className="font-semibold text-primary">{formatWeekdayDate(semesterAhead ? semester.startsOn : home.date)}</span>
             {!semesterAhead && next.data ? <ParityBadge parity={next.data.parity} size="sm" /> : null}
           </p>
         </div>

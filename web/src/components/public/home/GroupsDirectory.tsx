@@ -5,6 +5,7 @@ import { paths } from '@/app/routes';
 import { ErrorState, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
+import { groupSpecialtyName } from '@/lib/names';
 import { useFavoritesStore } from '@/stores/favorites';
 
 /**
@@ -51,7 +52,7 @@ export function GroupsDirectory() {
                       <li key={group.id}>
                         <Link
                           to={paths.group(group.code)}
-                          title={`${group.specialty.name !== group.specialty.letters ? group.specialty.name : group.department}, ${group.shift} зміна`}
+                          title={[groupSpecialtyName(group), `${group.shift} зміна`].filter(Boolean).join(', ')}
                           className={cn(
                             'inline-flex h-8 min-w-14 items-center justify-center gap-1 rounded-plate border bg-surface px-2',
                             'font-condensed text-ui leading-none font-extrabold tracking-[0.02em] figures',

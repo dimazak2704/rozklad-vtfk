@@ -107,7 +107,8 @@ export function TimetableEditor({
   );
   const visible = useMemo(() => filterEntities(entities, filters, hardLessonIds), [entities, filters, hardLessonIds]);
   const departments = useMemo(
-    () => [...new Set((catalog.data?.groups ?? []).map((g) => g.department))].sort((a, b) => a.localeCompare(b, 'uk')),
+    () =>
+      [...new Set((catalog.data?.groups ?? []).flatMap((g) => (g.department ? [g.department] : [])))].sort((a, b) => a.localeCompare(b, 'uk')),
     [catalog.data],
   );
   const groupShift = useMemo(() => new Map((catalog.data?.groups ?? []).map((g) => [g.id, g.shift])), [catalog.data]);

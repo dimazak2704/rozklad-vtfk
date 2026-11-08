@@ -5,6 +5,7 @@
 import type {
   IsoDate,
   OrderItemDto,
+  OrderKind,
   OrderRowType,
   OrderSummaryDto,
   SettingsDto,
@@ -12,14 +13,28 @@ import type {
   Uuid,
   WeekParity,
 } from '@/api/types';
-import { compareIsoDates } from '@/lib/date';
+import { compareIsoDates, formatLongDate } from '@/lib/date';
 import { REASON_CODE_LABEL } from '@/lib/labels';
 import { ACTIVE_SEMESTER, CALENDAR_PERIODS, parityOn, weekdayLabel } from '../../fixtures';
 import { mockId } from '../../ids';
 import { changesOn, type ChangeRecord, type OrderRecord, type World } from './world';
 
-/** Рядок під номером (DOMAIN §8, однаковий в усіх розпорядженнях коледжу). */
-export const ORDER_TITLE = 'По коледжу про деякі зміни в розкладі занять';
+/** Рядок під заголовком, однаковий в усіх розпорядженнях коледжу (DOMAIN §8; core: OrderTexts.SUBTITLE). */
+export const ORDER_SUBTITLE = 'По коледжу про деякі зміни в розкладі занять';
+
+/**
+ * Заголовок як у core (OrderTexts): «РОЗПОРЯДЖЕННЯ» (чернетка), «РОЗПОРЯДЖЕННЯ №35»,
+ * «ДОПОВНЕННЯ до розпорядження №35» (власний номер доповнення — у полі `number`).
+ */
+export function orderTitle(kind: OrderKind, number: number | null, parentNumber: number | null): string {
+  if (kind === 'AMENDMENT') return `ДОПОВНЕННЯ до розпорядження №${parentNumber ?? ''}`;
+  return number === null ? 'РОЗПОРЯДЖЕННЯ' : `РОЗПОРЯДЖЕННЯ №${number}`;
+}
+
+/** «На 19 жовтня 2026 р.» (core: OrderTexts.dateLine). */
+export function orderDateLabel(date: IsoDate): string {
+  return `На ${formatLongDate(date)} р.`;
+}
 
 const PARITY_UPPER: Record<WeekParity, string> = { NUMERATOR: 'ЧИСЕЛЬНИК', DENOMINATOR: 'ЗНАМЕННИК' };
 const UK = new Intl.Collator('uk', { numeric: true });
@@ -101,7 +116,8 @@ function rowsOf(change: ChangeRecord): { items: OrderItemDto[]; roomChanges: Ord
         roomChanges: [],
       };
     case 'SWAP': {
-      const movedFrom = change.pairTo ?? change.pairFrom;
+      // пара, з якої переставили заняття на звільнений слот pairFrom (core: swapFromPair)
+      const movedFrom = change.swapFromPair ?? change.pairFrom;
       return {
         items: [
           row({
@@ -275,7 +291,7 @@ export function buildDraft(world: World, date: IsoDate, settings: SettingsDto, n
     kind: main ? 'AMENDMENT' : 'ORDER',
     parentId: main?.id ?? null,
     status: 'DRAFT',
-    title: ORDER_TITLE,
+    title: orderTitle(main ? 'AMENDMENT' : 'ORDER', null, main?.number ?? null),
     weekdayLabel: weekdayLabel(date),
     parityLabel: PARITY_UPPER[parityOn(date)],
     items,
@@ -284,10 +300,13 @@ export function buildDraft(world: World, date: IsoDate, settings: SettingsDto, n
     notes: existing?.notes ?? (main ? [] : calendarNotes(date)),
     signatoryPosition: settings.signatoryPosition,
     signatoryName: settings.signatoryName,
-    semesterId: ACTIVE_SEMESTER.id,
-    createdAt: existing?.createdAt ?? now.toISOString(),
+    subtitle: ORDER_SUBTITLE,
+    dateLabel: orderDateLabel(date),
     publishedAt: null,
     publishedBy: null,
+    version: existing ? existing.version + 1 : 0,
+    semesterId: ACTIVE_SEMESTER.id,
+    createdAt: existing?.createdAt ?? now.toISOString(),
   };
   world.orders.set(id, draft);
   return draft;
@@ -357,7 +376,7 @@ export function order35(): OrderRecord {
     kind: 'ORDER',
     parentId: null,
     status: 'PUBLISHED',
-    title: ORDER_TITLE,
+    title: orderTitle('ORDER', 35, null),
     weekdayLabel: 'ПОНЕДІЛОК',
     parityLabel: 'ЗНАМЕННИК',
     items,
@@ -371,10 +390,13 @@ export function order35(): OrderRecord {
     ],
     signatoryPosition: 'Заступник директора з НР',
     signatoryName: 'Микола ПОЛІЩУК',
-    semesterId: ACTIVE_SEMESTER.id,
+    subtitle: ORDER_SUBTITLE,
+    dateLabel: orderDateLabel('2026-10-19'),
     // ДЕМО: час публікації на фото не видно — пʼятниця перед датою розпорядження
-    createdAt: '2026-10-16T11:05:00.000Z',
     publishedAt: '2026-10-16T12:40:00.000Z',
     publishedBy: 'admin',
+    version: 1,
+    semesterId: ACTIVE_SEMESTER.id,
+    createdAt: '2026-10-16T11:05:00.000Z',
   };
 }

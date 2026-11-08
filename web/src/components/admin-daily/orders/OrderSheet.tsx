@@ -141,8 +141,9 @@ export function OrderSheet({ order, parentNumber = null, changes, fresh, classNa
               </>
             )}
           </p>
-          <p>{order.subtitle ?? order.title}</p>
-          <p>На {formatLongDate(order.date)} р.</p>
+          {/* рядок під заголовком і дату друкуємо так, як їх сформував core */}
+          <p>{order.subtitle}</p>
+          <p>{order.dateLabel}</p>
           <p className="text-[1.08em]">
             {order.weekdayLabel} - {order.parityLabel}
           </p>

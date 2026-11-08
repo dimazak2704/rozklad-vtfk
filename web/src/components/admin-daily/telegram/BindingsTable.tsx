@@ -36,7 +36,7 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
   const teacherName = useMemo(() => new Map((teachers.data ?? []).map((t) => [t.id, t.shortName])), [teachers.data]);
   const target = useCallback(
     (row: ChatBindingDto): string | null =>
-      row.groupId ? (groupCode.get(row.groupId) ?? null) : row.teacherId ? (teacherName.get(row.teacherId) ?? null) : null,
+      row.groupId ? (row.groupCode ?? groupCode.get(row.groupId) ?? null) : row.teacherId ? (teacherName.get(row.teacherId) ?? null) : null,
     [groupCode, teacherName],
   );
 

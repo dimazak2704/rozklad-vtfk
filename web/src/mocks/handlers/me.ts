@@ -8,6 +8,7 @@ import { http, HttpResponse } from 'msw';
 import type {
   AbsenceDto,
   AbsenceReasonCategory,
+  AbsenceSummaryDto,
   ChangeReplyRequest,
   ChangeStatus,
   IsoDate,
@@ -35,9 +36,16 @@ export const ME: MeDto = {
 
 const REASONS: readonly AbsenceReasonCategory[] = ['SICK_LEAVE', 'VACATION', 'BUSINESS_TRIP', 'PERSONAL', 'OTHER'];
 const KINDS: readonly PreferenceKind[] = ['UNWANTED', 'UNAVAILABLE'];
-const COMMENT_MAX = 500;
+/** Межа core (`@Size(max = 1000)`). */
+const COMMENT_MAX = 1000;
 
 // ───────────────────────── Відсутності ─────────────────────────
+
+/** Подія SSE про відсутність: без причини й коментаря (DOMAIN §7). */
+function absenceEvent(absence: AbsenceDto): AbsenceSummaryDto {
+  const { id, teacher, dateFrom, dateTo, pairs, source, status } = absence;
+  return { id, teacher, dateFrom, dateTo, pairs, source, status };
+}
 
 /** n-й навчальний день від дати (n може бути відʼємним) або null, якщо вийшли за семестр. */
 function studyDayOffset(date: IsoDate, n: number): IsoDate | null {
@@ -74,7 +82,9 @@ function absencesAt(now: Date): AbsenceDto[] {
       comment: null,
       source: 'WEB',
       status: 'ACTIVE',
+      createdBy: ME.username,
       createdAt: now.toISOString(),
+      version: 0,
     });
   }
   if (past) {
@@ -89,7 +99,9 @@ function absencesAt(now: Date): AbsenceDto[] {
       comment: null,
       source: 'BOT',
       status: 'ACTIVE',
+      createdBy: 'telegram-bot',
       createdAt: new Date(now.getTime() - 14 * 86_400_000).toISOString(),
+      version: 0,
     });
   }
   absenceState.set(seeded);
@@ -119,8 +131,9 @@ function validateAbsence(body: Partial<MyAbsenceRequest>, today: IsoDate): Respo
     errors.push({ field: 'comment', message: `Не більше ${COMMENT_MAX} символів` });
   }
   if (errors.length > 0) return badRequest('Перевірте дані відсутності.', errors);
-  if (compareIsoDates(body.dateFrom as IsoDate, today) < 0) {
-    return businessRule('ABSENCE_IN_PAST', 'Відсутність можна повідомити лише на сьогодні чи майбутні дати.');
+  // як core: минулою вважається відсутність, що вже закінчилась (dateTo < сьогодні)
+  if (compareIsoDates(body.dateTo as IsoDate, today) < 0) {
+    return businessRule('ABSENCE_IN_PAST', 'Не можна повідомити про відсутність, яка вже минула.');
   }
   return null;
 }
@@ -231,12 +244,9 @@ export const handlers = [
   http.post(apiPath('/me/changes/:id/confirm'), ({ params, request }) => reply(String(params.id), request, 'CONFIRM')),
   http.post(apiPath('/me/changes/:id/decline'), ({ params, request }) => reply(String(params.id), request, 'DECLINE')),
 
+  // як core: усі власні відсутності (і скасовані), нові спершу
   http.get(apiPath('/me/absences'), () =>
-    HttpResponse.json(
-      [...absencesAt(new Date())]
-        .filter((a) => a.status === 'ACTIVE')
-        .sort((a, b) => compareIsoDates(b.dateFrom, a.dateFrom)),
-    ),
+    HttpResponse.json([...absencesAt(new Date())].sort((a, b) => compareIsoDates(b.dateFrom, a.dateFrom))),
   ),
 
   http.post(apiPath('/me/absences'), async ({ request }) => {
@@ -247,6 +257,7 @@ export const handlers = [
     const request_ = body as MyAbsenceRequest;
     const list = absencesAt(now);
     const clash = list.find((a) => a.status === 'ACTIVE' && overlaps(a, { ...request_, pairs: request_.pairs ?? null }));
+    // 409 — перетин з наявною відсутністю (core: ConflictException)
     if (clash) {
       return problem({ status: 409, detail: `На ${formatDateRange(clash.dateFrom, clash.dateTo)} відсутність уже повідомлено.` });
     }
@@ -260,23 +271,29 @@ export const handlers = [
       comment: request_.comment?.trim() ? request_.comment.trim() : null,
       source: 'WEB',
       status: 'ACTIVE',
+      createdBy: ME.username,
       createdAt: now.toISOString(),
+      version: 0,
     };
     absenceState.set([absence, ...list]);
     // у події немає причини й коментаря: вони приватні (DOMAIN §7)
-    emitServerEvent('absence.created', { ...absence, comment: null });
+    emitServerEvent('absence.created', absenceEvent(absence));
     return HttpResponse.json(absence, { status: 201 });
   }),
 
+  // як AbsenceService.cancelOwn: лише своя, лише та, що ще не почалася; запис лишається зі статусом CANCELLED
   http.delete(apiPath('/me/absences/:id'), ({ params }) => {
     const now = new Date();
     const list = absencesAt(now);
-    const absence = list.find((a) => a.id === params.id && a.status === 'ACTIVE');
-    if (!absence) return notFound(`Відсутність з id ${String(params.id)} не знайдено серед ваших.`);
+    const absence = list.find((a) => a.id === params.id);
+    if (!absence) return notFound(`Відсутність з id ${String(params.id)} не знайдено.`);
     if (compareIsoDates(absence.dateFrom, todayInKyiv(now)) <= 0) {
-      return businessRule('ABSENCE_NOT_FUTURE', 'Видалити можна лише майбутню відсутність. Якщо плани змінилися, повідомте диспетчера.');
+      return businessRule('ABSENCE_STARTED', 'Скасувати можна лише майбутню відсутність. Якщо плани змінилися, повідомте диспетчера.');
     }
-    absenceState.set(list.filter((a) => a.id !== absence.id));
+    if (absence.status === 'CANCELLED') return new HttpResponse(null, { status: 204 });
+    const cancelled: AbsenceDto = { ...absence, status: 'CANCELLED', version: absence.version + 1 };
+    absenceState.set(list.map((a) => (a.id === absence.id ? cancelled : a)));
+    emitServerEvent('absence.updated', absenceEvent(cancelled));
     return new HttpResponse(null, { status: 204 });
   }),
 

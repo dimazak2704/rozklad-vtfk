@@ -29,7 +29,7 @@ import { useRegisterCommands } from '@/stores/commands';
  */
 export default function GenerationPage() {
   const meta = usePublicMeta();
-  const semesterId = meta.data?.semester.id;
+  const semesterId = meta.data?.semester?.id;
   const versions = useTimetableVersions(semesterId);
   const catalog = usePlanningCatalog();
   const jobs = useGenerationJobs(semesterId);

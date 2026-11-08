@@ -1,20 +1,21 @@
-import { Calculator, ChevronRight, CircleExclamationPoint, Clock, FileText, Hourglass, Info, TriangleExclamationPoint, UserX } from 'lucide-react';
+import { CalendarX, ChevronRight, CircleExclamationPoint, FileText, Hourglass, Info, TriangleExclamationPoint, UserX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import type { DashboardAlert } from '@/api/types';
+import type { DashboardAlert, DashboardAlertKind } from '@/api/types';
 import { cn } from '@/lib/cn';
 
-/** Іконка за видом сповіщення; невідомі види — за серйозністю. */
-const KIND_ICON: Record<string, ReactNode> = {
-  UNCOVERED_SOON: <Clock aria-hidden="true" />,
-  UNCOVERED: <CircleExclamationPoint aria-hidden="true" />,
+/** Іконка за видом сповіщення (рівно ті види, що надсилає core); невідомі нові види — за серйозністю. */
+const KIND_ICON: Record<DashboardAlertKind, ReactNode> = {
+  NO_SEMESTER: <CalendarX aria-hidden="true" />,
+  UNCOVERED_LESSONS: <CircleExclamationPoint aria-hidden="true" />,
   DECLINED: <UserX aria-hidden="true" />,
   PENDING_OVERDUE: <Hourglass aria-hidden="true" />,
   ORDER_NOT_PUBLISHED: <FileText aria-hidden="true" />,
-  DISCIPLINE_FINISHED: <Calculator aria-hidden="true" />,
-  WILL_UNDERRUN: <Calculator aria-hidden="true" />,
-  WILL_OVERRUN: <Calculator aria-hidden="true" />,
 };
+
+function kindIcon(kind: string): ReactNode | undefined {
+  return Object.hasOwn(KIND_ICON, kind) ? KIND_ICON[kind as DashboardAlertKind] : undefined;
+}
 
 const SEVERITY: Record<DashboardAlert['severity'], { icon: ReactNode; tone: string; label: string }> = {
   ERROR: { icon: <CircleExclamationPoint aria-hidden="true" />, tone: 'text-danger', label: 'Терміново' },
@@ -30,7 +31,7 @@ export function AlertList({ alerts }: { alerts: readonly DashboardAlert[] }) {
         const severity = SEVERITY[alert.severity];
         const content = (
           <>
-            <span className={cn('mt-0.5 shrink-0 [&_svg]:size-4', severity.tone)}>{KIND_ICON[alert.kind] ?? severity.icon}</span>
+            <span className={cn('mt-0.5 shrink-0 [&_svg]:size-4', severity.tone)}>{kindIcon(alert.kind) ?? severity.icon}</span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className={cn('text-meta font-semibold', severity.tone)}>{severity.label}</span>
               <span className="text-ui text-primary">{alert.message}</span>

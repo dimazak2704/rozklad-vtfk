@@ -3,28 +3,18 @@ import { useMemo } from 'react';
 import { Tabs as RadixTabs } from 'radix-ui';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode } from '@/api/types';
-import {
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingRegion,
-  Plate,
-  SegmentedControl,
-  Skeleton,
-  Tabs,
-  TabsContent,
-  Tooltip,
-} from '@/components/ui';
+import { EmptyState, ErrorState, LoadingRegion, Plate, Skeleton, Tabs, TabsContent } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { ABSENCE_REASON_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, subgroupLabel } from '@/lib/labels';
+import { ABSENCE_REASON_LABEL, subgroupLabel } from '@/lib/labels';
+import { lessonTime } from '@/lib/schedule';
 import { absencePeriod } from '../format';
 import { isOpen, OPTION_TABS, optionKey, optionsByKind, type LessonEntry, type OptionTab } from '../model';
 import { DecisionCard } from './DecisionCard';
+import { ReasonPicker } from './ReasonPicker';
 import { OptionRow } from './OptionRow';
 
-const REASON_CHOICES: readonly ReasonCode[] = ['ABSENT', 'MUTUAL', 'BUSINESS_TRIP', 'OTHER'];
 
 /** Шапка панелі: яку пару вирішуємо — час, група, дисципліна, аудиторія, хто відсутній. */
 function LessonSummary({ entry }: { entry: LessonEntry }) {
@@ -38,7 +28,8 @@ function LessonSummary({ entry }: { entry: LessonEntry }) {
       </div>
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-caption text-secondary figures">
-          {formatWeekdayDate(date)} · {lesson.startsAt}–{lesson.endsAt}
+          {formatWeekdayDate(date)}
+          {lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}
         </p>
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Plate>{lesson.group.code}</Plate>
@@ -69,48 +60,6 @@ function LessonSummary({ entry }: { entry: LessonEntry }) {
           {ABSENCE_REASON_LABEL[entry.absence.reasonCategory].toLocaleLowerCase('uk')}, {absencePeriod(entry.absence)}
         </p>
       </div>
-    </div>
-  );
-}
-
-interface ReasonPickerProps {
-  code: ReasonCode;
-  text: string;
-  onCodeChange: (code: ReasonCode) => void;
-  onTextChange: (text: string) => void;
-}
-
-/** Причина, яку надрукують у колонці «Причина заміни». */
-function ReasonPicker({ code, text, onCodeChange, onTextChange }: ReasonPickerProps) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-caption font-semibold text-secondary">Причина в розпорядженні</span>
-      <SegmentedControl<ReasonCode>
-        aria-label="Причина в розпорядженні"
-        size="sm"
-        value={code}
-        onValueChange={onCodeChange}
-        options={REASON_CHOICES.map((value) => ({
-          value,
-          label: (
-            <Tooltip content={REASON_CODE_HINT[value]}>
-              <span>{REASON_CODE_LABEL[value]}</span>
-            </Tooltip>
-          ),
-          ariaLabel: `${REASON_CODE_LABEL[value]} — ${REASON_CODE_HINT[value]}`,
-        }))}
-      />
-      {code === 'OTHER' ? (
-        <Input
-          size="sm"
-          aria-label="Текст причини (до 20 символів)"
-          placeholder="Напр.: Конф."
-          maxLength={20}
-          value={text}
-          onChange={(event) => onTextChange(event.target.value)}
-          className="w-32"
-        />
-      ) : null}
     </div>
   );
 }

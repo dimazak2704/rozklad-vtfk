@@ -1,4 +1,5 @@
 import { Send } from 'lucide-react';
+import { isApiError } from '@/api/errors';
 import { useCreateBindingCode } from '@/api/telegram';
 import type { Uuid } from '@/api/types';
 import { Button, buttonClass, notify } from '@/components/ui';
@@ -6,6 +7,11 @@ import { useNow } from '@/hooks/useNow';
 import { durationLabel } from '@/lib/labels';
 import { QrPlate } from '../public/QrPlate';
 import { TELEGRAM_BOT_HANDLE } from '../public/telegram';
+
+/** Обліковий запис ще не повʼязаний з викладачем (notification: 422 `teacher-not-linked`). */
+function isNotLinked(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === 'teacher-not-linked';
+}
 
 /**
  * Привʼязка Telegram: одноразове глибоке посилання на бота з кодом (CONTRACTS §6). З компʼютера — QR-кодом
@@ -18,7 +24,17 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
   const msLeft = data ? new Date(data.expiresAt).getTime() - now.getTime() : 0;
   const expired = data !== undefined && msLeft <= 0;
 
-  const request = () => link.mutate({ type: 'TEACHER', teacherId }, { onError: (error) => notify.error(error, 'Не вдалося отримати посилання для Telegram') });
+  const request = () =>
+    link.mutate(
+      { type: 'TEACHER', teacherId },
+      {
+        onError: (error) => {
+          // 422 teacher-not-linked показуємо в самій картці: це не збій, а стан облікового запису
+          if (!isNotLinked(error)) notify.error(error, 'Не вдалося отримати посилання для Telegram');
+        },
+      },
+    );
+  const notLinked = link.isError && isNotLinked(link.error);
 
   return (
     <section aria-labelledby="telegram-connect-heading" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
@@ -28,7 +44,11 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
       <p className="text-ui text-secondary">
         Підключіть бота {TELEGRAM_BOT_HANDLE}: запити на заміну приходитимуть у Telegram, а відповісти можна однією кнопкою.
       </p>
-      {!data || expired ? (
+      {notLinked ? (
+        <p role="alert" className="text-ui font-medium text-danger">
+          {link.error.message}
+        </p>
+      ) : !data || expired ? (
         <div className="flex flex-col gap-2">
           {expired ? <p className="text-caption text-muted">Посилання прострочене — отримайте нове.</p> : null}
           <Button

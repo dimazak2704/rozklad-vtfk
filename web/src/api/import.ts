@@ -6,7 +6,7 @@
  * (timetable/TimetableDraft, program/ProgramDraft, ai/AiSchemas.order|curriculum); рядок звіту має ще
  * поле `message` з поясненням українською, `score` у збігах — від 0 до 1.
  */
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { qk } from './queryKeys';
 import type {
@@ -19,6 +19,7 @@ import type {
   MappingType,
   OrderKind,
   OrderRowType,
+  Page,
   Parity,
   ReportRow,
   RoomType,
@@ -42,8 +43,6 @@ export type ReportRowType =
 
 export interface ImportReportRow extends Omit<ReportRow, 'type'> {
   type: ReportRowType;
-  /** Пояснення для диспетчера: «Схоже на одруківку…». */
-  message?: string | null;
 }
 
 // ───────────────────────── Чернетки за видом імпорту ─────────────────────────
@@ -159,29 +158,80 @@ export interface CurriculumDraft {
   warnings: string[];
 }
 
-/** Що отримав core після застосування (лічильники й посилання). @inferred */
+/** Крок застосування, якому нічого було робити (наприклад, усі сутності каталогу вже є). */
+export interface SkippedStep {
+  skipped: true;
+}
+
+/** Відповідь core на `POST /api/admin/import/catalog`. */
+export interface CoreCatalogImportResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  ids: Record<string, Record<string, Uuid>>;
+  warnings: string[];
+}
+
+/** Відповідь core на `POST /api/admin/import/timetable`: нова чернетка версії. */
+export interface CoreTimetableImportResult {
+  versionId: Uuid;
+  name: string;
+  lessonCount: number;
+  hardConflicts: number;
+  softWarnings: number;
+}
+
+/** Відповідь core на `POST /api/admin/import/load`. */
+export interface CoreLoadImportResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  ids: Record<string, Uuid>;
+}
+
+/**
+ * `result` застосованого завдання — відповіді core за кроками (importer зберігає кожен завершений крок):
+ * TIMETABLE_XLSX — `catalog` + `timetable`, програма й навчальний план — `catalog` + `load`, розпорядження — `changes`.
+ */
 export interface ImportApplyResult {
-  message: string;
-  created?: number | null;
-  updated?: number | null;
-  aliases?: number | null;
-  /** Чернетка версії розкладу, створена з таблиці. */
-  versionId?: Uuid | null;
+  catalog?: CoreCatalogImportResult | SkippedStep;
+  timetable?: CoreTimetableImportResult;
+  load?: CoreLoadImportResult | SkippedStep;
+  changes?: Record<string, unknown>;
 }
 
-/** Параметри завантаження: для програм — групи, до яких привʼязати години. */
+export function isSkipped(step: object | undefined): step is SkippedStep {
+  return step !== undefined && 'skipped' in step && (step as SkippedStep).skipped;
+}
+
+/**
+ * Параметри завантаження (поле `options`, JSON) — рівно ключі, які приймає importer (`JobOptions`);
+ * будь-який інший ключ → 400 на `options.<ключ>`.
+ */
 export interface ImportOptions {
-  groupIds?: Uuid[];
+  /** TIMETABLE_XLSX: аркуш (типово «Розклад друк»), до 100 символів. */
+  sheet?: string;
+  /** TIMETABLE_XLSX: назва чернетки версії, до 100 символів. */
+  versionName?: string;
+  /** CURRICULUM (обовʼязково): семестр навчального плану 1..8. */
+  semesterNumber?: number;
+  /** DISCIPLINE_PROGRAM, CURRICULUM (обовʼязково до застосування): коди груп, яким додати навантаження. */
+  groupCodes?: string[];
+  /** DISCIPLINE_PROGRAM: годин на тиждень, коли програма їх не каже (0 < x ≤ 40). */
+  hoursPerWeek?: number;
 }
 
-export interface ImportJob extends Omit<ImportJobDto, 'report' | 'draft'> {
+export const IMPORT_OPTION_LIMITS = {
+  sheet: 100,
+  versionName: 100,
+  semesterNumber: { min: 1, max: 8 },
+  hoursPerWeek: { min: 0.5, max: 40 },
+} as const;
+
+export interface ImportJob extends Omit<ImportJobDto, 'report' | 'options' | 'result'> {
   report: ImportReportRow[];
-  draft: unknown;
-  semesterId?: Uuid | null;
-  options?: ImportOptions | null;
-  /** Рішення, збережені раніше (PUT …/mappings). */
-  mappings?: ImportMapping[] | null;
-  result?: ImportApplyResult | null;
+  options?: ImportOptions;
+  result?: ImportApplyResult;
 }
 
 /** Чернетка з видом імпорту: розбираємо JSON один раз і перевіряємо форму, а не віримо наосліп. */
@@ -247,12 +297,17 @@ export interface ImportJobFilters {
   status?: ImportJobStatus;
 }
 
-/** Завдання імпорту, нові зверху; поки якесь у роботі — оновлюємо список. */
-export function useImportJobs(filters: ImportJobFilters = {}) {
+/** Розмір сторінки списку завдань (importer: 1..100, типово 20). */
+export const IMPORT_JOBS_PAGE_SIZE = 20;
+
+/** Завдання імпорту — сторінка `{items,page,size,total}`, нові зверху; поки якесь у роботі — оновлюємо. */
+export function useImportJobs(filters: ImportJobFilters = {}, page = 0, size = IMPORT_JOBS_PAGE_SIZE) {
   return useQuery({
-    queryKey: qk.importer.jobs({ ...filters }),
-    queryFn: ({ signal }) => api.get<ImportJob[]>('/import/jobs', { kind: filters.kind, status: filters.status }, { signal }),
-    refetchInterval: (query) => (query.state.data?.some((job) => isBusy(job.status)) ? POLL_MS : false),
+    queryKey: qk.importer.jobs({ ...filters, page, size }),
+    queryFn: ({ signal }) =>
+      api.get<Page<ImportJob>>('/import/jobs', { kind: filters.kind, status: filters.status, page, size }, { signal }),
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.items.some((job) => isBusy(job.status)) ? POLL_MS : false),
   });
 }
 
@@ -297,7 +352,7 @@ export function useUploadImport() {
       form.append('file', file, file.name);
       form.append('kind', kind);
       if (semesterId) form.append('semesterId', semesterId);
-      if (options) form.append('options', JSON.stringify(options));
+      if (options && Object.keys(options).length > 0) form.append('options', JSON.stringify(options));
       return api.upload<ImportJob>('/import/jobs', form);
     },
     onSuccess: (job) => {

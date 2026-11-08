@@ -22,18 +22,21 @@ function HeaderParity({ withWeek }: { withWeek: boolean }) {
 /** Телефон: лише слово, конденсованим, — найважливіший факт для студента; тап пояснює правило. */
 function CompactParity() {
   const meta = usePublicMeta();
-  if (!meta.data) return null;
-  const label = capitalize(PARITY_LABEL[meta.data.parity]);
+  // поза семестром парності й номера тижня немає — нічого не показуємо
+  if (!meta.data?.parity) return null;
+  const { parity, weekNumber } = meta.data;
+  const label = capitalize(PARITY_LABEL[parity]);
+  const week = weekNumber ? `, ${weekNumber}-й тиждень` : '';
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={`${label}, ${meta.data.weekNumber}-й тиждень. Як чергуються тижні`}
+        aria-label={`${label}${week}. Як чергуються тижні`}
         className="inline-flex h-11 items-center rounded-control px-2 text-on-shell focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-on-shell"
       >
         <span className="font-condensed text-cell font-bold">{label}</span>
       </PopoverTrigger>
-      <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[meta.data.parity]}, ${meta.data.weekNumber}-й тиждень`}>
-        <p className="text-ui text-secondary">{PARITY_HINT[meta.data.parity]}</p>
+      <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[parity]}${week}`}>
+        <p className="text-ui text-secondary">{PARITY_HINT[parity]}</p>
       </PopoverContent>
     </Popover>
   );

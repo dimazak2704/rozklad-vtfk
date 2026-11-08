@@ -1,7 +1,7 @@
 import { ArrowRight, CircleCheck, CircleX, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { useApplyImport, type ImportJob } from '@/api/import';
+import { isSkipped, useApplyImport, type ImportApplyResult, type ImportJob } from '@/api/import';
 import { Button, buttonClass, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
@@ -18,6 +18,38 @@ const APPLY_EFFECT: Record<ImportJob['kind'], string> = {
   CURRICULUM: 'Години плану запишуться в навантаження вибраних груп за дисциплінами, що мають збіг.',
   ORDER_DOCUMENT: 'Рядки розпорядження запишуться як історичні зміни на його дату. Поточні заміни це не зачепить.',
 };
+
+/** Що записано в core: підсумок кроків застосування людськими словами (порожні кроки пропускаємо). */
+function resultLines(result: ImportApplyResult): string[] {
+  const lines: string[] = [];
+  const catalog = result.catalog;
+  if (catalog && !isSkipped(catalog)) {
+    const parts = [
+      catalog.created ? countLabel(catalog.created, ['новий запис', 'нові записи', 'нових записів']) : null,
+      catalog.updated ? `оновлено: ${catalog.updated}` : null,
+      catalog.unchanged ? `без змін: ${catalog.unchanged}` : null,
+    ].filter(Boolean);
+    if (parts.length > 0) lines.push(`Каталог: ${parts.join(', ')}.`);
+    lines.push(...catalog.warnings);
+  }
+  const timetable = result.timetable;
+  if (timetable) {
+    const conflicts = timetable.hardConflicts
+      ? `, ${countLabel(timetable.hardConflicts, ['конфлікт', 'конфлікти', 'конфліктів'])}`
+      : '';
+    lines.push(`Чернетка «${timetable.name}»: ${countLabel(timetable.lessonCount, ['заняття', 'заняття', 'занять'])}${conflicts}.`);
+  }
+  const load = result.load;
+  if (load && !isSkipped(load)) {
+    const parts = [
+      load.created ? countLabel(load.created, ['новий рядок', 'нові рядки', 'нових рядків']) : null,
+      load.updated ? `оновлено: ${load.updated}` : null,
+      load.unchanged ? `без змін: ${load.unchanged}` : null,
+    ].filter(Boolean);
+    if (parts.length > 0) lines.push(`Навантаження: ${parts.join(', ')}.`);
+  }
+  return lines;
+}
 
 /** Секунди від моменту, коли почалося застосування (живий лічильник замість вигаданого відсотка). */
 function useElapsed(running: boolean): number {
@@ -54,11 +86,12 @@ export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
   };
 
   if (job.status === 'APPLIED') {
-    const result = job.result;
+    const lines = job.result ? resultLines(job.result) : [];
+    const versionId = job.result?.timetable?.versionId;
     const links =
       job.kind === 'TIMETABLE_XLSX'
         ? [
-            { to: '/admin/timetable', label: 'Відкрити редактор розкладу' },
+            { to: versionId ? `/admin/timetable?version=${versionId}` : '/admin/timetable', label: 'Відкрити редактор розкладу' },
             { to: '/admin/catalog/teachers', label: 'Перевірити викладачів' },
           ]
         : job.kind === 'ORDER_DOCUMENT'
@@ -70,15 +103,12 @@ export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
           <CircleCheck aria-hidden="true" className="size-5" />
           Імпорт застосовано
         </p>
-        {result ? (
-          <>
-            <p className="text-ui text-primary">{result.message}</p>
-            <p className="flex flex-wrap gap-x-4 text-caption text-secondary figures">
-              {result.created ? <span>{countLabel(result.created, ['новий запис', 'нові записи', 'нових записів'])}</span> : null}
-              {result.updated ? <span>оновлено: {result.updated}</span> : null}
-              {result.aliases ? <span>{countLabel(result.aliases, ['псевдонім', 'псевдоніми', 'псевдонімів'])}</span> : null}
-            </p>
-          </>
+        {lines.length > 0 ? (
+          <ul className="flex flex-col gap-0.5 text-ui text-primary figures">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
         ) : null}
         <div className="flex flex-wrap gap-2">
           {links.map((link) => (
@@ -114,7 +144,8 @@ export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
 
   const blocked = job.status === 'NEEDS_REVIEW';
   const failed = job.status === 'FAILED';
-  const canApply = job.status === 'READY' || (failed && job.draft !== null);
+  // сервер сам каже, чи можна застосовувати (READY або FAILED з чернеткою без блокувальних рядків)
+  const canApply = job.canApply;
 
   return (
     <section

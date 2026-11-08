@@ -16,6 +16,23 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: 'Забагато запитів. Спробуйте за хвилину.',
 };
 
+/**
+ * Українські повідомлення для кодів бізнес-правил (422 `code`) та інших відомих відмов бекенду.
+ * Сервер і сам надсилає `detail` українською; тут — коротші тексти для людини, яка діє в інтерфейсі,
+ * щоб те саме правило звучало однаково в кабінеті викладача й у панелі диспетчера.
+ */
+export const PROBLEM_CODE_MESSAGES: Readonly<Record<string, string>> = {
+  ABSENCE_STARTED: 'Скасувати можна лише відсутність, яка ще не почалася. Якщо плани змінилися, повідомте диспетчера.',
+  ABSENCE_IN_PAST: 'Не можна повідомити про відсутність, яка вже минула.',
+  ABSENCE_TEACHER_FIXED: 'Викладача відсутності змінити не можна: скасуйте її та створіть нову.',
+  ABSENCE_CANCELLED: 'Цю відсутність уже скасовано — оновіть список.',
+  ABSENCE_MISMATCH: 'Ця відсутність належить іншому викладачу.',
+  'teacher-not-linked': 'Ваш обліковий запис ще не повʼязаний з викладачем. Зверніться до диспетчера.',
+};
+
+/** Повідомлення 409 для оптимістичного блокування (`stale-data`): хтось інший змінив запис раніше. */
+export const STALE_DATA_MESSAGE = 'Дані вже змінив хтось інший. Ми оновили їх — перевірте й повторіть дію.';
+
 export function defaultMessage(status: number, kind: ApiErrorKind): string {
   if (kind === 'network') return 'Немає звʼязку із сервером. Перевірте зʼєднання і спробуйте ще раз.';
   if (kind === 'timeout') return 'Сервер довго не відповідає. Спробуйте ще раз.';
@@ -33,6 +50,8 @@ export interface ApiErrorInit {
   type?: string;
   errors?: FieldErrorDto[];
   conflicts?: Conflict[];
+  /** Код бізнес-правила з 422 (`code`). */
+  code?: string;
   requestId?: string;
   cause?: unknown;
 }
@@ -46,11 +65,13 @@ export class ApiError extends Error {
   readonly type: string | undefined;
   readonly errors: FieldErrorDto[];
   readonly conflicts: Conflict[];
+  readonly code: string | undefined;
   readonly requestId: string | undefined;
 
   constructor(init: ApiErrorInit) {
     const kind = init.kind ?? 'http';
-    const message = init.detail || defaultMessage(init.status, kind);
+    const known = init.code ? PROBLEM_CODE_MESSAGES[init.code] : undefined;
+    const message = known ?? (init.detail || defaultMessage(init.status, kind));
     super(message, { cause: init.cause });
     this.name = 'ApiError';
     this.status = init.status;
@@ -60,6 +81,7 @@ export class ApiError extends Error {
     this.type = init.type;
     this.errors = init.errors ?? [];
     this.conflicts = init.conflicts ?? [];
+    this.code = init.code;
     this.requestId = init.requestId;
   }
 
@@ -81,6 +103,11 @@ export class ApiError extends Error {
 
   get isConflict(): boolean {
     return this.status === 409;
+  }
+
+  /** 409 оптимістичного блокування: запис змінили між читанням і збереженням (`urn:rozklad:problem:stale-data`). */
+  get isStaleData(): boolean {
+    return this.status === 409 && (this.type?.endsWith(':stale-data') ?? false);
   }
 
   /** Повторювати має сенс лише мережеві збої та 5xx/429. */
@@ -108,7 +135,7 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
 
 /** Будує ApiError з HTTP-відповіді (problem+json, json або порожнє тіло). */
 export async function errorFromResponse(response: Response): Promise<ApiError> {
-  const requestId = response.headers.get('X-Request-Id') ?? undefined;
+  const headerRequestId = response.headers.get('X-Request-Id') ?? undefined;
   const contentType = response.headers.get('Content-Type') ?? '';
   let problem: ProblemDetail = {};
   if (contentType.includes('json')) {
@@ -126,7 +153,8 @@ export async function errorFromResponse(response: Response): Promise<ApiError> {
     type: problem.type,
     errors: Array.isArray(problem.errors) ? problem.errors : [],
     conflicts: Array.isArray(problem.conflicts) ? problem.conflicts : [],
-    requestId,
+    code: typeof problem.code === 'string' ? problem.code : undefined,
+    requestId: headerRequestId ?? (typeof problem.requestId === 'string' ? problem.requestId : undefined),
   });
 }
 

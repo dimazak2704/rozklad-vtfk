@@ -147,12 +147,15 @@ export function requiredParam(url: URL, name: string): string {
   return value;
 }
 
-/** Page<T> за параметрами Spring Data: `page` з 0, `size` (типово 20, не більше 100). */
-export function paginate<T>(items: readonly T[], url: URL, defaultSize = 20): Page<T> {
+/**
+ * Page<T> за параметрами Spring Data: `page` з 0, `size` (типово 20, не більше `maxSize` — у кожного
+ * сервісу своя межа: core каталог 200, importer 100, notification 200).
+ */
+export function paginate<T>(items: readonly T[], url: URL, defaultSize = 20, maxSize = 100): Page<T> {
   const page = Number(url.searchParams.get('page') ?? 0);
   const size = Number(url.searchParams.get('size') ?? defaultSize);
-  if (!Number.isInteger(page) || page < 0 || !Number.isInteger(size) || size < 1 || size > 100) {
-    throw badRequest('Некоректні параметри сторінки: page ≥ 0, size від 1 до 100.');
+  if (!Number.isInteger(page) || page < 0 || !Number.isInteger(size) || size < 1 || size > maxSize) {
+    throw badRequest(`Некоректні параметри сторінки: page ≥ 0, size від 1 до ${maxSize}.`);
   }
   return { items: items.slice(page * size, (page + 1) * size), page, size, total: items.length };
 }

@@ -64,7 +64,7 @@ describe('логіка розкладу', () => {
     kind: 'SUBSTITUTED',
     discipline: ref('НДЕКСМ'),
     teacher: teacher('Непийвода'),
-    original: { discipline: ref('СТП'), teacher: teacher('Кренцін') },
+    original: { discipline: ref('СТП'), teacher: teacher('Кренцін'), room: null, pair: null },
     reasonText: 'Зв.зам.',
   });
   const schedule: ScheduleDto = {
@@ -123,11 +123,31 @@ describe('фільтр замін', () => {
   const groups: ChangeGroup[] = [
     {
       group: { id: 'a', code: '1КІ2', course: 1 },
-      items: [{ pairLabel: '2', rowType: 'REPLACEMENT', from: { discipline: 'Ін.мова', teacher: 'Крисак Л.' }, to: { discipline: 'Ін.мова', teacher: 'Прокопчук' } }],
+      items: [
+        {
+          pairLabel: '2',
+          rowType: 'REPLACEMENT',
+          from: { discipline: 'Ін.мова', teacher: 'Крисак Л.' },
+          reasonText: 'Відп.',
+          to: { discipline: 'Ін.мова', teacher: 'Прокопчук' },
+          room: '110',
+          subgroupNote: null,
+        },
+      ],
     },
     {
       group: { id: 'b', code: '4КІ1', course: 4 },
-      items: [{ pairLabel: '2', rowType: 'REPLACEMENT', from: { discipline: 'СТП', teacher: 'Кренцін' }, to: { discipline: 'НДЕКСМ', teacher: 'Непийвода' } }],
+      items: [
+        {
+          pairLabel: '2',
+          rowType: 'REPLACEMENT',
+          from: { discipline: 'СТП', teacher: 'Кренцін' },
+          reasonText: 'Зв.зам.',
+          to: { discipline: 'НДЕКСМ', teacher: 'Непийвода' },
+          room: '6',
+          subgroupNote: null,
+        },
+      ],
     },
   ];
 
@@ -155,6 +175,8 @@ describe('колонки дзвінків', () => {
       id: 'p',
       name: 'Тест',
       active: true,
+      defaultProfile: true,
+      version: 0,
       slots: [
         ...([1, 2, 3, 4] as const).flatMap((d) => [slot(d, 1, '08:30', '09:30'), slot(d, 2, '09:40', '10:40')]),
         slot(5, 1, '08:30', '09:30'),

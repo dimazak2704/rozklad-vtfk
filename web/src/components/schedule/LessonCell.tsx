@@ -4,7 +4,7 @@ import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { pairOrdinalGenitive } from '@/lib/ordinal';
-import { LESSON_TONE, lessonCounterpart, lessonSummary, roomLabel, type Perspective } from '@/lib/schedule';
+import { LESSON_TONE, lessonCounterpart, lessonSummary, lessonTime, roomLabel, type Perspective } from '@/lib/schedule';
 import { Drawer, DrawerContent, DrawerTrigger } from '../ui/Drawer';
 import { HoverDetails } from '../ui/HoverCard';
 import { LessonDetails } from './LessonDetails';
@@ -17,7 +17,7 @@ export interface LessonCellProps {
   /** `grid` — клітинка тижневої сітки (на всю клітинку таблиці), `list` — рядок денного списку. */
   variant?: 'grid' | 'list';
   date?: IsoDate;
-  dayParity?: WeekParity;
+  dayParity?: WeekParity | null;
   /** Пара йде зараз: доріжка прогресу 3 px уздовж верхнього краю. */
   now?: boolean;
   /** 0..1 — скільки пари минуло (для доріжки). */
@@ -255,11 +255,7 @@ export function LessonCell({
           </span>
         ) : null}
 
-        {showTime ? (
-          <span className="text-meta text-muted figures">
-            {lesson.startsAt}–{lesson.endsAt}
-          </span>
-        ) : null}
+        {showTime && lessonTime(lesson) ? <span className="text-meta text-muted figures">{lessonTime(lesson)}</span> : null}
       </button>
     </DetailsTrigger>
   );

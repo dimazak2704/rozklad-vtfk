@@ -174,8 +174,12 @@ export default function ChangesPage() {
               {changes.data ? <ParityBadge parity={changes.data.parity} size="sm" /> : null}
               {order ? (
                 <span>
-                  Розпорядження <span className="font-semibold text-primary figures">№{order.number}</span>, опубліковано{' '}
-                  <span className="figures">{formatInstant(order.publishedAt)}</span>
+                  Розпорядження{order.number !== null ? <span className="font-semibold text-primary figures"> №{order.number}</span> : null}
+                  {order.publishedAt ? (
+                    <>
+                      , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
+                    </>
+                  ) : null}
                 </span>
               ) : changes.data ? (
                 <span>Розпорядження ще немає</span>

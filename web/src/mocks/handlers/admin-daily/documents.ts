@@ -4,7 +4,6 @@
  * PNG малюється на canvas, PDF — сторінка A4 з цим зображенням, DOCX — таблиця WordprocessingML у ZIP.
  */
 import type { OrderDto, OrderItemDto } from '@/api/types';
-import { formatLongDate } from '@/lib/date';
 
 const IN_TESTS = import.meta.env.MODE === 'test';
 const encoder = new TextEncoder();
@@ -17,7 +16,7 @@ export function documentHeading(order: OrderDto, parentNumber: number | null): s
     order.kind === 'AMENDMENT'
       ? `ДОПОВНЕННЯ ${number} до розпорядження №${parentNumber ?? '—'}`
       : `РОЗПОРЯДЖЕННЯ ${number}`;
-  return [first, order.title, `На ${formatLongDate(order.date)} р.`, `${order.weekdayLabel} - ${order.parityLabel}`];
+  return [first, order.subtitle, order.dateLabel, `${order.weekdayLabel} - ${order.parityLabel}`];
 }
 
 /** Клітинки рядка: група, пара, дисципліна й викладач за розкладом, причина, дисципліна й викладач заміни, ауд. */

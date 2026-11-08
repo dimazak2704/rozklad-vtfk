@@ -1,12 +1,11 @@
-import type { GenerationJobView } from '@/api/generation';
 import { parseScore } from '@/api/generation';
-import type { Uuid } from '@/api/types';
+import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Badge, Panel, type BadgeTone } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
 import { elapsedSeconds, formatSeconds } from './model';
 
-const STATUS: Record<GenerationJobView['status'], { label: string; tone: BadgeTone }> = {
+const STATUS: Record<GenerationJobDto['status'], { label: string; tone: BadgeTone }> = {
   QUEUED: { label: 'У черзі', tone: 'neutral' },
   RUNNING: { label: 'Іде', tone: 'accent' },
   SOLVED: { label: 'Готово', tone: 'success' },
@@ -15,7 +14,7 @@ const STATUS: Record<GenerationJobView['status'], { label: string; tone: BadgeTo
 };
 
 interface JobHistoryProps {
-  jobs: readonly GenerationJobView[];
+  jobs: readonly GenerationJobDto[];
   selectedId: Uuid | null;
   onSelect: (jobId: Uuid) => void;
 }

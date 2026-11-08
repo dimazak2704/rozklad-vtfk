@@ -44,8 +44,7 @@ export function useChangesWorkspace(date: IsoDate, period: Period): ChangesWorks
   const { from, to } = periodRange(date, period);
   const absencesQuery = useAbsences(from, to);
   const absences = absencesQuery.data ?? NO_ABSENCES;
-  const absenceIds = useMemo(() => absences.map((a) => a.id), [absences]);
-  const affected = useAffectedLessons(absenceIds);
+  const affected = useAffectedLessons(absences);
   const dates = useMemo(() => studyDates(from, to), [from, to]);
   const changes = useChangesForDates(dates);
 

@@ -85,13 +85,22 @@ export function pairRange(days: ReadonlyArray<Pick<DayDto, 'lessons'>>): { first
 }
 
 /**
+ * Час пари «08:30–09:30» або null: без профілю дзвінків core надсилає `startsAt`/`endsAt` = null, і тоді
+ * час не показуємо зовсім (а не «null–null»).
+ */
+export function lessonTime(lesson: Pick<LessonView, 'startsAt' | 'endsAt'>): string | null {
+  return lesson.startsAt && lesson.endsAt ? `${lesson.startsAt}–${lesson.endsAt}` : null;
+}
+
+/**
  * Найчастіший час пари за тиждень — його пишемо в рядку сітки. Клітинки з іншим часом
- * (у пʼятницю 4 пара о 12:20) показують свій час окремо.
+ * (у пʼятницю 4 пара о 12:20) показують свій час окремо. Пари без часу (немає профілю дзвінків) пропускаємо.
  */
 export function rowTimes(days: ReadonlyArray<Pick<DayDto, 'lessons'>>): Map<number, { startsAt: string; endsAt: string }> {
   const counts = new Map<number, Map<string, number>>();
   for (const day of days) {
     for (const lesson of day.lessons) {
+      if (!lesson.startsAt || !lesson.endsAt) continue;
       const key = `${lesson.startsAt}-${lesson.endsAt}`;
       const perPair = counts.get(lesson.pair) ?? new Map<string, number>();
       perPair.set(key, (perPair.get(key) ?? 0) + 1);
@@ -134,7 +143,8 @@ export function roomLabel(name: string | null | undefined): string | null {
 
 /** Текст для читача екрана: усе, що видно в клітинці, одним реченням. */
 export function lessonSummary(lesson: LessonView, perspective: Perspective = 'group'): string {
-  const parts: string[] = [`${lesson.pair} пара, ${lesson.startsAt}–${lesson.endsAt}.`];
+  const time = lessonTime(lesson);
+  const parts: string[] = [`${lesson.pair} пара${time ? `, ${time}` : ''}.`];
   const who = lessonCounterpart(lesson, perspective);
   const room = lesson.room ? `аудиторія ${lesson.room.name}` : null;
   parts.push(`${[lesson.discipline.name || lesson.discipline.shortName, who, room].filter(Boolean).join(', ')}.`);

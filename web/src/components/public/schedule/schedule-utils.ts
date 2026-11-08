@@ -83,7 +83,8 @@ function lessonLine(lesson: LessonView, perspective: Perspective): string {
   if (lesson.kind === 'CANCELLED') note = ' — пари не буде';
   else if (lesson.kind !== 'REGULAR') note = ` — ${changeSummary(lesson)}`;
   if (lesson.reasonText && lesson.kind !== 'REGULAR') note += ` (${lesson.reasonText})`;
-  return `${lesson.pair} пара, ${lesson.startsAt} — ${parts}${subgroup}${online}${note}`;
+  const at = lesson.startsAt ? `, ${lesson.startsAt}` : '';
+  return `${lesson.pair} пара${at} — ${parts}${subgroup}${online}${note}`;
 }
 
 /**
@@ -92,7 +93,9 @@ function lessonLine(lesson: LessonView, perspective: Perspective): string {
  */
 export function dayShareText(label: string, day: DayDto | undefined, perspective: Perspective): string {
   if (!day) return `Розклад ${label}`;
-  const header = `${label} — ${formatWeekdayDate(day.date).toLocaleLowerCase('uk')} (${PARITY_LABEL[day.parity]})`;
+  const date = formatWeekdayDate(day.date).toLocaleLowerCase('uk');
+  // поза семестром парності немає — не вигадуємо її в тексті
+  const header = day.parity ? `${label} — ${date} (${PARITY_LABEL[day.parity]})` : `${label} — ${date}`;
   if (!day.studyDay) return `${header}: не навчальний день.`;
   const lessons = [...day.lessons].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup);
   if (lessons.length === 0) return `${header}: пар немає.`;

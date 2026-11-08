@@ -15,3 +15,16 @@ export function initials(name: string): string {
   const second = words[1] ?? '';
   return (first.charAt(0) + second.replace(/[^\p{L}]/gu, '').charAt(0)).toLocaleUpperCase('uk');
 }
+
+/**
+ * Підпис групи для списків: «4 курс · Комп'ютерна інженерія». Відділення в core може бути null —
+ * тоді його просто немає в підписі (ніякого «null»).
+ */
+export function groupDescription(group: { course: number; department: string | null }, separator = ' · '): string {
+  return [`${group.course} курс`, group.department].filter(Boolean).join(separator);
+}
+
+/** Назва спеціальності, а якщо вона збігається з літерами — відділення (може не бути зовсім). */
+export function groupSpecialtyName(group: { specialty: { letters: string; name: string }; department: string | null }): string | null {
+  return group.specialty.name !== group.specialty.letters ? group.specialty.name : group.department;
+}

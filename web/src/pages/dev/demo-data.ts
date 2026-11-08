@@ -149,7 +149,7 @@ export const DEMO_WEEK: ScheduleDto = {
         teacher: T.nepyivoda,
         room: ROOMS.r6,
         kind: 'SUBSTITUTED',
-        original: { discipline: stp, teacher: T.krentsin, room: ROOMS.r301 },
+        original: { discipline: stp, teacher: T.krentsin, room: ROOMS.r301, pair: null },
         reasonText: 'Зв.зам.',
       },
       { pair: 3, discipline: dk, teacher: T.palamarchuk, room: ROOMS.r203 },
@@ -159,7 +159,7 @@ export const DEMO_WEEK: ScheduleDto = {
       { pair: 1, discipline: prog, teacher: T.stets, room: ROOMS.r301 },
       { pair: 2, discipline: eu, teacher: T.aleksieienko, room: ROOMS.r11 },
       { pair: 3, discipline: stp, teacher: T.krentsin, room: ROOMS.r208 },
-      { pair: 4, discipline: opcz, teacher: T.hanza, room: ROOMS.r309, kind: 'ROOM_CHANGED', original: { room: ROOMS.r17 } },
+      { pair: 4, discipline: opcz, teacher: T.hanza, room: ROOMS.r309, kind: 'ROOM_CHANGED', original: { discipline: null, teacher: null, room: ROOMS.r17, pair: null } },
     ]),
     day('2026-11-11', 3, 'СЕРЕДА', [
       { pair: 1, discipline: dk, teacher: T.palamarchuk, room: ROOMS.r203 },
@@ -182,7 +182,7 @@ export const DEMO_WEEK: ScheduleDto = {
     day('2026-11-13', 5, 'ПʼЯТНИЦЯ', [
       { pair: 1, discipline: sp, teacher: T.ordynskyi, room: ROOMS.r208 },
       { pair: 2, discipline: kb, teacher: T.nepyivoda, room: ROOMS.r14 },
-      { pair: 3, discipline: ndeksm, teacher: T.nepyivoda, room: ROOMS.r14, kind: 'MOVED', original: { pair: 4 }, online: true },
+      { pair: 3, discipline: ndeksm, teacher: T.nepyivoda, room: ROOMS.r14, kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 4 }, online: true },
     ]),
   ],
 };
@@ -205,6 +205,9 @@ export const DEMO_BLOCK: LessonView = {
   changeId: 'change-block',
 };
 
+/** Поля OptionDto, яких демо-варіанти не мають (core надсилає їх як null). */
+const NO_EXTRAS = { discipline: null, room: null, swapLesson: null, date: null, pair: null } as const;
+
 /** Варіанти заміни з оцінками (DOMAIN §7) — для ScoreBar і «Чому?». */
 export const DEMO_OPTIONS: OptionDto[] = [
   {
@@ -213,6 +216,7 @@ export const DEMO_OPTIONS: OptionDto[] = [
     title: 'Непийвода М.В. — НДЕКСМ',
     reasons: ['Веде цю групу', 'Та сама циклова комісія', 'Закриває вікно між 1 і 3 парою'],
     teacher: T.nepyivoda,
+    ...NO_EXTRAS,
     warnings: [],
   },
   {
@@ -221,6 +225,7 @@ export const DEMO_OPTIONS: OptionDto[] = [
     title: 'Стець — Прогр.',
     reasons: ['Веде цю групу', 'Вже має 2 пари цього дня'],
     teacher: T.stets,
+    ...NO_EXTRAS,
     warnings: ['3 заміни цього місяця'],
   },
   {
@@ -228,7 +233,9 @@ export const DEMO_OPTIONS: OptionDto[] = [
     score: 41,
     title: 'Переставити 4 пару на 2',
     reasons: ['Група піде раніше'],
+    teacher: null,
+    ...NO_EXTRAS,
     warnings: ['Викладач 4 пари має вікно'],
   },
-  { kind: 'CANCEL', score: 12, title: 'Пари не буде', reasons: ['Група прийде пізніше'], warnings: [] },
+  { kind: 'CANCEL', score: 12, title: 'Пари не буде', reasons: ['Група прийде пізніше'], teacher: null, ...NO_EXTRAS, warnings: [] },
 ];

@@ -20,14 +20,15 @@ export function UpcomingUncovered({ entries, date }: UpcomingUncoveredProps) {
   const { clock } = useNow();
   const open = entries
     .filter((entry) => LESSON_STATE[entry.state].needsAction)
-    .sort((a, b) => a.item.lesson.startsAt.localeCompare(b.item.lesson.startsAt) || a.item.lesson.group.code.localeCompare(b.item.lesson.group.code, 'uk'));
+    // без профілю дзвінків часу немає — тоді впорядковуємо за номером пари
+    .sort((a, b) => a.item.lesson.pair - b.item.lesson.pair || a.item.lesson.group.code.localeCompare(b.item.lesson.group.code, 'uk'));
   const today = clock.date === date;
   return (
     <ul className="flex flex-col">
       {open.slice(0, MAX_ROWS).map((entry) => {
         const { lesson } = entry.item;
-        const minutes = timeToMinutes(lesson.startsAt) - clock.minutes;
-        const started = today && minutes <= 0;
+        const minutes = lesson.startsAt ? timeToMinutes(lesson.startsAt) - clock.minutes : null;
+        const started = today && minutes !== null && minutes <= 0;
         return (
           <li key={`${entry.item.date}-${lesson.id}`} className="border-b border-separator last:border-b-0">
             <Link
@@ -36,7 +37,7 @@ export function UpcomingUncovered({ entries, date }: UpcomingUncoveredProps) {
             >
               <span className="flex flex-col items-center leading-none">
                 <span className="font-condensed text-heading font-bold text-primary figures">{lesson.pair}</span>
-                <span className="mt-1 text-meta text-muted figures">{lesson.startsAt}</span>
+                {lesson.startsAt ? <span className="mt-1 text-meta text-muted figures">{lesson.startsAt}</span> : null}
               </span>
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex min-w-0 items-center gap-2">
@@ -47,7 +48,7 @@ export function UpcomingUncovered({ entries, date }: UpcomingUncoveredProps) {
               </span>
               <span className="flex flex-col items-end gap-1">
                 <StateBadge state={entry.state} />
-                {today ? (
+                {today && minutes !== null ? (
                   <span className={cn('text-meta font-semibold figures', started ? 'text-danger' : minutes <= 60 ? 'text-change' : 'text-muted')}>
                     {started ? 'вже йде' : `за ${durationLabel(minutes)}`}
                   </span>

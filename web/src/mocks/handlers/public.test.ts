@@ -55,15 +55,17 @@ describe('довідники', () => {
 });
 
 describe('GET /api/public/bells', () => {
-  it('без дати віддає всі профілі, з датою — дзвінки того дня', async () => {
+  it('без дати — сьогодні й активні профілі, з датою — дзвінки того дня (ISO день тижня, вихідні порожні)', async () => {
     at('2026-11-09T08:00:00Z');
     const all = await get<BellsDto>('/public/bells');
-    expect(all.profiles?.map((p) => p.name)).toEqual(['2 зміни, 60 хв', '2 зміни, 50 хв', '1 зміна, 80 хв']);
+    expect(all).toMatchObject({ date: '2026-11-09', weekday: 1, studyDay: true });
+    expect(all.profiles?.map((p) => p.name)).toEqual(['2 зміни, 60 хв']);
     const friday = await get<BellsDto>('/public/bells', { date: '2026-11-13' });
     expect(friday.slots).toHaveLength(6);
     expect(friday.slots[3]).toEqual({ pair: 4, startsAt: '12:20', endsAt: '13:20' });
+    expect(friday.profiles).toBeNull();
     const saturday = await get<BellsDto>('/public/bells', { date: '2026-11-14' });
-    expect(saturday.slots).toEqual([]);
+    expect(saturday).toMatchObject({ weekday: 6, studyDay: false, slots: [] });
     expect((await failure(get('/public/bells', { date: '14.11.2026' })))?.status).toBe(400);
   });
 });

@@ -27,6 +27,7 @@ export interface EventStreamState {
 const KNOWN_EVENTS: ReadonlySet<string> = new Set<ServerEventType>([
   'change.updated',
   'absence.created',
+  'absence.updated',
   'generation.progress',
   'generation.completed',
   'order.published',

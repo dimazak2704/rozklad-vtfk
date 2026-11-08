@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { ApiError } from '@/api/errors';
-import { appendProgressPoint, DEFAULT_WEIGHTS, parseScore, type GenerationJobView } from '@/api/generation';
-import type { GenerationJobCreated, TemplateLessonDto, TimetableVersionDto } from '@/api/types';
+import { appendProgressPoint, DEFAULT_WEIGHTS, parseScore } from '@/api/generation';
+import type { GenerationJobCreated, GenerationJobDto, TemplateLessonDto, TimetableVersionDto } from '@/api/types';
 import { ACTIVE_SEMESTER, GROUPS, PUBLISHED_VERSION_ID, TEMPLATE_LESSONS } from '../fixtures';
 import { solveTimetable } from './generation';
 import { analyzeLessons } from './timetable';
@@ -68,17 +68,17 @@ describe('задачі генерації', () => {
     const t0 = new Date('2026-11-08T10:00:00Z').getTime();
     vi.setSystemTime(t0);
     const { jobId } = await start();
-    expect((await api.get<GenerationJobView>(`${jobsPath}/${jobId}`)).status).toBe('QUEUED');
+    expect((await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`)).status).toBe('QUEUED');
 
     await solved();
     vi.setSystemTime(t0 + 5_000);
-    const running = await api.get<GenerationJobView>(`${jobsPath}/${jobId}`);
+    const running = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
     expect(running.status).toBe('RUNNING');
     expect(running.progress.length).toBeGreaterThan(1);
     expect(running.metricsBefore?.brokenDays).toBe(34);
 
     vi.setSystemTime(t0 + 15_000);
-    const done = await api.get<GenerationJobView>(`${jobsPath}/${jobId}`);
+    const done = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
     expect(done).toMatchObject({ status: 'SOLVED', bestScore: expect.stringMatching(/^0hard\/-\d+soft$/) });
     expect(done.metricsAfter?.teacherWindows).toBeLessThan(180);
     expect(done.analysis?.find((a) => a.constraint === 'Аудиторія зайнята')).toMatchObject({ matchCount: 0 });
@@ -91,7 +91,7 @@ describe('задачі генерації', () => {
     const second = await failure(start());
     expect(second.status).toBe(409);
     await api.post(`${jobsPath}/${jobId}/cancel`);
-    const cancelled = await api.get<GenerationJobView>(`${jobsPath}/${jobId}`);
+    const cancelled = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
     expect(cancelled.status).toBe('CANCELLED');
     expect(cancelled.resultVersionId).toBeNull();
     const again = await failure(api.post(`${jobsPath}/${jobId}/cancel`));

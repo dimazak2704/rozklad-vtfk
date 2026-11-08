@@ -34,7 +34,8 @@ function slots(days: readonly Weekday[], times: SlotTimes): BellProfileSlotDto[]
 }
 
 function profile(name: string, active: boolean, profileSlots: BellProfileSlotDto[]): BellProfileDto {
-  return { id: mockId('bell-profile', name), name, active, slots: profileSlots };
+  // типовий профіль (налаштування activeBellProfileId) — активний «2 зміни, 60 хв»
+  return { id: mockId('bell-profile', name), name, active, defaultProfile: active, slots: profileSlots, version: 0 };
 }
 
 /** Профілі дзвінків з аркушів «дзвінки (2 зм)», «дзвінки» і сайту коледжу (DOMAIN §2). */

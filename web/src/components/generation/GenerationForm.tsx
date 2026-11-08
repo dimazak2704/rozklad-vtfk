@@ -4,6 +4,7 @@ import { DEFAULT_WEIGHTS, TIME_LIMIT_MAX, TIME_LIMIT_MIN } from '@/api/generatio
 import type { PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
 import { Button, Chip, Combobox, Field, NumberInput, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
 import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
+import { groupDescription } from '@/lib/names';
 import { formatSeconds, validateForm, WEIGHT_FIELDS, WEIGHT_MAX, type GenerationFormState, type ScopeMode } from './model';
 import { WeightSlider } from './WeightSlider';
 
@@ -29,7 +30,8 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
   const [submitted, setSubmitted] = useState(false);
   const errors = submitted ? validateForm(form) : {};
   const groupOptions = useMemo(
-    () => groups.map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс · ${g.department}`, keywords: [g.department] })),
+    () =>
+      groups.map((g) => ({ value: g.id, label: g.code, description: groupDescription(g), keywords: g.department ? [g.department] : [] })),
     [groups],
   );
   const groupsById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);

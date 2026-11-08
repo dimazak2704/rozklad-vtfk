@@ -51,7 +51,10 @@ export default function MyPreferencesPage() {
         const key = cellKey(day.weekday, lesson.pair);
         const labels = byCell.get(key) ?? new Map<string, Set<string>>();
         const label = `${lesson.group.code} · ${lesson.discipline.shortName}`;
-        labels.set(label, (labels.get(label) ?? new Set<string>()).add(day.parity));
+        const parities = labels.get(label) ?? new Set<string>();
+        // день поза семестром (parity = null) не каже, чисельник це чи знаменник
+        if (day.parity) parities.add(day.parity);
+        labels.set(label, parities);
         byCell.set(key, labels);
       }
     }

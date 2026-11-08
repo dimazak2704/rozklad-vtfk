@@ -1,16 +1,11 @@
 /**
- * Перевірка налаштувань на клієнті — ті самі межі, що й на сервері (core: Bean Validation;
+ * Перевірка налаштувань на клієнті — ті самі межі, що й на сервері (SETTINGS_LIMITS = core SystemSettings;
  * мок — src/mocks/handlers/settings.ts). Повідомлення українською, поруч із полем.
  */
 import { z } from 'zod';
+import { SETTINGS_LIMITS } from '@/api/settings-limits';
 
-export const LIMITS = {
-  confirmTimeoutMinutes: { min: 5, max: 240 },
-  hoursPerPair: { min: 1, max: 4 },
-  signatoryPosition: 120,
-  signatoryName: 80,
-  collegeName: { min: 3, max: 200 },
-} as const;
+export const LIMITS = SETTINGS_LIMITS;
 
 const minutes = LIMITS.confirmTimeoutMinutes;
 const hours = LIMITS.hoursPerPair;
@@ -35,7 +30,7 @@ export const settingsSchema = z.object({
   collegeName: z
     .string()
     .trim()
-    .min(LIMITS.collegeName.min, { error: `Щонайменше ${LIMITS.collegeName.min} символи` })
+    .min(LIMITS.collegeName.min, { error: 'Вкажіть назву коледжу' })
     .max(LIMITS.collegeName.max, { error: `Не довше ${LIMITS.collegeName.max} символів` }),
   hoursPerPair: z
     .number({ error: 'Вкажіть кількість годин' })

@@ -91,10 +91,14 @@ describe('мої відсутності', () => {
   it('видалення: лише майбутня', async () => {
     at('2026-11-09T08:00:00Z');
     const [future, past] = await api.get<AbsenceDto[]>('/me/absences');
-    expect((await failure(api.delete(`/me/absences/${past?.id}`)))?.status).toBe(422);
+    const started = await failure(api.delete(`/me/absences/${past?.id}`));
+    expect(started).toMatchObject({ status: 422, code: 'ABSENCE_STARTED' });
+    expect(started?.message).toBe('Скасувати можна лише відсутність, яка ще не почалася. Якщо плани змінилися, повідомте диспетчера.');
     await api.delete(`/me/absences/${future?.id}`);
-    expect(await api.get<AbsenceDto[]>('/me/absences')).toHaveLength(1);
-    expect((await failure(api.delete(`/me/absences/${future?.id}`)))?.status).toBe(404);
+    // як core: запис лишається зі статусом CANCELLED, повторне скасування — без помилки
+    const after = await api.get<AbsenceDto[]>('/me/absences');
+    expect(after.find((a) => a.id === future?.id)).toMatchObject({ status: 'CANCELLED', version: 1 });
+    await api.delete(`/me/absences/${future?.id}`);
   });
 });
 
@@ -119,7 +123,8 @@ describe('код привʼязки Telegram', () => {
   // один мок на POST /notify/bindings/codes (область Telegram); що викладач просить код лише для себе, перевіряє сервер
   it('викладач отримує глибоке посилання на бота з кодом', async () => {
     const code = await api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'TEACHER', teacherId: krentsin.id });
-    expect(code.deepLink).toBe(`https://t.me/scheduler_vtfk_bot?start=${code.code}`);
-    expect(code.code).not.toBe('');
+    // код показують як «XXXX-XXXX», у посиланні він без дефіса; особистому чату groupLink і command не потрібні
+    expect(code.deepLink).toBe(`https://t.me/scheduler_vtfk_bot?start=${code.code.replace('-', '')}`);
+    expect(code).toMatchObject({ type: 'TEACHER', groupLink: null, command: null });
   });
 });

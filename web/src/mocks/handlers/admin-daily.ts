@@ -7,7 +7,14 @@
  * варіантів є `date`, у варіанта відпрацювання — `date` і `pair`; у перестановки `pairTo` — звідки пара.
  */
 import { http, HttpResponse } from 'msw';
-import type { AbsenceRequest, CreateChangeRequest, InternalChangeReplyRequest, IsoDate, UpdateOrderNotesRequest } from '@/api/types';
+import type {
+  AbsenceRequest,
+  CreateChangeRequest,
+  InternalChangeReplyRequest,
+  IsoDate,
+  UpdateChangeRequest,
+  UpdateOrderNotesRequest,
+} from '@/api/types';
 import { compareIsoDates, isIsoDate, todayInKyiv } from '@/lib/date';
 import { apiPath, badRequest, notFound, requiredParam, readJson } from '../kit';
 import {
@@ -100,6 +107,8 @@ export const handlers = [
 
   http.get(apiPath('/admin/absences/:id/affected'), ({ params }) => {
     const absence = getAbsence(String(params.id));
+    // `date` — поле, якого клієнт потребує, але core поки не надсилає (integration.md §5); мок його дає,
+    // а клієнт без нього виводить дату лише для одноденної відсутності (withLessonDates)
     const items = affectedLessons(world(), absence).map((item) => ({
       date: item.date,
       lesson: item.lesson,
@@ -112,7 +121,8 @@ export const handlers = [
   http.get(apiPath('/admin/lessons/:lessonId/options'), ({ params }) => {
     const found = findTemplateLesson(String(params.lessonId));
     if (!found) return notFound(`Заняття з id ${String(params.lessonId)} не знайдено.`);
-    return HttpResponse.json({ date: found.date, lesson: found.lesson, options: optionsFor(world(), found.date, found.lesson) });
+    // як core: {lesson, options} без дати заняття (дату варіанти відпрацювання мають самі)
+    return HttpResponse.json({ lesson: found.lesson, options: optionsFor(world(), found.date, found.lesson) });
   }),
 
   // ── Зміни ──
@@ -136,7 +146,7 @@ export const handlers = [
   }),
 
   http.put(apiPath('/admin/changes/:id'), async ({ params, request }) =>
-    HttpResponse.json(toChangeDto(updateChange(String(params.id), await readJson<Partial<CreateChangeRequest>>(request)))),
+    HttpResponse.json(toChangeDto(updateChange(String(params.id), await readJson<Partial<UpdateChangeRequest>>(request)))),
   ),
 
   http.delete(apiPath('/admin/changes/:id'), ({ params }) => {

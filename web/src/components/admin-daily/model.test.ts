@@ -28,6 +28,9 @@ const lesson: AffectedLesson['lesson'] = {
   subgroup: 1,
   kind: 'REGULAR',
   online: false,
+  original: null,
+  reasonText: null,
+  changeId: null,
 };
 
 const option = (patch: Partial<ChangeOption>): ChangeOption => ({
@@ -40,6 +43,8 @@ const option = (patch: Partial<ChangeOption>): ChangeOption => ({
   discipline: lesson.discipline,
   room: lesson.room,
   swapLesson: null,
+  date: null,
+  pair: null,
   ...patch,
 });
 
@@ -128,13 +133,27 @@ describe('стрічка подій', () => {
     status: 'CONFIRMED',
     date: '2026-11-09',
     pairFrom: 2,
-    pairTo: null,
+    pairTo: 2,
     group: { id: 'g', code: '1КІ2', course: 1 },
     subgroup: 1,
     original: { discipline: lesson.discipline, teacher: lesson.teacher, room: lesson.room },
     new: { discipline: lesson.discipline, teacher: { id: 't', shortName: 'Михальчук', displayName: 'Михальчук' }, room: lesson.room },
     reasonCode: 'ABSENT',
     reasonText: null,
+    absenceId: null,
+    confirmDeadline: null,
+    respondedAt: '2026-11-09T05:15:00Z',
+    orderId: null,
+    approvalMode: 'CONFIRM',
+    originalLessonId: lesson.id,
+    swapLessonId: null,
+    swapFromPair: null,
+    printedReason: 'Відп.',
+    responseComment: null,
+    remindedAt: null,
+    createdBy: 'admin',
+    createdAt: '2026-11-09T05:00:00Z',
+    version: 2,
     history: [
       { at: '2026-11-09T05:00:00Z', actor: 'admin', from: null, to: 'PENDING_CONFIRMATION', comment: null },
       { at: '2026-11-09T05:15:00Z', actor: 'Михальчук', from: 'PENDING_CONFIRMATION', to: 'CONFIRMED', comment: null },
@@ -147,9 +166,12 @@ describe('стрічка подій', () => {
     dateTo: '2026-11-11',
     pairs: null,
     reasonCategory: 'SICK_LEAVE',
+    comment: null,
     source: 'BOT',
     status: 'ACTIVE',
+    createdBy: 'telegram-bot',
     createdAt: '2026-11-09T04:30:00Z',
+    version: 0,
   };
   const order: OrderSummaryDto = { id: 'o-36', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z' };
 
@@ -172,6 +194,8 @@ describe('маршрут ранку', () => {
     confirmed: 2,
     declined: 1,
     orderDraft: { id: 'd', itemCount: 2 },
+    generation: null,
+    aiSpendToday: null,
     alerts: [],
   };
 

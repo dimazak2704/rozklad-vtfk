@@ -211,7 +211,7 @@ describe('генератор розкладу', () => {
       lessons.map(
         (l): LessonView =>
           l.id === target?.id
-            ? { ...l, kind: 'SUBSTITUTED', teacher: substitute, original: { teacher: l.teacher }, reasonText: 'Зв.зам.' }
+            ? { ...l, kind: 'SUBSTITUTED', teacher: substitute, original: { discipline: null, teacher: l.teacher, room: null, pair: null }, reasonText: 'Зв.зам.' }
             : l,
       );
     const forKrentsin = buildSchedule('TEACHER', krentsin.id, date, date, { overlay })?.days[0]?.lessons ?? [];

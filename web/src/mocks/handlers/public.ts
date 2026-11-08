@@ -33,7 +33,6 @@ import type {
   Weekday,
 } from '@/api/types';
 import { addDays, compareIsoDates, isIsoDate, isoWeekday, kyivClock, timeToMinutes, todayInKyiv } from '@/lib/date';
-import { REASON_CODE_LABEL } from '@/lib/labels';
 import {
   ACTIVE_BELL_PROFILE,
   ACTIVE_SEMESTER,
@@ -65,6 +64,7 @@ import {
 import { mockId } from '../ids';
 import { apiPath, badRequest, notFound, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
+import { printedReason } from './admin-daily/printed';
 
 const UK = new Intl.Collator('uk');
 
@@ -130,9 +130,6 @@ export const KRENTSIN = teacherRef(teacherNamed('Кренцін'));
 /** Дата розпорядження №35 — єдиного, рядки якого відомі напевно. */
 export const ORDER_35_DATE = '2026-10-19';
 
-const REASON_SHORT = (code: ReasonCode, text: string | null): string | null =>
-  code === 'OTHER' ? text : REASON_CODE_LABEL[code];
-
 /** Хто веде яку дисципліну за шаблоном (компетенція для підбору заміни, DOMAIN §7). */
 const TEACHERS_BY_DISCIPLINE: ReadonlyMap<Uuid, readonly TeacherRef[]> = (() => {
   const map = new Map<Uuid, Map<Uuid, TeacherRef>>();
@@ -157,7 +154,7 @@ interface ChangeSeed {
   group: LessonView['group'];
   subgroup: number;
   pair: number;
-  next: ChangeParties;
+  next: Partial<ChangeParties>;
   reasonCode: ReasonCode;
   reasonText?: string | null;
   confirmDeadline?: IsoInstant | null;
@@ -172,7 +169,7 @@ function createChange(seed: ChangeSeed): ChangeDto {
     status: seed.status,
     date: seed.date,
     pairFrom: seed.pair,
-    pairTo: null,
+    pairTo: seed.pair,
     group: seed.group,
     subgroup: seed.subgroup,
     original: {
@@ -191,6 +188,16 @@ function createChange(seed: ChangeSeed): ChangeDto {
       { at: createdAt, actor: 'admin', from: null, to: 'DRAFT', comment: null },
       { at: createdAt, actor: 'admin', from: 'DRAFT', to: target, comment: null },
     ],
+    approvalMode: 'CONFIRM',
+    originalLessonId: seed.lesson?.id ?? null,
+    swapLessonId: null,
+    swapFromPair: null,
+    printedReason: printedReason(seed.kind, seed.reasonCode, seed.reasonText ?? null),
+    responseComment: null,
+    remindedAt: null,
+    createdBy: 'admin',
+    createdAt,
+    version: 1,
   };
 }
 
@@ -255,7 +262,7 @@ class DayPlanner {
     return this.lessons.filter((l) => l.group.code === code && !this.used.has(l.id));
   }
 
-  private take(lesson: LessonView, next: ChangeParties): void {
+  private take(lesson: LessonView, next: Partial<ChangeParties>): void {
     this.used.add(lesson.id);
     if (next.teacher) this.extraBusy.add(`t:${next.teacher.id}:${lesson.pair}`);
     if (next.room) this.extraBusy.add(`r:${next.room.id}:${lesson.pair}`);
@@ -502,7 +509,8 @@ function isVisible(change: ChangeDto): boolean {
 }
 
 function changedLesson(lesson: LessonView, change: ChangeDto): LessonView {
-  const reasonText = REASON_SHORT(change.reasonCode, change.reasonText);
+  // як core: у розкладі — та сама надрукована причина, що й у розпорядженні (ReasonCode.printed)
+  const reasonText = change.printedReason;
   const discipline = change.new.discipline ?? lesson.discipline;
   const room = change.new.room ?? lesson.room ?? null;
   switch (change.kind) {
@@ -514,7 +522,7 @@ function changedLesson(lesson: LessonView, change: ChangeDto): LessonView {
         ...lesson,
         kind: 'ROOM_CHANGED',
         room: change.new.room ?? lesson.room,
-        original: { room: lesson.room ?? null },
+        original: { discipline: null, teacher: null, room: lesson.room ?? null, pair: null },
         reasonText: null,
         changeId: change.id,
       };
@@ -537,6 +545,7 @@ function changedLesson(lesson: LessonView, change: ChangeDto): LessonView {
           discipline: discipline.id !== lesson.discipline.id ? lesson.discipline : null,
           teacher: lesson.teacher ?? null,
           room: room?.id !== lesson.room?.id ? (lesson.room ?? null) : null,
+          pair: null,
         },
         reasonText,
         changeId: change.id,
@@ -612,9 +621,9 @@ export function toChangeView(change: ChangeDto): ChangeView {
   return {
     pairLabel: change.pairTo && change.pairTo !== change.pairFrom ? `${change.pairFrom}-${change.pairTo}` : String(change.pairFrom),
     rowType,
-    from: rowType === 'ADDITIONAL' ? {} : before,
-    reasonText: rowType === 'ADDITIONAL' || rowType === 'ROOM_CHANGE' ? null : REASON_SHORT(change.reasonCode, change.reasonText),
-    to: rowType === 'CANCELLATION' || rowType === 'ROOM_CHANGE' ? {} : after,
+    from: rowType === 'ADDITIONAL' ? { discipline: null, teacher: null } : before,
+    reasonText: change.printedReason,
+    to: rowType === 'CANCELLATION' || rowType === 'ROOM_CHANGE' ? { discipline: null, teacher: null } : after,
     room: rowType === 'CANCELLATION' ? null : ((change.new.room ?? change.original.room)?.name ?? null),
     subgroupNote: change.subgroup > 0 ? `${change.subgroup} підгрупа` : null,
   };
@@ -719,6 +728,8 @@ export function icsCalendar(owner: ScheduleOwner, now: Date): string {
         lesson.kind === 'ADDITIONAL' ? 'Додаткова пара' : null,
         lesson.online ? 'Дистанційно' : null,
       ].filter(Boolean);
+      // без профілю дзвінків час пари невідомий — у календар таку пару не кладемо
+      if (!lesson.startsAt || !lesson.endsAt) continue;
       lines.push(
         'BEGIN:VEVENT',
         `UID:${lesson.id}@rozklad.vtfk`,
@@ -789,17 +800,22 @@ const SEGMENT_TO_TYPE: Readonly<Record<string, EntityType>> = { group: 'GROUP', 
 
 const OWNER_NOUN: Record<EntityType, string> = { GROUP: 'Групу', TEACHER: 'Викладача', ROOM: 'Аудиторію' };
 
-function bellsFor(date: IsoDate | null, now: Date): BellsDto {
+/**
+ * Як PublicCalendarService.bells у core: без дати — сьогодні; `weekday` — ISO 1..7 (у вихідні `slots`
+ * порожні), `studyDay` за календарем, `profiles` (активні профілі) — лише в запиті без дати.
+ */
+function bellsFor(requested: IsoDate | null, now: Date): BellsDto {
   const profile = { id: ACTIVE_BELL_PROFILE.id, name: ACTIVE_BELL_PROFILE.name };
-  if (date === null) {
-    const todayWeekday = isoWeekday(todayInKyiv(now));
-    // у вихідні показуємо понеділок — найближчий навчальний день
-    const weekday = (todayWeekday <= 5 ? todayWeekday : 1) as Weekday;
-    return { profile, weekday, slots: bellSlots(weekday), profiles: [...BELL_PROFILES] };
-  }
+  const date = requested ?? todayInKyiv(now);
   const weekday = isoWeekday(date);
-  // вихідний: дзвінків немає (контракт не описує вихідні; Weekday тут — день тижня ISO)
-  return { profile, weekday: weekday as Weekday, slots: weekday <= 5 ? bellSlots(weekday as Weekday) : [] };
+  return {
+    profile,
+    date,
+    weekday,
+    studyDay: isStudyDay(date),
+    slots: weekday <= 5 ? bellSlots(weekday as Weekday) : [],
+    profiles: requested === null ? BELL_PROFILES.filter((p) => p.active) : null,
+  };
 }
 
 export const handlers = [

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { useImportJobs, type ImportJob } from '@/api/import';
+import { useMemo, useState } from 'react';
+import { IMPORT_JOBS_PAGE_SIZE, useImportJobs, type ImportJob } from '@/api/import';
 import { DataTable, EmptyState, type DataTableColumn } from '@/components/ui';
 import { formatInstant, formatInstantTime, todayInKyiv } from '@/lib/date';
 import { IMPORT_KIND_LABEL } from './labels';
@@ -17,7 +17,10 @@ function when(instant: string): string {
 
 /** Завдання імпорту: файл, вид, стан (оновлюється сам, поки сервер працює), що в звіті, витрати ШІ. */
 export function JobList({ onOpen }: JobListProps) {
-  const jobs = useImportJobs();
+  // сторінки рахує importer: старі завдання не тягнемо всі одразу
+  const [page, setPage] = useState(0);
+  const jobs = useImportJobs({}, page);
+  const data = jobs.data;
 
   const columns = useMemo<Array<DataTableColumn<ImportJob>>>(
     () => [
@@ -69,12 +72,17 @@ export function JobList({ onOpen }: JobListProps) {
       <DataTable
         caption="Завдання імпорту"
         columns={columns}
-        rows={jobs.data}
+        rows={data?.items}
         getRowId={(job) => job.id}
         loading={jobs.isPending}
         error={jobs.error}
         onRetry={() => void jobs.refetch()}
         onRowClick={onOpen}
+        pagination={
+          data && data.total > IMPORT_JOBS_PAGE_SIZE
+            ? { page, size: IMPORT_JOBS_PAGE_SIZE, total: data.total, onPageChange: setPage, noun: 'завдань' }
+            : undefined
+        }
         empty={
           <EmptyState
             size="sm"

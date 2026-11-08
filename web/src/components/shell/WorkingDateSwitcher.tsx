@@ -30,7 +30,14 @@ function useWide(): boolean {
  * Парність і номер тижня для робочої дати від сьогоднішніх з /public/meta: тижні чергуються.
  * Далі ніж на два тижні не рахуємо — канікули могли зсунути нумерацію.
  */
-function parityFor(date: IsoDate, today: IsoDate, parity: WeekParity, weekNumber: number): { parity: WeekParity; week: number } | null {
+function parityFor(
+  date: IsoDate,
+  today: IsoDate,
+  parity: WeekParity | null,
+  weekNumber: number | null,
+): { parity: WeekParity; week: number } | null {
+  // сьогодні поза семестром — від чого відраховувати, невідомо; парність не вигадуємо
+  if (!parity || weekNumber === null) return null;
   const weeks = Math.round(diffDays(startOfWeek(today), startOfWeek(date)) / 7);
   if (Math.abs(weeks) > 2) return null;
   const flipped = parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';

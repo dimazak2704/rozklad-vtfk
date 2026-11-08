@@ -98,6 +98,8 @@ export function useMyAbsences() {
   return useQuery({
     queryKey: qk.me.absences(),
     queryFn: ({ signal }) => api.get<AbsenceDto[]>('/me/absences', undefined, { signal }),
+    // core віддає й скасовані (status CANCELLED): у кабінеті показуємо лише чинні
+    select: (list) => list.filter((absence) => absence.status === 'ACTIVE'),
   });
 }
 
@@ -113,7 +115,7 @@ export function useCreateAbsence() {
   });
 }
 
-/** DELETE /api/me/absences/{id} — лише власні й лише майбутні (перевіряє сервер). */
+/** DELETE /api/me/absences/{id} — лише власні й лише ті, що ще не почалися (422 `ABSENCE_STARTED`); core ставить CANCELLED. */
 export function useDeleteAbsence() {
   const queryClient = useQueryClient();
   const key = qk.me.absences();

@@ -71,7 +71,7 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
               <span className={cn('font-condensed text-title font-bold figures', needsAction ? 'text-primary' : 'text-secondary')}>
                 {lesson.pair}
               </span>
-              <span className="mt-1 text-meta font-normal text-muted figures">{lesson.startsAt}</span>
+              {lesson.startsAt ? <span className="mt-1 text-meta font-normal text-muted figures">{lesson.startsAt}</span> : null}
             </span>
             <span className="flex min-w-0 flex-col gap-1">
               <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

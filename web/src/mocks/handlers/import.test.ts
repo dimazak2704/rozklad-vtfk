@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, apiRequest } from '@/api/client';
 import { ApiError } from '@/api/errors';
 import type { ImportJob, TimetableDraft } from '@/api/import';
-import type { AiUsageDto, AliasDto, ImportMapping } from '@/api/types';
-import { DISCIPLINES, GROUPS, TEACHERS } from '../fixtures';
+import type { AiUsageDto, AliasDto, ImportMapping, Page } from '@/api/types';
+import { DISCIPLINES, GROUPS, SEMESTERS, TEACHERS } from '../fixtures';
 import { resetMockStores } from '../store';
 
 async function failure(request: Promise<unknown>): Promise<ApiError> {
@@ -16,9 +16,10 @@ async function failure(request: Promise<unknown>): Promise<ApiError> {
   throw new Error('Запит мав завершитися помилкою');
 }
 
-const jobs = () => api.get<ImportJob[]>('/import/jobs');
+const jobs = async () => (await api.get<Page<ImportJob>>('/import/jobs')).items;
 const job = (id: string) => api.get<ImportJob>(`/import/jobs/${id}`);
-const timetableJob = async () => (await jobs()).find((j) => j.kind === 'TIMETABLE_XLSX') as ImportJob;
+/** Повне завдання розкладу (у списку importer звіт порожній, а чернетки немає). */
+const timetableJob = async () => job(((await jobs()).find((j) => j.kind === 'TIMETABLE_XLSX') as ImportJob).id);
 const teacherId = (shortName: string) => (TEACHERS.find((t) => t.shortName === shortName) as { id: string }).id;
 const disciplineId = (shortName: string) => (DISCIPLINES.find((d) => d.shortName === shortName) as { id: string }).id;
 
@@ -36,7 +37,10 @@ afterEach(() => {
 });
 
 describe('завдання імпорту', () => {
-  it('список: нові зверху, різні стани й витрати ШІ', async () => {
+  it('список: сторінка, нові зверху, різні стани й витрати ШІ; без звіту й чернетки', async () => {
+    const page = await api.get<Page<ImportJob>>('/import/jobs', { size: 2 });
+    expect(page).toMatchObject({ page: 0, size: 2, total: 4 });
+    expect(page.items).toHaveLength(2);
     const list = await jobs();
     expect(list.map((j) => [j.fileName, j.status])).toEqual([
       ['розпорядження-35.jpg', 'READY'],
@@ -46,6 +50,11 @@ describe('завдання імпорту', () => {
     ]);
     expect(list[0]?.ai).toMatchObject({ model: 'claude-sonnet-5-5' });
     expect(list[3]?.error).toMatch(/^Денний бюджет ШІ \(\$2\.00\) вичерпано/);
+    // як ImportJobDto у списку: порожній звіт, без draft/options/mappings/result; null-полів немає зовсім
+    expect(list.every((j) => j.report.length === 0 && !('draft' in j) && !('options' in j) && !('result' in j))).toBe(true);
+    expect(list[1]).not.toHaveProperty('error');
+    expect(list[1]).toMatchObject({ fileType: 'XLSX', canApply: false });
+    expect(list[0]).toMatchObject({ canApply: true });
   });
 
   it('звіт таблиці містить справжні одруківки й чекає 5 рішень', async () => {
@@ -54,11 +63,10 @@ describe('завдання імпорту', () => {
     const raws = timetable.report.map((r) => r.raw);
     expect(raws).toEqual(expect.arrayContaining(['Гарболінська', 'Граболінська', 'Герасменко', 'ІКІ1']));
     expect(timetable.report.find((r) => r.raw === 'ІКІ1')).toMatchObject({ severity: 'WARN', matched: { label: '1КІ1' } });
-    expect(timetable.report.find((r) => r.raw === 'Граболінська')).toMatchObject({
-      severity: 'WARN',
-      matched: null,
-      suggestions: [{ label: 'Гарболінська', score: 0.94 }],
-    });
+    const typo = timetable.report.find((r) => r.raw === 'Граболінська');
+    expect(typo).toMatchObject({ severity: 'WARN', suggestions: [{ label: 'Гарболінська', score: 0.94 }] });
+    // NON_NULL: збігу немає — поля matched теж немає
+    expect(typo).not.toHaveProperty('matched');
     const draft = timetable.draft as TimetableDraft;
     expect(draft.groups).toHaveLength(GROUPS.length);
     expect(draft.groups.find((g) => g.code === '1КІ1')?.raw).toBe('ІКІ1');
@@ -81,18 +89,22 @@ describe('завдання імпорту', () => {
 
   it('застосування: APPLYING → APPLIED за опитуваннями; написання стають псевдонімами, «Вс.» — новою дисципліною', async () => {
     const timetable = await timetableJob();
-    expect((await failure(api.post(`/import/jobs/${timetable.id}/apply`))).message).toBe('Спершу вирішіть рядки, що чекають рішення: 5.');
+    const blocked = await failure(api.post(`/import/jobs/${timetable.id}/apply`));
+    expect(blocked).toMatchObject({ status: 422, code: 'IMPORT_NEEDS_REVIEW' });
     await api.put(`/import/jobs/${timetable.id}/mappings`, { mappings: DECISIONS });
     const started = await api.post<ImportJob>(`/import/jobs/${timetable.id}/apply`);
     expect(started.status).toBe('APPLYING');
     expect((await job(timetable.id)).status).toBe('APPLYING');
     const applied = await job(timetable.id);
     expect(applied.status).toBe('APPLIED');
-    expect(applied.result).toMatchObject({ created: 1, aliases: 3 });
-    expect(applied.result?.message).toMatch(/^Створено чернетку версії розкладу/);
+    // результат — відповіді core за кроками: каталог (новий запис + псевдоніми) і чернетка версії
+    expect(applied.result?.catalog).toMatchObject({ created: 1, updated: 3 });
+    expect(applied.result?.timetable).toMatchObject({ name: `Імпорт з «${timetable.fileName}»` });
+    expect(applied.result?.timetable?.lessonCount).toBeGreaterThan(0);
     const aliases = await api.get<AliasDto[]>(`/admin/teachers/${teacherId('Гарболінська')}/aliases`);
     expect(aliases.map((a) => a.alias)).toContain('Граболінська');
-    expect((await failure(api.post(`/import/jobs/${timetable.id}/apply`))).message).toBe('Цей імпорт уже застосовано.');
+    // повторне застосування ідемпотентне (202 з тим самим завданням), як у importer
+    expect((await api.post<ImportJob>(`/import/jobs/${timetable.id}/apply`)).status).toBe('APPLIED');
   });
 });
 
@@ -133,11 +145,15 @@ describe('завантаження файлу', () => {
     expect((await job(created.id)).status).toBe('PARSING');
     expect((await job(created.id)).status).toBe('PARSING');
     const parsed = await job(created.id);
-    expect(parsed).toMatchObject({ status: 'NEEDS_REVIEW', summary: { conflicts: 5 }, ai: null });
+    expect(parsed).toMatchObject({ status: 'NEEDS_REVIEW', summary: { conflicts: 5 } });
+    expect(parsed).not.toHaveProperty('ai');
   });
 
   it('завантажений розклад проходить увесь шлях до APPLIED', async () => {
-    const created = await upload('timetable-flow.xlsx', 'TIMETABLE_XLSX');
+    const created = await upload('timetable-flow.xlsx', 'TIMETABLE_XLSX', {
+      semesterId: SEMESTERS.find((s) => s.active)?.id ?? '',
+      options: JSON.stringify({ versionName: 'Розклад з листопада' }),
+    });
     let current = created;
     for (let i = 0; i < 5 && current.status !== 'NEEDS_REVIEW'; i += 1) current = await job(created.id);
     expect(current.status).toBe('NEEDS_REVIEW');
@@ -145,14 +161,25 @@ describe('завантаження файлу', () => {
     expect((await api.put<ImportJob>(`/import/jobs/${created.id}/mappings`, { mappings: decisions })).status).toBe('READY');
     expect((await api.post<ImportJob>(`/import/jobs/${created.id}/apply`)).status).toBe('APPLYING');
     for (let i = 0; i < 5 && current.status !== 'APPLIED'; i += 1) current = await job(created.id);
-    expect(current).toMatchObject({ status: 'APPLIED', result: { created: 1, aliases: 4 } });
+    expect(current).toMatchObject({
+      status: 'APPLIED',
+      result: { catalog: { created: 1, updated: 4 }, timetable: { name: 'Розклад з листопада' } },
+    });
   });
 
-  it('формат не для цього виду — 415, програма без груп — 400', async () => {
+  it('формат не для цього виду — 415; параметри — лише ключі importer; план без семестру — 400; програма без груп — 422 при застосуванні', async () => {
     const wrong = await failure(upload('rozklad.jpg', 'TIMETABLE_XLSX'));
     expect(wrong).toMatchObject({ status: 415, message: 'Для розкладу потрібна таблиця Excel (XLSX). Файл «rozklad.jpg» має інший формат.' });
-    const noGroups = await failure(upload('program.docx', 'DISCIPLINE_PROGRAM'));
-    expect(noGroups.fieldErrors()).toEqual({ 'options.groupIds': 'Вкажіть групи, яким читається дисципліна за цим документом.' });
+    // старий ключ клієнта `groupIds` importer відхиляє
+    const unknownKey = await failure(upload('program.docx', 'DISCIPLINE_PROGRAM', { options: JSON.stringify({ groupIds: ['x'] }) }));
+    expect(Object.keys(unknownKey.fieldErrors())).toEqual(['options.groupIds']);
+    const noSemester = await failure(upload('plan.pdf', 'CURRICULUM', { options: JSON.stringify({ groupCodes: ['4КІ1'] }) }));
+    expect(Object.keys(noSemester.fieldErrors())).toEqual(['options.semesterNumber']);
+    const program = await upload('program.docx', 'DISCIPLINE_PROGRAM', { semesterId: SEMESTERS.find((s) => s.active)?.id ?? '' });
+    let current = program;
+    for (let i = 0; i < 5 && current.status !== 'READY'; i += 1) current = await job(program.id);
+    const noGroups = await failure(api.post(`/import/jobs/${program.id}/apply`));
+    expect(noGroups).toMatchObject({ status: 422, code: 'GROUPS_REQUIRED' });
   });
 
   it('фото розпорядження розпізнає модель зору й рахує витрати дня', async () => {
@@ -160,7 +187,8 @@ describe('завантаження файлу', () => {
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
     resetMockStores();
     const before = await api.get<AiUsageDto>('/import/ai/usage');
-    expect(before).toMatchObject({ today: { calls: 1 }, dailyBudgetUsd: 2, model: { text: 'claude-haiku-5-5', vision: 'claude-sonnet-5-5' } });
+    expect(before).toMatchObject({ today: { calls: 1 }, dailyBudgetUsd: 2, enabled: true, model: { text: 'claude-haiku-5-5', vision: 'claude-sonnet-5-5' } });
+    expect(before.remainingUsd).toBeCloseTo(2 - before.today.costUsd, 4);
     const created = await upload('order-36.jpg', 'ORDER_DOCUMENT');
     for (let i = 0; i < 3; i += 1) await job(created.id);
     const parsed = await job(created.id);

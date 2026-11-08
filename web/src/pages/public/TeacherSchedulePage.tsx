@@ -63,7 +63,10 @@ export default function TeacherSchedulePage() {
     );
   }
 
-  const details = [teacher?.cycleCommission ? `Циклова комісія: ${teacher.cycleCommission}` : null, summary].filter(Boolean).join(' · ');
+  // повне імʼя core надсилає лише тоді, коли це дозволено налаштуванням showTeacherFullNames
+  const details = [teacher?.fullName ?? null, teacher?.cycleCommission ? `Циклова комісія: ${teacher.cycleCommission}` : null, summary]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <SchedulePage

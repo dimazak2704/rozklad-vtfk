@@ -1,6 +1,6 @@
 /**
  * Стан області «щоденна робота диспетчера» в мок-API: відсутності, зміни (заміни) і розпорядження.
- * Записи — DTO контракту плюс внутрішні поля, яких клієнт не отримує (звʼязок зі заняттям, автор).
+ * Зміни зберігаються рівно як ChangeDto core; розпорядження — OrderDto плюс внутрішні поля списку.
  */
 import type {
   AbsenceDto,
@@ -12,19 +12,13 @@ import type {
   Uuid,
 } from '@/api/types';
 
-/** Зміна з внутрішніми полями: яке заняття вона закриває і з якою парою міняє (SWAP). */
-export interface ChangeRecord extends ChangeDto {
-  createdAt: IsoInstant;
-  originalLessonId: Uuid | null;
-  swapLessonId: Uuid | null;
-}
+/** Зміна — рівно ChangeDto core (усі адитивні поля, зокрема `version`, уже в DTO). */
+export type ChangeRecord = ChangeDto;
 
-/** Розпорядження з полями, що є в списку (OrderSummaryDto), але не в OrderDto. */
+/** Розпорядження з внутрішніми полями (семестр для нумерації, час створення). */
 export interface OrderRecord extends OrderDto {
   semesterId: Uuid;
   createdAt: IsoInstant;
-  publishedAt: IsoInstant | null;
-  publishedBy: string | null;
 }
 
 export interface World {
@@ -49,12 +43,11 @@ export const LIVE_STATUSES: ReadonlySet<ChangeStatus> = new Set<ChangeStatus>([
 export const ADMIN_ACTOR = 'admin';
 
 export function toChangeDto(record: ChangeRecord): ChangeDto {
-  const { createdAt: _createdAt, originalLessonId: _original, swapLessonId: _swap, ...dto } = record;
-  return dto;
+  return { ...record };
 }
 
 export function toOrderDto(record: OrderRecord): OrderDto {
-  const { semesterId: _semester, createdAt: _created, publishedAt: _published, publishedBy: _by, ...dto } = record;
+  const { semesterId: _semester, createdAt: _created, ...dto } = record;
   return dto;
 }
 

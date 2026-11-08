@@ -3,25 +3,17 @@
  * область публічних сторінок (handlers/public.ts), витрати ШІ — область імпорту (handlers/import.ts).
  */
 import { http, HttpResponse } from 'msw';
+import { DEFAULT_CONFIRM_TIMEOUT_MINUTES, SETTINGS_LIMITS } from '@/api/settings-limits';
 import type { ApprovalMode, FieldErrorDto, SettingsDto } from '@/api/types';
 import { ACTIVE_BELL_PROFILE, BELL_PROFILES } from '../fixtures';
 import { apiPath, badRequest, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { COLLEGE_NAME } from './meta';
 
-/** Межі значень — ті самі, що перевіряє форма (src/components/admin-daily/settings/schema.ts). */
-export const SETTINGS_LIMITS = {
-  confirmTimeoutMinutes: { min: 5, max: 240 },
-  hoursPerPair: { min: 1, max: 4 },
-  signatoryPosition: 120,
-  signatoryName: 80,
-  collegeName: { min: 3, max: 200 },
-} as const;
-
-/** Початкові значення (DOMAIN §2, §8: «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару). */
+/** Початкові значення — типові значення core (V1_802): «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару, 120 хв. */
 const seed = (): SettingsDto => ({
   approvalMode: 'CONFIRM',
-  confirmTimeoutMinutes: 15,
+  confirmTimeoutMinutes: DEFAULT_CONFIRM_TIMEOUT_MINUTES,
   signatoryPosition: 'Заступник директора з НР',
   signatoryName: 'Микола ПОЛІЩУК',
   collegeName: COLLEGE_NAME,
@@ -69,7 +61,7 @@ export function validateSettings(body: Partial<Record<keyof SettingsDto, unknown
       body.collegeName,
       'collegeName',
       SETTINGS_LIMITS.collegeName.max,
-      `Назва коледжу — щонайменше ${SETTINGS_LIMITS.collegeName.min} символи`,
+      'Вкажіть назву коледжу',
       SETTINGS_LIMITS.collegeName.min,
     ),
   );

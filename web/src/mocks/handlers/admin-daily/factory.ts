@@ -16,6 +16,7 @@ import type {
   TeacherRef,
   Uuid,
 } from '@/api/types';
+import { printedReason } from './printed';
 import type { ChangeRecord } from './world';
 
 export interface ChangeInput {
@@ -60,13 +61,15 @@ export function makeChange(
   const newTeacher = swap ? (swap.teacher ?? null) : (input.newTeacher ?? null);
   const status: ChangeStatus = needsConfirmation(input.kind, newTeacher, options.mode) ? 'PENDING_CONFIRMATION' : 'CONFIRMED';
   const lesson = input.lesson;
+  const reasonText = input.reasonText?.trim() || null;
   return {
     id: input.id,
     kind: input.kind,
     status,
     date: input.date,
+    // як у core: діапазон пар; для однієї пари (і для SWAP) pairTo = pairFrom, звідки переставили — swapFromPair
     pairFrom: input.pairFrom,
-    pairTo: swap ? swap.pair : input.pairTo,
+    pairTo: input.pairTo ?? input.pairFrom,
     group: input.group,
     subgroup: input.subgroup,
     original: {
@@ -84,16 +87,23 @@ export function makeChange(
             room: input.newRoom ?? lesson?.room ?? null,
           },
     reasonCode: input.reasonCode,
-    reasonText: input.reasonText?.trim() || null,
+    reasonText,
     absenceId: input.absenceId ?? null,
     confirmDeadline:
       status === 'PENDING_CONFIRMATION' ? new Date(options.at.getTime() + options.timeoutMinutes * 60_000).toISOString() : null,
     respondedAt: null,
     orderId: null,
     history: [historyEntry(options.at, options.actor, null, status, createdComment(status, input.kind))],
-    createdAt: options.at.toISOString(),
+    approvalMode: options.mode,
     originalLessonId: lesson?.id ?? null,
     swapLessonId: swap?.id ?? null,
+    swapFromPair: swap?.pair ?? null,
+    printedReason: printedReason(input.kind, input.reasonCode, reasonText),
+    responseComment: null,
+    remindedAt: null,
+    createdBy: options.actor,
+    createdAt: options.at.toISOString(),
+    version: 0,
   };
 }
 
@@ -111,5 +121,7 @@ export function transition(
     ...patch,
     status: to,
     history: [...change.history, historyEntry(at, actor, change.status, to, comment)],
+    // кожне збереження в core збільшує версію (оптимістичне блокування)
+    version: change.version + 1,
   };
 }

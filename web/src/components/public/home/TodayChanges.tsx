@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
+import { changeGroupKey, isMyGroup } from '../changes/changes-filter';
 import { useHomeDay } from './useHomeDay';
 
 const CHANGE_FORMS = ['зміна', 'зміни', 'змін'] as const;
@@ -45,8 +46,8 @@ export function TodayChanges({ className }: { className?: string }) {
       </p>
     );
   } else {
-    const groups = [...changes.data.groups].sort((a, b) => Number(mine.has(b.group.id)) - Number(mine.has(a.group.id)));
-    const ownCount = groups.filter((g) => mine.has(g.group.id)).length;
+    const groups = [...changes.data.groups].sort((a, b) => Number(isMyGroup(mine, b.group.id)) - Number(isMyGroup(mine, a.group.id)));
+    const ownCount = groups.filter((g) => isMyGroup(mine, g.group.id)).length;
     body = (
       <>
         <p className="text-ui text-secondary">
@@ -60,9 +61,9 @@ export function TodayChanges({ className }: { className?: string }) {
         </p>
         <ul className="flex flex-wrap gap-1.5">
           {groups.map(({ group, items }) => {
-            const own = mine.has(group.id);
+            const own = isMyGroup(mine, group.id);
             return (
-              <li key={group.id}>
+              <li key={changeGroupKey(group)}>
                 <Link
                   to={`/g/${encodeURIComponent(group.code)}?date=${changes.data.date}&view=day`}
                   aria-label={`${group.code}: ${countLabel(items.length, CHANGE_FORMS)}${own ? ', ваша група' : ''}`}

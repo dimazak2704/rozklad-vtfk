@@ -1,11 +1,13 @@
 /**
- * Команди відсутностей і змін: перевірка запиту як у core (400 з полями, 404, 409 з conflicts[]), переходи
- * станів з історією, SSE `change.updated` / `absence.created`, запит у Telegram і його імітована відповідь.
+ * Команди відсутностей і змін: перевірка запиту як у core (400 з полями, 404, 409 з conflicts[] і
+ * `stale-data` для застарілої `version`, 422 з кодами правил), переходи станів з історією, SSE
+ * `change.updated` / `absence.created` / `absence.updated`, запит у Telegram і його імітована відповідь.
  */
 import type {
   AbsenceDto,
   AbsenceReasonCategory,
   AbsenceRequest,
+  AbsenceSummaryDto,
   ChangeKind,
   Conflict,
   CreateChangeRequest,
@@ -13,6 +15,7 @@ import type {
   LessonView,
   ReasonCode,
   ReplyDecision,
+  UpdateChangeRequest,
   Uuid,
 } from '@/api/types';
 import { compareIsoDates, formatDateRange, formatNumericDate, isIsoDate } from '@/lib/date';
@@ -30,10 +33,11 @@ import {
 } from '../../fixtures';
 import { emitServerEvent } from '../../events';
 import { mockId } from '../../ids';
-import { badRequest, conflict, problem } from '../../kit';
+import { badRequest, businessRule, conflict, problem } from '../../kit';
 import { currentSettings } from '../settings';
 import { isTeacherBound, recordConfirmationRequest } from '../telegram';
 import { makeChange, transition } from './factory';
+import { printedReason } from './printed';
 import { findTemplateLesson } from './lessons';
 import { decisionFor, groupPairs, isAbsent, isCovered, teacherSlots } from './rules';
 import { getChange, saveChange, world } from './state';
@@ -45,12 +49,30 @@ const REASON_CODES: readonly ReasonCode[] = ['ABSENT', 'MUTUAL', 'FINISHED', 'BU
 /** Види, які диспетчер створює зі сторінки «Заміни» (блок і «вичитано» — з календаря й обліку). */
 const CREATABLE_KINDS: readonly ChangeKind[] = ['REPLACE_TEACHER', 'REPLACE_DISCIPLINE', 'SWAP', 'CANCEL', 'ADDITIONAL', 'ROOM_CHANGE'];
 const MAX_PAIR = 8;
-const MAX_COMMENT = 500;
-/** Причина «Інше» друкується в колонці розпорядження — коротко. */
-const MAX_REASON_TEXT = 20;
+/** Межі core: коментар відсутності до 1000 символів, текст причини зміни до 100. */
+const MAX_COMMENT = 1000;
+const MAX_REASON_TEXT = 100;
+/** Діапазон пар (pairTo ≠ pairFrom) core дозволяє лише блоку й додатковим парам. */
+const RANGE_KINDS: readonly ChangeKind[] = ['BLOCK', 'ADDITIONAL'];
 
 function emitChange(change: ChangeRecord): void {
   emitServerEvent('change.updated', toChangeDto(change));
+}
+
+/** 409 `stale-data`, як OptimisticLockingFailureException у core. */
+function staleData(): Response {
+  return problem({
+    status: 409,
+    slug: 'stale-data',
+    title: 'Дані змінилися',
+    detail: 'Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.',
+  });
+}
+
+/** Подія SSE про відсутність — без причини й коментаря (вони приватні, DOMAIN §7). */
+export function absenceSummary(absence: AbsenceDto): AbsenceSummaryDto {
+  const { id, teacher, dateFrom, dateTo, pairs, source, status } = absence;
+  return { id, teacher, dateFrom, dateTo, pairs, source, status };
 }
 
 const semesterRange = `${formatNumericDate(ACTIVE_SEMESTER.startsOn)}–${formatNumericDate(ACTIVE_SEMESTER.endsOn)}`;
@@ -122,10 +144,12 @@ export function createAbsence(body: Partial<AbsenceRequest>, now: Date): Absence
     comment: body.comment?.trim() || null,
     source: 'ADMIN',
     status: 'ACTIVE',
+    createdBy: ADMIN_ACTOR,
     createdAt: now.toISOString(),
+    version: 0,
   };
   world().absences.set(absence.id, absence);
-  emitServerEvent('absence.created', absence);
+  emitServerEvent('absence.created', absenceSummary(absence));
   return absence;
 }
 
@@ -138,13 +162,14 @@ export function getAbsence(id: Uuid): AbsenceDto {
 }
 
 export function updateAbsence(id: Uuid, body: Partial<AbsenceRequest>): AbsenceDto {
-  const current = getAbsence(id);
+  const current = world().absences.get(id);
+  if (!current) throw problem({ status: 404, detail: `Відсутність з id ${id} не знайдено.` });
+  if (body.version !== undefined && body.version !== null && body.version !== current.version) throw staleData();
+  if (current.status === 'CANCELLED') throw businessRule('ABSENCE_CANCELLED', 'Скасовану відсутність змінити не можна.');
   const errors = validateAbsence(body);
   if (errors.length > 0) throw badRequest('Перевірте дані відсутності.', errors);
   if (body.teacherId !== current.teacher.id) {
-    throw badRequest('Викладача у відсутності змінити не можна — створіть нову.', [
-      { field: 'teacherId', message: 'Викладача змінити не можна' },
-    ]);
+    throw businessRule('ABSENCE_TEACHER_FIXED', 'Викладача відсутності змінити не можна: скасуйте її та створіть нову.');
   }
   const pairs = body.pairs ? [...body.pairs].sort((a, b) => a - b) : null;
   const next: AbsenceDto = {
@@ -154,16 +179,22 @@ export function updateAbsence(id: Uuid, body: Partial<AbsenceRequest>): AbsenceD
     pairs,
     reasonCategory: body.reasonCategory as AbsenceReasonCategory,
     comment: body.comment?.trim() || null,
+    version: current.version + 1,
   };
   assertNoOverlap(next, current.teacher.id, id);
   world().absences.set(id, next);
+  emitServerEvent('absence.updated', absenceSummary(next));
   return next;
 }
 
 /** Відсутність скасовано (викладач вийшов): невнесені рішення за нею теж скасовуються. */
 export function cancelAbsence(id: Uuid, now: Date): void {
-  const absence = getAbsence(id);
-  world().absences.set(id, { ...absence, status: 'CANCELLED' });
+  const absence = world().absences.get(id);
+  if (!absence) throw problem({ status: 404, detail: `Відсутність з id ${id} не знайдено.` });
+  if (absence.status === 'CANCELLED') throw businessRule('ABSENCE_CANCELLED', 'Ця відсутність уже скасована.');
+  const cancelled: AbsenceDto = { ...absence, status: 'CANCELLED', version: absence.version + 1 };
+  world().absences.set(id, cancelled);
+  emitServerEvent('absence.updated', absenceSummary(cancelled));
   for (const change of [...world().changes.values()]) {
     if (change.absenceId !== id || change.status === 'APPLIED' || change.status === 'CANCELLED') continue;
     cancelSimulatedReply(change.id);
@@ -224,6 +255,9 @@ function resolveRequest(body: Partial<CreateChangeRequest>): Resolved & { errors
   if (!body.groupId || !findGroup(body.groupId)) errors.push({ field: 'groupId', message: 'Оберіть групу' });
   if (!Number.isInteger(body.pairFrom) || (body.pairFrom as number) < 1 || (body.pairFrom as number) > MAX_PAIR) {
     errors.push({ field: 'pairFrom', message: `Пара від 1 до ${MAX_PAIR}` });
+  }
+  if (body.pairTo !== undefined && body.pairTo !== null && body.pairTo !== body.pairFrom && !RANGE_KINDS.includes(kind)) {
+    errors.push({ field: 'pairTo', message: 'Діапазон пар можливий лише для блоку або додаткових пар' });
   }
   if (!body.reasonCode || !REASON_CODES.includes(body.reasonCode)) errors.push({ field: 'reasonCode', message: 'Оберіть причину' });
   if (body.reasonCode === 'OTHER' && !body.reasonText?.trim()) {
@@ -349,28 +383,28 @@ function requestConfirmation(change: ChangeRecord): void {
   );
 }
 
-function assertNotFinal(change: ChangeRecord, action: string): void {
-  if (change.status === 'APPLIED') {
-    throw conflict(`Зміну вже внесено в опубліковане розпорядження — ${action} можна лише доповненням.`);
-  }
-  if (change.status === 'CANCELLED') throw conflict('Зміну вже скасовано.');
-}
-
-/** DELETE /api/admin/changes/{id} → CANCELLED: пара знову потребує рішення. */
+/** DELETE /api/admin/changes/{id} → CANCELLED: пара знову потребує рішення. Повтор — без помилки (204). */
 export function cancelChange(id: Uuid, now: Date): ChangeRecord {
   const change = getChange(id);
-  assertNotFinal(change, 'скасувати її');
+  if (change.status === 'CANCELLED') return change;
+  if (change.status === 'APPLIED') {
+    throw businessRule('CHANGE_ALREADY_APPLIED', 'Зміну вже внесено в опубліковане розпорядження — скасувати її можна лише доповненням.');
+  }
   cancelSimulatedReply(id);
   const next = saveChange(transition(change, 'CANCELLED', now, ADMIN_ACTOR, 'Рішення скасовано диспетчером', { confirmDeadline: null }));
   emitChange(next);
   return next;
 }
 
-/** POST …/request-confirmation: нагадування в Telegram і новий строк відповіді. */
+/**
+ * POST …/request-confirmation: нагадування в Telegram і новий строк відповіді. Як у core, запит можна надіслати
+ * й після відмови (DECLINED → PENDING_CONFIRMATION) — наприклад, коли диспетчер домовився телефоном.
+ */
 export function resendConfirmation(id: Uuid, now: Date): ChangeRecord {
   const change = getChange(id);
-  if (change.status === 'DECLINED') throw conflict('Викладач уже відмовився. Оберіть іншого кандидата.');
-  if (change.status !== 'PENDING_CONFIRMATION') throw conflict('Нагадати можна лише про заміну, що чекає підтвердження.');
+  if (change.status !== 'PENDING_CONFIRMATION' && change.status !== 'DECLINED') {
+    throw businessRule('CHANGE_ILLEGAL_TRANSITION', 'Запит можна надіслати лише для заміни, що чекає відповіді або була відхилена.');
+  }
   const deadline = new Date(now.getTime() + currentSettings().confirmTimeoutMinutes * 60_000).toISOString();
   const next = saveChange(
     transition(change, 'PENDING_CONFIRMATION', now, ADMIN_ACTOR, 'Запит надіслано повторно', { confirmDeadline: deadline }),
@@ -380,11 +414,14 @@ export function resendConfirmation(id: Uuid, now: Date): ChangeRecord {
   return next;
 }
 
-/** POST …/confirm: диспетчер підтверджує сам (домовився телефоном). */
+/** POST …/confirm: диспетчер підтверджує сам (домовився телефоном). Відхилену core так не підтверджує (422). */
 export function confirmByAdmin(id: Uuid, now: Date): ChangeRecord {
   const change = getChange(id);
-  if (change.status !== 'PENDING_CONFIRMATION' && change.status !== 'DECLINED') {
-    throw conflict('Підтвердити можна лише заміну, що чекає відповіді або була відхилена.');
+  if (change.status === 'DECLINED') {
+    throw businessRule('CHANGE_DECLINED', 'Викладач відмовився від цієї заміни. Надішліть запит ще раз або оберіть іншого викладача.');
+  }
+  if (change.status !== 'PENDING_CONFIRMATION' && change.status !== 'DRAFT') {
+    throw businessRule('CHANGE_ILLEGAL_TRANSITION', 'Підтвердити можна лише заміну, що чекає відповіді.');
   }
   cancelSimulatedReply(id);
   const next = saveChange(transition(change, 'CONFIRMED', now, ADMIN_ACTOR, 'Підтверджено диспетчером', { confirmDeadline: null }));
@@ -408,30 +445,43 @@ export function replyToChange(id: Uuid, teacherId: string | undefined, decision:
     transition(change, to, now, change.new.teacher?.shortName ?? 'telegram', comment?.trim() || null, {
       respondedAt: now.toISOString(),
       confirmDeadline: null,
+      responseComment: comment?.trim() || null,
     }),
   );
   emitChange(next);
   return next;
 }
 
-/** PUT /api/admin/changes/{id}: причина й аудиторія (решта — нове рішення). */
-export function updateChange(id: Uuid, body: Partial<CreateChangeRequest>): ChangeRecord {
+/**
+ * PUT /api/admin/changes/{id} `{newRoomId?, reasonCode, reasonText?, version?}` — як ChangeCommands.update у core:
+ * лише аудиторія й причина; застаріла `version` → 409 `stale-data`; редагувати можна відкриту чи відхилену.
+ * `newRoomId` замінює аудиторію рішення (null — без окремої аудиторії).
+ */
+export function updateChange(id: Uuid, body: Partial<UpdateChangeRequest>): ChangeRecord {
   const change = getChange(id);
-  assertNotFinal(change, 'змінити її');
+  if (body.version !== undefined && body.version !== null && body.version !== change.version) throw staleData();
+  const editable = change.status === 'DRAFT' || change.status === 'PENDING_CONFIRMATION' || change.status === 'CONFIRMED' || change.status === 'DECLINED';
+  if (!editable) throw businessRule('CHANGE_NOT_EDITABLE', 'Зміну з цим статусом редагувати не можна.');
   const errors: FieldErrorDto[] = [];
-  if (body.reasonCode !== undefined && !REASON_CODES.includes(body.reasonCode)) errors.push({ field: 'reasonCode', message: 'Оберіть причину' });
-  const reasonCode = body.reasonCode ?? change.reasonCode;
-  const reasonText = body.reasonText !== undefined ? body.reasonText?.trim() || null : change.reasonText;
-  if (reasonCode === 'OTHER' && !reasonText) errors.push({ field: 'reasonText', message: 'Коротко вкажіть причину для розпорядження' });
+  if (!body.reasonCode || !REASON_CODES.includes(body.reasonCode)) errors.push({ field: 'reasonCode', message: 'Оберіть причину' });
+  const reasonText = body.reasonText?.trim() || null;
   if (reasonText && reasonText.length > MAX_REASON_TEXT) errors.push({ field: 'reasonText', message: `Не довше ${MAX_REASON_TEXT} символів` });
   const room = body.newRoomId ? findRoom(body.newRoomId) : undefined;
-  if (body.newRoomId && !room) errors.push({ field: 'newRoomId', message: 'Оберіть аудиторію' });
+  if (body.newRoomId && !room) throw businessRule('REFERENCE_NOT_FOUND', 'Аудиторію не знайдено.');
   if (errors.length > 0) throw badRequest('Перевірте дані зміни.', errors);
+  const reasonCode = body.reasonCode as ReasonCode;
+  if (change.kind === 'DISCIPLINE_FINISHED' && reasonCode !== 'FINISHED') {
+    throw businessRule('CHANGE_INVALID', 'Для вичитаної дисципліни причина — «Вичит.».');
+  }
+  if (change.kind === 'ROOM_CHANGE' && !room) throw businessRule('CHANGE_INVALID', 'Для заміни аудиторії вкажіть нову аудиторію.');
+  if (change.kind === 'CANCEL' && room) throw businessRule('CHANGE_INVALID', 'Скасована пара не має аудиторії.');
   const next = saveChange({
     ...change,
     reasonCode,
     reasonText,
-    new: room ? { ...change.new, room: roomRef(room) } : change.new,
+    printedReason: printedReason(change.kind, reasonCode, reasonText),
+    new: { ...change.new, room: room ? roomRef(room) : null },
+    version: change.version + 1,
   });
   emitChange(next);
   return next;

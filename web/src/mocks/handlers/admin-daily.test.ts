@@ -52,10 +52,11 @@ describe('демо-ранок', () => {
     const dashboard = await api.get<DashboardDto>('/admin/dashboard', { date: DAY });
     expect(dashboard).toMatchObject({ date: DAY, parity: 'NUMERATOR', absences: 3, uncoveredLessons: 4, pending: 2, confirmed: 2, declined: 1 });
     expect(dashboard.orderDraft?.itemCount).toBe(2);
-    const kinds = dashboard.alerts.map((a) => a.kind);
-    expect(kinds).toEqual(expect.arrayContaining(['DECLINED', 'PENDING_OVERDUE', 'ORDER_NOT_PUBLISHED']));
-    // сповіщення від термінового до довідкового
-    expect(dashboard.alerts[0]?.severity).toBe('ERROR');
+    // рівно ті види й у тому порядку, що й у core: відмови, без рішення, прострочені, неопубліковані
+    expect(dashboard.alerts.map((a) => a.kind)).toEqual(['DECLINED', 'UNCOVERED_LESSONS', 'PENDING_OVERDUE', 'ORDER_NOT_PUBLISHED']);
+    expect(dashboard.alerts.map((a) => a.severity)).toEqual(['ERROR', 'WARN', 'WARN', 'INFO']);
+    expect(dashboard.alerts[1]).toMatchObject({ message: '4 пари без рішення через відсутність викладачів', link: `/admin/changes?date=${DAY}` });
+    expect(dashboard.aiSpendToday).toBeNull();
   });
 
   it('відсутність на кілька днів повертає зачеплені пари з датами й рішеннями', async () => {
@@ -128,7 +129,9 @@ describe('варіанти й зміни', () => {
   it('кандидати: без відсутнього й зайнятих, найкращі — ті, хто веде дисципліну', async () => {
     const { lesson } = await firstLessonOf('Погосян');
     const result = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
-    expect(result.date).toBe(DAY);
+    // як core: відповідь без дати заняття; дата є лише у варіантів відпрацювання
+    expect(result).not.toHaveProperty('date');
+    expect(result.options.filter((o) => o.kind !== 'ADDITIONAL').every((o) => o.date === null && o.pair === null)).toBe(true);
     const teachers = result.options.filter((o) => o.kind === 'REPLACE_TEACHER');
     expect(teachers.length).toBeGreaterThan(0);
     expect(teachers.length).toBeLessThanOrEqual(10);
@@ -158,7 +161,10 @@ describe('варіанти й зміни', () => {
     };
     const change = await api.post<ChangeDto>('/admin/changes', body);
     expect(change.status).toBe('PENDING_CONFIRMATION');
-    expect(Date.parse(change.confirmDeadline ?? '') - NOW.getTime()).toBe(15 * 60_000);
+    // типовий строк core — 120 хв (налаштування confirmTimeoutMinutes)
+    expect(Date.parse(change.confirmDeadline ?? '') - NOW.getTime()).toBe(120 * 60_000);
+    // адитивні поля core: pairTo = pairFrom для однієї пари, версія для оптимістичного блокування
+    expect(change).toMatchObject({ pairTo: lesson.lesson.pair, swapFromPair: null, printedReason: 'Відп.', version: 0, approvalMode: 'CONFIRM' });
     expect(change.history.at(-1)?.to).toBe('PENDING_CONFIRMATION');
     const again = await failure(api.post('/admin/changes', body));
     expect(again.status).toBe(409);
@@ -216,18 +222,38 @@ describe('варіанти й зміни', () => {
     const twice = await failure(api.post(`/internal/changes/${pending.id}/reply`, { teacherId: pending.new.teacher.id, decision: 'DECLINE' }));
     expect(twice.status).toBe(409);
     const remindConfirmed = await failure(api.post(`/admin/changes/${pending.id}/request-confirmation`));
-    expect(remindConfirmed.status).toBe(409);
+    expect(remindConfirmed).toMatchObject({ status: 422, code: 'CHANGE_ILLEGAL_TRANSITION' });
   });
 
-  it('диспетчер підтверджує відхилену заміну, а скасоване рішення повертає пару «без рішення»', async () => {
+  it('відхилену заміну не підтвердити (422 CHANGE_DECLINED), але можна спитати ще раз; скасування повертає пару «без рішення»', async () => {
     const changes = await api.get<ChangeDto[]>('/admin/changes', { date: DAY, status: 'DECLINED' });
     const declined = changes[0];
-    const confirmed = await api.post<ChangeDto>(`/admin/changes/${declined?.id ?? ''}/confirm`);
-    expect(confirmed.status).toBe('CONFIRMED');
-    expect(confirmed.history.at(-1)).toMatchObject({ actor: 'admin', from: 'DECLINED', to: 'CONFIRMED' });
-    await api.delete(`/admin/changes/${confirmed.id}`);
+    const refused = await failure(api.post(`/admin/changes/${declined?.id ?? ''}/confirm`));
+    expect(refused).toMatchObject({ status: 422, code: 'CHANGE_DECLINED' });
+    const asked = await api.post<ChangeDto>(`/admin/changes/${declined?.id ?? ''}/request-confirmation`);
+    expect(asked.history.at(-1)).toMatchObject({ actor: 'admin', from: 'DECLINED', to: 'PENDING_CONFIRMATION' });
+    await api.delete(`/admin/changes/${asked.id}`);
+    // повторне скасування — без помилки, як у core
+    await api.delete(`/admin/changes/${asked.id}`);
     const after = await api.get<ChangeDto[]>('/admin/changes', { date: DAY });
-    expect(after.find((c) => c.id === confirmed.id)?.status).toBe('CANCELLED');
+    expect(after.find((c) => c.id === asked.id)?.status).toBe('CANCELLED');
+  });
+
+  it('PUT зміни: лише причина й аудиторія з version; застаріла версія — 409 stale-data', async () => {
+    const [change] = await api.get<ChangeDto[]>('/admin/changes', { date: DAY, status: 'CONFIRMED' });
+    if (!change) throw new Error('У демо-ранку має бути підтверджена зміна');
+    const updated = await api.put<ChangeDto>(`/admin/changes/${change.id}`, {
+      newRoomId: change.new.room?.id ?? null,
+      reasonCode: 'OTHER',
+      reasonText: 'Конф.',
+      version: change.version,
+    });
+    expect(updated).toMatchObject({ reasonCode: 'OTHER', reasonText: 'Конф.', printedReason: 'Конф.', version: change.version + 1 });
+    const stale = await failure(
+      api.put(`/admin/changes/${change.id}`, { newRoomId: null, reasonCode: 'ABSENT', version: change.version }),
+    );
+    expect(stale.status).toBe(409);
+    expect(stale.isStaleData).toBe(true);
   });
 });
 
@@ -251,20 +277,24 @@ describe('розпорядження', () => {
     expect(applied.every((c) => c.orderId === published.id)).toBe(true);
 
     const twice = await failure(api.post(`/admin/orders/${draft.id}/publish`));
-    expect(twice.status).toBe(409);
+    expect(twice).toMatchObject({ status: 422, code: 'ORDER_ALREADY_PUBLISHED' });
+    expect(published.title).toBe('РОЗПОРЯДЖЕННЯ №36');
     const amendment = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
     expect(amendment).toMatchObject({ kind: 'AMENDMENT', parentId: published.id, items: [] });
+    expect(amendment.title).toBe('ДОПОВНЕННЯ до розпорядження №36');
     const emptyPublish = await failure(api.post(`/admin/orders/${amendment.id}/publish`));
-    expect(emptyPublish.status).toBe(422);
+    expect(emptyPublish).toMatchObject({ status: 422, code: 'AMENDMENT_EMPTY' });
   });
 
   it('примітки чернетки зберігаються, а опублікованого — ні', async () => {
     const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
-    const saved = await api.put<OrderDto>(`/admin/orders/${draft.id}/notes`, { notes: ['  2КІ3 – практика  ', ''] });
+    const saved = await api.put<OrderDto>(`/admin/orders/${draft.id}/notes`, { notes: ['  2КІ3 – практика  '] });
     expect(saved.notes).toEqual(['2КІ3 – практика']);
+    const blank = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['ok', '  '] }));
+    expect(blank.fieldErrors()).toHaveProperty('notes[1]');
     const archive = await api.get<Page<OrderSummaryDto>>('/admin/orders', { q: '35' });
     const error = await failure(api.put(`/admin/orders/${archive.items[0]?.id ?? ''}/notes`, { notes: [] }));
-    expect(error.status).toBe(409);
+    expect(error).toMatchObject({ status: 422, code: 'ORDER_ALREADY_PUBLISHED' });
     const tooLong = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['х'.repeat(501)] }));
     expect(tooLong.fieldErrors()).toHaveProperty('notes[0]');
   });
@@ -284,9 +314,12 @@ describe('розпорядження', () => {
   it('після публікації бот розсилає розпорядження в привʼязані чати груп і диспетчерам', async () => {
     const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
     const published = await api.post<OrderDto>(`/admin/orders/${draft.id}/publish`);
-    const deliveries = await api.get<DeliveryDto[]>('/notify/deliveries', { orderId: published.id });
-    expect(deliveries.map((d) => d.chatTitle).sort()).toEqual(['1КІ2 — група', '1ТК1 — група', 'Диспетчерська ВТФК']);
-    expect(deliveries.every((d) => d.status === 'SENT')).toBe(true);
+    // журнал — сторінка, як у notification
+    const page = await api.get<Page<DeliveryDto>>('/notify/deliveries', { orderId: published.id });
+    expect(page).toMatchObject({ page: 0, size: 20, total: 3 });
+    expect(page.items.map((d) => d.chatTitle).sort()).toEqual(['1КІ2 — група', '1ТК1 — група', 'Диспетчерська ВТФК']);
+    expect(page.items.every((d) => d.status === 'SENT' && d.nextAttemptAt === null)).toBe(true);
+    expect(page.items.map((d) => d.purpose).sort()).toEqual(['ORDER_ADMIN', 'ORDER_GROUP', 'ORDER_GROUP']);
   });
 });
 
@@ -295,19 +328,30 @@ describe('Telegram і налаштування', () => {
     const missing = await failure(api.post('/notify/bindings/codes', { type: 'GROUP_CHAT' }));
     expect(missing.fieldErrors()).toHaveProperty('groupId');
     const code = await api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'GROUP_CHAT', groupId: groupNamed('4КІ1').id });
-    expect(code.code).toMatch(/^[A-Z2-9]{8}$/);
-    expect(code.deepLink).toBe(`https://t.me/scheduler_vtfk_bot?startgroup=${code.code}`);
+    // як у notification: 200, код «XXXX-XXXX», посилання — без дефіса
+    expect(code.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(code).toMatchObject({ type: 'GROUP_CHAT', label: '4КІ1', command: `/bind ${code.code}` });
+    const raw = code.code.replace('-', '');
+    expect(code.groupLink).toBe(`https://t.me/scheduler_vtfk_bot?startgroup=${raw}`);
+    expect(code.deepLink).toBe(`https://t.me/scheduler_vtfk_bot?start=${raw}`);
     expect(Date.parse(code.expiresAt) - NOW.getTime()).toBe(24 * 60 * 60_000);
+    // підписнику, як і чату групи, потрібна група
     const subscriber = await failure(api.post('/notify/bindings/codes', { type: 'SUBSCRIBER' }));
-    expect(subscriber.status).toBe(400);
+    expect(subscriber.fieldErrors()).toHaveProperty('groupId');
+    const teacher = await api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'TEACHER', teacherId: teacherNamed('Кренцін').id });
+    expect(teacher).toMatchObject({ type: 'TEACHER', groupLink: null, command: null });
   });
 
   it('налаштування: межі значень перевіряються, коректні — зберігаються', async () => {
     const settings = await api.get<SettingsDto>('/admin/settings');
-    const invalid = await failure(api.put('/admin/settings', { ...settings, confirmTimeoutMinutes: 2, signatoryName: ' ', hoursPerPair: 9 }));
+    // типові значення й межі — як у core: 120 хв, 5..1440, посада ≤ 200, імʼя ≤ 100
+    expect(settings.confirmTimeoutMinutes).toBe(120);
+    const invalid = await failure(api.put('/admin/settings', { ...settings, confirmTimeoutMinutes: 1441, signatoryName: ' ', hoursPerPair: 9 }));
     expect(Object.keys(invalid.fieldErrors()).sort()).toEqual(['confirmTimeoutMinutes', 'hoursPerPair', 'signatoryName']);
-    const saved = await api.put<SettingsDto>('/admin/settings', { ...settings, confirmTimeoutMinutes: 30, signatoryName: 'Микола ПОЛІЩУК ' });
-    expect(saved).toMatchObject({ confirmTimeoutMinutes: 30, signatoryName: 'Микола ПОЛІЩУК' });
+    const tooLong = await failure(api.put('/admin/settings', { ...settings, signatoryPosition: 'х'.repeat(201), signatoryName: 'х'.repeat(101) }));
+    expect(Object.keys(tooLong.fieldErrors()).sort()).toEqual(['signatoryName', 'signatoryPosition']);
+    const saved = await api.put<SettingsDto>('/admin/settings', { ...settings, confirmTimeoutMinutes: 1440, signatoryName: 'Микола ПОЛІЩУК ' });
+    expect(saved).toMatchObject({ confirmTimeoutMinutes: 1440, signatoryName: 'Микола ПОЛІЩУК' });
     expect(await api.get<SettingsDto>('/admin/settings')).toEqual(saved);
   });
 });

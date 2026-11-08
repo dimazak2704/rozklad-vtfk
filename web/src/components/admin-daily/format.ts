@@ -42,19 +42,25 @@ export function pairsCount(count: number): string {
   return countLabel(count, PAIRS_FORMS);
 }
 
+/** «СТП — Кренцін» без висячих тире, коли якоїсь частини немає. */
+function partiesText(side: ChangeDto['new']): string {
+  return [side.discipline?.shortName, side.teacher?.shortName].filter(Boolean).join(' — ') || 'без змін у складі';
+}
+
 /** Що буде з парою після рішення: «→ Михальчук», «Пари не буде», «4 пара → на 2». */
 export function decisionSummary(change: ChangeDto): string {
   switch (change.kind) {
     case 'CANCEL':
       return 'Пари не буде';
     case 'SWAP':
-      return `Переставлено ${change.pairTo ?? ''} пару: ${change.new.discipline?.shortName ?? ''} — ${change.new.teacher?.shortName ?? ''}`;
+      // swapFromPair — пара, з якої переставили заняття на звільнене місце (pairFrom)
+      return `${change.swapFromPair !== null ? `Переставлено ${change.swapFromPair} пару` : 'Перестановка'}: ${partiesText(change.new)}`;
     case 'REPLACE_DISCIPLINE':
-      return `${change.new.discipline?.shortName ?? ''} — ${change.new.teacher?.shortName ?? ''}`;
+      return partiesText(change.new);
     case 'ADDITIONAL':
-      return `Додаткова пара: ${change.new.discipline?.shortName ?? ''} — ${change.new.teacher?.shortName ?? ''}`;
+      return `Додаткова пара: ${partiesText(change.new)}`;
     case 'ROOM_CHANGE':
-      return `Аудиторія ${change.new.room?.name ?? ''}`;
+      return change.new.room ? `Аудиторія ${change.new.room.name}` : 'Заміна аудиторії';
     case 'REPLACE_TEACHER':
     case 'BLOCK':
     case 'DISCIPLINE_FINISHED':

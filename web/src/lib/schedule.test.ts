@@ -15,6 +15,9 @@ function lesson(pair: number, overrides: Partial<LessonView> = {}): LessonView {
     subgroup: 0,
     kind: 'REGULAR',
     online: false,
+    original: null,
+    reasonText: null,
+    changeId: null,
     ...overrides,
   };
 }

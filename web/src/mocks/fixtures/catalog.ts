@@ -324,11 +324,16 @@ export function toPublicGroup(group: GroupDto): PublicGroupDto {
   };
 }
 
+/**
+ * Як у core: `fullName` лише тоді, коли налаштування showTeacherFullNames це дозволяє й імʼя відоме.
+ * Мок не читає налаштувань (типово false), тож повного імені не дає — як core з типовими налаштуваннями.
+ */
 export const toPublicTeacher = (teacher: TeacherDto): PublicTeacherDto => ({
   id: teacher.id,
   shortName: teacher.shortName,
   displayName: teacher.displayName,
   cycleCommission: teacher.cycleCommission?.label ?? null,
+  fullName: null,
 });
 
 export const toPublicRoom = (room: RoomDto): PublicRoomDto => ({

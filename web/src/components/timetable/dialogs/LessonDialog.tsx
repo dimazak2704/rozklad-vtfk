@@ -18,6 +18,7 @@ import {
   type ComboboxOption,
 } from '@/components/ui';
 import { capitalize, LESSON_KIND_LABEL, ROOM_TYPE_LABEL, weekdayShort } from '@/lib/labels';
+import { groupDescription } from '@/lib/names';
 import { roomLabel } from '@/lib/schedule';
 import { WEEKDAYS } from '../model/grid';
 import { LESSON_FORM_FIELDS, lessonSchema, requestOf, type LessonFormValues } from '../model/lessonForm';
@@ -105,8 +106,8 @@ function LessonForm({
       catalog.groups.map((g) => ({
         value: g.id,
         label: g.code,
-        description: `${g.course} курс · ${g.department}`,
-        keywords: [g.specialty.name, g.department],
+        description: groupDescription(g),
+        keywords: [g.specialty.name, ...(g.department ? [g.department] : [])],
       })),
     [catalog.groups],
   );

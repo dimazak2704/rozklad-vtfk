@@ -9,6 +9,7 @@ import { Button, Combobox, Dialog, DialogContent, Field, IconButton, notify, Pla
 import { useNow } from '@/hooks/useNow';
 import { formatInstant } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
+import { groupDescription } from '@/lib/names';
 
 type CodeType = Exclude<BindingType, 'SUBSCRIBER'>;
 
@@ -38,14 +39,16 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-function Instructions({ type, code }: { type: CodeType; code: string }) {
+function Instructions({ type, command }: { type: CodeType; command: string | null }) {
   if (type === 'GROUP_CHAT') {
     return (
       <ol className="flex list-decimal flex-col gap-1 ps-5 text-ui text-secondary">
         <li>Куратор відкриває посилання чи QR і обирає чат групи — бот додається туди сам.</li>
-        <li>
-          Або вручну: додати бота в чат і надіслати <code className="rounded-plate bg-sunken px-1 font-mono text-primary">/bind {code}</code>.
-        </li>
+        {command ? (
+          <li>
+            Або вручну: додати бота в чат і надіслати <code className="rounded-plate bg-sunken px-1 font-mono text-primary">{command}</code>.
+          </li>
+        ) : null}
         <li>Чат зʼявиться в таблиці привʼязок, щойно бот отримає код.</li>
       </ol>
     );
@@ -58,14 +61,16 @@ function Instructions({ type, code }: { type: CodeType; code: string }) {
   );
 }
 
-function Result({ type, result, targetLabel }: { type: CodeType; result: BindingCodeDto; targetLabel: string | null }) {
+function Result({ type, result }: { type: CodeType; result: BindingCodeDto }) {
   const { now } = useNow();
   const left = Math.max(0, Math.round((Date.parse(result.expiresAt) - now.getTime()) / 60_000));
+  // чат групи привʼязують посиланням ?startgroup= (бот сам додається в групу); інші — особистим ?start=
+  const link = type === 'GROUP_CHAT' ? (result.groupLink ?? result.deepLink) : result.deepLink;
   return (
     <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <span className="text-caption text-muted">Код привʼязки{targetLabel ? ` · ${targetLabel}` : ''}</span>
+          <span className="text-caption text-muted">Код привʼязки · {result.label}</span>
           <span className="flex items-center gap-2">
             <Plate size="lg" className="tracking-[0.12em]">
               {result.code}
@@ -79,17 +84,23 @@ function Result({ type, result, targetLabel }: { type: CodeType; result: Binding
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-caption text-muted">Посилання</span>
           <span className="flex min-w-0 items-center gap-1 rounded-control border border-default bg-sunken ps-2.5">
-            <a href={result.deepLink} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover:underline">
-              {result.deepLink}
+            <a href={link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover:underline">
+              {link}
             </a>
-            <CopyButton value={result.deepLink} label="Копіювати посилання" />
+            <CopyButton value={link} label="Копіювати посилання" />
           </span>
         </div>
-        <Instructions type={type} code={result.code} />
+        <Instructions type={type} command={result.command} />
+        {type === 'ADMIN_CHAT' && result.command ? (
+          <p className="text-caption text-secondary">
+            Для групового чату диспетчерів: додайте бота й надішліть{' '}
+            <code className="rounded-plate bg-sunken px-1 font-mono text-primary">{result.command}</code>.
+          </p>
+        ) : null}
       </div>
       <figure className="flex flex-col items-center gap-1.5 self-start">
         <div data-theme="light" className="rounded-panel border border-default bg-surface p-3">
-          <QRCodeSVG value={result.deepLink} size={148} level="M" marginSize={0} title={`QR-код: ${result.deepLink}`} />
+          <QRCodeSVG value={link} size={148} level="M" marginSize={0} title={`QR-код: ${link}`} />
         </div>
         <figcaption className="flex items-center gap-1 text-caption text-muted">
           <QrCode aria-hidden="true" className="size-3.5" />
@@ -116,7 +127,7 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
   const create = useCreateBindingCode();
 
   const groupOptions = useMemo(
-    () => (groups.data ?? []).map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс, ${g.department}` })),
+    () => (groups.data ?? []).map((g) => ({ value: g.id, label: g.code, description: groupDescription(g, ', ') })),
     [groups.data],
   );
   const teacherOptions = useMemo(
@@ -124,12 +135,6 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
     [teachers.data],
   );
   const needsTarget = type !== 'ADMIN_CHAT';
-  const targetLabel =
-    type === 'GROUP_CHAT'
-      ? (groupOptions.find((o) => o.value === targetId)?.label ?? null)
-      : type === 'TEACHER'
-        ? (teacherOptions.find((o) => o.value === targetId)?.label ?? null)
-        : null;
 
   const submit = async () => {
     if (needsTarget && !targetId) {
@@ -190,7 +195,7 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
         }
       >
         {result ? (
-          <Result type={type} result={result} targetLabel={targetLabel} />
+          <Result type={type} result={result} />
         ) : (
           <div className="flex flex-col gap-4">
             <RadioGroup<CodeType>

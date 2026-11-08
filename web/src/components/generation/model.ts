@@ -1,7 +1,6 @@
 /** Генератор: параметри форми, перетворення в запит, тривалості, рядки «Було / Стало». */
-import type { GenerationJobView } from '@/api/generation';
 import { DEFAULT_WEIGHTS, TIME_LIMIT_MAX, TIME_LIMIT_MIN } from '@/api/generation';
-import type { GenerationJobRequest, GenerationWeights, MetricsDto, Uuid } from '@/api/types';
+import type { GenerationJobDto, GenerationJobRequest, GenerationWeights, MetricsDto, Uuid } from '@/api/types';
 
 export type ScopeMode = 'all' | 'courses' | 'groups';
 
@@ -62,7 +61,7 @@ export function formatSeconds(totalSeconds: number): string {
 }
 
 /** Скільки секунд задача розвʼязувалась (за останньою точкою прогресу або моментами старту й кінця). */
-export function elapsedSeconds(job: GenerationJobView): number {
+export function elapsedSeconds(job: GenerationJobDto): number {
   if (job.startedAt && job.finishedAt) return (Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000;
   return job.progress.at(-1)?.t ?? 0;
 }
@@ -75,7 +74,7 @@ export interface ComparisonRow {
 }
 
 /** Рядки «Було / Стало»: жорсткі конфлікти (з оцінки) і метрики версії. */
-export function comparisonRows(job: GenerationJobView): ComparisonRow[] {
+export function comparisonRows(job: GenerationJobDto): ComparisonRow[] {
   const before = job.metricsBefore;
   const after = job.metricsAfter;
   if (!before || !after) return [];

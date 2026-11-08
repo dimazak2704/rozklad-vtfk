@@ -29,12 +29,6 @@ export const DEFAULT_WEIGHTS: Readonly<GenerationWeights> = {
 export const TIME_LIMIT_MIN = 10;
 export const TIME_LIMIT_MAX = 600;
 
-/**
- * Задача з параметрами запуску. Контракт не перелічує `params` у відповіді (у БД це `generation_job.params`);
- * якщо бекенд їх не віддає, інтерфейс показує лише те, що знає напевно. @inferred
- */
-export type GenerationJobView = GenerationJobDto & { params?: GenerationJobRequest | null };
-
 const ACTIVE: ReadonlySet<GenerationJobStatus> = new Set(['QUEUED', 'RUNNING']);
 
 export function isJobActive(status: GenerationJobStatus | undefined): boolean {
@@ -55,7 +49,7 @@ const jobPath = (jobId: Uuid) => `${jobsPath}/${encodeURIComponent(jobId)}`;
 export function useGenerationJobs(semesterId: Uuid | undefined) {
   return useQuery({
     queryKey: qk.admin.generation.jobs(semesterId),
-    queryFn: ({ signal }) => api.get<GenerationJobView[]>(jobsPath, { semesterId }, { signal }),
+    queryFn: ({ signal }) => api.get<GenerationJobDto[]>(jobsPath, { semesterId }, { signal }),
     enabled: Boolean(semesterId),
     // поки щось розвʼязується, історія теж оновлюється (стан, час, оцінка)
     refetchInterval: (query) => (query.state.data?.some((job) => isJobActive(job.status)) ? 4000 : false),
@@ -66,7 +60,7 @@ export function useGenerationJobs(semesterId: Uuid | undefined) {
 export function useGenerationJob(jobId: Uuid | null | undefined) {
   return useQuery({
     queryKey: qk.admin.generation.job(jobId ?? ''),
-    queryFn: ({ signal }) => api.get<GenerationJobView>(jobPath(jobId ?? ''), undefined, { signal }),
+    queryFn: ({ signal }) => api.get<GenerationJobDto>(jobPath(jobId ?? ''), undefined, { signal }),
     enabled: Boolean(jobId),
     refetchInterval: (query) => (isJobActive(query.state.data?.status) ? 2000 : false),
     refetchIntervalInBackground: false,
@@ -84,7 +78,8 @@ export function useStartGeneration() {
 export function useCancelGeneration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (jobId: Uuid) => api.post<void>(`${jobPath(jobId)}/cancel`),
+    // 202 із задачею (повторне скасування CANCELLED — те саме; SOLVED/FAILED → 409)
+    mutationFn: (jobId: Uuid) => api.post<GenerationJobDto>(`${jobPath(jobId)}/cancel`),
     onSettled: (_data, _error, jobId) => {
       void queryClient.invalidateQueries({ queryKey: qk.admin.generation.job(jobId) });
       void queryClient.invalidateQueries({ queryKey: qk.admin.generation.jobs() });
@@ -111,7 +106,7 @@ export function useGenerationLiveUpdates(jobId: Uuid | null | undefined): void {
 
   useServerEvent('generation.progress', (event) => {
     if (!jobId || event.jobId !== jobId) return;
-    queryClient.setQueryData<GenerationJobView>(qk.admin.generation.job(jobId), (job) => {
+    queryClient.setQueryData<GenerationJobDto>(qk.admin.generation.job(jobId), (job) => {
       if (!job || !isJobActive(job.status)) return job;
       const point = { t: Math.round(event.elapsedMs / 100) / 10, hard: event.hardScore, soft: event.softScore };
       return {
@@ -125,7 +120,7 @@ export function useGenerationLiveUpdates(jobId: Uuid | null | undefined): void {
 
   useServerEvent('generation.completed', (event) => {
     if (!jobId || event.id !== jobId) return;
-    queryClient.setQueryData<GenerationJobView>(qk.admin.generation.job(jobId), (job) => ({ ...job, ...event }));
+    queryClient.setQueryData<GenerationJobDto>(qk.admin.generation.job(jobId), (job) => ({ ...job, ...event }));
     void queryClient.invalidateQueries({ queryKey: qk.admin.generation.jobs() });
   });
 }

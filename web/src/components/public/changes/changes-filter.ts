@@ -14,6 +14,16 @@ export interface ChangesFilter {
   mineOnly: boolean;
 }
 
+/** Чи група в моїх: рядок групи, якої немає в каталозі, приходить з `group.id = null` — вона нічия. */
+export function isMyGroup(groupIds: ReadonlySet<string>, id: string | null): boolean {
+  return id !== null && groupIds.has(id);
+}
+
+/** Ключ групи для React: id, а для групи поза каталогом — її код. */
+export function changeGroupKey(group: ChangeGroup['group']): string {
+  return group.id ?? `code:${group.code}`;
+}
+
 export interface MyTargets {
   groupIds: ReadonlySet<string>;
   /** Підписи обраних викладачів: «Кренцін», «Крисак Л.В.». */
@@ -57,7 +67,7 @@ export function filterChangeGroups(groups: readonly ChangeGroup[], filter: Chang
     .filter((entry) => filter.courses.length === 0 || filter.courses.includes(entry.group.course))
     .filter((entry) => !query || matchScore(query, entry.group.code) >= 60)
     .map((entry) => {
-      if (!filter.mineOnly || mine.groupIds.has(entry.group.id)) return entry;
+      if (!filter.mineOnly || isMyGroup(mine.groupIds, entry.group.id)) return entry;
       return { ...entry, items: entry.items.filter((item) => rowMentions(item, mine.teachers)) };
     })
     .filter((entry) => entry.items.length > 0);

@@ -2,11 +2,11 @@ import { FileImage, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
 import { useId, useRef, useState, type DragEvent } from 'react';
 import { activeSemesterOf, useSemesters } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
-import { useUploadImport, type ImportJob } from '@/api/import';
+import { IMPORT_OPTION_LIMITS, useUploadImport, type ImportJob, type ImportOptions } from '@/api/import';
 import type { ImportKind } from '@/api/types';
 import { applyServerErrors } from '@/components/catalog/forms';
 import { FormAlert } from '@/components/catalog/FormParts';
-import { Button, Combobox, Field, IconButton, Plate, Select, notify } from '@/components/ui';
+import { Button, Combobox, Field, IconButton, Input, NumberInput, Plate, Select, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { ACCEPT_ATTRIBUTE, detectImportKind, extensionOf, fileProblem, formatBytes, kindAccepts, usesVision } from './detect';
 import { IMPORT_KIND_LABEL, IMPORT_KIND_OPTIONS } from './labels';
@@ -42,8 +42,13 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
   const [dragging, setDragging] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [semesterId, setSemesterId] = useState<string | null>(null);
-  const [groupIds, setGroupIds] = useState<string[]>([]);
+  // importer привʼязує години за кодами груп (options.groupCodes), тож і зберігаємо коди
+  const [groupCodes, setGroupCodes] = useState<string[]>([]);
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [planSemester, setPlanSemester] = useState<number | null>(null);
+  const [planSemesterError, setPlanSemesterError] = useState<string | null>(null);
+  const [versionName, setVersionName] = useState('');
+  const [hoursPerWeek, setHoursPerWeek] = useState<number | null>(null);
   const semester = semesters.data?.find((s) => s.id === semesterId) ?? activeSemesterOf(semesters.data);
 
   const choose = (file: File | undefined) => {
@@ -73,30 +78,51 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
   const needsGroups = picked?.kind === 'DISCIPLINE_PROGRAM' || picked?.kind === 'CURRICULUM';
   const formatMismatch = picked ? !kindAccepts(picked.kind, picked.file.name) : false;
 
+  /** Лише ключі, які приймає importer для цього виду (інший ключ → 400). */
+  const optionsFor = (kind: ImportKind): ImportOptions => {
+    const options: ImportOptions = {};
+    if (kind === 'TIMETABLE_XLSX' && versionName.trim()) options.versionName = versionName.trim();
+    if (kind === 'DISCIPLINE_PROGRAM' || kind === 'CURRICULUM') options.groupCodes = groupCodes;
+    if (kind === 'CURRICULUM' && planSemester !== null) options.semesterNumber = planSemester;
+    if (kind === 'DISCIPLINE_PROGRAM' && hoursPerWeek !== null) options.hoursPerWeek = hoursPerWeek;
+    return options;
+  };
+
   const submit = async () => {
     if (!picked) return;
-    if (needsGroups && groupIds.length === 0) {
+    let invalid = false;
+    if (needsGroups && groupCodes.length === 0) {
       setGroupError('Оберіть групи, яким читається дисципліна за цим документом.');
-      return;
+      invalid = true;
     }
+    if (picked.kind === 'CURRICULUM' && planSemester === null) {
+      setPlanSemesterError('Вкажіть, який семестр плану розпізнати.');
+      invalid = true;
+    }
+    if (invalid) return;
     setProblem(null);
     try {
       const job = await upload.mutateAsync({
         file: picked.file,
         kind: picked.kind,
         semesterId: semester?.id ?? null,
-        options: needsGroups ? { groupIds } : null,
+        options: optionsFor(picked.kind),
       });
       notify.success(`«${picked.file.name}» завантажено — розбираємо`);
       setPicked(null);
-      setGroupIds([]);
+      setGroupCodes([]);
+      setPlanSemester(null);
+      setVersionName('');
+      setHoursPerWeek(null);
       onUploaded(job);
     } catch (error) {
       setProblem(applyServerErrors(error, () => undefined, []));
     }
   };
 
-  const groupOptions = (groups.items ?? []).filter((g) => !groupIds.includes(g.id)).map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс` }));
+  const groupOptions = (groups.items ?? [])
+    .filter((g) => !groupCodes.includes(g.code))
+    .map((g) => ({ value: g.code, label: g.code, description: `${g.course} курс` }));
 
   return (
     <section aria-labelledby={`${inputId}-title`} className="flex flex-col gap-3">
@@ -149,9 +175,9 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
               <div className="flex flex-col gap-2">
                 <Combobox
                   value={null}
-                  onValueChange={(id) => {
-                    if (id) {
-                      setGroupIds([...groupIds, id]);
+                  onValueChange={(code) => {
+                    if (code) {
+                      setGroupCodes([...groupCodes, code]);
                       setGroupError(null);
                     }
                   }}
@@ -160,26 +186,60 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
                   searchPlaceholder="Код групи"
                   loading={groups.isPending}
                 />
-                {groupIds.length > 0 ? (
+                {groupCodes.length > 0 ? (
                   <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані групи">
-                    {groupIds.map((id) => {
-                      const group = groups.items?.find((g) => g.id === id);
-                      return (
-                        <li key={id} className="inline-flex items-center gap-0.5">
-                          <Plate size="md">{group?.code ?? '…'}</Plate>
-                          <IconButton
-                            label={`Прибрати групу ${group?.code ?? ''}`}
-                            icon={<X aria-hidden="true" className="size-3.5" />}
-                            size="sm"
-                            className="size-7"
-                            onClick={() => setGroupIds(groupIds.filter((g) => g !== id))}
-                          />
-                        </li>
-                      );
-                    })}
+                    {groupCodes.map((code) => (
+                      <li key={code} className="inline-flex items-center gap-0.5">
+                        <Plate size="md">{code}</Plate>
+                        <IconButton
+                          label={`Прибрати групу ${code}`}
+                          icon={<X aria-hidden="true" className="size-3.5" />}
+                          size="sm"
+                          className="size-7"
+                          onClick={() => setGroupCodes(groupCodes.filter((g) => g !== code))}
+                        />
+                      </li>
+                    ))}
                   </ul>
                 ) : null}
               </div>
+            </Field>
+          ) : null}
+          {picked.kind === 'CURRICULUM' ? (
+            <Field label="Семестр навчального плану" required error={planSemesterError} hint="Номер семестру в плані, від 1 до 8: напр., 7 — перший семестр 4 курсу">
+              <NumberInput
+                value={planSemester}
+                onValueChange={(value) => {
+                  setPlanSemester(value);
+                  setPlanSemesterError(null);
+                }}
+                min={IMPORT_OPTION_LIMITS.semesterNumber.min}
+                max={IMPORT_OPTION_LIMITS.semesterNumber.max}
+                className="w-32"
+              />
+            </Field>
+          ) : null}
+          {picked.kind === 'DISCIPLINE_PROGRAM' ? (
+            <Field label="Годин на тиждень" hint="Якщо програма цього не каже; інакше лишіть порожнім">
+              <NumberInput
+                value={hoursPerWeek}
+                onValueChange={setHoursPerWeek}
+                min={IMPORT_OPTION_LIMITS.hoursPerWeek.min}
+                max={IMPORT_OPTION_LIMITS.hoursPerWeek.max}
+                step={0.5}
+                precision={1}
+                className="w-32"
+              />
+            </Field>
+          ) : null}
+          {picked.kind === 'TIMETABLE_XLSX' ? (
+            <Field label="Назва чернетки" hint="Необовʼязково: інакше — «Імпорт з «назва файлу»»">
+              <Input
+                value={versionName}
+                onChange={(event) => setVersionName(event.target.value)}
+                maxLength={IMPORT_OPTION_LIMITS.versionName}
+                placeholder="Напр.: Розклад з 3 листопада"
+              />
             </Field>
           ) : null}
           <FormAlert message={problem} />

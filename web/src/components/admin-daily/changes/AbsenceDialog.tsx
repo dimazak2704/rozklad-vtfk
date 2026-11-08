@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { useCreateAbsence, useUpdateAbsence } from '@/api/admin-daily';
 import { usePublicSchedule, usePublicTeachers } from '@/api/public';
-import { isApiError } from '@/api/errors';
+import { isApiError, STALE_DATA_MESSAGE } from '@/api/errors';
 import { useBells } from '@/api/meta';
 import type { AbsenceDto, AbsenceReasonCategory, AbsenceRequest, IsoDate } from '@/api/types';
 import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl, Select, Textarea } from '@/components/ui';
@@ -32,7 +32,7 @@ function buildSchema(semester: SemesterBounds | null) {
       wholeDay: z.boolean(),
       pairs: z.array(z.number().int().min(1).max(8)),
       reasonCategory: z.enum(REASONS as [AbsenceReasonCategory, ...AbsenceReasonCategory[]], { error: 'Оберіть причину' }),
-      comment: z.string().max(500, { error: 'Не довше 500 символів' }),
+      comment: z.string().max(1000, { error: 'Не довше 1000 символів' }),
     })
     .refine((v) => compareIsoDates(v.dateTo, v.dateFrom) >= 0, { error: 'Не раніше за дату початку', path: ['dateTo'] })
     .refine((v) => v.wholeDay || v.pairs.length > 0, { error: 'Оберіть хоча б одну пару', path: ['pairs'] })
@@ -112,6 +112,8 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
       pairs: values.wholeDay ? null : [...values.pairs].sort((a, b) => a - b),
       reasonCategory: values.reasonCategory,
       comment: values.comment.trim() || null,
+      // версія, яку бачив диспетчер: якщо відсутність тим часом змінили, core відповість 409
+      ...(absence ? { version: absence.version } : {}),
     };
     try {
       const saved = absence ? await update.mutateAsync({ id: absence.id, body }) : await create.mutateAsync(body);
@@ -123,7 +125,13 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
           if (field in values) setError(field as keyof FormValues, { message });
         }
       }
-      setFormError(isApiError(error) ? error.message : 'Не вдалося зберегти відсутність. Спробуйте ще раз.');
+      setFormError(
+        isApiError(error)
+          ? error.isStaleData
+            ? STALE_DATA_MESSAGE
+            : error.message
+          : 'Не вдалося зберегти відсутність. Спробуйте ще раз.',
+      );
     }
   });
 

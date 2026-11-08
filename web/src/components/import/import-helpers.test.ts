@@ -44,10 +44,8 @@ describe('визначення виду імпорту', () => {
 
 const row = (patch: Partial<ImportReportRow> & Pick<ImportReportRow, 'type' | 'raw'>): ImportReportRow => ({
   severity: 'OK',
-  matched: null,
   suggestions: [],
   location: 'Розклад друк',
-  message: null,
   ...patch,
 });
 

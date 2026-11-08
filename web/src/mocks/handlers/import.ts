@@ -21,6 +21,7 @@ import type {
 } from '@/api/import';
 import type {
   AiUsageDto,
+  ImportFileType,
   ImportJobStatus,
   ImportKind,
   ImportMapping,
@@ -34,7 +35,7 @@ import { kyivClock } from '@/lib/date';
 import { ukCollator } from '@/lib/sort';
 import { DISCIPLINES, GROUPS, ROOMS, TEACHERS, TEMPLATE_LESSONS, BELL_PROFILES } from '../fixtures';
 import { mockId } from '../ids';
-import { apiPath, badRequest, conflict, problem, readJson } from '../kit';
+import { apiPath, badRequest, businessRule, conflict, paginate, problem, readJson } from '../kit';
 import { createMockCollection } from '../store';
 import { activeSemester, semesters } from './calendar';
 import {
@@ -57,17 +58,47 @@ const VISION_MODEL = 'claude-sonnet-5-5';
 
 // ───────────────────────── Стан ─────────────────────────
 
-interface StoredJob extends ImportJob {
+/**
+ * Завдання в памʼяті мока: поля можуть бути null. У відповідь іде `toDto` — як ImportJobDto importer
+ * (`@JsonInclude(NON_NULL)`: null-полів немає), а список — без звіту, чернетки, параметрів і результату.
+ */
+interface StoredJob {
+  id: Uuid;
+  kind: ImportKind;
+  fileName: string;
+  fileType: ImportFileType;
+  fileSize: number;
+  status: ImportJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  summary: ImportJob['summary'];
+  report: ImportReportRow[];
+  draft: unknown;
+  ai: NonNullable<ImportJob['ai']> | null;
+  error: string | null;
+  semesterId: Uuid | null;
+  options: ImportOptions | null;
+  mappings: ImportMapping[];
+  result: ImportApplyResult | null;
   /** Скільки опитувань лишилось до наступного кроку стану. */
   pendingPolls: number;
   /** Коли рахувались витрати ШІ (для денного ліміту). */
   aiAt: string | null;
 }
 
+/** Формат за розширенням (importer визначає за вмістом; у моку файли справжні лише в e2e). */
+function fileTypeOf(fileName: string): ImportFileType {
+  const ext = extensionOf(fileName);
+  const map: Readonly<Record<string, ImportFileType>> = { xlsx: 'XLSX', docx: 'DOCX', doc: 'DOC', pdf: 'PDF', jpg: 'JPEG', jpeg: 'JPEG', png: 'PNG', webp: 'WEBP', gif: 'GIF' };
+  return map[ext] ?? 'PDF';
+}
+
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 // ───────────────────────── Звіт: допоміжне ─────────────────────────
 
+/** Рядок звіту як ReportRow importer: `matched` і `message` немає, коли вони null (NON_NULL). */
 const row = (
   severity: ReportSeverity,
   type: ImportReportRow['type'],
@@ -76,7 +107,15 @@ const row = (
   message: string | null,
   matched: ScoredRef | null = null,
   suggestions: ScoredRef[] = [],
-): ImportReportRow => ({ severity, type, raw, matched, suggestions, location, message });
+): ImportReportRow => ({
+  severity,
+  type,
+  raw,
+  ...(matched ? { matched } : {}),
+  suggestions,
+  location,
+  ...(message ? { message } : {}),
+});
 
 const scored = (id: Uuid, label: string, score: number): ScoredRef => ({ id, label, score });
 
@@ -539,7 +578,7 @@ const KIND_HINT: Readonly<Record<ImportKind, string>> = {
 interface ParseResult {
   report: ImportReportRow[];
   draft: unknown;
-  ai: ImportJob['ai'];
+  ai: NonNullable<ImportJob['ai']> | null;
 }
 
 /** ДЕМО-витрати: токени й вартість виклику моделі зору для одного документа. */
@@ -558,7 +597,7 @@ function parse(kind: ImportKind, fileName: string, semesterId: Uuid | null, opti
       return { report: orderReport(), draft: ORDER_35, ai: usesVision(kind, fileName) ? visionUsage(3850, 1240) : null };
     case 'DISCIPLINE_PROGRAM':
       return {
-        report: programReport(options?.groupIds ?? [], semesterId),
+        report: programReport(groupIdsOf(options), semesterId),
         draft: { ...PROGRAM_ECONOMICS, source: extensionOf(fileName) === 'pdf' ? 'PDF_TEXT' : 'TABLE' },
         ai: null,
       };
@@ -583,8 +622,12 @@ function parsedJob(
     id,
     kind,
     fileName,
+    fileType: fileTypeOf(fileName),
+    fileSize: 184_320,
     status: statusAfterParse(parsed.report),
     createdAt,
+    updatedAt: createdAt,
+    createdBy: 'admin',
     summary: summaryOf(parsed.report),
     report: parsed.report,
     draft: parsed.draft,
@@ -602,25 +645,29 @@ function parsedJob(
 /** ДЕМО-завдання: різні стани в списку. Час — відносно «зараз», вартість ШІ — оцінка. */
 function seedJobs(): StoredJob[] {
   const semester = activeSemester();
-  const fourthCourseKi = ['4КІ1', '4КІ2', '4КІ3'].map((code) => groupNamed(code).id);
+  const fourthCourseKi = ['4КІ1', '4КІ2', '4КІ3'].map((code) => groupNamed(code).code);
   const timetable = parsedJob(mockId('import-job', 'timetable-2025-26'), 'TIMETABLE_XLSX', 'Розклад 2025-2026.xlsx', hoursAgo(20), semester.id, null);
   const order = parsedJob(mockId('import-job', 'order-35-photo'), 'ORDER_DOCUMENT', 'розпорядження-35.jpg', hoursAgo(2), null, null);
   const program = parsedJob(mockId('import-job', 'program-economics'), 'DISCIPLINE_PROGRAM', 'Програма ЕУІТП.docx', hoursAgo(47), semester.id, {
-    groupIds: fourthCourseKi,
+    groupCodes: fourthCourseKi,
   });
   const failed: StoredJob = {
     id: mockId('import-job', 'curriculum-ki-budget'),
     kind: 'CURRICULUM',
     fileName: 'навчальний-план-КІ.pdf',
+    fileType: 'PDF',
+    fileSize: 2_411_520,
     status: 'FAILED',
     createdAt: hoursAgo(75),
+    updatedAt: hoursAgo(75),
+    createdBy: 'admin',
     summary: { recognized: 0, unknown: 0, conflicts: 0, warnings: 0 },
     report: [row('ERROR', 'FILE', 'навчальний-план-КІ.pdf', 'Документ', 'Скан потребує моделі зору, а денний бюджет ШІ вичерпано.')],
     draft: null,
     ai: null,
     error: `Денний бюджет ШІ ($${DAILY_BUDGET_USD.toFixed(2)}) вичерпано. Завантажте файл ще раз завтра або збільште бюджет у налаштуваннях.`,
     semesterId: semester.id,
-    options: null,
+    options: { semesterNumber: 7, groupCodes: ['4КІ1'] },
     mappings: [],
     result: null,
     pendingPolls: 0,
@@ -631,9 +678,46 @@ function seedJobs(): StoredJob[] {
 
 const jobs = createMockCollection<StoredJob>('Завдання імпорту', seedJobs);
 
-function toDto(job: StoredJob): ImportJob {
-  const { pendingPolls: _pending, aiAt: _aiAt, ...dto } = job;
+/** Чи можна застосувати — як ImportJob.canApply() importer. */
+function canApply(job: StoredJob): boolean {
+  if (job.status === 'READY') return true;
+  return job.status === 'FAILED' && job.draft !== null && job.draft !== undefined && summaryOf(job.report).conflicts === 0;
+}
+
+/** Відповідь як ImportJobDto (NON_NULL); `list` — елемент списку: порожній звіт, без чернетки, параметрів і результату. */
+function toDto(job: StoredJob, list = false): ImportJob {
+  const dto: ImportJob = {
+    id: job.id,
+    kind: job.kind,
+    fileName: job.fileName,
+    fileType: job.fileType,
+    fileSize: job.fileSize,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    createdBy: job.createdBy,
+    summary: job.summary,
+    report: list ? [] : job.report,
+    canApply: canApply(job),
+  };
+  if (job.semesterId) dto.semesterId = job.semesterId;
+  if (job.ai) dto.ai = job.ai;
+  if (job.error) dto.error = job.error;
+  if (!list) {
+    if (job.draft !== null && job.draft !== undefined) dto.draft = job.draft;
+    if (job.options) dto.options = job.options;
+    dto.mappings = job.mappings;
+    if (job.result) dto.result = job.result;
+  }
   return dto;
+}
+
+/** Групи з параметрів (importer приймає коди груп) → id каталогу для звіту й навантаження. */
+function groupIdsOf(options: ImportOptions | null): Uuid[] {
+  return (options?.groupCodes ?? []).flatMap((code) => {
+    const group = groups.all().find((g) => g.code === code);
+    return group ? [group.id] : [];
+  });
 }
 
 // ───────────────────────── Рішення щодо назв ─────────────────────────
@@ -690,9 +774,17 @@ function applyMappings(job: StoredJob, mappings: unknown): StoredJob {
         message: decision.addAlias ? `Зіставлено вручну: ${label}; написання «${r.raw}» стане псевдонімом.` : `Зіставлено вручну: ${label}.`,
       };
     }
-    return { ...r, severity: 'INFO' as const, matched: null, message: 'Буде створено новий запис каталогу.' };
+    const { matched: _matched, ...rest } = r;
+    return { ...rest, severity: 'INFO' as const, message: 'Буде створено новий запис каталогу.' };
   });
-  return { ...job, mappings: [...merged.values()], report, summary: summaryOf(report), status: statusAfterParse(report) };
+  return {
+    ...job,
+    mappings: [...merged.values()],
+    report,
+    summary: summaryOf(report),
+    status: statusAfterParse(report),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 // ───────────────────────── Застосування ─────────────────────────
@@ -760,7 +852,7 @@ function upsertLoad(job: StoredJob, entries: readonly LoadFromImport[]): { creat
   if (!semester) throw problem({ status: 422, slug: 'business-rule', code: 'IMPORT_SEMESTER_MISSING', detail: 'Семестр імпорту не знайдено.' });
   let created = 0;
   let updated = 0;
-  for (const groupId of job.options?.groupIds ?? []) {
+  for (const groupId of groupIdsOf(job.options)) {
     const group = groups.find(groupId);
     if (!group) continue;
     for (const entry of entries) {
@@ -803,13 +895,13 @@ function upsertLoad(job: StoredJob, entries: readonly LoadFromImport[]): { creat
 }
 
 /** Програма → навантаження вибраних груп: план = години на заняттях, форма контролю з таблиці. */
-function applyProgram(job: StoredJob): ImportApplyResult {
+function applyProgram(job: StoredJob): { created: number; updated: number } {
   const draft = job.draft as ProgramDraft;
   const discipline = disciplines.all().find((d) => d.name === draft.disciplineName);
   if (!discipline) {
     throw problem({ status: 422, slug: 'business-rule', code: 'IMPORT_DISCIPLINE_MISSING', detail: `Дисципліни «${draft.disciplineName ?? '—'}» немає в каталозі.` });
   }
-  const hoursPerWeek = draft.hoursPerWeek ?? 2;
+  const hoursPerWeek = job.options?.hoursPerWeek ?? draft.hoursPerWeek ?? 2;
   const planned = draft.hours?.classroom ?? 0;
   const { created, updated } = upsertLoad(job, [
     {
@@ -821,11 +913,11 @@ function applyProgram(job: StoredJob): ImportApplyResult {
       note: `Програма дисципліни: ${planned} год на заняттях (${draft.hours?.lectures ?? 0} лекц., ${draft.hours?.labs ?? 0} лаб., ${draft.hours?.seminars ?? 0} сем.).`,
     },
   ]);
-  return { message: `Години програми записано в навантаження ${created + updated} ${created + updated === 1 ? 'групи' : 'груп'}.`, created, updated };
+  return { created, updated };
 }
 
 /** Навчальний план → навантаження вибраних груп за рядками, що мають збіг у каталозі. */
-function applyCurriculum(job: StoredJob): ImportApplyResult {
+function applyCurriculum(job: StoredJob): { created: number; updated: number } {
   const draft = job.draft as CurriculumDraft;
   const entries: LoadFromImport[] = [];
   for (const planRow of draft.rows) {
@@ -842,8 +934,7 @@ function applyCurriculum(job: StoredJob): ImportApplyResult {
       note: `Навчальний план, ${draft.semester} семестр: ${planRow.hoursPerSemester ?? '—'} год.`,
     });
   }
-  const { created, updated } = upsertLoad(job, entries);
-  return { message: `Рядки навчального плану записано в навантаження: ${created + updated}.`, created, updated };
+  return upsertLoad(job, entries);
 }
 
 function finishApply(job: StoredJob): StoredJob {
@@ -861,35 +952,43 @@ function finishApply(job: StoredJob): StoredJob {
       if (createFromImport(r.type, r.raw)) createdEntities += 1;
     }
   }
+  // результат — відповіді core за кроками, як їх зберігає importer (catalog, timetable, load, changes)
+  const catalog: ImportApplyResult['catalog'] =
+    createdEntities + aliases === 0 ? { skipped: true } : { created: createdEntities, updated: aliases, unchanged: 0, ids: {}, warnings: [] };
   let result: ImportApplyResult;
   switch (job.kind) {
     case 'TIMETABLE_XLSX': {
       const lessons = Array.isArray((job.draft as TimetableDraft | null)?.lessons) ? (job.draft as TimetableDraft).lessons.length : 0;
       result = {
-        message: `Створено чернетку версії розкладу «Імпорт: ${job.fileName}» (${lessons} занять). Перевірте й опублікуйте її в редакторі розкладу.`,
-        created: createdEntities,
-        aliases,
-        versionId: mockId('timetable-version', `import:${job.id}`),
+        catalog,
+        timetable: {
+          versionId: mockId('timetable-version', `import:${job.id}`),
+          name: job.options?.versionName ?? `Імпорт з «${job.fileName}»`,
+          lessonCount: lessons,
+          hardConflicts: 0,
+          softWarnings: 0,
+        },
       };
       break;
     }
     case 'ORDER_DOCUMENT': {
       const draft = job.draft as OrderDraft;
-      result = {
-        message: `Розпорядження №${draft.number ?? '—'} записано як історичні зміни: ${draft.rows.length - 1} рядків (повтор пропущено).`,
-        created: createdEntities,
-        aliases,
-      };
+      // core ще не має POST /api/admin/import/changes (integration.md §5.15) — мок лише рахує рядки
+      result = { changes: { date: draft.date, rows: draft.rows.length } };
       break;
     }
-    case 'DISCIPLINE_PROGRAM':
-      result = { ...applyProgram(job), aliases };
+    case 'DISCIPLINE_PROGRAM': {
+      const load = applyProgram(job);
+      result = { catalog, load: { ...load, unchanged: 0, ids: {} } };
       break;
-    case 'CURRICULUM':
-      result = { ...applyCurriculum(job), aliases };
+    }
+    case 'CURRICULUM': {
+      const load = applyCurriculum(job);
+      result = { catalog, load: { ...load, unchanged: 0, ids: {} } };
       break;
+    }
   }
-  return { ...job, status: 'APPLIED', result };
+  return { ...job, status: 'APPLIED', result, updatedAt: new Date().toISOString() };
 }
 
 /** Крок стану за одне опитування. */
@@ -929,11 +1028,58 @@ function aiUsageToday(): AiUsageDto {
       costUsd: Math.round(spent.reduce((sum, j) => sum + (j.ai?.costUsd ?? 0), 0) * 10_000) / 10_000,
     },
     dailyBudgetUsd: DAILY_BUDGET_USD,
+    remainingUsd: Math.max(0, Math.round((DAILY_BUDGET_USD - spent.reduce((sum, j) => sum + (j.ai?.costUsd ?? 0), 0)) * 10_000) / 10_000),
     model: { text: TEXT_MODEL, vision: VISION_MODEL },
+    enabled: true,
   };
 }
 
 // ───────────────────────── Обробники ─────────────────────────
+
+const OPTION_KEYS = ['sheet', 'versionName', 'semesterNumber', 'groupCodes', 'hoursPerWeek'] as const;
+
+/**
+ * Параметри завантаження — як JobOptions.from в importer: лише відомі ключі (інший → 400 на `options.<ключ>`),
+ * рядки до 100 символів, семестр плану 1..8, коди груп — масив рядків, години 0 < x ≤ 40.
+ */
+function parseOptions(value: unknown, errors: Array<{ field: string; message: string }>): ImportOptions | null {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    errors.push({ field: 'options', message: "Параметри мають бути JSON-об'єктом." });
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const options: ImportOptions = {};
+  for (const key of Object.keys(raw)) {
+    if (!(OPTION_KEYS as readonly string[]).includes(key)) {
+      errors.push({ field: `options.${key}`, message: `Невідомий параметр. Допустимі: ${[...OPTION_KEYS].sort().join(', ')}.` });
+    }
+  }
+  for (const key of ['sheet', 'versionName'] as const) {
+    const text = raw[key];
+    if (text === undefined || text === null) continue;
+    if (typeof text !== 'string' || !text.trim() || text.length > 100) errors.push({ field: `options.${key}`, message: 'Непорожній рядок до 100 символів.' });
+    else options[key] = text.trim();
+  }
+  const semester = raw.semesterNumber;
+  if (semester !== undefined && semester !== null) {
+    if (typeof semester !== 'number' || !Number.isInteger(semester) || semester < 1 || semester > 8) {
+      errors.push({ field: 'options.semesterNumber', message: 'Номер семестру навчального плану — ціле число від 1 до 8.' });
+    } else options.semesterNumber = semester;
+  }
+  const codes = raw.groupCodes;
+  if (codes !== undefined && codes !== null) {
+    if (!Array.isArray(codes) || codes.some((code) => typeof code !== 'string' || !groups.all().some((g) => g.code === code))) {
+      errors.push({ field: 'options.groupCodes', message: 'Коди груп — масив рядків, наприклад ["4КІ1", "4КІ2"].' });
+    } else options.groupCodes = [...new Set(codes as string[])];
+  }
+  const hours = raw.hoursPerWeek;
+  if (hours !== undefined && hours !== null) {
+    if (typeof hours !== 'number' || hours <= 0 || hours > 40) errors.push({ field: 'options.hoursPerWeek', message: 'Годин на тиждень — додатне число не більше 40.' });
+    else options.hoursPerWeek = hours;
+  }
+  return options;
+}
 
 /** Файл із multipart: перевіряємо форму, а не клас (у Vitest File з jsdom і з Node — різні класи). */
 function isUploadedFile(value: FormDataEntryValue | null): value is File {
@@ -962,9 +1108,10 @@ async function readUpload(request: Request): Promise<{ file: File; kind: ImportK
   let options: ImportOptions | null = null;
   if (typeof rawOptions === 'string' && rawOptions) {
     try {
-      options = JSON.parse(rawOptions) as ImportOptions;
+      const parsed: unknown = JSON.parse(rawOptions);
+      options = parseOptions(parsed, errors);
     } catch {
-      errors.push({ field: 'options', message: 'Параметри мають бути JSON.' });
+      errors.push({ field: 'options', message: 'Параметри мають бути JSON-об\'єктом.' });
     }
   }
   if (errors.length > 0) throw badRequest('Перевірте файл і параметри.', errors);
@@ -981,8 +1128,11 @@ async function readUpload(request: Request): Promise<{ file: File; kind: ImportK
       detail: `${KIND_HINT[typedKind]} Файл «${upload.name}» має інший формат.`,
     });
   }
-  if ((typedKind === 'DISCIPLINE_PROGRAM' || typedKind === 'CURRICULUM') && !(options?.groupIds?.length)) {
-    throw badRequest('Виберіть групи.', [{ field: 'options.groupIds', message: 'Вкажіть групи, яким читається дисципліна за цим документом.' }]);
+  // як CurriculumImportHandler.acceptUpload: для навчального плану семестр плану обовʼязковий одразу
+  if (typedKind === 'CURRICULUM' && options?.semesterNumber === undefined) {
+    throw badRequest('Перевірте файл і параметри.', [
+      { field: 'options.semesterNumber', message: 'Вкажіть номер семестру навчального плану (1–8), який треба розпізнати.' },
+    ]);
   }
   return { file: upload, kind: typedKind, semesterId: (semesterId as string | null) ?? null, options };
 }
@@ -997,18 +1147,24 @@ export const handlers = [
       .map(advance)
       .filter((j) => (!kind || j.kind === kind) && (!status || j.status === status))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || ukCollator.compare(a.fileName, b.fileName))
-      .map(toDto);
-    return HttpResponse.json(list);
+      .map((job) => toDto(job, true));
+    // як importer: сторінка {items,page,size,total}, size 1..100
+    return HttpResponse.json(paginate(list, url, 20, 100));
   }),
   http.get(apiPath('/import/jobs/:id'), ({ params }) => HttpResponse.json(toDto(advance(jobs.get(String(params.id)))))),
   http.post(apiPath('/import/jobs'), async ({ request }) => {
     const { file, kind, semesterId, options } = await readUpload(request);
+    const now = new Date().toISOString();
     const job = jobs.insert({
       id: mockId('import-job', crypto.randomUUID()),
       kind,
       fileName: file.name,
+      fileType: fileTypeOf(file.name),
+      fileSize: file.size,
       status: 'UPLOADED',
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+      createdBy: 'admin',
       summary: { recognized: 0, unknown: 0, conflicts: 0, warnings: 0 },
       report: [],
       draft: null,
@@ -1029,16 +1185,33 @@ export const handlers = [
     const next = applyMappings(job, body.mappings);
     return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
   }),
-  http.post(apiPath('/import/jobs/:id/apply'), ({ params }) => {
+  // як ImportJobService.requestApply: ідемпотентно для APPLIED/APPLYING, 409 під час розбору, 422 з кодами правил
+  http.post(apiPath('/import/jobs/:id/apply'), async ({ params, request }) => {
     const job = jobs.get(String(params.id));
+    const text = await request.text();
+    const body = text ? (JSON.parse(text) as { semesterId?: Uuid | null }) : {};
+    if (job.status === 'APPLIED' || job.status === 'APPLYING') return HttpResponse.json(toDto(job), { status: 202 });
+    if (job.status === 'UPLOADED' || job.status === 'PARSING') throw conflict('Файл ще обробляється — зачекайте завершення розбору.');
     if (job.status === 'NEEDS_REVIEW') {
-      throw conflict(`Спершу вирішіть рядки, що чекають рішення: ${job.summary.conflicts}.`);
+      throw businessRule(
+        'IMPORT_NEEDS_REVIEW',
+        "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів.",
+      );
     }
-    if (job.status !== 'READY' && job.status !== 'FAILED') {
-      throw conflict(job.status === 'APPLIED' ? 'Цей імпорт уже застосовано.' : 'Імпорт ще розбирається або вже застосовується.');
+    if (!canApply(job)) throw businessRule('IMPORT_FAILED', 'Файл не вдалося розібрати — завантажте його ще раз.');
+    const semesterId = body.semesterId ?? job.semesterId;
+    if (job.kind !== 'ORDER_DOCUMENT' && !semesterId) throw businessRule('SEMESTER_REQUIRED', 'Оберіть семестр, у який застосувати імпорт.');
+    if ((job.kind === 'DISCIPLINE_PROGRAM' || job.kind === 'CURRICULUM') && !job.options?.groupCodes?.length) {
+      throw businessRule('GROUPS_REQUIRED', 'Під час завантаження вкажіть групи (options.groupCodes), яким додати навантаження.');
     }
-    if (job.status === 'FAILED' && !job.draft) throw conflict('Чернетки немає: завантажте файл ще раз.');
-    const next = jobs.update(job.id, (current) => ({ ...current, status: 'APPLYING', pendingPolls: 2, error: null }));
+    const next = jobs.update(job.id, (current) => ({
+      ...current,
+      semesterId: semesterId ?? null,
+      status: 'APPLYING',
+      pendingPolls: 2,
+      error: null,
+      updatedAt: new Date().toISOString(),
+    }));
     return HttpResponse.json(toDto(next), { status: 202 });
   }),
   http.get(apiPath('/import/ai/usage'), () => HttpResponse.json(aiUsageToday())),

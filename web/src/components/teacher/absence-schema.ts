@@ -3,12 +3,13 @@ import type { AbsenceReasonCategory, IsoDate, MyAbsenceRequest } from '@/api/typ
 import { compareIsoDates, isIsoDate } from '@/lib/date';
 
 export const REASONS = ['SICK_LEAVE', 'VACATION', 'BUSINESS_TRIP', 'PERSONAL', 'OTHER'] as const satisfies readonly AbsenceReasonCategory[];
-export const COMMENT_MAX = 500;
+/** Межа core (`@Size(max = 1000)`). */
+export const COMMENT_MAX = 1000;
 export const ALL_PAIRS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 /**
- * Форма відсутності. `today` — сьогодні за Києвом: минулу відсутність повідомити не можна
- * (сервер перевіряє те саме і відповідає 422).
+ * Форма відсутності. `today` — сьогодні за Києвом: відсутність, що вже закінчилась, повідомити не можна
+ * (core: 422 `ABSENCE_IN_PAST`, коли dateTo раніше за сьогодні); ту, що вже триває, — можна.
  */
 export function absenceSchema(today: IsoDate) {
   return z
@@ -21,8 +22,8 @@ export function absenceSchema(today: IsoDate) {
       comment: z.string().max(COMMENT_MAX, `Не більше ${COMMENT_MAX} символів`),
     })
     .superRefine((values, ctx) => {
-      if (isIsoDate(values.dateFrom) && compareIsoDates(values.dateFrom, today) < 0) {
-        ctx.addIssue({ code: 'custom', path: ['dateFrom'], message: 'Можна повідомити лише на сьогодні чи майбутні дати' });
+      if (isIsoDate(values.dateTo) && compareIsoDates(values.dateTo, today) < 0) {
+        ctx.addIssue({ code: 'custom', path: ['dateTo'], message: 'Ця відсутність уже минула — вкажіть поточну чи майбутню' });
       }
       if (isIsoDate(values.dateFrom) && isIsoDate(values.dateTo) && compareIsoDates(values.dateTo, values.dateFrom) < 0) {
         ctx.addIssue({ code: 'custom', path: ['dateTo'], message: 'Не раніше за дату початку' });

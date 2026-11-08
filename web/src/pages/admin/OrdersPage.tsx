@@ -68,7 +68,8 @@ export default function OrdersPage() {
   const meta = usePublicMeta();
   useDailyLiveSync();
   const fresh = useFreshSources();
-  const semester = meta.data ? { startsOn: meta.data.semester.startsOn, endsOn: meta.data.semester.endsOn } : null;
+  // без семестру (null) межі не перевіряємо в клієнті: сервер сам відповість 422 для дати поза семестром
+  const semester = meta.data?.semester ?? null;
   const inSemester = !semester || (compareIsoDates(date, semester.startsOn) >= 0 && compareIsoDates(date, semester.endsOn) <= 0);
   const weekend = isWeekend(date);
 
