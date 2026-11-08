@@ -11,7 +11,7 @@ const minutes = LIMITS.confirmTimeoutMinutes;
 const hours = LIMITS.hoursPerPair;
 
 export const settingsSchema = z.object({
-  approvalMode: z.enum(['AUTO', 'CONFIRM'], { error: 'Оберіть режим погодження замін' }),
+  approvalMode: z.enum(['NOTIFY', 'CONFIRM', 'AUTO'], { error: 'Оберіть режим погодження замін' }),
   confirmTimeoutMinutes: z
     .number({ error: 'Вкажіть, скільки хвилин чекати' })
     .int({ error: 'Лише ціле число хвилин' })

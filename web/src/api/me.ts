@@ -59,6 +59,16 @@ export interface ReplyVariables {
 const REPLY_STATUS: Record<ReplyDecision, ChangeStatus> = { CONFIRM: 'CONFIRMED', DECLINE: 'DECLINED' };
 
 /**
+ * Стан заміни після відповіді — як у core. Прохання (CONFIRM) переходить у CONFIRMED чи DECLINED. Повідомлення
+ * (NOTIFY): «Добре» лишає статус, «Не можу» відхиляє ще не опубліковану заміну, а опубліковану лишає (заперечення).
+ */
+export function answered(change: ChangeDto, decision: ReplyDecision, at: string): ChangeDto {
+  if (change.approvalMode !== 'NOTIFY') return { ...change, status: REPLY_STATUS[decision], respondedAt: at, teacherAnswer: decision };
+  const status = decision === 'DECLINE' && change.status === 'CONFIRMED' ? 'DECLINED' : change.status;
+  return { ...change, status, respondedAt: at, teacherAnswer: decision };
+}
+
+/**
  * POST /api/me/changes/{id}/confirm|decline. Оптимістично: картка одразу переходить у новий стан,
  * а якщо сервер відмовив — повертається назад і зʼявляється пояснення.
  */
@@ -74,9 +84,7 @@ export function useReplyToChange() {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<ChangeDto[]>(key);
       queryClient.setQueryData<ChangeDto[]>(key, (list) =>
-        list?.map((change) =>
-          change.id === id ? { ...change, status: REPLY_STATUS[decision], respondedAt: new Date().toISOString() } : change,
-        ),
+        list?.map((change) => (change.id === id ? answered(change, decision, new Date().toISOString()) : change)),
       );
       return { previous };
     },

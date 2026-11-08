@@ -4,17 +4,13 @@ import { useServerEvent } from '@/api/live';
 import { useMyChanges, useReplyToChange } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
 import { ErrorState, Skeleton, notify } from '@/components/ui';
-import { compareIsoDates } from '@/lib/date';
-import { changeTitle } from './change-text';
+import { todayInKyiv } from '@/lib/date';
+import { awaitingAnswer, changeTitle, isUnansweredNotice } from './change-text';
 import { SubstitutionCard } from './SubstitutionCard';
 
-function byDateAndPair(a: ChangeDto, b: ChangeDto): number {
-  return compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom;
-}
-
 /**
- * Запити на заміну, що чекають моєї відповіді. Нові приходять наживо (SSE `change.updated`) — з
- * підсвіткою картки й сповіщенням; відповідь оптимістична (src/api/me.ts → useReplyToChange).
+ * Заміни, що чекають моєї відповіді. Нові приходять наживо (SSE `change.updated`) — з підсвіткою картки й
+ * сповіщенням; відповідь оптимістична (src/api/me.ts → useReplyToChange).
  */
 export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   const changes = useMyChanges();
@@ -22,22 +18,35 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   const [fresh, setFresh] = useState<ReadonlySet<Uuid>>(new Set());
 
   useServerEvent('change.updated', (change) => {
-    if (change.new.teacher?.id !== teacherId || change.status !== 'PENDING_CONFIRMATION') return;
+    if (change.new.teacher?.id !== teacherId) return;
+    const request = change.status === 'PENDING_CONFIRMATION';
+    const notice = isUnansweredNotice(change, todayInKyiv()) && change.history.length === 1;
+    if (!request && !notice) return;
     setFresh((current) => new Set(current).add(change.id));
-    notify.info('Новий запит на заміну', { description: changeTitle(change) });
+    notify.info(notice ? 'Вам поставили заміну' : 'Новий запит на заміну', { description: changeTitle(change) });
   });
 
-  const pending = (changes.data ?? []).filter((c) => c.status === 'PENDING_CONFIRMATION').sort(byDateAndPair);
+  const waiting = awaitingAnswer(changes.data ?? [], todayInKyiv());
 
   const confirm = (change: ChangeDto) =>
     reply.mutate(
       { id: change.id, decision: 'CONFIRM' },
-      { onSuccess: () => notify.success('Заміну підтверджено', { description: `${changeTitle(change)}. Пара зʼявиться у вашому розкладі.` }) },
+      {
+        onSuccess: () =>
+          change.approvalMode === 'NOTIFY'
+            ? notify.success('Дякуємо!', { description: `${changeTitle(change)}. Пара вже у вашому розкладі.` })
+            : notify.success('Заміну підтверджено', { description: `${changeTitle(change)}. Пара зʼявиться у вашому розкладі.` }),
+      },
     );
   const decline = (change: ChangeDto, comment: string) =>
     reply.mutate(
       { id: change.id, decision: 'DECLINE', comment },
-      { onSuccess: () => notify.info('Ви відмовилися від заміни', { description: 'Диспетчер побачить відповідь і підбере іншого викладача.' }) },
+      {
+        onSuccess: (updated) =>
+          updated.status === 'APPLIED'
+            ? notify.info('Диспетчера повідомлено', { description: 'Заміна вже в розпорядженні — диспетчер внесе доповнення.' })
+            : notify.info('Ви відмовилися від заміни', { description: 'Диспетчер побачить відповідь і обере інший варіант.' }),
+      },
     );
 
   let body;
@@ -54,17 +63,17 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
         className="rounded-panel border border-default bg-surface"
       />
     );
-  } else if (pending.length === 0) {
+  } else if (waiting.length === 0) {
     body = (
       <p className="flex items-center gap-2 rounded-panel border border-default bg-surface px-4 py-3 text-ui text-secondary">
         <CircleCheck aria-hidden="true" className="size-4 text-add" />
-        Нових запитів на заміну немає. Коли диспетчер попросить вас замінити колегу, запит зʼявиться тут і в Telegram.
+        Нових замін немає. Коли диспетчер поставить вас на заміну, вона зʼявиться тут і в Telegram.
       </p>
     );
   } else {
     body = (
       <ul className="flex flex-col gap-3">
-        {pending.map((change) => (
+        {waiting.map((change) => (
           <li key={change.id}>
             <SubstitutionCard
               change={change}
@@ -81,10 +90,10 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   return (
     <section aria-labelledby="requests-heading" className="flex flex-col gap-3">
       <h2 id="requests-heading" className="flex items-center gap-2 text-title font-semibold text-primary">
-        Запити на заміну
-        {pending.length > 0 ? (
+        Нові заміни
+        {waiting.length > 0 ? (
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-change px-1.5 text-caption font-bold text-on-change figures">
-            {pending.length}
+            {waiting.length}
           </span>
         ) : null}
       </h2>

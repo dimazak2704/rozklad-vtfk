@@ -63,7 +63,8 @@ async function freeLesson(): Promise<{ date: string; lesson: Lesson; option: Opt
   throw new Error('До кінця семестру немає вільного дня для сценарію заміни: перезаповніть стенд (reset-data, seed)');
 }
 
-test('відсутність → заміна Непийводою → вона підтверджує в кабінеті → розпорядження → заміна на сайті', async ({ page, browser, baseURL }) => {
+// стенд працює в типовому режимі NOTIFY: диспетчер призначає, викладачка відповідає «Добре» в кабінеті
+test('відсутність → Непийводу призначено → вона відповідає «Добре» в кабінеті → розпорядження → заміна на сайті', async ({ page, browser, baseURL }) => {
   const { date, lesson, option } = await freeLesson();
   const group = lesson.group.code;
 
@@ -85,24 +86,24 @@ test('відсутність → заміна Непийводою → вона 
   // 2. Пара відкрита, серед варіантів «інша дисципліна» — пара Непийводи
   const decision = page.getByRole('region', { name: 'Рішення щодо пари' });
   await page.getByRole('tab', { name: /Інша дисципліна/ }).click();
-  await page.getByRole('button', { name: `Обрати: ${option.title}` }).click();
-  await expect(decision.getByText('Чекає відповіді')).toBeVisible();
+  await page.getByRole('button', { name: `Призначити: ${option.title}` }).click();
+  await expect(decision.getByText('Підтверджено', { exact: true }).first()).toBeVisible();
 
-  // 3. Непийвода у своєму кабінеті бачить запит і підтверджує
+  // 3. Непийвода у своєму кабінеті бачить нову заміну і відповідає «Добре»
   const teacher = await pageAs(browser, 'TEACHER2', baseURL ?? '', '/me');
   try {
     await expect(teacher.getByRole('heading', { level: 1 })).toHaveText('Мій розклад', { timeout: 30_000 });
-    const request = teacher.getByRole('article', { name: new RegExp(`^Запит на заміну: ${group}, .*${lesson.pair} пара$`) });
-    await expect(request).toBeVisible();
-    await request.getByRole('button', { name: 'Підтверджую' }).click();
-    await expect(teacher.getByText('Заміну підтверджено')).toBeVisible();
-    await expect(request).toHaveCount(0);
+    const notice = teacher.getByRole('article', { name: new RegExp(`^Нова заміна: ${group}, .*${lesson.pair} пара$`) });
+    await expect(notice).toBeVisible();
+    await notice.getByRole('button', { name: 'Добре' }).click();
+    await expect(teacher.getByText('Дякуємо!')).toBeVisible();
+    await expect(notice).toHaveCount(0);
   } finally {
     await teacher.context().close();
   }
 
-  // 4. У диспетчера стан оновився сам (SSE): підтверджено, рядок у чернетці розпорядження
-  await expect(decision.getByText('Підтверджено', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+  // 4. У диспетчера відповідь видно сама (SSE): «Добре», рядок у чернетці розпорядження
+  await expect(decision.getByText('«Добре»').first()).toBeVisible({ timeout: 20_000 });
   await decision.getByRole('link', { name: 'Переглянути чернетку' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Розпорядження' })).toBeVisible();
   const draft = page.getByRole('article', { name: /\(чернетка\)$/ });

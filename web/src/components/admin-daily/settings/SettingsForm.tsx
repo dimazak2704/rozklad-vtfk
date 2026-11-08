@@ -6,7 +6,7 @@ import { useBlocker } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { useBellProfiles } from '@/api/public';
 import { useUpdateSettings } from '@/api/settings';
-import type { BellProfileDto, SettingsDto } from '@/api/types';
+import type { ApprovalMode, BellProfileDto, SettingsDto } from '@/api/types';
 import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, Select, Switch, toastClearanceRef } from '@/components/ui';
 import { LIMITS, settingsSchema, type SettingsFormValues } from './schema';
 
@@ -118,26 +118,31 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
 
       <SettingsSection
         title="Заміни"
-        description="Як підтверджуються заміни і скільки чекати відповіді викладача, перш ніж нагадати диспетчеру."
+        description="Що відбувається, коли ви обираєте викладача на заміну."
       >
         <Controller
           control={control}
           name="approvalMode"
           render={({ field }) => (
-            <RadioGroup<'AUTO' | 'CONFIRM'>
-              legend="Режим погодження"
+            <RadioGroup<ApprovalMode>
+              legend="Як призначати заміну"
               value={field.value}
               onValueChange={field.onChange}
               options={[
                 {
+                  value: 'NOTIFY',
+                  label: 'Призначити й повідомити',
+                  description: 'Заміна діє одразу. Викладач отримує повідомлення в Telegram і може відповісти «Добре» або «Не можу».',
+                },
+                {
                   value: 'CONFIRM',
-                  label: 'Із підтвердженням у Telegram',
-                  description: 'Викладач отримує запит із кнопками «Підтверджую» / «Не можу». До розпорядження йдуть лише підтверджені.',
+                  label: 'Чекати згоди викладача',
+                  description: 'Викладач отримує прохання з кнопками «Підтверджую» / «Не можу». У розпорядження йдуть лише підтверджені.',
                 },
                 {
                   value: 'AUTO',
-                  label: 'Автоматично',
-                  description: 'Заміна підтверджується одразу після вибору диспетчера; викладач лише отримує повідомлення.',
+                  label: 'Призначити без повідомлення',
+                  description: 'Заміна діє одразу, викладачу нічого не надсилаємо. Він дізнається з розпорядження.',
                 },
               ]}
             />
@@ -146,8 +151,8 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
         <Field
           label="Скільки чекати відповіді"
           hint={
-            mode === 'AUTO'
-              ? 'У режимі «Автоматично» не використовується.'
+            mode !== 'CONFIRM'
+              ? 'Лише для режиму «Чекати згоди викладача».'
               : `Після цього строку диспетчер бачить нагадування на панелі й у чаті диспетчерів. ${LIMITS.confirmTimeoutMinutes.min}–${LIMITS.confirmTimeoutMinutes.max} хв.`
           }
           error={formState.errors.confirmTimeoutMinutes?.message}
@@ -166,7 +171,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
                 step={5}
                 unit="хв"
                 className="w-40"
-                disabled={mode === 'AUTO'}
+                disabled={mode !== 'CONFIRM'}
               />
             )}
           />

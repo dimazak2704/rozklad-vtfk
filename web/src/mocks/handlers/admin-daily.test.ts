@@ -208,6 +208,29 @@ describe('варіанти й зміни', () => {
     expect(change.confirmDeadline).toBeNull();
   });
 
+  it('у режимі NOTIFY заміна одразу діє, «Не можу» до розпорядження її відхиляє, повтор — та сама відповідь', async () => {
+    const settings = await api.get<SettingsDto>('/admin/settings');
+    await api.put('/admin/settings', { ...settings, approvalMode: 'NOTIFY' });
+    const { lesson } = await firstLessonOf('Погосян');
+    const { options } = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
+    const teacherId = options.find((o) => o.kind === 'REPLACE_TEACHER')?.teacher?.id;
+    const change = await api.post<ChangeDto>('/admin/changes', {
+      kind: 'REPLACE_TEACHER',
+      date: DAY,
+      pairFrom: lesson.lesson.pair,
+      groupId: lesson.lesson.group.id,
+      originalLessonId: lesson.lesson.id,
+      newTeacherId: teacherId,
+      reasonCode: 'ABSENT',
+    });
+    expect(change).toMatchObject({ status: 'CONFIRMED', approvalMode: 'NOTIFY', confirmDeadline: null, teacherAnswer: null });
+    const declined = await api.post<ChangeDto>(`/internal/changes/${change.id}/reply`, { teacherId, decision: 'DECLINE' });
+    expect(declined).toMatchObject({ status: 'DECLINED', teacherAnswer: 'DECLINE' });
+    const again = await api.post<ChangeDto>(`/internal/changes/${change.id}/reply`, { teacherId, decision: 'DECLINE' });
+    expect(again.version).toBe(declined.version);
+    expect((await failure(api.post(`/internal/changes/${change.id}/reply`, { teacherId, decision: 'CONFIRM' }))).status).toBe(409);
+  });
+
   it('відповідь з Telegram: чужий викладач — 403, повторна — 409, нагадування лише для очікування', async () => {
     const changes = await api.get<ChangeDto[]>('/admin/changes', { date: DAY, status: 'PENDING_CONFIRMATION' });
     const pending = changes[0];

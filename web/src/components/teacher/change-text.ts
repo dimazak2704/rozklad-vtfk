@@ -1,7 +1,7 @@
 /** Тексти для карток запитів на заміну: що саме треба провести і замість кого. */
-import type { ChangeDto } from '@/api/types';
+import type { ChangeDto, IsoDate } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
-import { formatWeekdayDate, relativeDayLabel, todayInKyiv } from '@/lib/date';
+import { compareIsoDates, formatWeekdayDate, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { REASON_CODE_LABEL } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 
@@ -54,5 +54,28 @@ export function changeStatusBadge(change: ChangeDto): { label: string; tone: Bad
     }
     return { label: 'Змінено доповненням', tone: 'change' };
   }
+  // NOTIFY: «Не можу» після публікації — заміна ще в розпорядженні, доки диспетчер не внесе доповнення
+  if (change.status === 'APPLIED' && change.teacherAnswer === 'DECLINE' && change.approvalMode === 'NOTIFY') {
+    return { label: 'Ви повідомили, що не можете', tone: 'cancel' };
+  }
   return STATUS[change.status];
+}
+
+function byDateAndPair(a: ChangeDto, b: ChangeDto): number {
+  return compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom;
+}
+
+/** Повідомлення NOTIFY, на яке ще не відповіли: заміна вже діє, викладач може сказати «Добре» чи «Не можу». */
+export function isUnansweredNotice(change: ChangeDto, today: IsoDate): boolean {
+  return (
+    change.approvalMode === 'NOTIFY' &&
+    !change.teacherAnswer &&
+    (change.status === 'CONFIRMED' || change.status === 'APPLIED') &&
+    compareIsoDates(change.date, today) >= 0
+  );
+}
+
+/** Що чекає моєї відповіді: прохання (CONFIRM) і нові заміни, про які мені повідомили (NOTIFY). */
+export function awaitingAnswer(changes: readonly ChangeDto[], today: IsoDate): ChangeDto[] {
+  return changes.filter((c) => c.status === 'PENDING_CONFIRMATION' || isUnansweredNotice(c, today)).sort(byDateAndPair);
 }

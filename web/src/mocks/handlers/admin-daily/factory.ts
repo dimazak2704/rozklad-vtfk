@@ -47,10 +47,16 @@ export function historyEntry(at: Date, actor: string, from: ChangeStatus | null,
   return { at: at.toISOString(), actor, from, to, comment };
 }
 
-export function createdComment(status: ChangeStatus, kind: ChangeKind): string | null {
+export function createdComment(status: ChangeStatus, kind: ChangeKind, mode: ApprovalMode = 'AUTO'): string | null {
   if (status === 'PENDING_CONFIRMATION') return 'Запит на підтвердження надіслано в Telegram';
   if (kind === 'CANCEL') return null;
+  if (mode === 'NOTIFY') return 'Створено і підтверджено, викладачу надіслано повідомлення';
   return 'Підтверджено без запиту: режим «Автоматично»';
+}
+
+/** Як ChangeWorkflow.open у core: без нового викладача — AUTO, інакше режим налаштувань. */
+export function changeApprovalMode(kind: ChangeKind, newTeacher: TeacherRef | null | undefined, mode: ApprovalMode): ApprovalMode {
+  return newTeacher && kind !== 'CANCEL' ? mode : 'AUTO';
 }
 
 export function makeChange(
@@ -93,8 +99,10 @@ export function makeChange(
       status === 'PENDING_CONFIRMATION' ? new Date(options.at.getTime() + options.timeoutMinutes * 60_000).toISOString() : null,
     respondedAt: null,
     orderId: null,
-    history: [historyEntry(options.at, options.actor, null, status, createdComment(status, input.kind))],
-    approvalMode: options.mode,
+    history: [
+      historyEntry(options.at, options.actor, null, status, createdComment(status, input.kind, changeApprovalMode(input.kind, newTeacher, options.mode))),
+    ],
+    approvalMode: options.mode === 'NOTIFY' ? changeApprovalMode(input.kind, newTeacher, options.mode) : options.mode,
     originalLessonId: lesson?.id ?? null,
     swapLessonId: swap?.id ?? null,
     swapFromPair: swap?.pair ?? null,
@@ -105,6 +113,7 @@ export function makeChange(
     createdAt: options.at.toISOString(),
     version: 0,
     supersededBy: null,
+    teacherAnswer: null,
   };
 }
 

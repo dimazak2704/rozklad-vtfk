@@ -62,8 +62,9 @@ test.describe('щоденна робота диспетчера', () => {
     // 2. Перша пара відсутнього вже відкрита — обираємо найкращого кандидата
     const lesson = page.getByRole('button', { name: /2ВЕ/ }).filter({ hasText: 'Потрібне рішення' });
     await expect(lesson).toHaveAttribute('aria-current', 'true');
-    const best = page.getByRole('button', { name: /^Обрати:/ }).first();
-    const candidate = ((await best.getAttribute('aria-label')) ?? '').replace('Обрати: ', '');
+    // мок працює в режимі CONFIRM: вибір викладача надсилає йому прохання
+    const best = page.getByRole('button', { name: /^Надіслати прохання:/ }).first();
+    const candidate = ((await best.getAttribute('aria-label')) ?? '').replace('Надіслати прохання: ', '');
     expect(candidate).not.toBe('');
     await best.click();
 

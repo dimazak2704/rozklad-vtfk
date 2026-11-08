@@ -84,11 +84,13 @@ interface OptionRowProps {
   best: boolean;
   busy: boolean;
   disabled: boolean;
+  /** Напис кнопки вибору: «Призначити», «Надіслати прохання» чи «Обрати» (model.pickLabel). */
+  pickLabel?: string;
   onPick: (option: ChangeOption) => void;
 }
 
 /** Варіант рішення: хто чи що, оцінка смугою, причини чипами, «Чому?» і кнопка вибору. */
-export function OptionRow({ option, rank, best, busy, disabled, onPick }: OptionRowProps) {
+export function OptionRow({ option, rank, best, busy, disabled, pickLabel = 'Обрати', onPick }: OptionRowProps) {
   const chips = [
     ...option.reasons.map((text) => ({ text, warning: false })),
     ...option.warnings.map((text) => ({ text, warning: true })),
@@ -120,10 +122,10 @@ export function OptionRow({ option, rank, best, busy, disabled, onPick }: Option
           loading={busy}
           disabled={disabled || incomplete}
           onClick={() => onPick(option)}
-          aria-label={`Обрати: ${option.title}`}
+          aria-label={`${pickLabel}: ${option.title}`}
           aria-keyshortcuts={rank <= 9 ? String(rank) : undefined}
         >
-          Обрати
+          {pickLabel}
         </Button>
       </div>
       {chips.length > 0 ? (

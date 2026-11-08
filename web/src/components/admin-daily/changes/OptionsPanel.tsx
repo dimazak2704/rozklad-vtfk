@@ -2,6 +2,7 @@ import { DoorOpen, MonitorSmartphone } from 'lucide-react';
 import { useMemo } from 'react';
 import { Tabs as RadixTabs } from 'radix-ui';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
+import { useSettings } from '@/api/settings';
 import type { ReasonCode } from '@/api/types';
 import { EmptyState, ErrorState, LoadingRegion, Plate, Skeleton, Tabs, TabsContent } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -10,7 +11,7 @@ import { lineAttr } from '@/lib/discipline-color';
 import { ABSENCE_REASON_LABEL, subgroupLabel } from '@/lib/labels';
 import { lessonTime } from '@/lib/schedule';
 import { absencePeriod } from '../format';
-import { isOpen, OPTION_TABS, optionKey, optionsByKind, type LessonEntry, type OptionTab } from '../model';
+import { isOpen, OPTION_TABS, optionKey, optionsByKind, pickLabel, type LessonEntry, type OptionTab } from '../model';
 import { DecisionCard } from './DecisionCard';
 import { ReasonPicker } from './ReasonPicker';
 import { OptionRow } from './OptionRow';
@@ -89,6 +90,8 @@ export function OptionsPanel(props: OptionsPanelProps) {
   const open = isOpen(entry.state);
   const options = useLessonOptions(open ? entry.item.lesson.id : null);
   const grouped = useMemo(() => optionsByKind(options.data?.options ?? []), [options.data]);
+  // режим погодження визначає, що станеться після вибору: призначення (NOTIFY, AUTO) чи прохання (CONFIRM)
+  const approvalMode = useSettings().data?.approvalMode;
 
   return (
     <div className="@container flex flex-col gap-4">
@@ -167,6 +170,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
                             best={index === 0}
                             busy={pickingKey === optionKey(option)}
                             disabled={pickingKey !== null}
+                            pickLabel={pickLabel(option, approvalMode)}
                             onPick={onPick}
                           />
                         ))}

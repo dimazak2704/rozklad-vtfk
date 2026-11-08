@@ -22,6 +22,7 @@ export const DELIVERY_PURPOSE_LABEL: Record<DeliveryPurpose, string> = {
   ORDER_TEACHER: 'Розпорядження викладачу',
   ORDER_ADMIN: 'Розпорядження диспетчерам',
   SUBSTITUTION_REQUEST: 'Запит на підтвердження заміни',
+  SUBSTITUTION_NOTICE: 'Повідомлення про заміну',
   SUBSTITUTION_REMINDER: 'Нагадування про заміну',
   SUBSTITUTION_STATUS: 'Зміна стану заміни',
   SUBSTITUTION_ADMIN: 'Заміна — диспетчерам',

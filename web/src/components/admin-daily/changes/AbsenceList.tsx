@@ -10,6 +10,7 @@ const SEGMENT_FILL: Record<LessonState, string> = {
   uncovered: 'bg-[var(--fill-cancel)]',
   declined: 'bg-[var(--fill-cancel)]',
   substituteAbsent: 'bg-[var(--fill-cancel)]',
+  objected: 'bg-[var(--fill-cancel)]',
   pending: 'bg-[var(--fill-change)]',
   confirmed: 'bg-[var(--fill-add)]',
   applied: 'bg-[var(--fill-accent)]',

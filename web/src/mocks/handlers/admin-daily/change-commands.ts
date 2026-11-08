@@ -438,6 +438,7 @@ export function replyToChange(id: Uuid, teacherId: string | undefined, decision:
   if (!teacherId || change.new.teacher?.id !== teacherId) {
     throw problem({ status: 403, detail: 'Відповісти може лише викладач, якому запропоновано заміну.' });
   }
+  if (change.approvalMode === 'NOTIFY') return answerNotice(change, decision, comment, now);
   if (change.status !== 'PENDING_CONFIRMATION') throw conflict('Заміна вже не чекає підтвердження.');
   cancelSimulatedReply(id);
   const to = decision === 'CONFIRM' ? 'CONFIRMED' : 'DECLINED';
@@ -446,6 +447,34 @@ export function replyToChange(id: Uuid, teacherId: string | undefined, decision:
       respondedAt: now.toISOString(),
       confirmDeadline: null,
       responseComment: comment?.trim() || null,
+    }),
+  );
+  emitChange(next);
+  return next;
+}
+
+/**
+ * Як ChangeReplies у core для NOTIFY: «Добре» лишає статус, «Не можу» відхиляє ще не опубліковану заміну, а
+ * опубліковану лишає (заперечення — диспетчер готує доповнення). Повтор тієї самої відповіді нічого не змінює.
+ */
+function answerNotice(change: ChangeRecord, decision: ReplyDecision, comment: string | null | undefined, now: Date): ChangeRecord {
+  const inForce = change.status === 'CONFIRMED' || change.status === 'APPLIED';
+  if (change.teacherAnswer === decision && (inForce || change.status === 'DECLINED')) return change;
+  if (!inForce) throw conflict(change.status === 'DECLINED' ? 'Ви вже відмовилися від цієї заміни.' : 'Заміна вже не діє.');
+  if (change.teacherAnswer === 'DECLINE') throw conflict('Ви вже повідомили, що не можете провести цю пару.');
+  const text = comment?.trim() || null;
+  const to = decision === 'DECLINE' && change.status === 'CONFIRMED' ? 'DECLINED' : change.status;
+  const note =
+    decision === 'CONFIRM'
+      ? 'Викладач побачив заміну'
+      : to === 'DECLINED'
+        ? 'Викладач не може провести пару'
+        : 'Викладач не може провести пару, а заміна вже в розпорядженні: потрібне доповнення';
+  const next = saveChange(
+    transition(change, to, now, change.new.teacher?.shortName ?? 'telegram', text ?? note, {
+      respondedAt: now.toISOString(),
+      responseComment: text,
+      teacherAnswer: decision,
     }),
   );
   emitChange(next);

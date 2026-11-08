@@ -8,10 +8,10 @@ import type { ChangeDto, ReasonCode } from '@/api/types';
 import { Button, buttonClass, notify } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { formatDayMonth } from '@/lib/date';
+import { formatDayMonth, formatInstantTime } from '@/lib/date';
 import { CHANGE_KIND_LABEL, REASON_CODE_LABEL } from '@/lib/labels';
 import { ChangeTimeline } from '../ChangeTimeline';
-import { pendingInfo, type LessonState } from '../model';
+import { noticeAnswer, pendingInfo, type LessonState } from '../model';
 import { StateBadge } from '../StateBadge';
 import { ReasonPicker } from './ReasonPicker';
 
@@ -109,7 +109,8 @@ function useRequestDelivery(teacherId: string | undefined, enabled: boolean): 's
 
 export function DecisionCard({ change, state, busy, onResend, onConfirm, onCancel }: DecisionCardProps) {
   const { now } = useNow();
-  const delivery = useRequestDelivery(change.new.teacher?.id, state === 'pending');
+  const answer = noticeAnswer(change);
+  const delivery = useRequestDelivery(change.new.teacher?.id, state === 'pending' || answer === 'waiting');
   const undelivered = delivery === 'noTelegram' || delivery === 'botOff';
   const pending = state === 'pending' && !undelivered ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
   const substitute = change.new.teacher?.shortName ?? 'Викладач';
@@ -117,7 +118,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
   const reason = change.reasonCode === 'OTHER' ? (change.reasonText ?? REASON_CODE_LABEL.OTHER) : REASON_CODE_LABEL[change.reasonCode];
   const [editingReason, setEditingReason] = useState(false);
   // core дозволяє правити відкриті й відхилені рішення; «вичитано» має лише одну причину
-  const canEditReason = state !== 'applied' && state !== 'uncovered' && change.kind !== 'DISCIPLINE_FINISHED';
+  const canEditReason = state !== 'applied' && state !== 'objected' && state !== 'uncovered' && change.kind !== 'DISCIPLINE_FINISHED';
 
   return (
     <section aria-label="Рішення щодо пари" className="flex flex-col gap-4">
@@ -156,6 +157,27 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
           скасуйте її і оберіть інше рішення для пари.
         </p>
       ) : null}
+      {state === 'objected' ? (
+        <p role="alert" className="rounded-control border border-cancel bg-danger-subtle px-3 py-2 text-ui text-danger">
+          {substitute} не може провести цю пару, а розпорядження вже опубліковане. Додайте відсутність цього викладача
+          на цю пару: пара зʼявиться в списку, і нове рішення піде в доповнення до розпорядження.
+        </p>
+      ) : null}
+      {answer === 'waiting' && (state === 'confirmed' || state === 'applied') ? (
+        <p role="status" className="rounded-control border border-separator bg-sunken px-3 py-2 text-ui text-secondary">
+          {delivery === 'noTelegram'
+            ? `${substitute} не підключив Telegram — повідомте про заміну самі.`
+            : delivery === 'botOff'
+              ? 'Telegram-бот зараз вимкнений — повідомте викладача про заміну самі.'
+              : `${substitute} отримує повідомлення в Telegram. Відповіді ще немає; якщо викладач не зможе, ви побачите це тут.`}
+        </p>
+      ) : null}
+      {answer === 'ok' ? (
+        <p className="text-caption text-secondary">
+          Відповідь викладача: <span className="font-semibold text-add">«Добре»</span>
+          {change.respondedAt ? <span className="figures"> о {formatInstantTime(change.respondedAt)}</span> : null}.
+        </p>
+      ) : null}
       {state === 'pending' && undelivered ? (
         <p role="status" className="rounded-control border border-change bg-change-subtle px-3 py-2 text-ui text-change">
           {delivery === 'botOff'
@@ -187,7 +209,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
 
       <ChangeTimeline change={change} />
 
-      {state === 'applied' ? (
+      {state === 'applied' || state === 'objected' ? (
         <Link to={`/admin/orders?date=${change.date}`} className={buttonClass({ variant: 'secondary', size: 'sm', className: 'self-start' })}>
           <FileText aria-hidden="true" className="size-4" />
           Відкрити розпорядження

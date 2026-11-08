@@ -37,7 +37,8 @@ function pickedMessage(option: ChangeOption, created: ChangeDto, entry: LessonEn
     case 'ROOM_CHANGE':
     case 'BLOCK':
     case 'DISCIPLINE_FINISHED':
-      return pending ? `Запит у Telegram надіслано: ${who} — ${where}` : `Заміну підтверджено: ${who} — ${where}`;
+      if (pending) return `Запит у Telegram надіслано: ${who} — ${where}`;
+      return created.approvalMode === 'NOTIFY' ? `Призначено: ${who} — ${where}` : `Заміну підтверджено: ${who} — ${where}`;
   }
 }
 

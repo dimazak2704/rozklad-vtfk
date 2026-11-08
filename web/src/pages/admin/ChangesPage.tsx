@@ -17,12 +17,14 @@ import {
   defaultReason,
   filterFromParam,
   isOpen,
+  isObjection,
   isOptionTab,
   lessonButtonId,
   LESSON_FILTERS,
   LESSON_STATE,
   matchesFilter,
   optionsByKind,
+  teacherAnswered,
   type LessonEntry,
   type LessonFilter,
   type OptionTab,
@@ -198,13 +200,20 @@ export default function ChangesPage() {
   // відповідь викладача в Telegram: тост і короткий «пульс» на рядку пари
   useServerEvent('change.updated', (change) => {
     const last = change.history.at(-1);
-    if (!last || last.from !== 'PENDING_CONFIRMATION' || (last.to !== 'CONFIRMED' && last.to !== 'DECLINED')) return;
+    if (!last || !teacherAnswered(last.from, last.to, change.approvalMode)) return;
     if (actions.isOwn(change.id) || change.date < workspace.from || change.date > workspace.to) return;
     const entry = workspace.entries.find((e) => e.item.decision?.changeId === change.id);
     const teacher = change.new.teacher?.shortName ?? 'Викладач';
     const where = `${change.group.code}, ${change.pairFrom} пара`;
-    if (last.to === 'CONFIRMED') notify.success(`Підтверджено в Telegram: ${teacher}`, { description: where });
-    else notify.warning(`Відмова в Telegram: ${teacher}`, { description: `${where} — оберіть інший варіант` });
+    if (isObjection(change)) {
+      notify.warning(`${teacher} не може, а заміна вже в розпорядженні`, { description: `${where} — потрібне доповнення` });
+    } else if (last.to === 'DECLINED') {
+      notify.warning(`Відмова в Telegram: ${teacher}`, { description: `${where} — оберіть інший варіант` });
+    } else if (change.approvalMode === 'NOTIFY') {
+      notify.info(`${teacher}: «Добре»`, { description: where });
+    } else {
+      notify.success(`Підтверджено в Telegram: ${teacher}`, { description: where });
+    }
     if (entry) {
       const lessonId = entry.item.lesson.id;
       setPulsing((prev) => new Set(prev).add(lessonId));

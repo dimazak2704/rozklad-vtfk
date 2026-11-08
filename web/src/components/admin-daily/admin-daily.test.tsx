@@ -155,10 +155,25 @@ describe('налаштування', () => {
   it('зберігає зміни і ховає панель збереження', async () => {
     const user = userEvent.setup();
     renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);
-    await user.click(screen.getByRole('radio', { name: 'Автоматично' }));
+    await user.click(screen.getByRole('radio', { name: 'Призначити й повідомити' }));
     expect(screen.getByText('Є незбережені зміни')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Зберегти' }));
     await waitFor(() => expect(screen.queryByText('Є незбережені зміни')).not.toBeInTheDocument());
+  });
+
+  it('пропонує три режими, «Призначити й повідомити» першим; строк відповіді — лише для прохання', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);
+    const group = screen.getByRole('radiogroup', { name: 'Як призначати заміну' });
+    const names = within(group)
+      .getAllByRole('radio')
+      .map((radio) => document.querySelector(`label[for="${radio.id}"]`)?.textContent);
+    expect(names).toEqual(['Призначити й повідомити', 'Чекати згоди викладача', 'Призначити без повідомлення']);
+    const timeout = screen.getByRole('spinbutton', { name: /Скільки чекати відповіді/ });
+    expect(timeout).toBeEnabled();
+    await user.click(screen.getByRole('radio', { name: 'Призначити й повідомити' }));
+    expect(timeout).toBeDisabled();
+    expect(screen.getByText('Лише для режиму «Чекати згоди викладача».')).toBeInTheDocument();
   });
 
   it('помилки сервера стають помилками полів', async () => {
@@ -185,7 +200,8 @@ describe('екран «Заміни»', () => {
 
     // демо-ранок: три відсутні, пара 3Ф (Крисак) — перша без рішення, її варіанти вже відкриті
     expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л.В.' }, WAIT)).toBeInTheDocument();
-    const firstPick = await screen.findAllByRole('button', { name: /^Обрати:/ }, WAIT);
+    // мок працює в режимі CONFIRM: вибір викладача лише просить його згоди
+    const firstPick = await screen.findAllByRole('button', { name: /^Надіслати прохання:/ }, WAIT);
     expect(firstPick.length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /3Ф/, current: true })).toBeInTheDocument();
 

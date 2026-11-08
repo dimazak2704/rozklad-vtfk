@@ -10,7 +10,11 @@ import { apiPath, badRequest, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { COLLEGE_NAME } from './meta';
 
-/** Початкові значення — типові значення core (V1_802): «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару, 120 хв. */
+/**
+ * Початкові значення — типові значення core (V1_802): «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару,
+ * 120 хв. Режим погодження в моку — CONFIRM (у core типовий NOTIFY): демо-світ показує прохання, строки й
+ * змодельовані відповіді в Telegram; NOTIFY вмикається на сторінці налаштувань.
+ */
 const seed = (): SettingsDto => ({
   approvalMode: 'CONFIRM',
   confirmTimeoutMinutes: DEFAULT_CONFIRM_TIMEOUT_MINUTES,
@@ -30,7 +34,7 @@ export function currentSettings(): SettingsDto {
   return settings.get();
 }
 
-const APPROVAL_MODES: readonly ApprovalMode[] = ['AUTO', 'CONFIRM'];
+const APPROVAL_MODES: readonly ApprovalMode[] = ['NOTIFY', 'CONFIRM', 'AUTO'];
 
 function isInteger(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;

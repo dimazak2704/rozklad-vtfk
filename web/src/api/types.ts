@@ -70,7 +70,11 @@ export type CalendarPeriodKind = 'HOLIDAY' | 'NO_CLASSES' | 'PRACTICE' | 'STUDY_
 export type StudyMode = 'OFFLINE' | 'ONLINE' | 'MIXED';
 export type PeriodScope = 'ALL' | 'COURSES' | 'GROUPS';
 export type Employment = 'STAFF' | 'PART_TIME';
-export type ApprovalMode = 'AUTO' | 'CONFIRM';
+/**
+ * Що отримує викладач, якого призначили на заміну (DOMAIN §7): NOTIFY — заміна діє одразу, йому повідомляють
+ * і він відповідає «Добре» / «Не можу» (типовий); CONFIRM — прохання, заміна чекає згоди; AUTO — нічого.
+ */
+export type ApprovalMode = 'NOTIFY' | 'CONFIRM' | 'AUTO';
 export type ConflictKind = 'TEACHER' | 'GROUP' | 'ROOM' | 'CAPACITY' | 'ROOM_TYPE' | 'SHIFT' | 'UNAVAILABLE';
 export type ConflictSeverity = 'HARD' | 'SOFT';
 export type EntityType = 'GROUP' | 'TEACHER' | 'ROOM';
@@ -911,6 +915,12 @@ export interface ChangeDto {
    * (доповнення скасувало пару замінника чи віддало її іншому); `null`, якщо такої немає.
    */
   supersededBy?: Nullable<ChangeSuccessorDto>;
+  /**
+   * Адитивно (core, R7): відповідь призначеного викладача в поточному раунді — `CONFIRM` («Підтверджую» або
+   * «Добре»), `DECLINE` («Не можу»), `null` — ще не відповів. NOTIFY + APPLIED + DECLINE — заперечення після
+   * публікації: потрібне доповнення до розпорядження.
+   */
+  teacherAnswer?: Nullable<ReplyDecision>;
 }
 
 /** Зміна, що пізніше скасувала чи перепризначила пару застосованої зміни. */
@@ -1375,6 +1385,7 @@ export type DeliveryPurpose =
   | 'ORDER_TEACHER'
   | 'ORDER_ADMIN'
   | 'SUBSTITUTION_REQUEST'
+  | 'SUBSTITUTION_NOTICE'
   | 'SUBSTITUTION_REMINDER'
   | 'SUBSTITUTION_STATUS'
   | 'SUBSTITUTION_ADMIN'

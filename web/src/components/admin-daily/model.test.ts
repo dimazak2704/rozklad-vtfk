@@ -8,13 +8,18 @@ import {
   buildFeed,
   defaultReason,
   filterFromParam,
+  isObjection,
   isOpen,
   LESSON_STATE,
   lessonState,
   matchesFilter,
+  noticeAnswer,
   optionsByKind,
   pendingInfo,
+  pickLabel,
   requestsForOption,
+  teacherAnswered,
+  toEntries,
 } from './model';
 
 const lesson: AffectedLesson['lesson'] = {
@@ -128,6 +133,17 @@ describe('варіант → запити на сервер', () => {
     expect(requestsForOption(option({}), { ...ctx, reasonCode: 'OTHER', reasonText: 'Конф.' })?.[0]?.reasonText).toBe('Конф.');
   });
 
+  it('кнопка вибору: «Призначити» в NOTIFY й AUTO, «Надіслати прохання» в CONFIRM, «Обрати» без викладача', () => {
+    const teacher = option({});
+    expect(pickLabel(teacher, 'NOTIFY')).toBe('Призначити');
+    expect(pickLabel(teacher, 'AUTO')).toBe('Призначити');
+    expect(pickLabel(teacher, undefined)).toBe('Призначити');
+    expect(pickLabel(teacher, 'CONFIRM')).toBe('Надіслати прохання');
+    expect(pickLabel(option({ kind: 'REPLACE_DISCIPLINE' }), 'CONFIRM')).toBe('Надіслати прохання');
+    expect(pickLabel(option({ kind: 'CANCEL', teacher: null }), 'CONFIRM')).toBe('Обрати');
+    expect(pickLabel(option({ kind: 'SWAP' }), 'NOTIFY')).toBe('Обрати');
+  });
+
   it('групування за видами зберігає порядок сервера', () => {
     const grouped = optionsByKind([option({ title: 'А', score: 70 }), option({ kind: 'CANCEL', title: 'Пари не буде' }), option({ title: 'Б', score: 50 })]);
     expect(grouped.get('REPLACE_TEACHER')?.map((o) => o.title)).toEqual(['А', 'Б']);
@@ -184,6 +200,54 @@ describe('стрічка подій', () => {
     version: 0,
   };
   const order: OrderSummaryDto = { id: 'o-36', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z', imported: false };
+
+  it('NOTIFY: призначення, «Добре» і заперечення після розпорядження', () => {
+    const notice: ChangeDto = {
+      ...change,
+      id: 'c-2',
+      status: 'APPLIED',
+      approvalMode: 'NOTIFY',
+      teacherAnswer: 'DECLINE',
+      history: [
+        { at: '2026-11-09T05:00:00Z', actor: 'admin', from: null, to: 'CONFIRMED', comment: null },
+        { at: '2026-11-09T05:10:00Z', actor: 'Михальчук', from: 'CONFIRMED', to: 'CONFIRMED', comment: null },
+        { at: '2026-11-09T05:20:00Z', actor: 'admin', from: 'CONFIRMED', to: 'APPLIED', comment: null },
+        { at: '2026-11-09T05:40:00Z', actor: 'Михальчук', from: 'APPLIED', to: 'APPLIED', comment: null },
+      ],
+    };
+    expect(buildFeed([notice], [], [], '2026-11-09').map((f) => [f.kind, f.text])).toEqual([
+      ['declined', 'Не може, потрібне доповнення: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+      ['confirmed', '«Добре»: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+      ['confirmed', 'Призначено: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+    ]);
+  });
+
+  it('NOTIFY: стан пари, відповідь викладача і живий тост', () => {
+    const absenceRef = { id: 'a', teacher: lesson.teacher } as AbsenceDto;
+    const item = (status: ChangeDto['status']): AffectedLesson =>
+      ({ date: '2026-11-09', lesson, decision: { changeId: 'c-3', status, kind: 'REPLACE_TEACHER' }, asSubstitute: false });
+    const notice = (patch: Partial<ChangeDto>): ChangeDto => ({ ...change, id: 'c-3', approvalMode: 'NOTIFY', teacherAnswer: null, ...patch });
+
+    const objected = notice({ status: 'APPLIED', teacherAnswer: 'DECLINE' });
+    expect(toEntries(absenceRef, [item('APPLIED')], new Map([['c-3', objected]]))[0]?.state).toBe('objected');
+    expect(toEntries(absenceRef, [item('APPLIED')], new Map([['c-3', notice({ status: 'APPLIED' })]]))[0]?.state).toBe('applied');
+    expect(isObjection(objected)).toBe(true);
+    expect(LESSON_STATE.objected.needsAction).toBe(true);
+    expect(matchesFilter('objected', 'action')).toBe(true);
+    expect(matchesFilter('objected', 'declined')).toBe(true);
+    expect(matchesFilter('objected', 'done')).toBe(false);
+
+    expect(noticeAnswer(notice({ status: 'CONFIRMED' }))).toBe('waiting');
+    expect(noticeAnswer(notice({ status: 'CONFIRMED', teacherAnswer: 'CONFIRM' }))).toBe('ok');
+    expect(noticeAnswer(notice({ status: 'DECLINED', teacherAnswer: 'DECLINE' }))).toBe('cannot');
+    expect(noticeAnswer({ ...change, approvalMode: 'CONFIRM' })).toBeNull();
+
+    expect(teacherAnswered('PENDING_CONFIRMATION', 'CONFIRMED', 'CONFIRM')).toBe(true);
+    expect(teacherAnswered('CONFIRMED', 'CONFIRMED', 'CONFIRM')).toBe(false);
+    expect(teacherAnswered('CONFIRMED', 'DECLINED', 'NOTIFY')).toBe(true);
+    expect(teacherAnswered('APPLIED', 'APPLIED', 'NOTIFY')).toBe(true);
+    expect(teacherAnswered(null, 'CONFIRMED', 'NOTIFY')).toBe(false);
+  });
 
   it('найновіші події першими, відповідь з Telegram названо прямо', () => {
     const feed = buildFeed([change], [absence], [order], '2026-11-09');

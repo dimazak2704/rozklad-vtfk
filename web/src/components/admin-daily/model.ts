@@ -6,6 +6,7 @@ import type { AffectedLesson, ChangeOption } from '@/api/admin-daily';
 import type {
   AbsenceDto,
   AbsenceReasonCategory,
+  ApprovalMode,
   ChangeDto,
   ChangeKind,
   ChangeStatus,
@@ -21,12 +22,21 @@ import { durationLabel } from '@/lib/labels';
 
 // ───────────────────────── Стан пари ─────────────────────────
 
-export type LessonState = 'uncovered' | 'declined' | 'substituteAbsent' | 'pending' | 'confirmed' | 'cancelled' | 'applied';
+export type LessonState =
+  | 'uncovered'
+  | 'declined'
+  | 'substituteAbsent'
+  | 'objected'
+  | 'pending'
+  | 'confirmed'
+  | 'cancelled'
+  | 'applied';
 
 export const LESSON_STATE: Record<LessonState, { label: string; tone: BadgeTone; needsAction: boolean }> = {
   uncovered: { label: 'Без рішення', tone: 'danger', needsAction: true },
   declined: { label: 'Відмова', tone: 'danger', needsAction: true },
   substituteAbsent: { label: 'Замінник відсутній', tone: 'danger', needsAction: true },
+  objected: { label: 'Потрібне доповнення', tone: 'danger', needsAction: true },
   pending: { label: 'Чекає відповіді', tone: 'warning', needsAction: false },
   confirmed: { label: 'Підтверджено', tone: 'success', needsAction: false },
   cancelled: { label: 'Пари не буде', tone: 'cancel', needsAction: false },
@@ -79,13 +89,42 @@ export interface TeacherGroup {
   days: Array<{ date: IsoDate; entries: LessonEntry[] }>;
 }
 
+/**
+ * Заперечення після публікації (NOTIFY): викладач натиснув «Не можу», а заміна вже в розпорядженні. Core його не
+ * скасовує — диспетчер готує доповнення, тож пара знову потребує дії.
+ */
+export function isObjection(change: Pick<ChangeDto, 'status' | 'teacherAnswer'> | null | undefined): boolean {
+  return change?.status === 'APPLIED' && change.teacherAnswer === 'DECLINE';
+}
+
 export function toEntries(absence: AbsenceDto, items: readonly AffectedLesson[], changes: ReadonlyMap<Uuid, ChangeDto>): LessonEntry[] {
-  return items.map((item) => ({
-    absence,
-    item,
-    state: lessonState(item.decision, item.asSubstitute),
-    change: item.decision ? (changes.get(item.decision.changeId) ?? null) : null,
-  }));
+  return items.map((item) => {
+    const change = item.decision ? (changes.get(item.decision.changeId) ?? null) : null;
+    const state = lessonState(item.decision, item.asSubstitute);
+    return { absence, item, state: state === 'applied' && isObjection(change) ? 'objected' : state, change };
+  });
+}
+
+/**
+ * Чи останній запис історії — відповідь викладача (для живого тосту диспетчеру): відповідь на прохання
+ * (PENDING → CONFIRMED | DECLINED) або на повідомлення NOTIFY («Добре» — статус той самий, «Не можу» до
+ * розпорядження — CONFIRMED → DECLINED, після — APPLIED → APPLIED).
+ */
+export function teacherAnswered(from: ChangeStatus | null, to: ChangeStatus, mode: ApprovalMode): boolean {
+  if (from === 'PENDING_CONFIRMATION') return to === 'CONFIRMED' || to === 'DECLINED';
+  if (mode !== 'NOTIFY') return false;
+  return (from === 'CONFIRMED' && (to === 'CONFIRMED' || to === 'DECLINED')) || (from === 'APPLIED' && to === 'APPLIED');
+}
+
+/**
+ * Відповідь викладача на повідомлення NOTIFY для рядка й картки рішення: `null` — режим інший або відповіді ще
+ * немає (у NOTIFY — `waiting`).
+ */
+export function noticeAnswer(change: ChangeDto | null | undefined): 'waiting' | 'ok' | 'cannot' | null {
+  if (!change || change.approvalMode !== 'NOTIFY') return null;
+  if (change.teacherAnswer === 'CONFIRM') return 'ok';
+  if (change.teacherAnswer === 'DECLINE') return 'cannot';
+  return change.status === 'CONFIRMED' || change.status === 'APPLIED' ? 'waiting' : null;
 }
 
 /** Пари за викладачем (відсутністю), усередині — за датою; порядок як у списку відсутностей. */
@@ -123,11 +162,11 @@ export function matchesFilter(state: LessonState, filter: LessonFilter): boolean
     case 'all':
       return true;
     case 'action':
-      return state === 'uncovered' || state === 'declined' || state === 'substituteAbsent';
+      return state === 'uncovered' || state === 'declined' || state === 'substituteAbsent' || state === 'objected';
     case 'pending':
       return state === 'pending';
     case 'declined':
-      return state === 'declined';
+      return state === 'declined' || state === 'objected';
     case 'done':
       return state === 'confirmed' || state === 'cancelled' || state === 'applied';
   }
@@ -226,6 +265,15 @@ export function requestsForOption(option: ChangeOption, ctx: PickContext): Creat
   }
 }
 
+/**
+ * Напис кнопки вибору варіанта. Варіант із викладачем у режимі CONFIRM лише просить його згоди, у NOTIFY й AUTO —
+ * одразу призначає; варіант без викладача (скасування, перестановка) просто обирається.
+ */
+export function pickLabel(option: Pick<ChangeOption, 'kind' | 'teacher'>, mode: ApprovalMode | undefined): string {
+  if (!option.teacher || option.kind === 'CANCEL' || option.kind === 'SWAP') return 'Обрати';
+  return mode === 'CONFIRM' ? 'Надіслати прохання' : 'Призначити';
+}
+
 /** Стабільний ключ варіанта (для списків і стану «обираємо…»). */
 export function optionKey(option: ChangeOption): string {
   return [option.kind, option.teacher?.id, option.discipline?.id, option.swapLesson?.id, option.date, option.pair].join('|');
@@ -302,7 +350,17 @@ export function buildFeed(changes: readonly ChangeDto[], absences: readonly Abse
       const teacher = change.new.teacher?.shortName ?? 'викладач';
       let kind: FeedKind | null = null;
       let text = '';
-      if (entry.to === 'PENDING_CONFIRMATION' && entry.from === 'PENDING_CONFIRMATION') {
+      if (entry.from === 'APPLIED' && entry.to === 'APPLIED') {
+        // NOTIFY: «Не можу» після публікації — розпорядження лишається, потрібне доповнення
+        kind = 'declined';
+        text = `Не може, потрібне доповнення: ${teacher} — ${changeLine(change)}`;
+      } else if (entry.from === 'CONFIRMED' && entry.to === 'CONFIRMED') {
+        kind = 'confirmed';
+        text = `«Добре»: ${teacher} — ${changeLine(change)}`;
+      } else if (entry.from === null && entry.to === 'CONFIRMED' && change.approvalMode === 'NOTIFY') {
+        kind = 'confirmed';
+        text = `Призначено: ${teacher} — ${changeLine(change)}`;
+      } else if (entry.to === 'PENDING_CONFIRMATION' && entry.from === 'PENDING_CONFIRMATION') {
         kind = 'reminder';
         text = `Нагадування в Telegram: ${teacher} — ${changeLine(change)}`;
       } else if (entry.to === 'PENDING_CONFIRMATION') {

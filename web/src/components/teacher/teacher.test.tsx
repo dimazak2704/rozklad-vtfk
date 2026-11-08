@@ -12,10 +12,11 @@ import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
-import { changeStatusBadge } from './change-text';
+import { awaitingAnswer, changeStatusBadge } from './change-text';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
+import { answered } from '@/api/me';
 
 const krentsin = teacherNamed('Кренцін');
 
@@ -29,25 +30,36 @@ describe('SubstitutionRequests', () => {
   it('підтвердження оптимістичне: картка зникає одразу', async () => {
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
-    const cards = await screen.findAllByRole('article');
-    expect(cards).toHaveLength(2);
-    await user.click(within(cards[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
-    expect(screen.getAllByRole('article')).toHaveLength(1);
+    const requests = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    expect(requests).toHaveLength(2);
+    await user.click(within(requests[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
   });
 
   it('якщо сервер відмовив — картка повертається', async () => {
     server.use(http.post(apiPath('/me/changes/:id/confirm'), () => problem({ status: 409, detail: 'На цей запит уже відповіли.' })));
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
-    const cards = await screen.findAllByRole('article');
-    await user.click(within(cards[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    const requests = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    await user.click(within(requests[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    await waitFor(() => expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(2));
+  });
+
+  it('призначена заміна (NOTIFY): «Добре» чи «Не можу», без строку відповіді', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [notice] = await screen.findAllByRole('article', { name: /^Нова заміна/ });
+    const card = notice as HTMLElement;
+    expect(within(card).queryByText(/відповісти до/)).not.toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Не можу' })).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Добре' }));
+    await waitFor(() => expect(screen.queryAllByRole('article', { name: /^Нова заміна/ })).toHaveLength(0));
   });
 
   it('без запитів — спокійний порожній стан', async () => {
     server.use(http.get(apiPath('/me/changes'), () => Response.json([])));
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
-    expect(await screen.findByText(/Нових запитів на заміну немає/)).toBeInTheDocument();
+    expect(await screen.findByText(/Нових замін немає/)).toBeInTheDocument();
   });
 });
 
@@ -273,5 +285,41 @@ describe('changeStatusBadge', () => {
     expect(changeStatusBadge(later('CANCEL'))).toEqual({ label: 'Скасовано доповненням', tone: 'cancel' });
     expect(changeStatusBadge(later('REPLACE_TEACHER'))?.label).toBe('Передано іншому доповненням');
     expect(changeStatusBadge(later('SWAP'))?.label).toBe('Змінено доповненням');
+  });
+
+  it('NOTIFY: «Не можу» після розпорядження видно як заперечення', () => {
+    expect(changeStatusBadge({ ...applied, approvalMode: 'NOTIFY', teacherAnswer: 'DECLINE' })).toEqual({
+      label: 'Ви повідомили, що не можете',
+      tone: 'cancel',
+    });
+    expect(changeStatusBadge({ ...applied, approvalMode: 'NOTIFY', teacherAnswer: 'CONFIRM' })?.label).toBe('У розпорядженні');
+  });
+});
+
+describe('відповідь на заміну (як у core)', () => {
+  const base = { status: 'CONFIRMED', approvalMode: 'NOTIFY', teacherAnswer: null } as unknown as ChangeDto;
+  const at = '2026-11-09T08:00:00Z';
+
+  it('повідомлення: «Добре» лишає статус, «Не можу» відхиляє неопубліковану й лишає опубліковану', () => {
+    expect(answered(base, 'CONFIRM', at)).toMatchObject({ status: 'CONFIRMED', teacherAnswer: 'CONFIRM', respondedAt: at });
+    expect(answered(base, 'DECLINE', at)).toMatchObject({ status: 'DECLINED', teacherAnswer: 'DECLINE' });
+    expect(answered({ ...base, status: 'APPLIED' }, 'DECLINE', at)).toMatchObject({ status: 'APPLIED', teacherAnswer: 'DECLINE' });
+  });
+
+  it('прохання: підтвердження чи відмова змінюють статус', () => {
+    const request = { ...base, status: 'PENDING_CONFIRMATION', approvalMode: 'CONFIRM' } as ChangeDto;
+    expect(answered(request, 'CONFIRM', at).status).toBe('CONFIRMED');
+    expect(answered(request, 'DECLINE', at).status).toBe('DECLINED');
+  });
+
+  it('у списку «Нові заміни» — прохання й повідомлення без відповіді, не з минулих днів', () => {
+    const list = [
+      { ...base, id: 'past', date: '2026-11-06', pairFrom: 1 },
+      { ...base, id: 'notice', date: '2026-11-10', pairFrom: 2 },
+      { ...base, id: 'answered', date: '2026-11-10', pairFrom: 3, teacherAnswer: 'CONFIRM' },
+      { ...base, id: 'request', date: '2026-11-10', pairFrom: 1, status: 'PENDING_CONFIRMATION', approvalMode: 'CONFIRM' },
+      { ...base, id: 'auto', date: '2026-11-10', pairFrom: 4, approvalMode: 'AUTO' },
+    ] as ChangeDto[];
+    expect(awaitingAnswer(list, '2026-11-09').map((c) => c.id)).toEqual(['request', 'notice']);
   });
 });

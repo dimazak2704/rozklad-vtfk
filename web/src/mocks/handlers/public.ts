@@ -158,6 +158,8 @@ interface ChangeSeed {
   reasonCode: ReasonCode;
   reasonText?: string | null;
   confirmDeadline?: IsoInstant | null;
+  /** NOTIFY — викладачу повідомили про вже підтверджену заміну (типовий режим core); інакше прохання CONFIRM. */
+  approvalMode?: ChangeDto['approvalMode'];
 }
 
 function createChange(seed: ChangeSeed): ChangeDto {
@@ -188,7 +190,7 @@ function createChange(seed: ChangeSeed): ChangeDto {
       { at: createdAt, actor: 'admin', from: null, to: 'DRAFT', comment: null },
       { at: createdAt, actor: 'admin', from: 'DRAFT', to: target, comment: null },
     ],
-    approvalMode: 'CONFIRM',
+    approvalMode: seed.approvalMode ?? 'CONFIRM',
     originalLessonId: seed.lesson?.id ?? null,
     swapLessonId: null,
     swapFromPair: null,
@@ -199,6 +201,7 @@ function createChange(seed: ChangeSeed): ChangeDto {
     createdAt,
     version: 1,
     supersededBy: null,
+    teacherAnswer: null,
   };
 }
 
@@ -361,6 +364,8 @@ class DayPlanner {
           next: { teacher: KRENTSIN },
           reasonCode: 'ABSENT',
           confirmDeadline: status === 'PENDING_CONFIRMATION' ? kyivInstant(this.date, '07:30') : null,
+          // підтверджена заміна — як у типовому режимі core: Кренціну повідомили, він може сказати «Добре» чи «Не можу»
+          approvalMode: status === 'CONFIRMED' ? 'NOTIFY' : 'CONFIRM',
         });
       }
     }
@@ -442,7 +447,11 @@ function cached(key: string, build: () => ChangeDto[]): ChangeDto[] {
 
 /** Відповіді викладача на запити (стан мок-API; скидається між тестами). */
 interface ReplyRecord {
-  status: Extract<ChangeStatus, 'CONFIRMED' | 'DECLINED'>;
+  status: Extract<ChangeStatus, 'CONFIRMED' | 'DECLINED' | 'APPLIED'>;
+  /** Що сказав викладач (для NOTIFY статус може лишитися тим самим). */
+  answer: 'CONFIRM' | 'DECLINE';
+  /** Статус, з якого відповідали (для історії). */
+  from: ChangeStatus;
   at: IsoInstant;
   comment: string | null;
   actor: string;
@@ -456,9 +465,11 @@ function effective(change: ChangeDto, now: Date): ChangeDto {
   if (reply) {
     result = {
       ...result,
-      status: reply.status,
+      // заперечення після публікації (APPLIED) статусу не змінює: розпорядження нижче знову зробить зміну APPLIED
+      status: reply.status === 'APPLIED' ? result.status : reply.status,
       respondedAt: reply.at,
-      history: [...result.history, { at: reply.at, actor: reply.actor, from: 'PENDING_CONFIRMATION', to: reply.status, comment: reply.comment }],
+      teacherAnswer: reply.answer,
+      history: [...result.history, { at: reply.at, actor: reply.actor, from: reply.from, to: reply.status, comment: reply.comment }],
     };
   }
   if (result.status === 'CONFIRMED' && isPublished(result.date, now)) {
@@ -496,10 +507,28 @@ export function replyToChange(
 ): ChangeDto {
   const change = changesForTeacher(teacherId, now).find((c) => c.id === id);
   if (!change) throw notFound(`Запит на заміну з id ${id} не знайдено серед ваших.`);
+  const base = baseChangesFor(change.date, now).find((c) => c.id === id) ?? change;
+  if (change.approvalMode === 'NOTIFY') {
+    // як ChangeReplies у core: повтор тієї самої відповіді — та сама зміна, інша відповідь після відповіді — 409
+    if (change.teacherAnswer === decision) return change;
+    if (change.teacherAnswer || (change.status !== 'CONFIRMED' && change.status !== 'APPLIED')) {
+      throw problem({ status: 409, detail: 'Ви вже відповіли на цю заміну — оновіть сторінку.' });
+    }
+    const status = decision === 'DECLINE' ? (change.status === 'APPLIED' ? 'APPLIED' : 'DECLINED') : change.status;
+    replies.get().set(id, { status, answer: decision, from: change.status, at: now.toISOString(), comment, actor });
+    return effective(base, now);
+  }
   if (change.status !== 'PENDING_CONFIRMATION') {
     throw problem({ status: 409, detail: 'На цей запит уже відповіли — оновіть сторінку.' });
   }
-  replies.get().set(id, { status: decision === 'CONFIRM' ? 'CONFIRMED' : 'DECLINED', at: now.toISOString(), comment, actor });
+  replies.get().set(id, {
+    status: decision === 'CONFIRM' ? 'CONFIRMED' : 'DECLINED',
+    answer: decision,
+    from: 'PENDING_CONFIRMATION',
+    at: now.toISOString(),
+    comment,
+    actor,
+  });
   return effective(change, now);
 }
 

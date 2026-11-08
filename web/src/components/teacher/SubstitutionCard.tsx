@@ -1,4 +1,4 @@
-import { Check, Clock, DoorOpen, X } from 'lucide-react';
+import { Check, Clock, DoorOpen, FileCheck, ThumbsUp, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useBells } from '@/api/meta';
 import type { ChangeDto } from '@/api/types';
@@ -21,8 +21,9 @@ interface SubstitutionCardProps {
 }
 
 /**
- * Запит на заміну: коли, яка група й пара, що провести і замість кого, до коли відповісти.
- * «Підтверджую» — одним натисканням; «Не можу» — з необовʼязковим коментарем для диспетчера.
+ * Заміна, що чекає відповіді: коли, яка група й пара, що провести і замість кого. Прохання (CONFIRM) має строк і
+ * кнопки «Підтверджую» / «Не можу»; повідомлення про призначену заміну (NOTIFY) — «Добре» / «Не можу», бо заміна
+ * вже діє. «Не можу» — з необовʼязковим коментарем для диспетчера.
  */
 export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }: SubstitutionCardProps) {
   const bells = useBells(change.date);
@@ -38,10 +39,11 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
   const hint = reasonHint(reason);
   const room = changeRoom(change);
   const disciplineName = changeDisciplineName(change);
+  const notice = change.approvalMode === 'NOTIFY';
 
   return (
     <article
-      aria-label={`Запит на заміну: ${change.group.code}, ${changeDay(change).toLocaleLowerCase('uk')}, ${change.pairFrom} пара`}
+      aria-label={`${notice ? 'Нова заміна' : 'Запит на заміну'}: ${change.group.code}, ${changeDay(change).toLocaleLowerCase('uk')}, ${change.pairFrom} пара`}
       className={cn(
         'flex flex-col gap-3 rounded-panel border border-change bg-surface p-4',
         fresh && 'motion-safe:animate-[live-flash_2.4s_var(--ease-out)]',
@@ -58,6 +60,11 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
             </span>
           ) : null}
         </p>
+        {notice && change.status === 'APPLIED' ? (
+          <Badge tone="accent" size="sm" icon={<FileCheck aria-hidden="true" className="size-3" />}>
+            у розпорядженні
+          </Badge>
+        ) : null}
         {deadline ? (
           <Badge tone={overdue ? 'cancel' : 'change'} size="sm" icon={<Clock aria-hidden="true" className="size-3" />}>
             {overdue
@@ -100,8 +107,12 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-separator pt-3">
-        <Button variant="primary" iconStart={<Check aria-hidden="true" className="size-4" />} onClick={onConfirm}>
-          Підтверджую
+        <Button
+          variant="primary"
+          iconStart={notice ? <ThumbsUp aria-hidden="true" className="size-4" /> : <Check aria-hidden="true" className="size-4" />}
+          onClick={onConfirm}
+        >
+          {notice ? 'Добре' : 'Підтверджую'}
         </Button>
         <Popover>
           <PopoverTrigger asChild>
@@ -109,7 +120,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
               Не можу
             </Button>
           </PopoverTrigger>
-          <PopoverContent width="md" title="Відмовитися від заміни?">
+          <PopoverContent width="md" title={notice ? 'Не можете провести цю пару?' : 'Відмовитися від заміни?'}>
             <form
               className="flex flex-col gap-3"
               onSubmit={(event) => {
@@ -134,7 +145,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
                   </Button>
                 </PopoverClose>
                 <Button type="submit" variant="danger" size="sm">
-                  Відмовитися
+                  {notice ? 'Повідомити диспетчера' : 'Відмовитися'}
                 </Button>
               </div>
             </form>

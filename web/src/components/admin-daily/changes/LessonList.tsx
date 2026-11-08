@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
 import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { absencePeriod, decisionSummary } from '../format';
-import { LESSON_STATE, lessonButtonId, type LessonEntry, type TeacherGroup } from '../model';
+import { LESSON_STATE, lessonButtonId, noticeAnswer, type LessonEntry, type TeacherGroup } from '../model';
 import { PendingCountdown, StateBadge } from '../StateBadge';
 
 function DecisionLine({ entry }: { entry: LessonEntry }) {
@@ -26,6 +26,12 @@ function DecisionLine({ entry }: { entry: LessonEntry }) {
           Мав замінити: {entry.item.lesson.teacher?.shortName ?? 'викладача'} — скасуйте зміну й оберіть інше рішення
         </span>
       );
+    case 'objected':
+      return (
+        <span className="text-danger">
+          {change?.new.teacher?.shortName ?? 'Викладач'} не може, а заміна вже в розпорядженні — потрібне доповнення
+        </span>
+      );
     case 'cancelled':
       return <span className="text-cancel">Пари не буде</span>;
     case 'pending':
@@ -36,7 +42,14 @@ function DecisionLine({ entry }: { entry: LessonEntry }) {
           <ArrowRight aria-label="заміна" className="size-3.5 shrink-0 text-change rtl:rotate-180" />
           <span className="truncate font-semibold text-primary">{change ? decisionSummary(change) : 'Рішення ухвалено'}</span>
           {entry.state === 'pending' ? <PendingCountdown deadline={change?.confirmDeadline} className="text-caption" /> : null}
-          {entry.state === 'confirmed' && change?.respondedAt ? (
+          {noticeAnswer(change) === 'ok' ? (
+            <span className="inline-flex items-center gap-1 text-add">
+              <UserRoundCheck aria-hidden="true" className="size-3.5" />
+              <span className="sr-only">Відповідь викладача:</span>
+              «Добре»
+              {change?.respondedAt ? <span className="text-muted figures">о {formatInstantTime(change.respondedAt)}</span> : null}
+            </span>
+          ) : entry.state === 'confirmed' && change?.respondedAt ? (
             <span className="text-muted figures">о {formatInstantTime(change.respondedAt)}</span>
           ) : null}
         </span>
