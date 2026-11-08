@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -114,6 +115,15 @@ class ApiErrorHandlingTest {
         mockMvc.perform(get("/api/admin/probe/days").with(TestJwts.admin()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("from"));
+    }
+
+    @Test
+    void pathTraversalRejectedByTheFirewallIsAProblemDetail() throws Exception {
+        mockMvc.perform(get(URI.create("/api/public/../admin/probe/not-found")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:bad-request"))
+                .andExpect(jsonPath("$.title").value("Некоректний запит"));
     }
 
     @Test

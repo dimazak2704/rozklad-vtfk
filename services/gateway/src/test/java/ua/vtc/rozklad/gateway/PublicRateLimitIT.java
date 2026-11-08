@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -45,6 +47,17 @@ class PublicRateLimitIT {
         }
 
         assertThat(statuses).startsWith(200, 200, 200).contains(429);
+        // відмова лімітера — той самий ProblemDetail, що й інші помилки, і підказка, коли повторити
+        client.get().uri("/api/public/meta").exchange()
+                .expectStatus().isEqualTo(429)
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectHeader().valueEquals(HttpHeaders.RETRY_AFTER, "1")
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.type").isEqualTo("urn:rozklad:problem:too-many-requests")
+                .jsonPath("$.status").isEqualTo(429)
+                .jsonPath("$.title").isEqualTo("Забагато запитів")
+                .jsonPath("$.requestId").exists();
     }
 
     @Test

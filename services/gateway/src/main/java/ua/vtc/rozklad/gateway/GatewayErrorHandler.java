@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Errors raised by the gateway itself (no route, service down, timeout) as RFC 9457
- * ProblemDetail with Ukrainian texts, the same shape the services use.
+ * ProblemDetail with Ukrainian texts, the same shape the services use. Gateway filters that only
+ * set a status (the rate limiter's 429) get the same body through {@link EmptyErrorBodyFilter}.
  */
 @Component
 @Order(-2)
@@ -49,6 +50,11 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
             log.warn("Gateway error {} on {} {}: {}", problem.status().value(), exchange.getRequest().getMethod(),
                     exchange.getRequest().getPath(), error.toString());
         }
+        return write(exchange, response, problem);
+    }
+
+    /** Writes {@code problem} as {@code application/problem+json} into {@code response}. */
+    Mono<Void> write(ServerWebExchange exchange, ServerHttpResponse response, Problem problem) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("type", "urn:rozklad:problem:" + problem.type());
         body.put("title", problem.title());
@@ -84,9 +90,11 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
                 "Сталася непередбачена помилка. Спробуйте пізніше.");
     }
 
-    private static Problem fromStatus(HttpStatusCode status) {
+    static Problem fromStatus(HttpStatusCode status) {
         return switch (status.value()) {
             case 404 -> new Problem(HttpStatus.NOT_FOUND, "not-found", "Не знайдено", "Такого ресурсу не існує.");
+            case 429 -> new Problem(HttpStatus.TOO_MANY_REQUESTS, "too-many-requests", "Забагато запитів",
+                    "Зачекайте секунду й повторіть запит.");
             case 405 -> new Problem(HttpStatus.METHOD_NOT_ALLOWED, "method-not-allowed", "Метод не підтримується",
                     "Цей метод не підтримується для ресурсу.");
             case 503 -> new Problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable",

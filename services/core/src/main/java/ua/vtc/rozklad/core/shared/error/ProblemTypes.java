@@ -6,6 +6,7 @@ import java.net.URI;
 public final class ProblemTypes {
 
     public static final URI VALIDATION = of("validation");
+    public static final URI BAD_REQUEST = of("bad-request");
     public static final URI NOT_FOUND = of("not-found");
     public static final URI CONFLICT = of("conflict");
     public static final URI SCHEDULE_CONFLICT = of("schedule-conflict");

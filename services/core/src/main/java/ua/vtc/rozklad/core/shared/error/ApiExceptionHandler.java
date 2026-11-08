@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -154,6 +155,18 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, ProblemTypes.DATA_INTEGRITY, "Конфлікт даних",
                 "Операція порушує цілісність даних: такий запис уже існує або на нього посилаються інші дані.",
                 request);
+    }
+
+    /** The security firewall rejected the request line (path traversal, encoded slash, …). */
+    @ExceptionHandler(RequestRejectedException.class)
+    ResponseEntity<Object> handleRejected(RequestRejectedException ex, HttpServletRequest request) {
+        log.info("Request rejected by the firewall: {}", ex.getMessage());
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Адреса запиту містить недопустимі символи або сегменти шляху.");
+        body.setType(ProblemTypes.BAD_REQUEST);
+        body.setTitle("Некоректний запит");
+        addRequestId(body);
+        return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(AuthenticationException.class)
