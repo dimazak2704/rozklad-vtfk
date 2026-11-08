@@ -97,7 +97,7 @@ class CalendarApiIT {
         assertThat(calendar.shiftWindow(2, 5).allows(7)).isFalse();
 
         mvc.perform(get("/api/admin/settings").with(TestJwts.admin()))
-                .andExpect(jsonPath("$.approvalMode").value("CONFIRM"))
+                .andExpect(jsonPath("$.approvalMode").value("NOTIFY"))
                 .andExpect(jsonPath("$.collegeName").value("Вінницький технічний фаховий коледж"))
                 .andExpect(jsonPath("$.activeBellProfileId").value((String) defaults.getFirst().get("id")));
     }

@@ -36,14 +36,14 @@ class PersistentSettingsServiceTest {
         SystemSettings settings = service().current();
 
         assertThat(settings).isEqualTo(SystemSettings.DEFAULTS);
-        assertThat(settings.approvalMode()).isEqualTo(ChangeApprovalMode.CONFIRM);
+        assertThat(settings.approvalMode()).isEqualTo(ChangeApprovalMode.NOTIFY);
         assertThat(settings.confirmTimeoutMinutes()).isEqualTo(120);
         assertThat(settings.signatoryPosition()).isEqualTo("Заступник директора з НР");
         assertThat(settings.signatoryName()).isEqualTo("Микола ПОЛІЩУК");
         assertThat(settings.collegeName()).isEqualTo("Вінницький технічний фаховий коледж");
         assertThat(settings.hoursPerPair()).isEqualTo(2);
         assertThat(settings.showTeacherFullNames()).isFalse();
-        assertThat(settings.requiresConfirmation()).isTrue();
+        assertThat(settings.requiresConfirmation()).as("NOTIFY confirms at once").isFalse();
     }
 
     @Test

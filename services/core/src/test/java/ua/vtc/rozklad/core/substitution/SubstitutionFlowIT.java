@@ -138,6 +138,8 @@ class SubstitutionFlowIT {
         fixture.lesson(semester, MONDAY, 1, ki41, 0, opcz, hanza, room110);
         stpLesson = fixture.lesson(semester, MONDAY, 2, ki41, 0, stp, krentsin, room6);
         fixture.lesson(semester, MONDAY, 3, ki41, 0, ndks, nepyivoda, room6);
+        // потік із запитом на підтвердження (CONFIRM); типовий NOTIFY перевіряє NotifyApprovalIT
+        fixture.setting("substitution.approvalMode", "CONFIRM");
         fixture.lesson(semester, MONDAY, 1, ki42, 0, ndks, nepyivoda, room6);
         fixture.competence(nepyivoda, stp);
         fixture.load(semester, ki41, stp, 44, krentsin);

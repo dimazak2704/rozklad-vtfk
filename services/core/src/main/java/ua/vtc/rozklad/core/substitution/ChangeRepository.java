@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -37,6 +38,14 @@ public interface ChangeRepository extends JpaRepository<Change, UUID> {
     default void lockDecisionsOf(LocalDate date) {
         acquireAdvisoryLock("change-date:" + date);
     }
+
+    /**
+     * Date of a change without loading the entity: callers take {@link #lockDecisionsOf} first and only
+     * then read the change, so they see what a decision that held the lock (a publication, a cancel)
+     * committed instead of the state from before the wait.
+     */
+    @Query("select c.date from Change c where c.id = :id")
+    Optional<LocalDate> findDateById(UUID id);
 
     @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:key, 0))", nativeQuery = true)
     Integer acquireAdvisoryLock(String key);

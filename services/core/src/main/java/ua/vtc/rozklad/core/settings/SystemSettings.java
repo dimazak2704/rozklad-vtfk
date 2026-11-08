@@ -8,7 +8,7 @@ import java.util.UUID;
  * Typed system settings (CONTRACTS §2 {@code SettingsDto}, DOMAIN §7–§8). Values come from the
  * {@code setting} table; a key without a row falls back to {@link #DEFAULTS}.
  *
- * @param approvalMode          whether a new teacher must confirm a substitution
+ * @param approvalMode          what a new teacher of a substitution gets: a notice (NOTIFY), a request (CONFIRM), nothing (AUTO)
  * @param confirmTimeoutMinutes reminder after this many minutes of a pending confirmation
  * @param signatoryPosition     signature line of orders («Заступник директора з НР»)
  * @param signatoryName         signature name of orders («Микола ПОЛІЩУК»)
@@ -35,9 +35,12 @@ public record SystemSettings(
     public static final int MAX_SIGNATORY_NAME_LENGTH = 100;
     public static final int MAX_COLLEGE_NAME_LENGTH = 200;
 
-    /** Values from the college documents (orders №35, №96, №105) and DOMAIN §7–§9. */
+    /**
+     * Values from the college documents (orders №35, №96, №105) and DOMAIN §7–§9. The approval mode is
+     * NOTIFY: the dispatcher assigns and the teacher is told afterwards (college workflow, 08.11.2026).
+     */
     public static final SystemSettings DEFAULTS = new SystemSettings(
-            ChangeApprovalMode.CONFIRM,
+            ChangeApprovalMode.NOTIFY,
             120,
             "Заступник директора з НР",
             "Микола ПОЛІЩУК",

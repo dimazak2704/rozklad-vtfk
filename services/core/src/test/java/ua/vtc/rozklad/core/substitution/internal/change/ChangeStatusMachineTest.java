@@ -41,6 +41,23 @@ class ChangeStatusMachineTest {
                 .isEqualTo(ChangeStatusMachine.ILLEGAL_TRANSITION);
     }
 
+    /** CONFIRMED → DECLINED stays out of the general table: only the informed teacher of a NOTIFY change takes it. */
+    @org.junit.jupiter.api.Test
+    void informedTeacherMayDeclineOnlyAConfirmedChange() {
+        assertThat(ChangeStatusMachine.canTransition(ChangeStatus.CONFIRMED, ChangeStatus.DECLINED)).isFalse();
+        ChangeStatusMachine.requireTeacherDecline(ChangeStatus.CONFIRMED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ChangeStatus.class, names = {"DRAFT", "PENDING_CONFIRMATION", "DECLINED", "CANCELLED", "APPLIED"})
+    void informedTeacherCannotDeclineFromOtherStatuses(ChangeStatus status) {
+        assertThatThrownBy(() -> ChangeStatusMachine.requireTeacherDecline(status))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining(ChangeStatusMachine.label(status))
+                .extracting(error -> ((BusinessRuleException) error).getCode())
+                .isEqualTo(ChangeStatusMachine.ILLEGAL_TRANSITION);
+    }
+
     @ParameterizedTest
     @EnumSource(value = ChangeStatus.class, names = {"APPLIED", "CANCELLED"})
     void appliedAndCancelledAreFinal(ChangeStatus status) {

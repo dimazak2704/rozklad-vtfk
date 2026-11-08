@@ -70,6 +70,26 @@ class SettingsApiIT {
                 String.class)).isEqualTo("admin");
     }
 
+    /** NOTIFY (the default) can be chosen back after another mode; an unknown mode is a field error. */
+    @Test
+    void notifyModeIsAccepted() throws Exception {
+        String body = """
+                {"approvalMode":"%s","confirmTimeoutMinutes":120,"signatoryPosition":"Директор",
+                 "signatoryName":"Світлана ВАСИЛЮК","collegeName":"ВТФК","hoursPerPair":2,
+                 "showTeacherFullNames":false,"activeBellProfileId":null,"version":%d}""";
+        mvc.perform(put("/api/admin/settings").with(TestJwts.admin()).contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted("CONFIRM", settings.version())))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/admin/settings").with(TestJwts.admin()).contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted("NOTIFY", settings.version())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value("NOTIFY"));
+        assertThat(settings.approvalMode()).isEqualTo(ua.vtc.rozklad.core.settings.ChangeApprovalMode.NOTIFY);
+        mvc.perform(put("/api/admin/settings").with(TestJwts.admin()).contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted("ASK", settings.version())))
+                .andExpect(status().isBadRequest());
+    }
+
     /** Two administrators save the form they both loaded: one wins, the other gets 409 stale-data. */
     @Test
     void parallelSavesOfTheSameVersionLetOnlyOneWin() throws Exception {

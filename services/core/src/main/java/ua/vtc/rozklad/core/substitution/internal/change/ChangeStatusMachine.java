@@ -24,6 +24,10 @@ import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
  * </pre>
  * APPLIED and CANCELLED are final. A declined change returns its lesson to «needs decision»; it
  * can only be asked again or cancelled.
+ *
+ * <p>One transition is not in the table because only one actor may take it: in approval mode NOTIFY
+ * the informed teacher answers «Не можу» to a change that is CONFIRMED but not yet published, and it
+ * becomes DECLINED ({@link #requireTeacherDecline}). The dispatcher cannot decline a confirmed change.
  */
 public final class ChangeStatusMachine {
 
@@ -52,6 +56,18 @@ public final class ChangeStatusMachine {
         if (!canTransition(from, to)) {
             throw new BusinessRuleException(ILLEGAL_TRANSITION,
                     "Зміну зі статусом «%s» не можна перевести у статус «%s».".formatted(label(from), label(to)));
+        }
+    }
+
+    /**
+     * CONFIRMED → DECLINED when the informed teacher of a NOTIFY change cannot take it (DOMAIN §7).
+     *
+     * @throws BusinessRuleException (422, {@value #ILLEGAL_TRANSITION}) from any other status
+     */
+    public static void requireTeacherDecline(ChangeStatus from) {
+        if (from != CONFIRMED) {
+            throw new BusinessRuleException(ILLEGAL_TRANSITION,
+                    "Зміну зі статусом «%s» не можна перевести у статус «%s».".formatted(label(from), label(DECLINED)));
         }
     }
 

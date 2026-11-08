@@ -51,7 +51,7 @@ class EventExternalizationConfigTest {
 
     @Test
     void everyOutboundTypeIsAContractEventProducedByCore() {
-        assertThat(EventExternalizationConfig.OUTBOUND).hasSize(8)
+        assertThat(EventExternalizationConfig.OUTBOUND).hasSize(9)
                 .allSatisfy(type -> assertThat(RozkladEvents.routingKey(type)).isNotBlank());
     }
 }

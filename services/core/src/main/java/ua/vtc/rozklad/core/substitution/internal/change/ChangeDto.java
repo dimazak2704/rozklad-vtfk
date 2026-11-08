@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.RoomRef;
@@ -21,7 +22,10 @@ import ua.vtc.rozklad.core.substitution.ApprovalMode;
  * {@code createdAt}, {@code version} (send it back in PUT for optimistic locking) and
  * {@code supersededBy}: the published change that later decided about the lesson this applied
  * change created (an amendment cancelled the substitute's pair or gave it to someone else), else
- * {@code null}.
+ * {@code null}. Round 7: {@code teacherAnswer}, the assigned teacher's answer in the current round
+ * ({@code CONFIRM} = «Підтверджую» / «Добре», {@code DECLINE} = «Не можу», {@code null} = no answer yet);
+ * with {@code approvalMode} NOTIFY and status APPLIED, {@code DECLINE} is an objection that needs an
+ * amendment to the published order.
  */
 public record ChangeDto(
         UUID id,
@@ -51,7 +55,8 @@ public record ChangeDto(
         String createdBy,
         Instant createdAt,
         long version,
-        Successor supersededBy) {
+        Successor supersededBy,
+        ConfirmationDecision teacherAnswer) {
 
     public record Parties(DisciplineRef discipline, TeacherRef teacher, RoomRef room) {
     }

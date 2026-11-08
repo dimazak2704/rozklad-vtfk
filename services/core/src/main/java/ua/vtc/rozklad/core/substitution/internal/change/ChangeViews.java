@@ -102,7 +102,8 @@ public class ChangeViews {
                 change.getCreatedBy(),
                 change.getCreatedAt(),
                 change.getVersion(),
-                successors.get(change.getId()))).toList();
+                successors.get(change.getId()),
+                change.getTeacherAnswer())).toList();
     }
 
     /**

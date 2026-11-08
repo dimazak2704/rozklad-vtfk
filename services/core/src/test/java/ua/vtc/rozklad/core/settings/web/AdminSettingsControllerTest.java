@@ -43,7 +43,7 @@ class AdminSettingsControllerTest {
         mockMvc.perform(get("/api/admin/settings").with(TestJwts.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(3))
-                .andExpect(jsonPath("$.approvalMode").value("CONFIRM"))
+                .andExpect(jsonPath("$.approvalMode").value("NOTIFY"))
                 .andExpect(jsonPath("$.confirmTimeoutMinutes").value(120))
                 .andExpect(jsonPath("$.signatoryPosition").value("Заступник директора з НР"))
                 .andExpect(jsonPath("$.signatoryName").value("Микола ПОЛІЩУК"))

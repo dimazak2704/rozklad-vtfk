@@ -33,6 +33,6 @@ final class ChangeDtos {
                 List.of(new ChangeDto.HistoryEntry(Instant.parse("2026-10-18T15:00:00Z"), "admin", null, status,
                         "Створено")),
                 ApprovalMode.CONFIRM, UUID.randomUUID(), null, null, "Відп.", null, null, "admin",
-                Instant.parse("2026-10-18T15:00:00Z"), 0, null);
+                Instant.parse("2026-10-18T15:00:00Z"), 0, null, null);
     }
 }

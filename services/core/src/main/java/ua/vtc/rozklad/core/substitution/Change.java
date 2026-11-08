@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
@@ -91,6 +92,10 @@ public class Change extends BaseEntity {
 
     @Column(name = "response_comment", columnDefinition = "text")
     private String responseComment;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "teacher_answer", length = 16)
+    private ConfirmationDecision teacherAnswer;
 
     @Column(name = "order_id")
     private UUID orderId;
@@ -257,7 +262,17 @@ public class Change extends BaseEntity {
         return responseComment;
     }
 
-    public void recordResponse(Instant respondedAt, String responseComment) {
+    /**
+     * The assigned teacher's latest answer in the current round: CONFIRM («Підтверджую» / «Добре») or
+     * DECLINE («Не можу»); {@code null} while he has not answered.
+     */
+    public ConfirmationDecision getTeacherAnswer() {
+        return teacherAnswer;
+    }
+
+    /** The assigned teacher answered (cabinet or Telegram). */
+    public void recordAnswer(ConfirmationDecision answer, Instant respondedAt, String responseComment) {
+        this.teacherAnswer = Objects.requireNonNull(answer, "answer");
         this.respondedAt = Objects.requireNonNull(respondedAt, "respondedAt");
         this.responseComment = responseComment;
     }
@@ -301,10 +316,11 @@ public class Change extends BaseEntity {
         this.remindedAt = Objects.requireNonNull(at, "at");
     }
 
-    /** Starts a new confirmation round: new deadline, no reminder sent yet. */
+    /** Starts a new confirmation round: new deadline, no reminder sent yet, no answer yet. */
     public void startConfirmationRound(Instant deadline) {
         this.confirmDeadline = Objects.requireNonNull(deadline, "deadline");
         this.remindedAt = null;
+        this.teacherAnswer = null;
     }
 
     public String getCreatedBy() {

@@ -625,6 +625,10 @@ class TimetablePublicationIT {
 
     @Test
     void republicationReportsLessonsKeptForOpenDecisionsAndReplacesThemOnceAbandoned() {
+        // рішення, що чекає відповіді, є лише в режимі CONFIRM (типовий режим — NOTIFY)
+        jdbc.update("INSERT INTO setting (key, value, updated_at, updated_by) VALUES "
+                + "('substitution.approvalMode', '\"CONFIRM\"', now(), 'test') "
+                + "ON CONFLICT (key) DO UPDATE SET value = excluded.value");
         UUID firstVersion = imports.importTimetable(importCommand()).versionId();
         publication.publish(firstVersion, data.semester.getStartsOn(), "admin");
         UUID group = data.group4ki1.getId();

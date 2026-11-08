@@ -131,6 +131,8 @@ class ChangeLifecycleIT {
         stp = fixture.discipline("СТП", "Сучасні технології проєктування");
         room = fixture.room("6");
         lesson = fixture.lesson(semester, MONDAY, 2, group, 0, stp, krentsin, room);
+        // ці тести перевіряють режим CONFIRM; NOTIFY (типовий) — у NotifyApprovalIT
+        fixture.setting("substitution.approvalMode", "CONFIRM");
     }
 
     @AfterEach

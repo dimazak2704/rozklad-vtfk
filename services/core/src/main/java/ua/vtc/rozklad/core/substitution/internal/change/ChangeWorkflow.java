@@ -36,25 +36,36 @@ public class ChangeWorkflow {
     }
 
     /**
-     * Approval rules for a new change: with a teacher to assign and approval mode CONFIRM it waits
-     * for the teacher (DRAFT → PENDING_CONFIRMATION), otherwise it is confirmed at once
-     * (DRAFT → CONFIRMED). One history entry records the creation.
+     * Approval rules for a new change. Without a teacher to assign it is confirmed at once (AUTO). With
+     * one, the setting decides: CONFIRM waits for the teacher (DRAFT → PENDING_CONFIRMATION, deadline,
+     * request); NOTIFY confirms at once and informs the teacher (no deadline, no reminders); AUTO
+     * confirms at once without a message. One history entry records the creation.
      */
     public void open(Change change, String actor) {
-        boolean askTeacher = change.getNewTeacherId() != null && settings.requiresConfirmation();
-        ChangeStatus target = askTeacher ? ChangeStatus.PENDING_CONFIRMATION : ChangeStatus.CONFIRMED;
+        ApprovalMode mode = change.getNewTeacherId() == null ? ApprovalMode.AUTO : switch (settings.approvalMode()) {
+            case AUTO -> ApprovalMode.AUTO;
+            case CONFIRM -> ApprovalMode.CONFIRM;
+            case NOTIFY -> ApprovalMode.NOTIFY;
+        };
+        ChangeStatus target = mode == ApprovalMode.CONFIRM ? ChangeStatus.PENDING_CONFIRMATION : ChangeStatus.CONFIRMED;
         ChangeStatusMachine.requireTransition(change.getStatus(), target);
         change.setStatus(target);
-        change.setApprovalMode(askTeacher ? ApprovalMode.CONFIRM : ApprovalMode.AUTO);
-        if (askTeacher) {
+        change.setApprovalMode(mode);
+        if (mode == ApprovalMode.CONFIRM) {
             change.startConfirmationRound(clock.instant().plus(settings.current().confirmTimeout()));
         }
-        history.save(new ChangeHistory(change.getId(), clock.instant(), actor, null, target,
-                askTeacher ? "Створено, очікує підтвердження викладача" : "Створено і підтверджено"));
-        if (askTeacher) {
-            notifications.confirmationRequested(change);
-        } else {
-            notifications.statusChanged(change);
+        history.save(new ChangeHistory(change.getId(), clock.instant(), actor, null, target, switch (mode) {
+            case CONFIRM -> "Створено, очікує підтвердження викладача";
+            case NOTIFY -> "Створено і підтверджено, викладачу надіслано повідомлення";
+            case AUTO -> "Створено і підтверджено";
+        }));
+        switch (mode) {
+            case CONFIRM -> notifications.confirmationRequested(change);
+            case NOTIFY -> {
+                notifications.statusChanged(change);
+                notifications.confirmationRequested(change);
+            }
+            case AUTO -> notifications.statusChanged(change);
         }
     }
 
@@ -65,8 +76,35 @@ public class ChangeWorkflow {
      * is replaced by the current version's lesson).
      */
     public void moveTo(Change change, ChangeStatus target, String actor, String comment) {
+        ChangeStatusMachine.requireTransition(change.getStatus(), target);
+        transition(change, target, actor, comment);
+    }
+
+    /**
+     * NOTIFY: the informed teacher cannot take a confirmed, not yet published change
+     * (CONFIRMED → DECLINED). The lesson needs a decision again, exactly as after a declined request.
+     */
+    public void declineAssigned(Change change, String actor, String comment) {
+        if (change.getApprovalMode() != ApprovalMode.NOTIFY) {
+            throw new BusinessRuleException(ChangeStatusMachine.ILLEGAL_TRANSITION,
+                    "Підтверджену заміну може відхилити лише викладач, якому про неї повідомили.");
+        }
+        ChangeStatusMachine.requireTeacherDecline(change.getStatus());
+        transition(change, ChangeStatus.DECLINED, actor, comment);
+    }
+
+    /**
+     * An answer that keeps the status (NOTIFY: «Добре», or «Не можу» after publication): a history
+     * entry with the same status on both sides and {@code substitution.teacher-replied}.
+     */
+    public void recordAnswerWithoutTransition(Change change, String actor, String comment) {
+        history.save(new ChangeHistory(change.getId(), clock.instant(), actor, change.getStatus(), change.getStatus(),
+                comment));
+        notifications.teacherReplied(change);
+    }
+
+    private void transition(Change change, ChangeStatus target, String actor, String comment) {
         ChangeStatus from = change.getStatus();
-        ChangeStatusMachine.requireTransition(from, target);
         change.setStatus(target);
         history.save(new ChangeHistory(change.getId(), clock.instant(), actor, from, target, comment));
         notifications.statusChanged(change);
@@ -80,7 +118,7 @@ public class ChangeWorkflow {
 
     /**
      * Asks the assigned teacher (again): a new confirmation round with a fresh deadline. Allowed for
-     * DRAFT, PENDING_CONFIRMATION (re-send) and DECLINED (ask once more).
+     * DRAFT, PENDING_CONFIRMATION (re-send) and DECLINED (ask once more, whatever mode the change had).
      */
     public void requestConfirmation(Change change, String actor) {
         if (change.getNewTeacherId() == null) {
