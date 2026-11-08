@@ -9,6 +9,7 @@ import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
+import { AbsenceForm } from './AbsenceForm';
 import { changeStatusBadge } from './change-text';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
@@ -117,6 +118,24 @@ describe('схема відсутності', () => {
     const values = schema.parse({ dateFrom: '2026-11-10', dateTo: '2026-11-11', wholeDay: false, pairs: [4, 2], reasonCategory: 'SICK_LEAVE', comment: '  ' });
     expect(toAbsenceRequest(values)).toEqual({ dateFrom: '2026-11-10', dateTo: '2026-11-11', pairs: [2, 4], reasonCategory: 'SICK_LEAVE', comment: null });
     expect(toAbsenceRequest({ ...values, wholeDay: true }).pairs).toBeNull();
+  });
+});
+
+describe('AbsenceForm: дні', () => {
+  it('два кліки в календарі обирають кілька днів, третій починає новий вибір', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
+    const day = (name: RegExp) => screen.getByRole('button', { name });
+    const summary = () => screen.getByText(/навчальних днів/).closest('p')?.textContent ?? '';
+
+    await user.click(day(/четвер, 19/));
+    expect(summary()).toContain('навчальних днів: 1');
+    await user.click(day(/пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/));
+    expect(summary()).toMatch(/19–20\sлистопада/);
+    expect(summary()).toContain('навчальних днів: 2');
+
+    await user.click(day(/вівторок, 24/));
+    expect(summary()).toContain('навчальних днів: 1');
   });
 });
 

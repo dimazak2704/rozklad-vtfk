@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleExclamationPoint, Send } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DayPicker, type DateRange } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
 import { Controller, useForm, useWatch } from 'react-hook-form';
@@ -49,6 +49,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   const schema = useMemo(() => absenceSchema(today), [today]);
   const first = nearestStudyDay(today);
   const container = useRef<HTMLFormElement>(null);
+  const [awaitingEnd, setAwaitingEnd] = useState(false);
   const form = useForm<AbsenceFormValues>({
     resolver: zodResolver(schema),
     defaultValues: { dateFrom: first, dateTo: first, wholeDay: true, pairs: [], comment: '' },
@@ -79,6 +80,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
       notify.success('Відсутність повідомлено', {
         description: `${formatDateRange(created.dateFrom, created.dateTo)}: диспетчер підбере заміни, а ви побачите їх у кабінеті.`,
       });
+      setAwaitingEnd(false);
       form.reset({ dateFrom: first, dateTo: first, wholeDay: true, pairs: [], comment: '', reasonCategory: values.reasonCategory });
     } catch (error) {
       if (!isApiError(error)) {
@@ -97,8 +99,10 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
     }
   });
 
+  // перший клік обирає початок: календар має бачити діапазон без кінця, щоб другий клік його завершив
+  // (форма тим часом уже має один день, і підсумок показує «навчальних днів: 1»)
   const selected: DateRange | undefined = isIsoDate(dateFrom)
-    ? { from: localDateFromIso(dateFrom), to: isIsoDate(dateTo) ? localDateFromIso(dateTo) : undefined }
+    ? { from: localDateFromIso(dateFrom), to: isIsoDate(dateTo) && !awaitingEnd ? localDateFromIso(dateTo) : undefined }
     : undefined;
 
   return (
@@ -121,6 +125,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             onSelect={(range) => {
               const from = range?.from ? isoFromLocalDate(range.from) : '';
               const to = range?.to ? isoFromLocalDate(range.to) : from;
+              setAwaitingEnd(Boolean(range?.from) && !range?.to);
               form.setValue('dateFrom', from, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
               form.setValue('dateTo', to, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
             }}
