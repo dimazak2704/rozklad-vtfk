@@ -109,7 +109,7 @@ teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOU
 Import apply (role ADMIN or SERVICE): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
 `POST /api/admin/import/timetable` `{semesterId, name, lessons:[{weekday,pair,parity,groupCode,subgroup,disciplineShortName,teacherShortName?,roomName?,online}]}` → draft version id;
-`POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import).
+`POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values; absent `splitSubgroups` updates the one item of group × discipline × lesson kind whatever its split, 400 `items[i].splitSubgroups` when both a whole-group and a split item exist); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import).
 `POST /api/admin/import/timetable` honours `Idempotency-Key`. Dates in requests: years 2000–2100.
 
 SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `absence.created`, `generation.progress`,

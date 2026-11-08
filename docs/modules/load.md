@@ -25,6 +25,9 @@ per subgroup, weekly pattern; derivation from a timetable version; import by nat
 ## Decisions
 
 - One item per group × discipline × lesson kind × split (409 on a duplicate).
+- Import without `splitSubgroups` (curriculum, program) updates the item of group × discipline × lesson
+  kind that is there and keeps its split and subgroup teachers; with none it creates a whole-group item;
+  with both a whole-group and a split item it is refused (400 `items[i].splitSubgroups`), nothing written.
 - Hours per week 0.1..40 with one decimal; planned hours default to `hoursPerWeek × teachingWeeks`
   of the semester (rounded).
 - Whole group: at most a teacher for subgroup 0. Split: the group must have subgroups in the catalog;
