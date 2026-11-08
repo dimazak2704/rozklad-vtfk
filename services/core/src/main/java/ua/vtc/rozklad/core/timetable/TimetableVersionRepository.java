@@ -27,6 +27,13 @@ public interface TimetableVersionRepository extends JpaRepository<TimetableVersi
     @Query("select v from TimetableVersion v where v.id = :id")
     Optional<TimetableVersion> findByIdForUpdate(UUID id);
 
+    Optional<TimetableVersion> findByImportKey(String importKey);
+
+    /** Serializes import calls carrying the same {@code Idempotency-Key}. */
+    default void lockImportKey(String key) {
+        acquireAdvisoryLock("timetable-import:" + key);
+    }
+
     /** Serializes publications of one semester with a transaction-scoped PostgreSQL advisory lock. */
     default void lockPublication(UUID semesterId) {
         acquireAdvisoryLock("timetable-publication:" + semesterId);

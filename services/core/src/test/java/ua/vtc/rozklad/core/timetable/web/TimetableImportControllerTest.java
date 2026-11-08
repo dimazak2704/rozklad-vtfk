@@ -51,22 +51,24 @@ class TimetableImportControllerTest {
 
     @Test
     void importerServiceAccountCreatesADraft() throws Exception {
-        given(imports.importTimetable(any())).willReturn(new ImportTimetableResult(VERSION, "Розклад 2025/26 (Excel)",
+        given(imports.importTimetable(any(), any())).willReturn(new ImportTimetableResult(VERSION, "Розклад 2025/26 (Excel)",
                 1, 0, 0));
 
         mockMvc.perform(post("/api/admin/import/timetable").with(TestJwts.service())
+                        .header("Idempotency-Key", "import-job:42:timetable")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "/api/admin/timetable/versions/" + VERSION))
                 .andExpect(jsonPath("$.versionId").value(VERSION.toString()))
                 .andExpect(jsonPath("$.lessonCount").value(1));
         verify(imports).importTimetable(new ImportTimetableCommand(SEMESTER, "Розклад 2025/26 (Excel)", List.of(
-                new ImportTimetableCommand.Lesson(1, 2, Parity.BOTH, "4КІ1", 0, "СТП", "Кренцін М.Д.", "6", false))));
+                new ImportTimetableCommand.Lesson(1, 2, Parity.BOTH, "4КІ1", 0, "СТП", "Кренцін М.Д.", "6", false))),
+                "import-job:42:timetable");
     }
 
     @Test
     void unknownNamesAreListedPerField() throws Exception {
-        given(imports.importTimetable(any())).willThrow(new UnresolvedImportReferencesException(List.of(
+        given(imports.importTimetable(any(), any())).willThrow(new UnresolvedImportReferencesException(List.of(
                 new FieldErrorDto("lessons[0].teacherShortName",
                         "Викладача «Іваненко І.І.» не знайдено в каталозі (рядків: 3)"))));
 
@@ -88,7 +90,7 @@ class TimetableImportControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"pair\":2", "\"pair\":9")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("lessons[0].pair"));
-        verify(imports, never()).importTimetable(any());
+        verify(imports, never()).importTimetable(any(), any());
     }
 
     @Test

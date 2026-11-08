@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.catalog.TeacherAliasRepository;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
+import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.FieldErrorDto;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
@@ -64,6 +66,26 @@ public class TimetableImportService {
 
     @Transactional
     public ImportTimetableResult importTimetable(ImportTimetableCommand command) {
+        return importTimetable(command, null);
+    }
+
+    /**
+     * With an {@code idempotencyKey} (the importer sends {@code import-job:<id>:timetable}) a repeated
+     * call returns the draft created by the first one, so a retry after a lost response does not
+     * leave a duplicate version; the same key with a different request is a 409. The key lives as
+     * long as the draft: after the draft is deleted the key may create a new one.
+     */
+    @Transactional
+    public ImportTimetableResult importTimetable(ImportTimetableCommand command, String idempotencyKey) {
+        String requestHash = null;
+        if (idempotencyKey != null) {
+            versions.lockImportKey(idempotencyKey);
+            requestHash = ImportRequestHash.of(command);
+            Optional<TimetableVersion> earlier = versions.findByImportKey(idempotencyKey);
+            if (earlier.isPresent()) {
+                return repeat(earlier.get(), requestHash);
+            }
+        }
         if (!semesters.existsById(command.semesterId())) {
             throw new BusinessRuleException(LessonReferenceValidator.REFERENCE_NOT_FOUND,
                     NotFoundException.of("Семестр", command.semesterId()).getMessage());
@@ -91,12 +113,26 @@ public class TimetableImportService {
             throw new UnresolvedImportReferencesException(problems.errors());
         }
 
-        TimetableVersion version = versions.save(new TimetableVersion(command.semesterId(), command.name().strip(),
-                VersionSource.IMPORT));
+        TimetableVersion draft = new TimetableVersion(command.semesterId(), command.name().strip(), VersionSource.IMPORT);
+        if (idempotencyKey != null) {
+            draft.markImported(idempotencyKey, requestHash);
+        }
+        TimetableVersion version = versions.save(draft);
         List<TemplateLesson> created = resolved.stream().map(lesson -> lesson.toTemplate(version.getId())).toList();
         lessons.saveAll(created);
         VersionAnalysis.Result result = analysis.analyze(command.semesterId(), created);
         return new ImportTimetableResult(version.getId(), version.getName(), created.size(),
+                result.conflicts().hard().size(), result.conflicts().soft().size());
+    }
+
+    private ImportTimetableResult repeat(TimetableVersion version, String requestHash) {
+        if (!requestHash.equals(version.getImportRequestHash())) {
+            throw new ConflictException("Ключ Idempotency-Key уже використано для іншого імпорту розкладу "
+                    + "(чернетка «%s»).".formatted(version.getName()));
+        }
+        List<TemplateLesson> existing = lessons.findAllByVersionId(version.getId());
+        VersionAnalysis.Result result = analysis.analyze(version.getSemesterId(), existing);
+        return new ImportTimetableResult(version.getId(), version.getName(), existing.size(),
                 result.conflicts().hard().size(), result.conflicts().soft().size());
     }
 

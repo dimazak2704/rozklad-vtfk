@@ -155,6 +155,22 @@ class TimetablePublicationIT {
         });
     }
 
+    /** A retry of the importer's call with the same Idempotency-Key returns the first draft. */
+    @Test
+    void repeatedImportWithTheSameKeyReturnsTheFirstDraft() {
+        ImportTimetableResult first = imports.importTimetable(importCommand(), "import-job:test:timetable");
+        ImportTimetableResult repeat = imports.importTimetable(importCommand(), "import-job:test:timetable");
+
+        assertThat(repeat).isEqualTo(first);
+        assertThat(count("SELECT count(*) FROM timetable_version WHERE semester_id = ?", data.semester.getId()))
+                .isEqualTo(1);
+        ImportTimetableCommand other = new ImportTimetableCommand(data.semester.getId(), "Інша назва",
+                importCommand().lessons());
+        assertThatThrownBy(() -> imports.importTimetable(other, "import-job:test:timetable"))
+                .isInstanceOf(ConflictException.class);
+        assertThat(imports.importTimetable(importCommand(), null).versionId()).isNotEqualTo(first.versionId());
+    }
+
     @Test
     void publicScheduleShowsTimesNotesAndAnswers304WhenUnchanged() {
         publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");

@@ -55,6 +55,12 @@ public class TimetableVersion extends BaseEntity {
     @Column(name = "notes", columnDefinition = "text")
     private String notes;
 
+    @Column(name = "import_key", length = 200, updatable = false)
+    private String importKey;
+
+    @Column(name = "import_request_hash", length = 64, updatable = false)
+    private String importRequestHash;
+
     protected TimetableVersion() {
     }
 
@@ -129,6 +135,20 @@ public class TimetableVersion extends BaseEntity {
 
     public void setMetrics(JsonNode metrics) {
         this.metrics = metrics;
+    }
+
+    /** {@code Idempotency-Key} of the import call that created this draft, if any. */
+    public String getImportKey() {
+        return importKey;
+    }
+
+    public String getImportRequestHash() {
+        return importRequestHash;
+    }
+
+    public void markImported(String key, String requestHash) {
+        this.importKey = Objects.requireNonNull(key, "key");
+        this.importRequestHash = Objects.requireNonNull(requestHash, "requestHash");
     }
 
     public String getNotes() {
