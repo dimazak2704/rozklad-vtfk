@@ -70,6 +70,11 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  # межі декодера Netty вищі за межі RequestHeadFilter (4 КБ адреса, 8 КБ заголовків): запит між
+  # ними отримує 414/431 з ProblemDetail, а не порожню відповідь Netty
+  max-http-request-header-size: 64KB
+  netty:
+    max-initial-line-length: 64KB
 
 management:
   endpoints:
