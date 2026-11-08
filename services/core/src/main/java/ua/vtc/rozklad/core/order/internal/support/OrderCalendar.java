@@ -42,6 +42,14 @@ public class OrderCalendar {
         return calendar.week(date).map(week -> week.parity()).orElse(null);
     }
 
+    /**
+     * Whether the college has classes on the date: Mon–Fri inside a semester and outside every holiday or
+     * no-classes period of everybody ({@link CalendarQueries#isStudyDay}).
+     */
+    public boolean isStudyDay(LocalDate date) {
+        return calendar.isStudyDay(date);
+    }
+
     /** NUMERATOR or DENOMINATOR of the date's week (a manual override of the week wins). */
     public Parity parity(LocalDate date) {
         return calendar.parity(date);

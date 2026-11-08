@@ -29,7 +29,7 @@ Page<T>       {items:[T], page, size, total}
 | `GET /api/public/rooms` | `[{id, name, type, capacity, building, maxParallel}]` |
 | `GET /api/public/bells?date=` | `{profile:{id,name}, weekday, slots:[{pair, startsAt, endsAt}]}` (+ `profiles` list when no date) |
 | `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
-| `GET /api/public/changes?date=` | `{date, parity, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}` |
+| `GET /api/public/changes?date=` | `{date, parity, studyDay, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}` |
 | `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` for the semester (published lessons) |
 | `GET /api/public/invites/{token}` | `{valid, teacherName, expiresAt}` |
 | `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired/used/revoked (`inviteStatus`) |

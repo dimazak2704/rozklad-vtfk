@@ -66,8 +66,8 @@ class PublicChanges {
         List<PrintedRow> rows = published.stream()
                 .flatMap(order -> order.getItems().stream().map(item -> new PrintedRow(item, order.getNumber())))
                 .toList();
-        return new PublicChangesDto(date, parity, UkrainianText.weekday(date.getDayOfWeek()), main, amendments,
-                grouped(rows));
+        return new PublicChangesDto(date, parity, calendar.isStudyDay(date), UkrainianText.weekday(date.getDayOfWeek()),
+                main, amendments, grouped(rows));
     }
 
     private static PublicChangesDto.PublishedOrder summary(OrderDocument order) {

@@ -36,7 +36,7 @@ class PublicChangesControllerTest {
     @Test
     void anyoneSeesThePublishedChangesOfADate() throws Exception {
         LocalDate date = LocalDate.of(2026, 10, 19);
-        given(changes.of(date)).willReturn(new PublicChangesDto(date, Parity.DENOMINATOR, "Понеділок",
+        given(changes.of(date)).willReturn(new PublicChangesDto(date, Parity.DENOMINATOR, true, "Понеділок",
                 new PublicChangesDto.PublishedOrder(UUID.randomUUID(), 35, Instant.parse("2026-10-18T14:00:00Z"), false),
                 List.of(new PublicChangesDto.PublishedOrder(UUID.randomUUID(), 36, Instant.parse("2026-10-19T07:00:00Z"),
                         false)),
@@ -48,6 +48,7 @@ class PublicChangesControllerTest {
         mockMvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.parity").value("DENOMINATOR"))
+                .andExpect(jsonPath("$.studyDay").value(true))
                 .andExpect(jsonPath("$.order.number").value(35))
                 .andExpect(jsonPath("$.groups[0].group.code").value("1ТК1"))
                 .andExpect(jsonPath("$.groups[0].items[0].to.discipline").value("Пари не буде"))

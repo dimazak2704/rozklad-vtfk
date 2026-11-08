@@ -11,12 +11,15 @@ import ua.vtc.rozklad.contracts.Parity;
  * {@code GET /api/public/changes?date=}: the published changes of a date grouped by group. Only
  * published orders (main + amendments) are public; {@code parity} is {@code null} outside every
  * semester. {@code from}/{@code to} are the printed text of the order row. Additive:
- * {@code amendments} (published amendments of the date by number, each with its own documents) and
- * {@code ChangeView.orderNumber} (the order or amendment the row is printed in).
+ * {@code amendments} (published amendments of the date by number, each with its own documents),
+ * {@code ChangeView.orderNumber} (the order or amendment the row is printed in) and {@code studyDay}
+ * ({@code false} on weekends, holidays of the whole college and outside every semester — the regular
+ * timetable does not run that day, so «no order yet» does not mean «classes as usual»).
  */
 public record PublicChangesDto(
         LocalDate date,
         Parity parity,
+        boolean studyDay,
         String weekdayLabel,
         PublishedOrder order,
         List<PublishedOrder> amendments,

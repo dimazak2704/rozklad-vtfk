@@ -265,12 +265,39 @@ class OrderPublicationIT {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.parity").isEqualTo("DENOMINATOR")
+                .jsonPath("$.studyDay").isEqualTo(true)
                 .jsonPath("$.weekdayLabel").isEqualTo("Понеділок")
                 .jsonPath("$.order.number").isEqualTo(35)
                 .jsonPath("$.groups.length()").isEqualTo(7)
                 .jsonPath("$.groups[3].group.code").isEqualTo("1ТК1")
                 .jsonPath("$.groups[3].items[1].subgroupNote").isEqualTo("1 підгрупа")
                 .jsonPath("$.groups[3].items[1].to.discipline").isEqualTo("Пари не буде");
+    }
+
+    /**
+     * The public changes page must not say «classes as usual» on a day without classes: a holiday of the
+     * whole college and a date after the semester are not study days (r5-ui-real-93).
+     */
+    @Test
+    void publicChangesTellWhetherTheDateHasClasses() {
+        fixture.period(semester, CalendarPeriodKind.HOLIDAY, "День захисників", LocalDate.of(2026, 10, 14),
+                LocalDate.of(2026, 10, 14), null, null);
+
+        client.get().uri("/api/public/changes?date=2026-10-14").exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.studyDay").isEqualTo(false)
+                .jsonPath("$.parity").isNotEmpty()
+                .jsonPath("$.groups.length()").isEqualTo(0);
+        client.get().uri("/api/public/changes?date=2026-12-31").exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.studyDay").isEqualTo(false)
+                .jsonPath("$.parity").doesNotExist();
+        client.get().uri("/api/public/changes?date=2026-10-20").exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.studyDay").isEqualTo(true);
     }
 
     /**
