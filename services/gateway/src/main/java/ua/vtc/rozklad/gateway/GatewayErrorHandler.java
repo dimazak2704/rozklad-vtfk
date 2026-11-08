@@ -1,6 +1,8 @@
 package ua.vtc.rozklad.gateway;
 
 import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -65,7 +67,9 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
     }
 
     static Problem classify(Throwable error) {
-        if (hasCause(error, ConnectException.class)) {
+        // the service is down: refused connection, no route, or (Docker) its container name no longer resolves
+        if (hasCause(error, ConnectException.class) || hasCause(error, UnknownHostException.class)
+                || hasCause(error, NoRouteToHostException.class)) {
             return new Problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Сервіс тимчасово недоступний",
                     "Спробуйте ще раз за хвилину.");
         }
