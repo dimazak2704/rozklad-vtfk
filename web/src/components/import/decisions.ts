@@ -3,7 +3,7 @@
  * рішення інтерфейсу перетворюється на тіло PUT …/mappings.
  */
 import { isEntityRow, needsDecision, type ImportJob, type ImportReportRow } from '@/api/import';
-import type { ImportMapping, MappingType } from '@/api/types';
+import type { ImportKind, ImportMapping, MappingType } from '@/api/types';
 
 /** existing — зіставити; alias — зіставити й додати написання псевдонімом; create — новий запис. */
 export type MappingAction = 'existing' | 'alias' | 'create';
@@ -23,11 +23,25 @@ export function decisionRows(job: Pick<ImportJob, 'report' | 'mappings'>): Entit
   return job.report.filter(isEntityRow).filter((row) => needsDecision(row) || !row.matched || decided.has(decisionKey(row)));
 }
 
-/** Початковий стан: збережене раніше рішення, «створити» для нового без кандидатів, інакше — не вирішено. */
-export function initialDecision(row: EntityReportRow, mapping: ImportMapping | undefined): Decision {
+/**
+ * Чи застосування цього виду створює новий запис каталогу (як ImportHandler.creates importer):
+ * розпорядження зберігається як текст і не створює нічого; програма й навчальний план додають
+ * навантаження наявним групам і можуть створити лише дисципліну; розклад створює все.
+ */
+export function creates(kind: ImportKind, type: MappingType): boolean {
+  if (kind === 'ORDER_DOCUMENT') return false;
+  if (kind === 'DISCIPLINE_PROGRAM' || kind === 'CURRICULUM') return type === 'DISCIPLINE';
+  return true;
+}
+
+/**
+ * Початковий стан: збережене раніше рішення, «створити» для нового без кандидатів (якщо цей імпорт
+ * взагалі створює такі записи), інакше — не вирішено.
+ */
+export function initialDecision(row: EntityReportRow, mapping: ImportMapping | undefined, creatable = true): Decision {
   if (mapping?.targetId) return { action: mapping.addAlias ? 'alias' : 'existing', targetId: mapping.targetId };
-  if (mapping?.createNew) return { action: 'create', targetId: null };
-  if (needsDecision(row)) return { action: null, targetId: null };
+  if (mapping?.createNew && creatable) return { action: 'create', targetId: null };
+  if (needsDecision(row) || !creatable) return { action: null, targetId: null };
   return { action: 'create', targetId: null };
 }
 
@@ -44,4 +58,30 @@ export function toMapping(row: EntityReportRow, decision: Decision): ImportMappi
     return { type: row.type, raw: row.raw, targetId: decision.targetId, createNew: null, addAlias: decision.action === 'alias' };
   }
   return null;
+}
+
+/** Вкладка перегляду, де виправляють те, що блокує застосування. */
+export type ReviewTab = 'decisions' | 'report' | 'draft';
+
+/** Рядок звіту з параметрів імпорту (групи, години на тиждень) — їх виправляють на вкладці «Чернетка». */
+export const OPTIONS_LOCATION = 'параметри імпорту';
+
+/**
+ * Що блокує застосування і де це виправити: рішення щодо назв — «Рішення»; заголовок і рядки
+ * розпорядження, параметри програми чи плану — «Чернетка»; решта — «Звіт».
+ */
+export function blockingReason(job: Pick<ImportJob, 'kind' | 'report'>): { decisions: number; errors: ImportReportRow[]; tab: ReviewTab } {
+  const decisions = job.report.filter(needsDecision).length;
+  const errors = job.report.filter((row) => row.severity === 'ERROR');
+  if (decisions > 0) return { decisions, errors, tab: 'decisions' };
+  const first = errors[0];
+  const tab: ReviewTab =
+    !first
+      ? 'report'
+      : job.kind === 'ORDER_DOCUMENT' || first.location === OPTIONS_LOCATION
+        ? 'draft'
+        : isEntityRow(first)
+          ? 'decisions'
+          : 'report';
+  return { decisions, errors, tab };
 }

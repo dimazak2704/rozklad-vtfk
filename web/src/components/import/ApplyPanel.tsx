@@ -6,11 +6,15 @@ import { Button, buttonClass, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
+import { blockingReason, type ReviewTab } from './decisions';
 
 interface ApplyPanelProps {
   job: ImportJob;
-  onShowDecisions: () => void;
+  onShowTab: (tab: ReviewTab) => void;
 }
+
+const TAB_BUTTON: Record<ReviewTab, string> = { decisions: 'До рішень', draft: 'До чернетки', report: 'До звіту' };
+const TAB_NAME: Record<ReviewTab, string> = { decisions: '«Рішення»', draft: '«Чернетка»', report: '«Звіт»' };
 
 const APPLY_EFFECT: Record<ImportJob['kind'], string> = {
   TIMETABLE_XLSX: 'Буде створено нових записів каталогу й псевдонімів за вашими рішеннями та чернетку версії розкладу. Опублікований розклад не зміниться.',
@@ -70,7 +74,7 @@ function useElapsed(running: boolean): number {
  * Нижня панель перегляду: що станеться після застосування, кнопка (з підтвердженням), хід застосування
  * і результат з посиланнями туди, де видно зміни.
  */
-export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
+export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
   const apply = useApplyImport(job.id);
   const applying = job.status === 'APPLYING';
   const elapsed = useElapsed(applying);
@@ -142,37 +146,52 @@ export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
     );
   }
 
-  const blocked = job.status === 'NEEDS_REVIEW';
   const failed = job.status === 'FAILED';
-  // сервер сам каже, чи можна застосовувати (READY або FAILED з чернеткою без блокувальних рядків)
+  // сервер сам каже, чи можна застосовувати (READY, FAILED чи повернене core без блокувальних рядків)
   const canApply = job.canApply;
+  const blocked = job.status === 'NEEDS_REVIEW' && !canApply;
+  // core відхилив застосування: причина в job.error, завдання знову на перевірці
+  const rejected = job.status === 'NEEDS_REVIEW' && Boolean(job.error);
+  const reason = blockingReason(job);
 
   return (
     <section
       aria-label="Застосування імпорту"
       className={cn(
         'flex flex-wrap items-center gap-3 rounded-panel border px-4 py-3',
-        failed ? 'border-cancel bg-danger-subtle' : blocked ? 'border-change bg-change-subtle' : 'border-default bg-surface',
+        failed || rejected ? 'border-cancel bg-danger-subtle' : blocked ? 'border-change bg-change-subtle' : 'border-default bg-surface',
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {failed ? (
+        {failed || rejected ? (
           <p className="flex items-center gap-2 text-ui font-semibold text-danger">
-            <CircleX aria-hidden="true" className="size-4" />
+            <CircleX aria-hidden="true" className="size-4 shrink-0" />
             {job.error ?? 'Імпорт не вдався.'}
           </p>
-        ) : blocked ? (
+        ) : null}
+        {blocked && reason.decisions > 0 ? (
           <p className="text-ui font-semibold text-change">
-            Щоб застосувати, вирішіть {countLabel(job.summary.conflicts, ['рядок', 'рядки', 'рядків'])} на вкладці «Рішення».
+            Щоб застосувати, вирішіть {countLabel(reason.decisions, ['рядок', 'рядки', 'рядків'])} на вкладці «Рішення».
           </p>
-        ) : (
+        ) : blocked && reason.errors.length > 0 ? (
+          <p className="text-ui font-semibold text-change">
+            Щоб застосувати, виправте на вкладці {TAB_NAME[reason.tab]}: {reason.errors[0]?.message}
+            {reason.errors.length > 1 ? ` (і ще ${countLabel(reason.errors.length - 1, ['рядок', 'рядки', 'рядків'])})` : ''}
+          </p>
+        ) : !failed && !rejected ? (
           <p className="text-ui font-semibold text-primary">Готово до застосування</p>
-        )}
-        <p className="text-caption text-secondary">{failed && !canApply ? 'Чернетки немає — завантажте файл ще раз.' : APPLY_EFFECT[job.kind]}</p>
+        ) : null}
+        <p className="text-caption text-secondary">
+          {failed && !canApply
+            ? 'Чернетки немає — завантажте файл ще раз.'
+            : rejected && canApply
+              ? 'Виправте чернетку за цим повідомленням або усуньте причину в системі й застосуйте ще раз.'
+              : APPLY_EFFECT[job.kind]}
+        </p>
       </div>
-      {blocked ? (
-        <Button variant="secondary" onClick={onShowDecisions}>
-          До рішень
+      {blocked && (reason.decisions > 0 || reason.errors.length > 0) ? (
+        <Button variant="secondary" onClick={() => onShowTab(reason.tab)}>
+          {TAB_BUTTON[reason.tab]}
         </Button>
       ) : null}
       <Button
@@ -182,7 +201,7 @@ export function ApplyPanel({ job, onShowDecisions }: ApplyPanelProps) {
         iconStart={<Play aria-hidden="true" className="size-4" />}
         onClick={() => void start()}
       >
-        {failed ? 'Спробувати ще раз' : 'Застосувати'}
+        {failed || rejected ? 'Спробувати ще раз' : 'Застосувати'}
       </Button>
     </section>
   );

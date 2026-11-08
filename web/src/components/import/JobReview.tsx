@@ -18,7 +18,7 @@ import {
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
 import { ApplyPanel } from './ApplyPanel';
-import { decisionRows } from './decisions';
+import { blockingReason, decisionRows, type ReviewTab } from './decisions';
 import { CurriculumPreview } from './drafts/CurriculumPreview';
 import { OrderDraftEditor } from './drafts/OrderDraftEditor';
 import { OrderPreview } from './drafts/OrderPreview';
@@ -26,11 +26,12 @@ import { ProgramPreview } from './drafts/ProgramPreview';
 import { TimetablePreview } from './drafts/TimetablePreview';
 import { IMPORT_KIND_LABEL } from './labels';
 import { JobStatusBadge } from './JobStatus';
+import { LoadOptionsPanel } from './LoadOptionsPanel';
 import { MappingPanel } from './MappingPanel';
 import { ReportTable } from './ReportTable';
 import { FileIcon } from './UploadPanel';
 
-type Tab = 'decisions' | 'report' | 'draft';
+type Tab = ReviewTab;
 
 /**
  * Чернетка розпорядження: перегляд у розкладці документа і звірка рядків. Прочитане ШІ треба звірити й
@@ -108,7 +109,7 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
   const draft = typedDraft(data);
   const decisions = decisionRows(data);
   const parsing = data.status === 'UPLOADED' || data.status === 'PARSING';
-  const active: Tab = tab ?? (data.summary.conflicts > 0 ? 'decisions' : 'draft');
+  const active: Tab = tab ?? (data.summary.conflicts > 0 ? blockingReason(data).tab : 'draft');
   const stats = [
     { label: 'Розпізнано', value: data.summary.recognized, tone: 'text-primary' },
     { label: 'Нових записів', value: data.summary.unknown, tone: 'text-primary' },
@@ -166,7 +167,7 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
             ))}
           </dl>
 
-          <ApplyPanel job={data} onShowDecisions={() => setTab('decisions')} />
+          <ApplyPanel job={data} onShowTab={setTab} />
 
           <Tabs value={active} onValueChange={(value) => setTab(value as Tab)}>
             <TabsList aria-label="Розділи імпорту">
@@ -194,9 +195,15 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
               ) : draft.kind === 'ORDER_DOCUMENT' ? (
                 <OrderReview job={data} draft={draft.draft} />
               ) : draft.kind === 'DISCIPLINE_PROGRAM' ? (
-                <ProgramPreview draft={draft.draft} checks={data.report.filter((row) => row.type === 'HOURS')} />
+                <div className="flex flex-col gap-4">
+                  <LoadOptionsPanel key={`${data.id}-${data.version ?? 0}`} job={data} />
+                  <ProgramPreview draft={draft.draft} checks={data.report.filter((row) => row.type === 'HOURS')} />
+                </div>
               ) : (
-                <CurriculumPreview draft={draft.draft} />
+                <div className="flex flex-col gap-4">
+                  <LoadOptionsPanel key={`${data.id}-${data.version ?? 0}`} job={data} />
+                  <CurriculumPreview draft={draft.draft} />
+                </div>
               )}
             </TabsContent>
           </Tabs>

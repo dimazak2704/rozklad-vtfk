@@ -70,6 +70,7 @@ export const ROW_TYPE_LABEL: Record<ReportRowType, string> = {
   CURRICULUM: 'План',
   CATALOG: 'Каталог',
   FILE: 'Файл',
+  OPTIONS: 'Параметри',
 };
 
 /** Знахідний відмінок для кнопок: «Створити викладача». */

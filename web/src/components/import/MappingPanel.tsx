@@ -8,7 +8,7 @@ import { FormAlert } from '@/components/catalog/FormParts';
 import { Badge, Button, Combobox, EmptyState, RadioGroup, notify, type ComboboxOption } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
-import { decisionKey, decisionRows, initialDecision, isComplete, toMapping, type Decision, type EntityReportRow, type MappingAction } from './decisions';
+import { creates, decisionKey, decisionRows, initialDecision, isComplete, toMapping, type Decision, type EntityReportRow, type MappingAction } from './decisions';
 import { ENTITY_ACCUSATIVE, ROW_TYPE_LABEL, scorePercent } from './labels';
 
 const CATALOG_OF: Record<MappingType, CatalogEntity> = {
@@ -23,11 +23,66 @@ const CATALOG_OF: Record<MappingType, CatalogEntity> = {
  * псевдонім (тоді наступний імпорт розпізнає його сам) або створити новий запис. Зберігаються разом.
  */
 export function MappingPanel({ job }: { job: ImportJob }) {
+  if (job.kind === 'ORDER_DOCUMENT') return <OrderMatching job={job} />;
+  return <MappingForm job={job} />;
+}
+
+/**
+ * Розпорядження зберігається як текст: каталог не змінюється, тож рішень немає — лише довідка, як назви з
+ * розпорядження співвідносяться з каталогом (схожі записи допомагають помітити одруківку при звірці).
+ */
+function OrderMatching({ job }: { job: ImportJob }) {
+  const rows = useMemo(() => decisionRows(job), [job]);
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        size="sm"
+        icon={<Check aria-hidden="true" />}
+        title="Усі назви є в каталозі"
+        description="Групи, викладачі, дисципліни й аудиторії розпорядження знайдено в каталозі."
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="max-w-prose text-ui text-secondary">
+        Розпорядження зберігається як текст — каталог не змінюється, рішень тут не потрібно. Назви, яких немає в каталозі,
+        варто ще раз звірити з фото на вкладці «Чернетка»: схожий запис часто підказує одруківку.
+      </p>
+      <ol className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
+        {rows.map((row) => (
+          <li key={decisionKey(row)} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3">
+            <Badge size="sm" tone="neutral">
+              {ROW_TYPE_LABEL[row.type]}
+            </Badge>
+            <span className="font-condensed text-heading font-bold break-words text-primary">«{row.raw}»</span>
+            {row.suggestions.length > 0 ? (
+              <span className="text-caption text-secondary">
+                схоже: {row.suggestions.map((s) => `«${s.label}»`).join(', ')}
+              </span>
+            ) : (
+              <span className="text-caption text-muted">немає в каталозі</span>
+            )}
+            <span className="text-meta font-normal text-muted">{row.location}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function MappingForm({ job }: { job: ImportJob }) {
   const rows = useMemo(() => decisionRows(job), [job]);
   const save = useSaveMappings(job.id);
   const editable = job.status === 'NEEDS_REVIEW' || job.status === 'READY';
   const [decisions, setDecisions] = useState<Map<string, Decision>>(
-    () => new Map(rows.map((row) => [decisionKey(row), initialDecision(row, job.mappings?.find((m) => decisionKey(m) === decisionKey(row)))])),
+    () =>
+      new Map(
+        rows.map((row) => [
+          decisionKey(row),
+          initialDecision(row, job.mappings?.find((m) => decisionKey(m) === decisionKey(row)), creates(job.kind, row.type)),
+        ]),
+      ),
   );
   const [problem, setProblem] = useState<string | null>(null);
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
@@ -92,6 +147,7 @@ export function MappingPanel({ job }: { job: ImportJob }) {
             onChange={(patch) => update(decisionKey(row), patch)}
             missing={missing.has(decisionKey(row))}
             disabled={!editable || save.isPending}
+            creatable={creates(job.kind, row.type)}
           />
         ))}
       </ol>
@@ -122,9 +178,11 @@ interface MappingRowProps {
   onChange: (patch: Partial<Decision>) => void;
   missing: boolean;
   disabled: boolean;
+  /** Цей імпорт може створити такий запис (інакше — лише зіставити з наявним). */
+  creatable: boolean;
 }
 
-function MappingRow({ row, decision, onChange, missing, disabled }: MappingRowProps) {
+function MappingRow({ row, decision, onChange, missing, disabled, creatable }: MappingRowProps) {
   const catalog = useCatalogOptions(CATALOG_OF[row.type], {}, { enabled: decision.action === 'existing' || decision.action === 'alias' });
   const top = row.suggestions[0];
   const aliasable = supportsAlias(row.type);
@@ -141,7 +199,7 @@ function MappingRow({ row, decision, onChange, missing, disabled }: MappingRowPr
   const actions = [
     { value: 'existing' as const, label: 'Зіставити з наявним' },
     ...(aliasable ? [{ value: 'alias' as const, label: 'Зіставити й запамʼятати написання' }] : []),
-    { value: 'create' as const, label: `Створити ${ENTITY_ACCUSATIVE[row.type]}` },
+    ...(creatable ? [{ value: 'create' as const, label: `Створити ${ENTITY_ACCUSATIVE[row.type]}` }] : []),
   ];
 
   return (

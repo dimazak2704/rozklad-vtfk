@@ -437,14 +437,14 @@ function orderReport(): ImportReportRow[] {
       row(exact ? 'OK' : 'INFO', 'TEACHER', raw, 'Таблиця', exact ? null : `Ініціали дописано з каталогу: ${shortName}.`, scored(teacher.id, shortName, exact ? 1 : 0.97)),
     );
   }
-  report.push(row('INFO', 'TEACHER', 'Ємельяненко', 'Таблиця, рядок 1', 'У каталозі немає: буде створено нового викладача.'));
+  report.push(row('INFO', 'TEACHER', 'Ємельяненко', 'Таблиця, рядок 1', 'Немає в каталозі (для інформації: розпорядження зберігається як текст, каталог не змінюється).'));
   for (const name of ['Ін.мова', 'ЕТ', 'Культ.', 'ІКТ', 'ІМД', 'ОД', 'ЕіФБ', 'ТБО', 'Укр.літ.', 'Вс.іст.', 'СТП', 'ОПЦЗ', 'БЖ']) {
     const discipline = disciplineNamed(name);
     report.push(row('OK', 'DISCIPLINE', name, 'Таблиця', null, scored(discipline.id, name, 1)));
   }
   report.push(
     row('INFO', 'DISCIPLINE', 'НДКС', 'Таблиця, рядок 15', 'Збіг за псевдонімом каталогу: НДЕКСМ.', scored(disciplineNamed('НДЕКСМ').id, 'НДЕКСМ', 1)),
-    row('INFO', 'DISCIPLINE', 'ЗУ', 'Таблиця, рядок 1', 'У каталозі немає: буде створено «Захист України» (відома абревіатура).'),
+    row('INFO', 'DISCIPLINE', 'ЗУ', 'Таблиця, рядок 1', 'Немає в каталозі (для інформації: розпорядження зберігається як текст, каталог не змінюється).'),
   );
   for (const code of ['1ТК1', '1ОП2', '1КІ2', '1М', '1ЕА2', '2ОД', '2ОБ', '2М', '2Ф', '3Ф', '4КІ1', '4КІ2']) {
     const group = groupNamed(code);
@@ -678,10 +678,29 @@ function seedJobs(): StoredJob[] {
 
 const jobs = createMockCollection<StoredJob>('Завдання імпорту', seedJobs);
 
-/** Чи можна застосувати — як ImportJob.canApply() importer. */
+/** Чи можна застосувати — як ImportJob.canApply() importer (NEEDS_REVIEW з error — повернене core). */
 function canApply(job: StoredJob): boolean {
   if (job.status === 'READY') return true;
-  return job.status === 'FAILED' && job.draft !== null && job.draft !== undefined && summaryOf(job.report).conflicts === 0;
+  const intact = job.draft !== null && job.draft !== undefined && summaryOf(job.report).conflicts === 0;
+  return (job.status === 'FAILED' || (job.status === 'NEEDS_REVIEW' && Boolean(job.error))) && intact;
+}
+
+/** Як ImportHandler.creates: розпорядження нічого не створює, програма й план — лише дисципліни. */
+function createsEntity(kind: ImportKind, type: MappingType): boolean {
+  if (kind === 'ORDER_DOCUMENT') return false;
+  if (kind === 'DISCIPLINE_PROGRAM' || kind === 'CURRICULUM') return type === 'DISCIPLINE';
+  return true;
+}
+
+const OPTIONS_LOCATION = 'параметри імпорту';
+
+/** Як LoadApplier.readiness: без груп програму чи план не застосувати. */
+function withReadiness(kind: ImportKind, report: readonly ImportReportRow[], options: ImportOptions | null): ImportReportRow[] {
+  const rest = report.filter((r) => !(r.severity === 'ERROR' && r.location === OPTIONS_LOCATION));
+  if ((kind === 'DISCIPLINE_PROGRAM' || kind === 'CURRICULUM') && !options?.groupCodes?.length) {
+    return [row('ERROR', 'OPTIONS', '', OPTIONS_LOCATION, 'Вкажіть групи, яким додати навантаження (параметри імпорту).'), ...rest];
+  }
+  return rest;
 }
 
 /** Відповідь як ImportJobDto (NON_NULL); `list` — елемент списку: порожній звіт, без чернетки, параметрів і результату. */
@@ -760,6 +779,9 @@ function applyMappings(job: StoredJob, mappings: unknown): StoredJob {
       errors.push({ field: `${field}.addAlias`, message: 'Псевдоніми зберігаються лише для викладачів і дисциплін.' });
     }
     if (m.addAlias && !hasTarget) errors.push({ field: `${field}.addAlias`, message: 'Псевдонім додають до наявного запису.' });
+    if (hasNew && !createsEntity(job.kind, m.type)) {
+      errors.push({ field: `${field}.createNew`, message: 'Цей імпорт не створює таких записів — зіставте значення з наявним записом каталогу.' });
+    }
   });
   if (errors.length > 0) throw badRequest('Перевірте рішення.', errors);
   const merged = new Map<string, ImportMapping>((job.mappings ?? []).map((m) => [`${m.type}|${m.raw}`, m]));
@@ -1207,6 +1229,35 @@ export const handlers = [
     };
     return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
   }),
+  // як ImportJobService.updateOptions: параметри застосування міняються без повторного завантаження
+  http.put(apiPath('/import/jobs/:id/options'), async ({ request, params }) => {
+    const job = jobs.get(String(params.id));
+    if (job.status !== 'NEEDS_REVIEW' && job.status !== 'READY' && !(job.status === 'FAILED' && job.draft != null)) {
+      throw conflict(`Параметри можна змінювати, лише коли завдання очікує перевірки; зараз — ${job.status}.`);
+    }
+    const body = await readJson<{ version?: unknown; options?: unknown }>(request);
+    const errors: Array<{ field: string; message: string }> = [];
+    if (typeof body.version !== 'number') errors.push({ field: 'version', message: 'Оновіть сторінку: бракує версії завдання' });
+    const options = parseOptions(body.options ?? null, errors) ?? {};
+    for (const key of ['sheet', 'semesterNumber'] as const) {
+      if ((options[key] ?? null) !== (job.options?.[key] ?? null)) {
+        errors.push({ field: `options.${key}`, message: 'Цей параметр визначає, як прочитано файл, — щоб його змінити, завантажте файл ще раз.' });
+      }
+    }
+    if (errors.length > 0) throw badRequest('Перевірте параметри.', errors);
+    const base = job.kind === 'DISCIPLINE_PROGRAM' ? programReport(groupIdsOf(options), job.semesterId) : job.report;
+    const report = withReadiness(job.kind, base, options);
+    const next: StoredJob = {
+      ...job,
+      options,
+      report,
+      summary: summaryOf(report),
+      status: statusAfterParse(report),
+      error: statusAfterParse(report) === 'READY' ? null : job.error,
+      updatedAt: new Date().toISOString(),
+    };
+    return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
+  }),
   // як ImportJobService.requestApply: ідемпотентно для APPLIED/APPLYING, 409 під час розбору, 422 з кодами правил
   http.post(apiPath('/import/jobs/:id/apply'), async ({ params, request }) => {
     const job = jobs.get(String(params.id));
@@ -1214,17 +1265,21 @@ export const handlers = [
     const body = text ? (JSON.parse(text) as { semesterId?: Uuid | null }) : {};
     if (job.status === 'APPLIED' || job.status === 'APPLYING') return HttpResponse.json(toDto(job), { status: 202 });
     if (job.status === 'UPLOADED' || job.status === 'PARSING') throw conflict('Файл ще обробляється — зачекайте завершення розбору.');
-    if (job.status === 'NEEDS_REVIEW') {
+    if (job.status === 'NEEDS_REVIEW' && !canApply(job)) {
+      const decisions = job.report.some((r) => r.severity === 'WARN' && !r.matched && r.suggestions.length > 0);
+      const firstError = job.report.find((r) => r.severity === 'ERROR');
       throw businessRule(
         'IMPORT_NEEDS_REVIEW',
-        "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів.",
+        decisions || !firstError
+          ? "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів."
+          : `Імпорт потребує перевірки: ${firstError.message}`,
       );
     }
     if (!canApply(job)) throw businessRule('IMPORT_FAILED', 'Файл не вдалося розібрати — завантажте його ще раз.');
     const semesterId = body.semesterId ?? job.semesterId;
     if (job.kind !== 'ORDER_DOCUMENT' && !semesterId) throw businessRule('SEMESTER_REQUIRED', 'Оберіть семестр, у який застосувати імпорт.');
     if ((job.kind === 'DISCIPLINE_PROGRAM' || job.kind === 'CURRICULUM') && !job.options?.groupCodes?.length) {
-      throw businessRule('GROUPS_REQUIRED', 'Під час завантаження вкажіть групи (options.groupCodes), яким додати навантаження.');
+      throw businessRule('GROUPS_REQUIRED', 'Під час завантаження вкажіть групи, яким додати навантаження.');
     }
     const next = jobs.update(job.id, (current) => ({
       ...current,

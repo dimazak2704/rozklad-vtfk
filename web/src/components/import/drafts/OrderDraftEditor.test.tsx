@@ -62,4 +62,64 @@ describe('звірка заголовка розпорядження', () => {
     await waitFor(() => expect(sent).toHaveBeenCalledOnce());
     expect(sent).toHaveBeenCalledWith(expect.objectContaining({ number: null, date: null }));
   });
+
+  // r4-ai-imports-51: день тижня, парність і підпис можна виправити; розбіжність дня з датою видно одразу
+  it('день тижня звіряється з датою, мітки й підпис ідуть на сервер', async () => {
+    const sent = vi.fn();
+    server.use(
+      http.put(apiPath('/import/jobs/:id/draft'), async ({ request, params }) => {
+        sent(await request.json());
+        return HttpResponse.json({ id: params.id, kind: 'ORDER_DOCUMENT', status: 'READY', version: 4 });
+      }),
+    );
+    const user = userEvent.setup();
+    const read: OrderDraft = { ...headless, number: 30, date: '2026-10-15', weekdayLabel: "П'ЯТНИЦЯ", parityLabel: 'ЗНАМЕННИК', signatoryName: 'Микола ПОЛЩУК' };
+    renderWithProviders(<OrderDraftEditor jobId="job-1" version={3} draft={read} onDone={vi.fn()} />);
+
+    expect(screen.getByText('За датою це ЧЕТВЕР — перевірте дату або день тижня.')).toBeInTheDocument();
+    const date = screen.getByLabelText(/^Дата/);
+    await user.clear(date);
+    await user.type(date, '2026-10-16');
+    expect(screen.queryByText(/За датою це/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Зберегти звірені рядки' }));
+
+    await waitFor(() => expect(sent).toHaveBeenCalledOnce());
+    expect(sent).toHaveBeenCalledWith(expect.objectContaining({
+      date: '2026-10-16',
+      weekdayLabel: "П'ЯТНИЦЯ",
+      parityLabel: 'ЗНАМЕННИК',
+      signatoryName: 'Микола ПОЛЩУК',
+    }));
+  });
+
+  // r5-ai-imports-73: правка тексту рядка повертає «За текстом», якщо тип не вибирали вручну
+  it('після правки тексту тип рядка визначає сервер', async () => {
+    const sent = vi.fn();
+    server.use(
+      http.put(apiPath('/import/jobs/:id/draft'), async ({ request, params }) => {
+        sent(await request.json());
+        return HttpResponse.json({ id: params.id, kind: 'ORDER_DOCUMENT', status: 'READY', version: 4 });
+      }),
+    );
+    const user = userEvent.setup();
+    const read: OrderDraft = {
+      ...headless,
+      number: 30,
+      date: '2026-10-16',
+      rows: [
+        { section: 'CHANGES', groupCode: '1ОП1', pairLabel: '1', rowType: 'REPLACEMENT', fromDiscipline: 'ФВ', reasonText: 'Зв.зам.' },
+        { section: 'CHANGES', groupCode: '2ОБ', pairLabel: '4', rowType: 'FINISHED', fromDiscipline: 'ФВ', reasonText: 'Вичит.' },
+      ],
+    };
+    renderWithProviders(<OrderDraftEditor jobId="job-1" version={3} draft={read} onDone={vi.fn()} />);
+
+    const reason = screen.getByRole('textbox', { name: 'Причина, рядок 1' });
+    await user.clear(reason);
+    await user.type(reason, 'Вичит.');
+    await user.click(screen.getByRole('button', { name: 'Зберегти звірені рядки' }));
+
+    await waitFor(() => expect(sent).toHaveBeenCalledOnce());
+    const body = sent.mock.calls[0]?.[0] as { rows: Array<{ rowType: string | null }> };
+    expect(body.rows.map((r) => r.rowType)).toEqual([null, 'FINISHED']);
+  });
 });

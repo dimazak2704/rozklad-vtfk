@@ -1251,9 +1251,12 @@ export interface ImportJobDto {
   ai?: { model: string; inputTokens: number; outputTokens: number; costUsd: number };
   result?: unknown;
   error?: string;
-  /** Чи можна застосувати зараз (READY або FAILED з чернеткою без блокувальних рядків). */
+  /**
+   * Чи можна застосувати зараз: READY, FAILED з чернеткою або NEEDS_REVIEW після відмови core (`error`) —
+   * без блокувальних рядків.
+   */
   canApply: boolean;
-  /** Версія завдання: її повертають, зберігаючи виправлені рядки розпорядження (PUT …/draft). */
+  /** Версія завдання: її повертають, зберігаючи виправлені рядки розпорядження (PUT …/draft) чи параметри (PUT …/options). */
   version?: number;
 }
 

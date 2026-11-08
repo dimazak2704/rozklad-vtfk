@@ -39,7 +39,8 @@ export type ReportRowType =
   | 'ORDER'
   | 'CURRICULUM'
   | 'CATALOG'
-  | 'FILE';
+  | 'FILE'
+  | 'OPTIONS';
 
 export interface ImportReportRow extends Omit<ReportRow, 'type'> {
   type: ReportRowType;
@@ -398,6 +399,21 @@ export function useSaveOrderDraft(jobId: Uuid) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (edit: OrderDraftEdit) => api.put<ImportJob>(`/import/jobs/${jobId}/draft`, edit),
+    onSuccess: (job) => {
+      queryClient.setQueryData(qk.importer.job(job.id), job);
+      invalidateImport(queryClient);
+    },
+  });
+}
+
+/**
+ * PUT /api/import/jobs/{id}/options — нові параметри застосування (групи, години на тиждень, назва версії);
+ * сервер перераховує звіт. `sheet` і `semesterNumber` змінювати не можна (400 на полі).
+ */
+export function useSaveImportOptions(jobId: Uuid) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { version: number; options: ImportOptions }) => api.put<ImportJob>(`/import/jobs/${jobId}/options`, body),
     onSuccess: (job) => {
       queryClient.setQueryData(qk.importer.job(job.id), job);
       invalidateImport(queryClient);

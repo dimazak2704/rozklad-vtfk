@@ -1,14 +1,14 @@
 import { FileImage, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
 import { useId, useRef, useState, type DragEvent } from 'react';
 import { activeSemesterOf, useSemesters } from '@/api/calendar';
-import { useCatalogOptions } from '@/api/catalog';
 import { IMPORT_OPTION_LIMITS, useUploadImport, type ImportJob, type ImportOptions } from '@/api/import';
 import type { ImportKind } from '@/api/types';
 import { applyServerErrors } from '@/components/catalog/forms';
 import { FormAlert } from '@/components/catalog/FormParts';
-import { Button, Combobox, Field, IconButton, Input, NumberInput, Plate, Select, notify } from '@/components/ui';
+import { Button, Field, IconButton, Input, NumberInput, Select, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { ACCEPT_ATTRIBUTE, detectImportKind, extensionOf, fileProblem, formatBytes, kindAccepts, usesVision } from './detect';
+import { GroupCodesPicker } from './GroupCodesPicker';
 import { IMPORT_KIND_LABEL, IMPORT_KIND_OPTIONS } from './labels';
 
 interface UploadPanelProps {
@@ -37,7 +37,6 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadImport();
   const semesters = useSemesters();
-  const groups = useCatalogOptions('groups', { active: true });
   const [picked, setPicked] = useState<Picked | null>(null);
   const [dragging, setDragging] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -120,10 +119,6 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
     }
   };
 
-  const groupOptions = (groups.items ?? [])
-    .filter((g) => !groupCodes.includes(g.code))
-    .map((g) => ({ value: g.code, label: g.code, description: `${g.course} курс` }));
-
   return (
     <section aria-labelledby={`${inputId}-title`} className="flex flex-col gap-3">
       <h2 id={`${inputId}-title`} className="sr-only">
@@ -172,37 +167,13 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
           </div>
           {needsGroups ? (
             <Field label="Групи" required error={groupError} hint="Семестр у програмі часто застарілий — години привʼяжемо до цих груп">
-              <div className="flex flex-col gap-2">
-                <Combobox
-                  value={null}
-                  onValueChange={(code) => {
-                    if (code) {
-                      setGroupCodes([...groupCodes, code]);
-                      setGroupError(null);
-                    }
-                  }}
-                  options={groupOptions}
-                  placeholder="Додати групу…"
-                  searchPlaceholder="Код групи"
-                  loading={groups.isPending}
-                />
-                {groupCodes.length > 0 ? (
-                  <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані групи">
-                    {groupCodes.map((code) => (
-                      <li key={code} className="inline-flex items-center gap-0.5">
-                        <Plate size="md">{code}</Plate>
-                        <IconButton
-                          label={`Прибрати групу ${code}`}
-                          icon={<X aria-hidden="true" className="size-3.5" />}
-                          size="sm"
-                          className="size-7"
-                          onClick={() => setGroupCodes(groupCodes.filter((g) => g !== code))}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+              <GroupCodesPicker
+                value={groupCodes}
+                onChange={(codes) => {
+                  setGroupCodes(codes);
+                  if (codes.length > 0) setGroupError(null);
+                }}
+              />
             </Field>
           ) : null}
           {picked.kind === 'CURRICULUM' ? (

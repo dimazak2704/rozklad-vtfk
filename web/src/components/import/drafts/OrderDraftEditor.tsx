@@ -32,9 +32,40 @@ const COLUMNS: ReadonlyArray<{ field: TextField; label: string; width: string }>
 
 interface EditableRow extends OrderDraftRow {
   key: number;
-  /** Тип обрав адміністратор; AUTO — сервер визначить за текстом. */
+  /** Тип рядка; AUTO — сервер визначить за текстом. */
   chosenType: OrderRowType | 'AUTO';
+  /** Тип вибрав адміністратор у цьому редакторі; інакше правка тексту повертає «За текстом». */
+  typeChosen: boolean;
 }
+
+const WEEKDAY_LABELS = ['НЕДІЛЯ', 'ПОНЕДІЛОК', 'ВІВТОРОК', 'СЕРЕДА', 'ЧЕТВЕР', "П'ЯТНИЦЯ", 'СУБОТА'] as const;
+
+/** «ЧЕТВЕР» для дати YYYY-MM-DD (без часового поясу: дата календарна). */
+function weekdayLabelOf(date: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+  const day = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
+  return WEEKDAY_LABELS[day] ?? null;
+}
+
+/** Надрукований день тижня збігається з датою (регістр, апостроф і пробіли не важать). */
+function sameWeekday(printed: string, expected: string): boolean {
+  const key = (text: string) => text.replace(/[ʼ'’`\s]/g, '').toLocaleUpperCase('uk');
+  return key(printed) === key(expected);
+}
+
+type ParityChoice = 'CALENDAR' | 'ЧИСЕЛЬНИК' | 'ЗНАМЕННИК';
+
+const PARITIES: ReadonlyArray<{ value: ParityChoice; label: string }> = [
+  { value: 'CALENDAR', label: 'Як у календарі' },
+  { value: 'ЧИСЕЛЬНИК', label: 'ЧИСЕЛЬНИК' },
+  { value: 'ЗНАМЕННИК', label: 'ЗНАМЕННИК' },
+];
+
+const parityChoice = (label: string | null | undefined): ParityChoice => {
+  const upper = (label ?? '').trim().toLocaleUpperCase('uk');
+  return upper === 'ЧИСЕЛЬНИК' || upper === 'ЗНАМЕННИК' ? upper : 'CALENDAR';
+};
 
 const blank = (text: string | null | undefined) => (text && text.trim() !== '' ? text.trim() : null);
 
@@ -55,7 +86,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
   const save = useSaveOrderDraft(jobId);
   const [nextKey, setNextKey] = useState(draft.rows.length);
   const [rows, setRows] = useState<EditableRow[]>(() =>
-    draft.rows.map((row, index) => ({ ...row, key: index, chosenType: row.rowType })),
+    draft.rows.map((row, index) => ({ ...row, key: index, chosenType: row.rowType, typeChosen: false })),
   );
   const [notes, setNotes] = useState(draft.notes.join('\n'));
   // заголовок теж читає ШІ: без номера й дати core розпорядження не прийме
@@ -63,15 +94,29 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
   const [date, setDate] = useState(draft.date ?? '');
   const [kind, setKind] = useState<OrderKind>(draft.kind);
   const [parentNumber, setParentNumber] = useState(draft.parentNumber != null ? String(draft.parentNumber) : '');
+  // день тижня, парність і підпис — як надруковано; день тижня звіряємо з датою одразу
+  const [weekdayLabel, setWeekdayLabel] = useState(draft.weekdayLabel ?? '');
+  const [parity, setParity] = useState<ParityChoice>(parityChoice(draft.parityLabel));
+  const [signatoryPosition, setSignatoryPosition] = useState(draft.signatoryPosition ?? '');
+  const [signatoryName, setSignatoryName] = useState(draft.signatoryName ?? '');
+  const expectedWeekday = weekdayLabelOf(date);
+  const weekdayMismatch =
+    expectedWeekday !== null && weekdayLabel.trim() !== '' && !sameWeekday(weekdayLabel, expectedWeekday)
+      ? `За датою це ${expectedWeekday} — перевірте дату або день тижня.`
+      : null;
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const update = (key: number, patch: Partial<EditableRow>) =>
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
 
+  /** Правка тексту: тип, який адміністратор не вибирав сам, знову визначить сервер за текстом. */
+  const updateText = (row: EditableRow, field: TextField, value: string) =>
+    update(row.key, row.typeChosen || row.chosenType === 'ROOM_CHANGE' ? { [field]: value } : { [field]: value, chosenType: 'AUTO' });
+
   const addRow = () => {
     setRows((current) => [
       ...current,
-      { key: nextKey, section: 'CHANGES', groupCode: '', pairLabel: '', rowType: 'REPLACEMENT', chosenType: 'AUTO' },
+      { key: nextKey, section: 'CHANGES', groupCode: '', pairLabel: '', rowType: 'REPLACEMENT', chosenType: 'AUTO', typeChosen: false },
     ]);
     setNextKey((key) => key + 1);
   };
@@ -85,8 +130,8 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
         kind,
         parentNumber: kind === 'AMENDMENT' ? parseNumber(parentNumber) : null,
         date: date === '' ? null : date,
-        weekdayLabel: draft.weekdayLabel ?? null,
-        parityLabel: draft.parityLabel ?? null,
+        weekdayLabel: blank(weekdayLabel),
+        parityLabel: parity === 'CALENDAR' ? null : parity,
         rows: rows.map((row) => ({
           section: row.chosenType === 'ROOM_CHANGE' ? 'ROOM_CHANGES' : 'CHANGES',
           groupCode: row.groupCode.trim(),
@@ -100,8 +145,8 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
           roomText: blank(row.roomText),
         })),
         notes: notes.split('\n').map((note) => note.trim()).filter((note) => note !== ''),
-        signatoryPosition: draft.signatoryPosition ?? null,
-        signatoryName: draft.signatoryName ?? null,
+        signatoryPosition: blank(signatoryPosition),
+        signatoryName: blank(signatoryName),
       });
       notify.success('Рядки збережено', { description: 'Звірене розпорядження можна застосувати.' });
       onDone();
@@ -115,7 +160,8 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
     <section aria-label="Звірка рядків розпорядження" className="flex flex-col gap-3">
       <p className="text-ui text-secondary">
         Порівняйте кожен рядок з фото: виправте групу, пару, прізвища й аудиторії, видаліть зайве. Тип «За текстом» сервер
-        визначить за правилами розпорядження («Вичит.» без заміни — вичитано, діапазон пар — блок).
+        визначить за правилами розпорядження («Вичит.» без заміни — вичитано, діапазон пар — блок); коли ви правите текст
+        рядка, його тип знову визначається за текстом, доки ви не виберете тип самі.
       </p>
       <fieldset className="grid gap-3 sm:grid-cols-4">
         <legend className="mb-2 text-ui font-semibold text-primary">Заголовок розпорядження</legend>
@@ -133,6 +179,18 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
             <Input inputMode="numeric" value={parentNumber} onChange={(event) => setParentNumber(event.target.value)} />
           </Field>
         ) : null}
+        <Field label="День тижня" error={errors.weekdayLabel ?? weekdayMismatch} hint="Як надруковано; порожньо — за датою">
+          <Input value={weekdayLabel} onChange={(event) => setWeekdayLabel(event.target.value)} maxLength={20} />
+        </Field>
+        <Field label="Чисельник / знаменник" error={errors.parityLabel} hint="Перевіряється за календарем під час застосування">
+          <Select<ParityChoice> value={parity} onValueChange={setParity} options={PARITIES} />
+        </Field>
+        <Field label="Посада в підписі" error={errors.signatoryPosition}>
+          <Input value={signatoryPosition} onChange={(event) => setSignatoryPosition(event.target.value)} maxLength={200} />
+        </Field>
+        <Field label="Ім'я в підписі" error={errors.signatoryName} hint="Як надруковано, навіть з одруком">
+          <Input value={signatoryName} onChange={(event) => setSignatoryName(event.target.value)} maxLength={200} />
+        </Field>
       </fieldset>
       <div className="overflow-x-auto rounded-plate border border-default">
         <table className="w-full min-w-[64rem] border-collapse text-caption">
@@ -170,7 +228,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
                         aria-invalid={error ? true : undefined}
                         title={error}
                         value={row[column.field] ?? ''}
-                        onChange={(event) => update(row.key, { [column.field]: event.target.value })}
+                        onChange={(event) => updateText(row, column.field, event.target.value)}
                       />
                     </td>
                   );
@@ -180,7 +238,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
                     size="sm"
                     aria-label={`Тип, рядок ${index + 1}`}
                     value={row.chosenType}
-                    onValueChange={(value) => update(row.key, { chosenType: value })}
+                    onValueChange={(value) => update(row.key, { chosenType: value, typeChosen: value !== 'AUTO' })}
                     options={ROW_TYPES}
                     className="w-36"
                   />
