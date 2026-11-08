@@ -1,5 +1,6 @@
+import { useAuth } from 'react-oidc-context';
 import { Navigate } from 'react-router';
-import { postLoginPath } from '@/auth/postLogin';
+import { postLoginPath, returnToFromState } from '@/auth/postLogin';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -10,6 +11,8 @@ import { Spinner } from '@/components/ui/Spinner';
  */
 export default function AuthCallbackPage() {
   const { status, roles, error, signIn } = useCurrentUser();
+  // сторінка, з якої почали вхід: AuthProvider веде туди сам, і ця сторінка не має перебити його своїм маршрутом
+  const returnTo = returnToFromState(useAuth().user?.state);
 
   if (error) {
     return (
@@ -27,8 +30,8 @@ export default function AuthCallbackPage() {
     );
   }
 
-  // якщо AuthProvider уже обробив повернення, а навігація ще не відбулася
-  if (status === 'authenticated') return <Navigate to={postLoginPath(roles)} replace />;
+  // якщо AuthProvider уже обробив повернення, а навігація ще не відбулася (сторінка призначення ще вантажиться)
+  if (status === 'authenticated') return <Navigate to={postLoginPath(roles, returnTo)} replace />;
 
   return (
     <section role="status" aria-live="polite" className="flex min-h-dvh items-center justify-center gap-3 text-ui text-secondary">
