@@ -5,6 +5,76 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * PWA для публічних сторінок (UI.md §4.13): встановлюється на телефон, оболонка кешується заздалегідь,
+ * а частини коду й публічні відповіді API — під час перегляду. Розклад береться з мережі (NetworkFirst),
+ * без неї — з кешу: останні переглянуті тижні відкриваються офлайн. Service Worker лише в production-збірці:
+ * у dev працює Service Worker мок-API (MSW), і два воркери на одному scope заважали б один одному.
+ */
+function pwa(): Plugin[] {
+  return VitePWA({
+    registerType: 'autoUpdate',
+    // окремий скрипт, а не вбудований: CSP у nginx дозволяє лише скрипти з того ж походження
+    injectRegister: 'script-defer',
+    devOptions: { enabled: false },
+    includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+    manifest: {
+      name: 'Розклад ВТФК',
+      short_name: 'Розклад',
+      description: 'Розклад занять і заміни Вінницького технічного фахового коледжу: групи, викладачі, аудиторії, дзвінки.',
+      lang: 'uk',
+      dir: 'ltr',
+      id: '/',
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      orientation: 'any',
+      background_color: '#f3f6fa',
+      theme_color: '#0c3669',
+      categories: ['education'],
+      icons: [
+        { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+      shortcuts: [
+        { name: 'Заміни', short_name: 'Заміни', url: '/changes', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
+        { name: 'Дзвінки', short_name: 'Дзвінки', url: '/bells', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
+      ],
+    },
+    workbox: {
+      // заздалегідь — лише оболонка; сторінки адмінки й кабінету не потрапляють у кеш, поки їх не відкрили
+      globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg'],
+      navigateFallback: 'index.html',
+      // /api (ICS, файли розпоряджень) і повернення з Keycloak завжди йдуть у мережу
+      navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
+      cleanupOutdatedCaches: true,
+      runtimeCaching: [
+        {
+          // файли з хешем у назві не змінюються
+          urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
+          handler: 'CacheFirst',
+          options: { cacheName: 'rozklad-assets', expiration: { maxEntries: 250, maxAgeSeconds: 60 * DAY_SECONDS } },
+        },
+        {
+          urlPattern: ({ url, sameOrigin }) =>
+            sameOrigin && /^\/api\/public\/(meta|groups|teachers|rooms|bells|schedule|changes)(\/|$)/.test(url.pathname),
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'rozklad-public-api',
+            networkTimeoutSeconds: 5,
+            expiration: { maxEntries: 120, maxAgeSeconds: 21 * DAY_SECONDS },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
+      ],
+    },
+  });
+}
 
 /**
  * Service Worker мок-API (public/mockServiceWorker.js) потрібен лише в dev: прибираємо його з production-збірки,
@@ -44,7 +114,7 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [react(), tailwindcss(), dropMockServiceWorker()],
+    plugins: [react(), tailwindcss(), dropMockServiceWorker(), ...pwa()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },

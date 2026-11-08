@@ -1,0 +1,46 @@
+/*
+ * Друк розкладу (UI.md §4.12): аркуш рендериться порталом прямо в <body> поруч із застосунком.
+ * На екрані його не видно, а під час друку видно лише його — шапка, меню й кнопки на папір не потрапляють.
+ * Ctrl+P на сторінці розкладу теж друкує саме аркуш тижня.
+ */
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  body:has(> .print-sheet) > :not(.print-sheet) {
+    display: none !important;
+  }
+
+  .print-sheet {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-sheet--week {
+    page: rozklad-week;
+  }
+
+  .print-sheet--door {
+    page: rozklad-door;
+  }
+
+  .print-sheet table {
+    break-inside: auto;
+  }
+
+  .print-sheet tr {
+    break-inside: avoid;
+  }
+}
+
+@page rozklad-week {
+  size: A4 landscape;
+  margin: 9mm 10mm;
+}
+
+@page rozklad-door {
+  size: A4 portrait;
+  margin: 14mm;
+}

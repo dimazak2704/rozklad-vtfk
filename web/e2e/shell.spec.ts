@@ -35,7 +35,7 @@ test.describe('оболонка публічного сайту', () => {
     await input.fill('4ki1');
     await page.getByRole('option', { name: /4КІ1/ }).first().click();
     await expect(page).toHaveURL(/\/g\/4%D0%9A%D0%861$/);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Розклад групи');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Розклад групи\s*4КІ1/);
   });
 
   test('невідома адреса показує 404 з пропозицією групи', async ({ page }) => {

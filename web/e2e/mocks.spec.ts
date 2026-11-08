@@ -22,7 +22,7 @@ test.describe('мок-API', () => {
     await search(page, 'кренц');
     await page.getByRole('option', { name: /Кренцін/ }).first().click();
     await expect(page).toHaveURL(/\/t\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Розклад викладача');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Розклад викладача\s*Кренцін/);
   });
 
   test('прапорець ?mockError симулює збій ендпоінта', async ({ page }) => {
