@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.catalog;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,4 +13,8 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, UUID
     Optional<StudentGroup> findByCode(String code);
 
     List<StudentGroup> findAllByActiveTrueOrderByCourseAscCodeAsc();
+
+    List<StudentGroup> findAllByCodeIn(Collection<String> codes);
+
+    boolean existsBySpecialtyId(UUID specialtyId);
 }

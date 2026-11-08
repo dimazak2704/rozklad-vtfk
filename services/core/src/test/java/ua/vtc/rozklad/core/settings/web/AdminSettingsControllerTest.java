@@ -1,0 +1,84 @@
+package ua.vtc.rozklad.core.settings.web;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import ua.vtc.rozklad.core.settings.SettingsService;
+import ua.vtc.rozklad.core.settings.SystemSettings;
+import ua.vtc.rozklad.core.support.TestJwts;
+import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
+
+/** {@code GET/PUT /api/admin/settings}. */
+@WebMvcTest(AdminSettingsController.class)
+@Import(WebSliceTestConfiguration.class)
+class AdminSettingsControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private SettingsService settings;
+
+    @Test
+    void adminReadsTypedSettings() throws Exception {
+        given(settings.current()).willReturn(SystemSettings.DEFAULTS);
+
+        mockMvc.perform(get("/api/admin/settings").with(TestJwts.admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value("CONFIRM"))
+                .andExpect(jsonPath("$.confirmTimeoutMinutes").value(120))
+                .andExpect(jsonPath("$.signatoryPosition").value("Заступник директора з НР"))
+                .andExpect(jsonPath("$.signatoryName").value("Микола ПОЛІЩУК"))
+                .andExpect(jsonPath("$.hoursPerPair").value(2))
+                .andExpect(jsonPath("$.showTeacherFullNames").value(false));
+    }
+
+    @Test
+    void putSavesWithTheAdminAsActor() throws Exception {
+        given(settings.update(any(), eq("admin"))).willAnswer(call -> call.getArgument(0));
+
+        mockMvc.perform(put("/api/admin/settings").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"approvalMode":"AUTO","confirmTimeoutMinutes":60,"signatoryPosition":"Директор",
+                                 "signatoryName":"Світлана ВАСИЛЮК","collegeName":"ВТФК","hoursPerPair":2,
+                                 "showTeacherFullNames":true,"activeBellProfileId":null}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value("AUTO"));
+    }
+
+    @Test
+    void outOfRangeValuesAre400() throws Exception {
+        mockMvc.perform(put("/api/admin/settings").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"approvalMode":"AUTO","confirmTimeoutMinutes":2,"signatoryPosition":"",
+                                 "signatoryName":"Ім'я","collegeName":"ВТФК","hoursPerPair":7,
+                                 "showTeacherFullNames":false}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("confirmTimeoutMinutes"))
+                .andExpect(jsonPath("$.errors[1].field").value("hoursPerPair"))
+                .andExpect(jsonPath("$.errors[2].field").value("signatoryPosition"));
+    }
+
+    @Test
+    void teacherCannotSeeSettings() throws Exception {
+        mockMvc.perform(get("/api/admin/settings").with(TestJwts.teacher())).andExpect(status().isForbidden());
+    }
+}

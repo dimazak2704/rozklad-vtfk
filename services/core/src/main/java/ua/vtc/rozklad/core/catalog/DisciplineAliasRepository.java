@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.catalog;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,4 +11,8 @@ public interface DisciplineAliasRepository extends JpaRepository<DisciplineAlias
     Optional<DisciplineAlias> findByNormalized(String normalized);
 
     List<DisciplineAlias> findAllByDisciplineId(UUID disciplineId);
+
+    List<DisciplineAlias> findAllByDisciplineIdOrderByAlias(UUID disciplineId);
+
+    List<DisciplineAlias> findAllByDisciplineIdIn(Collection<UUID> disciplineIds);
 }
