@@ -42,7 +42,9 @@ export type ChangeKind =
   | 'ADDITIONAL'
   | 'ROOM_CHANGE'
   | 'BLOCK'
-  | 'DISCIPLINE_FINISHED';
+  | 'DISCIPLINE_FINISHED'
+  /** Round 7: викладач іншої підгрупи веде обидві підгрупи разом (`swapLessonId` — його пара). */
+  | 'MERGE_SUBGROUPS';
 export type ChangeStatus = 'DRAFT' | 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'DECLINED' | 'CANCELLED' | 'APPLIED';
 export type RoomType = 'CLASSROOM' | 'COMPUTER_LAB' | 'LAB' | 'GYM' | 'SPORTS_GROUND' | 'OTHER';
 export type ReasonCode = 'ABSENT' | 'MUTUAL' | 'FINISHED' | 'BUSINESS_TRIP' | 'OTHER';
@@ -58,7 +60,9 @@ export type OrderRowType =
   | 'BLOCK'
   | 'FINISHED'
   | 'AS_SCHEDULED'
-  | 'ROOM_CHANGE';
+  | 'ROOM_CHANGE'
+  /** Round 7: «Об'єднання підгруп: {to.discipline} ({to.teacher}) — обидві підгрупи». */
+  | 'MERGE_SUBGROUPS';
 export type TimetableVersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type TimetableVersionSource = 'MANUAL' | 'IMPORT' | 'GENERATED' | 'COPY';
 export type GenerationJobStatus = 'QUEUED' | 'RUNNING' | 'SOLVED' | 'FAILED' | 'CANCELLED';
@@ -815,26 +819,81 @@ export interface AffectedLessonDto {
   asSubstitute: boolean;
 }
 
+/** Смуга варіанта (DOMAIN §7): порівнюється першою, далі вид і внутрішня вартість (її сервер не віддає). */
+export type OptionBand = 'CLEAN' | 'EASY_CANCEL' | 'CAUTION' | 'LAST';
+
+/**
+ * Варіант рішення в порядку сервера (Round 7, рекомендатор v2). Види: REPLACE_DISCIPLINE, MERGE_SUBGROUPS,
+ * SWAP, CANCEL — будь-яка підмножина; REPLACE_TEACHER і ADDITIONAL `/options` більше не дає.
+ */
 export interface OptionDto {
   kind: ChangeKind;
-  /** 0..100 */
+  /** @deprecated Лише позиція (100, 90, …). Інтерфейс її не показує. */
   score: number;
   title: string;
+  /** Інформаційні чипи, найважливіший перший. */
   reasons: string[];
   teacher: Nullable<TeacherRef>;
   discipline: Nullable<DisciplineRef>;
   room: Nullable<RoomRef>;
+  /** SWAP — переставлене заняття; MERGE_SUBGROUPS — заняття іншої підгрупи на цій парі. */
   swapLesson: Nullable<LessonView>;
+  /** Чипи «⚠». */
   warnings: string[];
-  /** Адитивно: дата й пара відпрацювання (лише ADDITIONAL). */
+  /** Завжди null (відпрацювання — ручна дія «Додати пару»). */
   date: Nullable<IsoDate>;
   pair: Nullable<number>;
+  band: OptionBand;
+  /** Лише в першого варіанта і лише коли він явно кращий за другий (ніколи для минулої пари). */
+  recommended: boolean;
+  /** Аудиторія, яку варіант пропонує (своя аудиторія замінника чи аудиторія іншої підгрупи). */
+  suggestedRoom: Nullable<RoomRef>;
+}
+
+/** Хто вже відмовився від запиту на цю пару і коли. */
+export interface DeclinedDto {
+  teacher: TeacherRef;
+  at: IsoInstant;
 }
 
 /** GET /api/admin/lessons/{lessonId}/options */
 export interface LessonOptionsDto {
   lesson: LessonView;
   options: OptionDto[];
+  declined: DeclinedDto[];
+  /** Пара вже минула: диспетчер позначає, що було насправді, нічого не рекомендовано. */
+  past: boolean;
+}
+
+export type TeacherAvailabilityStatus = 'FREE' | 'BUSY' | 'ABSENT' | 'UNAVAILABLE' | 'DECLINED';
+
+/** Елемент GET /api/admin/lessons/{lessonId}/teacher-availability?q= (ручне «Інший викладач…»). */
+export interface TeacherAvailabilityDto {
+  teacher: TeacherRef;
+  status: TeacherAvailabilityStatus;
+  /** BUSY — «3 пара, 4КІ2»; DECLINED — «14:05» (Київ); інакше null. */
+  detail: Nullable<string>;
+}
+
+/** Пара плану дня з її варіантами й запропонованим (`proposedIndex` у `options`). */
+export interface PlannedLessonDto {
+  lesson: LessonView;
+  options: OptionDto[];
+  /** null — пара минула або нічого не підходить. */
+  proposedIndex: Nullable<number>;
+  declined: DeclinedDto[];
+  past: boolean;
+}
+
+/** GET /api/admin/absences/{id}/plan?date= — пропозиція, нічого не створено. */
+export interface DayPlanDto {
+  date: IsoDate;
+  lessons: PlannedLessonDto[];
+}
+
+/** POST /api/admin/changes/batch → 201 ChangeDto[] у порядку запиту; одна транзакція. */
+export interface BatchChangesRequest {
+  changes: CreateChangeRequest[];
 }
 
 /** POST /api/admin/changes → 201 ChangeDto / 409 conflicts */

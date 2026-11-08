@@ -12,12 +12,15 @@ import type {
   CreateChangeRequest,
   IsoDate,
   IsoInstant,
+  LessonView,
   OrderSummaryDto,
   ReasonCode,
+  TeacherAvailabilityDto,
+  TeacherAvailabilityStatus,
   Uuid,
 } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
-import { durationLabel } from '@/lib/labels';
+import { countLabel, durationLabel } from '@/lib/labels';
 
 // ───────────────────────── Стан пари ─────────────────────────
 
@@ -164,6 +167,16 @@ export function defaultReason(category: AbsenceReasonCategory | undefined): Reas
   return category === 'BUSINESS_TRIP' ? 'BUSINESS_TRIP' : 'ABSENT';
 }
 
+/**
+ * Причина, яку підставляємо під обраний варіант, доки диспетчер не змінив її сам: інша дисципліна групи —
+ * «Зв.зам.» (так друкують 9 з 10 таких замін), скасування — «Відп.», решта — за причиною відсутності.
+ */
+export function reasonForOption(kind: ChangeKind | null | undefined, category: AbsenceReasonCategory | undefined): ReasonCode {
+  if (kind === 'REPLACE_DISCIPLINE') return 'MUTUAL';
+  if (kind === 'CANCEL') return 'ABSENT';
+  return defaultReason(category);
+}
+
 export interface PickContext {
   date: IsoDate;
   lesson: AffectedLesson['lesson'];
@@ -172,14 +185,9 @@ export interface PickContext {
   reasonText: string | null;
 }
 
-/**
- * Запити на сервер для обраного варіанта. Відпрацювання — два кроки: сьогоднішню пару скасувати
- * й додати пару в інший день (DOMAIN §7: ADDITIONAL з вільним слотом групи й викладача).
- * null — варіант неповний (сервер не дав потрібних полів).
- */
-export function requestsForOption(option: ChangeOption, ctx: PickContext): CreateChangeRequest[] | null {
-  const base: CreateChangeRequest = {
-    kind: option.kind,
+function baseRequest(kind: ChangeKind, ctx: PickContext): CreateChangeRequest {
+  return {
+    kind,
     date: ctx.date,
     pairFrom: ctx.lesson.pair,
     groupId: ctx.lesson.group.id,
@@ -189,36 +197,32 @@ export function requestsForOption(option: ChangeOption, ctx: PickContext): Creat
     reasonText: ctx.reasonCode === 'OTHER' ? ctx.reasonText : null,
     absenceId: ctx.absenceId,
   };
+}
+
+/**
+ * Запит на сервер для обраного варіанта. Аудиторія — та, яку запропонував сервер (`suggestedRoom`:
+ * група йде до викладача). null — варіант неповний (сервер не дав потрібних полів) або цей вид
+ * зі списку варіантів не створюється (відпрацювання — окрема ручна дія).
+ */
+export function requestForOption(option: ChangeOption, ctx: PickContext): CreateChangeRequest | null {
+  const base = baseRequest(option.kind, ctx);
+  const room = option.suggestedRoom ? { newRoomId: option.suggestedRoom.id } : {};
   switch (option.kind) {
-    case 'REPLACE_TEACHER':
-      return option.teacher ? [{ ...base, newTeacherId: option.teacher.id }] : null;
     case 'REPLACE_DISCIPLINE':
       return option.teacher && option.discipline
-        ? [{ ...base, newTeacherId: option.teacher.id, newDisciplineId: option.discipline.id }]
+        ? { ...base, newTeacherId: option.teacher.id, newDisciplineId: option.discipline.id, ...room }
         : null;
+    case 'MERGE_SUBGROUPS':
+      // викладача й дисципліну core бере з пари іншої підгрупи: newTeacherId/newDisciplineId не надсилаємо
+      return option.swapLesson ? { ...base, swapLessonId: option.swapLesson.id, ...room } : null;
     case 'SWAP':
-      return option.swapLesson ? [{ ...base, swapLessonId: option.swapLesson.id }] : null;
+      return option.swapLesson ? { ...base, swapLessonId: option.swapLesson.id } : null;
     case 'CANCEL':
-      return [base];
-    case 'ADDITIONAL': {
-      if (!option.date || !option.pair || !option.teacher || !option.discipline) return null;
-      return [
-        { ...base, kind: 'CANCEL' },
-        {
-          kind: 'ADDITIONAL',
-          date: option.date,
-          pairFrom: option.pair,
-          groupId: ctx.lesson.group.id,
-          subgroup: ctx.lesson.subgroup,
-          newTeacherId: option.teacher.id,
-          newDisciplineId: option.discipline.id,
-          newRoomId: option.room?.id ?? null,
-          reasonCode: 'OTHER',
-          reasonText: 'Відпрацювання',
-          absenceId: ctx.absenceId,
-        },
-      ];
-    }
+      return base;
+    case 'REPLACE_TEACHER':
+      // сервер його вже не пропонує; лишається для сумісності зі старими відповідями
+      return option.teacher ? { ...base, newTeacherId: option.teacher.id } : null;
+    case 'ADDITIONAL':
     case 'ROOM_CHANGE':
     case 'BLOCK':
     case 'DISCIPLINE_FINISHED':
@@ -226,9 +230,14 @@ export function requestsForOption(option: ChangeOption, ctx: PickContext): Creat
   }
 }
 
-/** Стабільний ключ варіанта (для списків і стану «обираємо…»). */
+/** Ручне призначення іншого викладача тієї самої дисципліни (виняток, «Інший викладач…»). */
+export function manualTeacherRequest(teacherId: Uuid, ctx: PickContext): CreateChangeRequest {
+  return { ...baseRequest('REPLACE_TEACHER', ctx), newTeacherId: teacherId };
+}
+
+/** Стабільний ключ варіанта (для списків, вибору й стану «призначаємо…»). */
 export function optionKey(option: ChangeOption): string {
-  return [option.kind, option.teacher?.id, option.discipline?.id, option.swapLesson?.id, option.date, option.pair].join('|');
+  return [option.kind, option.teacher?.id, option.discipline?.id, option.swapLesson?.id].join('|');
 }
 
 /** id кнопки пари в списку: за ним J/K переводять фокус і прокручують список. */
@@ -236,30 +245,127 @@ export function lessonButtonId(entry: { item: { date: IsoDate; lesson: { id: Uui
   return `lesson-${entry.item.date}-${entry.item.lesson.id}`;
 }
 
-export type OptionTab = 'REPLACE_TEACHER' | 'REPLACE_DISCIPLINE' | 'SWAP' | 'CANCEL' | 'ADDITIONAL';
-
-/** Варіанти, згруповані за видом у порядку від найкращого (сервер уже відсортував). */
-export function optionsByKind(options: readonly ChangeOption[]): Map<OptionTab, ChangeOption[]> {
-  const map = new Map<OptionTab, ChangeOption[]>(OPTION_TABS.map((tab) => [tab.kind, []]));
-  for (const option of options) map.get(option.kind as OptionTab)?.push(option);
-  return map;
+/** id кнопки вибору варіанта: клавіші 1–9 обирають варіант і переводять на нього фокус (Enter — дія). */
+export function optionButtonId(lessonId: Uuid, index: number): string {
+  return `option-${lessonId}-${index}`;
 }
 
-export function isOptionTab(value: string | null): value is OptionTab {
-  return OPTION_TABS.some((tab) => tab.kind === value);
+// ───────────────────────── Подання варіантів ─────────────────────────
+
+/** Скільки варіантів видно одразу; решта — за «Ще варіанти». */
+export const VISIBLE_OPTIONS = 3;
+/** Чипів у рядку не більше трьох: перша причина, перше «⚠», ще один. */
+export const MAX_ROW_CHIPS = 3;
+
+/** Підпис виду над назвою варіанта. */
+export const OPTION_KIND_LABEL: Partial<Record<ChangeKind, string>> = {
+  REPLACE_DISCIPLINE: 'Інша дисципліна групи',
+  MERGE_SUBGROUPS: 'Обʼєднання підгруп',
+  SWAP: 'Перестановка',
+  CANCEL: 'Скасування',
+  REPLACE_TEACHER: 'Інший викладач',
+};
+
+/** Назва варіанта. Обʼєднання формулюємо як дію викладача: «Обʼєднати підгрупи — Можаровська веде обидві». */
+export function optionTitle(option: ChangeOption): string {
+  if (option.kind === 'MERGE_SUBGROUPS' && option.teacher) return `Обʼєднати підгрупи — ${option.teacher.shortName} веде обидві`;
+  return option.title;
 }
 
-export const OPTION_TABS: ReadonlyArray<{ kind: OptionTab; label: string; empty: string }> = [
-  {
-    kind: 'REPLACE_TEACHER',
-    label: 'Викладачі',
-    empty: 'Вільних викладачів на цю пару немає. Спробуйте іншу дисципліну, перестановку чи скасування.',
-  },
-  { kind: 'REPLACE_DISCIPLINE', label: 'Інша дисципліна', empty: 'Інших дисциплін групи з вільним викладачем на цю пару немає.' },
-  { kind: 'SWAP', label: 'Перестановка', empty: 'Пізніших пар, які можна поставити на це місце, немає.' },
-  { kind: 'CANCEL', label: 'Скасування', empty: 'Скасувати цю пару не можна.' },
-  { kind: 'ADDITIONAL', label: 'Додаткова пара', empty: 'За два тижні немає вільного часу і для групи, і для викладача.' },
-];
+export interface OptionChip {
+  text: string;
+  warning: boolean;
+}
+
+/** Чипи рядка: перша причина, перше «⚠», далі ще один (наступна причина або «⚠»). Решта — у «Чому?». */
+export function rowChips(option: ChangeOption): OptionChip[] {
+  const reasons = option.reasons.map((text) => ({ text, warning: false }));
+  const warnings = option.warnings.map((text) => ({ text, warning: true }));
+  const chips: OptionChip[] = [];
+  const firstReason = reasons.shift();
+  const firstWarning = warnings.shift();
+  if (firstReason) chips.push(firstReason);
+  if (firstWarning) chips.push(firstWarning);
+  for (const chip of [...reasons, ...warnings]) {
+    if (chips.length >= MAX_ROW_CHIPS) break;
+    chips.push(chip);
+  }
+  return chips;
+}
+
+/** Чи призначає варіант викладача (тоді в режимі «з підтвердженням» йому йде прохання в Telegram). */
+export function assignsTeacher(option: Pick<ChangeOption, 'kind' | 'teacher'>): boolean {
+  return option.kind !== 'CANCEL' && option.teacher !== null;
+}
+
+/**
+ * Напис кнопки дії. Прохання надсилаємо лише в режимі CONFIRM; будь-який інший режим (AUTO, NOTIFY)
+ * призначає одразу. Поки налаштування не завантажились — теж «Призначити»: це лише напис, статус
+ * зміни визначає сервер.
+ */
+export function actionLabel(option: Pick<ChangeOption, 'kind' | 'teacher'>, approvalMode: string | null | undefined): string {
+  return assignsTeacher(option) ? assignLabel(approvalMode) : 'Застосувати';
+}
+
+/** Напис дії, що призначає викладача: «Надіслати прохання» лише в режимі CONFIRM. */
+export function assignLabel(approvalMode: string | null | undefined): string {
+  return approvalMode === 'CONFIRM' ? 'Надіслати прохання' : 'Призначити';
+}
+
+/** Напис кнопки плану дня: «Надіслати всі (3)» у режимі CONFIRM, інакше «Призначити всі (3)». */
+export function planActionLabel(count: number, approvalMode: string | null | undefined): string {
+  return `${approvalMode === 'CONFIRM' ? 'Надіслати всі' : 'Призначити всі'} (${count})`;
+}
+
+/** Заголовок над списком: рекомендація є лише тоді, коли сервер явно позначив перший варіант. */
+export function optionsHeading(options: readonly ChangeOption[], past: boolean): string | null {
+  if (past) return 'Заняття вже минуло — позначте, що було насправді.';
+  if (options.length > 1 && !options[0]?.recommended) return 'Рівноцінні варіанти — оберіть самі';
+  return null;
+}
+
+/** У групи немає вільного викладача іншої дисципліни й нікого, хто взяв би обидві підгрупи. */
+export function poolIsEmpty(options: readonly ChangeOption[]): boolean {
+  return !options.some((option) => option.kind === 'REPLACE_DISCIPLINE' || option.kind === 'MERGE_SUBGROUPS');
+}
+
+export const EMPTY_POOL_TEXT = 'Вільних викладачів групи на цю пару немає. Можна переставити або скасувати пару.';
+
+/** Стан викладача на парі словами (рід невідомий — обидві форми, як у бланках коледжу). */
+export function availabilityLabel(item: Pick<TeacherAvailabilityDto, 'status' | 'detail'>): string {
+  const labels: Record<TeacherAvailabilityStatus, string> = {
+    FREE: 'Вільний(а)',
+    BUSY: item.detail ? `Зайнятий(а): ${item.detail}` : 'Зайнятий(а)',
+    ABSENT: 'Відсутній(я)',
+    UNAVAILABLE: 'Недоступний(а) в цей час',
+    DECLINED: item.detail ? `Відмовився(лась) о ${item.detail}` : 'Відмовився(лась)',
+  };
+  return labels[item.status];
+}
+
+/** Обране в плані: пара й варіант (без «не вирішувати»). */
+export interface PlanChoice {
+  lesson: LessonView;
+  option: ChangeOption;
+}
+
+const REQUEST_FORMS = ['прохання', 'прохання', 'прохань'] as const;
+
+/** Підсумок перед дією: кому піде прохання (CONFIRM) чи кого призначимо, і скільки пар скасуємо. */
+export function planSummary(choices: readonly PlanChoice[], approvalMode: string | null | undefined): string[] {
+  const teachers = choices.filter((c) => assignsTeacher(c.option)).map((c) => c.option.teacher?.shortName ?? '');
+  const cancels = choices.filter((c) => c.option.kind === 'CANCEL').length;
+  const lines: string[] = [];
+  if (teachers.length > 0) {
+    lines.push(
+      approvalMode === 'CONFIRM'
+        ? `${countLabel(teachers.length, REQUEST_FORMS)} в Telegram: ${teachers.join(', ')}`
+        : `Призначимо: ${teachers.join(', ')}`,
+    );
+  }
+  if (cancels > 0) lines.push(`Пар не буде: ${cancels}`);
+  return lines;
+}
 
 // ───────────────────────── Стрічка подій ─────────────────────────
 

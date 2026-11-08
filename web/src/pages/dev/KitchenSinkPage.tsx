@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarDays, Copy, Download, FileText, Info, Pencil, Plus, Search, Trash, Users } from 'lucide-react';
+import { CalendarDays, Copy, Download, FileText, Pencil, Plus, Search, Trash, Users } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError } from '@/api/errors';
 import type { IsoDate, WeekParity } from '@/api/types';
+import { OptionRow } from '@/components/admin-daily/changes/OptionRow';
+import { actionLabel } from '@/components/admin-daily/model';
 import { DayColumn, DayList, DayListSkeleton, LessonCell, NowIndicator, WeekGrid } from '@/components/schedule';
 import {
   Avatar,
@@ -39,12 +41,8 @@ import {
   Plate,
   Panel,
   ParityBadge,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   RadioGroup,
   RowActions,
-  ScoreBar,
   Section,
   SegmentedControl,
   Select,
@@ -302,6 +300,7 @@ export default function KitchenSinkPage() {
   const preference = useThemeStore((state) => state.preference);
   const setPreference = useThemeStore((state) => state.setPreference);
   const [minutes, setMinutes] = useState(10 * 60 + 5);
+  const [demoSelected, setDemoSelected] = useState<number | null>(0);
   const [date, setDate] = useState<IsoDate>(DEMO_TODAY);
   const [group, setGroup] = useState<string | null>('4КІ1');
   const [view, setView] = useState<'day' | 'week'>('week');
@@ -583,64 +582,24 @@ export default function KitchenSinkPage() {
       <Section id="states" title="Стани" description="Матриця станів контролів; бейджі, оцінки, парність, завантаження, порожнеча, помилка.">
         <StateMatrix />
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <Demo title="Кандидати на заміну: причина й оцінка">
-            <ul className="-mx-4 flex flex-col">
-              {DEMO_OPTIONS.filter((option) => option.teacher).map((option, index) => (
-                <li
+          <Demo title="Варіанти заміни: вибір окремо від дії">
+            {/* справжній OptionRow: клік лише обирає, дія — кнопка в обраному рядку */}
+            <ol className="flex flex-col gap-2" aria-label="Варіанти">
+              {DEMO_OPTIONS.map((option, index) => (
+                <OptionRow
                   key={option.title}
-                  className="group/row grid min-h-14 grid-cols-[1.25rem_minmax(0,1fr)_2.5rem_1.5rem_auto] items-center gap-x-3 px-4 py-2 hover:bg-hover"
-                >
-                  {/* номер — клавіша вибору 1–9, звичайним текстом; перший рядок і є рекомендацією */}
-                  <span className="text-caption font-semibold text-muted figures">{index + 1}</span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="flex min-w-0 items-baseline gap-2">
-                      <span className="truncate text-ui font-semibold">{option.title}</span>
-                      {index === 0 ? <span className="shrink-0 text-meta font-medium text-secondary">рекомендовано</span> : null}
-                    </span>
-                    <span className="truncate text-caption text-secondary">{option.reasons.join(' · ').toLocaleLowerCase('uk')}</span>
-                  </span>
-                  <ScoreBar value={option.score} label={`Оцінка: ${option.title}`} recommended={index === 0} />
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <IconButton label="Чому така оцінка" size="sm" className="size-6" icon={<Info aria-hidden="true" className="size-4" />} />
-                    </PopoverTrigger>
-                    <PopoverContent width="sm" title={option.title} align="end">
-                      <ul className="flex flex-col gap-1 text-caption text-secondary">
-                        {option.reasons.map((reason) => (
-                          <li key={reason} className="flex justify-between gap-3">
-                            {reason} <span className="font-semibold text-add">+</span>
-                          </li>
-                        ))}
-                        {option.warnings.map((warning) => (
-                          <li key={warning} className="flex justify-between gap-3">
-                            {warning} <span className="font-semibold text-danger">−</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </PopoverContent>
-                  </Popover>
-                  {/* одна заповнена кнопка на екран — у рекомендованого; решта зʼявляються при наведенні чи фокусі */}
-                  <Button
-                    size="sm"
-                    variant={index === 0 ? 'primary' : 'secondary'}
-                    className={cn(index > 0 && 'opacity-0 transition-opacity duration-100 group-focus-within/row:opacity-100 group-hover/row:opacity-100')}
-                  >
-                    Призначити
-                  </Button>
-                </li>
+                  option={option}
+                  selectId={`demo-option-${index}`}
+                  hotkey={index + 1}
+                  selected={demoSelected === index}
+                  busy={false}
+                  disabled={false}
+                  actionLabel={actionLabel(option, 'CONFIRM')}
+                  onSelect={() => setDemoSelected(index)}
+                  onAct={() => setDemoSelected(null)}
+                />
               ))}
-            </ul>
-            <div className="-mx-4 border-t border-separator px-4 pt-3">
-              <p className="pb-1 text-meta font-semibold text-muted">Інші рішення</p>
-              <ul className="flex flex-col">
-                {DEMO_OPTIONS.filter((option) => !option.teacher).map((option) => (
-                  <li key={option.title} className="flex h-10 items-center justify-between gap-3 text-ui">
-                    {option.title}
-                    <span className="text-caption text-muted">{option.reasons[0]}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            </ol>
           </Demo>
           <div className="flex min-w-0 flex-col gap-4">
           <Demo title="Бейджі, статуси й таблетки">

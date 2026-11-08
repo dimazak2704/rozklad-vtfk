@@ -47,7 +47,17 @@ import { ADMIN_ACTOR, toChangeDto, type ChangeRecord } from './world';
 const REASON_CATEGORIES: readonly AbsenceReasonCategory[] = ['SICK_LEAVE', 'VACATION', 'BUSINESS_TRIP', 'PERSONAL', 'OTHER'];
 const REASON_CODES: readonly ReasonCode[] = ['ABSENT', 'MUTUAL', 'FINISHED', 'BUSINESS_TRIP', 'OTHER'];
 /** Види, які диспетчер створює зі сторінки «Заміни» (блок і «вичитано» — з календаря й обліку). */
-const CREATABLE_KINDS: readonly ChangeKind[] = ['REPLACE_TEACHER', 'REPLACE_DISCIPLINE', 'SWAP', 'CANCEL', 'ADDITIONAL', 'ROOM_CHANGE'];
+const CREATABLE_KINDS: readonly ChangeKind[] = [
+  'REPLACE_TEACHER',
+  'REPLACE_DISCIPLINE',
+  'SWAP',
+  'CANCEL',
+  'ADDITIONAL',
+  'ROOM_CHANGE',
+  'MERGE_SUBGROUPS',
+];
+/** Скільки рішень приймає POST /changes/batch (як BatchChangesRequest у core). */
+export const MAX_BATCH = 50;
 const MAX_PAIR = 8;
 /** Межі core: коментар відсутності до 1000 символів, текст причини зміни до 100. */
 const MAX_COMMENT = 1000;
@@ -291,6 +301,22 @@ function resolveRequest(body: Partial<CreateChangeRequest>): Resolved & { errors
   if (kind === 'ROOM_CHANGE' && (!body.newRoomId || !findRoom(body.newRoomId))) {
     errors.push({ field: 'newRoomId', message: 'Оберіть аудиторію' });
   }
+  if (kind === 'MERGE_SUBGROUPS') {
+    // як ChangeCommands.mergePartner у core: викладача й дисципліну беремо з пари іншої підгрупи
+    if (body.newTeacherId) errors.push({ field: 'newTeacherId', message: 'Викладача бере пара іншої підгрупи — не вказуйте його' });
+    if (body.newDisciplineId) errors.push({ field: 'newDisciplineId', message: 'Дисципліна та сама — не вказуйте її' });
+    result.swapLesson = lessonOn(body.swapLessonId, date, 'swapLessonId', errors);
+    const partner = result.swapLesson;
+    const own = result.lesson;
+    if (partner && own) {
+      const samePair = partner.group.id === own.group.id && partner.pair === own.pair && partner.discipline.id === own.discipline.id;
+      if (own.subgroup === 0 || partner.subgroup === 0 || partner.subgroup === own.subgroup || !samePair) {
+        errors.push({ field: 'swapLessonId', message: 'Обʼєднати можна лише з тією самою дисципліною іншої підгрупи на цій самій парі' });
+      } else if (!partner.teacher || partner.teacher.id === own.teacher?.id) {
+        errors.push({ field: 'swapLessonId', message: 'Пару іншої підгрупи веде той самий відсутній викладач' });
+      }
+    }
+  }
   if (kind === 'SWAP') {
     result.swapLesson = lessonOn(body.swapLessonId, date, 'swapLessonId', errors);
     const swap = result.swapLesson;
@@ -318,7 +344,12 @@ export function createChange(body: Partial<CreateChangeRequest>, now: Date): Cha
     }
   }
   const conflicts: Conflict[] = [];
+  // при обʼєднанні викладач іншої підгрупи і так веде цю пару — перевіряємо лише, чи він не відсутній
   const newTeacherId = kind === 'SWAP' ? swapLesson?.teacher?.id : body.newTeacherId;
+  const mergeTeacher = kind === 'MERGE_SUBGROUPS' ? swapLesson?.teacher : null;
+  if (mergeTeacher && isAbsent(world(), mergeTeacher.id, date, pair)) {
+    conflicts.push({ kind: 'UNAVAILABLE', severity: 'HARD', message: `У ${mergeTeacher.shortName} на цю пару є відсутність`, lessonIds: [], date, pair });
+  }
   if (newTeacherId) {
     const busy = teacherConflict(newTeacherId, date, pair);
     if (busy) conflicts.push(busy);
@@ -357,6 +388,37 @@ export function createChange(body: Partial<CreateChangeRequest>, now: Date): Cha
   emitChange(change);
   if (change.status === 'PENDING_CONFIRMATION') requestConfirmation(change);
   return change;
+}
+
+/**
+ * POST /api/admin/changes/batch — як одна транзакція core: рішення створюються по черзі (наступне бачить
+ * попередні), а будь-яка 400/409 відкочує вже створені; поля помилок — `changes[i].поле`.
+ */
+export async function createChangesBatch(items: Array<Partial<CreateChangeRequest>> | undefined, now: Date): Promise<ChangeRecord[]> {
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_BATCH) {
+    throw badRequest('Перевірте дані змін.', [{ field: 'changes', message: `Від 1 до ${MAX_BATCH} змін` }]);
+  }
+  const created: ChangeRecord[] = [];
+  for (const [index, item] of items.entries()) {
+    try {
+      created.push(createChange(item, now));
+    } catch (thrown) {
+      for (const change of created) {
+        cancelSimulatedReply(change.id);
+        world().changes.delete(change.id);
+      }
+      if (!(thrown instanceof Response)) throw thrown;
+      const body = (await thrown.clone().json()) as { detail?: string; errors?: FieldErrorDto[]; conflicts?: Conflict[] };
+      if (thrown.status === 400) {
+        throw badRequest(
+          body.detail ?? 'Перевірте дані змін.',
+          (body.errors ?? []).map((error) => ({ ...error, field: `changes[${index}].${error.field}` })),
+        );
+      }
+      throw thrown;
+    }
+  }
+  return created;
 }
 
 // ───────────────────────── Зміни: життєвий цикл ─────────────────────────

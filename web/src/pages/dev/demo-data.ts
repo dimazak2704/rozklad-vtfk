@@ -206,36 +206,58 @@ export const DEMO_BLOCK: LessonView = {
 };
 
 /** Поля OptionDto, яких демо-варіанти не мають (core надсилає їх як null). */
-const NO_EXTRAS = { discipline: null, room: null, swapLesson: null, date: null, pair: null } as const;
+const NO_EXTRAS = { room: null, swapLesson: null, date: null, pair: null, suggestedRoom: null } as const;
 
-/** Варіанти заміни з оцінками (DOMAIN §7) — для ScoreBar і «Чому?». */
+/** Варіанти в порядку сервера (рекомендатор v2): без балів, з чипами причин і застережень. */
 export const DEMO_OPTIONS: OptionDto[] = [
   {
-    kind: 'REPLACE_TEACHER',
-    score: 92,
-    title: 'Непийвода М.В. — НДЕКСМ',
-    reasons: ['Веде цю групу', 'Та сама циклова комісія', 'Закриває вікно між 1 і 3 парою'],
+    kind: 'REPLACE_DISCIPLINE',
+    score: 100,
+    title: 'НДЕКСМ — Непийвода',
+    reasons: ['НДЕКСМ відстає від плану', 'Закриває вікно в розкладі викладача', 'Сьогодні має 1, 3 пари'],
     teacher: T.nepyivoda,
+    discipline: { id: 'd-ndeksm', shortName: 'НДЕКСМ', name: 'НДЕКСМ', color: null },
     ...NO_EXTRAS,
+    suggestedRoom: ROOMS.r14,
     warnings: [],
+    band: 'CLEAN',
+    recommended: true,
   },
   {
-    kind: 'REPLACE_TEACHER',
-    score: 68,
-    title: 'Стець — Прогр.',
-    reasons: ['Веде цю групу', 'Вже має 2 пари цього дня'],
+    kind: 'REPLACE_DISCIPLINE',
+    score: 90,
+    title: 'Прогр. — Стець',
+    reasons: ['Сьогодні має 2 пари'],
     teacher: T.stets,
+    discipline: { id: 'd-prog', shortName: 'Прогр.', name: 'Програмування', color: null },
     ...NO_EXTRAS,
-    warnings: ['3 заміни цього місяця'],
+    suggestedRoom: ROOMS.r301,
+    warnings: ['Вже має пару з цією групою (1 пара) — краще перестановка'],
+    band: 'CAUTION',
+    recommended: false,
   },
   {
     kind: 'SWAP',
-    score: 41,
-    title: 'Переставити 4 пару на 2',
+    score: 80,
+    title: 'Переставити 4 пару (Прогр.) на 2',
     reasons: ['Група піде раніше'],
-    teacher: null,
+    teacher: T.stets,
+    discipline: null,
     ...NO_EXTRAS,
-    warnings: ['Викладач 4 пари має вікно'],
+    warnings: [],
+    band: 'CLEAN',
+    recommended: false,
   },
-  { kind: 'CANCEL', score: 12, title: 'Пари не буде', reasons: ['Група прийде пізніше'], teacher: null, ...NO_EXTRAS, warnings: [] },
+  {
+    kind: 'CANCEL',
+    score: 70,
+    title: 'Пари не буде',
+    reasons: ['Перша пара: група прийде пізніше'],
+    teacher: null,
+    discipline: null,
+    ...NO_EXTRAS,
+    warnings: [],
+    band: 'EASY_CANCEL',
+    recommended: false,
+  },
 ];

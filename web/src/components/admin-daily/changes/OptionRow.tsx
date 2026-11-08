@@ -1,47 +1,33 @@
-import { Check, CircleQuestionMark, TriangleExclamationPoint } from 'lucide-react';
+import { Check, CircleQuestionMark, DoorOpen, TriangleExclamationPoint } from 'lucide-react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import type { ChangeOption } from '@/api/admin-daily';
-import { Badge, Button, Kbd, Popover, PopoverContent, PopoverTrigger, ScoreBar } from '@/components/ui';
+import { Button, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { OPTION_KIND_LABEL, optionTitle, rowChips } from '../model';
 
-/** Як рахується оцінка — коротко, словами DOMAIN §7 (для «Чому?»). */
-const SCORING: Partial<Record<ChangeOption['kind'], readonly string[]>> = {
-  REPLACE_TEACHER: [
-    '+50 — веде цю дисципліну',
-    '+20 — та сама циклова комісія',
-    '+15 — закриває вікно в його дні',
-    '+10 — уже має пари цього дня',
-    '−8 за кожну заміну цього місяця (до −24)',
-    '−15 — небажаний час за побажаннями',
-  ],
-  REPLACE_DISCIPLINE: ['Інша дисципліна групи, викладач якої вільний на цій парі', '+20 — якщо дисципліна відстає від плану'],
-  SWAP: ['Пізніша пара групи стає на це місце', 'Краще, коли це остання пара: група піде раніше'],
-  CANCEL: ['Краще, коли пара перша чи остання: група прийде пізніше або піде раніше', 'Гірше, якщо в середині дня утвориться вікно'],
-  ADDITIONAL: ['Вільний час і групи, і викладача протягом двох тижнів', 'Поруч з іншими парами групи того дня'],
-};
-
-const MAX_INLINE_CHIPS = 3;
-
+/** «Чому?»: усі причини й застереження сервера, без балів і формул. */
 function WhyPopover({ option }: { option: ChangeOption }) {
-  const rules = SCORING[option.kind] ?? [];
+  const title = optionTitle(option);
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
+          className="relative z-10"
           iconStart={<CircleQuestionMark aria-hidden="true" className="size-4" />}
-          aria-label={`Чому ${option.title}: оцінка ${option.score}`}
+          aria-label={`Чому: ${title}`}
         >
           Чому?
         </Button>
       </PopoverTrigger>
-      <PopoverContent width="md" align="end" title={`${option.title}: ${option.score} зі 100`}>
+      <PopoverContent width="md" align="end" title={title}>
         <div className="flex flex-col gap-3 text-ui">
           {option.reasons.length > 0 ? (
             <ul className="flex flex-col gap-1.5" aria-label="На користь">
               {option.reasons.map((reason) => (
                 <li key={reason} className="flex items-start gap-2">
-                  <Check aria-hidden="true" className="mt-0.5 size-4 text-add" />
+                  <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-add" />
                   <span>{reason}</span>
                 </li>
               ))}
@@ -53,23 +39,11 @@ function WhyPopover({ option }: { option: ChangeOption }) {
             <ul className="flex flex-col gap-1.5" aria-label="Варто врахувати">
               {option.warnings.map((warning) => (
                 <li key={warning} className="flex items-start gap-2">
-                  <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 text-change" />
+                  <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-change" />
                   <span>{warning}</span>
                 </li>
               ))}
             </ul>
-          ) : null}
-          {rules.length > 0 ? (
-            <div className="border-t border-separator pt-2.5">
-              <p className="text-caption font-semibold text-secondary">Як рахуємо</p>
-              <ul className="mt-1 flex flex-col gap-0.5 text-caption text-muted">
-                {rules.map((rule) => (
-                  <li key={rule} className="figures">
-                    {rule}
-                  </li>
-                ))}
-              </ul>
-            </div>
           ) : null}
         </div>
       </PopoverContent>
@@ -77,70 +51,121 @@ function WhyPopover({ option }: { option: ChangeOption }) {
   );
 }
 
-interface OptionRowProps {
-  option: ChangeOption;
-  /** Номер у списку: 1–9 — клавіша вибору. */
-  rank: number;
-  best: boolean;
-  busy: boolean;
-  disabled: boolean;
-  onPick: (option: ChangeOption) => void;
+/** Аудиторія, куди прийде група: своя аудиторія замінника чи аудиторія іншої підгрупи. */
+function suggestedRoomName(option: ChangeOption): string | null {
+  if (option.kind !== 'REPLACE_DISCIPLINE' && option.kind !== 'MERGE_SUBGROUPS') return null;
+  return option.suggestedRoom?.name ?? null;
 }
 
-/** Варіант рішення: хто чи що, оцінка смугою, причини чипами, «Чому?» і кнопка вибору. */
-export function OptionRow({ option, rank, best, busy, disabled, onPick }: OptionRowProps) {
-  const chips = [
-    ...option.reasons.map((text) => ({ text, warning: false })),
-    ...option.warnings.map((text) => ({ text, warning: true })),
-  ];
-  const hidden = chips.length - MAX_INLINE_CHIPS;
-  const incomplete = option.kind === 'ADDITIONAL' && (!option.date || !option.pair);
+/** До трьох чипів сервера: перша причина, перше «⚠», ще один. Довгі переносяться, а не обрізаються. */
+export function OptionChips({ option }: { option: ChangeOption }) {
+  const chips = rowChips(option);
+  if (chips.length === 0) return null;
+  return (
+    <ul className="flex flex-wrap gap-1" aria-label="Коротко про варіант">
+      {chips.map((chip) => (
+        <li
+          key={chip.text}
+          className={cn(
+            'inline-flex max-w-full items-start gap-1 rounded-plate px-1.5 py-0.5 text-meta font-medium text-pretty',
+            chip.warning ? 'bg-change-subtle text-change' : 'bg-active text-secondary',
+          )}
+        >
+          {chip.warning ? (
+            <>
+              <TriangleExclamationPoint aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+              <span className="sr-only">Увага: </span>
+            </>
+          ) : null}
+          <span>{chip.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export interface OptionRowProps {
+  option: ChangeOption;
+  /** id кнопки вибору: на неї переводять фокус клавіші 1–9. */
+  selectId: string;
+  /** Клавіша вибору (1–9), якщо є. */
+  hotkey: number | null;
+  selected: boolean;
+  /** Створюємо зміну з цього варіанта. */
+  busy: boolean;
+  /** Поки створюється інша зміна, діяти не можна (вибирати — можна). */
+  disabled: boolean;
+  actionLabel: string;
+  onSelect: (option: ChangeOption) => void;
+  onAct: (option: ChangeOption) => void;
+  /** Що показати в обраному рядку над кнопкою дії (причина в розпорядженні). */
+  actionExtra?: ReactNode;
+}
+
+/**
+ * Варіант рішення. Клік чи клавіша лише ОБИРАЮТЬ рядок; дія — окрема кнопка в обраному рядку або Enter на
+ * ньому. Без балів і номерів: назва, вид, аудиторія і до трьох чипів сервера; решта — у «Чому?».
+ */
+export function OptionRow({ option, selectId, hotkey, selected, busy, disabled, actionLabel, onSelect, onAct, actionExtra }: OptionRowProps) {
+  const title = optionTitle(option);
+  const room = suggestedRoomName(option);
+  const kindLabel = OPTION_KIND_LABEL[option.kind];
+
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    // Enter на вже обраному рядку — дія; на необраному — звичайний вибір (клік кнопки)
+    if (event.key === 'Enter' && selected && !event.repeat) {
+      event.preventDefault();
+      if (!disabled) onAct(option);
+    }
+  };
+
   return (
     <li
       className={cn(
-        'grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 rounded-control border px-3 py-2.5',
-        best ? 'border-accent-subtle bg-selected/40' : 'border-separator',
+        'relative flex flex-col gap-2 rounded-control border px-3 py-2.5',
+        'transition-[background-color,border-color] duration-100 ease-out',
+        selected ? 'border-accent bg-selected' : 'border-default hover:border-control hover:bg-hover',
       )}
     >
-      <span className="pt-1" aria-hidden={rank > 9}>
-        {rank <= 9 ? <Kbd className={best ? 'border-accent text-accent' : undefined}>{rank}</Kbd> : null}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1 pt-0.5">
-        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-          <span className="truncate text-ui font-semibold text-primary">{option.title}</span>
-          {best ? <span className="text-meta font-semibold text-accent">найкращий збіг</span> : null}
-        </p>
-        <ScoreBar value={option.score} size="sm" label={`Придатність: ${option.title}`} className="max-w-48" />
-      </div>
-      <div className="flex items-center gap-0.5">
-        <WhyPopover option={option} />
-        <Button
-          size="sm"
-          variant={best ? 'primary' : 'secondary'}
-          loading={busy}
-          disabled={disabled || incomplete}
-          onClick={() => onPick(option)}
-          aria-label={`Обрати: ${option.title}`}
-          aria-keyshortcuts={rank <= 9 ? String(rank) : undefined}
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          id={selectId}
+          aria-pressed={selected}
+          aria-keyshortcuts={hotkey ? String(hotkey) : undefined}
+          onClick={() => onSelect(option)}
+          onKeyDown={onKeyDown}
+          className={cn(
+            // накладка after:inset-0 робить клікабельним увесь рядок; «Чому?» і дія лежать над нею (z-10)
+            'flex min-w-0 flex-1 flex-col items-start gap-0.5 text-start after:absolute after:inset-0 after:rounded-control',
+            'focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus',
+          )}
         >
-          Обрати
-        </Button>
-      </div>
-      {chips.length > 0 ? (
-        <ul className="col-span-2 col-start-2 flex flex-wrap gap-1" aria-label="Причини">
-          {chips.slice(0, MAX_INLINE_CHIPS).map((chip) => (
-            <li key={chip.text}>
-              <Badge size="sm" tone={chip.warning ? 'warning' : 'neutral'}>
-                {chip.text}
-              </Badge>
-            </li>
-          ))}
-          {hidden > 0 ? (
-            <li>
-              <Badge size="sm">ще {hidden}</Badge>
-            </li>
+          <span className="flex flex-wrap items-baseline gap-x-2 text-meta text-muted">
+            {kindLabel ? <span>{kindLabel}</span> : null}
+            {option.recommended ? <span className="font-semibold text-accent">Рекомендовано</span> : null}
+          </span>
+          <span className="text-ui font-semibold text-pretty text-primary">{title}</span>
+          {room ? (
+            <span className="inline-flex items-center gap-1 text-caption text-secondary">
+              <DoorOpen aria-hidden="true" className="size-3.5 text-muted" />
+              ауд. {room}
+            </span>
           ) : null}
-        </ul>
+        </button>
+        <WhyPopover option={option} />
+      </div>
+      <OptionChips option={option} />
+      {selected ? (
+        <div className="relative z-10 flex flex-col gap-2 border-t border-separator pt-2.5">
+          {actionExtra}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Button variant="primary" size="sm" loading={busy} disabled={disabled && !busy} onClick={() => onAct(option)}>
+              {actionLabel}
+            </Button>
+            <span className="text-caption text-muted pointer-coarse:hidden">або Enter</span>
+          </div>
+        </div>
       ) : null}
     </li>
   );

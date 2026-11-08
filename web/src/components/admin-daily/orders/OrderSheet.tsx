@@ -49,6 +49,12 @@ function RowCells({ item }: { item: OrderItemDto }) {
   const right =
     item.rowType === 'CANCELLATION' ? (
       <Merged span={2}>Пари не буде</Merged>
+    ) : item.rowType === 'MERGE_SUBGROUPS' ? (
+      // як DOCX core: «Обʼєднання підгруп: Ін.мова (Можаровська) — обидві підгрупи»
+      <Merged span={2}>
+        Обʼєднання підгруп: {item.toDiscipline ?? '—'}
+        {item.toTeacher ? ` (${item.toTeacher})` : ''} — обидві підгрупи
+      </Merged>
     ) : (
       <>
         <td className={CELL}>

@@ -114,6 +114,7 @@ export const CHANGE_KIND_LABEL: Record<ChangeKind, string> = {
   ROOM_CHANGE: 'Зміна аудиторії',
   BLOCK: 'Блок пар',
   DISCIPLINE_FINISHED: 'Дисципліну вичитано',
+  MERGE_SUBGROUPS: 'Обʼєднання підгруп',
 };
 
 export const CHANGE_STATUS_LABEL: Record<ChangeStatus, string> = {

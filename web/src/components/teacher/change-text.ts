@@ -49,7 +49,7 @@ export function changeStatusBadge(change: ChangeDto): { label: string; tone: Bad
   const successor = change.supersededBy;
   if (change.status === 'APPLIED' && successor) {
     if (successor.kind === 'CANCEL') return { label: 'Скасовано доповненням', tone: 'cancel' };
-    if (successor.kind === 'REPLACE_TEACHER' || successor.kind === 'REPLACE_DISCIPLINE') {
+    if (successor.kind === 'REPLACE_TEACHER' || successor.kind === 'REPLACE_DISCIPLINE' || successor.kind === 'MERGE_SUBGROUPS') {
       return { label: 'Передано іншому доповненням', tone: 'cancel' };
     }
     return { label: 'Змінено доповненням', tone: 'change' };

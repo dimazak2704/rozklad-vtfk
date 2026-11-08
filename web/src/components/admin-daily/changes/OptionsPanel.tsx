@@ -1,20 +1,31 @@
-import { DoorOpen, MonitorSmartphone } from 'lucide-react';
-import { useMemo } from 'react';
-import { Tabs as RadixTabs } from 'radix-ui';
+import { ChevronDown, DoorOpen, MonitorSmartphone, UserRoundSearch } from 'lucide-react';
+import { useId, useState } from 'react';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
-import type { ReasonCode } from '@/api/types';
-import { EmptyState, ErrorState, LoadingRegion, Plate, Skeleton, Tabs, TabsContent } from '@/components/ui';
-import { cn } from '@/lib/cn';
-import { formatWeekdayDate } from '@/lib/date';
+import type { ReasonCode, TeacherRef } from '@/api/types';
+import { Button, EmptyState, ErrorState, LoadingRegion, Plate, Skeleton } from '@/components/ui';
+import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { ABSENCE_REASON_LABEL, subgroupLabel } from '@/lib/labels';
 import { lessonTime } from '@/lib/schedule';
 import { absencePeriod } from '../format';
-import { isOpen, OPTION_TABS, optionKey, optionsByKind, type LessonEntry, type OptionTab } from '../model';
+import {
+  actionLabel,
+  EMPTY_POOL_TEXT,
+  isOpen,
+  optionButtonId,
+  optionKey,
+  optionsHeading,
+  poolIsEmpty,
+  VISIBLE_OPTIONS,
+  type LessonEntry,
+  type PlanChoice,
+} from '../model';
+import { DayPlanDialog } from './DayPlanDialog';
 import { DecisionCard } from './DecisionCard';
-import { ReasonPicker } from './ReasonPicker';
 import { OptionRow } from './OptionRow';
-
+import { OtherTeacherDialog } from './OtherTeacherDialog';
+import { ReasonPicker } from './ReasonPicker';
+import { MANUAL_KEY, PLAN_KEY } from './useDecisionActions';
 
 /** Шапка панелі: яку пару вирішуємо — час, група, дисципліна, аудиторія, хто відсутній. */
 function LessonSummary({ entry }: { entry: LessonEntry }) {
@@ -66,14 +77,23 @@ function LessonSummary({ entry }: { entry: LessonEntry }) {
 
 interface OptionsPanelProps {
   entry: LessonEntry;
-  tab: OptionTab;
-  onTabChange: (tab: OptionTab) => void;
+  /** Режим погодження з налаштувань: CONFIRM — «Надіслати прохання», інакше «Призначити». */
+  approvalMode: string | null | undefined;
+  /** Причина, що піде в розпорядження (уже з урахуванням виду обраного варіанта). */
   reasonCode: ReasonCode;
   reasonText: string;
   onReasonCodeChange: (code: ReasonCode) => void;
   onReasonTextChange: (text: string) => void;
+  selectedKey: string | null;
+  onSelect: (option: ChangeOption) => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   pickingKey: string | null;
-  onPick: (option: ChangeOption) => void;
+  onAct: (option: ChangeOption) => void;
+  onAssignManual: (teacher: TeacherRef) => Promise<boolean>;
+  /** Скільки пар цього відсутнього того ж дня ще без рішення (план дня — від двох). */
+  planCount: number;
+  onApplyPlan: (choices: PlanChoice[]) => Promise<boolean>;
   decisionBusy: 'resend' | 'confirm' | 'cancel' | null;
   onResend: () => void;
   onConfirm: () => void;
@@ -81,14 +101,25 @@ interface OptionsPanelProps {
 }
 
 /**
- * Права колонка: яку пару вирішуємо, ухвалене рішення (якщо є) і варіанти вкладками — викладачі,
- * інша дисципліна, перестановка, скасування, додаткова пара. Клавіші 1–9 обирають варіант зі списку.
+ * Права колонка: яку пару вирішуємо, ухвалене рішення (якщо є) і варіанти одним списком у порядку сервера.
+ * Видно три, решта — за «Ще варіанти». Клік чи 1–9 лише обирають; дія — кнопка в обраному рядку або Enter.
+ * Ручний шлях — «Інший викладач…»; кілька пар дня — «Запропонувати план дня».
  */
 export function OptionsPanel(props: OptionsPanelProps) {
-  const { entry, tab, onTabChange, pickingKey, onPick } = props;
+  const { entry, selectedKey, onSelect, pickingKey, expanded } = props;
   const open = isOpen(entry.state);
-  const options = useLessonOptions(open ? entry.item.lesson.id : null);
-  const grouped = useMemo(() => optionsByKind(options.data?.options ?? []), [options.data]);
+  const lessonId = entry.item.lesson.id;
+  const options = useLessonOptions(open ? lessonId : null);
+  const [teacherDialog, setTeacherDialog] = useState(false);
+  const [planDialog, setPlanDialog] = useState(false);
+  const listId = useId();
+
+  const list = options.data?.options ?? [];
+  const past = options.data?.past ?? false;
+  const declined = options.data?.declined ?? [];
+  const shown = expanded ? list : list.slice(0, VISIBLE_OPTIONS);
+  const hidden = list.length - shown.length;
+  const heading = optionsHeading(list, past);
 
   return (
     <div className="@container flex flex-col gap-4">
@@ -108,18 +139,22 @@ export function OptionsPanel(props: OptionsPanelProps) {
       ) : null}
 
       {open ? (
-        <div className="flex flex-col gap-3 border-t border-separator pt-4">
-          <ReasonPicker
-            code={props.reasonCode}
-            text={props.reasonText}
-            onCodeChange={props.onReasonCodeChange}
-            onTextChange={props.onReasonTextChange}
-          />
+        <section aria-labelledby={`${listId}-title`} className="flex flex-col gap-3 border-t border-separator pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h3 id={`${listId}-title`} className="text-ui font-semibold text-primary">
+              Як закрити пару
+            </h3>
+            {props.planCount >= 2 ? (
+              <Button variant="secondary" size="sm" onClick={() => setPlanDialog(true)}>
+                Запропонувати план дня
+              </Button>
+            ) : null}
+          </div>
+
           {options.isPending ? (
             <LoadingRegion label="Підбираємо варіанти…">
               <div className="flex flex-col gap-2">
-                <Skeleton className="h-10 w-full" />
-                {[0, 1, 2, 3].map((key) => (
+                {[0, 1, 2].map((key) => (
                   <Skeleton key={key} className="h-20 w-full" />
                 ))}
               </div>
@@ -127,57 +162,95 @@ export function OptionsPanel(props: OptionsPanelProps) {
           ) : options.isError ? (
             <ErrorState error={options.error} onRetry={() => void options.refetch()} size="sm" />
           ) : (
-            <Tabs value={tab} onValueChange={(value) => onTabChange(value as OptionTab)}>
-              {/* пʼять видів рішень не вміщаються в один ряд вкладок — «таблетки» переносяться на другий рядок */}
-              <RadixTabs.List aria-label="Види рішень" className="flex flex-wrap gap-1.5">
-                {OPTION_TABS.map((item) => {
-                  const count = grouped.get(item.kind)?.length ?? 0;
-                  return (
-                    <RadixTabs.Trigger
-                      key={item.kind}
-                      value={item.kind}
-                      className={cn(
-                        'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-ui font-semibold whitespace-nowrap',
-                        'transition-[background-color,border-color,color] duration-100 ease-out',
-                        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                        'data-[state=active]:border-accent data-[state=active]:bg-selected data-[state=active]:text-accent',
-                        'data-[state=inactive]:border-default data-[state=inactive]:bg-surface data-[state=inactive]:hover:border-strong',
-                        count === 0 ? 'data-[state=inactive]:text-muted' : 'data-[state=inactive]:text-secondary',
-                      )}
-                    >
-                      {item.label}
-                      <span className="text-caption figures opacity-80">{count}</span>
-                    </RadixTabs.Trigger>
-                  );
-                })}
-              </RadixTabs.List>
-              {OPTION_TABS.map((item) => {
-                const list = grouped.get(item.kind) ?? [];
-                return (
-                  <TabsContent key={item.kind} value={item.kind}>
-                    {list.length === 0 ? (
-                      <EmptyState title="Немає варіантів" description={item.empty} size="sm" align="start" />
-                    ) : (
-                      <ol className="flex flex-col gap-2" aria-label={item.label}>
-                        {list.map((option, index) => (
-                          <OptionRow
-                            key={optionKey(option)}
-                            option={option}
-                            rank={index + 1}
-                            best={index === 0}
-                            busy={pickingKey === optionKey(option)}
-                            disabled={pickingKey !== null}
-                            onPick={onPick}
+            <>
+              {heading ? <p className="text-caption text-secondary">{heading}</p> : null}
+              {declined.length > 0 ? (
+                <p className="text-caption text-secondary">
+                  Відмовились: {declined.map((d) => `${d.teacher.shortName} (${formatInstantTime(d.at)})`).join(', ')}
+                </p>
+              ) : null}
+              {poolIsEmpty(list) ? <p className="text-caption text-secondary">{EMPTY_POOL_TEXT}</p> : null}
+              {list.length === 0 ? (
+                <EmptyState title="Немає варіантів" description="Сервер не запропонував жодного рішення для цієї пари." size="sm" align="start" />
+              ) : (
+                <ol id={`${listId}-list`} className="flex flex-col gap-2" aria-label="Варіанти">
+                  {shown.map((option, index) => {
+                    const key = optionKey(option);
+                    return (
+                      <OptionRow
+                        key={key}
+                        option={option}
+                        selectId={optionButtonId(lessonId, index)}
+                        hotkey={index < 9 ? index + 1 : null}
+                        selected={selectedKey === key}
+                        busy={pickingKey === key}
+                        disabled={pickingKey !== null}
+                        actionLabel={actionLabel(option, props.approvalMode)}
+                        onSelect={onSelect}
+                        onAct={props.onAct}
+                        actionExtra={
+                          <ReasonPicker
+                            code={props.reasonCode}
+                            text={props.reasonText}
+                            onCodeChange={props.onReasonCodeChange}
+                            onTextChange={props.onReasonTextChange}
                           />
-                        ))}
-                      </ol>
-                    )}
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
+                        }
+                      />
+                    );
+                  })}
+                </ol>
+              )}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {hidden > 0 || expanded ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={expanded}
+                    aria-controls={`${listId}-list`}
+                    onClick={() => props.onExpandedChange(!expanded)}
+                    iconEnd={<ChevronDown aria-hidden="true" className={expanded ? 'size-4 rotate-180' : 'size-4'} />}
+                  >
+                    {expanded ? 'Менше варіантів' : `Ще варіанти (${hidden})`}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTeacherDialog(true)}
+                  iconStart={<UserRoundSearch aria-hidden="true" className="size-4" />}
+                >
+                  Інший викладач…
+                </Button>
+              </div>
+            </>
           )}
-        </div>
+
+          <OtherTeacherDialog
+            open={teacherDialog}
+            onOpenChange={setTeacherDialog}
+            lessonId={lessonId}
+            pair={entry.item.lesson.pair}
+            approvalMode={props.approvalMode}
+            busy={pickingKey === MANUAL_KEY}
+            onAssign={(teacher) => {
+              void props.onAssignManual(teacher).then((done) => done && setTeacherDialog(false));
+            }}
+          />
+          {props.planCount >= 2 ? (
+            <DayPlanDialog
+              open={planDialog}
+              onOpenChange={setPlanDialog}
+              absence={entry.absence}
+              date={entry.item.date}
+              approvalMode={props.approvalMode}
+              busy={pickingKey === PLAN_KEY}
+              onApply={(choices) => {
+                void props.onApplyPlan(choices).then((done) => done && setPlanDialog(false));
+              }}
+            />
+          ) : null}
+        </section>
       ) : null}
     </div>
   );

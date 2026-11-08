@@ -7,11 +7,13 @@ import type {
   BindingCodeDto,
   ChangeDto,
   DashboardDto,
+  DayPlanDto,
   DeliveryDto,
   OrderDto,
   OrderSummaryDto,
   Page,
   SettingsDto,
+  TeacherAvailabilityDto,
 } from '@/api/types';
 import { resetMockStores } from '@/mocks/store';
 import { groupNamed, lessonsOn, teacherNamed } from '../fixtures';
@@ -126,37 +128,79 @@ describe('варіанти й зміни', () => {
     return { absence, lesson };
   }
 
-  it('кандидати: без відсутнього й зайнятих, найкращі — ті, хто веде дисципліну', async () => {
+  it('варіанти v2: лише своя група (інша дисципліна, обʼєднання), перестановка, скасування — у порядку сервера', async () => {
     const { lesson } = await firstLessonOf('Погосян');
     const result = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
-    // як core: відповідь без дати заняття; дата є лише у варіантів відпрацювання
+    // як core: відповідь без дати заняття, з відмовами й ознакою минулої пари
     expect(result).not.toHaveProperty('date');
-    expect(result.options.filter((o) => o.kind !== 'ADDITIONAL').every((o) => o.date === null && o.pair === null)).toBe(true);
-    const teachers = result.options.filter((o) => o.kind === 'REPLACE_TEACHER');
-    expect(teachers.length).toBeGreaterThan(0);
-    expect(teachers.length).toBeLessThanOrEqual(10);
-    const ids = teachers.map((o) => o.teacher?.id);
+    expect(result).toMatchObject({ declined: [], past: false });
+    const kinds = new Set(result.options.map((o) => o.kind));
+    expect([...kinds].every((kind) => ['REPLACE_DISCIPLINE', 'MERGE_SUBGROUPS', 'SWAP', 'CANCEL'].includes(kind))).toBe(true);
+    expect(result.options.every((o) => o.date === null && o.pair === null)).toBe(true);
+    // бал — лише позиція; «Рекомендовано» — не більше одного й лише перший
+    expect(result.options.map((o) => o.score)).toEqual(result.options.map((_, i) => Math.max(0, 100 - 10 * i)));
+    expect(result.options.slice(1).some((o) => o.recommended)).toBe(false);
+    const pool = result.options.filter((o) => o.kind === 'REPLACE_DISCIPLINE');
+    expect(pool.length).toBeGreaterThan(0);
+    const ids = pool.map((o) => o.teacher?.id);
+    // один варіант на викладача; ні відсутнього, ні Крисак (лікарняний)
+    expect(new Set(ids).size).toBe(ids.length);
     expect(ids).not.toContain(teacherNamed('Погосян').id);
-    // Крисак Л.В. на лікарняному — серед кандидатів її немає
     expect(ids).not.toContain(teacherNamed('Крисак Л.В.').id);
-    const scores = teachers.map((o) => o.score);
-    expect(scores).toEqual([...scores].sort((a, b) => b - a));
-    expect(result.options.some((o) => o.kind === 'CANCEL')).toBe(true);
+    // своя аудиторія замінника або аудиторія пари
+    expect(pool.every((o) => o.suggestedRoom !== null)).toBe(true);
+    expect(result.options.filter((o) => o.kind === 'CANCEL')).toHaveLength(1);
   });
 
-  it('вибір кандидата в режимі підтвердження чекає відповіді; друге рішення на ту саму пару — 409', async () => {
+  it('обʼєднання підгруп: варіант для підгрупової пари, створення без викладача в запиті', async () => {
+    // демо-ранок: Крисак Л.В. на лікарняному, у її підгрупових пар є колега іншої підгрупи
+    const absences = await api.get<AbsenceDto[]>('/admin/absences', { from: DAY, to: DAY });
+    const sick = absences.find((a) => a.teacher.shortName === 'Крисак Л.В.');
+    const lessons = await api.get<AffectedLesson[]>(`/admin/absences/${sick?.id ?? ''}/affected`);
+    let found: { item: AffectedLesson; partnerId: string } | null = null;
+    for (const item of lessons.filter((l) => l.date === DAY && l.lesson.subgroup > 0)) {
+      const { options } = await api.get<LessonOptions>(`/admin/lessons/${item.lesson.id}/options`);
+      const merge = options.find((o) => o.kind === 'MERGE_SUBGROUPS');
+      if (merge?.swapLesson) {
+        expect(merge.swapLesson.subgroup).not.toBe(item.lesson.subgroup);
+        expect(merge.suggestedRoom?.id).toBe(merge.swapLesson.room?.id);
+        found = { item, partnerId: merge.swapLesson.id };
+        if (!item.decision) break;
+      }
+    }
+    if (!found) throw new Error('У демо-ранку має бути пара, де можна обʼєднати підгрупи');
+    const body = {
+      kind: 'MERGE_SUBGROUPS',
+      date: DAY,
+      pairFrom: found.item.lesson.pair,
+      groupId: found.item.lesson.group.id,
+      originalLessonId: found.item.lesson.id,
+      swapLessonId: found.partnerId,
+      reasonCode: 'ABSENT',
+    };
+    const withTeacher = await failure(api.post('/admin/changes', { ...body, newTeacherId: teacherNamed('Погосян').id }));
+    expect(withTeacher.fieldErrors()).toHaveProperty('newTeacherId');
+    if (found.item.decision) await api.delete(`/admin/changes/${found.item.decision.changeId}`);
+    const change = await api.post<ChangeDto>('/admin/changes', body);
+    expect(change).toMatchObject({ kind: 'MERGE_SUBGROUPS', swapLessonId: found.partnerId, status: 'PENDING_CONFIRMATION' });
+    expect(change.new.teacher?.id).not.toBe(found.item.lesson.teacher?.id);
+  });
+
+  it('вибір варіанта в режимі підтвердження чекає відповіді; друге рішення на ту саму пару — 409', async () => {
     const { absence, lesson } = await firstLessonOf('Погосян');
     const { options } = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
-    const best = options.find((o) => o.kind === 'REPLACE_TEACHER');
+    const best = options.find((o) => o.kind === 'REPLACE_DISCIPLINE');
     const body = {
-      kind: 'REPLACE_TEACHER',
+      kind: 'REPLACE_DISCIPLINE',
       date: DAY,
       pairFrom: lesson.lesson.pair,
       groupId: lesson.lesson.group.id,
       subgroup: lesson.lesson.subgroup,
       originalLessonId: lesson.lesson.id,
       newTeacherId: best?.teacher?.id,
-      reasonCode: 'ABSENT',
+      newDisciplineId: best?.discipline?.id,
+      newRoomId: best?.suggestedRoom?.id,
+      reasonCode: 'MUTUAL',
       absenceId: absence.id,
     };
     const change = await api.post<ChangeDto>('/admin/changes', body);
@@ -164,10 +208,60 @@ describe('варіанти й зміни', () => {
     // типовий строк core — 120 хв (налаштування confirmTimeoutMinutes)
     expect(Date.parse(change.confirmDeadline ?? '') - NOW.getTime()).toBe(120 * 60_000);
     // адитивні поля core: pairTo = pairFrom для однієї пари, версія для оптимістичного блокування
-    expect(change).toMatchObject({ pairTo: lesson.lesson.pair, swapFromPair: null, printedReason: 'Відп.', version: 0, approvalMode: 'CONFIRM' });
+    expect(change).toMatchObject({ pairTo: lesson.lesson.pair, swapFromPair: null, printedReason: 'Зв.зам.', version: 0, approvalMode: 'CONFIRM' });
+    expect(change.new.room?.id).toBe(best?.suggestedRoom?.id);
     expect(change.history.at(-1)?.to).toBe('PENDING_CONFIRMATION');
     const again = await failure(api.post('/admin/changes', body));
     expect(again.status).toBe(409);
+  });
+
+  it('пакет рішень — одна транзакція: помилка другого не лишає першого, поля `changes[i].…`', async () => {
+    const { absence, lesson } = await firstLessonOf('Погосян');
+    const before = await api.get<ChangeDto[]>('/admin/changes', { date: DAY });
+    const cancel = {
+      kind: 'CANCEL',
+      date: DAY,
+      pairFrom: lesson.lesson.pair,
+      groupId: lesson.lesson.group.id,
+      originalLessonId: lesson.lesson.id,
+      reasonCode: 'ABSENT',
+      absenceId: absence.id,
+    };
+    const broken = await failure(api.post('/admin/changes/batch', { changes: [cancel, { ...cancel, kind: 'REPLACE_DISCIPLINE' }] }));
+    expect(broken.status).toBe(400);
+    expect(broken.fieldErrors()).toHaveProperty('changes[1].newTeacherId');
+    expect(await api.get<ChangeDto[]>('/admin/changes', { date: DAY })).toHaveLength(before.length);
+    const empty = await failure(api.post('/admin/changes/batch', { changes: [] }));
+    expect(empty.fieldErrors()).toHaveProperty('changes');
+
+    const created = await api.post<ChangeDto[]>('/admin/changes/batch', { changes: [cancel] });
+    expect(created.map((c) => [c.kind, c.status])).toEqual([['CANCEL', 'CONFIRMED']]);
+  });
+
+  it('«Інший викладач…»: усі активні викладачі зі станом, вільні першими, пошук за прізвищем', async () => {
+    const { lesson } = await firstLessonOf('Погосян');
+    const all = await api.get<TeacherAvailabilityDto[]>(`/admin/lessons/${lesson.lesson.id}/teacher-availability`);
+    expect(all.map((i) => i.teacher.id)).not.toContain(teacherNamed('Погосян').id);
+    const firstBusy = all.findIndex((i) => i.status !== 'FREE');
+    expect(all.slice(firstBusy).some((i) => i.status === 'FREE')).toBe(false);
+    expect(all.find((i) => i.teacher.id === teacherNamed('Крисак Л.В.').id)?.status).toBe('ABSENT');
+    expect(all.filter((i) => i.status === 'BUSY').every((i) => i.detail?.startsWith(`${lesson.lesson.pair} пара, `))).toBe(true);
+    const found = await api.get<TeacherAvailabilityDto[]>(`/admin/lessons/${lesson.lesson.id}/teacher-availability`, { q: 'крис' });
+    expect(found.map((i) => i.teacher.shortName)).toEqual(expect.arrayContaining(['Крисак Л.В.']));
+    expect(found.every((i) => i.teacher.shortName.toLocaleLowerCase('uk').includes('крис'))).toBe(true);
+  });
+
+  it('план дня: пропозиція на кожну невирішену пару, нічого не створює; дата поза відсутністю — 400', async () => {
+    const { absence } = await firstLessonOf('Погосян');
+    const before = await api.get<ChangeDto[]>('/admin/changes', { date: DAY });
+    const plan = await api.get<DayPlanDto>(`/admin/absences/${absence.id}/plan`, { date: DAY });
+    expect(plan.date).toBe(DAY);
+    expect(plan.lessons.length).toBeGreaterThan(0);
+    expect(plan.lessons.map((l) => l.lesson.pair)).toEqual([...plan.lessons.map((l) => l.lesson.pair)].sort((a, b) => a - b));
+    expect(plan.lessons.every((l) => l.proposedIndex === null || l.options[l.proposedIndex] !== undefined)).toBe(true);
+    expect(await api.get<ChangeDto[]>('/admin/changes', { date: DAY })).toHaveLength(before.length);
+    const outside = await failure(api.get(`/admin/absences/${absence.id}/plan`, { date: '2026-11-20' }));
+    expect(outside.fieldErrors()).toHaveProperty('date');
   });
 
   it('зайнятий чи відсутній кандидат — 409 з conflicts[] (TEACHER / UNAVAILABLE)', async () => {
@@ -195,14 +289,16 @@ describe('варіанти й зміни', () => {
     await api.put('/admin/settings', { ...settings, approvalMode: 'AUTO' });
     const { lesson } = await firstLessonOf('Погосян');
     const { options } = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
+    const best = options.find((o) => o.kind === 'REPLACE_DISCIPLINE');
     const change = await api.post<ChangeDto>('/admin/changes', {
-      kind: 'REPLACE_TEACHER',
+      kind: 'REPLACE_DISCIPLINE',
       date: DAY,
       pairFrom: lesson.lesson.pair,
       groupId: lesson.lesson.group.id,
       originalLessonId: lesson.lesson.id,
-      newTeacherId: options.find((o) => o.kind === 'REPLACE_TEACHER')?.teacher?.id,
-      reasonCode: 'ABSENT',
+      newTeacherId: best?.teacher?.id,
+      newDisciplineId: best?.discipline?.id,
+      reasonCode: 'MUTUAL',
     });
     expect(change.status).toBe('CONFIRMED');
     expect(change.confirmDeadline).toBeNull();
@@ -261,13 +357,15 @@ describe('розпорядження', () => {
   it('чернетка — підтверджені зміни дати за курсом, групою й парою; публікація дає №36 і вносить зміни', async () => {
     const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
     expect(draft).toMatchObject({ status: 'DRAFT', number: null, kind: 'ORDER', weekdayLabel: 'ПОНЕДІЛОК', parityLabel: 'ЧИСЕЛЬНИК' });
+    // як №35: у 1КІ2 Ін.мова Крисак — тепер обʼєднання з викладачем іншої підгрупи, а не «Відп.» Прокопчуку
     expect(draft.items.map((i) => [i.groupCode, i.rowType])).toEqual([
-      ['1КІ2', 'REPLACEMENT'],
+      ['1КІ2', 'MERGE_SUBGROUPS'],
       ['1ТК1', 'CANCELLATION'],
     ]);
-    // «(п.)» — лише там, де скасовано пару однієї підгрупи (як «Крисак Л. (п.)» у №35)
+    // «(п.)» — там, де йдеться про пару однієї підгрупи (як «Крисак Л. (п.)» у №35)
     expect(draft.items[1]?.fromTeacher).toBe('Крисак Л. (п.)');
-    expect(draft.items[0]?.fromTeacher).toBe('Крисак Л.');
+    expect(draft.items[0]).toMatchObject({ fromTeacher: 'Крисак Л. (п.)', toDiscipline: 'Ін.мова' });
+    expect(draft.items[0]?.toTeacher).not.toBeNull();
 
     const published = await api.post<OrderDto>(`/admin/orders/${draft.id}/publish`);
     expect(published).toMatchObject({ status: 'PUBLISHED', number: 36 });

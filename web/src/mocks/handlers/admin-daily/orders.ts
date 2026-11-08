@@ -115,6 +115,24 @@ function rowsOf(change: ChangeRecord): { items: OrderItemDto[]; roomChanges: Ord
         ],
         roomChanges: [],
       };
+    case 'MERGE_SUBGROUPS':
+      // як ChangeRows у core: ліворуч — пара відсутнього (його підгрупа), праворуч — хто веде обидві
+      return {
+        items: [
+          row({
+            ...base,
+            key: change.id,
+            fromTeacher: teacherText(change.original.teacher, change.subgroup > 0),
+            pairLabel: String(change.pairFrom),
+            rowType: 'MERGE_SUBGROUPS',
+            reasonText: reasonLabel(change),
+            toDiscipline: (change.new.discipline ?? change.original.discipline)?.shortName ?? null,
+            toTeacher: teacherText(change.new.teacher),
+            roomText: room,
+          }),
+        ],
+        roomChanges: [],
+      };
     case 'SWAP': {
       // пара, з якої переставили заняття на звільнений слот pairFrom (core: swapFromPair)
       const movedFrom = change.swapFromPair ?? change.pairFrom;
