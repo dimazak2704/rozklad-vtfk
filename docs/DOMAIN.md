@@ -134,10 +134,20 @@ Publishing version V (effective from F): validate hard conflicts → archive the
 version of the semester → for every study date d in [F, semester end]: parity(d), take template lessons
 with weekday(d) and parity ∈ {BOTH, parity(d)}, skip groups in PRACTICE on d, set `online` from STUDY_MODE,
 insert `lesson` rows (origin TEMPLATE). Future TEMPLATE lessons of the old version (date ≥ F) not referenced
-by changes are deleted first; lessons created/modified by applied changes are kept and reported if they
-now conflict. Emits `timetable.version.published` and `schedule.changed`.
+by a live change are deleted first (a DECLINED or CANCELLED change pins nothing); lessons created/modified by
+applied changes are kept and reported if they now conflict; old-version lessons kept for an open decision are
+reported as `pendingDecisions` and replaced by the new version once that decision is cancelled or declined.
+Emits `timetable.version.published` and `schedule.changed`.
+
+Dated lessons keep following the calendar after publication: a calendar edit (holiday, practice, study mode,
+parity override, semester dates) re-materializes the affected dates and groups from today on with the version
+that governs each date (the one published last among those effective by then); lessons that still match keep
+their rows (an ONLINE period only flips `online` and frees the room), lessons of live changes are not touched,
+past days stay as history.
 
 ## 7. Absences, options, changes
+
+A teacher (cabinet, bot) reports absences from today on; earlier days are entered by the dispatcher.
 
 **Affected lessons** = SCHEDULED lessons of the teacher with date in range and pair in `pairs` (or all), plus
 lessons the teacher was to take over by a not yet published change (`asSubstitute`). A substitute must not be
