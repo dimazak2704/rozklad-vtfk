@@ -98,7 +98,7 @@ export const WEIGHT_FIELDS: ReadonlyArray<{ key: keyof GenerationWeights; label:
   { key: 'brokenDays', label: 'Рвані дні', hint: 'Штраф за день, коли в чисельник і знаменник різна кількість пар або різна перша пара.' },
   { key: 'latePairs', label: 'Пізні пари', hint: 'Штраф за заняття після 16:00 (7-ма і 8-ма пари).' },
   { key: 'preferences', label: 'Побажання викладачів', hint: 'Штраф за пару в слоті, який викладач позначив як небажаний.' },
-  { key: 'homeRoom', label: 'Своя аудиторія', hint: 'Штраф, коли група вчиться не у своїй (закріпленій) аудиторії.' },
+  { key: 'homeRoom', label: 'Аудиторія викладача', hint: 'Штраф, коли пара не в аудиторії, де викладач зазвичай веде цю дисципліну.' },
 ];
 
 export const WEIGHT_MAX = 30;

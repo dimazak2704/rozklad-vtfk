@@ -181,7 +181,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
               )}
             />
           </Field>
-          <Field label="Домашня аудиторія" error={errors.homeRoomId?.message} hint="Генератор намагається ставити пари сюди">
+          <Field label="Домашня аудиторія" error={errors.homeRoomId?.message} hint="Для довідки. Генератор ставить пари в аудиторії викладачів">
             <Controller
               control={form.control}
               name="homeRoomId"
