@@ -72,6 +72,10 @@ class Dashboard {
                         declined.pairFrom() == declined.pairTo() ? String.valueOf(declined.pairFrom())
                                 : declined.pairFrom() + "-" + declined.pairTo()),
                 changesLink)));
+        summary.absentSubstitutes().forEach(absent -> alerts.add(new DashboardDto.Alert("SUBSTITUTE_ABSENT",
+                DashboardDto.Severity.ERROR, "%s відсутній, але призначений на заміну: %s, %d пара. Скасуйте цю зміну "
+                .formatted(absent.teacherName(), absent.groupCode(), absent.pair())
+                + "й оберіть інше рішення.", changesLink)));
         if (summary.uncoveredLessons() > 0) {
             int count = summary.uncoveredLessons();
             alerts.add(new DashboardDto.Alert("UNCOVERED_LESSONS", DashboardDto.Severity.WARN,

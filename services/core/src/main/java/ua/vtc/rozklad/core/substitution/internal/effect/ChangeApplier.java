@@ -35,8 +35,8 @@ import ua.vtc.rozklad.core.timetable.LessonRepository;
  * Applies the confirmed changes of a published order to the dated lessons (DOMAIN §7). All
  * effects are planned first, then every replaced lesson is cancelled and only then the new lessons
  * are checked and inserted, so two changes may hand pairs over to each other within one slot.
- * Slot conflicts are re-checked in code ({@code conflicts[]}) and once more by the deferred
- * database constraints.
+ * Slot conflicts and absent substitutes are re-checked in code ({@code conflicts[]}) and slots once
+ * more by the deferred database constraints.
  */
 @Service
 @Transactional(propagation = Propagation.MANDATORY)
@@ -49,10 +49,11 @@ class ChangeApplier implements ChangePublication {
     private final ChangeWorkflow workflow;
     private final ChangeNotifications notifications;
     private final CatalogLookup catalog;
+    private final AbsentSubstitutes absentSubstitutes;
 
     ChangeApplier(ChangeRepository changes, LessonRepository lessons, ChangeEffectPlanner planner,
                   DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                  CatalogLookup catalog) {
+                  CatalogLookup catalog, AbsentSubstitutes absentSubstitutes) {
         this.changes = changes;
         this.lessons = lessons;
         this.planner = planner;
@@ -60,6 +61,7 @@ class ChangeApplier implements ChangePublication {
         this.workflow = workflow;
         this.notifications = notifications;
         this.catalog = catalog;
+        this.absentSubstitutes = absentSubstitutes;
     }
 
     @Override
@@ -97,7 +99,9 @@ class ChangeApplier implements ChangePublication {
             }
         }
         List<PlannedLesson> created = plans.stream().flatMap(plan -> plan.effect().created().stream()).toList();
-        List<ConflictDto> conflicts = checker.check(created, cancelledIds, null, false);
+        List<ConflictDto> conflicts = new ArrayList<>(checker.check(created, cancelledIds, null, false));
+        // замінника могли зареєструвати відсутнім уже після підтвердження (DOMAIN §7)
+        conflicts.addAll(absentSubstitutes.conflicts(toApply));
         if (!conflicts.isEmpty()) {
             throw ConflictException.schedule(conflicts);
         }

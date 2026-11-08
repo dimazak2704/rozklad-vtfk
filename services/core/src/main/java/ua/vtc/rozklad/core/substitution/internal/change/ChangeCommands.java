@@ -18,13 +18,13 @@ import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
-import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.internal.effect.AbsentSubstitutes;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffect;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffectPlanner;
 import ua.vtc.rozklad.core.substitution.internal.effect.DatedSlotChecker;
@@ -55,11 +55,12 @@ public class ChangeCommands {
     private final ChangeWorkflow workflow;
     private final ChangeNotifications notifications;
     private final ChangeViews views;
+    private final AbsentSubstitutes absentSubstitutes;
 
     public ChangeCommands(ChangeRepository changes, AbsenceRepository absences, LessonRepository lessons,
                           CatalogLookup catalog, SubstitutionCalendar calendar, ChangeEffectPlanner planner,
                           DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                          ChangeViews views) {
+                          ChangeViews views, AbsentSubstitutes absentSubstitutes) {
         this.changes = changes;
         this.absences = absences;
         this.lessons = lessons;
@@ -70,6 +71,7 @@ public class ChangeCommands {
         this.workflow = workflow;
         this.notifications = notifications;
         this.views = views;
+        this.absentSubstitutes = absentSubstitutes;
     }
 
     public ChangeDto create(CreateChangeRequest request, String actor) {
@@ -156,6 +158,8 @@ public class ChangeCommands {
             changes.lockDecisionsOf(change.getDate());
             lessons.lockGroupDay(change.getGroupId(), change.getDate());
             requireFreeSlot(change, planner.plan(change));
+        } else {
+            requireSubstitutePresent(change);
         }
         workflow.requestConfirmation(change, actor);
         return finish(change);
@@ -168,6 +172,7 @@ public class ChangeCommands {
             throw new BusinessRuleException("CHANGE_DECLINED",
                     "Викладач відмовився від цієї заміни. Надішліть запит ще раз або оберіть іншого викладача.");
         }
+        requireSubstitutePresent(change);
         workflow.moveTo(change, ChangeStatus.CONFIRMED, actor, "Підтверджено диспетчером");
         return finish(change);
     }
@@ -190,31 +195,18 @@ public class ChangeCommands {
     private void requireFreeSlot(Change change, ChangeEffect effect) {
         List<ConflictDto> conflicts = new ArrayList<>(checker.check(effect.created(), effect.cancelledIds(),
                 change.getId(), true));
-        conflicts.addAll(absentSubstitute(change));
+        conflicts.addAll(absentSubstitutes.conflicts(change));
         if (!conflicts.isEmpty()) {
             throw ConflictException.schedule(conflicts);
         }
     }
 
-    private List<ConflictDto> absentSubstitute(Change change) {
-        UUID teacher = change.getNewTeacherId();
-        if (teacher == null || teacher.equals(change.getOrigTeacherId())) {
-            return List.of();
+    /** A substitute registered absent after the change was made cannot be confirmed (409 UNAVAILABLE). */
+    private void requireSubstitutePresent(Change change) {
+        List<ConflictDto> conflicts = absentSubstitutes.conflicts(change);
+        if (!conflicts.isEmpty()) {
+            throw ConflictException.schedule(conflicts);
         }
-        List<Absence> active = absences.findActiveOverlapping(change.getDate(), change.getDate(), teacher);
-        if (active.isEmpty()) {
-            return List.of();
-        }
-        String name = catalog.teacher(teacher).getShortName();
-        List<ConflictDto> conflicts = new ArrayList<>();
-        for (int pair = change.getPairFrom(); pair <= change.getPairTo(); pair++) {
-            int slot = pair;
-            if (active.stream().anyMatch(absence -> absence.covers(change.getDate(), slot))) {
-                conflicts.add(ConflictDto.hard(ConflictKind.UNAVAILABLE, "%s відсутній %s на %d парі".formatted(name,
-                        change.getDate().format(SubstitutionCalendar.DATE), slot), List.of(), change.getDate(), slot));
-            }
-        }
-        return conflicts;
     }
 
     private ChangeDto finish(Change change) {

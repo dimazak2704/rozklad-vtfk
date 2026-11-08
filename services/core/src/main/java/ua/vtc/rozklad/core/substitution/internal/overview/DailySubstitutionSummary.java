@@ -3,11 +3,15 @@ package ua.vtc.rozklad.core.substitution.internal.overview;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeStatus;
@@ -20,6 +24,7 @@ import ua.vtc.rozklad.core.substitution.ChangeRepository;
 import ua.vtc.rozklad.core.substitution.SubstitutionDaySummary;
 import ua.vtc.rozklad.core.substitution.SubstitutionOverview;
 import ua.vtc.rozklad.core.substitution.internal.absence.LessonDecisions;
+import ua.vtc.rozklad.core.substitution.internal.effect.AbsentSubstitutes;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
@@ -29,6 +34,9 @@ import ua.vtc.rozklad.core.timetable.LessonStatus;
 @Service
 @Transactional(readOnly = true)
 class DailySubstitutionSummary implements SubstitutionOverview {
+
+    private static final Set<ChangeStatus> OPEN = EnumSet.of(ChangeStatus.DRAFT, ChangeStatus.PENDING_CONFIRMATION,
+            ChangeStatus.CONFIRMED);
 
     private final AbsenceRepository absences;
     private final LessonRepository lessons;
@@ -80,7 +88,27 @@ class DailySubstitutionSummary implements SubstitutionOverview {
                         .filter(change -> change.getConfirmDeadline() != null
                                 && change.getConfirmDeadline().isBefore(now))
                         .count(),
-                declinedDetails(unresolvedDeclined));
+                declinedDetails(unresolvedDeclined),
+                absentSubstitutes(date, dayChanges, absencesByTeacher));
+    }
+
+    /** Open changes whose substitute is absent at one of their pairs (DOMAIN §7). */
+    private List<SubstitutionDaySummary.AbsentSubstitute> absentSubstitutes(LocalDate date, List<Change> dayChanges,
+                                                                          Map<UUID, List<Absence>> absencesByTeacher) {
+        List<SubstitutionDaySummary.AbsentSubstitute> found = new ArrayList<>();
+        for (Change change : dayChanges) {
+            if (!OPEN.contains(change.getStatus()) || !AbsentSubstitutes.hasSubstitute(change)) {
+                continue;
+            }
+            List<Absence> ofSubstitute = absencesByTeacher.getOrDefault(change.getNewTeacherId(), List.of());
+            IntStream.rangeClosed(change.getPairFrom(), change.getPairTo())
+                    .filter(pair -> ofSubstitute.stream().anyMatch(absence -> absence.covers(date, pair)))
+                    .findFirst()
+                    .ifPresent(pair -> found.add(new SubstitutionDaySummary.AbsentSubstitute(change.getId(),
+                            catalog.group(change.getGroupId()).getCode(), pair,
+                            catalog.teacher(change.getNewTeacherId()).getShortName())));
+        }
+        return found;
     }
 
     /** A later live decision about the same lesson (or the same slot for changes without a lesson). */

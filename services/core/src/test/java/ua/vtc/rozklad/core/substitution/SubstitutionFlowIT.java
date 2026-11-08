@@ -35,7 +35,9 @@ import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
+import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
+import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceDto;
@@ -82,6 +84,9 @@ class SubstitutionFlowIT {
 
     @Autowired
     private SubstitutionOverview overview;
+
+    @Autowired
+    private ChangePublication changePublication;
 
     @Autowired
     private AccountingService accounting;
@@ -245,6 +250,71 @@ class SubstitutionFlowIT {
         assertThat(stp.suggestion().text()).isEqualTo("Не вистачає 42 год: додати 21 пару");
         assertThat(accounting.progressOfGroup(semester.getId(), ki41.getId()).get(stpLesson.getDisciplineId())
                 .hoursBehind()).isEqualTo(42);
+    }
+
+    /** DOMAIN §7: a substitute must not be absent; an absence registered after the request blocks confirming. */
+    @Test
+    void substituteRegisteredAbsentCannotConfirm() {
+        ChangeDto change = replaceWithHanza();
+
+        AbsenceDto hanzaAbsent = reportWholeDay(hanza);
+
+        assertThatThrownBy(() -> replies.replyFromBot(change.id(), hanza.getId(), ConfirmationDecision.CONFIRM, null))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .singleElement().satisfies(found -> {
+                            assertThat(found.kind()).isEqualTo(ConflictKind.UNAVAILABLE);
+                            assertThat(found.pair()).isEqualTo(2);
+                        }));
+        assertThatThrownBy(() -> changeCommands.confirm(change.id(), "admin")).isInstanceOf(ConflictException.class);
+        assertThat(affectedLessons.of(hanzaAbsent.id()))
+                .filteredOn(AffectedLessonDto::asSubstitute).singleElement().satisfies(item -> {
+                    assertThat(item.lesson().id()).isEqualTo(stpLesson.getId());
+                    assertThat(item.decision().changeId()).isEqualTo(change.id());
+                    assertThat(item.decision().status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+                });
+    }
+
+    /**
+     * A confirmed substitute who is registered absent afterwards: the absence lists the lesson, the
+     * dashboard summary names the change and publication is refused with an UNAVAILABLE conflict.
+     */
+    @Test
+    void confirmedSubstituteRegisteredAbsentIsSurfacedAndBlocksPublication() {
+        ChangeDto change = replaceWithHanza();
+        replies.replyFromBot(change.id(), hanza.getId(), ConfirmationDecision.CONFIRM, null);
+
+        AbsenceDto hanzaAbsent = reportWholeDay(hanza);
+
+        List<AffectedLessonDto> affected = affectedLessons.of(hanzaAbsent.id());
+        assertThat(affected).extracting(item -> item.lesson().pair()).containsExactly(1, 2);
+        assertThat(affected.get(0).asSubstitute()).isFalse();
+        assertThat(affected.get(1)).satisfies(item -> {
+            assertThat(item.asSubstitute()).isTrue();
+            assertThat(item.lesson().id()).isEqualTo(stpLesson.getId());
+            assertThat(item.decision().status()).isEqualTo(ChangeStatus.CONFIRMED);
+        });
+        assertThat(overview.summarize(MONDAY).absentSubstitutes()).singleElement().satisfies(absent -> {
+            assertThat(absent.changeId()).isEqualTo(change.id());
+            assertThat(absent.groupCode()).isEqualTo("4КІ1");
+            assertThat(absent.pair()).isEqualTo(2);
+            assertThat(absent.teacherName()).isEqualTo("Ганза І.П.");
+        });
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status ->
+                changePublication.apply(List.of(change.id()), UUID.randomUUID(), "admin")))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .extracting(ConflictDto::kind).containsExactly(ConflictKind.UNAVAILABLE));
+        assertThat(changes.findById(change.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+    }
+
+    private ChangeDto replaceWithHanza() {
+        return changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2, null,
+                ki41.getId(), null, stpLesson.getId(), null, hanza.getId(), null, null, ReasonCode.OTHER, "тест",
+                null), "admin");
+    }
+
+    private AbsenceDto reportWholeDay(Teacher teacher) {
+        return absences.report(teacher.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY, null,
+                AbsenceReasonCategory.SICK_LEAVE, null), AbsenceSource.ADMIN, "admin");
     }
 
     private AbsenceDto reportAbsence() {

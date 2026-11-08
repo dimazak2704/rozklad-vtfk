@@ -12,6 +12,8 @@ import java.util.UUID;
  * @param declined         declined changes that nobody has replaced with a new decision yet
  * @param overduePending   pending confirmations past their deadline
  * @param declinedChanges  the unresolved declined changes, for alerts
+ * @param absentSubstitutes not yet published changes whose substitute is absent at the pair (they
+ *                          cannot be confirmed or published until the dispatcher decides again)
  */
 public record SubstitutionDaySummary(
         LocalDate date,
@@ -21,10 +23,16 @@ public record SubstitutionDaySummary(
         int confirmed,
         int declined,
         int overduePending,
-        List<DeclinedChange> declinedChanges) {
+        List<DeclinedChange> declinedChanges,
+        List<AbsentSubstitute> absentSubstitutes) {
 
     public SubstitutionDaySummary {
         declinedChanges = List.copyOf(declinedChanges);
+        absentSubstitutes = List.copyOf(absentSubstitutes);
+    }
+
+    /** An open change of the date whose substitute ({@code teacherName}) is absent at {@code pair}. */
+    public record AbsentSubstitute(UUID changeId, String groupCode, int pair, String teacherName) {
     }
 
     /** {@code teacherName} is the teacher who declined (short name), may be {@code null}. */

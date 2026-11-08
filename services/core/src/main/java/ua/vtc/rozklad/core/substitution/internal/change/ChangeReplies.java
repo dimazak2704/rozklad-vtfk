@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -8,11 +9,13 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.internal.effect.AbsentSubstitutes;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
 import ua.vtc.rozklad.core.substitution.internal.support.CurrentTeacher;
 
@@ -31,16 +34,19 @@ public class ChangeReplies {
     private final ChangeViews views;
     private final CatalogLookup catalog;
     private final CurrentTeacher currentTeacher;
+    private final AbsentSubstitutes absentSubstitutes;
     private final Clock clock;
 
     public ChangeReplies(ChangeRepository changes, ChangeWorkflow workflow, ChangeNotifications notifications,
-                         ChangeViews views, CatalogLookup catalog, CurrentTeacher currentTeacher, Clock clock) {
+                         ChangeViews views, CatalogLookup catalog, CurrentTeacher currentTeacher,
+                         AbsentSubstitutes absentSubstitutes, Clock clock) {
         this.changes = changes;
         this.workflow = workflow;
         this.notifications = notifications;
         this.views = views;
         this.catalog = catalog;
         this.currentTeacher = currentTeacher;
+        this.absentSubstitutes = absentSubstitutes;
         this.clock = clock;
     }
 
@@ -67,6 +73,13 @@ public class ChangeReplies {
                     .formatted(ChangeStatusMachine.label(change.getStatus())));
         }
         String text = comment == null || comment.isBlank() ? null : comment.strip();
+        if (decision == ConfirmationDecision.CONFIRM) {
+            // відсутність могли зареєструвати вже після запиту: відсутній викладач не може взяти пару
+            List<ConflictDto> conflicts = absentSubstitutes.conflicts(change);
+            if (!conflicts.isEmpty()) {
+                throw ConflictException.schedule(conflicts);
+            }
+        }
         change.recordResponse(clock.instant(), text);
         if (decision == ConfirmationDecision.CONFIRM) {
             workflow.moveTo(change, ChangeStatus.CONFIRMED, actor, text != null ? text : "Підтверджено викладачем");
