@@ -223,6 +223,13 @@ pair, else L's room (`suggestedRoom`); groups come to the teacher. A merge sugge
 **«Рекомендовано»** only on #1, only when #1 is CLEAN, #2 is in a worse band or costs at least 5 more, and L is not in
 the past. `score = max(0, 100 − 10·index)` reflects the position only (deprecated).
 
+**Choosing is not sending** (web): the dispatcher sees one list in server order (three rows, the rest behind
+«Ще варіанти»), no numbers. A click or `1–9` only selects a row; the change is created by the button in the selected
+row or `Enter` — «Надіслати прохання» in CONFIRM mode (the request goes to Telegram at once), «Призначити» otherwise.
+Until the dispatcher changes it, the reason follows the kind: another discipline of the group → «Зв.зам.»,
+«Пари не буде» → «Відп.». The suggested room is sent with the change. «Інший викладач…» (any free teacher of the
+same discipline, REPLACE_TEACHER) is a manual exception, never ranked.
+
 **Day plan** (`GET /api/admin/absences/{id}/plan?date=`, button «Запропонувати план дня»): every undecided lesson of
 the absent teacher that day, lessons with the fewest CLEAN options first (then by pair); each takes its #1; its
 teacher becomes busy at that pair and has it in his day; for a later lesson he gets the bundle bonus when the pair

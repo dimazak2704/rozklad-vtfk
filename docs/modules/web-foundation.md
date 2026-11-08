@@ -86,7 +86,7 @@ web/
 `Tooltip`, `Tabs`, `Badge`, `Chip`, `Plate` (табличка коду), `Panel`, `Section`, `DataTable` (сортування, липка
 шапка, стани, пагінація, `RowActions`), `Pagination`, `Skeleton`/`SkeletonText`/`LoadingRegion`, `EmptyState`,
 `ErrorState`, `Toaster` + `notify` (success/info/warning/error/undo/promise), `Kbd`/`KbdCombo`, `Avatar`,
-`Spinner`, `DateNav` (‹ сьогодні › + календар, ←/→/T), `ScoreBar`, `ParityBadge`/`ParityMark`, `StatusDot`,
+`Spinner`, `DateNav` (‹ сьогодні › + календар, ←/→/T), `ParityBadge`/`ParityMark`, `StatusDot`,
 `PageHeader`, `Breadcrumbs`.
 
 **Розклад (`@/components/schedule`):** `LessonCell` (стани REGULAR/SUBSTITUTED/CANCELLED/ADDITIONAL/MOVED/
