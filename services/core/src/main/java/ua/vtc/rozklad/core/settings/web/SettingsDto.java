@@ -18,7 +18,8 @@ import ua.vtc.rozklad.core.settings.ChangeApprovalMode;
 import ua.vtc.rozklad.core.settings.SystemSettings;
 
 /**
- * {@code SettingsDto} of CONTRACTS §2; the same shape is read by GET and written by PUT.
+ * {@code SettingsDto} of CONTRACTS §2; the same shape is read by GET and written by PUT. {@code version}
+ * (additive) is the revision GET returned; PUT with an older one is a 409 {@code stale-data}.
  * Field messages are shown next to the fields of the settings form, so they say what to enter (as the web form does).
  */
 record SettingsDto(
@@ -39,16 +40,17 @@ record SettingsDto(
         @Min(value = MIN_HOURS_PER_PAIR, message = HOURS_RANGE)
         @Max(value = MAX_HOURS_PER_PAIR, message = HOURS_RANGE) Integer hoursPerPair,
         @NotNull Boolean showTeacherFullNames,
-        UUID activeBellProfileId) {
+        UUID activeBellProfileId,
+        @NotNull(message = "Оновіть сторінку: бракує версії налаштувань") Long version) {
 
     static final String TIMEOUT_RANGE =
             "Від " + MIN_CONFIRM_TIMEOUT_MINUTES + " до " + MAX_CONFIRM_TIMEOUT_MINUTES + " хвилин";
     static final String HOURS_RANGE = "Від " + MIN_HOURS_PER_PAIR + " до " + MAX_HOURS_PER_PAIR + " годин";
 
-    static SettingsDto from(SystemSettings settings) {
+    static SettingsDto from(SystemSettings settings, long version) {
         return new SettingsDto(settings.approvalMode(), settings.confirmTimeoutMinutes(),
                 settings.signatoryPosition(), settings.signatoryName(), settings.collegeName(),
-                settings.hoursPerPair(), settings.showTeacherFullNames(), settings.activeBellProfileId());
+                settings.hoursPerPair(), settings.showTeacherFullNames(), settings.activeBellProfileId(), version);
     }
 
     SystemSettings toSettings() {

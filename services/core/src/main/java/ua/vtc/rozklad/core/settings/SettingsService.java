@@ -19,6 +19,19 @@ public interface SettingsService {
      */
     SystemSettings update(SystemSettings settings, String actor);
 
+    /**
+     * Revision of the stored settings: every update increments it. The settings form sends back the
+     * revision it has shown, so two administrators cannot silently overwrite each other.
+     */
+    long version();
+
+    /**
+     * {@link #update(SystemSettings, String)} only while the settings are still at {@code expectedVersion}.
+     *
+     * @throws org.springframework.dao.OptimisticLockingFailureException when someone saved them meanwhile
+     */
+    SystemSettings update(SystemSettings settings, long expectedVersion, String actor);
+
     default ChangeApprovalMode approvalMode() {
         return current().approvalMode();
     }

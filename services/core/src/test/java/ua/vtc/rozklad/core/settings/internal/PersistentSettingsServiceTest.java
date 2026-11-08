@@ -84,11 +84,22 @@ class PersistentSettingsServiceTest {
 
         assertThat(saved.signatoryPosition()).isEqualTo("Директор");
         ArgumentCaptor<Setting> stored = ArgumentCaptor.forClass(Setting.class);
-        verify(repository, org.mockito.Mockito.times(7)).save(stored.capture());
+        // 7 змінених значень + рядок версії налаштувань (його ще не було)
+        verify(repository, org.mockito.Mockito.times(8)).save(stored.capture());
         assertThat(stored.getAllValues()).extracting(Setting::getKey)
                 .doesNotContain("substitution.approvalMode")
-                .contains("substitution.confirmTimeoutMinutes", "calendar.activeBellProfileId");
+                .contains("substitution.confirmTimeoutMinutes", "calendar.activeBellProfileId", "settings.version");
         assertThat(stored.getAllValues()).allSatisfy(setting -> assertThat(setting.getUpdatedBy()).isEqualTo("admin"));
+    }
+
+    @Test
+    void updateOfAnOlderVersionIsRejected() {
+        given(repository.findById(PersistentSettingsService.VERSION_KEY))
+                .willReturn(Optional.of(new Setting(PersistentSettingsService.VERSION_KEY, JSON.numberNode(3L), "admin")));
+
+        assertThatThrownBy(() -> service().update(SystemSettings.DEFAULTS, 2L, "admin"))
+                .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
+        verify(repository, never()).save(any());
     }
 
     @Test

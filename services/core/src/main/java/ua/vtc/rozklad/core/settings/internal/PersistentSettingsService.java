@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -25,6 +26,9 @@ import ua.vtc.rozklad.core.shared.error.FieldErrors;
  */
 @Service
 class PersistentSettingsService implements SettingsService {
+
+    /** Revision row of the settings (not a setting itself, ignored by {@link #current()}). */
+    static final String VERSION_KEY = "settings.version";
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
 
@@ -59,8 +63,29 @@ class PersistentSettingsService implements SettingsService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long version() {
+        return storedVersion();
+    }
+
+    @Override
+    @Transactional
+    public SystemSettings update(SystemSettings proposed, long expectedVersion, String actor) {
+        settings.lockForUpdate();
+        if (storedVersion() != expectedVersion) {
+            throw new OptimisticLockingFailureException("Settings changed: expected version " + expectedVersion);
+        }
+        return write(proposed, actor);
+    }
+
+    @Override
     @Transactional
     public SystemSettings update(SystemSettings proposed, String actor) {
+        settings.lockForUpdate();
+        return write(proposed, actor);
+    }
+
+    private SystemSettings write(SystemSettings proposed, String actor) {
         SystemSettings normalized = new SystemSettings(proposed.approvalMode(), proposed.confirmTimeoutMinutes(),
                 proposed.signatoryPosition().strip(), proposed.signatoryName().strip(), proposed.collegeName().strip(),
                 proposed.hoursPerPair(), proposed.showTeacherFullNames(), proposed.activeBellProfileId());
@@ -79,7 +104,19 @@ class PersistentSettingsService implements SettingsService {
         write(SettingKey.ACTIVE_BELL_PROFILE_ID, normalized.activeBellProfileId() == null
                 ? JSON.nullNode()
                 : JSON.stringNode(normalized.activeBellProfileId().toString()), actor);
+        Setting version = settings.findById(VERSION_KEY).orElse(null);
+        if (version == null) {
+            settings.save(new Setting(VERSION_KEY, JSON.numberNode(1L), actor));
+        } else {
+            version.update(JSON.numberNode(version.getValue().asLong() + 1), actor);
+        }
+        settings.flush();
         return normalized;
+    }
+
+    /** No row yet = revision 0 (settings never saved through the API). */
+    private long storedVersion() {
+        return settings.findById(VERSION_KEY).map(setting -> setting.getValue().asLong()).orElse(0L);
     }
 
     private void write(SettingKey key, JsonNode value, String actor) {

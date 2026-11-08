@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ua.vtc.rozklad.core.settings.SettingsService;
+import ua.vtc.rozklad.core.settings.SystemSettings;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 
 /** {@code GET/PUT /api/admin/settings} (ADMIN). */
@@ -22,11 +23,12 @@ class AdminSettingsController {
 
     @GetMapping
     SettingsDto get() {
-        return SettingsDto.from(settings.current());
+        return SettingsDto.from(settings.current(), settings.version());
     }
 
     @PutMapping
     SettingsDto update(@Valid @RequestBody SettingsDto body, CurrentUser user) {
-        return SettingsDto.from(settings.update(body.toSettings(), user.username()));
+        SystemSettings saved = settings.update(body.toSettings(), body.version(), user.username());
+        return SettingsDto.from(saved, settings.version());
     }
 }
