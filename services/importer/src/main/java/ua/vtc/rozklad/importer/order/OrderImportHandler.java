@@ -1,7 +1,9 @@
 package ua.vtc.rozklad.importer.order;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,6 +48,14 @@ import ua.vtc.rozklad.importer.web.ProblemException;
 public class OrderImportHandler implements ImportHandler {
 
     static final String STEP_CHANGES = "changes";
+    /** U+FFFD REPLACEMENT CHARACTER: what a reader puts where it could not decode a character. */
+    static final char UNREADABLE = '\uFFFD';
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final Map<OrderRowType, String> ROW_TYPE_NAMES = Map.of(
+            OrderRowType.REPLACEMENT, "«заміна»", OrderRowType.CANCELLATION, "«пари не буде»",
+            OrderRowType.ADDITIONAL, "«додатково»", OrderRowType.BLOCK, "«блок пар»",
+            OrderRowType.FINISHED, "«вичитано»", OrderRowType.AS_SCHEDULED, "«за розкладом»",
+            OrderRowType.ROOM_CHANGE, "«заміна аудиторії»");
     static final String HEADER = "заголовок";
     static final String REVIEW_REQUIRED = "Рядки розпорядження прочитав ШІ з фото/скану: звірте кожен рядок з оригіналом, "
             + "виправте помилки й збережіть рядки — лише після цього розпорядження можна застосувати.";
@@ -89,6 +99,12 @@ public class OrderImportHandler implements ImportHandler {
         return false;
     }
 
+    /** The order is stored as text: no group, teacher, discipline or room is created. */
+    @Override
+    public boolean creates(EntityType type) {
+        return false;
+    }
+
     @Override
     public ParseOutcome parse(ParseInput input) {
         Issues issues = new Issues();
@@ -106,6 +122,7 @@ public class OrderImportHandler implements ImportHandler {
             issues.warn(RowType.ORDER, null, null, "У розпорядженні не знайдено жодного рядка змін.");
         }
         checkHeader(draft, issues);
+        checkReadable(draft, issues);
         return new ParseOutcome(draft, issues.rows());
     }
 
@@ -129,6 +146,44 @@ public class OrderImportHandler implements ImportHandler {
         if (draft.kind() == OrderKind.AMENDMENT && draft.parentNumber() == null) {
             issues.error(RowType.ORDER, null, HEADER, "Вкажіть номер розпорядження, яке доповнюють.");
         }
+        // надрукований день тижня — головна ознака неправильно прочитаної дати (парність звіряє core за календарем)
+        if (draft.date() != null && draft.weekdayLabel() != null) {
+            Optional<DayOfWeek> printed = OrderTexts.weekdayOf(draft.weekdayLabel());
+            if (printed.isEmpty()) {
+                issues.error(RowType.ORDER, draft.weekdayLabel(), HEADER, "«" + draft.weekdayLabel() + "» — не день "
+                        + "тижня. Виправте день тижня за оригіналом або залиште поле порожнім.");
+            } else if (printed.get() != draft.date().getDayOfWeek()) {
+                issues.error(RowType.ORDER, draft.weekdayLabel(), HEADER, "У розпорядженні надруковано «"
+                        + draft.weekdayLabel() + "», а " + DATE.format(draft.date()) + " — "
+                        + OrderTexts.weekdayName(draft.date()) + ". Перевірте дату або день тижня.");
+            }
+        }
+    }
+
+    /**
+     * Text with U+FFFD (a character the reader could not decode) would go into the order of record
+     * and the public changes page as «�»: every such field is a blocking error until corrected.
+     */
+    static void checkReadable(OrderDraft draft, Issues issues) {
+        List<String> header = new ArrayList<>(List.of(nullToEmpty(draft.weekdayLabel()), nullToEmpty(draft.parityLabel()),
+                nullToEmpty(draft.signatoryPosition()), nullToEmpty(draft.signatoryName())));
+        header.addAll(draft.notes());
+        header.stream().filter(OrderImportHandler::unreadable).findFirst().ifPresent(text -> issues.error(
+                RowType.ORDER, text, HEADER, "У заголовку, примітках або підписі є нерозпізнані символи «"
+                        + UNREADABLE + "» — виправте текст за оригіналом."));
+        for (Row row : draft.rows()) {
+            String texts = String.join(" ", nullToEmpty(row.groupCode()), nullToEmpty(row.pairLabel()),
+                    nullToEmpty(row.fromDiscipline()), nullToEmpty(row.fromTeacher()), nullToEmpty(row.reasonText()),
+                    nullToEmpty(row.toDiscipline()), nullToEmpty(row.toTeacher()), nullToEmpty(row.roomText()));
+            if (unreadable(texts)) {
+                issues.error(RowType.ORDER, TextNormalizer.clean(texts), row.location(), "У рядку є нерозпізнані символи «"
+                        + UNREADABLE + "» — виправте текст за оригіналом.");
+            }
+        }
+    }
+
+    private static boolean unreadable(String text) {
+        return text.indexOf(UNREADABLE) >= 0;
     }
 
     /** Validates the model's answer: unknown enum values and dates become warnings, codes are canonical. */
@@ -163,16 +218,8 @@ public class OrderImportHandler implements ImportHandler {
         }
         try {
             OrderRowType answered = OrderRowType.valueOf(row.rowType());
-            // «Вичит.» без заміни — завжди FINISHED, і FINISHED — лише так (правило DOCX-розбору, DOMAIN §8)
-            boolean finishedByText = OrderTexts.finished(row.reasonText(), row.toDiscipline(), row.toTeacher());
-            if (finishedByText != (answered == OrderRowType.FINISHED)) {
-                OrderRowType derived = OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(),
-                        row.reasonText(), row.toDiscipline(), row.toTeacher());
-                issues.warn(RowType.ORDER, row.rowType(), location, "ШІ позначив рядок як " + answered
-                        + ", але за текстом це " + derived + " — взято " + derived + ".");
-                return derived;
-            }
-            return answered;
+            return consistent(answered, row.pairLabel(), row.fromDiscipline(), row.fromTeacher(), row.reasonText(),
+                    row.toDiscipline(), row.toTeacher(), issues, location, "ШІ позначив рядок");
         } catch (IllegalArgumentException | NullPointerException e) {
             OrderRowType derived = OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(),
                     row.reasonText(), row.toDiscipline(), row.toTeacher());
@@ -180,6 +227,24 @@ public class OrderImportHandler implements ImportHandler {
                     + "» — визначено за текстом як " + derived + ".");
             return derived;
         }
+    }
+
+    /**
+     * «Вичит.» без заміни — завжди FINISHED, і FINISHED — лише так (правило DOCX-розбору, DOMAIN §8): a
+     * given type that contradicts it is replaced by the type of the text, with a WARN naming both.
+     */
+    static OrderRowType consistent(OrderRowType given, String pairLabel, String fromDiscipline, String fromTeacher,
+                                   String reasonText, String toDiscipline, String toTeacher, Issues issues,
+                                   String location, String who) {
+        boolean finishedByText = OrderTexts.finished(reasonText, toDiscipline, toTeacher);
+        if (finishedByText == (given == OrderRowType.FINISHED)) {
+            return given;
+        }
+        OrderRowType derived = OrderTexts.rowType(pairLabel, fromDiscipline, fromTeacher, reasonText, toDiscipline,
+                toTeacher);
+        issues.warn(RowType.ORDER, given.name(), location, who + " як " + ROW_TYPE_NAMES.get(given)
+                + ", але за текстом це " + ROW_TYPE_NAMES.get(derived) + " — взято " + ROW_TYPE_NAMES.get(derived) + ".");
+        return derived;
     }
 
     private static String groupCode(String raw, Issues issues, String location) {
@@ -259,7 +324,9 @@ public class OrderImportHandler implements ImportHandler {
             String location = "рядок " + (index + 1);
             Section section = row.section() == null ? Section.CHANGES : row.section();
             OrderRowType type = section == Section.ROOM_CHANGES ? OrderRowType.ROOM_CHANGE
-                    : row.rowType() != null ? row.rowType()
+                    : row.rowType() != null
+                    ? consistent(row.rowType(), row.pairLabel(), row.fromDiscipline(), row.fromTeacher(),
+                    row.reasonText(), row.toDiscipline(), row.toTeacher(), issues, location, "Рядок позначено")
                     : OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(), row.reasonText(),
                     row.toDiscipline(), row.toTeacher());
             rows.add(new Row(section, groupCode(row.groupCode(), issues, location), clean(row.pairLabel()), type,
@@ -276,6 +343,7 @@ public class OrderImportHandler implements ImportHandler {
                         : edit.notes().stream().map(TextNormalizer::clean).filter(note -> !note.isEmpty()).toList(),
                 clean(edit.signatoryPosition()), clean(edit.signatoryName()), before.source(), true);
         checkHeader(revised, issues);
+        checkReadable(revised, issues);
         return new ParseOutcome(revised, issues.rows());
     }
 

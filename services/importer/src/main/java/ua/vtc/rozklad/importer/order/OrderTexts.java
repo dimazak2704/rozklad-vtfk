@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.importer.order;
 
 import java.time.DateTimeException;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +83,25 @@ public final class OrderTexts {
         }
         String weekday = matcher.group(1).equals("пятниця") ? "п'ятниця" : matcher.group(1);
         return Optional.of(List.of(weekday.toUpperCase(TextNormalizer.UK), matcher.group(2).toUpperCase(TextNormalizer.UK)));
+    }
+
+    private static final List<String> WEEKDAYS = List.of("понеділок", "вівторок", "середа", "четвер", "п'ятниця");
+
+    /**
+     * The weekday a printed label names («П'ЯТНИЦЯ», «пятниця», «Четвер»), or empty when the label
+     * is not a school day name.
+     */
+    public static Optional<DayOfWeek> weekdayOf(String label) {
+        String key = TextNormalizer.key(label).replace("пятниця", "п'ятниця");
+        int index = WEEKDAYS.indexOf(key);
+        return index < 0 ? Optional.empty() : Optional.of(DayOfWeek.of(index + 1));
+    }
+
+    /** «четвер» for a date (Saturday and Sunday by their names too). */
+    public static String weekdayName(LocalDate date) {
+        int index = date.getDayOfWeek().getValue() - 1;
+        return index < WEEKDAYS.size() ? WEEKDAYS.get(index)
+                : date.getDayOfWeek() == DayOfWeek.SATURDAY ? "субота" : "неділя";
     }
 
     /**

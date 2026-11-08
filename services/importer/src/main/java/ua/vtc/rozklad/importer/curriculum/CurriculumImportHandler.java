@@ -1,6 +1,5 @@
 package ua.vtc.rozklad.importer.curriculum;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -14,7 +13,6 @@ import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,6 +26,7 @@ import ua.vtc.rozklad.importer.apply.CoreImportClient;
 import ua.vtc.rozklad.importer.apply.CoreImportPayloads;
 import ua.vtc.rozklad.importer.apply.LoadApplier;
 import ua.vtc.rozklad.importer.curriculum.CurriculumDraft.ControlForm;
+import ua.vtc.rozklad.importer.job.ExcelWorkbooks;
 import ua.vtc.rozklad.importer.job.FileType;
 import ua.vtc.rozklad.importer.job.ImportHandler;
 import ua.vtc.rozklad.importer.job.ImportKind;
@@ -35,8 +34,12 @@ import ua.vtc.rozklad.importer.job.ImportParseException;
 import ua.vtc.rozklad.importer.job.JobOptions;
 import ua.vtc.rozklad.importer.normalize.EntityCandidate;
 import ua.vtc.rozklad.importer.normalize.EntityType;
+import ua.vtc.rozklad.importer.normalize.NormalizationEngine.NormalizationResult;
+import ua.vtc.rozklad.importer.normalize.Resolution;
 import ua.vtc.rozklad.importer.report.Issues;
+import ua.vtc.rozklad.importer.report.ReportRow;
 import ua.vtc.rozklad.importer.report.RowType;
+import ua.vtc.rozklad.importer.report.Severity;
 import ua.vtc.rozklad.importer.text.TextNormalizer;
 import ua.vtc.rozklad.importer.web.InvalidRequestException;
 import ua.vtc.rozklad.importer.web.ProblemException;
@@ -156,6 +159,31 @@ public class CurriculumImportHandler implements ImportHandler {
         }
     }
 
+    /** Applying adds load items: only disciplines may be new, groups must exist. */
+    @Override
+    public boolean creates(EntityType type) {
+        return type == EntityType.DISCIPLINE;
+    }
+
+    /** Groups must be given; a discipline name with characters the model could not read is not created. */
+    @Override
+    public List<ReportRow> readiness(JsonNode draftJson, JobOptions options, NormalizationResult normalization) {
+        CurriculumDraft draft = jsonMapper.treeToValue(draftJson, CurriculumDraft.class);
+        List<ReportRow> rows = new ArrayList<>(LoadApplier.readiness(options));
+        int index = 0;
+        for (CurriculumDraft.Row row : draft.rows()) {
+            index++;
+            boolean mapped = normalization.find(EntityType.DISCIPLINE, row.discipline()).map(Resolution::existing)
+                    .orElse(false);
+            if (row.discipline().indexOf('\uFFFD') >= 0 && !mapped) {
+                rows.add(ReportRow.of(Severity.ERROR, RowType.DISCIPLINE, row.discipline(), "рядок " + index,
+                        "У назві є нерозпізнані символи «\uFFFD» — зіставте дисципліну з каталогом на вкладці «Рішення» "
+                                + "або завантажте чіткіший скан."));
+            }
+        }
+        return rows;
+    }
+
     @Override
     public List<EntityCandidate> entities(JsonNode draftJson, JobOptions options) {
         CurriculumDraft draft = jsonMapper.treeToValue(draftJson, CurriculumDraft.class);
@@ -203,7 +231,8 @@ public class CurriculumImportHandler implements ImportHandler {
     static String tableText(byte[] content) {
         DataFormatter formatter = new DataFormatter();
         StringBuilder text = new StringBuilder();
-        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
+        try (Workbook workbook = ExcelWorkbooks.open(content, "Не вдалося прочитати файл Excel навчального плану: він "
+                + "пошкоджений або має інший формат. Збережіть його в Excel ще раз як .xlsx.")) {
             for (Sheet sheet : workbook) {
                 text.append("# ").append(sheet.getSheetName()).append('\n');
                 for (Row row : sheet) {

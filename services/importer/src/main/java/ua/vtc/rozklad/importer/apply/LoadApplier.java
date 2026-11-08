@@ -7,8 +7,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
 import ua.vtc.rozklad.importer.job.ImportHandler.ApplyInput;
+import ua.vtc.rozklad.importer.job.JobOptions;
 import ua.vtc.rozklad.importer.normalize.EntityType;
 import ua.vtc.rozklad.importer.normalize.Resolution;
+import ua.vtc.rozklad.importer.report.ReportRow;
+import ua.vtc.rozklad.importer.report.RowType;
+import ua.vtc.rozklad.importer.report.Severity;
 
 /**
  * Shared apply steps of DISCIPLINE_PROGRAM and CURRICULUM: checks semester and target groups,
@@ -31,16 +35,29 @@ public final class LoadApplier {
         }
         CatalogSnapshot catalog = input.catalog();
         if (!catalog.semesters().isEmpty() && !catalog.hasSemester(input.semesterId())) {
-            throw new ApplyException("SEMESTER_NOT_FOUND", "Обраного семестру немає в core.");
+            throw new ApplyException("SEMESTER_NOT_FOUND", "Обраного семестру немає на сервері розкладу — оберіть інший семестр.");
         }
         return input.semesterId();
+    }
+
+    public static final String OPTIONS_LOCATION = "параметри імпорту";
+    static final String GROUPS_REQUIRED = "Вкажіть групи, яким додати навантаження (параметри імпорту).";
+
+    /**
+     * Readiness rows every load import shares: groups must be given (whether they exist is a
+     * matching row, see {@code ImportHandler#creates}).
+     */
+    public static List<ReportRow> readiness(JobOptions options) {
+        return options.groupCodes().isEmpty()
+                ? List.of(ReportRow.of(Severity.ERROR, RowType.GROUP, null, OPTIONS_LOCATION, GROUPS_REQUIRED))
+                : List.of();
     }
 
     /** Target groups (options.groupCodes) must exist in the catalog; returns their catalog codes. */
     public static List<String> requireGroups(ApplyInput input, CatalogKeys keys) {
         List<String> codes = input.options().groupCodes();
         if (codes.isEmpty()) {
-            throw new ApplyException("GROUPS_REQUIRED", "Вкажіть групи (options.groupCodes), яким додати навантаження.");
+            throw new ApplyException("GROUPS_REQUIRED", GROUPS_REQUIRED);
         }
         List<String> result = new ArrayList<>();
         List<String> missing = new ArrayList<>();

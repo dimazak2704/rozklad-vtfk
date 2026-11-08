@@ -5,6 +5,7 @@ import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
 import ua.vtc.rozklad.importer.normalize.EntityCandidate;
+import ua.vtc.rozklad.importer.normalize.EntityType;
 import ua.vtc.rozklad.importer.normalize.NormalizationEngine.NormalizationResult;
 import ua.vtc.rozklad.importer.report.ReportRow;
 
@@ -40,6 +41,24 @@ public interface ImportHandler {
      */
     default boolean entitiesBlockApply() {
         return true;
+    }
+
+    /**
+     * Whether applying creates a catalog entry for a {@code type} value that is not in the catalog.
+     * When it does not (orders keep text only; load imports add hours to existing groups), the
+     * report never promises «буде створено» and an admin cannot ask to create one.
+     */
+    default boolean creates(EntityType type) {
+        return true;
+    }
+
+    /**
+     * What applying needs beyond the matching rows, checked whenever the report is rebuilt (parse,
+     * mappings, options, draft revision): a blocking ERROR row here keeps the job in review instead
+     * of letting it fail at apply.
+     */
+    default List<ReportRow> readiness(JsonNode draft, JobOptions options, NormalizationResult normalization) {
+        return List.of();
     }
 
     record ParseInput(UUID jobId, String fileName, FileType type, byte[] content, JobOptions options) {

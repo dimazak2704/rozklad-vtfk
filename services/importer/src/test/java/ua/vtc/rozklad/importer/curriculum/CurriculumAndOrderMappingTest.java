@@ -67,8 +67,8 @@ class CurriculumAndOrderMappingTest {
         assertThat(draft.rows()).extracting(OrderDraft.Row::rowType).containsExactly(OrderRowType.REPLACEMENT,
                 OrderRowType.FINISHED, OrderRowType.FINISHED);
         assertThat(issues.rows()).extracting(ReportRow::message)
-                .anyMatch(message -> message.contains("ШІ позначив рядок як FINISHED, але за текстом це REPLACEMENT"))
-                .anyMatch(message -> message.contains("ШІ позначив рядок як BLOCK, але за текстом це FINISHED"));
+                .anyMatch(message -> message.contains("ШІ позначив рядок як «вичитано», але за текстом це «заміна»"))
+                .anyMatch(message -> message.contains("ШІ позначив рядок як «блок пар», але за текстом це «вичитано»"));
     }
 
     @Test

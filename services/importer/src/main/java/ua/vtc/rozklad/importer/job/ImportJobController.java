@@ -134,6 +134,17 @@ public class ImportJobController {
         return ImportJobDto.of(service.updateMappings(id, changes));
     }
 
+    /** {@code version} — the job version the admin edited; {@code options} — the whole new parameter object. */
+    public record OptionsRequest(@NotNull(message = "Оновіть сторінку: бракує версії завдання") Long version,
+                                 @NotNull JsonNode options) {
+    }
+
+    @Operation(summary = "Змінити параметри застосування (групи, години на тиждень, назва версії) і перерахувати звіт")
+    @PutMapping("/{id}/options")
+    public ImportJobDto updateOptions(@PathVariable UUID id, @Valid @RequestBody OptionsRequest request) {
+        return ImportJobDto.of(service.updateOptions(id, request.version(), request.options()));
+    }
+
     /** Optional body: the semester to apply into (overrides the one given at upload). */
     public record ApplyRequest(UUID semesterId) {
     }

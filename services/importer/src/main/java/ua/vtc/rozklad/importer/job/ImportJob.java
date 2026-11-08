@@ -181,6 +181,21 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
+    /**
+     * The admin changed the parameters that applying uses (groups, weekly hours, version name):
+     * nothing is parsed again, the readiness and matching rows are rebuilt with the new ones.
+     */
+    public void reoptioned(JsonNode options, List<ReportRow> entityRows, Instant now) {
+        require(acceptsMappings(), "change the options");
+        this.options = options;
+        updateReport(entityRows);
+        status = summary.blocking() ? ImportJobStatus.NEEDS_REVIEW : ImportJobStatus.READY;
+        if (status == ImportJobStatus.READY) {
+            error = null;
+        }
+        updatedAt = now;
+    }
+
     /** The admin replaced the draft with a corrected one: new parse remarks and matching rows. */
     public void revised(JsonNode draft, List<ReportRow> parseIssues, List<ReportRow> entityRows, Instant now) {
         require(acceptsMappings(), "revise the draft");
@@ -266,10 +281,15 @@ public class ImportJob implements Persistable<UUID> {
                 || status == ImportJobStatus.FAILED && draft != null && parsedAt != null;
     }
 
-    /** READY, or FAILED while applying (the draft is intact and nothing blocks). */
+    /**
+     * READY; FAILED while applying; or back in review because core rejected the content while no
+     * report row blocks (the admin may have fixed the cause in core, e.g. created the semester):
+     * the draft is intact and nothing blocks.
+     */
     public boolean canApply() {
+        boolean intact = draft != null && parsedAt != null && !summary.blocking();
         return status == ImportJobStatus.READY
-                || status == ImportJobStatus.FAILED && draft != null && parsedAt != null && !summary.blocking();
+                || (status == ImportJobStatus.FAILED || status == ImportJobStatus.NEEDS_REVIEW && error != null) && intact;
     }
 
     private void updateReport(List<ReportRow> entityRows) {

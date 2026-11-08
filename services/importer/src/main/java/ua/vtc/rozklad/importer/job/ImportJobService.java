@@ -27,6 +27,7 @@ import ua.vtc.rozklad.importer.catalog.CatalogUnavailableException;
 import ua.vtc.rozklad.importer.config.Ids;
 import ua.vtc.rozklad.importer.config.ImportProperties;
 import ua.vtc.rozklad.importer.normalize.MappingDecision;
+import ua.vtc.rozklad.importer.report.Severity;
 import ua.vtc.rozklad.importer.storage.FileStorage;
 import ua.vtc.rozklad.importer.web.BusinessRuleException;
 import ua.vtc.rozklad.importer.web.InvalidRequestException;
@@ -135,6 +136,7 @@ public class ImportJobService {
             throw InvalidRequestException.field("mappings", "Не більше " + MAX_MAPPINGS + " зіставлень за раз.");
         }
         JobOptions options = JobOptions.from(job.options());
+        ImportHandler handler = handlers.get(job.kind());
         Set<String> known = new HashSet<>();
         normalizer.entities(job.kind(), job.draft(), options).forEach(entity -> known.add(entity.key()));
         CatalogSnapshot snapshot = fetchCatalog();
@@ -148,6 +150,10 @@ public class ImportJobService {
             }
             if (decision.mapsToExisting() && !exists(snapshot, decision)) {
                 errors.add(Map.entry(prefix + ".targetId", "Обраного запису немає в каталозі."));
+            }
+            if (decision.createNew() != null && !change.reset() && !handler.creates(decision.type())) {
+                errors.add(Map.entry(prefix + ".createNew", "Цей імпорт не створює нових "
+                        + decision.type().genitivePlural() + " — зіставте значення з наявним записом каталогу."));
             }
         }
         if (!errors.isEmpty()) {
@@ -171,6 +177,46 @@ public class ImportJobService {
                 throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
             }
             fresh.remapped(decisions, normalized.rows(), clock.instant());
+            return fresh;
+        });
+    }
+
+    /**
+     * Replaces the parameters of a job waiting for review (the same validation as at upload) and
+     * rebuilds its report with them: a missing group or weekly hours are fixed here instead of
+     * uploading — and for a scan paying for the AI reading — again. {@code sheet} and
+     * {@code semesterNumber} decide how the file was read: changing them is a field error.
+     */
+    public ImportJob updateOptions(UUID id, long expectedVersion, JsonNode optionsJson) {
+        ImportJob job = get(id);
+        if (!job.acceptsMappings()) {
+            throw ProblemException.conflict("Параметри можна змінювати, лише коли завдання очікує перевірки "
+                    + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
+        }
+        if (job.version() != expectedVersion) {
+            throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
+        }
+        JobOptions requested = JobOptions.from(optionsJson);
+        JsonNode current = job.options() == null ? jsonMapper.createObjectNode() : job.options();
+        JsonNode next = requested.toJson();
+        List<Map.Entry<String, String>> errors = new ArrayList<>();
+        for (String name : List.of("sheet", "semesterNumber")) {
+            if (!current.path(name).equals(next.path(name))) {
+                errors.add(Map.entry("options." + name, "Цей параметр визначає, як прочитано файл, — щоб його "
+                        + "змінити, завантажте файл ще раз."));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new InvalidRequestException(errors);
+        }
+        JobNormalizer.Normalized normalized = normalizer.normalize(job.kind(), job.draft(), requested, job.mappings(),
+                fetchCatalog());
+        return transaction.execute(status -> {
+            ImportJob fresh = jobs.findById(id).orElseThrow(() -> new NotFoundException("Завдання імпорту не знайдено."));
+            if (fresh.version() != expectedVersion) {
+                throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
+            }
+            fresh.reoptioned(next, normalized.rows(), clock.instant());
             return fresh;
         });
     }
@@ -221,9 +267,12 @@ public class ImportJobService {
                 return job;
             }
             case UPLOADED, PARSING -> throw ProblemException.conflict("Файл ще обробляється — зачекайте завершення розбору.");
-            case NEEDS_REVIEW -> throw new BusinessRuleException("IMPORT_NEEDS_REVIEW", job.summary().conflicts() > 0
-                    ? "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів."
-                    : "Імпорт потребує перевірки.");
+            case NEEDS_REVIEW -> {
+                // повернуте core на перевірку без блокувальних рядків можна застосувати ще раз (причину усунуто в core)
+                if (!job.canApply()) {
+                    throw new BusinessRuleException("IMPORT_NEEDS_REVIEW", reviewReason(job));
+                }
+            }
             default -> {
                 // READY або FAILED після невдалого застосування
             }
@@ -237,12 +286,23 @@ public class ImportJobService {
         }
         boolean loadKind = job.kind() == ImportKind.DISCIPLINE_PROGRAM || job.kind() == ImportKind.CURRICULUM;
         if (loadKind && JobOptions.from(job.options()).groupCodes().isEmpty()) {
-            throw new BusinessRuleException("GROUPS_REQUIRED", "Під час завантаження вкажіть групи (options.groupCodes), "
-                    + "яким додати навантаження.");
+            throw new BusinessRuleException("GROUPS_REQUIRED", "Під час завантаження вкажіть групи, яким додати "
+                    + "навантаження.");
         }
         job.startApplying(effectiveSemester, clock.instant());
         events.publishEvent(new ImportJobQueued(id, ImportJobQueued.Stage.APPLY));
         return job;
+    }
+
+    /** Why a job in review cannot be applied, in the words of the report. */
+    private static String reviewReason(ImportJob job) {
+        if (job.summary().conflicts() > 0) {
+            return "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів.";
+        }
+        return job.report().stream().filter(row -> row.severity() == Severity.ERROR)
+                .findFirst()
+                .map(row -> "Імпорт потребує перевірки: " + row.message())
+                .orElseGet(() -> job.error() != null ? "Імпорт потребує перевірки: " + job.error() : "Імпорт потребує перевірки.");
     }
 
     private CatalogSnapshot fetchCatalog() {

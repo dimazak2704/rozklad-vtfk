@@ -12,4 +12,12 @@ public final class OrderTestAccess {
     public static OrderDraft fromAi(OrderExtraction extraction, Issues issues) {
         return OrderImportHandler.fromAi(extraction, issues);
     }
+
+    public static void checkReadable(OrderDraft draft, Issues issues) {
+        OrderImportHandler.checkReadable(draft, issues);
+    }
+
+    public static OrderImportHandler handler(java.time.Clock clock) {
+        return new OrderImportHandler(null, null, null, tools.jackson.databind.json.JsonMapper.builder().build(), clock);
+    }
 }

@@ -21,6 +21,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -337,6 +339,8 @@ class ImportJobFlowIT {
         JsonNode rejected = job(id);
         assertThat(rejected.get("status").asString()).isEqualTo("NEEDS_REVIEW");
         assertThat(rejected.get("error").asString()).contains("№35 уже є в семестрі");
+        // r5-ai-imports-68: нічого в звіті не блокує — після виправлення в core можна застосувати ще раз
+        assertThat(rejected.get("canApply").asBoolean()).isTrue();
 
         reset(core);
         when(core.importChanges(any(), anyString())).thenReturn(jsonMapper.readTree("{\"items\":1}"));
@@ -423,6 +427,104 @@ class ImportJobFlowIT {
         mockMvc.perform(get("/api/import/jobs/{id}", UUID.randomUUID()).with(TestTokens.admin()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Завдання імпорту не знайдено."));
+    }
+
+    /**
+     * r3-ai-imports-02: what apply needs (weekly hours, existing groups) is a blocking report row, not a
+     * FAILED apply; the parameters are corrected on the job instead of uploading again.
+     */
+    @Test
+    void programMissingWeeklyHoursOrAnUnknownGroupWaitsForReviewAndIsFixedByOptions() throws Exception {
+        UUID id = UUID.fromString(upload("programs/working-program-ndeksm.doc", "DISCIPLINE_PROGRAM",
+                TestCatalogs.SEMESTER, "{\"groupCodes\":[\"4КІ9\"]}").get("id").asString());
+        JsonNode parsed = job(id);
+        assertThat(parsed.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(parsed.get("canApply").asBoolean()).isFalse();
+        assertThat(errorMessages(parsed))
+                .contains("У програмі не вказано годин на тиждень — задайте «Годин на тиждень» у параметрах імпорту.")
+                .anyMatch(message -> message.startsWith("Немає в каталозі, а цей імпорт не створює нових груп."));
+        assertThat(messages(parsed)).noneMatch(message -> message.contains("буде створено (група)"));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("IMPORT_NEEDS_REVIEW"));
+        // групу цей імпорт не створює — і за рішенням адміністратора теж
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mappings\":[{\"type\":\"GROUP\",\"raw\":\"4КІ9\",\"createNew\":{},\"addAlias\":false}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("mappings[0].createNew"));
+        // параметр, що визначає розбір, не змінюють
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"options\":{\"groupCodes\":[\"4КІ1\"],\"sheet\":\"Аркуш\"}}"
+                                .formatted(parsed.get("version").asLong())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("options.sheet"));
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"options\":{\"groupCodes\":[\"4КІ1\"],\"hoursPerWeek\":0}}"
+                                .formatted(parsed.get("version").asLong())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("options.hoursPerWeek"));
+
+        String fixed = mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"options\":{\"groupCodes\":[\"4КІ1\"],\"hoursPerWeek\":2}}"
+                                .formatted(parsed.get("version").asLong())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.options.hoursPerWeek").value(2))
+                .andExpect(jsonPath("$.options.groupCodes[0]").value("4КІ1"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode corrected = jsonMapper.readTree(fixed);
+        assertThat(errorMessages(corrected)).noneMatch(message -> message.contains("годин на тиждень")
+                || message.contains("нових груп"));
+        // застаріла версія — 409
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"options\":{\"groupCodes\":[\"4КІ1\"]}}"
+                                .formatted(parsed.get("version").asLong())))
+                .andExpect(status().isConflict());
+    }
+
+    /** r3-ai-imports-06, r3-ui-real-24: an order is stored as text; unreadable characters block it. */
+    @Test
+    void orderReportDoesNotPromiseNewCatalogEntries() throws Exception {
+        ((FakeAiAdapter) aiPort).reply(AiPurpose.ORDER_DOCUMENT, """
+                {"number":35,"kind":"ORDER","parentNumber":null,"date":"2026-10-19","weekdayLabel":"ПОНЕДІЛОК",
+                 "parityLabel":"ЗНАМЕННИК",
+                 "rows":[{"section":"CHANGES","groupCode":"1ТК","pairLabel":"2","rowType":"REPLACEMENT",
+                   "fromDiscipline":"Вс.іст.","fromTeacher":"Бадун\uFFFD","reasonText":"Зв.зам.","toDiscipline":"ЗУ",
+                   "toTeacher":"Ємельяненко","roomText":"6"}],
+                 "notes":[],"signatoryPosition":null,"signatoryName":null,"warnings":[]}
+                """, 2000, 500);
+        UUID id = UUID.fromString(upload("orders/order-035-2026-10-19.jpg", "ORDER_DOCUMENT", null, null)
+                .get("id").asString());
+        JsonNode parsed = job(id);
+        assertThat(messages(parsed))
+                .noneMatch(message -> message.contains("буде створено"))
+                .anyMatch(message -> message.contains("каталог не змінюється"));
+        assertThat(errorMessages(parsed)).anyMatch(message -> message.startsWith("У рядку є нерозпізнані символи"));
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mappings\":[{\"type\":\"GROUP\",\"raw\":\"1ТК\",\"createNew\":{},\"addAlias\":false}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("mappings[0].createNew"));
+    }
+
+    private static List<String> messages(JsonNode job) {
+        List<String> messages = new ArrayList<>();
+        job.get("report").forEach(row -> messages.add(row.path("message").asString("")));
+        return messages;
+    }
+
+    private static List<String> errorMessages(JsonNode job) {
+        List<String> messages = new ArrayList<>();
+        job.get("report").forEach(row -> {
+            if ("ERROR".equals(row.get("severity").asString())) {
+                messages.add(row.get("message").asString());
+            }
+        });
+        return messages;
     }
 
     private JsonNode upload(String seedFile, String kind, UUID semesterId, String options) throws Exception {
