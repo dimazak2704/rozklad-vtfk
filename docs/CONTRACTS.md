@@ -80,12 +80,15 @@ Generation:
 Substitutions:
 | `GET /api/admin/absences?from&to&teacherId` · `POST` `{teacherId,dateFrom,dateTo,pairs?,reasonCategory,comment?}` · `PUT {id}` (+ required `version`) · `DELETE {id}` | |
 | `GET /api/admin/absences/{id}/affected` | `[{date, lesson:LessonView, decision:{changeId,status,kind}?, asSubstitute}]` (`asSubstitute`: the absent teacher is the substitute of `decision`) |
-| `GET /api/admin/lessons/{lessonId}/options` | `{lesson:LessonView, options:[Option]}` |
-| `POST /api/admin/changes` `{kind, date, pairFrom, pairTo?, groupId, subgroup?, originalLessonId?, newDisciplineId?, newTeacherId?, newRoomId?, swapLessonId?, reasonCode, reasonText?, absenceId?}` | 201 `ChangeDto` (status after approval-mode rules) / 409 conflicts |
+| `GET /api/admin/lessons/{lessonId}/options` | `{lesson:LessonView, options:[Option], declined:[{teacher:TeacherRef, at}], past:bool}` — options in server order; may contain any subset of kinds (REPLACE_DISCIPLINE, MERGE_SUBGROUPS, SWAP, CANCEL; never REPLACE_TEACHER or ADDITIONAL) |
+| `GET /api/admin/lessons/{lessonId}/teacher-availability?q=` | `[{teacher:TeacherRef, status: FREE\|BUSY\|ABSENT\|UNAVAILABLE\|DECLINED, detail?}]`, FREE first then alphabetical; `detail` «3 пара, 4КІ2» (BUSY) or «14:05» (DECLINED, Kyiv time); `q` filters by name |
+| `GET /api/admin/absences/{id}/plan?date=` | `{date, lessons:[{lesson:LessonView, options:[Option], proposedIndex?, declined:[…], past}]}` — proposal per undecided lesson of the absent teacher on `date` (default the absence's first day; outside the absence → 400 `errors[date]`); nothing is created |
+| `POST /api/admin/changes` `{kind, date, pairFrom, pairTo?, groupId, subgroup?, originalLessonId?, newDisciplineId?, newTeacherId?, newRoomId?, swapLessonId?, reasonCode, reasonText?, absenceId?}` | 201 `ChangeDto` (status after approval-mode rules) / 409 conflicts. MERGE_SUBGROUPS: `originalLessonId` + `swapLessonId` (the other subgroup's lesson of the same discipline and pair), no `newTeacherId`/`newDisciplineId` |
+| `POST /api/admin/changes/batch` `{changes:[CreateChangeRequest]}` (1..50) | 201 `[ChangeDto]` in request order; one transaction: any 400/409 creates nothing; field errors `changes[i].field` |
 | `GET /api/admin/changes?date&status` · `PUT /{id}` · `DELETE /{id}` (→ CANCELLED) | |
 | `POST /api/admin/changes/{id}/request-confirmation` · `POST /{id}/confirm` (admin override) | |
 | `GET /api/admin/dashboard?date` | `{date, parity, absences:n, uncoveredLessons:n, pending:n, confirmed:n, declined:n, orderDraft:{id,itemCount}?, generation:{status}?, aiSpendToday?, alerts:[...]}` |
-`Option {kind, score (0..100), title, reasons:[string], teacher?, discipline?, room?, swapLesson?, warnings:[string]}`
+`Option {kind, score (position only, deprecated), title, reasons:[string], teacher?, discipline?, room?, swapLesson?, warnings:[string], date?, pair?, band: CLEAN|EASY_CANCEL|CAUTION|LAST, recommended:bool, suggestedRoom?}` (`swapLesson`: moved lesson of a SWAP or the other subgroup's lesson of a MERGE_SUBGROUPS; `date`/`pair` always null now)
 `ChangeDto {id, kind, status, date, pairFrom, pairTo, group, subgroup, original:{discipline,teacher,room}, new:{discipline?,teacher?,room?}, reasonCode, reasonText, absenceId?, confirmDeadline?, respondedAt?, orderId?, history:[{at,actor,from,to,comment}]}`
 
 Orders:
@@ -164,7 +167,7 @@ Records live in `libs/contracts` (`ua.vtc.rozklad.contracts.events`).
 | `generation.cancel` | core → scheduler | `jobId` |
 | `generation.progress` | scheduler → core | `jobId, elapsedMs, hardScore, softScore` |
 | `generation.completed` | scheduler → core | `jobId, status SOLVED|FAILED|CANCELLED, hardScore, softScore, assignments:[{unitId, weekday, pair, parity, roomId}], analysis:[{constraint, matchCount, score}], error?` |
-| `substitution.confirmation-requested` | core → notification | `changeId, teacherId, date, pair, startsAt, endsAt, groupCode, subgroup, disciplineName, originalTeacherName, roomName?, deadline` |
+| `substitution.confirmation-requested` | core → notification | `changeId, teacherId, date, pair, startsAt, endsAt, groupCode, subgroup, disciplineName, originalTeacherName, roomName?, deadline` (MERGE_SUBGROUPS: `subgroup` 0 — the teacher takes the whole group) |
 | `substitution.status-changed` | core → notification | `changeId, status, teacherId, date, groupCode` (edit bot message / notify admins) |
 | `absence.reported` | core → notification | `absenceId, teacherId, teacherName, dateFrom, dateTo, pairs, source` |
 | `order.published` | core → notification | `OrderPayload` (all fields of `OrderDto` + `semesterName`, `affectedGroups:[{groupId, code}]`, `affectedTeachers:[{teacherId, name}]`) |

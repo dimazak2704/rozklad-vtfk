@@ -41,8 +41,10 @@ accounting  ← substitution ← order
 | Path | Who | What |
 |---|---|---|
 | `GET/POST /api/admin/absences`, `GET/PUT/DELETE /{id}`, `GET /{id}/affected` | ADMIN | absences; list = active absences overlapping `[from, to]` (default today + 31 days) |
-| `GET /api/admin/lessons/{lessonId}/options` | ADMIN | ranked options of a SCHEDULED lesson |
-| `GET/POST /api/admin/changes`, `GET/PUT/DELETE /{id}`, `POST /{id}/request-confirmation`, `POST /{id}/confirm` | ADMIN | changes and their workflow |
+| `GET /api/admin/lessons/{lessonId}/options` | ADMIN | ranked options of a SCHEDULED lesson (band, recommended, suggested room, decliners, past) |
+| `GET /api/admin/lessons/{lessonId}/teacher-availability?q=` | ADMIN | every active teacher's state at the lesson's pair (manual «Інший викладач…») |
+| `GET /api/admin/absences/{id}/plan?date=` | ADMIN | day plan: a proposal per undecided lesson, nothing created |
+| `GET/POST /api/admin/changes`, `POST /batch`, `GET/PUT/DELETE /{id}`, `POST /{id}/request-confirmation`, `POST /{id}/confirm` | ADMIN | changes and their workflow; `batch` = several changes in one transaction |
 | `GET /api/admin/orders`, `GET /draft?date=`, `GET /{id}`, `PUT /{id}/notes`, `POST /{id}/publish` | ADMIN | orders |
 | `GET /api/admin/dashboard?date` | ADMIN | daily figures and alerts |
 | `GET /api/admin/accounting?semesterId&groupId`, `GET /api/admin/accounting/teachers?month=2026-10` | ADMIN | accounting |
@@ -59,7 +61,9 @@ teacher gets 403 on `/api/me/*`.
 
 * **Kinds and required fields** — `ChangeKindRules` (400 per field): REPLACE_TEACHER (lesson + new
   teacher, the discipline stays), REPLACE_DISCIPLINE (lesson + discipline + teacher), SWAP (lesson +
-  a later lesson of the same cohort; its discipline and teacher move into the slot), CANCEL (lesson),
+  another lesson of the same cohort — a later one, or for a future day also an earlier one; its discipline and
+  teacher move into the slot), MERGE_SUBGROUPS (lesson + `swapLessonId` = the same discipline's lesson of another
+  subgroup at the pair; its teacher takes both subgroups as one whole-group lesson in his room), CANCEL (lesson),
   ROOM_CHANGE (lesson + room), DISCIPLINE_FINISHED (lesson, reason FINISHED, optional discipline +
   teacher), ADDITIONAL (date, pairs, discipline, teacher), BLOCK (date, pair range, discipline, optional
   teacher; replaces every lesson of the cohort in the range). Ranges only for BLOCK and ADDITIONAL.
@@ -69,7 +73,8 @@ teacher gets 403 on `/api/me/*`.
   decision only cancels it — order №35 has «1ТК1 1-4 ЗУ» and «1ТК1 1 Пари не буде»); hard conflicts of
   the lessons the change would create (409 `conflicts[]`, `DatedSlotChecker`): teacher, cohort,
   exclusive room or `maxParallel`, capacity, required room type, UNAVAILABLE; pending/confirmed
-  changes count as occupying their slots. Shift windows are not enforced (real orders put extra pairs
+  changes count as occupying their slots, and a lesson another open change takes away (its original or
+  moved/merged lesson, not a room change) no longer holds its teacher. Shift windows are not enforced (real orders put extra pairs
   outside them). Decisions about one group-day are serialized by `lockGroupDay`.
 * **Approval** — a change that assigns a teacher waits for that teacher when
   `substitution.approvalMode` is CONFIRM (default): DRAFT → PENDING_CONFIRMATION, deadline =
@@ -97,20 +102,23 @@ teacher gets 403 on `/api/me/*`.
   shrinking it cancels its changes that are no longer needed; `absence.reported` carries no reason or
   comment; SSE `absence.created` / `absence.updated` carry `AbsenceDto.Summary` (no reason/comment).
 
-## 4. Ranking (`OptionRanker`, pure)
+## 4. Ranking (`OptionsGatherer` → `OptionRanker`, pure; DOMAIN §7)
 
-REPLACE_TEACHER exactly as DOMAIN §7: candidate ≠ absent teacher, not absent, not busy (lesson or
-pending/confirmed assignment in the slot), not UNAVAILABLE; +50 «Веде цю дисципліну» (competence or
-any load item of the semester), +20 «Та сама циклова комісія», +15 «Закриває вікно між 2 і 4 парою»,
-+10 «Вже має 2 пари цього дня», −8 per substitution this month (pending/confirmed/applied takeovers),
-at most −24, chip «3 заміни цього місяця», −15 UNWANTED (warning «Небажаний час (побажання
-викладача)»); top 10; ties: fewer substitutions, then name. Other kinds (documented base scores):
-REPLACE_DISCIPLINE 40 + 20 «Відстає на N год» (plan − forecast) + day factors, finished disciplines
-excluded, top 5, warning about a required room type; SWAP 45, +10 «Група піде раніше» when the moved
-pair is the last one, −15 and a warning when it leaves a window; CANCEL 20, +15 for the first/last/only
-pair, −10 with «У групи з'явиться вікно» in the middle; ADDITIONAL (make-up within 14 days, adjacent to
-the group's day, inside the shift window, free for the group and the teacher) 15. Display score is
-clamped to 0..100.
+* **Gathering** (`OptionsGatherer.forDay(date, lessons)`, the per-lesson endpoint is a day with one lesson): one
+  query each for the day's lessons, open changes, absences, the weekday's preferences, declines
+  (`OptionsDeclines`), the six-week cover ledger (+ one lineage lookup, `ChangeLineage` shared with the teacher
+  statistics), weekly hours of the pool's teachers and the usual rooms; per group the load items and
+  `AccountingQueries.progressOfGroup`; catalog names in three batch reads. Budget asserted in `OptionsGatheringIT`:
+  ≤ 30 statements per lesson (28 measured, v1 had 49 in the same scenario), a day plan ≤ 15 + 8 per group.
+* **Pool**: other disciplines of the group for the lesson's cohort, each by its own teacher (REPLACE_DISCIPLINE);
+  plus MERGE_SUBGROUPS, SWAP, CANCEL. Never REPLACE_TEACHER or ADDITIONAL.
+* **Order**: band (CLEAN, EASY_CANCEL, CAUTION, LAST) → kind → integer cost → oldest last cover → title. Costs,
+  chips and the «recommended» rule are in DOMAIN §7; `RankingFactor` switches single factors off for the offline
+  evaluation only.
+* **Day plan**: `DayPlanner` (pure) over the inputs of one `forDay` read.
+* **Manual list**: `TeacherAvailability` (8 statements).
+* **Recommendation log**: `RecommendationLog` (change package) ranks the lesson before `POST /changes` and logs
+  `substitution.recommendation …` after it succeeded.
 
 ## 5. Orders (DOMAIN §8)
 
@@ -123,6 +131,7 @@ clamped to 0..100.
   left), BLOCK («1-4», the block on the left plus room) followed by AS_SCHEDULED rows («За розкладом»)
   for the group's other scheduled pairs (as order №105), FINISHED («Вичит.», right side only with a
   replacement), SWAP = replacement in the free slot + «Пари не буде» in the pair the lesson leaves,
+  MERGE_SUBGROUPS (left: the absent teacher's subgroup «(п.)», right: the teacher who takes both, his room),
   ROOM_CHANGE in «ЗАМІНА АУДИТОРІЙ». Subgroups of one slot merge («Харченко О./Михальчук»,
   «304/309»), a single subgroup is marked «Крисак Л. (п.)». Order: course, group code (Ukrainian
   collation), pair. Texts: discipline short name, teacher display name, room name; reasons «Відп.»,
@@ -179,9 +188,12 @@ Migrations: `V1_501` (`change.swap_lesson_id`, `change.reminded_at`), `V1_601`
 
 ```bash
 # unit + web slices of the area
-mvn -q -pl services/core -am test -Dtest='OptionRankerTest,MakeUpSlotFinderTest,ChangeStatusMachineTest,ChangeKindRulesTest,ChangeTest,HoursLedgerTest,OrderRowComposerTest,OrderTextsTest,StudyWeeksTest,UkrainianTextTest,*ControllerTest,*ControllersTest' -Dsurefire.failIfNoSpecifiedTests=false
+mvn -q -pl services/core -am test -Dtest='OptionRankerTest,DayPlannerTest,ChangeStatusMachineTest,ChangeKindRulesTest,ChangeTest,HoursLedgerTest,OrderRowComposerTest,OrderTextsTest,StudyWeeksTest,UkrainianTextTest,*ControllerTest,*ControllersTest' -Dsurefire.failIfNoSpecifiedTests=false
 # integration (Docker): lifecycle, order №35, numbering, absences → options → accounting
-mvn -q -pl services/core -am verify -Dit.test='ChangeLifecycleIT,OrderPublicationIT,OrderNumberingIT,SubstitutionFlowIT' -Dtest='None*' -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
+mvn -q -pl services/core -am verify -Dit.test='ChangeLifecycleIT,OrderPublicationIT,OrderNumberingIT,SubstitutionFlowIT,OptionsGatheringIT,ManualDecisionsIT' -Dtest='None*' -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
+# offline evaluation of the ranking on order №35 (excluded from the normal build, report in target/replay-order35.txt)
+python scripts/eval/export_replay_cases.py   # read-only, refreshes src/test/resources/replay/order35.json
+mvn -q -pl services/core -am test -Dtest=OptionRankerReplayTest -Dtest.excludedGroups= -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
 `OrderPublicationIT` rebuilds the real order №35 of 19.10.2026: 34 orders already published since
@@ -195,8 +207,10 @@ Manual run: own database on the shared PostgreSQL, port 38081.
   (a real JWT would need Keycloak or a second test context).
 * `aiSpendToday` of the dashboard is always `null` (the importer accounts AI usage; core has no client for
   `GET /api/import/ai/usage`, the SPA can read it directly).
-* Streams: a replacement keeps the stream of a same-discipline lesson; pending changes of other
+* Streams: a replacement or a cover keeps the stream of the replaced lesson; pending changes of other
   groups of the stream are exempt from the teacher check only through their original lesson.
+* Recommender v2: the fairness factors (cover burden) have no real history yet; on order №35 v2 reaches RD
+  hit@3 5/9 and hit@1 2/9 (v1: 2/9 and 1/9), see CHANGELOG round 7. Weights are frozen until ≥ 30 new decisions.
 * `POST /api/admin/import/changes` (historic orders) is not implemented.
 * Orders always print teacher display names; `showTeacherFullNames` is not applied here.
 * Reminders reach the dispatchers through SSE; the admin Telegram chat depends on the notification

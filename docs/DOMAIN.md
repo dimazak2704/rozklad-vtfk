@@ -54,7 +54,7 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 - `teacher(last_name, first_name, middle_name, short_name, display_name, cycle_commission_id, employment 'STAFF'|'PART_TIME', email, active, keycloak_user_id uuid unique null, needs_review bool)`
 - `teacher_alias(teacher_id, alias, normalized unique)`
 - `discipline(name, short_name, color, active, needs_review bool)`; `discipline_alias(discipline_id, alias, normalized unique)`
-- `teacher_discipline(teacher_id, discipline_id)` — competence used by candidate ranking
+- `teacher_discipline(teacher_id, discipline_id)` — competence (not used by the substitute ranking since round 7)
 - `building(name)`; `room(building_id, name, type, capacity, max_parallel int default 1, active)`;
   room types: `CLASSROOM, COMPUTER_LAB, LAB, GYM, SPORTS_GROUND, OTHER`
 - `student_group(code unique, course, specialty_id, number, size, shift, curator_teacher_id, home_room_id, active)`
@@ -84,14 +84,14 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 
 **substitution**
 - `absence(teacher_id, date_from, date_to, pairs smallint[] null (null=all day), reason_category SICK_LEAVE|VACATION|BUSINESS_TRIP|PERSONAL|OTHER, comment, source WEB|BOT|ADMIN, status ACTIVE|CANCELLED, created_by)`
-- `change(date, pair_from, pair_to, group_id, subgroup_number, kind REPLACE_TEACHER|REPLACE_DISCIPLINE|SWAP|CANCEL|ADDITIONAL|ROOM_CHANGE|BLOCK|DISCIPLINE_FINISHED, original_lesson_id null, orig_discipline_id, orig_teacher_id, orig_room_id, new_discipline_id, new_teacher_id, new_room_id, reason_code, reason_text, absence_id null, status DRAFT|PENDING_CONFIRMATION|CONFIRMED|DECLINED|CANCELLED|APPLIED, approval_mode AUTO|CONFIRM, confirm_deadline, responded_at, response_comment, order_id null, created_by)`
+- `change(date, pair_from, pair_to, group_id, subgroup_number, kind REPLACE_TEACHER|REPLACE_DISCIPLINE|SWAP|CANCEL|ADDITIONAL|ROOM_CHANGE|BLOCK|DISCIPLINE_FINISHED|MERGE_SUBGROUPS, swap_lesson_id null (SWAP: moved lesson, MERGE_SUBGROUPS: the other subgroup's lesson), original_lesson_id null, orig_discipline_id, orig_teacher_id, orig_room_id, new_discipline_id, new_teacher_id, new_room_id, reason_code, reason_text, absence_id null, status DRAFT|PENDING_CONFIRMATION|CONFIRMED|DECLINED|CANCELLED|APPLIED, approval_mode AUTO|CONFIRM, confirm_deadline, responded_at, response_comment, order_id null, created_by)`
 - `change_history(change_id, at, actor, from_status, to_status, comment)`
 - `teacher_preference(teacher_id, semester_id, weekday, pair_number, kind UNWANTED|UNAVAILABLE, note)`
 
 **order** (`order` is reserved → `order_document`)
 - `order_document(semester_id, number int null, date, kind ORDER|AMENDMENT, parent_id null, status DRAFT|PUBLISHED, title, weekday_label, parity_label, signatory_position, signatory_name, notes jsonb, published_at, published_by)`;
   unique `(semester_id, number)` where number not null
-- `order_item(order_id, section CHANGES|ROOM_CHANGES, position, group_code, pair_label, from_discipline, from_teacher, reason_text, to_discipline, to_teacher, room_text, row_type REPLACEMENT|CANCELLATION|ADDITIONAL|BLOCK|FINISHED|AS_SCHEDULED|ROOM_CHANGE, change_id null)` — denormalized text snapshot (document of record)
+- `order_item(order_id, section CHANGES|ROOM_CHANGES, position, group_code, pair_label, from_discipline, from_teacher, reason_text, to_discipline, to_teacher, room_text, row_type REPLACEMENT|CANCELLATION|ADDITIONAL|BLOCK|FINISHED|AS_SCHEDULED|ROOM_CHANGE|MERGE_SUBGROUPS, change_id null)` — denormalized text snapshot (document of record)
 
 **identity/settings/shared**
 - `invite(teacher_id, token_hash, expires_at, used_at, created_by)`
@@ -161,19 +161,87 @@ A teacher (cabinet, bot) reports absences from today on; earlier days are entere
 lessons the teacher was to take over by a not yet published change (`asSubstitute`). A substitute must not be
 absent at (date, pair): checked when the change is created, confirmed and published (409 UNAVAILABLE).
 
-**Options per affected lesson** (endpoint returns them ranked, each with Ukrainian reason chips):
-1. `REPLACE_TEACHER` — candidate T must be: not the absent teacher, not absent at (date,pair), free at
-   (date,pair) (no SCHEDULED lesson, no CONFIRMED/PENDING change assigning T there), not UNAVAILABLE.
-   Score: +50 teaches this discipline (teacher_discipline or any load item with it); +20 same cycle
-   commission; +15 closes a window (has lessons before and after that day); +10 already has lessons that
-   day; −8 per substitution this month (max −24); −15 UNWANTED slot. Top 10.
-   Chips e.g. «Веде цю дисципліну», «Та сама циклова комісія», «Закриває вікно між 2 і 4 парою»,
-   «Вже має 2 пари цього дня», «3 заміни цього місяця».
-2. `REPLACE_DISCIPLINE` — another load item of the same group whose teacher is free; +20 if that discipline
-   is behind plan («Відстає на 6 год»), excluded if already finished.
-3. `SWAP` — a later lesson of the same group that day whose teacher is free at this slot («Переставити 4 пару на 2: група піде раніше»).
-4. `CANCEL` — «Пари не буде»; note when it is the first/last pair («група прийде пізніше»).
-5. `ADDITIONAL` (відпрацювання) — optional: a free slot within 14 days for the group and the absent teacher.
+**How a missed pair is covered** (college practice, confirmed by the owner 08.11.2026). Each discipline of a
+group has exactly one teacher (one per subgroup for a split discipline). A missed pair is covered by **another
+discipline of the same group and cohort taught by that discipline's own teacher** (`REPLACE_DISCIPLINE`, printed
+with «Зв.зам.» in most real orders), by a **swap** of the group's pairs, by **merging subgroups**, or it is
+**cancelled**. Another teacher of the same discipline or a cycle-commission colleague (`REPLACE_TEACHER`) is a
+manual exception (dialog «Інший викладач…», `GET /lessons/{id}/teacher-availability`), never recommended. A make-up
+pair is a manual action («Додати пару» = `ADDITIONAL`), never proposed. One dispatcher picks every decision; the
+substitute is assigned first and informed afterwards. A substitution may go to any pair 1–8 whatever the group's
+shift (shift windows only shape the regular timetable); there is no daily pair cap.
+
+**Options per affected lesson** (`GET /api/admin/lessons/{id}/options`, `OptionsGatherer` reads, `OptionRanker`
+ranks — a pure deterministic function). Hard constraints for a cover by teacher T with discipline d′ of lesson L
+(discipline d):
+
+| # | Rule |
+|---|---|
+| H1 | L is SCHEDULED (else 422). A lesson before today still gets options (to record what happened) but nothing is «recommended» and the day plan proposes nothing (`past: true`). |
+| H2 | Cohort: a whole-group L takes only unsplit load items of the group; a subgroup-k L only split items, with the teacher of k. d′ ≠ d. |
+| H3 | d′ is not FINISHED and `plan − fact ≥ hoursPerPair` (setting `accounting.hoursPerPair`). |
+| H4 | T is not L's teacher, not absent at (date, pair), not UNAVAILABLE at that weekday × pair. |
+| H5 | T is free at the pair: no SCHEDULED lesson and no open (DRAFT/PENDING/CONFIRMED) change assigning T there. Except (a) T's lesson is the original or the moved/merged lesson of an open change other than a room change (the change takes it away — also when the new change is created), (b) the lesson or assignment is in L's own stream (one class for several groups gets one substitute; a cover keeps the stream). |
+| H6 | T has not declined a request for L (`change_history.to_status = DECLINED`); such teachers are listed in `declined`. |
+| H8 | One option per teacher: if T qualifies with several disciplines, the cheapest one stays (ties: larger `plan − forecast`, then name); the others go to the chip «Також веде: …». |
+
+Other kinds: **MERGE_SUBGROUPS** — L is for subgroup k, the same discipline runs for another subgroup at the same
+pair (and no third cohort) with a present teacher P who has not declined: P takes both subgroups in his room
+(«Об'єднати підгрупи: Ін.мова — Можаровська»). **SWAP** — another undecided lesson of exactly the same cohort moves
+into the slot: a later pair, or for a future day also an earlier one; its teacher passes H4–H6 at L's pair.
+**CANCEL** — one option.
+
+**Bands** (compared first): `CLEAN` — a cover, merge or swap without ⚠ (a swap is clean when the moved pair is the
+cohort's last one, or its first one on a future day); `EASY_CANCEL` — cancelling the cohort's first, last or only
+pair when L is online, or the group has a block that day, or `hoursBehind(d) < hoursPerPair` («Годин з {d}
+вистачає»); `CAUTION` — a cover or swap with ⚠; `LAST` — any other cancel (⚠ «У групи з'явиться вікно»). Inside a
+band: kind (REPLACE_DISCIPLINE → MERGE_SUBGROUPS → SWAP → CANCEL), then cost, then the teacher whose last cover is
+the oldest (none in six weeks counts as oldest), then the title (Ukrainian collation).
+
+**Cost of a cover** (integer, lower is better; the UI shows no numbers, only the chips):
+
+| Factor | Rule | Range | Chip |
+|---|---|---|---|
+| Behind plan (owner's rule) | rank of the relative lag `(plan − forecast) / plan` of d′ inside the pool, ascending, ties averaged, scaled to 0..1; cost `−round(10·r)` for a lagging d′ (a single candidate gets 0) | 0..−10 | «{d′} відстає від плану» |
+| Closes a window | T has pairs before and after L: −6 when both neighbours are T's pairs, −4 otherwise | −6/−4/0 | «Закриває вікно в розкладі викладача» / «Зменшує вікно …» |
+| Load | ascending rank of T's weekly hours (Σ `hours_per_week` of his load items) inside the pool, ties averaged, ÷ (n−1); `round(10·r)` | 0..10 | «Менше навантаження серед викладачів групи ({w} год/тиж)» (least loaded of ≥ 3) |
+| Cover burden | B = Σ over T's cover pairs (confirmed/applied takeovers that no later change undid) 1.0 if 0–14 days old, 0.5 if 15–42, plus 1.0 per pending request on the date; cost `min(12, round(3·B·18 / max(6, w)))` | 0..12 | «{n} замін за 6 тижнів» |
+| Waiting | g = empty pairs between L and T's nearest pair; g ≥ 2 costs `2·(g−1)` up to 8; 0 online | 0..8 | «Чекатиме {g} пари між заняттями» |
+| Long run | L makes a run of ≥ 4 pairs in a row | +4 | «{N} пари поспіль» |
+| Bundle | T could also take the absent teacher's undecided adjacent pair of the same group and cohort | −4 | «Може взяти й {N} пару» |
+| Declined today | T declined another request that day (no penalty for declining as such) | +6 | «Сьогодні вже відмовився(лась) від іншої пари» |
+| Overrun | `forecast(d′) + hoursPerPair > plan(d′)` or WILL_OVERRUN | +10, ⚠ | ⚠ «{d′} піде понад план» |
+| Unwanted slot | T marked the weekday × pair UNWANTED | +8, ⚠ | ⚠ «Небажаний час (побажання викладача)» |
+| Room type | d′ needs another room type, L is not online and T has no own free room | +3, ⚠ | ⚠ «Потрібна аудиторія «{тип}»» |
+| With the group today | T already has a pair with this group that day | ⚠ only | ⚠ «Вже має пару з цією групою ({N} пара) — краще перестановка» |
+
+Info chips without cost: «Сьогодні пар немає», «Сьогодні має 1, 3 пари», «Буде 5-та пара за день». A swap costs the
+moved teacher's waiting/long-run cost and an unwanted slot; a merge and a cancel cost 0. **Room**: a cover suggests
+the substitute's own room — the room he has d′ with this group most often in the timetable — when it is free at the
+pair, else L's room (`suggestedRoom`); groups come to the teacher. A merge suggests P's room.
+
+**«Рекомендовано»** only on #1, only when #1 is CLEAN, #2 is in a worse band or costs at least 5 more, and L is not in
+the past. `score = max(0, 100 − 10·index)` reflects the position only (deprecated).
+
+**Day plan** (`GET /api/admin/absences/{id}/plan?date=`, button «Запропонувати план дня»): every undecided lesson of
+the absent teacher that day, lessons with the fewest CLEAN options first (then by pair); each takes its #1; its
+teacher becomes busy at that pair and has it in his day; for a later lesson he gets the bundle bonus when the pair
+is next to his proposed one in the same group and cohort, otherwise +6 and one more cover pair. Deterministic,
+nothing is created or sent; the dispatcher sends what he accepts with `POST /api/admin/changes/batch` (one
+transaction).
+
+**Recommendation log** (no table): every `POST /api/admin/changes` (and every item of a batch) logs
+`substitution.recommendation lesson=… change=… chosenKind=… chosenTeacher=… shownRank=… band=… options=…`, the
+rank computed just before the change exists. Offline evaluation on the real order №35:
+`OptionRankerReplayTest` (`@Tag("eval")`, cases from `scripts/eval/export_replay_cases.py`). Weights change only
+after ≥ 30 new real decisions and only if a factor's sign holds on old and new data.
+
+**Merging subgroups** (`MERGE_SUBGROUPS`): `original_lesson_id` = the absent teacher's subgroup lesson,
+`swap_lesson_id` = the other subgroup's lesson, new teacher and discipline = that lesson's, new room = its room
+unless given. On publication both lessons are cancelled and one whole-group lesson of P is created: both
+subgroups keep the discipline's hours, P teaches one pair (his own, no substitution), the absent teacher misses one.
+The order prints one row «Об'єднання підгруп: {дисц.} ({викладач}) — обидві підгрупи» (`row_type
+MERGE_SUBGROUPS`), the left side «{дисц.} | {відсутній} (п.)».
 
 **Change lifecycle**: DRAFT → (approval mode CONFIRM and a new teacher is assigned) PENDING_CONFIRMATION
 → CONFIRMED | DECLINED (declined returns the lesson to «needs decision»). Kinds without a new teacher or
@@ -201,7 +269,8 @@ Table: `Група | Пара | За розкладом (дисципліна | 
 rows sorted by course, group code, pair. Row types: REPLACEMENT (all filled); CANCELLATION (right side =
 merged «Пари не буде»); ADDITIONAL (left = merged «ДОДАТКОВО»); BLOCK (pair «1-4», left side + room, e.g.
 ЗУ training day); FINISHED (reason «Вичит.», right side optional); AS_SCHEDULED (left = «За розкладом»);
-subgroups → two names / two rooms («304/309»), «(п.)» marks a one-subgroup lesson. Then the section
+subgroups → two names / two rooms («304/309»), «(п.)» marks a one-subgroup lesson; MERGE_SUBGROUPS (right side
+merged «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи»). Then the section
 «ЗАМІНА АУДИТОРІЙ» (group, pair, room), then notes (bold), then signature
 `{signatory_position}        {signatory_name}` (settings; e.g. «Заступник директора з НР» / «Микола ПОЛІЩУК»).
 Numbering: per semester, sequential from 1, assigned on publication (evidence: №35 on 19.10.2026 is the 35th
@@ -215,7 +284,8 @@ already ended) × hoursPerPair`, `remaining = #future SCHEDULED × hoursPerPair`
 status FINISHED (fact ≥ plan) | WILL_OVERRUN (forecast > plan + 2) | WILL_UNDERRUN (forecast < plan − 2) | ON_TRACK,
 `forecastFinishDate` = date where the cumulative reaches plan. Suggested actions: overrun → DISCIPLINE_FINISHED
 changes for lessons after the finish date; underrun → ADDITIONAL lessons. Teacher stats per month: substitutions
-done (count, hours) and lessons missed.
+done (count, hours) and lessons missed. Merged subgroups: the absent teacher misses one pair, the teacher who takes
+both subgroups is not counted as substituting (he teaches his own pair once); both subgroups keep the hours.
 
 ## 10. Normalization (import, search, bot)
 

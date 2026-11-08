@@ -1,0 +1,4534 @@
+{
+ "source": "order No. 35 of 2026-10-19, state before the decisions of the day",
+ "exportedOn": "2026-11-08",
+ "teachers": {
+  "01a1ba8a-3595-7894-8930-07c2d6d5ea15": "Єлісєєва І.О.",
+  "01a1ba8a-35ac-7bb1-84c4-dedc41b4315b": "Алексєєнко",
+  "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": "Бадунь",
+  "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf": "Бурбела О.С.",
+  "01a1ba8a-35da-7e09-ab01-3769f61b9909": "Вернигора",
+  "01a1ba8a-35e2-716d-aecf-e2b36c538e6f": "Вихристюк Ю.А.",
+  "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": "Волонтир Л.О.",
+  "01a1ba8a-35f0-71c0-ad96-a54636f4b65a": "Вітюк О.І.",
+  "01a1ba8a-35f7-7a8f-82c6-b51abb375a69": "Ганза А.І.",
+  "01a1ba8a-35fd-750c-8912-cd60d74755d9": "Герасименко",
+  "01a1ba8a-3604-7d0b-bc78-c780731c41c1": "Грабенко О.А.",
+  "01a1ba8a-360d-7ac0-b25d-5037e1fa7391": "Гуцаленко",
+  "01a1ba8a-3624-72a1-88cd-4da66914eb05": "Зоріна Ю.В.",
+  "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd": "Колесник А.",
+  "01a1ba8a-3628-7fba-a529-bef7088518a2": "Коляструк",
+  "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361": "Кренцін",
+  "01a1ba8a-364b-7382-accc-449bf1798238": "Крисак Л.В.",
+  "01a1ba8a-364d-7d00-9eeb-6e2a895df8b1": "Кукурудзяк",
+  "01a1ba8a-3651-7f38-b845-00282c2dc34a": "Кучинська О.Г.",
+  "01a1ba8a-366c-7444-b850-14924620cbca": "Марцинюк Т.Ю.",
+  "01a1ba8a-366f-7983-bef3-38592a4ce7bb": "Масловата Д.Р.",
+  "01a1ba8a-3671-7873-a1ca-4867fabc7b51": "Матвійчук А.В.",
+  "01a1ba8a-3673-714f-b5aa-a10bed229578": "Мельник Н.М.",
+  "01a1ba8a-3681-7538-907c-6de0689fc612": "Моторна Л.В.",
+  "01a1ba8a-3683-7bd0-b8fe-b81480fafd23": "Мусятовська",
+  "01a1ba8a-3686-7c92-b36e-503b43b7abf5": "Місецький А.В.",
+  "01a1ba8a-3689-772a-80fc-351e26be9fc6": "Непийвода",
+  "01a1ba8a-368c-7747-a2da-50dc986d5403": "Овчар Ів.М.",
+  "01a1ba8a-368f-7eaf-a034-68f37d4dae94": "Овчар Ін.М.",
+  "01a1ba8a-3691-7329-8050-ba45e8cdbcc2": "Ординський",
+  "01a1ba8a-3692-749b-810f-5dc6ce5f3d88": "Остап'юк Д.В.",
+  "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": "Охота О.Я.",
+  "01a1ba8a-3695-7796-99ee-bc334099f110": "Паламарчук",
+  "01a1ba8a-3697-740e-a45a-410a3c022527": "Папулова Л.Л.",
+  "01a1ba8a-36ab-7bbd-b303-2e284580068c": "Прокопчук",
+  "01a1ba8a-36b0-7361-8a76-8a6444944645": "Романюк О.М.",
+  "01a1ba8a-36b5-7df0-832b-72103b1f0f8e": "Серветник",
+  "01a1ba8a-36b9-776e-8860-fbc5d7061a39": "Стахова О.А.",
+  "01a1ba8a-36bd-7eeb-8d7c-abefa8285306": "Стець",
+  "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a": "Томчук М.В.",
+  "01a1ba8a-36c1-7139-9e55-e0f9408f9606": "Трофімчук",
+  "01a1ba8a-36c2-73e7-a123-6e68fdb13506": "Фабіянська",
+  "01a1ba8a-36ca-75c1-a743-2a3841929587": "Шароварська С.П.",
+  "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": "Шинкарюк",
+  "01a1ba8a-36cf-723f-9714-b4bc4f01a08c": "Щегоцька",
+  "01a1ba8a-36d7-781e-93c5-492d4aa1023e": "Яцуба"
+ },
+ "cases": [
+  {
+   "group": "1ТК1",
+   "pair": 1,
+   "subgroup": 1,
+   "lesson": "Ін.мова Крисак Л.В.",
+   "real": {
+    "kind": "CANCEL",
+    "reasonCode": "ABSENT",
+    "teacherId": null,
+    "disciplineId": null,
+    "teacher": null,
+    "discipline": null
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d38-7952-8fab-42ff14cb0708",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 1,
+     "subgroup": 1,
+     "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+     "disciplineShortName": "Ін.мова",
+     "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 36,
+      "fact": 12,
+      "forecast": 34,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-72e1-9c4f-eb691a06bb14",
+      "pair": 1,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "teacherShortName": "Можаровська О.Е.",
+      "roomId": "01a1ba8a-37ad-7fb2-8c62-735aef86bbd3",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d38-75a5-a9bf-971d481c94bf",
+      "pair": 2,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3702-747a-a673-4a2afa286e8c",
+      "disciplineShortName": "Вст.спц.",
+      "teacherId": "01a1ba8a-36c9-705a-8d4a-b8b2fa85fe2b",
+      "teacherShortName": "Цирульник",
+      "roomId": "01a1ba8a-37ba-7c62-968b-0d8fa8579243",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7bfe-abde-e79536edf325",
+      "pair": 3,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "disciplineShortName": "ФК",
+      "teacherId": "01a1ba8a-36ce-7719-a5c9-8433b7b259c0",
+      "teacherShortName": "Шинкарюк",
+      "roomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7322-9cba-0bb29c84326f",
+      "pair": 4,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "disciplineShortName": "Матем.",
+      "teacherId": "01a1ba8a-35ee-733c-922e-f855cfbde15e",
+      "teacherShortName": "Волошинська",
+      "roomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "shortName": "Ін.мова",
+      "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+      "teacherShortName": "Крисак Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ac-7de8-a6b2-6fdb07b4e6af"
+     },
+     {
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "shortName": "Інф.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35ee-733c-922e-f855cfbde15e": [
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": [
+      3,
+      4
+     ],
+     "01a1ba8a-364b-7382-accc-449bf1798238": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-367d-7f60-842d-da29f7d635b5": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-36c9-705a-8d4a-b8b2fa85fe2b": [
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": [
+      1,
+      3,
+      6,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "2": [
+      "01a1ba8a-35ee-733c-922e-f855cfbde15e",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-36c9-705a-8d4a-b8b2fa85fe2b"
+     ],
+     "3": [
+      "01a1ba8a-35ee-733c-922e-f855cfbde15e",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-36c9-705a-8d4a-b8b2fa85fe2b",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "4": [
+      "01a1ba8a-35ee-733c-922e-f855cfbde15e",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-36c9-705a-8d4a-b8b2fa85fe2b"
+     ],
+     "6": [
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "8": [
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "5": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "6": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "7": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "8": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": 23.0,
+     "01a1ba8a-364b-7382-accc-449bf1798238": 38.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "1КІ2",
+   "pair": 2,
+   "subgroup": 1,
+   "lesson": "Ін.мова Крисак Л.В.",
+   "real": {
+    "kind": "REPLACE_TEACHER",
+    "reasonCode": "ABSENT",
+    "teacherId": "01a1ba8a-36ab-7bbd-b303-2e284580068c",
+    "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+    "teacher": "Прокопчук",
+    "discipline": "Ін.мова"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d38-7dd0-b86f-3516182ef52a",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 2,
+     "subgroup": 1,
+     "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+     "disciplineShortName": "Ін.мова",
+     "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 36,
+      "fact": 12,
+      "forecast": 34,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-7825-9003-dd6bba260ba1",
+      "pair": 1,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3733-7754-9f5e-dbfec086fb6e",
+      "disciplineShortName": "ОБОП",
+      "teacherId": "01a1ba8a-36cf-723f-9714-b4bc4f01a08c",
+      "teacherShortName": "Щегоцька",
+      "roomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d38-763f-aded-39cf8aacea00",
+      "pair": 2,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "teacherShortName": "Можаровська О.Е.",
+      "roomId": "01a1ba8a-37ad-7fb2-8c62-735aef86bbd3",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7dda-a8c3-25d43bcec942",
+      "pair": 3,
+      "subgroup": 1,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "teacherShortName": "Вихристюк Ю.А.",
+      "roomId": "01a1ba8a-37c4-78d3-b7d1-fe9ea107929e",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7317-a9de-8826804bf6f2",
+      "pair": 3,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-368f-7eaf-a034-68f37d4dae94",
+      "teacherShortName": "Овчар Ін.М.",
+      "roomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-704c-b4e6-9efc325862a5",
+      "pair": 4,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "disciplineShortName": "Матем.",
+      "teacherId": "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "teacherShortName": "Вихристюк Ю.А.",
+      "roomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "shortName": "Ін.мова",
+      "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+      "teacherShortName": "Крисак Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ac-7de8-a6b2-6fdb07b4e6af"
+     },
+     {
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "shortName": "Інф.",
+      "teacherId": "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "teacherShortName": "Вихристюк Ю.А.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35e2-716d-aecf-e2b36c538e6f": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-364b-7382-accc-449bf1798238": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-367d-7f60-842d-da29f7d635b5": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-368f-7eaf-a034-68f37d4dae94": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-36cf-723f-9714-b4bc4f01a08c": [
+      1,
+      3
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94",
+      "01a1ba8a-36cf-723f-9714-b4bc4f01a08c"
+     ],
+     "2": [
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ],
+     "3": [
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94",
+      "01a1ba8a-36cf-723f-9714-b4bc4f01a08c"
+     ],
+     "4": [
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "5": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "6": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "7": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "8": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35e2-716d-aecf-e2b36c538e6f": 24.0,
+     "01a1ba8a-364b-7382-accc-449bf1798238": 38.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "4КІ1",
+   "pair": 2,
+   "subgroup": 0,
+   "lesson": "СТП Кренцін",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-3689-772a-80fc-351e26be9fc6",
+    "disciplineId": "01a1ba8a-3730-7ad2-9f55-a25e1dc62507",
+    "teacher": "Непийвода",
+    "discipline": "НДЕКС"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d39-7eb2-9f7c-e01e23129aa9",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 2,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-3753-7cb8-a251-202081f145f5",
+     "disciplineShortName": "СТП",
+     "teacherId": "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": true,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 72,
+      "fact": 26,
+      "forecast": 70,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 4.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-7021-abb5-f533665d1650",
+      "pair": 1,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3722-779e-9822-1565d5f18245",
+      "disciplineShortName": "КМ",
+      "teacherId": "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "teacherShortName": "Колесник А.",
+      "roomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7586-8762-fb20c7f09e68",
+      "pair": 3,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3707-7a2a-b000-7e2f9495dec4",
+      "disciplineShortName": "ДК",
+      "teacherId": "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "teacherShortName": "Паламарчук",
+      "roomId": null,
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7221-bfdd-acad31fed2ab",
+      "pair": 4,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3767-7f3c-920c-92fde535f06d",
+      "disciplineShortName": "ФВ",
+      "teacherId": "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "teacherShortName": "Бурбела О.С.",
+      "roomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-3722-779e-9822-1565d5f18245",
+      "shortName": "КМ",
+      "teacherId": "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "teacherShortName": "Колесник А.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 68,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-3753-7cb8-a251-202081f145f5",
+      "shortName": "СТП",
+      "teacherId": "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+      "teacherShortName": "Кренцін",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020"
+     },
+     {
+      "disciplineId": "01a1ba8a-3767-7f3c-920c-92fde535f06d",
+      "shortName": "ФВ",
+      "teacherId": "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "teacherShortName": "Бурбела О.С.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-374e-7492-9bb1-ec8a8ca522fc",
+      "shortName": "Прогр.",
+      "teacherId": "01a1ba8a-36bd-7eeb-8d7c-abefa8285306",
+      "teacherShortName": "Стець",
+      "progress": {
+       "plan": 72,
+       "fact": 28,
+       "forecast": 72,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bf-77d6-bb6e-254af1e43bbf"
+     },
+     {
+      "disciplineId": "01a1ba8a-3716-7cab-9ffb-3d38a7df4ce7",
+      "shortName": "ЕУ",
+      "teacherId": "01a1ba8a-35ac-7bb1-84c4-dedc41b4315b",
+      "teacherShortName": "Алексєєнко",
+      "progress": {
+       "plan": 54,
+       "fact": 22,
+       "forecast": 54,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3747-75fa-8264-6511b61e835d",
+      "shortName": "ОПЦЗ",
+      "teacherId": "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "teacherShortName": "Ганза А.І.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b2-74be-ab15-6defac8260fa"
+     },
+     {
+      "disciplineId": "01a1ba8a-3707-7a2a-b000-7e2f9495dec4",
+      "shortName": "ДК",
+      "teacherId": "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "teacherShortName": "Паламарчук",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "teacherShortName": "Зоріна Ю.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-374f-7b49-9bc2-6bc54240b1c8",
+      "shortName": "СП",
+      "teacherId": "01a1ba8a-3691-7329-8050-ba45e8cdbcc2",
+      "teacherShortName": "Ординський",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020"
+     },
+     {
+      "disciplineId": "01a1ba8a-371e-776b-8119-2500e923467c",
+      "shortName": "КБ",
+      "teacherId": "01a1ba8a-3689-772a-80fc-351e26be9fc6",
+      "teacherShortName": "Непийвода",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-3730-7ad2-9f55-a25e1dc62507",
+      "shortName": "НДЕКС",
+      "teacherId": "01a1ba8a-3689-772a-80fc-351e26be9fc6",
+      "teacherShortName": "Непийвода",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-35f7-7a8f-82c6-b51abb375a69": [
+      1,
+      2,
+      8
+     ],
+     "01a1ba8a-3624-72a1-88cd-4da66914eb05": [
+      3,
+      4
+     ],
+     "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361": [
+      2,
+      4
+     ],
+     "01a1ba8a-3695-7796-99ee-bc334099f110": [
+      1,
+      3
+     ],
+     "01a1ba8a-36bd-7eeb-8d7c-abefa8285306": [
+      1,
+      2,
+      3
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306"
+     ],
+     "2": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306"
+     ],
+     "3": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306"
+     ],
+     "4": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "8": [
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "2": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "3": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "4": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "5": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "6": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "7": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "8": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35ac-7bb1-84c4-dedc41b4315b": 11.0,
+     "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf": 41.0,
+     "01a1ba8a-35f7-7a8f-82c6-b51abb375a69": 21.0,
+     "01a1ba8a-3624-72a1-88cd-4da66914eb05": 14.0,
+     "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd": 12.0,
+     "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361": 12.0,
+     "01a1ba8a-3689-772a-80fc-351e26be9fc6": 12.0,
+     "01a1ba8a-3691-7329-8050-ba45e8cdbcc2": 6.0,
+     "01a1ba8a-3695-7796-99ee-bc334099f110": 20.0,
+     "01a1ba8a-36bd-7eeb-8d7c-abefa8285306": 30.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "1ЕА2",
+   "pair": 3,
+   "subgroup": 0,
+   "lesson": "ЕТ Масловата Д.Р.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-36ca-75c1-a743-2a3841929587",
+    "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+    "teacher": "Шароварська С.П.",
+    "discipline": "Культ."
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d39-758f-a0cf-d06fa5972091",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 3,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-3714-776c-90e1-eba7b8e51666",
+     "disciplineShortName": "ЕТ",
+     "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 36,
+      "fact": 12,
+      "forecast": 34,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 2.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-7b93-805c-fae9f0f9c5ba",
+      "pair": 1,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36f9-74c4-a4fe-cb76c6b4cecf",
+      "disciplineShortName": "БіЕ",
+      "teacherId": "01a1ba8a-35f0-71c0-ad96-a54636f4b65a",
+      "teacherShortName": "Вітюк О.І.",
+      "roomId": "01a1ba8a-37c9-7741-8946-63b66a3d131f",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d38-7b0a-a297-f0b38d6934b2",
+      "pair": 2,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "disciplineShortName": "Матем.",
+      "teacherId": "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "teacherShortName": "Вихристюк Ю.А.",
+      "roomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7b93-b9e7-abbc3fe85824",
+      "pair": 4,
+      "subgroup": 1,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "roomId": "01a1ba8a-37c4-78d3-b7d1-fe9ea107929e",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7566-9c52-0a8b8caaa934",
+      "pair": 4,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-36c7-7c99-baec-21088465241a",
+      "teacherShortName": "Хаулін",
+      "roomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-36f9-74c4-a4fe-cb76c6b4cecf",
+      "shortName": "БіЕ",
+      "teacherId": "01a1ba8a-35f0-71c0-ad96-a54636f4b65a",
+      "teacherShortName": "Вітюк О.І.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "teacherShortName": "Вихристюк Ю.А.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3714-776c-90e1-eba7b8e51666",
+      "shortName": "ЕТ",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cd-705d-a206-a553701ae181"
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-36c1-7139-9e55-e0f9408f9606",
+      "teacherShortName": "Трофімчук",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cf-7c13-a804-00ace2d4fe72"
+     },
+     {
+      "disciplineId": "01a1ba8a-3702-747a-a673-4a2afa286e8c",
+      "shortName": "Вст.спц.",
+      "teacherId": "01a1ba8a-360d-7ac0-b25d-5037e1fa7391",
+      "teacherShortName": "Гуцаленко",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37a2-7aa4-bc2f-d0a6afba2bef"
+     },
+     {
+      "disciplineId": "01a1ba8a-3705-7e6d-ac9e-427672f25d25",
+      "shortName": "Геогр.",
+      "teacherId": "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "teacherShortName": "Матвійчук А.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c8-749f-a663-8abea65e0dc2"
+     },
+     {
+      "disciplineId": "01a1ba8a-3796-7f45-b585-5403596e782b",
+      "shortName": "ФіА",
+      "teacherId": "01a1ba8a-3604-7d0b-bc78-c780731c41c1",
+      "teacherShortName": "Грабенко О.А.",
+      "progress": {
+       "plan": 54,
+       "fact": 22,
+       "forecast": 54,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-371d-7fb4-a225-be4997041217",
+      "shortName": "Зар.літ.",
+      "teacherId": "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a",
+      "teacherShortName": "Томчук М.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+      "shortName": "Культ.",
+      "teacherId": "01a1ba8a-36ca-75c1-a743-2a3841929587",
+      "teacherShortName": "Шароварська С.П.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37aa-70e5-8130-d81e8710265d"
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "teacherShortName": "Папулова Л.Л.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-3701-744c-b187-7c6eb1b17f38",
+      "shortName": "Вс.іст.",
+      "teacherId": "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "teacherShortName": "Бадунь",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-36c1-7139-9e55-e0f9408f9606",
+      "teacherShortName": "Трофімчук",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cf-7c13-a804-00ace2d4fe72"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-35e2-716d-aecf-e2b36c538e6f": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-35f0-71c0-ad96-a54636f4b65a": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": [
+      3,
+      4
+     ],
+     "01a1ba8a-360d-7ac0-b25d-5037e1fa7391": [
+      3,
+      4
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3671-7873-a1ca-4867fabc7b51": [
+      2,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-3697-740e-a45a-410a3c022527": [
+      2,
+      3
+     ],
+     "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-36c1-7139-9e55-e0f9408f9606": [
+      5,
+      6,
+      8
+     ],
+     "01a1ba8a-36c7-7c99-baec-21088465241a": [
+      3,
+      4
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-35f0-71c0-ad96-a54636f4b65a",
+      "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a"
+     ],
+     "2": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-35f0-71c0-ad96-a54636f4b65a",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a"
+     ],
+     "3": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-35f0-71c0-ad96-a54636f4b65a",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-360d-7ac0-b25d-5037e1fa7391",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a",
+      "01a1ba8a-36c7-7c99-baec-21088465241a"
+     ],
+     "4": [
+      "01a1ba8a-35e2-716d-aecf-e2b36c538e6f",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-360d-7ac0-b25d-5037e1fa7391",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a",
+      "01a1ba8a-36c7-7c99-baec-21088465241a"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-36c1-7139-9e55-e0f9408f9606"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-36c1-7139-9e55-e0f9408f9606"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-36c1-7139-9e55-e0f9408f9606"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": 27.0,
+     "01a1ba8a-35e2-716d-aecf-e2b36c538e6f": 24.0,
+     "01a1ba8a-35f0-71c0-ad96-a54636f4b65a": 18.0,
+     "01a1ba8a-3604-7d0b-bc78-c780731c41c1": 30.0,
+     "01a1ba8a-360d-7ac0-b25d-5037e1fa7391": 14.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3671-7873-a1ca-4867fabc7b51": 34.0,
+     "01a1ba8a-3697-740e-a45a-410a3c022527": 33.0,
+     "01a1ba8a-36c0-7242-9a3e-e1e03fe71b1a": 32.0,
+     "01a1ba8a-36c1-7139-9e55-e0f9408f9606": 32.0,
+     "01a1ba8a-36ca-75c1-a743-2a3841929587": 12.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "1М",
+   "pair": 3,
+   "subgroup": 1,
+   "lesson": "Ін.мова Крисак Л.В.",
+   "real": {
+    "kind": "REPLACE_TEACHER",
+    "reasonCode": "ABSENT",
+    "teacherId": "01a1ba8a-36ab-7bbd-b303-2e284580068c",
+    "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+    "teacher": "Прокопчук",
+    "discipline": "Ін.мова"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d39-751b-889e-b5ffc1e694ec",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 3,
+     "subgroup": 1,
+     "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+     "disciplineShortName": "Ін.мова",
+     "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 36,
+      "fact": 12,
+      "forecast": 34,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-7022-b6dc-874de43da05d",
+      "pair": 2,
+      "subgroup": 1,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-368f-7eaf-a034-68f37d4dae94",
+      "teacherShortName": "Овчар Ін.М.",
+      "roomId": "01a1ba8a-37c4-78d3-b7d1-fe9ea107929e",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d38-7dd9-8ca7-aeb229f991a0",
+      "pair": 2,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "disciplineShortName": "Інф.",
+      "teacherId": "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "teacherShortName": "Овчар Ів.М.",
+      "roomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7657-b9fb-09af4417d918",
+      "pair": 3,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "teacherShortName": "Можаровська О.Е.",
+      "roomId": "01a1ba8a-37ad-7fb2-8c62-735aef86bbd3",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7cee-8050-c3a75e5b5929",
+      "pair": 4,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3701-744c-b187-7c6eb1b17f38",
+      "disciplineShortName": "Вс.іст.",
+      "teacherId": "01a1ba8a-3660-737b-8f79-65a504efc91f",
+      "teacherShortName": "Марценюк Н.М.",
+      "roomId": "01a1ba8a-37cc-7dc4-9102-1f70ff912963",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-36e5-7b81-9ccd-ff451a59c803",
+      "shortName": "Інф.",
+      "teacherId": "01a1ba8a-368f-7eaf-a034-68f37d4dae94",
+      "teacherShortName": "Овчар Ін.М.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "shortName": "Ін.мова",
+      "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+      "teacherShortName": "Крисак Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ac-7de8-a6b2-6fdb07b4e6af"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-364b-7382-accc-449bf1798238": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-3660-737b-8f79-65a504efc91f": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-367d-7f60-842d-da29f7d635b5": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-368c-7747-a2da-50dc986d5403": [
+      1,
+      2
+     ],
+     "01a1ba8a-368f-7eaf-a034-68f37d4dae94": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3660-737b-8f79-65a504efc91f",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3660-737b-8f79-65a504efc91f",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3660-737b-8f79-65a504efc91f",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3660-737b-8f79-65a504efc91f",
+      "01a1ba8a-367d-7f60-842d-da29f7d635b5",
+      "01a1ba8a-368f-7eaf-a034-68f37d4dae94"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "5": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "6": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "7": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "8": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-364b-7382-accc-449bf1798238": 38.0,
+     "01a1ba8a-368f-7eaf-a034-68f37d4dae94": 29.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "3Ф",
+   "pair": 4,
+   "subgroup": 1,
+   "lesson": "Ін.мова Крисак Л.В.",
+   "real": {
+    "kind": "CANCEL",
+    "reasonCode": "ABSENT",
+    "teacherId": null,
+    "disciplineId": null,
+    "teacher": null,
+    "discipline": null
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d39-7f29-b466-11b1e304591c",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 4,
+     "subgroup": 1,
+     "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+     "disciplineShortName": "Ін.мова",
+     "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": true,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 54,
+      "fact": 18,
+      "forecast": 50,
+      "status": "WILL_UNDERRUN",
+      "hoursPerWeek": 0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d38-7261-94df-e6407a226f9b",
+      "pair": 1,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "disciplineShortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "roomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d38-7663-9092-85ea575ea688",
+      "pair": 2,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36f8-7be9-96fc-93a6c718bf93",
+      "disciplineShortName": "БОіЗКБ",
+      "teacherId": "01a1ba8a-3677-7596-b99b-6ac07464c10d",
+      "teacherShortName": "Михальчишина",
+      "roomId": "01a1ba8a-37c5-70e9-9cde-2f1efbb8e1e0",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7498-931b-61581913bf98",
+      "pair": 3,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-378c-7513-9717-bbc0dfe6cc6b",
+      "disciplineShortName": "ФЕА",
+      "teacherId": "01a1ba8a-36a5-747a-8fed-08dd3d1d19eb",
+      "teacherShortName": "Попова",
+      "roomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7fac-a28f-a97d78b2aa73",
+      "pair": 4,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5",
+      "teacherShortName": "Харченко О.А.",
+      "roomId": "01a1ba8a-37b1-7e2a-9f11-6b5b2c1be314",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "shortName": "Ін.мова",
+      "teacherId": "01a1ba8a-364b-7382-accc-449bf1798238",
+      "teacherShortName": "Крисак Л.В.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ac-7de8-a6b2-6fdb07b4e6af"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-364b-7382-accc-449bf1798238": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-3677-7596-b99b-6ac07464c10d": [
+      1,
+      2
+     ],
+     "01a1ba8a-36a5-747a-8fed-08dd3d1d19eb": [
+      1,
+      3
+     ],
+     "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5": [
+      4,
+      5,
+      6,
+      7,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3677-7596-b99b-6ac07464c10d",
+      "01a1ba8a-36a5-747a-8fed-08dd3d1d19eb"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3677-7596-b99b-6ac07464c10d"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-36a5-747a-8fed-08dd3d1d19eb"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "5": [
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "6": [
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "7": [
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "8": [
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "2": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "3": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "4": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "5": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "6": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "7": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ],
+     "8": [
+      "01a1ba8a-364b-7382-accc-449bf1798238"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-364b-7382-accc-449bf1798238": 38.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "4КІ2",
+   "pair": 4,
+   "subgroup": 0,
+   "lesson": "СТП Кренцін",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+    "disciplineId": "01a1ba8a-3747-75fa-8264-6511b61e835d",
+    "teacher": "Ганза А.І.",
+    "discipline": "ОПЦЗ"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d39-7fb1-a387-e9061b4d7623",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 4,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-3753-7cb8-a251-202081f145f5",
+     "disciplineShortName": "СТП",
+     "teacherId": "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": true,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 72,
+      "fact": 26,
+      "forecast": 70,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 4.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d39-7770-ba29-96b1fa1aa1f9",
+      "pair": 2,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3722-779e-9822-1565d5f18245",
+      "disciplineShortName": "КМ",
+      "teacherId": "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "teacherShortName": "Колесник А.",
+      "roomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d39-7f1e-afdc-a6c0535c4de1",
+      "pair": 3,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3717-7127-9197-3ea7a08a5558",
+      "disciplineShortName": "ЕУІТ",
+      "teacherId": "01a1ba8a-36cf-723f-9714-b4bc4f01a08c",
+      "teacherShortName": "Щегоцька",
+      "roomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-3722-779e-9822-1565d5f18245",
+      "shortName": "КМ",
+      "teacherId": "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "teacherShortName": "Колесник А.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 68,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-3717-7127-9197-3ea7a08a5558",
+      "shortName": "ЕУІТ",
+      "teacherId": "01a1ba8a-36cf-723f-9714-b4bc4f01a08c",
+      "teacherShortName": "Щегоцька",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020"
+     },
+     {
+      "disciplineId": "01a1ba8a-3753-7cb8-a251-202081f145f5",
+      "shortName": "СТП",
+      "teacherId": "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+      "teacherShortName": "Кренцін",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3730-7ad2-9f55-a25e1dc62507",
+      "shortName": "НДЕКС",
+      "teacherId": "01a1ba8a-3689-772a-80fc-351e26be9fc6",
+      "teacherShortName": "Непийвода",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-374e-7492-9bb1-ec8a8ca522fc",
+      "shortName": "Прогр.",
+      "teacherId": "01a1ba8a-36bd-7eeb-8d7c-abefa8285306",
+      "teacherShortName": "Стець",
+      "progress": {
+       "plan": 72,
+       "fact": 28,
+       "forecast": 72,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bf-77d6-bb6e-254af1e43bbf"
+     },
+     {
+      "disciplineId": "01a1ba8a-3747-75fa-8264-6511b61e835d",
+      "shortName": "ОПЦЗ",
+      "teacherId": "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "teacherShortName": "Ганза А.І.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37a9-73e0-877e-9b977e88ce44"
+     },
+     {
+      "disciplineId": "01a1ba8a-3707-7a2a-b000-7e2f9495dec4",
+      "shortName": "ДК",
+      "teacherId": "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "teacherShortName": "Паламарчук",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b7-74c6-af1c-c5cf0600e566"
+     },
+     {
+      "disciplineId": "01a1ba8a-3767-7f3c-920c-92fde535f06d",
+      "shortName": "ФВ",
+      "teacherId": "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "teacherShortName": "Бурбела О.С.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-371e-776b-8119-2500e923467c",
+      "shortName": "КБ",
+      "teacherId": "01a1ba8a-3689-772a-80fc-351e26be9fc6",
+      "teacherShortName": "Непийвода",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-374f-7b49-9bc2-6bc54240b1c8",
+      "shortName": "СП",
+      "teacherId": "01a1ba8a-3691-7329-8050-ba45e8cdbcc2",
+      "teacherShortName": "Ординський",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bb-7277-881c-4f50ab9cd020"
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "teacherShortName": "Зоріна Ю.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-35f7-7a8f-82c6-b51abb375a69": [
+      1,
+      2,
+      8
+     ],
+     "01a1ba8a-3624-72a1-88cd-4da66914eb05": [
+      3,
+      4
+     ],
+     "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361": [
+      2,
+      4
+     ],
+     "01a1ba8a-3695-7796-99ee-bc334099f110": [
+      1,
+      3
+     ],
+     "01a1ba8a-36bd-7eeb-8d7c-abefa8285306": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-36cf-723f-9714-b4bc4f01a08c": [
+      1,
+      3
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306",
+      "01a1ba8a-36cf-723f-9714-b4bc4f01a08c"
+     ],
+     "2": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306"
+     ],
+     "3": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-36bd-7eeb-8d7c-abefa8285306",
+      "01a1ba8a-36cf-723f-9714-b4bc4f01a08c"
+     ],
+     "4": [
+      "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf",
+      "01a1ba8a-3624-72a1-88cd-4da66914eb05",
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "8": [
+      "01a1ba8a-35f7-7a8f-82c6-b51abb375a69"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "2": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "3": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "4": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "5": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "6": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "7": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ],
+     "8": [
+      "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35d8-7a16-b2c6-06bb8cdb1caf": 41.0,
+     "01a1ba8a-35f7-7a8f-82c6-b51abb375a69": 21.0,
+     "01a1ba8a-3624-72a1-88cd-4da66914eb05": 14.0,
+     "01a1ba8a-3626-7a2d-bc6a-dbfd7df979dd": 12.0,
+     "01a1ba8a-363a-775c-ae4e-fa0dd2ab1361": 12.0,
+     "01a1ba8a-3689-772a-80fc-351e26be9fc6": 12.0,
+     "01a1ba8a-3691-7329-8050-ba45e8cdbcc2": 6.0,
+     "01a1ba8a-3695-7796-99ee-bc334099f110": 20.0,
+     "01a1ba8a-36bd-7eeb-8d7c-abefa8285306": 30.0,
+     "01a1ba8a-36cf-723f-9714-b4bc4f01a08c": 12.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2М",
+   "pair": 5,
+   "subgroup": 0,
+   "lesson": "ІМД Масловата Д.Р.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+    "disciplineId": "01a1ba8a-3701-744c-b187-7c6eb1b17f38",
+    "teacher": "Бадунь",
+    "discipline": "Вс.іст."
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-7fbe-8876-de12c1ae2e84",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 5,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+     "disciplineShortName": "ІМД",
+     "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 54,
+      "fact": 20,
+      "forecast": 52,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 3.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-7a88-a72d-26e85d3245f0",
+      "pair": 6,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "disciplineShortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "teacherShortName": "Романюк О.М.",
+      "roomId": "01a1ba8a-37b5-7bbc-bb0e-1d6dd24594bf",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7499-a5ba-6f6deb805a62",
+      "pair": 7,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-375d-7f85-8e11-4e333281ae77",
+      "disciplineShortName": "ТО",
+      "teacherId": "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "teacherShortName": "Місецький А.В.",
+      "roomId": "01a1ba8a-37c3-728d-afbf-65c75581d5cf",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-785b-b96b-dd858634e06b",
+      "pair": 8,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "disciplineShortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "roomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f"
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "teacherShortName": "Романюк О.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-375d-7f85-8e11-4e333281ae77",
+      "shortName": "ТО",
+      "teacherId": "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "teacherShortName": "Місецький А.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "shortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "progress": {
+       "plan": 72,
+       "fact": 24,
+       "forecast": 68,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517"
+     },
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "teacherShortName": "Моторна Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-374d-7109-8efc-4cd3c722294c",
+      "shortName": "Прав.",
+      "teacherId": "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "teacherShortName": "Бадунь",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cc-7dc4-9102-1f70ff912963"
+     },
+     {
+      "disciplineId": "01a1ba8a-374d-7e0f-8f2f-2417be5749f5",
+      "shortName": "ПДС",
+      "teacherId": "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "teacherShortName": "Паламарчук",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b7-74c6-af1c-c5cf0600e566"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "teacherShortName": "Папулова Л.Л.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-3739-74e3-a765-e33f2db1c1d4",
+      "shortName": "ОЕЗ",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": [
+      3,
+      4
+     ],
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3681-7538-907c-6de0689fc612": [
+      4,
+      6
+     ],
+     "01a1ba8a-3686-7c92-b36e-503b43b7abf5": [
+      2,
+      3,
+      7
+     ],
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": [
+      7,
+      8
+     ],
+     "01a1ba8a-3695-7796-99ee-bc334099f110": [
+      1,
+      3
+     ],
+     "01a1ba8a-3697-740e-a45a-410a3c022527": [
+      2,
+      3
+     ],
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": [
+      6,
+      7,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3695-7796-99ee-bc334099f110"
+     ],
+     "2": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "3": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "4": [
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3681-7538-907c-6de0689fc612"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": 27.0,
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": 23.0,
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": 40.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3681-7538-907c-6de0689fc612": 18.0,
+     "01a1ba8a-3686-7c92-b36e-503b43b7abf5": 16.0,
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": 18.0,
+     "01a1ba8a-3695-7796-99ee-bc334099f110": 20.0,
+     "01a1ba8a-3697-740e-a45a-410a3c022527": 33.0,
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": 34.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2ОД",
+   "pair": 6,
+   "subgroup": 0,
+   "lesson": "ІМД Масловата Д.Р.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-36d7-781e-93c5-492d4aa1023e",
+    "disciplineId": "01a1ba8a-3735-778d-991d-b8adc53e986e",
+    "teacher": "Яцуба",
+    "discipline": "ОД"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-72b3-8c23-329309f62e5a",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 6,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+     "disciplineShortName": "ІМД",
+     "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 54,
+      "fact": 20,
+      "forecast": 52,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 3.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-75d1-9a4f-8e867eafbb12",
+      "pair": 5,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "disciplineShortName": "Еколог.",
+      "teacherId": "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "teacherShortName": "Матвійчук А.В.",
+      "roomId": "01a1ba8a-37c8-749f-a663-8abea65e0dc2",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7b73-b1fb-8a66b87ed84a",
+      "pair": 7,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "disciplineShortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-36b9-776e-8860-fbc5d7061a39",
+      "teacherShortName": "Стахова О.А.",
+      "roomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "teacherShortName": "Матвійчук А.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-36b9-776e-8860-fbc5d7061a39",
+      "teacherShortName": "Стахова О.А.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f"
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-36b9-776e-8860-fbc5d7061a39",
+      "teacherShortName": "Стахова О.А.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7945-9005-9ba0e5f80415"
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-3692-749b-810f-5dc6ce5f3d88",
+      "teacherShortName": "Остап'юк Д.В.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-78cc-bafe-c17bcabcf75f",
+      "shortName": "ІКТ",
+      "teacherId": "01a1ba8a-35da-7e09-ab01-3769f61b9909",
+      "teacherShortName": "Вернигора",
+      "progress": {
+       "plan": 72,
+       "fact": 28,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a"
+     },
+     {
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "shortName": "Ін.мова",
+      "teacherId": "01a1ba8a-366c-7444-b850-14924620cbca",
+      "teacherShortName": "Марцинюк Т.Ю.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b4-7a70-8c75-b8ce92cef2c2"
+     },
+     {
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "shortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "teacherShortName": "Мельник Н.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3735-778d-991d-b8adc53e986e",
+      "shortName": "ОД",
+      "teacherId": "01a1ba8a-36d7-781e-93c5-492d4aa1023e",
+      "teacherShortName": "Яцуба",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+      "shortName": "Культ.",
+      "teacherId": "01a1ba8a-3628-7fba-a529-bef7088518a2",
+      "teacherShortName": "Коляструк",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7142-9d8c-d73ed227a5a3"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": [
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-366c-7444-b850-14924620cbca": [
+      2,
+      3
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3671-7873-a1ca-4867fabc7b51": [
+      2,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": [
+      2,
+      5,
+      7,
+      8
+     ],
+     "01a1ba8a-3692-749b-810f-5dc6ce5f3d88": [
+      1,
+      2,
+      4,
+      7,
+      8
+     ],
+     "01a1ba8a-36b9-776e-8860-fbc5d7061a39": [
+      7
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-3692-749b-810f-5dc6ce5f3d88"
+     ],
+     "2": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366c-7444-b850-14924620cbca",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3692-749b-810f-5dc6ce5f3d88"
+     ],
+     "3": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366c-7444-b850-14924620cbca",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "4": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-3692-749b-810f-5dc6ce5f3d88"
+     ],
+     "5": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578"
+     ],
+     "6": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3671-7873-a1ca-4867fabc7b51"
+     ],
+     "7": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3692-749b-810f-5dc6ce5f3d88",
+      "01a1ba8a-36b9-776e-8860-fbc5d7061a39"
+     ],
+     "8": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3692-749b-810f-5dc6ce5f3d88"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": 32.0,
+     "01a1ba8a-35da-7e09-ab01-3769f61b9909": 15.0,
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": 32.0,
+     "01a1ba8a-3628-7fba-a529-bef7088518a2": 6.0,
+     "01a1ba8a-366c-7444-b850-14924620cbca": 26.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3671-7873-a1ca-4867fabc7b51": 34.0,
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": 31.0,
+     "01a1ba8a-3692-749b-810f-5dc6ce5f3d88": 34.0,
+     "01a1ba8a-36b9-776e-8860-fbc5d7061a39": 27.0,
+     "01a1ba8a-36d7-781e-93c5-492d4aa1023e": 4.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2Ф",
+   "pair": 7,
+   "subgroup": 0,
+   "lesson": "ІМД Масловата Д.Р.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-364d-7d00-9eeb-6e2a895df8b1",
+    "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+    "teacher": "Кукурудзяк",
+    "discipline": "ЕіФБ"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-7995-bbc3-5e710b953091",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 7,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+     "disciplineShortName": "ІМД",
+     "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 54,
+      "fact": 18,
+      "forecast": 52,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 3.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-7490-8aea-fabe74098197",
+      "pair": 5,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-375a-73aa-97bd-6b34983eafc9",
+      "disciplineShortName": "ТБО",
+      "teacherId": "01a1ba8a-3683-7bd0-b8fe-b81480fafd23",
+      "teacherShortName": "Мусятовська",
+      "roomId": "01a1ba8a-37b5-7bbc-bb0e-1d6dd24594bf",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7651-ab18-da1f3296c70a",
+      "pair": 6,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "disciplineShortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "roomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7d3a-9cb2-a7afc1935e34",
+      "pair": 8,
+      "subgroup": 1,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5",
+      "teacherShortName": "Харченко О.А.",
+      "roomId": "01a1ba8a-37b1-7e2a-9f11-6b5b2c1be314",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-79b5-833d-5c0a9d5de6bd",
+      "pair": 8,
+      "subgroup": 2,
+      "disciplineId": "01a1ba8a-36e3-70bc-8e81-d78012fa3d83",
+      "disciplineShortName": "Ін.мова",
+      "teacherId": "01a1ba8a-367a-72f7-a876-caa1191e7cb2",
+      "teacherShortName": "Михальчук",
+      "roomId": "01a1ba8a-37d1-742e-a66e-09566bc7ab92",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-375a-73aa-97bd-6b34983eafc9",
+      "shortName": "ТБО",
+      "teacherId": "01a1ba8a-3683-7bd0-b8fe-b81480fafd23",
+      "teacherShortName": "Мусятовська",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b5-7bbc-bb0e-1d6dd24594bf"
+     },
+     {
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "shortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f"
+     },
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "teacherShortName": "Овчар Ів.М.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c4-78d3-b7d1-fe9ea107929e"
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "teacherShortName": "Папулова Л.Л.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "teacherShortName": "Романюк О.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-78cc-bafe-c17bcabcf75f",
+      "shortName": "ІКТ",
+      "teacherId": "01a1ba8a-35da-7e09-ab01-3769f61b9909",
+      "teacherShortName": "Вернигора",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a"
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "teacherShortName": "Овчар Ів.М.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c4-78d3-b7d1-fe9ea107929e"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "shortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-364d-7d00-9eeb-6e2a895df8b1",
+      "teacherShortName": "Кукурудзяк",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "teacherShortName": "Моторна Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+      "shortName": "Культ.",
+      "teacherId": "01a1ba8a-3628-7fba-a529-bef7088518a2",
+      "teacherShortName": "Коляструк",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7142-9d8c-d73ed227a5a3"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-367a-72f7-a876-caa1191e7cb2": [
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3681-7538-907c-6de0689fc612": [
+      4,
+      6
+     ],
+     "01a1ba8a-3683-7bd0-b8fe-b81480fafd23": [
+      3,
+      5
+     ],
+     "01a1ba8a-368c-7747-a2da-50dc986d5403": [
+      1,
+      2
+     ],
+     "01a1ba8a-3697-740e-a45a-410a3c022527": [
+      2,
+      3
+     ],
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": [
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5": [
+      4,
+      5,
+      6,
+      7,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-368c-7747-a2da-50dc986d5403"
+     ],
+     "2": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-368c-7747-a2da-50dc986d5403",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "3": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3683-7bd0-b8fe-b81480fafd23",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "4": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "5": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-367a-72f7-a876-caa1191e7cb2",
+      "01a1ba8a-3683-7bd0-b8fe-b81480fafd23",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "6": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-367a-72f7-a876-caa1191e7cb2",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-367a-72f7-a876-caa1191e7cb2",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-367a-72f7-a876-caa1191e7cb2",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "01a1ba8a-36c5-7f35-a67c-b3d4ee34b8e5"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35da-7e09-ab01-3769f61b9909": 15.0,
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": 32.0,
+     "01a1ba8a-3628-7fba-a529-bef7088518a2": 6.0,
+     "01a1ba8a-364d-7d00-9eeb-6e2a895df8b1": 5.0,
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": 40.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3681-7538-907c-6de0689fc612": 18.0,
+     "01a1ba8a-3683-7bd0-b8fe-b81480fafd23": 14.0,
+     "01a1ba8a-368c-7747-a2da-50dc986d5403": 28.0,
+     "01a1ba8a-3697-740e-a45a-410a3c022527": 33.0,
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": 34.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2ОБ",
+   "pair": 7,
+   "subgroup": 0,
+   "lesson": "ЕіФБ Охота О.Я.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-35da-7e09-ab01-3769f61b9909",
+    "disciplineId": "01a1ba8a-36df-78cc-bafe-c17bcabcf75f",
+    "teacher": "Вернигора",
+    "discipline": "ІКТ"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-733a-adb2-bf6d0614699b",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 7,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+     "disciplineShortName": "ЕіФБ",
+     "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 36,
+      "fact": 12,
+      "forecast": 34,
+      "status": "ON_TRACK",
+      "hoursPerWeek": 2.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-7c7e-bcf5-9cf150872293",
+      "pair": 5,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "disciplineShortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "roomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-79df-b54f-122ea3a0cc60",
+      "pair": 6,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "disciplineShortName": "ФК",
+      "teacherId": "01a1ba8a-36ce-7719-a5c9-8433b7b259c0",
+      "teacherShortName": "Шинкарюк",
+      "roomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7deb-8ffc-96d2d85a3b4a",
+      "pair": 8,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "disciplineShortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "roomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "shortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-36ce-7719-a5c9-8433b7b259c0",
+      "teacherShortName": "Шинкарюк",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d2-7f23-aac7-bf980be1f66a"
+     },
+     {
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "shortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-78cc-bafe-c17bcabcf75f",
+      "shortName": "ІКТ",
+      "teacherId": "01a1ba8a-35da-7e09-ab01-3769f61b9909",
+      "teacherShortName": "Вернигора",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 54,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "teacherShortName": "Моторна Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-375a-73aa-97bd-6b34983eafc9",
+      "shortName": "ТБО",
+      "teacherId": "01a1ba8a-36c2-73e7-a123-6e68fdb13506",
+      "teacherShortName": "Фабіянська",
+      "progress": {
+       "plan": 72,
+       "fact": 28,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "teacherShortName": "Мельник Н.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cf-7c13-a804-00ace2d4fe72"
+     },
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-36b5-7df0-832b-72103b1f0f8e",
+      "teacherShortName": "Серветник",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517"
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-36b5-7df0-832b-72103b1f0f8e",
+      "teacherShortName": "Серветник",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517"
+     },
+     {
+      "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+      "shortName": "Культ.",
+      "teacherId": "01a1ba8a-3628-7fba-a529-bef7088518a2",
+      "teacherShortName": "Коляструк",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7142-9d8c-d73ed227a5a3"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": [
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": [
+      2,
+      5,
+      7,
+      8
+     ],
+     "01a1ba8a-3681-7538-907c-6de0689fc612": [
+      4,
+      6
+     ],
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": [
+      7,
+      8
+     ],
+     "01a1ba8a-36c2-73e7-a123-6e68fdb13506": [
+      3,
+      4
+     ],
+     "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": [
+      1,
+      3,
+      6,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "2": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578"
+     ],
+     "3": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-36c2-73e7-a123-6e68fdb13506",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "4": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36c2-73e7-a123-6e68fdb13506"
+     ],
+     "5": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578"
+     ],
+     "6": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "7": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": 32.0,
+     "01a1ba8a-35da-7e09-ab01-3769f61b9909": 15.0,
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": 32.0,
+     "01a1ba8a-3628-7fba-a529-bef7088518a2": 6.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": 31.0,
+     "01a1ba8a-3681-7538-907c-6de0689fc612": 18.0,
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": 18.0,
+     "01a1ba8a-36b5-7df0-832b-72103b1f0f8e": 17.0,
+     "01a1ba8a-36c2-73e7-a123-6e68fdb13506": 12.0,
+     "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": 27.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2М",
+   "pair": 8,
+   "subgroup": 0,
+   "lesson": "ЕіФБ Охота О.Я.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+    "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+    "teacher": "Кучинська О.Г.",
+    "discipline": "Укр.літ."
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-785b-b96b-dd858634e06b",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 8,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+     "disciplineShortName": "ЕіФБ",
+     "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 72,
+      "fact": 24,
+      "forecast": 68,
+      "status": "WILL_UNDERRUN",
+      "hoursPerWeek": 4.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-7fbe-8876-de12c1ae2e84",
+      "pair": 5,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "disciplineShortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "roomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7a88-a72d-26e85d3245f0",
+      "pair": 6,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "disciplineShortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "teacherShortName": "Романюк О.М.",
+      "roomId": "01a1ba8a-37b5-7bbc-bb0e-1d6dd24594bf",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-7499-a5ba-6f6deb805a62",
+      "pair": 7,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-375d-7f85-8e11-4e333281ae77",
+      "disciplineShortName": "ТО",
+      "teacherId": "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "teacherShortName": "Місецький А.В.",
+      "roomId": "01a1ba8a-37c3-728d-afbf-65c75581d5cf",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-36b0-7361-8a76-8a6444944645",
+      "teacherShortName": "Романюк О.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-375d-7f85-8e11-4e333281ae77",
+      "shortName": "ТО",
+      "teacherId": "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "teacherShortName": "Місецький А.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c3-728d-afbf-65c75581d5cf"
+     },
+     {
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "shortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "progress": {
+       "plan": 72,
+       "fact": 24,
+       "forecast": 68,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517"
+     },
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "teacherShortName": "Моторна Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-374d-7109-8efc-4cd3c722294c",
+      "shortName": "Прав.",
+      "teacherId": "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "teacherShortName": "Бадунь",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37cc-7dc4-9102-1f70ff912963"
+     },
+     {
+      "disciplineId": "01a1ba8a-374d-7e0f-8f2f-2417be5749f5",
+      "shortName": "ПДС",
+      "teacherId": "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "teacherShortName": "Паламарчук",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37b7-74c6-af1c-c5cf0600e566"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "teacherShortName": "Кучинська О.Г.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-73cf-9d43-0a24523c3ade"
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "teacherShortName": "Герасименко",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-3697-740e-a45a-410a3c022527",
+      "teacherShortName": "Папулова Л.Л.",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6"
+     },
+     {
+      "disciplineId": "01a1ba8a-3739-74e3-a765-e33f2db1c1d4",
+      "shortName": "ОЕЗ",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": [
+      1,
+      2,
+      3
+     ],
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": [
+      3,
+      4
+     ],
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3681-7538-907c-6de0689fc612": [
+      4,
+      6
+     ],
+     "01a1ba8a-3686-7c92-b36e-503b43b7abf5": [
+      2,
+      3,
+      7
+     ],
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": [
+      7,
+      8
+     ],
+     "01a1ba8a-3695-7796-99ee-bc334099f110": [
+      1,
+      3
+     ],
+     "01a1ba8a-3697-740e-a45a-410a3c022527": [
+      2,
+      3
+     ],
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": [
+      6,
+      7,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3695-7796-99ee-bc334099f110"
+     ],
+     "2": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "3": [
+      "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f",
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3695-7796-99ee-bc334099f110",
+      "01a1ba8a-3697-740e-a45a-410a3c022527"
+     ],
+     "4": [
+      "01a1ba8a-35fd-750c-8912-cd60d74755d9",
+      "01a1ba8a-3651-7f38-b845-00282c2dc34a",
+      "01a1ba8a-3681-7538-907c-6de0689fc612"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3686-7c92-b36e-503b43b7abf5",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36b0-7361-8a76-8a6444944645"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-35ba-7876-b3ba-3dfc98688d3f": 27.0,
+     "01a1ba8a-35fd-750c-8912-cd60d74755d9": 23.0,
+     "01a1ba8a-3651-7f38-b845-00282c2dc34a": 40.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3681-7538-907c-6de0689fc612": 18.0,
+     "01a1ba8a-3686-7c92-b36e-503b43b7abf5": 16.0,
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": 18.0,
+     "01a1ba8a-3695-7796-99ee-bc334099f110": 20.0,
+     "01a1ba8a-3697-740e-a45a-410a3c022527": 33.0,
+     "01a1ba8a-36b0-7361-8a76-8a6444944645": 34.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  },
+  {
+   "group": "2ОБ",
+   "pair": 8,
+   "subgroup": 0,
+   "lesson": "ІМД Масловата Д.Р.",
+   "real": {
+    "kind": "REPLACE_DISCIPLINE",
+    "reasonCode": "MUTUAL",
+    "teacherId": "01a1ba8a-36c2-73e7-a123-6e68fdb13506",
+    "disciplineId": "01a1ba8a-375a-73aa-97bd-6b34983eafc9",
+    "teacher": "Фабіянська",
+    "discipline": "ТБО"
+   },
+   "input": {
+    "target": {
+     "lessonId": "01a1ba8a-6d3a-7deb-8ffc-96d2d85a3b4a",
+     "date": "2026-10-19",
+     "today": "2026-10-16",
+     "pair": 8,
+     "subgroup": 0,
+     "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+     "disciplineShortName": "ІМД",
+     "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+     "roomType": "CLASSROOM",
+     "streamId": null,
+     "online": false,
+     "hoursPerPair": 2,
+     "groupHasBlock": false,
+     "progress": {
+      "plan": 54,
+      "fact": 18,
+      "forecast": 50,
+      "status": "WILL_UNDERRUN",
+      "hoursPerWeek": 3.0
+     }
+    },
+    "groupDay": [
+     {
+      "lessonId": "01a1ba8a-6d3a-7c7e-bcf5-9cf150872293",
+      "pair": 5,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "disciplineShortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "roomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-79df-b54f-122ea3a0cc60",
+      "pair": 6,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "disciplineShortName": "ФК",
+      "teacherId": "01a1ba8a-36ce-7719-a5c9-8433b7b259c0",
+      "teacherShortName": "Шинкарюк",
+      "roomId": "01a1ba8a-37d1-77fb-a75a-39c8d97b1ee6",
+      "decided": false
+     },
+     {
+      "lessonId": "01a1ba8a-6d3a-733a-adb2-bf6d0614699b",
+      "pair": 7,
+      "subgroup": 0,
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "disciplineShortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "roomId": "01a1ba8a-37bc-73b3-adfa-0004ed163517",
+      "decided": false
+     }
+    ],
+    "groupDisciplines": [
+     {
+      "disciplineId": "01a1ba8a-3757-75c9-b2c4-80461f326aa3",
+      "shortName": "Стат.",
+      "teacherId": "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "teacherShortName": "Волонтир Л.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37af-7fb8-8d51-89e43de65b12"
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-7d6f-be11-189a9512f869",
+      "shortName": "ІМД",
+      "teacherId": "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "teacherShortName": "Масловата Д.Р.",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37ce-7e05-b94f-25069ee2ad3f"
+     },
+     {
+      "disciplineId": "01a1ba8a-378d-7730-9660-ec40f7781976",
+      "shortName": "ФК",
+      "teacherId": "01a1ba8a-36ce-7719-a5c9-8433b7b259c0",
+      "teacherShortName": "Шинкарюк",
+      "progress": {
+       "plan": 54,
+       "fact": 18,
+       "forecast": 52,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-371a-7b5a-83fc-27e033659822",
+      "shortName": "ЕіФБ",
+      "teacherId": "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "teacherShortName": "Охота О.Я.",
+      "progress": {
+       "plan": 36,
+       "fact": 12,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36df-78cc-bafe-c17bcabcf75f",
+      "shortName": "ІКТ",
+      "teacherId": "01a1ba8a-35da-7e09-ab01-3769f61b9909",
+      "teacherShortName": "Вернигора",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 54,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c1-7653-a320-fd4e3e888d1a"
+     },
+     {
+      "disciplineId": "01a1ba8a-3764-72c3-9a2f-0b46bb3f76e1",
+      "shortName": "Укр.літ.",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3765-7ec5-b888-1e1390941755",
+      "shortName": "Укр.мова",
+      "teacherId": "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "teacherShortName": "Єлісєєва І.О.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3718-7846-951d-631def9503dc",
+      "shortName": "Еколог.",
+      "teacherId": "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "teacherShortName": "Моторна Л.В.",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 36,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-375a-73aa-97bd-6b34983eafc9",
+      "shortName": "ТБО",
+      "teacherId": "01a1ba8a-36c2-73e7-a123-6e68fdb13506",
+      "teacherShortName": "Фабіянська",
+      "progress": {
+       "plan": 72,
+       "fact": 28,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-36e8-72eb-841f-2ca4e22f45cd",
+      "shortName": "Іст.Укр.",
+      "teacherId": "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "teacherShortName": "Мельник Н.М.",
+      "progress": {
+       "plan": 72,
+       "fact": 26,
+       "forecast": 70,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 4.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-372e-743a-a50b-123647d0c956",
+      "shortName": "Матем.",
+      "teacherId": "01a1ba8a-36b5-7df0-832b-72103b1f0f8e",
+      "teacherShortName": "Серветник",
+      "progress": {
+       "plan": 54,
+       "fact": 20,
+       "forecast": 50,
+       "status": "WILL_UNDERRUN",
+       "hoursPerWeek": 3.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-372c-7b70-a012-2465f6ddd882",
+      "shortName": "Мат.спц.",
+      "teacherId": "01a1ba8a-36b5-7df0-832b-72103b1f0f8e",
+      "teacherShortName": "Серветник",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": null
+     },
+     {
+      "disciplineId": "01a1ba8a-3724-7c2c-b064-add987a18d89",
+      "shortName": "Культ.",
+      "teacherId": "01a1ba8a-3628-7fba-a529-bef7088518a2",
+      "teacherShortName": "Коляструк",
+      "progress": {
+       "plan": 36,
+       "fact": 14,
+       "forecast": 34,
+       "status": "ON_TRACK",
+       "hoursPerWeek": 2.0
+      },
+      "requiredRoomType": null,
+      "ownRoomId": "01a1ba8a-37c2-7142-9d8c-d73ed227a5a3"
+     }
+    ],
+    "teacherPairsThatDay": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": [
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": [
+      3,
+      5,
+      6,
+      7,
+      8
+     ],
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": [
+      2,
+      5,
+      7,
+      8
+     ],
+     "01a1ba8a-3681-7538-907c-6de0689fc612": [
+      4,
+      6
+     ],
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": [
+      7,
+      8
+     ],
+     "01a1ba8a-36c2-73e7-a123-6e68fdb13506": [
+      3,
+      4
+     ],
+     "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": [
+      1,
+      3,
+      6,
+      8
+     ]
+    },
+    "busyByPair": {
+     "1": [
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "2": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578"
+     ],
+     "3": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-36c2-73e7-a123-6e68fdb13506",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "4": [
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36c2-73e7-a123-6e68fdb13506"
+     ],
+     "5": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578"
+     ],
+     "6": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3681-7538-907c-6de0689fc612",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ],
+     "7": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-3595-7894-8930-07c2d6d5ea15",
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3673-714f-b5aa-a10bed229578",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f",
+      "01a1ba8a-36ce-7719-a5c9-8433b7b259c0"
+     ]
+    },
+    "absentByPair": {
+     "1": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "2": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "3": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "4": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "5": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "6": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "7": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ],
+     "8": [
+      "01a1ba8a-366f-7983-bef3-38592a4ce7bb",
+      "01a1ba8a-3694-72a5-98ca-bc1f2dee280f"
+     ]
+    },
+    "slotPreferences": {},
+    "weeklyHours": {
+     "01a1ba8a-3595-7894-8930-07c2d6d5ea15": 32.0,
+     "01a1ba8a-35da-7e09-ab01-3769f61b9909": 15.0,
+     "01a1ba8a-35ec-7d31-9bf8-89d75b55ec1c": 32.0,
+     "01a1ba8a-3628-7fba-a529-bef7088518a2": 6.0,
+     "01a1ba8a-366f-7983-bef3-38592a4ce7bb": 23.0,
+     "01a1ba8a-3673-714f-b5aa-a10bed229578": 31.0,
+     "01a1ba8a-3681-7538-907c-6de0689fc612": 18.0,
+     "01a1ba8a-3694-72a5-98ca-bc1f2dee280f": 18.0,
+     "01a1ba8a-36b5-7df0-832b-72103b1f0f8e": 17.0,
+     "01a1ba8a-36c2-73e7-a123-6e68fdb13506": 12.0,
+     "01a1ba8a-36ce-7719-a5c9-8433b7b259c0": 27.0
+    },
+    "coverBurden": {},
+    "coverCount": {},
+    "lastCover": {},
+    "declinedThisLesson": [],
+    "declinedToday": [],
+    "planPenalty": {}
+   }
+  }
+ ]
+}
