@@ -47,12 +47,14 @@ The model also reported that the «ЗАМІНА АУДИТОРІЙ» section is 
 
 ## 2. Order №96 (22.05.2026, П'ЯТНИЦЯ – ЗНАМЕННИК)
 
-Header and 5 notes correct; position «Заступник директора з НМРтаІТ» correct, name read as «Микола ПОЛЩУК» (✘,
-should be «ПОЛІЩУК»).
+Header and 5 notes correct; position «Заступник директора з НМРтаІТ» correct, name read as «Микола ПОЛЩУК» (✔: the
+photo really prints «ПОЛЩУК», a misprint of «ПОЛІЩУК» in the original; the reading must keep it — corrected
+08.11.2026, round 6).
 
 All 26 rows have the right group, row type (BLOCK, 6 × ADDITIONAL with «ДОДАТКОВО», 2 × CANCELLATION, 5 × FINISHED
-«Вичит.», REPLACEMENT) and texts, **except one pair number**: «1М · 2 · ОП Масловата · Зв.зам. · Укр.літ.
-Кучинська · 303» came back as pair 1 (✘). **25 of 26 rows exact.** The model's warnings pointed at the missing
+«Вичит.», REPLACEMENT) and texts. «1М · 1 · ОП Масловата · Зв.зам. · Укр.літ. Кучинська · 303» came back as pair 1,
+which is what the photo prints (this note earlier said pair 2 and counted it as an error; a zoomed crop shows «1» —
+corrected 08.11.2026, round 6). **26 of 26 rows exact.** The model's warnings pointed at the missing
 reason in «2ТК 5» and the missing room in «2КІ1 5» — both are really empty in the original.
 
 ## 3. Order №105 (04.06.2026, ЧЕТВЕР – ЗНАМЕННИК) — the hardest photo
