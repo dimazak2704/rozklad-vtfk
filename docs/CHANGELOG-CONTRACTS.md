@@ -113,3 +113,16 @@ No endpoint was changed. These are the readings the SPA and its mock API use whe
 | `PUT /api/me/preferences?semesterId` | Body is the full list `[{weekday,pair,kind,note}]` replacing the previous one; response = saved list. | The grid is saved as a whole in one action. |
 | `POST /api/me/absences` | Past `dateFrom` → 422 (`ABSENCE_IN_PAST`); overlap with an existing absence → 409. `DELETE` of a non-future absence → 422 (`ABSENCE_NOT_FUTURE`). | «Own only, future only» (CONTRACTS §3); 422 for business rules as in the foundation. |
 | `POST /api/notify/bindings/codes` by a teacher | Only `{type: TEACHER, teacherId: <own>}`; another `teacherId` → 403. `deepLink` = `https://t.me/<bot>?start=<code>`. | CONTRACTS §6: «TEACHER may create own TEACHER code». |
+
+## admin-daily (SPA: dashboard, changes, orders, Telegram, settings)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/admin/absences/{id}/affected` | Each item also has `date` (ISO): `{date, lesson, decision}`. | An absence can span several days and `LessonView` has no date; the UI groups by date and sends it in `POST /changes`. Additive. |
+| `GET /api/admin/lessons/{id}/options` | The response also has `date`; an `ADDITIONAL` option carries `date` and `pair` of the proposed make-up slot. | Without them a make-up option cannot become `POST /changes {date, pairFrom}`. Additive; the UI disables such an option when they are missing. |
+| `ChangeDto.pairTo` for `SWAP` | The pair the later lesson was moved from. | The order prints two rows for a swap; `pairFrom` is the freed slot. |
+| `GET /api/admin/changes?date` · `GET /api/admin/absences?from&to` | Plain arrays (not `Page`); `absences` lists `ACTIVE` ones overlapping the range. | The contract gives no shape; daily lists are small. |
+| `DELETE /api/admin/absences/{id}` | Sets `CANCELLED`; its not-yet-applied changes become `CANCELLED`. | DOMAIN §3 has `absence.status`; a cancelled absence frees its lessons. |
+| `GET /api/notify/deliveries` | Array of `DeliveryDto`, newest first (at most 200). | The contract says only «delivery log». |
+| `DashboardAlert.kind` | `UNCOVERED_SOON`, `UNCOVERED`, `DECLINED`, `PENDING_OVERDUE`, `ORDER_NOT_PUBLISHED`, `DISCIPLINE_FINISHED`, `WILL_UNDERRUN`, `WILL_OVERRUN`; unknown kinds are shown by severity. | The contract does not list kinds. |
+| Order heading | `title` = «По коледжу про деякі зміни в розкладі занять»; the UI builds «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ №N до розпорядження №M» from `kind`, `number` and the parent's number. | DOMAIN §8 layout. |
