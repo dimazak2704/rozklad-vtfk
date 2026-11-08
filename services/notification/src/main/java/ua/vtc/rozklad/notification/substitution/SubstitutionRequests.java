@@ -143,7 +143,10 @@ public class SubstitutionRequests {
     public void onStatusChanged(SubstitutionStatusChanged event) {
         Optional<SubstitutionRequest> request = requests.findForUpdate(event.changeId());
         request.ifPresent(found -> {
-            boolean changed = found.changeStatus(event.status(), clock.instant());
+            // NOTIFY: у DECLINED заміну переводить лише «Не можу» викладача — локальна копія це запамʼятовує
+            boolean changed = found.isNotice() && event.status() == ChangeStatus.DECLINED
+                    ? found.recordAnswer(ConfirmationDecision.DECLINE, ChangeStatus.DECLINED, clock.instant())
+                    : found.changeStatus(event.status(), clock.instant());
             String text = found.isNotice() ? SubstitutionTexts.noticeState(found)
                     : SubstitutionTexts.finalState(found, event.status());
             if (changed && text != null) {

@@ -492,6 +492,27 @@ class SubstitutionFlowIT extends IntegrationTest {
         });
     }
 
+    /** «Добре» in Telegram, then «Не можу» in the cabinet: core's DECLINED event records the new answer locally. */
+    @Test
+    void cannotFromTheCabinetAfterOkIsRecordedAsTheAnswer() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+        Sent notice = telegram.lastSentTo(TEACHER);
+        core.answerAsNotice(ChangeStatus.CONFIRMED);
+        press(TEACHER, notice.messageId(), notice.callbackOf("👍 Добре").orElseThrow());
+
+        handlers.handle(statusChanged(ChangeStatus.DECLINED));
+        worker.drain();
+
+        assertThat(substitutions.find(CHANGE)).get().satisfies(request -> {
+            assertThat(request.getStatus()).isEqualTo(ChangeStatus.DECLINED);
+            assertThat(request.getTeacherAnswer()).isEqualTo(ConfirmationDecision.DECLINE);
+        });
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("Диспетчер обере інший варіант.");
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("❌ <b>Відмова від заміни</b>");
+    }
+
     /** The teacher answered in the cabinet: core's event edits the Telegram notice and alerts admins. */
     @Test
     void objectionFromTheCabinetEditsTheNoticeToo() {
