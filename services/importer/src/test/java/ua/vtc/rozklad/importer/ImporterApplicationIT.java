@@ -126,6 +126,16 @@ class ImporterApplicationIT {
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
                 .andExpect(jsonPath("$.errors[0].field").value("today"))
                 .andExpect(jsonPath("$.errors[0].message").value("Очікується дата у форматі РРРР-ММ-ДД."));
+        // r3-ai-imports-08: «сьогодні» поза 2000–2100 — 400 з полем, а не 500 чи 3000-й рік
+        for (String today : List.of("+999999999-12-31", "2999-12-31", "1999-12-31")) {
+            mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"text\":\"завтра не буду\",\"today\":\"" + today + "\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                    .andExpect(jsonPath("$.errors[0].field").value("today"))
+                    .andExpect(jsonPath("$.errors[0].message").value("Дата має бути в межах 2000–2100 років."));
+        }
         // NUL (U+0000) PostgreSQL не збереже: 400 із полем, як у core, а не 409 «запис уже існує»
         mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
                         .contentType(MediaType.APPLICATION_JSON)

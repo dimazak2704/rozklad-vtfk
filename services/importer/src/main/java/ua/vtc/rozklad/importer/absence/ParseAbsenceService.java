@@ -15,7 +15,8 @@ import ua.vtc.rozklad.importer.ai.AiUnavailableException;
 
 /**
  * Rules first; the text model is asked only when the rules are unsure (confidence below
- * {@value #AI_THRESHOLD}) and AI is available. AI problems never fail the call — the bot then gets
+ * {@value #AI_THRESHOLD}), the rules did not settle the message (a shape the answer cannot carry,
+ * where only the teacher can clarify) and AI is available. AI problems never fail the call — the bot then gets
  * the rule-based answer with its clarification. The message text is never logged (absence reasons
  * are private).
  */
@@ -36,8 +37,9 @@ public class ParseAbsenceService {
     }
 
     public ParsedAbsence parse(String text, LocalDate today) {
-        ParsedAbsence byRules = rules.parse(text, today);
-        if (byRules.confidence() >= AI_THRESHOLD || !ai.available()) {
+        AbsenceTextParser.Reading reading = rules.read(text, today);
+        ParsedAbsence byRules = reading.parsed();
+        if (reading.settled() || byRules.confidence() >= AI_THRESHOLD || !ai.available()) {
             return byRules;
         }
         try {

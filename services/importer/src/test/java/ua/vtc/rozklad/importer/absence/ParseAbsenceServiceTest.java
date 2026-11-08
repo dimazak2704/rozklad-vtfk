@@ -80,4 +80,16 @@ class ParseAbsenceServiceTest {
         assertThat(ParseAbsenceService.validated(new AbsenceExtraction(TODAY, TODAY, List.of(1), "UNKNOWN", 0.9, null), TODAY))
                 .extracting(ParsedAbsence::reasonCategory).isEqualTo(AbsenceReasonCategory.OTHER);
     }
+
+    /** r4-ai-imports-55: the AI answers in the same shape, so it is not asked what only the teacher can say. */
+    @Test
+    void settledRulesDoNotCallAi() {
+        when(ai.available()).thenReturn(true);
+
+        ParsedAbsence parsed = service.parse("10 листопада 3 пара, 11 листопада 1 пара", TODAY);
+
+        assertThat(parsed.source()).isEqualTo(ParsedAbsence.Source.RULES);
+        assertThat(parsed.clarification()).isNotBlank();
+        verify(ai, never()).parseAbsence(anyString(), any());
+    }
 }
