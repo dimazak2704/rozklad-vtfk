@@ -2,6 +2,7 @@ import { ArrowRight, BellRing, CircleCheck, FileText, PencilLine, Undo2 } from '
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useUpdateChange } from '@/api/admin-daily';
+import { useBindings, useBotStatus } from '@/api/telegram';
 import { isApiError, STALE_DATA_MESSAGE } from '@/api/errors';
 import type { ChangeDto, ReasonCode } from '@/api/types';
 import { Button, buttonClass, notify } from '@/components/ui';
@@ -92,9 +93,26 @@ function Side({ label, discipline, teacher, struck }: { label: string; disciplin
  * Ухвалене рішення щодо пари: було → стало (оригінал закреслено), стан зі строком, історія і дії:
  * нагадати, підтвердити за викладача, скасувати рішення.
  */
+/**
+ * Чи міг запит на підтвердження дійти до замінника: notification надсилає його лише викладачеві з
+ * привʼязаним Telegram і лише коли бот працює (інакше пише тільки в чат диспетчерів). `unknown` —
+ * дані ще вантажаться або недоступні: тоді показуємо звичайне очікування.
+ */
+function useRequestDelivery(teacherId: string | undefined, enabled: boolean): 'sent' | 'noTelegram' | 'botOff' | 'unknown' {
+  const bindings = useBindings();
+  const bot = useBotStatus();
+  if (!enabled || !teacherId) return 'unknown';
+  if (bot.data && !bot.data.connected) return 'botOff';
+  if (!bindings.data) return 'unknown';
+  return bindings.data.some((binding) => binding.type === 'TEACHER' && binding.teacherId === teacherId) ? 'sent' : 'noTelegram';
+}
+
 export function DecisionCard({ change, state, busy, onResend, onConfirm, onCancel }: DecisionCardProps) {
   const { now } = useNow();
-  const pending = state === 'pending' ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
+  const delivery = useRequestDelivery(change.new.teacher?.id, state === 'pending');
+  const undelivered = delivery === 'noTelegram' || delivery === 'botOff';
+  const pending = state === 'pending' && !undelivered ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
+  const substitute = change.new.teacher?.shortName ?? 'Викладач';
   const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled' || state === 'substituteAbsent';
   const reason = change.reasonCode === 'OTHER' ? (change.reasonText ?? REASON_CODE_LABEL.OTHER) : REASON_CODE_LABEL[change.reasonCode];
   const [editingReason, setEditingReason] = useState(false);
@@ -138,6 +156,13 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
           скасуйте її і оберіть інше рішення для пари.
         </p>
       ) : null}
+      {state === 'pending' && undelivered ? (
+        <p role="status" className="rounded-control border border-change bg-change-subtle px-3 py-2 text-ui text-change">
+          {delivery === 'botOff'
+            ? `Telegram-бот зараз вимкнений, тож запит ${substitute} не надіслано. Зателефонуйте й підтвердьте за викладача.`
+            : `${substitute} не підключив Telegram, тож запит не надіслано. Домовтеся телефоном і підтвердьте за викладача.`}
+        </p>
+      ) : null}
       {pending ? (
         <p
           role="status"
@@ -171,10 +196,19 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
         <div className="flex flex-wrap gap-2">
           {state === 'pending' ? (
             <>
-              <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={onResend} iconStart={<BellRing aria-hidden="true" className="size-4" />}>
-                Нагадати в Telegram
-              </Button>
-              <Button size="sm" variant="secondary" loading={busy === 'confirm'} disabled={busy !== null} onClick={onConfirm} iconStart={<CircleCheck aria-hidden="true" className="size-4" />}>
+              {undelivered ? null : (
+                <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={onResend} iconStart={<BellRing aria-hidden="true" className="size-4" />}>
+                  Нагадати в Telegram
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant={undelivered ? 'primary' : 'secondary'}
+                loading={busy === 'confirm'}
+                disabled={busy !== null}
+                onClick={onConfirm}
+                iconStart={<CircleCheck aria-hidden="true" className="size-4" />}
+              >
                 Підтвердити за викладача
               </Button>
             </>

@@ -207,6 +207,32 @@ describe('рішення щодо пари: зміна причини з version
     expect(screen.getByRole('button', { name: 'Зберегти' })).toBeInTheDocument();
   });
 
+  it('замінник без Telegram: не «чекаємо відповіді», а «запит не надіслано» і підтвердження за викладача', async () => {
+    const pending: ChangeDto = { ...change, status: 'PENDING_CONFIRMATION', confirmDeadline: '2099-01-01T00:00:00Z' };
+    renderWithProviders(
+      <DecisionCard change={pending} state="pending" busy={null} onResend={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />,
+    );
+    expect(await screen.findByText(/Прокопчук не підключив Telegram, тож запит не надіслано/)).toBeInTheDocument();
+    expect(screen.queryByText(/Чекаємо відповіді в Telegram/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Нагадати в Telegram' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Підтвердити за викладача' })).toBeInTheDocument();
+  });
+
+  it('замінник з Telegram: чекаємо відповіді й можна нагадати', async () => {
+    const krentsin = teacherNamed('Кренцін');
+    const pending: ChangeDto = {
+      ...change,
+      status: 'PENDING_CONFIRMATION',
+      confirmDeadline: '2099-01-01T00:00:00Z',
+      new: { ...change.new, teacher: { id: krentsin.id, shortName: krentsin.shortName, displayName: krentsin.displayName } },
+    };
+    renderWithProviders(
+      <DecisionCard change={pending} state="pending" busy={null} onResend={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />,
+    );
+    expect(await screen.findByText(/Чекаємо відповіді в Telegram/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Нагадати в Telegram' })).toBeInTheDocument();
+  });
+
   it('відхилену заміну пропонує спитати ще раз, а не «підтвердити» (core: 422 CHANGE_DECLINED)', () => {
     const onResend = vi.fn();
     renderWithProviders(
