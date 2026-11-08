@@ -121,6 +121,26 @@ class TimetableEditorIT {
     }
 
     @Test
+    void lessonIsEditedAndMovedInsideItsOwnSlot() {
+        UUID km = lessonId(data.group4ki1.getId(), 3);
+
+        // заміна аудиторії / онлайн без переміщення: той самий слот до і після (раніше — 500 з Set.of)
+        TemplateLessonMutationResponse edited = lessons.update(draftId, km, new TemplateLessonCommand(1, 3,
+                Parity.BOTH, data.group4ki1.getId(), 0, data.km.getId(), data.nepyivoda.getId(), null,
+                LessonKind.MIXED, null, false, true, null));
+        assertThat(edited.lesson().room()).isNull();
+        assertThat(edited.lesson().online()).isTrue();
+
+        TemplateLessonMutationResponse preview = lessons.previewMove(draftId, km,
+                new MoveCommand(1, 3, Parity.NUMERATOR, null));
+        assertThat(preview.lesson().parity()).isEqualTo(Parity.NUMERATOR);
+        TemplateLessonMutationResponse moved = lessons.move(draftId, km, new MoveCommand(1, 3, Parity.DENOMINATOR,
+                data.lab6.getId()));
+        assertThat(moved.lesson().parity()).isEqualTo(Parity.DENOMINATOR);
+        assertThat(moved.lesson().room().name()).isEqualTo("6");
+    }
+
+    @Test
     void referencesAreCheckedBeforeSaving() {
         UUID loadItemOf4ki2 = transaction.execute(status -> {
             LoadItem item = new LoadItem(data.semester.getId(), data.group4ki2.getId(), data.stp.getId(),

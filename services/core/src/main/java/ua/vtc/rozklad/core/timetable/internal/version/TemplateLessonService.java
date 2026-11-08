@@ -80,7 +80,7 @@ public class TemplateLessonService {
         lesson.setSubgroupNumber(command.subgroup());
         lesson.setDisciplineId(command.disciplineId());
         apply(lesson, command);
-        return response(version, lesson, Set.of(before, Slot.of(lesson)));
+        return response(version, lesson, slots(before, Slot.of(lesson)));
     }
 
     public TemplateLessonMutationResponse delete(UUID versionId, UUID lessonId) {
@@ -104,7 +104,7 @@ public class TemplateLessonService {
         UUID roomId = target.roomId() != null ? target.roomId() : lesson.getRoomId();
         return new TemplateLessonMutationResponse(
                 mapper.preview(lesson, target.weekday(), target.pair(), target.parity(), roomId),
-                touched(report, lessonId, Set.of(Slot.of(lesson), new Slot(target.weekday(), target.pair()))));
+                touched(report, lessonId, slots(Slot.of(lesson), new Slot(target.weekday(), target.pair()))));
     }
 
     /** Moves the lesson unless the move gives it a hard conflict (409 with {@code conflicts[]}). */
@@ -119,7 +119,12 @@ public class TemplateLessonService {
             lesson.setRoomId(target.roomId());
         }
         return new TemplateLessonMutationResponse(mapper.toDto(lesson),
-                touched(report, lessonId, Set.of(before, Slot.of(lesson))));
+                touched(report, lessonId, slots(before, Slot.of(lesson))));
+    }
+
+    /** Slots touched by an edit; the lesson may stay in its slot (room, teacher or parity change). */
+    private static Set<Slot> slots(Slot before, Slot after) {
+        return before.equals(after) ? Set.of(before) : Set.of(before, after);
     }
 
     private ConflictReport reportAfterMove(TimetableVersion version, TemplateLesson lesson, MoveCommand target) {
