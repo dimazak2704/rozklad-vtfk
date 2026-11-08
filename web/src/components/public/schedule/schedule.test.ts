@@ -112,6 +112,21 @@ describe('логіка розкладу', () => {
     expect(occupancy.busy).toBe(3);
   });
 
+  it('онлайн-заняття не займає аудиторію, у якій записане', () => {
+    const day = schedule.days[0] as DayDto;
+    const online: ScheduleDto = {
+      ...schedule,
+      days: [{ ...day, lessons: [lesson({ pair: 1, online: true }), lesson({ pair: 2, online: true }), lesson({ pair: 2 })] }],
+    };
+    const occupancy = roomOccupancy(online, 'r14', () => 8);
+    // 1 пара лише онлайн — вільна; на 2 парі хтось сидить фізично — зайнята
+    expect(occupancy.busy).toBe(1);
+    expect(occupancy.days[0]?.pairs.slice(0, 2)).toEqual([
+      { pair: 1, busy: false },
+      { pair: 2, busy: true },
+    ]);
+  });
+
   it('номер тижня семестру — від тижня з датою початку', () => {
     const semester = { startsOn: '2026-09-01', endsOn: '2026-12-30' };
     expect(semesterWeekOf('2026-10-19', semester)).toBe(8);

@@ -288,14 +288,19 @@ describe('розпорядження', () => {
 
   it('примітки чернетки зберігаються, а опублікованого — ні', async () => {
     const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
-    const saved = await api.put<OrderDto>(`/admin/orders/${draft.id}/notes`, { notes: ['  2КІ3 – практика  '] });
+    const saved = await api.put<OrderDto>(`/admin/orders/${draft.id}/notes`, { notes: ['  2КІ3 – практика  '], version: draft.version });
     expect(saved.notes).toEqual(['2КІ3 – практика']);
-    const blank = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['ok', '  '] }));
+    // правка з застарілого вигляду чернетки не перезаписує збережену мовчки
+    const stale = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['інша'], version: draft.version }));
+    expect(stale).toMatchObject({ status: 409, type: 'urn:rozklad:problem:stale-data' });
+    const noVersion = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['інша'] }));
+    expect(noVersion.fieldErrors()).toHaveProperty('version');
+    const blank = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['ok', '  '], version: saved.version }));
     expect(blank.fieldErrors()).toHaveProperty('notes[1]');
     const archive = await api.get<Page<OrderSummaryDto>>('/admin/orders', { q: '35' });
-    const error = await failure(api.put(`/admin/orders/${archive.items[0]?.id ?? ''}/notes`, { notes: [] }));
+    const error = await failure(api.put(`/admin/orders/${archive.items[0]?.id ?? ''}/notes`, { notes: [], version: 0 }));
     expect(error).toMatchObject({ status: 422, code: 'ORDER_ALREADY_PUBLISHED' });
-    const tooLong = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['х'.repeat(501)] }));
+    const tooLong = await failure(api.put(`/admin/orders/${draft.id}/notes`, { notes: ['х'.repeat(501)], version: saved.version }));
     expect(tooLong.fieldErrors()).toHaveProperty('notes[0]');
   });
 

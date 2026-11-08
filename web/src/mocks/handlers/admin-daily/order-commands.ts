@@ -7,7 +7,7 @@ import { compareIsoDates, formatNumericDate, isIsoDate, isoWeekday } from '@/lib
 import { matchScore } from '@/lib/search';
 import { findGroupByCode } from '../../fixtures';
 import { emitServerEvent } from '../../events';
-import { badRequest, businessRule, paginate } from '../../kit';
+import { badRequest, businessRule, paginate, problem } from '../../kit';
 import { currentSettings } from '../settings';
 import { recordOrderDeliveries } from '../telegram';
 import { applyChanges } from './change-commands';
@@ -28,9 +28,21 @@ export function draftFor(date: string | null, now: Date): OrderRecord {
   return buildDraft(world(), date, currentSettings(), now);
 }
 
-export function updateNotes(id: Uuid, notes: unknown): OrderRecord {
+/** PUT …/notes `{notes, version}` — як OrderDrafts.editNotes у core: без version → 400, застаріла → 409 `stale-data`. */
+export function updateNotes(id: Uuid, notes: unknown, version: unknown): OrderRecord {
   const order = getOrder(id);
+  if (typeof version !== 'number') {
+    throw badRequest('Перевірте дані.', [{ field: 'version', message: 'Вкажіть версію чернетки (поле version з відповіді).' }]);
+  }
   if (order.status === 'PUBLISHED') throw businessRule('ORDER_ALREADY_PUBLISHED', 'Опубліковане розпорядження змінювати не можна.');
+  if (version !== order.version) {
+    throw problem({
+      status: 409,
+      slug: 'stale-data',
+      title: 'Дані змінилися',
+      detail: 'Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.',
+    });
+  }
   if (!Array.isArray(notes) || notes.some((note) => typeof note !== 'string')) {
     throw badRequest('Примітки мають бути списком рядків.', [{ field: 'notes', message: 'Список рядків' }]);
   }

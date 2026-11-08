@@ -135,8 +135,9 @@ export interface Occupancy {
 }
 
 /**
- * Зайнятість аудиторії: скільки пар тижня в ній проходять заняття. Скасовані й ті, що переїхали
- * в іншу аудиторію, не займають її.
+ * Зайнятість аудиторії: скільки пар тижня в ній проходять заняття. Скасовані, ті, що переїхали
+ * в іншу аудиторію, й онлайн-заняття не займають її (DOMAIN §5: онлайн-заняття лише памʼятає
+ * аудиторію, як-от 3ОБ у 403, поки там сидить 1ОП2 за розпорядженням №35).
  */
 export function roomOccupancy(schedule: ScheduleDto, roomId: string, pairsPerWeekday: (weekday: number) => number): Occupancy {
   let busy = 0;
@@ -146,7 +147,9 @@ export function roomOccupancy(schedule: ScheduleDto, roomId: string, pairsPerWee
     .map((day) => {
       const count = pairsPerWeekday(day.weekday);
       const occupied = new Set(
-        day.lessons.filter((lesson) => lesson.kind !== 'CANCELLED' && lesson.room?.id === roomId).map((lesson) => lesson.pair),
+        day.lessons
+          .filter((lesson) => lesson.kind !== 'CANCELLED' && !lesson.online && lesson.room?.id === roomId)
+          .map((lesson) => lesson.pair),
       );
       const pairs = Array.from({ length: count }, (_, index) => ({ pair: index + 1, busy: occupied.has(index + 1) }));
       busy += pairs.filter((p) => p.busy).length;

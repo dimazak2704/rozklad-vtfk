@@ -3,7 +3,7 @@
  * і рахуємо їх у UTC, щоб перехід на літній час не зсував дні.
  */
 import type { IsoDate, IsoTime } from '@/api/types';
-import { capitalize, MONTHS_GENITIVE, weekdayName, weekdayShort } from './labels';
+import { capitalize, MONTHS_GENITIVE, WEEKDAY_ACCUSATIVE, WEEKDAY_GENITIVE, weekdayName, weekdayShort } from './labels';
 
 export const COLLEGE_TIME_ZONE = 'Europe/Kyiv';
 
@@ -148,6 +148,16 @@ export function formatLongDate(iso: IsoDate): string {
 /** «Понеділок, 19 жовтня» */
 export function formatWeekdayDate(iso: IsoDate): string {
   return `${capitalize(weekdayName(isoWeekday(iso)))}, ${formatDayMonth(iso)}`;
+}
+
+/** Після «на»: «середу, 23 грудня» («Заміни на середу, 23 грудня»). */
+export function formatWeekdayDateAfterNa(iso: IsoDate): string {
+  return `${WEEKDAY_ACCUSATIVE[isoWeekday(iso)] ?? ''}, ${formatDayMonth(iso)}`;
+}
+
+/** Після «до»: «понеділка, 26 жовтня» («До понеділка, 26 жовтня»). */
+export function formatWeekdayDateAfterDo(iso: IsoDate): string {
+  return `${WEEKDAY_GENITIVE[isoWeekday(iso)] ?? ''}, ${formatDayMonth(iso)}`;
 }
 
 /** «Пн, 19.10» */

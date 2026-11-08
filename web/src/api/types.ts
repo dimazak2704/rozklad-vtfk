@@ -330,6 +330,16 @@ export interface ChangeView {
   to: { discipline: Nullable<string>; teacher: Nullable<string> };
   room: Nullable<string>;
   subgroupNote: Nullable<string>;
+  /** Адитивно (R4): номер розпорядження чи доповнення, у якому надруковано рядок. */
+  orderNumber?: Nullable<number>;
+}
+
+/** Опубліковане розпорядження чи доповнення дати (публічна сторінка замін). */
+export interface PublishedOrderRef {
+  id: Uuid;
+  number: Nullable<number>;
+  publishedAt: Nullable<IsoInstant>;
+  imported: boolean;
 }
 
 /** GET /api/public/changes?date= */
@@ -340,7 +350,9 @@ export interface PublicChangesDto {
   /** «Понеділок» (з великої літери, на відміну від DayDto). */
   weekdayLabel: string;
   /** `imported` — паперове розпорядження, внесене в систему як текст: файлів (PDF/PNG) у нього немає, `publishedAt` — час імпорту. */
-  order: Nullable<{ id: Uuid; number: Nullable<number>; publishedAt: Nullable<IsoInstant>; imported: boolean }>;
+  order: Nullable<PublishedOrderRef>;
+  /** Адитивно (R4): опубліковані доповнення дати за номером — у кожного свій PDF/PNG. */
+  amendments?: PublishedOrderRef[];
   /** Рядок групи, якої немає в каталозі, має `group.id = null`. */
   groups: Array<{ group: Omit<GroupRef, 'id'> & { id: Nullable<Uuid> }; items: ChangeView[] }>;
 }
@@ -873,6 +885,18 @@ export interface ChangeDto {
   createdAt: IsoInstant;
   /** Версія для оптимістичного блокування: PUT надсилає її назад (застаріла → 409 `stale-data`). */
   version: number;
+  /**
+   * Адитивно (core, R4): опублікована пізніше зміна, що вирішила долю пари, яку поставила ця зміна
+   * (доповнення скасувало пару замінника чи віддало її іншому); `null`, якщо такої немає.
+   */
+  supersededBy?: Nullable<ChangeSuccessorDto>;
+}
+
+/** Зміна, що пізніше скасувала чи перепризначила пару застосованої зміни. */
+export interface ChangeSuccessorDto {
+  changeId: Uuid;
+  kind: ChangeKind;
+  orderId: Nullable<Uuid>;
 }
 
 /**
@@ -982,6 +1006,8 @@ export interface OrderNumberingDto {
 
 export interface UpdateOrderNotesRequest {
   notes: string[];
+  /** `version` чернетки, яку редагував диспетчер: застаріла → 409 `stale-data` (примітки друкуються в розпорядженні). */
+  version: number;
 }
 
 // ───────────────────────── 2. Admin: облік годин ─────────────────────────

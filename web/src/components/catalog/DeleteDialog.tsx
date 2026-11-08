@@ -2,7 +2,7 @@ import { Ban, TriangleExclamationPoint } from 'lucide-react';
 import { AlertDialog } from 'radix-ui';
 import { useReturnFocus } from '../ui/returnFocus';
 import { useState } from 'react';
-import { errorMessage, isApiError } from '@/api/errors';
+import { errorMessage, isApiError, withConflicts } from '@/api/errors';
 import { Button, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 
@@ -53,7 +53,7 @@ export function DeleteDialog({ target, onClose, title, description, onDelete, su
       setPhase({ kind: 'confirm' });
       onClose();
     } catch (error) {
-      if (isApiError(error) && error.status === 409) setPhase({ kind: 'blocked', reason: error.message });
+      if (isApiError(error) && error.status === 409) setPhase({ kind: 'blocked', reason: withConflicts(error) });
       else setPhase({ kind: 'error', message: errorMessage(error) });
     } finally {
       setPending(false);

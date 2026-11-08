@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { usePublicChanges } from '@/api/public';
 import { ErrorState, Skeleton, buttonClass } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
+import { formatInstantTime, formatWeekdayDateAfterNa } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 import { changeGroupKey, isMyGroup } from '../changes/changes-filter';
@@ -23,7 +23,7 @@ export function TodayChanges({ className }: { className?: string }) {
   const favorites = useFavoritesStore((state) => state.favorites);
   const recent = useFavoritesStore((state) => state.recent);
   const mine = new Set([...favorites, ...recent].filter((t) => t.type === 'GROUP').map((t) => t.id));
-  const title = home.isToday ? 'Заміни сьогодні' : `Заміни на ${formatWeekdayDate(home.date).toLocaleLowerCase('uk')}`;
+  const title = home.isToday ? 'Заміни сьогодні' : `Заміни на ${formatWeekdayDateAfterNa(home.date)}`;
   const changesLink = home.isToday ? '/changes' : `/changes?date=${home.date}`;
 
   let body;

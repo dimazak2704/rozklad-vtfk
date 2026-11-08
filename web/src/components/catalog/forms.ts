@@ -3,7 +3,7 @@
  * порожніх рядків і чисел для тіл запитів.
  */
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
-import { isApiError } from '@/api/errors';
+import { isApiError, withConflicts } from '@/api/errors';
 
 /**
  * Розкладає помилку сервера: повідомлення відомих полів — під ці поля (перше отримує фокус), решта
@@ -30,7 +30,7 @@ export function applyServerErrors<T extends FieldValues>(
   }
   if (error.errors.length > 0 && rest.length === 0) return null;
   if (rest.length > 0) return rest.join(' ');
-  return error.requestId && error.status >= 500 ? `${error.message} Код запиту: ${error.requestId}` : error.message;
+  return error.requestId && error.status >= 500 ? `${error.message} Код запиту: ${error.requestId}` : withConflicts(error);
 }
 
 /** «  301 » → «301», «» → null. */

@@ -198,6 +198,7 @@ function createChange(seed: ChangeSeed): ChangeDto {
     createdBy: 'admin',
     createdAt,
     version: 1,
+    supersededBy: null,
   };
 }
 
@@ -626,6 +627,7 @@ export function toChangeView(change: ChangeDto): ChangeView {
     to: rowType === 'CANCELLATION' || rowType === 'ROOM_CHANGE' ? { discipline: null, teacher: null } : after,
     room: rowType === 'CANCELLATION' ? null : ((change.new.room ?? change.original.room)?.name ?? null),
     subgroupNote: change.subgroup > 0 ? `${change.subgroup} підгрупа` : null,
+    orderNumber: null,
   };
 }
 
@@ -640,13 +642,18 @@ export function publicChanges(date: IsoDate, now: Date): PublicChangesDto {
       const gb = (b[0] as ChangeDto).group;
       return ga.course - gb.course || UK.compare(ga.code, gb.code);
     })
-    .map((changes) => ({ group: (changes[0] as ChangeDto).group, items: changes.map(toChangeView) }));
+    .map((changes) => ({
+      group: (changes[0] as ChangeDto).group,
+      // демо-дні мають лише основне розпорядження: кожен рядок надруковано в ньому
+      items: changes.map((change) => ({ ...toChangeView(change), orderNumber: orderNumberFor(date) })),
+    }));
   return {
     date,
     parity: parityOn(date),
     weekdayLabel: weekdayLabel(date),
     order:
       visible.length > 0 ? { id: orderIdFor(date), number: orderNumberFor(date), publishedAt: publishedAtFor(date), imported: false } : null,
+    amendments: [],
     groups,
   };
 }

@@ -95,13 +95,21 @@ interface ChangesListProps {
   groups: readonly ChangeGroup[];
   date: IsoDate;
   myGroupIds: ReadonlySet<string>;
+  /** Номер основного розпорядження: рядки з іншим номером надруковані в доповненні. */
+  mainOrderNumber?: number | null;
+}
+
+/** «Доповнення №45», якщо рядок надруковано не в основному розпорядженні дати. */
+function AmendmentBadge({ item, mainOrderNumber }: { item: ChangeView; mainOrderNumber: number | null | undefined }) {
+  if (item.orderNumber == null || item.orderNumber === mainOrderNumber) return null;
+  return <Badge size="sm">Доповнення №{item.orderNumber}</Badge>;
 }
 
 /**
  * Заміни дня у форматі розпорядження коледжу (DOMAIN §8): Група | Пара | За розкладом | Причина | По заміні | Ауд.
  * На телефоні — картки груп з тими самими рядками.
  */
-export function ChangesList({ groups, date, myGroupIds }: ChangesListProps) {
+export function ChangesList({ groups, date, myGroupIds, mainOrderNumber }: ChangesListProps) {
   return (
     <>
       <div className="hidden overflow-hidden rounded-panel border border-default bg-surface md:block">
@@ -151,6 +159,7 @@ export function ChangesList({ groups, date, myGroupIds }: ChangesListProps) {
                             {ROW_BADGE[item.rowType].label}
                           </Badge>
                           {item.subgroupNote ? <Badge size="sm">{item.subgroupNote}</Badge> : null}
+                          <AmendmentBadge item={item} mainOrderNumber={mainOrderNumber} />
                         </span>
                       </span>
                     </td>
@@ -198,6 +207,7 @@ export function ChangesList({ groups, date, myGroupIds }: ChangesListProps) {
                           {ROW_BADGE[item.rowType].label}
                         </Badge>
                         {item.subgroupNote ? <Badge size="sm">{item.subgroupNote}</Badge> : null}
+                        <AmendmentBadge item={item} mainOrderNumber={mainOrderNumber} />
                         {item.reasonText ? <Reason text={item.reasonText} /> : null}
                       </span>
                       <Before item={item} />

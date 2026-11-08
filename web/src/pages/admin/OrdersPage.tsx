@@ -40,7 +40,7 @@ import {
   notify,
 } from '@/components/ui';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
-import { compareIsoDates, formatInstant, formatLongDate, formatWeekdayDate, isWeekend, shiftStudyDay } from '@/lib/date';
+import { compareIsoDates, formatInstant, formatLongDate, formatWeekdayDate, formatWeekdayDateAfterDo, formatWeekdayDateAfterNa, isWeekend, shiftStudyDay } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -150,7 +150,7 @@ export default function OrdersPage() {
           description="На вихідні розпорядження не складають. Перейдіть до найближчого навчального дня або відкрийте документ з архіву нижче."
           action={
             <Button variant="primary" onClick={() => selectDay(shiftStudyDay(date, 1))}>
-              До {formatWeekdayDate(shiftStudyDay(date, 1)).toLocaleLowerCase('uk')}
+              До {formatWeekdayDateAfterDo(shiftStudyDay(date, 1))}
             </Button>
           }
         />
@@ -192,7 +192,7 @@ export default function OrdersPage() {
             <p className="flex flex-wrap items-center gap-2 text-ui text-secondary">
               Архів: документ на {formatLongDate(order.date)}.
               <Button size="sm" variant="ghost" iconStart={<ArrowLeft aria-hidden="true" className="size-4" />} onClick={() => setViewed(null)}>
-                До розпорядження на {formatWeekdayDate(date).toLocaleLowerCase('uk')}
+                До розпорядження на {formatWeekdayDateAfterNa(date)}
               </Button>
             </p>
           ) : null}
@@ -257,7 +257,7 @@ export default function OrdersPage() {
         description="Чернетка складається з підтверджених замін сама. Перевірте, додайте примітки й опублікуйте — номер присвоїться автоматично."
         meta={
           <>
-            <span className="text-ui font-semibold text-primary">на {formatWeekdayDate(date).toLocaleLowerCase('uk')}</span>
+            <span className="text-ui font-semibold text-primary">на {formatWeekdayDateAfterNa(date)}</span>
             {status}
           </>
         }

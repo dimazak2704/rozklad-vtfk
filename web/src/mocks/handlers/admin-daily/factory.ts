@@ -104,6 +104,7 @@ export function makeChange(
     createdBy: options.actor,
     createdAt: options.at.toISOString(),
     version: 0,
+    supersededBy: null,
   };
 }
 

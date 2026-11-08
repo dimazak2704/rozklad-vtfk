@@ -46,7 +46,7 @@ import {
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { cn } from '@/lib/cn';
-import { formatDateRange, formatWeekdayDate, isWeekend, shiftStudyDay } from '@/lib/date';
+import { formatDateRange, formatWeekdayDate, formatWeekdayDateAfterDo, isWeekend, shiftStudyDay } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 import { confirm } from '@/stores/confirm';
 
@@ -343,7 +343,7 @@ export default function ChangesPage() {
         description="Пар цього дня немає. Відсутності на вихідні не потрібні — перейдіть до найближчого навчального дня."
         action={
           <Button variant="primary" onClick={() => setDate(nextStudyDay)}>
-            До {formatWeekdayDate(nextStudyDay).toLocaleLowerCase('uk')}
+            До {formatWeekdayDateAfterDo(nextStudyDay)}
           </Button>
         }
         secondaryAction={

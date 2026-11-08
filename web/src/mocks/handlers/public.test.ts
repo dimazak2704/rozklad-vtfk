@@ -104,6 +104,7 @@ describe('розпорядження №35 (19.10.2026)', () => {
       to: { discipline: 'Ін.мова', teacher: 'Прокопчук' },
       room: '110',
       subgroupNote: '1 підгрупа',
+      orderNumber: 35,
     });
     expect(changes.groups[1]?.items[0]).toMatchObject({ rowType: 'CANCELLATION', to: {}, room: null, reasonText: 'Відп.' });
   });

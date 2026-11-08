@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
+import type { BellSlotDto, ChangeDto, PreferenceKind, Weekday } from '@/api/types';
 import { teacherNamed } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
+import { changeStatusBadge } from './change-text';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
@@ -116,5 +117,21 @@ describe('схема відсутності', () => {
     const values = schema.parse({ dateFrom: '2026-11-10', dateTo: '2026-11-11', wholeDay: false, pairs: [4, 2], reasonCategory: 'SICK_LEAVE', comment: '  ' });
     expect(toAbsenceRequest(values)).toEqual({ dateFrom: '2026-11-10', dateTo: '2026-11-11', pairs: [2, 4], reasonCategory: 'SICK_LEAVE', comment: null });
     expect(toAbsenceRequest({ ...values, wholeDay: true }).pairs).toBeNull();
+  });
+});
+
+describe('changeStatusBadge', () => {
+  const applied = { status: 'APPLIED', supersededBy: null } as unknown as ChangeDto;
+
+  it('застосована заміна — «У розпорядженні», доки її не змінило доповнення', () => {
+    expect(changeStatusBadge(applied)?.label).toBe('У розпорядженні');
+    expect(changeStatusBadge({ ...applied, status: 'CONFIRMED' })?.label).toBe('Підтверджено');
+  });
+
+  it('заміну, яку скасувало чи передало іншому доповнення, видно як скасовану, а не «У розпорядженні»', () => {
+    const later = (kind: ChangeDto['kind']): ChangeDto => ({ ...applied, supersededBy: { changeId: 'c2', kind, orderId: 'o49' } });
+    expect(changeStatusBadge(later('CANCEL'))).toEqual({ label: 'Скасовано доповненням', tone: 'cancel' });
+    expect(changeStatusBadge(later('REPLACE_TEACHER'))?.label).toBe('Передано іншому доповненням');
+    expect(changeStatusBadge(later('SWAP'))?.label).toBe('Змінено доповненням');
   });
 });

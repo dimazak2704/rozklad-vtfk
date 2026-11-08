@@ -189,7 +189,7 @@ export const handlers = [
 
   http.put(apiPath('/admin/orders/:id/notes'), async ({ params, request }) => {
     const body = await readJson<Partial<UpdateOrderNotesRequest>>(request);
-    return HttpResponse.json(toOrderDto(updateNotes(String(params.id), body.notes)));
+    return HttpResponse.json(toOrderDto(updateNotes(String(params.id), body.notes, body.version)));
   }),
 
   http.post(apiPath('/admin/orders/:id/publish'), ({ params }) =>

@@ -60,3 +60,44 @@ describe('«Заміни»: імпортоване паперове розпор
     expect(screen.queryByText(/опубліковано/)).not.toBeInTheDocument();
   });
 });
+
+describe('«Заміни»: розпорядження з доповненнями', () => {
+  it('називає доповнення, дає їхні PDF і позначає рядки з доповнень; заголовок — «на вівторок»', async () => {
+    const row = (pairLabel: string, orderNumber: number) => ({
+      pairLabel,
+      rowType: 'CANCELLATION',
+      from: { discipline: 'Прогр.', teacher: 'Непийвода' },
+      reasonText: 'Відп.',
+      to: { discipline: null, teacher: null },
+      room: null,
+      subgroupNote: null,
+      orderNumber,
+    });
+    server.use(
+      http.get(apiPath('/public/changes'), () =>
+        HttpResponse.json({
+          date: '2026-12-22',
+          parity: 'NUMERATOR',
+          weekdayLabel: 'Вівторок',
+          order: { id: 'order-43', number: 43, publishedAt: '2026-11-08T07:17:00Z', imported: false },
+          amendments: [
+            { id: 'order-45', number: 45, publishedAt: '2026-11-08T08:00:00Z', imported: false },
+            { id: 'order-49', number: 49, publishedAt: '2026-11-08T09:00:00Z', imported: false },
+          ],
+          groups: [{ group: { id: 'g-4ki3', code: '4КІ3', course: 4 }, items: [row('2', 43), row('3', 49)] }],
+        }),
+      ),
+    );
+
+    renderWithProviders(<ChangesPage />, { route: '/changes?date=2026-12-22' });
+
+    expect(await screen.findByRole('link', { name: /Доповнення №45/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /Заміни на вівторок, 22/ })).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'доповнення №45, №49')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Доповнення №45/ })).toHaveAttribute('href', expect.stringContaining('order-45.pdf'));
+    expect(screen.getByRole('link', { name: /Доповнення №49/ })).toHaveAttribute('href', expect.stringContaining('order-49.pdf'));
+    // рядок основного розпорядження без позначки, рядок доповнення — з нею (таблиця й картки)
+    expect(screen.getAllByText('Доповнення №49').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('Доповнення №43')).not.toBeInTheDocument();
+  });
+});

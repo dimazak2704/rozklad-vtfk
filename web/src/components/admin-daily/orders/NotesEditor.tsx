@@ -28,7 +28,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
     setErrors(local);
     if (Object.keys(local).length > 0) return;
     try {
-      await update.mutateAsync({ id: order.id, notes: notes.map((n) => n.trim()).filter(Boolean) });
+      await update.mutateAsync({ id: order.id, notes: notes.map((n) => n.trim()).filter(Boolean), version: order.version });
       notify.success('Примітки збережено');
     } catch (error) {
       if (isApiError(error)) {

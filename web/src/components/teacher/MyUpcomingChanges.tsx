@@ -1,13 +1,7 @@
 import { useMyChanges } from '@/api/me';
-import type { ChangeDto } from '@/api/types';
 import { Badge, Plate, Skeleton } from '@/components/ui';
 import { compareIsoDates, formatShortWeekdayDate, todayInKyiv } from '@/lib/date';
-import { changeDiscipline } from './change-text';
-
-const STATUS: Partial<Record<ChangeDto['status'], { label: string; tone: 'success' | 'accent' }>> = {
-  CONFIRMED: { label: 'Підтверджено', tone: 'success' },
-  APPLIED: { label: 'У розпорядженні', tone: 'accent' },
-};
+import { changeDiscipline, changeStatusBadge } from './change-text';
 
 /** Мої майбутні заміни: підтверджені й ті, що вже потрапили в опубліковане розпорядження. */
 export function MyUpcomingChanges() {
@@ -34,7 +28,7 @@ export function MyUpcomingChanges() {
       ) : (
         <ul className="flex flex-col divide-y divide-[var(--border-color-separator)]">
           {upcoming.map((change) => {
-            const status = STATUS[change.status];
+            const status = changeStatusBadge(change);
             return (
               <li key={change.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                 <span className="w-16 shrink-0 text-caption font-semibold text-secondary figures">

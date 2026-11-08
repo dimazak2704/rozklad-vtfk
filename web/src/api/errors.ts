@@ -158,9 +158,22 @@ export async function errorFromResponse(response: Response): Promise<ApiError> {
   });
 }
 
+const SHOWN_CONFLICTS = 3;
+
+/**
+ * Повідомлення разом з першими конфліктами розкладу (`conflicts[]` у 409): «Календар не змінено…»
+ * саме по собі не каже, яку пару й чому зачепило б.
+ */
+export function withConflicts(error: ApiError): string {
+  if (error.conflicts.length === 0) return error.message;
+  const shown = error.conflicts.slice(0, SHOWN_CONFLICTS).map((conflict) => conflict.message);
+  const more = error.conflicts.length - shown.length;
+  return [error.message, ...shown, more > 0 ? `І ще ${more}.` : ''].filter(Boolean).join(' ');
+}
+
 /** Текст для тосту/помилки з будь-якого винятку. */
 export function errorMessage(error: unknown): string {
-  if (isApiError(error)) return error.message;
+  if (isApiError(error)) return withConflicts(error);
   if (error instanceof Error && error.message) return error.message;
   return 'Щось пішло не так.';
 }

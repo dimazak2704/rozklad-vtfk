@@ -27,7 +27,7 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
-import { formatWeekdayDate, isWeekend, relativeDayLabel, shiftStudyDay } from '@/lib/date';
+import { formatWeekdayDate, formatWeekdayDateAfterDo, isWeekend, relativeDayLabel, shiftStudyDay } from '@/lib/date';
 
 /**
  * Панель диспетчера на робочу дату: маршрут ранку (відсутні → рішення → підтвердження → розпорядження),
@@ -104,7 +104,7 @@ export default function DashboardPage() {
             description="Пар немає, тож і замін теж. Підготуйте найближчий навчальний день: відсутності, повідомлені через бота, вже там."
             action={
               <Button variant="primary" onClick={() => setDate(nextStudyDay)}>
-                До {formatWeekdayDate(nextStudyDay).toLocaleLowerCase('uk')}
+                До {formatWeekdayDateAfterDo(nextStudyDay)}
               </Button>
             }
           />

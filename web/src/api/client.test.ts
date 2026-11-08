@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, buildUrl, onUnauthorized } from './client';
-import { ApiError } from './errors';
+import { ApiError, errorMessage } from './errors';
 
 vi.mock('@/auth/userManager', () => ({
   getAccessToken: vi.fn(() => Promise.resolve('token-123')),
@@ -126,5 +126,18 @@ describe('apiRequest', () => {
     await api.get('/me').catch(() => undefined);
     expect(handler).toHaveBeenCalledOnce();
     off();
+  });
+});
+
+describe('errorMessage', () => {
+  it('додає до 409 перші конфлікти розкладу, щоб було видно, що саме заважає', () => {
+    const conflict = (message: string) => ({ kind: 'GROUP' as const, severity: 'HARD' as const, message, lessonIds: [], pair: 3 });
+    const error = new ApiError({
+      status: 409,
+      detail: 'Календар не змінено.',
+      conflicts: [conflict('4КІ2 ОПЦЗ, 29.12: є заміна.'), conflict('А.'), conflict('Б.'), conflict('В.')],
+    });
+    expect(errorMessage(error)).toBe('Календар не змінено. 4КІ2 ОПЦЗ, 29.12: є заміна. А. Б. І ще 1.');
+    expect(errorMessage(new ApiError({ status: 409, detail: 'Конфлікт.' }))).toBe('Конфлікт.');
   });
 });

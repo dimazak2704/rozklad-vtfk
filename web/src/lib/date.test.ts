@@ -5,6 +5,8 @@ import {
   formatDateRange,
   formatDayMonth,
   formatWeekdayDate,
+  formatWeekdayDateAfterDo,
+  formatWeekdayDateAfterNa,
   isIsoDate,
   isoWeekday,
   kyivClock,
@@ -73,6 +75,13 @@ describe('форматування українською', () => {
   it('використовує родовий відмінок місяця', () => {
     expect(formatDayMonth('2026-10-19')).toBe('19\u00a0жовтня');
     expect(formatWeekdayDate('2026-10-23')).toBe('Пʼятниця, 23\u00a0жовтня');
+    // після прийменників — відмінок, а не «на середа», «до понеділок»
+    expect(formatWeekdayDateAfterNa('2026-12-23')).toBe('середу, 23\u00a0грудня');
+    expect(formatWeekdayDateAfterNa('2026-10-23')).toBe('пʼятницю, 23\u00a0жовтня');
+    expect(formatWeekdayDateAfterNa('2026-10-19')).toBe('понеділок, 19\u00a0жовтня');
+    expect(formatWeekdayDateAfterNa('2026-10-25')).toBe('неділю, 25\u00a0жовтня');
+    expect(formatWeekdayDateAfterDo('2026-10-26')).toBe('понеділка, 26\u00a0жовтня');
+    expect(formatWeekdayDateAfterDo('2026-12-23')).toBe('середи, 23\u00a0грудня');
   });
 
   it('стискає діапазон в одному місяці', () => {

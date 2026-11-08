@@ -267,7 +267,8 @@ export function useConfirmChange() {
 export function useUpdateOrderNotes() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, notes }: { id: Uuid; notes: string[] }) => api.put<OrderDto>(`/admin/orders/${id}/notes`, { notes }),
+    mutationFn: ({ id, notes, version }: { id: Uuid; notes: string[]; version: number }) =>
+      api.put<OrderDto>(`/admin/orders/${id}/notes`, { notes, version }),
     onSuccess: (order) => {
       queryClient.setQueryData(qk.admin.orders.draft(order.date), order);
       void queryClient.invalidateQueries({ queryKey: qk.admin.orders.all });

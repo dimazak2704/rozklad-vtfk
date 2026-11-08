@@ -34,7 +34,7 @@ import {
   formatInstant,
   formatInstantTime,
   formatShortWeekdayDate,
-  formatWeekdayDate,
+  formatWeekdayDateAfterNa,
   isIsoDate,
   nearestStudyDay,
   relativeDayLabel,
@@ -107,6 +107,7 @@ export default function ChangesPage() {
   const filtering = query.trim() !== '' || courses.length > 0 || mineOnly;
   const rowCount = filtered.reduce((sum, g) => sum + g.items.length, 0);
   const order = changes.data?.order;
+  const amendments = changes.data?.amendments ?? [];
   const past = compareIsoDates(date, today) < 0;
 
   const quickDay = (iso: IsoDate) => relativeDayLabel(iso, today) ?? formatShortWeekdayDate(iso);
@@ -176,7 +177,7 @@ export default function ChangesPage() {
       />
     );
   } else {
-    content = <ChangesList groups={filtered} date={date} myGroupIds={mine.groupIds} />;
+    content = <ChangesList groups={filtered} date={date} myGroupIds={mine.groupIds} mainOrderNumber={order?.number ?? null} />;
   }
 
   return (
@@ -185,7 +186,7 @@ export default function ChangesPage() {
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-col gap-1.5">
             <h1 className="text-headline font-semibold tracking-[-0.005em] text-primary">
-              Заміни <span className="text-secondary">на {formatWeekdayDate(date).toLocaleLowerCase('uk')}</span>
+              Заміни <span className="text-secondary">на {formatWeekdayDateAfterNa(date)}</span>
             </h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-ui text-secondary">
               {changes.data ? <ParityBadge parity={changes.data.parity} size="sm" /> : null}
@@ -204,23 +205,53 @@ export default function ChangesPage() {
               ) : changes.data ? (
                 <span>Розпорядження ще немає</span>
               ) : null}
+              {/* рядки доповнень надруковані в їхніх власних документах, не в основному розпорядженні */}
+              {amendments.length > 0 ? (
+                <span>
+                  доповнення{' '}
+                  {amendments.map((amendment, index) => (
+                    <span key={amendment.id} className="font-semibold text-primary figures">
+                      {index > 0 ? ', ' : ''}№{amendment.number}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
             </div>
           </div>
           {/* файли (PNG, PDF) робить система лише для власних розпоряджень; імпортоване паперове їх не має */}
-          {order && !order.imported ? (
+          {(order && !order.imported) || amendments.some((amendment) => !amendment.imported) ? (
             <div className="flex flex-wrap gap-2">
-              <Tooltip content={`Розпорядження №${order.number} як зображення`}>
-                <a href={orderDocumentUrl(order.id, 'png')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
-                  <FileImage aria-hidden="true" className="size-4" />
-                  PNG
-                </a>
-              </Tooltip>
-              <Tooltip content={`Розпорядження №${order.number} у PDF для друку`}>
-                <a href={orderDocumentUrl(order.id, 'pdf')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
-                  <FileText aria-hidden="true" className="size-4" />
-                  PDF
-                </a>
-              </Tooltip>
+              {order && !order.imported ? (
+                <>
+                  <Tooltip content={`Розпорядження №${order.number} як зображення`}>
+                    <a href={orderDocumentUrl(order.id, 'png')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
+                      <FileImage aria-hidden="true" className="size-4" />
+                      PNG
+                    </a>
+                  </Tooltip>
+                  <Tooltip content={`Розпорядження №${order.number} у PDF для друку`}>
+                    <a href={orderDocumentUrl(order.id, 'pdf')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
+                      <FileText aria-hidden="true" className="size-4" />
+                      PDF
+                    </a>
+                  </Tooltip>
+                </>
+              ) : null}
+              {amendments
+                .filter((amendment) => !amendment.imported)
+                .map((amendment) => (
+                  <Tooltip key={amendment.id} content={`Доповнення №${amendment.number} у PDF для друку`}>
+                    <a
+                      href={orderDocumentUrl(amendment.id, 'pdf')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={buttonClass({ variant: 'secondary' })}
+                    >
+                      <FileText aria-hidden="true" className="size-4" />
+                      Доповнення №{amendment.number}
+                    </a>
+                  </Tooltip>
+                ))}
             </div>
           ) : null}
         </div>
