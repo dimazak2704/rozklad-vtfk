@@ -135,7 +135,26 @@ export interface OrderDraft {
   notes: string[];
   signatoryPosition?: string | null;
   signatoryName?: string | null;
-  warnings: string[];
+  /** Лише мок: зауваження розпізнавання (у core-importer вони йдуть рядками звіту). */
+  warnings?: string[];
+  /** Рядки звірено з оригіналом і збережено (PUT …/draft); прочитані ШІ без звірки застосувати не можна. */
+  reviewed?: boolean | null;
+  source?: 'DOCX' | 'AI';
+}
+
+/** PUT /api/import/jobs/{id}/draft — звірені рядки розпорядження (`rowType: null` — визначити за текстом). */
+export interface OrderDraftEdit {
+  version: number;
+  number: number | null;
+  kind: OrderKind;
+  parentNumber: number | null;
+  date: string | null;
+  weekdayLabel: string | null;
+  parityLabel: string | null;
+  rows: Array<Omit<OrderDraftRow, 'rowType'> & { rowType: OrderRowType | null }>;
+  notes: string[];
+  signatoryPosition: string | null;
+  signatoryName: string | null;
 }
 
 export interface CurriculumDraftRow {
@@ -367,6 +386,18 @@ export function useSaveMappings(jobId: Uuid) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (mappings: ImportMapping[]) => api.put<ImportJob>(`/import/jobs/${jobId}/mappings`, { mappings }),
+    onSuccess: (job) => {
+      queryClient.setQueryData(qk.importer.job(job.id), job);
+      invalidateImport(queryClient);
+    },
+  });
+}
+
+/** Зберігає звірені (виправлені) рядки розпорядження; сервер перераховує звіт і повертає завдання. */
+export function useSaveOrderDraft(jobId: Uuid) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (edit: OrderDraftEdit) => api.put<ImportJob>(`/import/jobs/${jobId}/draft`, edit),
     onSuccess: (job) => {
       queryClient.setQueryData(qk.importer.job(job.id), job);
       invalidateImport(queryClient);

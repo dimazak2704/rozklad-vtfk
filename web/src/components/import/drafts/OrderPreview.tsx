@@ -17,9 +17,9 @@ export function OrderPreview({ draft }: { draft: OrderDraft }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {draft.warnings.length > 0 ? (
+      {(draft.warnings ?? []).length > 0 ? (
         <ul className="flex flex-col gap-1 rounded-control border border-change bg-change-subtle px-3 py-2 text-caption text-change" aria-label="Зауваження розпізнавання">
-          {draft.warnings.map((warning) => (
+          {(draft.warnings ?? []).map((warning) => (
             <li key={warning} className="flex items-start gap-1.5">
               <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
               {warning}

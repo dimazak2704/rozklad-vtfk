@@ -704,6 +704,8 @@ function toDto(job: StoredJob, list = false): ImportJob {
   if (job.ai) dto.ai = job.ai;
   if (job.error) dto.error = job.error;
   if (!list) {
+    // мок не моделює паралельних правок: версія завжди 0 (importer рахує її як @Version)
+    dto.version = 0;
     if (job.draft !== null && job.draft !== undefined) dto.draft = job.draft;
     if (job.options) dto.options = job.options;
     dto.mappings = job.mappings;
@@ -1184,6 +1186,16 @@ export const handlers = [
     const job = jobs.get(String(params.id));
     const body = await readJson<{ mappings?: unknown }>(request);
     const next = applyMappings(job, body.mappings);
+    return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
+  }),
+  // як OrderDraftController: звірені рядки розпорядження замінюють чернетку, завдання готове до застосування
+  http.put(apiPath('/import/jobs/:id/draft'), async ({ request, params }) => {
+    const job = jobs.get(String(params.id));
+    if (job.kind !== 'ORDER_DOCUMENT') throw businessRule('DRAFT_NOT_EDITABLE', 'Рядки можна редагувати лише в імпорті розпорядження.');
+    const body = await readJson<Record<string, unknown>>(request);
+    const { version: _version, ...draft } = body;
+    void _version;
+    const next: StoredJob = { ...job, draft: { ...(job.draft as object), ...draft, reviewed: true }, status: 'READY' };
     return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
   }),
   // як ImportJobService.requestApply: ідемпотентно для APPLIED/APPLYING, 409 під час розбору, 422 з кодами правил

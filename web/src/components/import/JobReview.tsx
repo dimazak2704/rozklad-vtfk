@@ -1,9 +1,10 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, PencilLine } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { typedDraft, useImportJob } from '@/api/import';
+import { type ImportJob, type OrderDraft, typedDraft, useImportJob } from '@/api/import';
 import type { Uuid } from '@/api/types';
 import {
+  Button,
   ErrorState,
   LoadingRegion,
   Skeleton,
@@ -19,6 +20,7 @@ import { formatInstant } from '@/lib/date';
 import { ApplyPanel } from './ApplyPanel';
 import { decisionRows } from './decisions';
 import { CurriculumPreview } from './drafts/CurriculumPreview';
+import { OrderDraftEditor } from './drafts/OrderDraftEditor';
 import { OrderPreview } from './drafts/OrderPreview';
 import { ProgramPreview } from './drafts/ProgramPreview';
 import { TimetablePreview } from './drafts/TimetablePreview';
@@ -29,6 +31,43 @@ import { ReportTable } from './ReportTable';
 import { FileIcon } from './UploadPanel';
 
 type Tab = 'decisions' | 'report' | 'draft';
+
+/**
+ * Чернетка розпорядження: перегляд у розкладці документа і звірка рядків. Прочитане ШІ треба звірити й
+ * зберегти, інакше сервер не дасть застосувати (NEEDS_REVIEW).
+ */
+function OrderReview({ job, draft }: { job: ImportJob; draft: OrderDraft }) {
+  const [editing, setEditing] = useState(false);
+  const editable = (job.status === 'NEEDS_REVIEW' || job.status === 'READY') && job.version !== undefined;
+  const mustReview = draft.source === 'AI' && !draft.reviewed;
+  if (editing && editable && job.version !== undefined) {
+    return <OrderDraftEditor jobId={job.id} version={job.version} draft={draft} onDone={() => setEditing(false)} />;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {editable ? (
+        <div
+          className={cn(
+            'flex flex-wrap items-center justify-between gap-3 rounded-panel border px-4 py-3',
+            mustReview ? 'border-change bg-change-subtle' : 'border-default bg-surface',
+          )}
+        >
+          <p className={cn('text-ui', mustReview ? 'text-change' : 'text-secondary')}>
+            {mustReview
+              ? 'Рядки прочитав ШІ з фото. Звірте їх з оригіналом, виправте помилки й збережіть — лише тоді розпорядження можна застосувати.'
+              : draft.reviewed
+                ? 'Рядки звірено вручну. За потреби їх можна виправити ще раз.'
+                : 'Рядки можна виправити перед застосуванням.'}
+          </p>
+          <Button size="sm" variant={mustReview ? 'primary' : 'secondary'} onClick={() => setEditing(true)} iconStart={<PencilLine aria-hidden="true" className="size-4" />}>
+            {mustReview ? 'Звірити рядки' : 'Виправити рядки'}
+          </Button>
+        </div>
+      ) : null}
+      <OrderPreview draft={draft} />
+    </div>
+  );
+}
 
 /** Перегляд завдання імпорту: підсумок, рішення щодо назв, звіт, чернетка й застосування. */
 export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
@@ -150,7 +189,7 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
               ) : draft.kind === 'TIMETABLE_XLSX' ? (
                 <TimetablePreview draft={draft.draft} />
               ) : draft.kind === 'ORDER_DOCUMENT' ? (
-                <OrderPreview draft={draft.draft} />
+                <OrderReview job={data} draft={draft.draft} />
               ) : draft.kind === 'DISCIPLINE_PROGRAM' ? (
                 <ProgramPreview draft={draft.draft} checks={data.report.filter((row) => row.type === 'HOURS')} />
               ) : (
