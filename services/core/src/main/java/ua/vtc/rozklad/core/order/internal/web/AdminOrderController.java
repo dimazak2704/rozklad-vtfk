@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
+import ua.vtc.rozklad.core.order.internal.importing.HistoricOrderImport;
 import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
 import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService.OrderNumberingDto;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
@@ -39,13 +40,15 @@ class AdminOrderController {
     private final OrderDrafts drafts;
     private final OrderPublication publication;
     private final OrderNumberingService numbering;
+    private final HistoricOrderImport historicOrders;
 
     AdminOrderController(OrderQueries queries, OrderDrafts drafts, OrderPublication publication,
-                         OrderNumberingService numbering) {
+                         OrderNumberingService numbering, HistoricOrderImport historicOrders) {
         this.queries = queries;
         this.drafts = drafts;
         this.publication = publication;
         this.numbering = numbering;
+        this.historicOrders = historicOrders;
     }
 
     @GetMapping
@@ -82,11 +85,16 @@ class AdminOrderController {
         return queries.get(id);
     }
 
-    /** Discards a draft (204); a published order is 422 {@code ORDER_ALREADY_PUBLISHED}. */
+    /**
+     * Discards a draft or deletes an imported paper order (204); an order the system published is 422
+     * {@code ORDER_ALREADY_PUBLISHED}, an imported order with amendments 409.
+     */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void discard(@PathVariable UUID id) {
-        drafts.discard(id);
+        if (!historicOrders.deleteIfImported(id)) {
+            drafts.discard(id);
+        }
     }
 
     /** Notes of a draft; {@code version} of the draft the dispatcher edited (stale → 409 {@code stale-data}). */

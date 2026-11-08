@@ -35,6 +35,9 @@ public interface OrderDocumentRepository extends JpaRepository<OrderDocument, UU
     @Query("select o.semesterId from OrderDocument o where o.id = :id")
     Optional<UUID> findSemesterIdById(UUID id);
 
+    /** Amendments of an order by number. */
+    List<OrderDocument> findAllByParentIdOrderByNumberAsc(UUID parentId);
+
     /** Number of rows (both sections) per order. */
     @Query("""
             select new ua.vtc.rozklad.core.order.OrderItemCount(i.order.id, count(i))

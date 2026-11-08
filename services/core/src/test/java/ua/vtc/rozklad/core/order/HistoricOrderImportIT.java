@@ -175,11 +175,44 @@ class HistoricOrderImportIT {
         importOrder(ORDER_35).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(true));
 
         String publishedId = jdbc.queryForObject("SELECT id::text FROM order_document", String.class);
+        // розпорядження, яке опублікувала сама система (а не імпортоване), не видаляється
+        jdbc.update("UPDATE order_document SET imported = false");
         mvc.perform(delete("/api/admin/orders/{id}", publishedId).with(TestJwts.admin()))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("ORDER_ALREADY_PUBLISHED"));
         mvc.perform(delete("/api/admin/orders/{id}", draftId).with(TestJwts.admin()))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * The number was misread (85 instead of 35): the imported order is deleted (its amendment first)
+     * and imported again; the misread number no longer drives the official numbering.
+     */
+    @Test
+    void misreadImportIsDeletedAndImportedAgain() throws Exception {
+        int nextBefore = numbering.nextNumber(semester.getId());
+        String misread = ORDER_35.replace("\"number\":35", "\"number\":85");
+        importOrder(misread).andExpect(status().isOk());
+        importOrder(misread.replace("\"number\":85,\"kind\":\"ORDER\"",
+                "\"number\":86,\"kind\":\"AMENDMENT\",\"parentNumber\":85")).andExpect(status().isOk());
+        assertThat(numbering.nextNumber(semester.getId())).isEqualTo(87);
+        String orderId = jdbc.queryForObject("SELECT id::text FROM order_document WHERE number = 85", String.class);
+        String amendmentId = jdbc.queryForObject("SELECT id::text FROM order_document WHERE number = 86", String.class);
+
+        mvc.perform(delete("/api/admin/orders/{id}", orderId).with(TestJwts.admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("До розпорядження №85 є доповнення №86: спершу видаліть їх."));
+        mvc.perform(delete("/api/admin/orders/{id}", amendmentId).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/admin/orders/{id}", orderId).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+
+        assertThat(numbering.nextNumber(semester.getId())).isEqualTo(nextBefore);
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+                .andExpect(jsonPath("$.order").doesNotExist());
+        importOrder(ORDER_35).andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(true))
+                .andExpect(jsonPath("$.number").value(35));
     }
 
     @Test

@@ -7,6 +7,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.OrderKind;
@@ -33,7 +35,8 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * again (same number, date and rows) answers with the stored one; the same number with other rows
  * is a 409 — unless the request says {@code replace} and the stored order was imported too: then the
  * corrected rows, notes, labels and signature replace the earlier import (a misreading fixed by the
- * admin). An order the system published itself is never replaced.
+ * admin). An order the system published itself is never replaced. An imported order can also be
+ * deleted (a misread number or date), see {@link #deleteIfImported}.
  */
 @Service
 @Transactional
@@ -91,6 +94,33 @@ public class HistoricOrderImport {
         order.markPublished(request.number(), clock.instant(), actor);
         orders.saveAndFlush(order);
         return result(order, true, false);
+    }
+
+    /**
+     * Deletes an order imported as text (a misread number or date is fixed by deleting it and
+     * importing the paper order again): nothing but its text depends on it, no change, lesson or
+     * file. Its number stops counting in the semester numbering. Amendments go first (409).
+     *
+     * @return {@code false} when the order does not exist or was not imported (drafts, orders the
+     *         system published), so the caller handles it
+     */
+    public boolean deleteIfImported(UUID orderId) {
+        Optional<OrderDocument> found = orders.findById(orderId).filter(OrderDocument::isImported);
+        if (found.isEmpty()) {
+            return false;
+        }
+        OrderDocument order = found.get();
+        orders.lockNumbering(order.getSemesterId());
+        orders.lockDate(order.getSemesterId(), order.getDate());
+        List<OrderDocument> amendments = orders.findAllByParentIdOrderByNumberAsc(order.getId());
+        if (!amendments.isEmpty()) {
+            throw new ConflictException("До розпорядження №%d є доповнення %s: спершу видаліть їх.".formatted(
+                    order.getNumber(), amendments.stream().map(amendment -> "№" + amendment.getNumber())
+                            .collect(Collectors.joining(", "))));
+        }
+        orders.delete(order);
+        orders.flush();
+        return true;
     }
 
     /** Printed labels, signature, notes and rows of the request. */
