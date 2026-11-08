@@ -124,6 +124,7 @@ describe('«Заміни» на дату без занять', () => {
     expect(screen.getByText(/Дата поза семестром — канікули/)).toBeInTheDocument();
     expect(screen.queryByText(/звичайний розклад/)).not.toBeInTheDocument();
     expect(screen.queryByText('Розпорядження ще не опубліковано')).not.toBeInTheDocument();
+    expect(screen.queryByText('Розпорядження ще немає')).not.toBeInTheDocument();
   });
 
   it('свято в семестрі — теж без занять', async () => {

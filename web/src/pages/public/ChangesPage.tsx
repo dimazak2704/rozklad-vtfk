@@ -50,6 +50,8 @@ const ROW_FORMS = ['зміна', 'зміни', 'змін'] as const;
 /** Знахідний після «Показано» і родовий після «з»: «Показано 1 зміну з 2 змін». */
 const ROW_FORMS_ACC = ['зміну', 'зміни', 'змін'] as const;
 const ROW_FORMS_GEN = ['зміни', 'змін', 'змін'] as const;
+/** Порожній стан у рамці: EmptyState ліворуч не має власних полів. */
+const EMPTY_BOX = 'rounded-panel border border-default bg-surface px-5';
 
 function ChangesSkeleton() {
   return (
@@ -121,7 +123,7 @@ export default function ChangesPage() {
     // без мережі запит дати стоїть на паузі (offlineFirst чекає мережу): пояснюємо, а не крутимо силуети
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
+        className={EMPTY_BOX}
         icon={<WifiOff aria-hidden="true" className="size-5" />}
         title="Заміни на цю дату не збережено на пристрої"
         description="Без інтернету відкриваються лише ті дні, які ви вже переглядали. Підключіться до мережі — заміни завантажаться самі."
@@ -150,7 +152,7 @@ export default function ChangesPage() {
     // свято, канікули чи день поза семестром: «діє звичайний розклад» тут неправда
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
+        className={EMPTY_BOX}
         title={past ? 'Цього дня занять не було' : 'Цього дня занять немає'}
         description={
           changes.data.parity === null
@@ -169,7 +171,7 @@ export default function ChangesPage() {
   } else if (groups.length === 0) {
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
+        className={EMPTY_BOX}
         title={order ? 'Змін для груп немає' : past ? 'Змін не було' : 'Розпорядження ще не опубліковано'}
         description={
           order
@@ -190,7 +192,7 @@ export default function ChangesPage() {
   } else if (filtered.length === 0) {
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
+        className={EMPTY_BOX}
         title="За цим фільтром змін немає"
         description={`Загалом зміни мають ${countLabel(groups.length, GROUP_FORMS_ACC)}. Перевірте код групи або скиньте фільтри.`}
         action={
@@ -226,7 +228,7 @@ export default function ChangesPage() {
                     </>
                   ) : null}
                 </span>
-              ) : changes.data ? (
+              ) : changes.data?.studyDay ? (
                 <span>Розпорядження ще немає</span>
               ) : null}
               {/* рядки доповнень надруковані в їхніх власних документах, не в основному розпорядженні */}
