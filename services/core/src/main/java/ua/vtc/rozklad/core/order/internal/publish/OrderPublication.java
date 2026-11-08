@@ -96,6 +96,9 @@ public class OrderPublication {
         if (!order.isDraft()) {
             throw new BusinessRuleException("ORDER_ALREADY_PUBLISHED", "Розпорядження вже опубліковане.");
         }
+        // рішення цієї дати (скасування, відповіді викладачів) чекають на публікацію, а не перехрещують
+        // з нею замки рядків занять і змін
+        changes.lockDecisionsOf(order.getDate());
         List<Change> confirmed = changes.findAllByDateAndStatusIn(order.getDate(), Set.of(ChangeStatus.CONFIRMED));
         if (!OrderDrafts.sameRows(order, OrderRowComposer.compose(rows.of(confirmed)))) {
             throw new ConflictException(STALE_DRAFT);

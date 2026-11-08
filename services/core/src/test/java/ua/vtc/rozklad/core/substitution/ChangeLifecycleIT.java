@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -17,7 +19,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.hibernate.StaleStateException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
@@ -462,6 +466,46 @@ class ChangeLifecycleIT {
                 new UpdateChangeRequest(null, ReasonCode.MUTUAL, null, created.version()), "admin");
         assertThat(edited.printedReason()).isEqualTo("Зв.зам.");
         assertThat(edited.version()).isGreaterThan(created.version());
+    }
+
+    /**
+     * The teacher's confirm and decline, the dispatcher's cancel and edit of one change at the same
+     * moment: they queue up on the date lock, one wins and every loser fails with a conflict or a
+     * stale version (both 409), never a deadlock or an untranslated error (500).
+     */
+    @Test
+    void concurrentDecisionsOnOneChangeQueueUpAndLosersGetAConflict() throws Exception {
+        LocalDate day = LocalDate.now(clock).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Lesson future = fixture.lesson(semester, day, 3, group, 0, stp, krentsin, room);
+        for (int round = 0; round < 3; round++) {
+            ChangeDto created = commands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, day, 3, null,
+                    group.getId(), null, future.getId(), null, nepyivoda.getId(), null, null, ReasonCode.ABSENT, null,
+                    null), "admin");
+
+            List<Object> results = Parallel.run(
+                    () -> replies.replyAsUser(created.id(), user(nepyivoda), ConfirmationDecision.CONFIRM, null),
+                    () -> replies.replyAsUser(created.id(), user(nepyivoda), ConfirmationDecision.DECLINE, null),
+                    () -> {
+                        commands.cancel(created.id(), "admin");
+                        return "cancelled";
+                    },
+                    () -> commands.update(created.id(), new UpdateChangeRequest(null, ReasonCode.MUTUAL, null,
+                            created.version()), "admin"));
+
+            assertThat(results).as("round %d", round).allSatisfy(result -> {
+                if (result instanceof RuntimeException failure) {
+                    assertThat(failure).isInstanceOfAny(ConflictException.class,
+                            OptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class,
+                            StaleStateException.class);
+                }
+            });
+            assertThat(results).as("round %d: one decision wins", round)
+                    .filteredOn(result -> !(result instanceof RuntimeException)).isNotEmpty();
+            Change after = changes.findById(created.id()).orElseThrow();
+            if (after.isOpen()) {
+                commands.cancel(created.id(), "admin");
+            }
+        }
     }
 
     @Test

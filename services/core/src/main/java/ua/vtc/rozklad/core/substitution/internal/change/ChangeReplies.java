@@ -65,6 +65,9 @@ public class ChangeReplies {
     private ChangeDto reply(UUID changeId, UUID teacherId, ConfirmationDecision decision, String comment,
                             String actor) {
         Change change = changes.findById(changeId).orElseThrow(() -> NotFoundException.of("Зміну", changeId));
+        // той самий порядок замків, що й у диспетчера (дата, потім рядок зміни): паралельні відповіді
+        // та скасування стають у чергу, а програвша сторона отримує 409 на перевірці версії
+        changes.lockDecisionsOf(change.getDate());
         if (!teacherId.equals(change.getNewTeacherId())) {
             throw new AccessDeniedException("Заміна призначена іншому викладачу");
         }

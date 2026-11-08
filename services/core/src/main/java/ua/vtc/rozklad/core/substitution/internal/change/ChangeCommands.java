@@ -39,7 +39,10 @@ import ua.vtc.rozklad.core.timetable.LessonRepository;
  * date are serialized with {@code changeRepository.lockDecisionsOf} (a teacher or a room is shared
  * by all groups of the date), then the group-day lessons are locked with
  * {@code lessonRepository.lockGroupDay}; concurrent edits of one change are caught by optimistic
- * locking ({@code version} is required in PUT).
+ * locking ({@code version} is required in PUT). Every transition of an existing change takes the
+ * date lock before it touches the change row: the cabinet, the bot and the dispatcher then queue
+ * up in one order instead of deadlocking, and the loser's stale change fails the version check
+ * (409 stale-data).
  */
 @Service
 @Transactional
@@ -140,6 +143,7 @@ public class ChangeCommands {
     /** DELETE: cancels the change; cancelling a cancelled change is a no-op. */
     public void cancel(UUID id, String actor) {
         Change change = find(id);
+        changes.lockDecisionsOf(change.getDate());
         if (change.getStatus() == ChangeStatus.CANCELLED) {
             return;
         }
@@ -158,8 +162,8 @@ public class ChangeCommands {
      */
     public ChangeDto requestConfirmation(UUID id, String actor) {
         Change change = find(id);
+        changes.lockDecisionsOf(change.getDate());
         if (change.getStatus() == ChangeStatus.DRAFT || change.getStatus() == ChangeStatus.DECLINED) {
-            changes.lockDecisionsOf(change.getDate());
             lessons.lockGroupDay(change.getGroupId(), change.getDate());
             ChangeEffect effect = planner.plan(change);
             requireNoCompetingDecision(change, effect);
@@ -174,6 +178,7 @@ public class ChangeCommands {
     /** The dispatcher confirms instead of the teacher (e.g. after a phone call). */
     public ChangeDto confirm(UUID id, String actor) {
         Change change = find(id);
+        changes.lockDecisionsOf(change.getDate());
         if (change.getStatus() == ChangeStatus.DECLINED) {
             throw new BusinessRuleException("CHANGE_DECLINED",
                     "Викладач відмовився від цієї заміни. Надішліть запит ще раз або оберіть іншого викладача.");
@@ -189,6 +194,7 @@ public class ChangeCommands {
                 .filter(change -> change.isOpen() || change.getStatus() == ChangeStatus.DECLINED)
                 .filter(which)
                 .forEach(change -> {
+                    changes.lockDecisionsOf(change.getDate());
                     workflow.moveTo(change, ChangeStatus.CANCELLED, actor, comment);
                     finish(change);
                 });
