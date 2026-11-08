@@ -6,6 +6,7 @@ import { useCurrentUser } from '@/auth/useCurrentUser';
 import { AdminSidebar } from '@/components/shell/AdminSidebar';
 import { AdminTopBar } from '@/components/shell/AdminTopBar';
 import { SkipLink } from '@/components/shell/SkipLink';
+import { useReturnFocus } from '@/components/ui/returnFocus';
 import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebar';
 
@@ -22,6 +23,7 @@ export function AdminLayout() {
   const { status, isDevBypass } = useCurrentUser();
   // у фіктивного dev-користувача немає токена: потік подій тоді дає лише мок-API
   const live = useLiveConnection(status === 'authenticated' && (!isDevBypass || MOCK_API));
+  const returnFocus = useReturnFocus();
 
   return (
     <div className="min-h-dvh bg-canvas [--sticky-top:3.5rem]">
@@ -40,6 +42,7 @@ export function AdminLayout() {
           <RadixDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim lg:hidden" />
           <RadixDialog.Content
             aria-describedby={undefined}
+            {...returnFocus}
             className="anim-sheet-left fixed inset-y-0 start-0 z-50 w-72 max-w-[85vw] bg-surface shadow-dialog focus-visible:outline-none lg:hidden"
           >
             <RadixDialog.Title className="sr-only">Розділи панелі диспетчера</RadixDialog.Title>

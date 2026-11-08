@@ -38,7 +38,8 @@ type Tab = 'decisions' | 'report' | 'draft';
  */
 function OrderReview({ job, draft }: { job: ImportJob; draft: OrderDraft }) {
   const [editing, setEditing] = useState(false);
-  const editable = (job.status === 'NEEDS_REVIEW' || job.status === 'READY') && job.version !== undefined;
+  // FAILED з чернеткою — core відхилив застосування: розпорядження виправляють і застосовують ще раз
+  const editable = (job.status === 'NEEDS_REVIEW' || job.status === 'READY' || job.status === 'FAILED') && job.version !== undefined;
   const mustReview = draft.source === 'AI' && !draft.reviewed;
   if (editing && editable && job.version !== undefined) {
     return <OrderDraftEditor jobId={job.id} version={job.version} draft={draft} onDone={() => setEditing(false)} />;
@@ -55,7 +56,9 @@ function OrderReview({ job, draft }: { job: ImportJob; draft: OrderDraft }) {
           <p className={cn('text-ui', mustReview ? 'text-change' : 'text-secondary')}>
             {mustReview
               ? 'Рядки прочитав ШІ з фото. Звірте їх з оригіналом, виправте помилки й збережіть — лише тоді розпорядження можна застосувати.'
-              : draft.reviewed
+              : job.status === 'FAILED'
+                ? 'Розпорядження не застосовано. Виправте номер, дату чи рядки за повідомленням вище й застосуйте ще раз.'
+                : draft.reviewed
                 ? 'Рядки звірено вручну. За потреби їх можна виправити ще раз.'
                 : 'Рядки можна виправити перед застосуванням.'}
           </p>

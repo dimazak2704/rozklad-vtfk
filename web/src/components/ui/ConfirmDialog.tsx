@@ -1,5 +1,6 @@
 import { TriangleExclamationPoint } from 'lucide-react';
 import { AlertDialog } from 'radix-ui';
+import { useReturnFocus } from './returnFocus';
 import { useState, type ReactNode } from 'react';
 import { errorMessage } from '@/api/errors';
 import { cn } from '@/lib/cn';
@@ -38,6 +39,8 @@ export function ConfirmDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const returnFocus = useReturnFocus();
+
   const handleConfirm = async () => {
     setPending(true);
     setError(null);
@@ -68,6 +71,7 @@ export function ConfirmDialog({
               'anim-dialog pointer-events-auto w-full max-w-md rounded-dialog border border-default bg-raised p-5 text-primary shadow-dialog',
               'focus-visible:outline-none',
             )}
+            {...returnFocus}
           >
             <div className="flex gap-3">
               {tone === 'danger' ? (

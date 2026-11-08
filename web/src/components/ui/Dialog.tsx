@@ -3,6 +3,7 @@ import { Dialog as RadixDialog } from 'radix-ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
+import { useReturnFocus } from './returnFocus';
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
@@ -28,7 +29,8 @@ export interface DialogContentProps extends Omit<ComponentProps<typeof RadixDial
 
 /**
  * Модальне вікно. Використовуйте лише коли дія потребує повної уваги (підтвердження, форма, що
- * не вміщається поруч). Фокус утримується всередині, Esc закриває, фон блокується.
+ * не вміщається поруч). Фокус утримується всередині, Esc закриває, фон блокується; після закриття
+ * фокус повертається на елемент, з якого вікно відкрили (див. `useReturnFocus`).
  */
 export function DialogContent({
   title,
@@ -38,8 +40,11 @@ export function DialogContent({
   hideClose = false,
   className,
   children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
+  const returnFocus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim" />
@@ -53,6 +58,7 @@ export function DialogContent({
           )}
           {...(description ? {} : { 'aria-describedby': undefined })}
           {...props}
+          {...returnFocus}
         >
           <div className="flex items-start gap-3 px-5 pt-5 pb-4">
             <div className="flex min-w-0 flex-1 flex-col gap-1">

@@ -740,7 +740,7 @@ function targetLabel(type: MappingType, id: Uuid): string | null {
 }
 
 function applyMappings(job: StoredJob, mappings: unknown): StoredJob {
-  if (job.status !== 'NEEDS_REVIEW' && job.status !== 'READY') {
+  if (job.status !== 'NEEDS_REVIEW' && job.status !== 'READY' && !(job.status === 'FAILED' && job.draft != null)) {
     throw conflict(`Рішення можна змінювати лише до застосування (зараз: ${job.status}).`);
   }
   if (!Array.isArray(mappings)) throw badRequest('Очікується список рішень.', [{ field: 'mappings', message: 'Очікується масив.' }]);
@@ -1193,9 +1193,18 @@ export const handlers = [
     const job = jobs.get(String(params.id));
     if (job.kind !== 'ORDER_DOCUMENT') throw businessRule('DRAFT_NOT_EDITABLE', 'Рядки можна редагувати лише в імпорті розпорядження.');
     const body = await readJson<Record<string, unknown>>(request);
+    if (job.status !== 'NEEDS_REVIEW' && job.status !== 'READY' && !(job.status === 'FAILED' && job.draft != null)) {
+      throw conflict(`Чернетку можна змінювати, лише коли завдання очікує перевірки; зараз — ${job.status}.`);
+    }
     const { version: _version, ...draft } = body;
     void _version;
-    const next: StoredJob = { ...job, draft: { ...(job.draft as object), ...draft, reviewed: true }, status: 'READY' };
+    // як OrderImportHandler.checkHeader: без номера, дати чи номера батьківського розпорядження — на перевірку
+    const headerComplete = draft.number != null && draft.date != null && (draft.kind !== 'AMENDMENT' || draft.parentNumber != null);
+    const next: StoredJob = {
+      ...job,
+      draft: { ...(job.draft as object), ...draft, reviewed: true },
+      status: headerComplete ? 'READY' : 'NEEDS_REVIEW',
+    };
     return HttpResponse.json(toDto(jobs.update(job.id, () => next)));
   }),
   // як ImportJobService.requestApply: ідемпотентно для APPLIED/APPLYING, 409 під час розбору, 422 з кодами правил

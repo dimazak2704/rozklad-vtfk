@@ -2,8 +2,8 @@ import { Plus, Save, Trash2, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 import { type OrderDraft, type OrderDraftRow, useSaveOrderDraft } from '@/api/import';
 import { isApiError } from '@/api/errors';
-import type { OrderRowType, Uuid } from '@/api/types';
-import { Button, IconButton, Input, Select, Textarea, notify } from '@/components/ui';
+import type { OrderKind, OrderRowType, Uuid } from '@/api/types';
+import { Button, Field, IconButton, Input, Select, Textarea, notify } from '@/components/ui';
 
 /** Типи рядків розпорядження (DOMAIN §8); «за текстом» — сервер визначить тип сам. */
 const ROW_TYPES: ReadonlyArray<{ value: OrderRowType | 'AUTO'; label: string }> = [
@@ -38,9 +38,18 @@ interface EditableRow extends OrderDraftRow {
 
 const blank = (text: string | null | undefined) => (text && text.trim() !== '' ? text.trim() : null);
 
+const KINDS: ReadonlyArray<{ value: OrderKind; label: string }> = [
+  { value: 'ORDER', label: 'Розпорядження' },
+  { value: 'AMENDMENT', label: 'Доповнення' },
+];
+
+/** Номер із поля: порожньо — не розпізнано (сервер не дасть застосувати), інакше ціле число. */
+const parseNumber = (text: string): number | null => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null);
+
 /**
- * Звірка розпорядження, прочитаного ШІ з фото: кожен рядок можна виправити, додати чи видалити, а потім
- * зберегти. Лише звірені рядки можна застосувати (сервер тримає імпорт у NEEDS_REVIEW до збереження).
+ * Звірка розпорядження, прочитаного ШІ з фото: заголовок (вид, номер, дата) і кожен рядок можна виправити,
+ * рядок — додати чи видалити, а потім зберегти. Лише звірене розпорядження з номером і датою можна застосувати
+ * (сервер тримає імпорт у NEEDS_REVIEW, доки бракує заголовка або рядки не збережено).
  */
 export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uuid; version: number; draft: OrderDraft; onDone: () => void }) {
   const save = useSaveOrderDraft(jobId);
@@ -49,6 +58,11 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
     draft.rows.map((row, index) => ({ ...row, key: index, chosenType: row.rowType })),
   );
   const [notes, setNotes] = useState(draft.notes.join('\n'));
+  // заголовок теж читає ШІ: без номера й дати core розпорядження не прийме
+  const [number, setNumber] = useState(draft.number != null ? String(draft.number) : '');
+  const [date, setDate] = useState(draft.date ?? '');
+  const [kind, setKind] = useState<OrderKind>(draft.kind);
+  const [parentNumber, setParentNumber] = useState(draft.parentNumber != null ? String(draft.parentNumber) : '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const update = (key: number, patch: Partial<EditableRow>) =>
@@ -67,10 +81,10 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
     try {
       await save.mutateAsync({
         version,
-        number: draft.number ?? null,
-        kind: draft.kind,
-        parentNumber: draft.parentNumber ?? null,
-        date: draft.date ?? null,
+        number: parseNumber(number),
+        kind,
+        parentNumber: kind === 'AMENDMENT' ? parseNumber(parentNumber) : null,
+        date: date === '' ? null : date,
         weekdayLabel: draft.weekdayLabel ?? null,
         parityLabel: draft.parityLabel ?? null,
         rows: rows.map((row) => ({
@@ -103,6 +117,23 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
         Порівняйте кожен рядок з фото: виправте групу, пару, прізвища й аудиторії, видаліть зайве. Тип «За текстом» сервер
         визначить за правилами розпорядження («Вичит.» без заміни — вичитано, діапазон пар — блок).
       </p>
+      <fieldset className="grid gap-3 sm:grid-cols-4">
+        <legend className="mb-2 text-ui font-semibold text-primary">Заголовок розпорядження</legend>
+        <Field label="Вид" error={errors.kind}>
+          <Select<OrderKind> value={kind} onValueChange={setKind} options={KINDS} />
+        </Field>
+        <Field label="Номер" required error={errors.number}>
+          <Input inputMode="numeric" value={number} onChange={(event) => setNumber(event.target.value)} />
+        </Field>
+        <Field label="Дата" required error={errors.date}>
+          <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        {kind === 'AMENDMENT' ? (
+          <Field label="Доповнює розпорядження №" required error={errors.parentNumber}>
+            <Input inputMode="numeric" value={parentNumber} onChange={(event) => setParentNumber(event.target.value)} />
+          </Field>
+        ) : null}
+      </fieldset>
       <div className="overflow-x-auto rounded-plate border border-default">
         <table className="w-full min-w-[64rem] border-collapse text-caption">
           <caption className="sr-only">Рядки розпорядження для звірки</caption>

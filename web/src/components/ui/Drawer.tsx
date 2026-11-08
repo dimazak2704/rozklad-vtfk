@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { Drawer as Vaul } from 'vaul';
 import { cn } from '@/lib/cn';
+import { useReturnFocus } from './returnFocus';
 
 export const Drawer = Vaul.Root;
 export const DrawerTrigger = Vaul.Trigger;
@@ -20,7 +21,19 @@ export interface DrawerContentProps extends Omit<ComponentProps<typeof Vaul.Cont
  * Шторка: на телефоні — знизу з «ручкою» і свайпом, на десктопі — збоку для деталей.
  * `<Drawer direction="right"><DrawerContent side="right" title="…">…</DrawerContent></Drawer>`
  */
-export function DrawerContent({ title, description, footer, side = 'bottom', titleClassName, className, children, ...props }: DrawerContentProps) {
+export function DrawerContent({
+  title,
+  description,
+  footer,
+  side = 'bottom',
+  titleClassName,
+  className,
+  children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
+  ...props
+}: DrawerContentProps) {
+  const returnFocus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
   return (
     <Vaul.Portal>
       <Vaul.Overlay className="fixed inset-0 z-50 bg-scrim" />
@@ -33,6 +46,7 @@ export function DrawerContent({ title, description, footer, side = 'bottom', tit
           className,
         )}
         {...props}
+        {...returnFocus}
       >
         {side === 'bottom' ? (
           <div aria-hidden="true" className="mx-auto mt-2 h-1 w-8 shrink-0 rounded-full bg-[var(--border-color-control)]" />

@@ -1,5 +1,6 @@
 import { Ban, TriangleExclamationPoint } from 'lucide-react';
 import { AlertDialog } from 'radix-ui';
+import { useReturnFocus } from '../ui/returnFocus';
 import { useState } from 'react';
 import { errorMessage, isApiError } from '@/api/errors';
 import { Button, notify } from '@/components/ui';
@@ -36,6 +37,7 @@ type Phase = { kind: 'confirm' } | { kind: 'blocked'; reason: string } | { kind:
 export function DeleteDialog({ target, onClose, title, description, onDelete, successMessage, deactivate }: DeleteDialogProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'confirm' });
   const [pending, setPending] = useState(false);
+  const returnFocus = useReturnFocus();
 
   const close = () => {
     if (pending) return;
@@ -71,7 +73,10 @@ export function DeleteDialog({ target, onClose, title, description, onDelete, su
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim" />
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-3">
-          <AlertDialog.Content className="anim-dialog pointer-events-auto w-full max-w-md rounded-dialog border border-default bg-raised p-5 text-primary shadow-dialog focus-visible:outline-none">
+          <AlertDialog.Content
+            className="anim-dialog pointer-events-auto w-full max-w-md rounded-dialog border border-default bg-raised p-5 text-primary shadow-dialog focus-visible:outline-none"
+            {...returnFocus}
+          >
             <div className="flex gap-3">
               {blocked ? (
                 <Ban aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-change" />

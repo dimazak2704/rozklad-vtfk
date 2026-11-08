@@ -1,5 +1,6 @@
 import { Command } from 'cmdk';
 import { CornerDownLeft, DoorOpen, History, Monitor, Moon, Search, Sun, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { Dialog as RadixDialog } from 'radix-ui';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { usePublicSearch } from '@/api/meta';
@@ -14,6 +15,7 @@ import { useFavoritesStore } from '@/stores/favorites';
 import { useThemeStore } from '@/stores/theme';
 import { KbdCombo } from '../ui/Kbd';
 import { Plate } from '../ui/Plate';
+import { useReturnFocus } from '../ui/returnFocus';
 import { Spinner } from '../ui/Spinner';
 
 const ENTITY_ICON: Record<EntityType, LucideIcon> = { GROUP: Users, TEACHER: UserRound, ROOM: DoorOpen };
@@ -60,22 +62,29 @@ export function CommandPalette() {
   const open = useCommandStore((state) => state.open);
   const initialQuery = useCommandStore((state) => state.initialQuery);
   const setOpen = useCommandStore((state) => state.setOpen);
+  // власне вікно Radix замість Command.Dialog: тому не передати обробники фокуса, а без них
+  // після Esc фокус падав на <body>
+  const returnFocus = useReturnFocus();
 
   return (
-    <Command.Dialog
-      open={open}
-      onOpenChange={(next) => setOpen(next)}
-      label="Пошук і команди"
-      shouldFilter={false}
-      loop
-      overlayClassName="anim-overlay fixed inset-0 z-50 bg-scrim"
-      contentClassName={cn(
-        'anim-dialog fixed inset-x-2 top-2 z-50 mx-auto flex max-h-[calc(100dvh-1rem)] max-w-xl flex-col overflow-hidden',
-        'rounded-dialog border border-default bg-raised text-primary shadow-dialog sm:top-[12vh] sm:max-h-[70vh]',
-      )}
-    >
-      {open ? <PaletteBody key={initialQuery} initialQuery={initialQuery} onClose={() => setOpen(false)} /> : null}
-    </Command.Dialog>
+    <RadixDialog.Root open={open} onOpenChange={(next) => setOpen(next)}>
+      <RadixDialog.Portal>
+        <RadixDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim" />
+        <RadixDialog.Content
+          aria-describedby={undefined}
+          className={cn(
+            'anim-dialog fixed inset-x-2 top-2 z-50 mx-auto flex max-h-[calc(100dvh-1rem)] max-w-xl flex-col overflow-hidden',
+            'rounded-dialog border border-default bg-raised text-primary shadow-dialog sm:top-[12vh] sm:max-h-[70vh]',
+          )}
+          {...returnFocus}
+        >
+          <RadixDialog.Title className="sr-only">Пошук і команди</RadixDialog.Title>
+          <Command label="Пошук і команди" shouldFilter={false} loop>
+            {open ? <PaletteBody key={initialQuery} initialQuery={initialQuery} onClose={() => setOpen(false)} /> : null}
+          </Command>
+        </RadixDialog.Content>
+      </RadixDialog.Portal>
+    </RadixDialog.Root>
   );
 }
 
