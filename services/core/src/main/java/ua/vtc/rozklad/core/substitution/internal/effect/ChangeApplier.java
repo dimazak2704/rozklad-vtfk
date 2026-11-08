@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.catalog.Room;
+import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
@@ -31,6 +32,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeNotifications;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeStatusMachine;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeWorkflow;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
+import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 
@@ -53,10 +55,11 @@ class ChangeApplier implements ChangePublication {
     private final ChangeNotifications notifications;
     private final CatalogLookup catalog;
     private final AbsentSubstitutes absentSubstitutes;
+    private final SubstitutionCalendar calendar;
 
     ChangeApplier(ChangeRepository changes, LessonRepository lessons, ChangeEffectPlanner planner,
                   DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                  CatalogLookup catalog, AbsentSubstitutes absentSubstitutes) {
+                  CatalogLookup catalog, AbsentSubstitutes absentSubstitutes, SubstitutionCalendar calendar) {
         this.changes = changes;
         this.lessons = lessons;
         this.planner = planner;
@@ -65,6 +68,7 @@ class ChangeApplier implements ChangePublication {
         this.notifications = notifications;
         this.catalog = catalog;
         this.absentSubstitutes = absentSubstitutes;
+        this.calendar = calendar;
     }
 
     @Override
@@ -104,6 +108,8 @@ class ChangeApplier implements ChangePublication {
         }
         List<PlannedLesson> created = plans.stream().flatMap(plan -> plan.effect().created().stream()).toList();
         List<ConflictDto> conflicts = new ArrayList<>(checker.check(created, cancelledIds, null, false));
+        // день міг закритися (практика, свято) уже після підтвердження: пара на такий день не ставиться
+        conflicts.addAll(onDaysWithoutClasses(plans));
         // замінника могли зареєструвати відсутнім уже після підтвердження (DOMAIN §7)
         conflicts.addAll(absentSubstitutes.conflicts(toApply));
         if (!conflicts.isEmpty()) {
@@ -157,6 +163,31 @@ class ChangeApplier implements ChangePublication {
         if (!conflicts.isEmpty()) {
             throw ConflictException.schedule(conflicts);
         }
+    }
+
+    /**
+     * A change that puts a lesson on a day the group has no classes (a practice or holiday added
+     * after the change was confirmed). Creation refuses such a change (422 {@code NO_CLASSES});
+     * this is the same rule at publication. Changes that only cancel lessons stay allowed: they are
+     * how a stray lesson is taken off such a day.
+     */
+    private List<ConflictDto> onDaysWithoutClasses(List<Planned> plans) {
+        List<ConflictDto> conflicts = new ArrayList<>();
+        for (Planned plan : plans) {
+            if (plan.effect().created().isEmpty()) {
+                continue;
+            }
+            Change change = plan.change();
+            StudentGroup group = catalog.group(change.getGroupId());
+            calendar.noClassesReason(change.getDate(), group).ifPresent(reason -> conflicts.add(ConflictDto.hard(
+                    ConflictKind.GROUP, "У групи %s %s занять немає (%s): зміну %d пари не можна опублікувати. "
+                            .formatted(group.getCode(), change.getDate().format(SubstitutionCalendar.DATE), reason,
+                                    change.getPairFrom())
+                            + "Скасуйте її або змініть календар.",
+                    Stream.ofNullable(change.getOriginalLessonId()).toList(), change.getDate(),
+                    change.getPairFrom())));
+        }
+        return conflicts;
     }
 
     private void insertLessons(List<Planned> plans) {

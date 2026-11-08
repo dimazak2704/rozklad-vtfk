@@ -24,11 +24,15 @@ import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.ScheduleChangeReason;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.core.calendar.CalendarQueries;
+import ua.vtc.rozklad.core.calendar.DayInfo;
+import ua.vtc.rozklad.core.calendar.GroupScope;
 import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.StudySemester;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
+import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
 import ua.vtc.rozklad.core.shared.sse.SseEventTypes;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.timetable.DatedLessonRefresh;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
@@ -159,6 +163,39 @@ class LessonRefresher implements DatedLessonRefresh {
         // збій унікальності слотів тут, а не під час commit: план мав його виключити
         lessons.checkSlotConstraintsNow();
         return new Result(missing.size(), removed.size(), updated.size(), Set.copyOf(removed), clashes);
+    }
+
+    /**
+     * Lessons of live changes that a calendar edit would leave on a day their group has no classes
+     * (holiday, practice): the refresh does not touch them (DOMAIN §6), so the edit must not be
+     * made silently. Dates before today are history and are not checked.
+     */
+    List<ConflictDto> strandedByCalendar(Collection<LocalDate> dates, Collection<UUID> groupIds) {
+        LocalDate today = LocalDate.now(clock);
+        SortedSet<LocalDate> days = dates.stream().filter(date -> !date.isBefore(today))
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (days.isEmpty() || groupIds.isEmpty()) {
+            return List.of();
+        }
+        StudyCalendar study = calendar.studyCalendar(days.first(), days.last());
+        List<ConflictDto> conflicts = new ArrayList<>();
+        for (StrandedLesson lesson : repository.keptScheduled(days, Set.copyOf(groupIds))) {
+            DayInfo day = study.day(lesson.date(), new GroupScope(lesson.groupId(), lesson.course()));
+            if (day.semesterId() == null || day.studyDay()) {
+                continue;
+            }
+            String what = "%s %s%s%s, %s, %d пара".formatted(lesson.groupCode(), lesson.disciplineName(),
+                    lesson.teacherName() == null ? "" : " " + lesson.teacherName(),
+                    lesson.subgroup() > 0 ? " (підгр. " + lesson.subgroup() + ")" : "",
+                    UkrainianText.date(lesson.date()), lesson.pair());
+            conflicts.add(ConflictDto.hard(ConflictKind.GROUP, lesson.fromOrder()
+                            ? what + ": заняття поставлене опублікованим розпорядженням, а занять у групи цього дня "
+                            + "не буде. Спершу скасуйте цю пару доповненням."
+                            : what + ": для заняття є відкрите рішення диспетчера, а занять у групи цього дня не буде. "
+                            + "Спершу скасуйте це рішення.",
+                    List.of(lesson.id()), lesson.date(), lesson.pair()));
+        }
+        return conflicts;
     }
 
     /** The version published last among those effective by {@code date}. */

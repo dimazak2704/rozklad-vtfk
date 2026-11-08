@@ -406,6 +406,76 @@ class TimetablePublicationIT {
                 data.group4ki2.getId(), day)).isZero();
     }
 
+    /** A practice over a pair with an open decision would strand the decision's lesson: refused, nothing changes. */
+    @Test
+    void practiceOverADayWithAnOpenDecisionIsRefused() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID group = data.group4ki1.getId();
+        Lesson stp = lessonAt(group, day, 2);
+        changeCommands.create(replaceTeacher(stp), "admin");
+
+        assertThatThrownBy(() -> periods.create(period(CalendarPeriodKind.PRACTICE, day, null, PeriodScope.GROUPS,
+                List.of(group))))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.kind()).isEqualTo(ConflictKind.GROUP);
+                            assertThat(conflict.lessonIds()).containsExactly(stp.getId());
+                            assertThat(conflict.message()).contains("4КІ1 СТП").contains("відкрите рішення");
+                        }));
+        assertThat(count("SELECT count(*) FROM calendar_period WHERE kind = 'PRACTICE' AND starts_on = ?", day)).isZero();
+        assertThat(lessonsOf(group, day)).isEqualTo(2);
+    }
+
+    /** An applied substitution keeps its lesson; a practice over it would leave it on a day without classes. */
+    @Test
+    void practiceOverAPublishedSubstitutionIsRefused() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID replacementId = applySubstitution(lessonAt(data.group4ki1.getId(), day, 2), day);
+
+        assertThatThrownBy(() -> periods.create(period(CalendarPeriodKind.PRACTICE, day, null, PeriodScope.GROUPS,
+                List.of(data.group4ki1.getId()))))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.lessonIds()).containsExactly(replacementId);
+                            assertThat(conflict.message()).contains("опублікованим розпорядженням");
+                        }));
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND status = 'SCHEDULED'", replacementId)).isOne();
+    }
+
+    /**
+     * While 4КІ1 studies online its room 304 is free and an order gives it to 4КІ2. Ending the online
+     * period would need 304 for 4КІ1 again: the delete is refused with the clash instead of dropping
+     * 4КІ1's lesson silently.
+     */
+    @Test
+    void endingAnOnlinePeriodWhoseRoomAnOrderTookIsRefused() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID online = periods.create(period(CalendarPeriodKind.STUDY_MODE, day, StudyMode.ONLINE, PeriodScope.GROUPS,
+                List.of(data.group4ki1.getId()))).id();
+        UUID taken = transaction.execute(status -> {
+            Lesson additional = new Lesson(data.semester.getId(), day, 1, data.group4ki2.getId(), 0,
+                    data.ndeksm.getId(), LessonOrigin.ADDITIONAL);
+            additional.setTeacherId(data.nepyivoda.getId());
+            additional.setRoom(data.room304.getId(), true);
+            em.persist(additional);
+            return additional.getId();
+        });
+
+        assertThatThrownBy(() -> periods.delete(online))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.kind()).isEqualTo(ConflictKind.ROOM);
+                            assertThat(conflict.lessonIds()).containsExactly(taken);
+                            assertThat(conflict.message()).contains("4КІ1 КМ").contains("аудиторія 304");
+                        }));
+        assertThat(count("SELECT count(*) FROM calendar_period WHERE id = ?", online)).isOne();
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND pair_number = 1 "
+                + "AND status = 'SCHEDULED' AND online", data.group4ki1.getId(), day)).isOne();
+    }
+
     @Test
     void parityOverrideAfterPublicationSwitchesTheWeeksLessons() {
         publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");

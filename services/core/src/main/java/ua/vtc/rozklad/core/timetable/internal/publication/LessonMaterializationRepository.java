@@ -113,6 +113,30 @@ class LessonMaterializationRepository {
                         "SCHEDULED".equals(rs.getString("status"))));
     }
 
+    /**
+     * Scheduled lessons of the group-days that a refresh never touches: created by a change
+     * (origin other than TEMPLATE, or {@code change_id} set) or kept for a live decision. A calendar
+     * edit must not leave them on a day the group has no classes.
+     */
+    public List<StrandedLesson> keptScheduled(Collection<LocalDate> dates, Collection<UUID> groupIds) {
+        return named.query("""
+                SELECT l.id, l.date, l.pair_number, l.subgroup_number, l.group_id, g.code AS group_code,
+                       g.course, d.short_name AS discipline_name, t.short_name AS teacher_name,
+                       (l.change_id IS NOT NULL OR l.origin <> 'TEMPLATE') AS from_order
+                FROM lesson l
+                JOIN student_group g ON g.id = l.group_id
+                JOIN discipline d ON d.id = l.discipline_id
+                LEFT JOIN teacher t ON t.id = l.teacher_id
+                WHERE l.date IN (:dates) AND l.group_id IN (:groups) AND l.status = 'SCHEDULED'
+                  AND (l.change_id IS NOT NULL OR l.origin <> 'TEMPLATE' OR EXISTS (%s))
+                ORDER BY l.date, g.code, l.pair_number
+                """.formatted(LIVE_DECISION), Map.of("dates", dates, "groups", groupIds),
+                (rs, rowNum) -> new StrandedLesson(rs.getObject("id", UUID.class),
+                        rs.getObject("date", LocalDate.class), rs.getInt("pair_number"), rs.getInt("subgroup_number"),
+                        rs.getObject("group_id", UUID.class), rs.getString("group_code"), rs.getInt("course"),
+                        rs.getString("discipline_name"), rs.getString("teacher_name"), rs.getBoolean("from_order")));
+    }
+
     /** Every lesson of the dates (any group, any status), as the planner sees lessons that stay. */
     public List<KeptLesson> lessonsOn(Collection<LocalDate> dates) {
         return named.query("""
