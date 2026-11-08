@@ -127,14 +127,23 @@ Paths of every SPA call exist in the backend. Shapes and codes that differ:
 
 Items 1–14 are closed on the web side: types, screens and the mock API follow the backend shapes and codes,
 and `web/src/api/contract.test.ts` checks every mocked response against the Java records (details:
-CHANGELOG-CONTRACTS, «Web: wiring to the backend contracts»). Still open, backend side:
-- `GET /api/admin/absences/{id}/affected` has no `date` per item; the changes screen needs it for absences
-  longer than one day (the client fails loudly instead of guessing).
-- Item 15: `maxParallel` in public rooms, deleting invites and historic order import in core are still
-  missing. The endpoints added on 08.11 (`GET /api/notify/bindings/me`, `PUT/DELETE
-  /api/admin/teachers/{id}/account`, `GET/PUT /api/admin/orders/numbering`) are not wired into the SPA
-  and the mock API yet.
+CHANGELOG-CONTRACTS, «Web: wiring to the backend contracts»).
+
+### Status after the SPA ran against the real stack (08.11.2026)
+
+`web/e2e-real` (opt-in Playwright suite, `npm run e2e:real`, docs/RUNNING.md §6) drives the SPA through the
+gateway with real Keycloak logins. Closed in this pass (CHANGELOG-CONTRACTS, «SPA against the real stack»):
+- `affected` items carry `date` (multi-day absences work on the changes screen).
+- Item 15: `maxParallel` in public rooms; `GET /api/notify/bindings/me` wired into the teacher cabinet.
+- Gateway answers 503 (not 500) when a stopped service's host does not resolve.
+
+Still open:
+- Item 15: deleting invites and historic order import (`POST /api/admin/import/changes`) in core;
+  `PUT/DELETE /api/admin/teachers/{id}/account` and `GET/PUT /api/admin/orders/numbering` have no SPA screens
+  and no mock handlers yet (the seed uses them through the API).
 - Item 16 (streams in the solver) is unchanged.
+- With the bot switched off the changes screen still says «Чекаємо відповіді в Telegram»; the teacher can answer
+  in the cabinet, but the text does not say so.
 
 ## 6. How to verify
 

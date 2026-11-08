@@ -26,7 +26,7 @@ Page<T>       {items:[T], page, size, total}
 | `GET /api/public/search?q=&limit=10` | `[{type: GROUP|TEACHER|ROOM, id, label, sublabel, url}]` (fuzzy, Latin/Cyrillic tolerant) |
 | `GET /api/public/groups` | `[{id, code, course, specialty:{letters,name}, department, shift}]` |
 | `GET /api/public/teachers` | `[{id, shortName, displayName, cycleCommission}]` |
-| `GET /api/public/rooms` | `[{id, name, type, capacity, building}]` |
+| `GET /api/public/rooms` | `[{id, name, type, capacity, building, maxParallel}]` |
 | `GET /api/public/bells?date=` | `{profile:{id,name}, weekday, slots:[{pair, startsAt, endsAt}]}` (+ `profiles` list when no date) |
 | `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
 | `GET /api/public/changes?date=` | `{date, parity, weekdayLabel, order:{id,number,publishedAt}?, groups:[{group:GroupRef, items:[ChangeView]}]}` |
@@ -78,7 +78,7 @@ Generation:
 
 Substitutions:
 | `GET /api/admin/absences?from&to&teacherId` · `POST` `{teacherId,dateFrom,dateTo,pairs?,reasonCategory,comment?}` · `PUT/DELETE {id}` | |
-| `GET /api/admin/absences/{id}/affected` | `[{lesson:LessonView, decision:{changeId,status,kind}?}]` |
+| `GET /api/admin/absences/{id}/affected` | `[{date, lesson:LessonView, decision:{changeId,status,kind}?}]` |
 | `GET /api/admin/lessons/{lessonId}/options` | `{lesson:LessonView, options:[Option]}` |
 | `POST /api/admin/changes` `{kind, date, pairFrom, pairTo?, groupId, subgroup?, originalLessonId?, newDisciplineId?, newTeacherId?, newRoomId?, swapLessonId?, reasonCode, reasonText?, absenceId?}` | 201 `ChangeDto` (status after approval-mode rules) / 409 conflicts |
 | `GET /api/admin/changes?date&status` · `PUT /{id}` · `DELETE /{id}` (→ CANCELLED) | |

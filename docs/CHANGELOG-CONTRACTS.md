@@ -210,3 +210,13 @@ misses one it has (`@JsonInclude(NON_NULL)` fields may be absent).
 | Order document header | notification prints «По коледжу про деякі зміни в розкладі занять» under the heading; `OrderPayload.title` (= «РОЗПОРЯДЖЕННЯ №35») is not printed again. | The printed sheet repeated the heading instead of the college subtitle. |
 | Keycloak client `rozklad-core-admin` | default client scope `kc-admin-api` (realm files + `keycloak-sync.sh`). | Keycloak 26.8 answers 401 to admin REST calls whose token lacks the admin API audience: invites and account links failed with 503. |
 
+## SPA against the real stack (08.11.2026, see `web/e2e-real`, docs/RUNNING.md §6)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/admin/absences/{id}/affected` | Additive `date` per item (the lesson's date). The SPA reads it instead of deriving it; the fallback that refused multi-day absences is gone. | `LessonView` has no date and an absence may span several days: the changes screen showed an error for every multi-day absence. |
+| `GET /api/public/rooms` | Additive `maxParallel` (how many groups at once; sports hall «с.з.» > 1). The room page prints «до N груп одночасно». | integration §5 item 15. |
+| `PUT /api/admin/settings` errors | Field messages say what to enter («Від 5 до 1440 хвилин», «Вкажіть посаду підписанта», «Не довше 200 символів») instead of the validator's defaults. | They are shown next to the form fields. |
+| Gateway: service down | A stopped container whose host name no longer resolves (`UnknownHostException`) and `NoRouteToHostException` are 503 `service-unavailable` like a refused connection; was 500 `internal`. | Docker removes the DNS name of a stopped container; clients retry 503 but not a generic 500 message. |
+| `GET /api/notify/bindings/me` | Used by the teacher cabinet (Telegram card): bound → the chat and since when; not bound → the binding link; 422 `teacher-not-linked` → the explanation, without offering a link. | Was added on 08.11 but not wired. |
+

@@ -132,6 +132,27 @@ the curriculum costs ~$0.003 with Haiku 5.5 instead of ~$0.05 with Sonnet 5.5, b
 12 rows Sonnet reads for semester 7 (`docs/modules/importer-ai-samples.md` §6) — use the default vision model
 for real imports.
 
+### The SPA against the stack (`web/e2e-real`)
+
+An opt-in Playwright suite (not part of `npm run e2e`, which uses the mock API) drives the SPA through the
+gateway with real Keycloak logins of the demo users. It starts its own Vite dev server on 5180 without mocks
+(the only dev port the Keycloak client `rozklad-web` accepts); `REAL_BASE_URL=http://localhost:8088` runs it
+against the nginx container instead (`up --web`), `REAL_REUSE_SERVER=1` reuses a dev server already on 5180.
+
+```bash
+cd web
+npm run e2e:real                                   # desktop 1440, tablet 768, phone 375; headless
+npx playwright test -c playwright.real.config.ts --project=desktop dispatcher   # one file
+```
+
+It checks the public pages against the API answers (week grid and day list of 4КІ1, parity of 19.10.2026,
+teacher, room, bells, changes of order №35 with PDF/PNG), error and offline states, and on desktop the
+dispatcher and teacher workflows. It changes data: the substitution test creates an absence of Кренцін on one
+pair, Непийвода confirms it in her cabinet and the order of that date is published (the next number, №36 on a
+fresh seed). The date is the first school day a week ahead without an absence of Кренцін and without an order,
+so the suite can run again; a two-day absence of Стець is created and cancelled. For clean demo data afterwards:
+`reset-data --yes`, `up --no-build`, `seed`.
+
 ## 7. Troubleshooting
 
 * A service stays `starting`: `scripts/dev-stack.sh logs <service>`; the JSON lines have `log.level` and
