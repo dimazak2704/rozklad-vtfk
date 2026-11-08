@@ -953,8 +953,9 @@ function finishApply(job: StoredJob): StoredJob {
     }
   }
   // результат — відповіді core за кроками, як їх зберігає importer (catalog, timetable, load, changes)
+  // як CatalogImportRun у core: новий запис каталогу й новий псевдонім — обидва в `created`
   const catalog: ImportApplyResult['catalog'] =
-    createdEntities + aliases === 0 ? { skipped: true } : { created: createdEntities, updated: aliases, unchanged: 0, ids: {}, warnings: [] };
+    createdEntities + aliases === 0 ? { skipped: true } : { created: createdEntities + aliases, updated: 0, unchanged: 0, ids: {}, warnings: [] };
   let result: ImportApplyResult;
   switch (job.kind) {
     case 'TIMETABLE_XLSX': {

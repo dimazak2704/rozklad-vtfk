@@ -98,7 +98,7 @@ describe('завдання імпорту', () => {
     const applied = await job(timetable.id);
     expect(applied.status).toBe('APPLIED');
     // результат — відповіді core за кроками: каталог (новий запис + псевдоніми) і чернетка версії
-    expect(applied.result?.catalog).toMatchObject({ created: 1, updated: 3 });
+    expect(applied.result?.catalog).toMatchObject({ created: 4, updated: 0 });
     expect(applied.result?.timetable).toMatchObject({ name: `Імпорт з «${timetable.fileName}»` });
     expect(applied.result?.timetable?.lessonCount).toBeGreaterThan(0);
     const aliases = await api.get<AliasDto[]>(`/admin/teachers/${teacherId('Гарболінська')}/aliases`);
@@ -163,7 +163,7 @@ describe('завантаження файлу', () => {
     for (let i = 0; i < 5 && current.status !== 'APPLIED'; i += 1) current = await job(created.id);
     expect(current).toMatchObject({
       status: 'APPLIED',
-      result: { catalog: { created: 1, updated: 4 }, timetable: { name: 'Розклад з листопада' } },
+      result: { catalog: { created: 5, updated: 0 }, timetable: { name: 'Розклад з листопада' } },
     });
   });
 

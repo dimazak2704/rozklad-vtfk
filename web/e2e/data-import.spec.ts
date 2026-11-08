@@ -53,8 +53,12 @@ test.describe('імпорт', () => {
     await applyPanel.getByRole('button', { name: 'Застосувати' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Застосувати' }).click();
     await expect(page.getByRole('region', { name: 'Результат імпорту' })).toContainText('Імпорт застосовано', { timeout: 30_000 });
-    // «Так, це …» запамʼятовує написання: чотири одруківки — чотири псевдоніми, «Вс.» — новий запис
-    await expect(page.getByRole('region', { name: 'Результат імпорту' })).toContainText('4 псевдоніми');
+    // «Так, це …» запамʼятовує написання: чотири одруківки — чотири псевдоніми, «Вс.» — новий запис;
+    // core рахує і те, і те як нові записи каталогу, а версію — окремим рядком
+    const result = page.getByRole('region', { name: 'Результат імпорту' });
+    await expect(result).toContainText('Каталог: 5 нових записів.');
+    // між числом і словом — нерозривний пробіл (countLabel), тому \s, а не пробіл
+    await expect(result).toContainText(/Чернетка «.+»:\s\d+\sзанять\./);
 
     // написання з таблиці тепер — псевдонім у каталозі
     // переходимо посиланням, а не goto: перезавантаження сторінки скинуло б стан моків
