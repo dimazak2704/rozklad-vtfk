@@ -9,6 +9,7 @@ import {
   useQueries,
   useQuery,
   useQueryClient,
+  type FetchStatus,
   type QueryClient,
 } from '@tanstack/react-query';
 import { api } from './client';
@@ -94,14 +95,19 @@ export function changesQuery(date: IsoDate) {
 interface Combined<T> {
   data: Array<T | undefined>;
   pending: boolean;
+  /** Хоч один запит без даних чекає мережі (без інтернету TanStack ставить його на паузу). */
+  paused: boolean;
   error: unknown;
 }
 
 /** Стабільна функція combine: результат структурно спільний, тож посилання не змінюються без потреби. */
-function combineResults<T>(results: ReadonlyArray<{ data: T | undefined; isPending: boolean; error: unknown }>): Combined<T> {
+function combineResults<T>(
+  results: ReadonlyArray<{ data: T | undefined; isPending: boolean; fetchStatus: FetchStatus; error: unknown }>,
+): Combined<T> {
   return {
     data: results.map((r) => r.data),
     pending: results.some((r) => r.isPending),
+    paused: results.some((r) => r.isPending && r.fetchStatus === 'paused'),
     error: results.find((r) => r.error)?.error ?? null,
   };
 }

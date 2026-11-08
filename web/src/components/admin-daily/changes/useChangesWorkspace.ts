@@ -31,6 +31,8 @@ export interface ChangesWorkspace {
   changesById: ReadonlyMap<Uuid, ChangeDto>;
   /** Перше завантаження ще триває (силуети). */
   loading: boolean;
+  /** Даних періоду ще немає, а запити чекають мережі: замість силуетів — стан «немає зв'язку». */
+  offline: boolean;
   error: unknown;
   retry: () => void;
 }
@@ -80,6 +82,11 @@ export function useChangesWorkspace(date: IsoDate, period: Period): ChangesWorks
     groups,
     changesById,
     loading: absencesQuery.isPending || affected.pending || changes.pending,
+    // відсутності попередньої дати (keepPreviousData) — не дані цього періоду
+    offline:
+      (absencesQuery.fetchStatus === 'paused' && (absencesQuery.isPending || absencesQuery.isPlaceholderData)) ||
+      affected.paused ||
+      changes.paused,
     error: absencesQuery.error ?? affected.error ?? changes.error ?? null,
     retry,
   };

@@ -1,4 +1,4 @@
-import { CalendarPlus, FileText, ListFilter, Plus } from 'lucide-react';
+import { CalendarPlus, FileText, ListFilter, Plus, WifiOff } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useCancelAbsence, useDailyLiveSync, useDashboard, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
@@ -295,7 +295,14 @@ export default function ChangesPage() {
           ))}
         </div>
       </div>
-      {workspace.loading && workspace.entries.length === 0 ? (
+      {workspace.offline ? (
+        <EmptyState
+          size="sm"
+          icon={<WifiOff aria-hidden="true" className="size-5" />}
+          title="Немає звʼязку з сервером"
+          description="Дані на цю дату ще не завантажені, а без інтернету їх не отримати. Підключіться до мережі — список оновиться сам."
+        />
+      ) : workspace.loading && workspace.entries.length === 0 ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((key) => (
             <Skeleton key={key} className="h-16 w-full rounded-control" />
@@ -406,7 +413,10 @@ export default function ChangesPage() {
         meta={
           <>
             <span className="text-ui font-semibold text-primary">{rangeLabel}</span>
-            {dashboard.data && period === 'day' && !weekend ? <ParityBadge parity={dashboard.data.parity} size="sm" /> : null}
+            {/* панель попередньої дати (keepPreviousData) може мати іншу парність — показуємо лише свою */}
+            {dashboard.data && !dashboard.isPlaceholderData && period === 'day' && !weekend ? (
+              <ParityBadge parity={dashboard.data.parity} size="sm" />
+            ) : null}
             {counts.action > 0 ? (
               <span className="text-caption font-semibold text-danger">{counts.action} без рішення</span>
             ) : workspace.entries.length > 0 ? (

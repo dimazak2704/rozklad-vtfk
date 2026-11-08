@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { onlineManager } from '@tanstack/react-query';
 import { http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrderDto, SettingsDto } from '@/api/types';
@@ -191,6 +192,16 @@ describe('екран «Заміни»', () => {
 
     await user.keyboard('j');
     await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toBeInTheDocument(), WAIT);
+  });
+
+  it('без мережі — пояснення замість вічних силуетів', { timeout: 20_000 }, async () => {
+    onlineManager.setOnline(false);
+    try {
+      renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
+      expect(await screen.findByText('Немає звʼязку з сервером', undefined, WAIT)).toBeInTheDocument();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it('помилка сервера — повідомлення з повтором, а не порожня сторінка', { timeout: 20_000 }, async () => {

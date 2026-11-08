@@ -453,13 +453,17 @@ export function replyToChange(id: Uuid, teacherId: string | undefined, decision:
 }
 
 /**
- * PUT /api/admin/changes/{id} `{newRoomId?, reasonCode, reasonText?, version?}` — як ChangeCommands.update у core:
- * лише аудиторія й причина; застаріла `version` → 409 `stale-data`; редагувати можна відкриту чи відхилену.
+ * PUT /api/admin/changes/{id} `{newRoomId?, reasonCode, reasonText?, version}` — як ChangeCommands.update у core:
+ * лише аудиторія й причина; без `version` → 400 (поле version), застаріла → 409 `stale-data`;
+ * редагувати можна відкриту чи відхилену.
  * `newRoomId` замінює аудиторію рішення (null — без окремої аудиторії).
  */
 export function updateChange(id: Uuid, body: Partial<UpdateChangeRequest>): ChangeRecord {
   const change = getChange(id);
-  if (body.version !== undefined && body.version !== null && body.version !== change.version) throw staleData();
+  if (body.version === undefined || body.version === null) {
+    throw badRequest('Перевірте дані зміни.', [{ field: 'version', message: 'Вкажіть версію зміни (поле version з відповіді)' }]);
+  }
+  if (body.version !== change.version) throw staleData();
   const editable = change.status === 'DRAFT' || change.status === 'PENDING_CONFIRMATION' || change.status === 'CONFIRMED' || change.status === 'DECLINED';
   if (!editable) throw businessRule('CHANGE_NOT_EDITABLE', 'Зміну з цим статусом редагувати не можна.');
   const errors: FieldErrorDto[] = [];

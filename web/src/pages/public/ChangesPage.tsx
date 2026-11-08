@@ -1,4 +1,4 @@
-import { FileImage, FileText, Search, Star, X } from 'lucide-react';
+import { FileImage, FileText, Search, Star, WifiOff, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { orderDocumentUrl, usePublicChanges } from '@/api/public';
@@ -112,7 +112,24 @@ export default function ChangesPage() {
   const quickDay = (iso: IsoDate) => relativeDayLabel(iso, today) ?? formatShortWeekdayDate(iso);
 
   let content;
-  if (changes.isPending) {
+  if (changes.fetchStatus === 'paused' && !changes.data) {
+    // без мережі запит дати стоїть на паузі (offlineFirst чекає мережу): пояснюємо, а не крутимо силуети
+    content = (
+      <EmptyState
+        className="rounded-panel border border-default bg-surface"
+        icon={<WifiOff aria-hidden="true" className="size-5" />}
+        title="Заміни на цю дату не збережено на пристрої"
+        description="Без інтернету відкриваються лише ті дні, які ви вже переглядали. Підключіться до мережі — заміни завантажаться самі."
+        action={
+          date !== home ? (
+            <Button variant="secondary" onClick={() => setDate(home)}>
+              {home === today ? 'Заміни на сьогодні' : `Заміни на ${quickDay(home).toLocaleLowerCase('uk')}`}
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  } else if (changes.isPending) {
     content = <ChangesSkeleton />;
   } else if (changes.isError) {
     content = (
