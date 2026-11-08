@@ -3,12 +3,15 @@ package ua.vtc.rozklad.core.shared.error;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.hibernate.JDBCException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -17,11 +20,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -33,7 +38,8 @@ import ua.vtc.rozklad.core.shared.web.RequestIdFilter;
 /**
  * Turns every error into an RFC 9457 ProblemDetail with Ukrainian {@code title}/{@code detail}.
  * Validation errors carry {@code errors[]}, schedule conflicts {@code conflicts[]}, business rule
- * violations {@code code}; every problem carries {@code requestId} for support.
+ * violations {@code code}; every problem carries {@code requestId} for support. A body or query
+ * parameter that cannot be bound (wrong type or format) is a validation error of that field too.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
@@ -59,7 +65,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                                                                             WebRequest request) {
         List<FieldErrorDto> errors = new ArrayList<>();
         ex.getParameterValidationResults().forEach(result -> {
-            String parameter = result.getMethodParameter().getParameterName();
+            // елемент списку чи мапи в тілі (List<@Valid …>) — з індексом: grid[2].pair
+            String parameter = result.getMethodParameter().getParameterName()
+                    + (result.getContainerIndex() != null ? "[" + result.getContainerIndex() + "]"
+                    : result.getContainerKey() != null ? "[" + result.getContainerKey() + "]" : "");
             for (MessageSourceResolvable error : result.getResolvableErrors()) {
                 String field = error instanceof FieldError fieldError
                         ? parameter + "." + fieldError.getField()
@@ -68,6 +77,34 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             }
         });
         return validationProblem(errors);
+    }
+
+    /** Malformed JSON or a value of the wrong type or format: 400 with the field when it is known. */
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        List<FieldErrorDto> errors = RequestProblems.unreadableBody(ex);
+        return validationProblem(errors, errors.isEmpty()
+                ? "Тіло запиту не вдалося прочитати: перевірте формат JSON." : "Перевірте виділені поля.");
+    }
+
+    /** A query or path parameter that does not convert ({@code ?from=abc}). */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+                                                        HttpStatusCode status, WebRequest request) {
+        String field = ex.getPropertyName() == null ? "value" : ex.getPropertyName();
+        return validationProblem(List.of(new FieldErrorDto(field, RequestProblems.expected(ex.getRequiredType()))),
+                "Значення «%s» параметра «%s» має неправильний формат.".formatted(ex.getValue(), field));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestParameter(MissingServletRequestParameterException ex,
+                                                                          HttpHeaders headers,
+                                                                          HttpStatusCode status,
+                                                                          WebRequest request) {
+        return validationProblem(List.of(new FieldErrorDto(ex.getParameterName(), "Обов'язковий параметр.")),
+                "Обов'язковий параметр «%s» відсутній.".formatted(ex.getParameterName()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -111,8 +148,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
-        // деталі SQL не віддаємо клієнту: вони розкривають схему БД
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        // деталі SQL не віддаємо клієнту (вони розкривають схему БД) і не пишемо в журнал: повідомлення
+        // PostgreSQL містить значення рядка (коментарі відсутностей, назви), ARCHITECTURE §10
+        log.warn("Data integrity violation: {}", describe(ex));
         return problem(HttpStatus.CONFLICT, ProblemTypes.DATA_INTEGRITY, "Конфлікт даних",
                 "Операція порушує цілісність даних: такий запис уже існує або на нього посилаються інші дані.",
                 request);
@@ -146,13 +184,38 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> createResponseEntity(Object body, HttpHeaders headers, HttpStatusCode status,
                                                           WebRequest request) {
         if (body instanceof ProblemDetail problem) {
+            if (problem.getType() == null || "about:blank".equals(problem.getType().toString())) {
+                problem.setType(RequestProblems.defaultType(status));
+            }
             addRequestId(problem);
         }
         return super.createResponseEntity(body, headers, status, request);
     }
 
+    /** SQLState and constraint only: never the message, which carries row values. */
+    static String describe(DataIntegrityViolationException ex) {
+        Throwable cause = ex.getCause();
+        while (cause != null && !(cause instanceof JDBCException)) {
+            cause = cause.getCause();
+        }
+        if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
+            return "SQLState " + violation.getSQLState() + ", constraint " + violation.getConstraintName();
+        }
+        if (cause instanceof JDBCException jdbc) {
+            return "SQLState " + jdbc.getSQLState() + " (" + jdbc.getClass().getSimpleName() + ")";
+        }
+        if (ex.getMostSpecificCause() instanceof SQLException sql) {
+            return "SQLState " + sql.getSQLState();
+        }
+        return ex.getClass().getSimpleName();
+    }
+
     private ResponseEntity<Object> validationProblem(List<FieldErrorDto> errors) {
-        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Перевірте виділені поля.");
+        return validationProblem(errors, "Перевірте виділені поля.");
+    }
+
+    private ResponseEntity<Object> validationProblem(List<FieldErrorDto> errors, String detail) {
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         body.setType(ProblemTypes.VALIDATION);
         body.setTitle("Некоректні дані");
         body.setProperty("errors", errors.stream()

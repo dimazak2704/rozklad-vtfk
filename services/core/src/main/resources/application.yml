@@ -11,6 +11,10 @@ spring:
     password: ${DB_PASSWORD:core}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
+      data-source-properties:
+        # повідомлення помилок PostgreSQL без значень рядків і параметрів запиту (коментарі
+        # відсутностей, назви): вони потрапляють у журнал Hibernate і в винятки (ARCHITECTURE §10)
+        logServerErrorDetail: false
   jpa:
     open-in-view: false
     hibernate:

@@ -84,6 +84,12 @@ class ImporterApplicationIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("text"))
                 .andExpect(jsonPath("$.errors[1].field").value("today"));
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"завтра\",\"today\":\"2026-13-40\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                .andExpect(jsonPath("$.errors[0].field").value("today"))
+                .andExpect(jsonPath("$.errors[0].message").value("Очікується дата у форматі РРРР-ММ-ДД."));
         mockMvc.perform(post("/api/import/ai/parse-absence").with(token("TEACHER"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"завтра\",\"today\":\"2026-11-07\"}"))
                 .andExpect(status().isForbidden());

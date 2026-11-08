@@ -57,7 +57,10 @@ class NotifyApiIT extends IntegrationTest {
         createCode(admin(), "{\"type\":\"GROUP_CHAT\",\"groupId\":\"" + CoreFixtures.SEMESTER + "\"}")
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Групу не знайдено."));
-        createCode(admin(), "{\"type\":\"PIGEON\"}").andExpect(status().isBadRequest());
+        createCode(admin(), "{\"type\":\"PIGEON\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                .andExpect(jsonPath("$.errors[0].field").value("type"))
+                .andExpect(jsonPath("$.errors[0].message").value(startsWith("Допустимі значення: ")));
     }
 
     @Test

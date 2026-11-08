@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,29 @@ class ProbeController {
     }
 
     record BellView(int pair, LocalTime startsAt, LocalTime endsAt) {
+    }
+
+    enum Category { SICK_LEAVE, OTHER }
+
+    record AbsenceForm(LocalDate dateFrom, List<Integer> pairs, Category reasonCategory, String comment) {
+    }
+
+    record GridRow(@Min(1) @Max(5) int weekday, @Min(1) @Max(8) int pair) {
+    }
+
+    @PostMapping("/api/admin/probe/absences")
+    AbsenceForm absence(@Valid @RequestBody AbsenceForm form) {
+        return form;
+    }
+
+    @PutMapping("/api/admin/probe/grid")
+    List<GridRow> grid(@RequestBody List<@Valid @NotNull GridRow> grid) {
+        return grid;
+    }
+
+    @GetMapping("/api/admin/probe/days")
+    LocalDate day(@RequestParam LocalDate from) {
+        return from;
     }
 
     @PostMapping("/api/admin/probe/groups")
