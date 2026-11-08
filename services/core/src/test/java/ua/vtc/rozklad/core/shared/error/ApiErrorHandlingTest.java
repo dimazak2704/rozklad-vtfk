@@ -216,6 +216,32 @@ class ApiErrorHandlingTest {
     }
 
     @Test
+    void undecodableQueryParameterIsAValidationErrorNamingIt() throws Exception {
+        mockMvc.perform(get("/api/public/probe/undecodable"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                .andExpect(jsonPath("$.errors[0].field").value("q"))
+                .andExpect(jsonPath("$.detail").value("Параметр «q» має некоректне кодування."))
+                .andExpect(jsonPath("$.requestId").exists());
+    }
+
+    @Test
+    void untranslatedOptimisticLockOfAFlushIsStaleData() throws Exception {
+        mockMvc.perform(get("/api/admin/probe/stale-flush").with(TestJwts.admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:stale-data"))
+                .andExpect(jsonPath("$.title").value("Дані змінилися"));
+    }
+
+    @Test
+    void deadlockBetweenConcurrentRequestsIs409NotInternal() throws Exception {
+        mockMvc.perform(get("/api/admin/probe/deadlock").with(TestJwts.admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:stale-data"))
+                .andExpect(jsonPath("$.detail", startsWith("Ці дані саме змінює інший запит")));
+    }
+
+    @Test
     void anonymousCallToAdminApiIs401ProblemWithBearerChallenge() throws Exception {
         mockMvc.perform(get("/api/admin/probe/not-found"))
                 .andExpect(status().isUnauthorized())

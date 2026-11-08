@@ -9,6 +9,9 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -44,6 +47,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     private static final String TYPE_PREFIX = "urn:rozklad:problem:";
+
+    /** Tomcat names the parameter it could not decode: «… Parameter [q] with value […] …». */
+    private static final Pattern PARAMETER_NAME = Pattern.compile("Parameter \\[([^\\]]{1,100})]");
 
     public record FieldErrorDto(String field, String message) {
     }
@@ -128,6 +134,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         body.setTitle("Некоректний запит");
         addRequestId(body);
         return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * Tomcat could not decode a query parameter ({@code ?kind=%E0%A4} is not UTF-8): a client
+     * error naming the parameter, never a 500 (the value itself is not echoed).
+     */
+    @ExceptionHandler(InvalidParameterException.class)
+    ResponseEntity<Object> handleUndecodableParameter(InvalidParameterException ex, HttpServletRequest request) {
+        log.info("Undecodable request parameter on {} {}", request.getMethod(), request.getRequestURI());
+        Matcher name = PARAMETER_NAME.matcher(String.valueOf(ex.getMessage()));
+        if (name.find()) {
+            String field = name.group(1);
+            return validationProblem(List.of(new FieldErrorDto(field,
+                            "Значення не вдалося розкодувати: очікується текст у кодуванні UTF-8.")),
+                    "Параметр «%s» має некоректне кодування.".formatted(field));
+        }
+        return problem(HttpStatus.BAD_REQUEST, "bad-request", "Некоректний запит",
+                "Параметри запиту не вдалося розкодувати: очікується текст у кодуванні UTF-8.", request);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

@@ -103,6 +103,25 @@ class ProbeController {
         throw new IllegalStateException("secret internal detail");
     }
 
+    /** What Tomcat throws when a query value is not valid UTF-8 ({@code ?q=%E0%A4}). */
+    @GetMapping("/api/public/probe/undecodable")
+    void undecodable() {
+        throw new org.apache.tomcat.util.http.InvalidParameterException(
+                "Character decoding failed. Parameter [q] with value [�] has been ignored.", 400);
+    }
+
+    /** An explicit {@code EntityManager.flush()} of a stale entity (not translated by Spring). */
+    @GetMapping("/api/admin/probe/stale-flush")
+    void staleFlush() {
+        throw new jakarta.persistence.OptimisticLockException("Row was updated or deleted by another transaction");
+    }
+
+    /** PostgreSQL broke a deadlock (SQLState 40P01), translated by Spring. */
+    @GetMapping("/api/admin/probe/deadlock")
+    void deadlock() {
+        throw new org.springframework.dao.CannotAcquireLockException("ERROR: deadlock detected");
+    }
+
     @GetMapping("/api/me/probe")
     CurrentUser me(CurrentUser user) {
         return user;

@@ -74,6 +74,18 @@ class CoreApplicationIT {
         }
     }
 
+    /** A query value that is not UTF-8 (Tomcat's InvalidParameterException) is a 400 naming the parameter. */
+    @Test
+    void undecodableQueryParameterIsAValidationProblem() throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/public/search?q=%E0%A4")).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("\"type\":\"urn:rozklad:problem:validation\"")
+                .contains("\"field\":\"q\"");
+    }
+
     @Test
     void openApiDescriptionIsPublished() {
         client.get().uri("/v3/api-docs").exchange()

@@ -7,7 +7,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.hibernate.JDBCException;
+import org.hibernate.StaleStateException;
+import org.hibernate.exception.LockAcquisitionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -15,6 +20,7 @@ import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -47,6 +53,12 @@ import ua.vtc.rozklad.core.shared.web.SupportedDates;
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+    /** Tomcat names the parameter it could not decode: «… Parameter [q] with value […] …». */
+    private static final Pattern PARAMETER_NAME = Pattern.compile("Parameter \\[([^\\]]{1,100})]");
+
+    private static final String STALE_DETAIL =
+            "Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.";
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
@@ -143,11 +155,47 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(body);
     }
 
-    @ExceptionHandler(OptimisticLockingFailureException.class)
-    ResponseEntity<Object> handleStaleData(OptimisticLockingFailureException ex, HttpServletRequest request) {
+    /**
+     * Another transaction changed the record first. Spring translates this at repository calls and
+     * at commit; an explicit {@code EntityManager.flush()} (or an auto-flush before a query of a
+     * non-repository bean) throws the JPA / Hibernate exception itself, which means the same.
+     */
+    @ExceptionHandler({OptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class,
+            StaleStateException.class})
+    ResponseEntity<Object> handleStaleData(Exception ex, HttpServletRequest request) {
         log.info("Optimistic lock conflict: {}", ex.getMessage());
+        return problem(HttpStatus.CONFLICT, ProblemTypes.STALE_DATA, "Дані змінилися", STALE_DETAIL, request);
+    }
+
+    /**
+     * PostgreSQL broke a deadlock or a lock wait between two concurrent requests and rolled this
+     * one back: nothing was written, the request can be repeated on fresh data.
+     */
+    @ExceptionHandler({PessimisticLockingFailureException.class, jakarta.persistence.PessimisticLockException.class,
+            LockAcquisitionException.class})
+    ResponseEntity<Object> handleLockFailure(Exception ex, HttpServletRequest request) {
+        log.warn("Lock failure between concurrent requests on {} {}: {}", request.getMethod(),
+                request.getRequestURI(), ex.getClass().getSimpleName());
         return problem(HttpStatus.CONFLICT, ProblemTypes.STALE_DATA, "Дані змінилися",
-                "Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.", request);
+                "Ці дані саме змінює інший запит. Оновіть сторінку та повторіть дію.", request);
+    }
+
+    /**
+     * Tomcat could not decode a query parameter ({@code ?q=%E0%A4} is not UTF-8): a client error
+     * naming the parameter, never a 500 (the value itself is not echoed).
+     */
+    @ExceptionHandler(InvalidParameterException.class)
+    ResponseEntity<Object> handleUndecodableParameter(InvalidParameterException ex, HttpServletRequest request) {
+        log.info("Undecodable request parameter on {} {}", request.getMethod(), request.getRequestURI());
+        Matcher name = PARAMETER_NAME.matcher(String.valueOf(ex.getMessage()));
+        if (name.find()) {
+            String field = name.group(1);
+            return validationProblem(List.of(new FieldErrorDto(field,
+                            "Значення не вдалося розкодувати: очікується текст у кодуванні UTF-8.")),
+                    "Параметр «%s» має некоректне кодування.".formatted(field));
+        }
+        return problem(HttpStatus.BAD_REQUEST, ProblemTypes.BAD_REQUEST, "Некоректний запит",
+                "Параметри запиту не вдалося розкодувати: очікується текст у кодуванні UTF-8.", request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
