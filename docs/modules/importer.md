@@ -157,9 +157,13 @@ DOCX: header paragraphs (number with spaced letters, «ДОПОВНЕННЯ до
 joined with « / »), «ЗАМІНА АУДИТОРІЙ» switches to ROOM_CHANGE rows, paragraphs after the table are notes, the
 last «…директора…<tab>Ім'я ПРІЗВИЩЕ» line is the signature. Row types per DOMAIN §8 (range → BLOCK, «ДОДАТКОВО»
 or empty left → ADDITIONAL, «За розкладом» → AS_SCHEDULED, «Пари не буде» → CANCELLATION, «Вичит.» without a
-replacement → FINISHED, else REPLACEMENT). Photos/scans/PDF go to the vision model with the same rules in the
-prompt; the answer is validated (unknown row types re-derived with a warning, dates parsed leniently, group codes
-canonicalized, model warnings copied into the report).
+replacement → FINISHED, else REPLACEMENT; «Вичит.» without a replacement wins over a pair range). Photos/scans/PDF go
+to the vision model with the same rules in the prompt; the answer is validated (unknown row types re-derived with a
+warning, a FINISHED that contradicts the text — or a «Вичит.» row typed otherwise — replaced with the derived type and a
+warning, dates parsed leniently, group codes canonicalized, model warnings copied into the report). An AI draft
+carries a blocking ORDER row until the admin saves the reviewed rows (`PUT /api/import/jobs/{id}/draft`, the SPA's
+«Звірити рядки»); applying a reviewed draft sends `replace: true`, so a corrected re-import replaces an earlier
+import of the same paper order in core.
 
 ### CURRICULUM
 
@@ -305,6 +309,7 @@ run the jar with `SERVER_PORT=18083 DB_NAME=importer_<name>` and a key from `.en
   PDF program in `seed/`).
 * No DOCX order sample exists in `seed/`; the DOCX order parser is tested on a generated document.
 * Vision accuracy on order photos is good but not perfect (see `importer-ai-samples.md`): the review step is
-  mandatory; group codes misread as other existing codes cannot be caught by matching.
+  enforced (NEEDS_REVIEW until the rows are saved); group codes misread as other existing codes cannot be caught by
+  matching, only by the admin's review.
 * Single instance assumed: restart recovery marks every `PARSING`/`APPLYING` job of the database.
 * `FILESYSTEM` storage: a file written for a rolled-back upload stays in the directory (harmless orphan).

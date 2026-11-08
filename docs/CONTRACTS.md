@@ -78,7 +78,7 @@ Generation:
 
 Substitutions:
 | `GET /api/admin/absences?from&to&teacherId` · `POST` `{teacherId,dateFrom,dateTo,pairs?,reasonCategory,comment?}` · `PUT/DELETE {id}` | |
-| `GET /api/admin/absences/{id}/affected` | `[{date, lesson:LessonView, decision:{changeId,status,kind}?}]` |
+| `GET /api/admin/absences/{id}/affected` | `[{date, lesson:LessonView, decision:{changeId,status,kind}?, asSubstitute}]` (`asSubstitute`: the absent teacher is the substitute of `decision`) |
 | `GET /api/admin/lessons/{lessonId}/options` | `{lesson:LessonView, options:[Option]}` |
 | `POST /api/admin/changes` `{kind, date, pairFrom, pairTo?, groupId, subgroup?, originalLessonId?, newDisciplineId?, newTeacherId?, newRoomId?, swapLessonId?, reasonCode, reasonText?, absenceId?}` | 201 `ChangeDto` (status after approval-mode rules) / 409 conflicts |
 | `GET /api/admin/changes?date&status` · `PUT /{id}` · `DELETE /{id}` (→ CANCELLED) | |
@@ -102,12 +102,13 @@ Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipl
 Identity & settings: `POST /api/admin/invites {teacherId}` → `{token, url, expiresAt}`; `GET /api/admin/invites`;
 `GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing Keycloak account → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
-`GET/PUT /api/admin/settings` → `{approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId}`.
+`GET/PUT /api/admin/settings` → `{approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
 
 Import apply (role ADMIN or SERVICE): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
 `POST /api/admin/import/timetable` `{semesterId, name, lessons:[{weekday,pair,parity,groupCode,subgroup,disciplineShortName,teacherShortName?,roomName?,online}]}` → draft version id;
-`POST /api/admin/import/load` `{semesterId, items:[...]}`; `POST /api/admin/import/changes` `{date, items:[...]}` (historic orders, optional).
+`POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import).
+`POST /api/admin/import/timetable` honours `Idempotency-Key`. Dates in requests: years 2000–2100.
 
 SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `absence.created`, `generation.progress`,
 `generation.completed`, `order.published`, `schedule.changed`, `ping` (every 25 s). Data = JSON of the related DTO.
@@ -131,6 +132,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 | `POST /api/import/jobs` multipart `file`, `kind` (TIMETABLE_XLSX\|DISCIPLINE_PROGRAM\|CURRICULUM\|ORDER_DOCUMENT), `semesterId?`, `options?` (json) | 202 `ImportJobDto` |
 | `GET /api/import/jobs?kind&status` · `GET /api/import/jobs/{id}` | `ImportJobDto {id, kind, fileName, status: UPLOADED|PARSING|NEEDS_REVIEW|READY|APPLYING|APPLIED|FAILED, createdAt, summary:{recognized, unknown, conflicts, warnings}, report:[ReportRow], draft:json, ai:{model, inputTokens, outputTokens, costUsd}?, error?}` |
 | `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type: TEACHER|DISCIPLINE|GROUP|ROOM, raw, targetId? , createNew?:{...}, addAlias:bool}]}` | re-normalizes, returns job |
+| `PUT /api/import/jobs/{id}/draft` (ORDER_DOCUMENT) `{version, number, kind, date, …, rows:[…], notes, …}` | reviewed rows replace the draft; AI-read orders cannot be applied before this |
 | `POST /api/import/jobs/{id}/apply` | 202 → APPLIED with core result ids |
 | `POST /api/import/ai/parse-absence` `{text, teacherId?, today}` | `{dateFrom, dateTo, pairs?, reasonCategory, confidence, clarification?}` |
 | `GET /api/import/ai/usage` | `{today:{calls, inputTokens, outputTokens, costUsd}, dailyBudgetUsd, model:{text,vision}}` |

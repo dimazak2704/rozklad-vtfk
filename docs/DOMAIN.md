@@ -139,7 +139,9 @@ now conflict. Emits `timetable.version.published` and `schedule.changed`.
 
 ## 7. Absences, options, changes
 
-**Affected lessons** = SCHEDULED lessons of the teacher with date in range and pair in `pairs` (or all).
+**Affected lessons** = SCHEDULED lessons of the teacher with date in range and pair in `pairs` (or all), plus
+lessons the teacher was to take over by a not yet published change (`asSubstitute`). A substitute must not be
+absent at (date, pair): checked when the change is created, confirmed and published (409 UNAVAILABLE).
 
 **Options per affected lesson** (endpoint returns them ranked, each with Ukrainian reason chips):
 1. `REPLACE_TEACHER` — candidate T must be: not the absent teacher, not absent at (date,pair), free at
