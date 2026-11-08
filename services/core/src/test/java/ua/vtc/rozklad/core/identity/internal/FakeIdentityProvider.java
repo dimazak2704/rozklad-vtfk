@@ -59,6 +59,15 @@ public class FakeIdentityProvider implements IdentityProvider {
     }
 
     @Override
+    public Optional<Account> findUserByUsername(String username) {
+        ensureUp();
+        return users.values().stream()
+                .filter(user -> user.username().equalsIgnoreCase(username))
+                .findFirst()
+                .map(user -> new Account(user.id(), user.username(), user.enabled()));
+    }
+
+    @Override
     public void restoreAccess(UUID userId, String password) {
         ensureUp();
         User user = users.get(userId);

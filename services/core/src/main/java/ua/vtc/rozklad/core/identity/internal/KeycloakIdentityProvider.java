@@ -91,6 +91,15 @@ class KeycloakIdentityProvider implements IdentityProvider, DisposableBean {
     }
 
     @Override
+    public Optional<Account> findUserByUsername(String username) {
+        return call("find user by username", () -> realm().users().searchByUsername(username, true).stream()
+                .filter(user -> user.getUsername().equalsIgnoreCase(username))
+                .findFirst()
+                .map(user -> new Account(UUID.fromString(user.getId()), user.getUsername(),
+                        Boolean.TRUE.equals(user.isEnabled()))));
+    }
+
+    @Override
     public void restoreAccess(UUID userId, String password) {
         setPassword(userId, password);
         call("enable user", () -> {

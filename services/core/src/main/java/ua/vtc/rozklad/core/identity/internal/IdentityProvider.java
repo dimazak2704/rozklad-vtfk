@@ -20,6 +20,9 @@ public interface IdentityProvider {
 
     Optional<Account> findUser(UUID userId);
 
+    /** Exact (case-insensitive) username match; Keycloak stores usernames in lower case. */
+    Optional<Account> findUserByUsername(String username);
+
     /** Enables the user and sets a new password (re-invite of an already linked teacher). */
     void restoreAccess(UUID userId, String password);
 

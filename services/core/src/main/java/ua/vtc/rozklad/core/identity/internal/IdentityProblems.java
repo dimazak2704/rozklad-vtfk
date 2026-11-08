@@ -36,6 +36,13 @@ public final class IdentityProblems {
                 "Не вдалося створити обліковий запис: сервер автентифікації не відповідає. Спробуйте пізніше."), cause);
     }
 
+    /** 503 while reading accounts (linking a teacher to an existing account). */
+    public static ErrorResponseException identityLookupUnavailable(Throwable cause) {
+        return new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE, problem(HttpStatus.SERVICE_UNAVAILABLE,
+                "identity-unavailable", "Сервіс входу недоступний",
+                "Не вдалося перевірити обліковий запис: сервер автентифікації не відповідає. Спробуйте пізніше."), cause);
+    }
+
     /** 403: a TEACHER token whose account is not linked to any teacher of the catalog. */
     public static ErrorResponseException accountNotLinked() {
         return new ErrorResponseException(HttpStatus.FORBIDDEN, problem(HttpStatus.FORBIDDEN, "forbidden",
