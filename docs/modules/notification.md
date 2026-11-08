@@ -18,7 +18,7 @@ internal REST, schedules are read from core's public REST.
 | `substitution` | `SubstitutionRequests` (request, reply, edits, deadline reminders), `SubstitutionTexts` |
 | `documents` | `OrderDocxRenderer` (POI, college layout), `LibreOfficeConverter`, `PdfPngRenderer` (PDFBox), `OrderDocuments` (cache, media for photos), `PublishedOrders`, `DocumentPrerenderer`, `web/DocumentsController` |
 | `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache), error mapping |
-| `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (deadlines every minute, nightly cleanup) |
+| `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
 | `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
 
 Tables (Flyway `V2`–`V6`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
@@ -90,7 +90,12 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   first one's commit, sees the state and does nothing. The handler talks to core first; once core accepted the
   answer the teacher always gets the success reply (a still failing local update is logged and retried
   3× on lock conflicts, the event brings the copy up to date). `SubstitutionFlowIT.*Racing*` reproduces the
-  interleaving of 08.11.2026 (event's UPDATE flushed but not committed while the button is pressed).
+  interleaving of 08.11.2026 (event's UPDATE flushed but not committed while the button is pressed); the event
+  commits only after `pg_blocking_pids` shows the button's transaction waiting for its lock, so the test always
+  covers the dangerous order. The two every-minute jobs (deadlines, teachers without Telegram) run one after
+  another in one scheduled method (the scheduler uses virtual threads, separate methods would run side by side),
+  lock their rows in one order (`order by change_id`, also across instances) and look teacher names up in core
+  before locking, so no HTTP call holds a row the button or an event waits for.
 * **Teacher without Telegram**: the request cannot be sent; instead of one admin message per change, the
   every-minute job tells admin chats about requests still PENDING after `app.bot.no-telegram-notice-delay`
   (2 min) — one message per teacher and lesson date listing the pairs (dedup key per teacher, date and chat), so

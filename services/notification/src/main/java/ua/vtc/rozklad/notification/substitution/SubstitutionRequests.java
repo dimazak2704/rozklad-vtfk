@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,10 @@ public class SubstitutionRequests {
     private static final Logger log = LoggerFactory.getLogger(SubstitutionRequests.class);
     private static final String UNKNOWN_TEACHER = "Викладач";
     private static final int MAX_RECORD_ATTEMPTS = 3;
+    private static final Comparator<SubstitutionRequest> BY_TEACHER_DATE_PAIR =
+            Comparator.comparing(SubstitutionRequest::getTeacherId)
+                    .thenComparing(SubstitutionRequest::getLessonDate)
+                    .thenComparingInt(SubstitutionRequest::getPair);
 
     private final SubstitutionRequestRepository requests;
     private final SubstitutionMessageRepository messages;
@@ -243,11 +248,19 @@ public class SubstitutionRequests {
     /**
      * Deadline passed without an answer: one reminder to the teacher and a notice to admins. Requests
      * that never reached the teacher (no Telegram) were already reported by
-     * {@link #reportTeachersWithoutTelegram()}; past lessons are not worth a notice.
+     * {@link #reportTeachersWithoutTelegram()}; past lessons are not worth a notice. Teacher names are
+     * looked up before the rows are locked, so no call to core holds the locks.
      */
-    @Transactional
     public int remindOverdue() {
         Instant now = clock.instant();
+        Map<UUID, String> names = teacherNames(requests.findOverdueTeachers(now));
+        if (names.isEmpty()) {
+            return 0;
+        }
+        return count(transactions.execute(tx -> remindOverdue(now, names)));
+    }
+
+    private int remindOverdue(Instant now, Map<UUID, String> names) {
         LocalDate today = LocalDate.now(clock);
         List<SubstitutionRequest> overdue = requests.findOverdue(now);
         for (SubstitutionRequest request : overdue) {
@@ -262,7 +275,7 @@ public class SubstitutionRequests {
                             .withKeyboard(SubstitutionTexts.buttons(request.getChangeId()))
                             .correlatedWith(request.getChangeId())
                             .dedupBy("reminder:" + key)));
-            String text = SubstitutionTexts.adminOverdue(teacherName(request.getTeacherId()), request,
+            String text = SubstitutionTexts.adminOverdue(name(names, request.getTeacherId()), request,
                     links.adminChanges(request.getLessonDate()));
             for (ChatBinding admin : bindings.adminChats()) {
                 outbox.enqueue(OutboundDraft.text(Recipient.of(admin), DeliveryPurpose.SUBSTITUTION_ADMIN, text)
@@ -284,12 +297,21 @@ public class SubstitutionRequests {
      *
      * @return number of (teacher, date) warnings queued
      */
-    @Transactional
     public int reportTeachersWithoutTelegram() {
+        Instant noticedBefore = clock.instant().minus(properties.noTelegramNoticeDelay());
+        Map<UUID, String> names = teacherNames(requests.findUnreportedWithoutTelegramTeachers(noticedBefore));
+        if (names.isEmpty()) {
+            return 0;
+        }
+        return count(transactions.execute(tx -> reportTeachersWithoutTelegram(noticedBefore, names)));
+    }
+
+    private int reportTeachersWithoutTelegram(Instant noticedBefore, Map<UUID, String> names) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
-        List<SubstitutionRequest> due = requests.findUnreportedWithoutTelegram(
-                now.minus(properties.noTelegramNoticeDelay()));
+        // рядки заблоковано в порядку change id (як і в remindOverdue), групуємо ж за викладачем, датою, парою
+        List<SubstitutionRequest> due = new ArrayList<>(requests.findUnreportedWithoutTelegram(noticedBefore));
+        due.sort(BY_TEACHER_DATE_PAIR);
         Map<TeacherDate, List<SubstitutionRequest>> byTeacherAndDate = new LinkedHashMap<>();
         for (SubstitutionRequest request : due) {
             request.markAdminWarned(now);
@@ -305,7 +327,7 @@ public class SubstitutionRequests {
         int warnings = 0;
         for (Map.Entry<TeacherDate, List<SubstitutionRequest>> entry : byTeacherAndDate.entrySet()) {
             TeacherDate key = entry.getKey();
-            String text = SubstitutionTexts.adminNoTelegram(teacherName(key.teacherId()), entry.getValue(),
+            String text = SubstitutionTexts.adminNoTelegram(name(names, key.teacherId()), entry.getValue(),
                     links.adminChanges(key.date()));
             boolean queued = false;
             for (ChatBinding admin : admins) {
@@ -370,6 +392,24 @@ public class SubstitutionRequests {
             outbox.enqueue(OutboundDraft.text(Recipient.of(admin), DeliveryPurpose.SUBSTITUTION_ADMIN, text)
                     .forEvent(eventId, part));
         }
+    }
+
+    private Map<UUID, String> teacherNames(List<UUID> teacherIds) {
+        Map<UUID, String> names = new LinkedHashMap<>();
+        for (UUID teacherId : teacherIds) {
+            names.put(teacherId, teacherName(teacherId));
+        }
+        return names;
+    }
+
+    /** A name looked up before locking; a teacher who appeared in between is looked up now. */
+    private String name(Map<UUID, String> names, UUID teacherId) {
+        String name = names.get(teacherId);
+        return name != null ? name : teacherName(teacherId);
+    }
+
+    private static int count(Integer value) {
+        return value == null ? 0 : value;
     }
 
     /** Display name for admin texts; core down ⇒ the name saved with the teacher's binding. */

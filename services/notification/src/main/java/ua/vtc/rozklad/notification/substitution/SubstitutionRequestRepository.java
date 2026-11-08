@@ -22,24 +22,39 @@ public interface SubstitutionRequestRepository extends JpaRepository<Substitutio
     @Query("select r from SubstitutionRequest r where r.changeId = :changeId")
     Optional<SubstitutionRequest> findForUpdate(UUID changeId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select r from SubstitutionRequest r
-            where r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
+    /** Pending requests whose deadline passed and that were not reminded yet. */
+    String OVERDUE = """
+            r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
               and r.remindedAt is null and r.deadline is not null and r.deadline < :now
-            order by r.deadline
-            """)
-    List<SubstitutionRequest> findOverdue(Instant now);
+            """;
 
     /** Pending requests of teachers without Telegram, older than {@code noticedBefore}, not reported to admins yet. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select r from SubstitutionRequest r
-            where r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
+    String UNREPORTED_WITHOUT_TELEGRAM = """
+            r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
               and r.noTelegramAt is not null and r.noTelegramAt <= :noticedBefore and r.adminWarnedAt is null
-            order by r.teacherId, r.lessonDate, r.pair
-            """)
+            """;
+
+    /*
+     * The locking queries of the scheduled jobs lock their rows in one order, by change id. A request of a
+     * teacher without Telegram can be overdue and unreported at once, so both jobs may lock it; with
+     * different orders (deadline vs. teacher/date/pair) two of them — or two instances — could deadlock.
+     */
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from SubstitutionRequest r where " + OVERDUE + " order by r.changeId")
+    List<SubstitutionRequest> findOverdue(Instant now);
+
+    /** Teachers of {@link #findOverdue}, read without locks (their names are looked up before locking). */
+    @Query("select distinct r.teacherId from SubstitutionRequest r where " + OVERDUE)
+    List<UUID> findOverdueTeachers(Instant now);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from SubstitutionRequest r where " + UNREPORTED_WITHOUT_TELEGRAM + " order by r.changeId")
     List<SubstitutionRequest> findUnreportedWithoutTelegram(Instant noticedBefore);
+
+    /** Teachers of {@link #findUnreportedWithoutTelegram}, read without locks. */
+    @Query("select distinct r.teacherId from SubstitutionRequest r where " + UNREPORTED_WITHOUT_TELEGRAM)
+    List<UUID> findUnreportedWithoutTelegramTeachers(Instant noticedBefore);
 
     @Modifying
     @Query("delete from SubstitutionRequest r where r.lessonDate < :before")

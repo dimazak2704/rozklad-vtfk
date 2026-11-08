@@ -51,17 +51,26 @@ public class ScheduledJobs {
         this.clock = clock;
     }
 
+    /**
+     * Confirmation deadlines, then warnings about teachers without Telegram. One method on purpose: the
+     * scheduler runs on virtual threads, so two methods with the same delay would start together and lock
+     * overlapping {@code substitution_request} rows side by side. A failure of the first job does not
+     * skip the second one; both are tried again in a minute.
+     */
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
-    public void confirmationDeadlines() {
-        if (telegram.enabled()) {
-            substitutions.remindOverdue();
+    public void substitutionDeadlines() {
+        if (!telegram.enabled()) {
+            return;
         }
+        runSafely("confirmation deadlines", substitutions::remindOverdue);
+        runSafely("teachers without Telegram", substitutions::reportTeachersWithoutTelegram);
     }
 
-    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
-    public void teachersWithoutTelegram() {
-        if (telegram.enabled()) {
-            substitutions.reportTeachersWithoutTelegram();
+    private static void runSafely(String job, Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException e) {
+            log.error("Scheduled job «{}» failed; it runs again in a minute", job, e);
         }
     }
 

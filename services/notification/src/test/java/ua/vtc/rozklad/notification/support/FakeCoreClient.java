@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.notification.core.CoreClient;
@@ -31,6 +32,8 @@ public class FakeCoreClient implements CoreClient {
     private final List<Reply> replies = new CopyOnWriteArrayList<>();
     private final List<AbsenceReport> absences = new CopyOnWriteArrayList<>();
     private final AtomicInteger scheduleCalls = new AtomicInteger();
+    private final AtomicInteger teacherCalls = new AtomicInteger();
+    private final AtomicInteger teacherCallsInTransaction = new AtomicInteger();
     private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile boolean unavailable;
     private volatile RuntimeException replyFailure;
@@ -41,6 +44,8 @@ public class FakeCoreClient implements CoreClient {
         replies.clear();
         absences.clear();
         scheduleCalls.set(0);
+        teacherCalls.set(0);
+        teacherCallsInTransaction.set(0);
         holidays.clear();
         unavailable = false;
         replyFailure = null;
@@ -76,6 +81,16 @@ public class FakeCoreClient implements CoreClient {
         return scheduleCalls.get();
     }
 
+    /** Calls of {@link #teachers()}, the HTTP request behind every teacher name. */
+    public int teacherCalls() {
+        return teacherCalls.get();
+    }
+
+    /** Calls of {@link #teachers()} made while the calling thread had a database transaction open. */
+    public int teacherCallsInTransaction() {
+        return teacherCallsInTransaction.get();
+    }
+
     @Override
     public PublicMeta meta() {
         available();
@@ -90,6 +105,10 @@ public class FakeCoreClient implements CoreClient {
 
     @Override
     public List<PublicTeacher> teachers() {
+        teacherCalls.incrementAndGet();
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            teacherCallsInTransaction.incrementAndGet();
+        }
         available();
         return CoreFixtures.teachers();
     }

@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeStatus;
@@ -49,6 +50,8 @@ class SubstitutionFlowIT extends IntegrationTest {
     private SubstitutionRequestRepository requestRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @BeforeEach
     void bindings() {
@@ -186,6 +189,64 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
     }
 
+    /**
+     * A request of a teacher without Telegram can be overdue and unreported at once, so both every-minute
+     * jobs lock it. Their locking queries take the rows in one order (change id), whatever the deadlines,
+     * teachers and pairs say — two jobs or two instances cannot deadlock on opposite orders. The warning
+     * still lists the pairs in order.
+     */
+    @Test
+    void scheduledJobsLockSharedRowsInTheSameOrder() {
+        // порядок change id (…a01 < …a02 < …a03) протилежний порядку дедлайнів і пар
+        Instant late = Instant.parse("2026-10-19T07:00:00Z");
+        handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 4, late));
+        handlers.handle(requested(CHANGE_3, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 3, late.minusSeconds(60)));
+        handlers.handle(requested(CHANGE_4, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 2, late.minusSeconds(120)));
+        clock.set(late.plusSeconds(60));
+        Instant now = clock.instant();
+
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(tx -> {
+            assertThat(requestRepository.findOverdue(now)).extracting(SubstitutionRequest::getChangeId)
+                    .containsExactly(CHANGE_2, CHANGE_3, CHANGE_4);
+            assertThat(requestRepository.findUnreportedWithoutTelegram(now)).extracting(SubstitutionRequest::getChangeId)
+                    .containsExactly(CHANGE_2, CHANGE_3, CHANGE_4);
+            tx.setRollbackOnly();
+        });
+
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        worker.drain();
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text())
+                .containsSubsequence("• 2 пара", "• 3 пара", "• 4 пара");
+    }
+
+    /** Teacher names come from core over HTTP; the jobs look them up before locking, never while holding rows. */
+    @Test
+    void scheduledJobsDoNotCallCoreWhileHoldingTheRows() {
+        handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 3));
+        worker.drain();
+        flushCaches();
+        core.reset();
+        clock.set(Instant.parse("2026-10-19T07:01:00Z"));
+
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(substitutions.remindOverdue()).isEqualTo(2);
+        worker.drain();
+
+        assertThat(core.teacherCalls()).isPositive();
+        assertThat(core.teacherCallsInTransaction()).isZero();
+        assertThat(telegram.sentTo(OWNER_CHAT)).extracting(Sent::text)
+                .anySatisfy(text -> assertThat(text).startsWith("⚠️ <b>Кренцін М.Д. не підключив Telegram</b>"))
+                .anySatisfy(text -> assertThat(text).contains("Непийвода М.В. не відповів до 19.10 о 10:00"));
+        // нічого не чекає — нічого не блокуємо і в core не ходимо
+        core.reset();
+        flushCaches();
+        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(core.teacherCalls()).isZero();
+    }
+
     @Test
     void confirmationRacingWithCoresStatusEventNeverShowsAnError() throws Exception {
         raceButtonWithStatusEvent("✅ Підтверджую", ChangeStatus.CONFIRMED);
@@ -243,11 +304,12 @@ class SubstitutionFlowIT extends IntegrationTest {
             eventFlushed.countDown();
             try {
                 assertThat(buttonPressed.await(10, TimeUnit.SECONDS)).isTrue();
-                // кнопка встигає прочитати рядок і впертися в блокування, поки подія не закомічена
-                Thread.sleep(500);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            // подію комітимо лише тоді, коли транзакція кнопки справді чекає на блокування цього рядка:
+            // так тест щоразу перевіряє саме небезпечний порядок, незалежно від швидкості машини
+            await(Duration.ofSeconds(10), this::anotherTransactionWaitsForThisOne);
         }));
         assertThat(eventFlushed.await(10, TimeUnit.SECONDS)).isTrue();
         buttonPressed.countDown();
@@ -261,6 +323,14 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus).isEqualTo(status);
         assertThat(telegram.editsIn(TEACHER)).isNotEmpty()
                 .allSatisfy(edit -> assertThat(edit.messageId()).isEqualTo(request.messageId()));
+    }
+
+    /** Some backend is blocked by a lock this transaction's backend holds (PostgreSQL {@code pg_blocking_pids}). */
+    private boolean anotherTransactionWaitsForThisOne() {
+        Integer blocked = jdbc.queryForObject(
+                "select count(*) from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))",
+                Integer.class);
+        return blocked != null && blocked > 0;
     }
 
     @Test
@@ -322,10 +392,15 @@ class SubstitutionFlowIT extends IntegrationTest {
 
     private static SubstitutionConfirmationRequested requested(UUID changeId, UUID teacherId, LocalDate date,
                                                                int pair) {
+        return requested(changeId, teacherId, date, pair, Instant.parse("2026-10-19T07:00:00Z"));
+    }
+
+    private static SubstitutionConfirmationRequested requested(UUID changeId, UUID teacherId, LocalDate date,
+                                                               int pair, Instant deadline) {
         return new SubstitutionConfirmationRequested(EventEnvelope.create(java.time.Clock.systemUTC()), changeId,
                 teacherId, date, pair, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
                 "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "6",
-                Instant.parse("2026-10-19T07:00:00Z"));
+                deadline);
     }
 
     private static SubstitutionStatusChanged statusChanged(ChangeStatus status) {
