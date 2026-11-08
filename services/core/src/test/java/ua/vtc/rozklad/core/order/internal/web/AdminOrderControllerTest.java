@@ -3,7 +3,10 @@ package ua.vtc.rozklad.core.order.internal.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -26,6 +29,7 @@ import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
+import ua.vtc.rozklad.core.order.internal.importing.HistoricOrderImport;
 import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
 import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService.OrderNumberingDto;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
@@ -60,6 +64,24 @@ class AdminOrderControllerTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private HistoricOrderImport historicOrders;
+
+    @Test
+    void deleteRemovesAnImportedOrderOrDiscardsADraft() throws Exception {
+        UUID imported = UUID.randomUUID();
+        UUID draft = UUID.randomUUID();
+        given(historicOrders.deleteIfImported(imported)).willReturn(true);
+
+        mockMvc.perform(delete("/api/admin/orders/{id}", imported).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/admin/orders/{id}", draft).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+
+        verify(drafts, never()).discard(imported);
+        verify(drafts).discard(draft);
+    }
 
     @Test
     void firstNumberOfTheSemesterIsSet() throws Exception {
