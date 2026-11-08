@@ -138,7 +138,8 @@ gateway with real Keycloak logins. Closed in this pass (CHANGELOG-CONTRACTS, «S
 - Gateway answers 503 (not 500) when a stopped service's host does not resolve.
 
 Still open:
-- Item 15: deleting invites and historic order import (`POST /api/admin/import/changes`) in core;
+- Item 15: deleting invites in core (historic order import `POST /api/admin/import/changes` exists since
+  round 1 of the verified failures, CHANGELOG-CONTRACTS);
   `PUT/DELETE /api/admin/teachers/{id}/account` and `GET/PUT /api/admin/orders/numbering` have no SPA screens
   and no mock handlers yet (the seed uses them through the API).
 - Item 16 (streams in the solver) is unchanged.
