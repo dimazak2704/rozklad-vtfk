@@ -9,7 +9,7 @@ import java.util.UUID;
 public sealed interface RozkladEvent
         permits TimetableVersionPublished, ScheduleChanged, GenerationRequested, GenerationCancelRequested,
         GenerationProgress, GenerationCompleted, SubstitutionConfirmationRequested, SubstitutionStatusChanged,
-        AbsenceReported, OrderPublished {
+        SubstitutionTeacherReplied, AbsenceReported, OrderPublished {
 
     UUID eventId();
 

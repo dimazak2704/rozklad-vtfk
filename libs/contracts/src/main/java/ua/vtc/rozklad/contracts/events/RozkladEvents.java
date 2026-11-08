@@ -27,20 +27,22 @@ public final class RozkladEvents {
     public static final String GENERATION_COMPLETED = "generation.completed";
     public static final String SUBSTITUTION_CONFIRMATION_REQUESTED = "substitution.confirmation-requested";
     public static final String SUBSTITUTION_STATUS_CHANGED = "substitution.status-changed";
+    public static final String SUBSTITUTION_TEACHER_REPLIED = "substitution.teacher-replied";
     public static final String ABSENCE_REPORTED = "absence.reported";
     public static final String ORDER_PUBLISHED = "order.published";
 
-    private static final Map<Class<? extends RozkladEvent>, String> ROUTING_KEYS = Map.of(
-            TimetableVersionPublished.class, TIMETABLE_VERSION_PUBLISHED,
-            ScheduleChanged.class, SCHEDULE_CHANGED,
-            GenerationRequested.class, GENERATION_REQUESTED,
-            GenerationCancelRequested.class, GENERATION_CANCEL,
-            GenerationProgress.class, GENERATION_PROGRESS,
-            GenerationCompleted.class, GENERATION_COMPLETED,
-            SubstitutionConfirmationRequested.class, SUBSTITUTION_CONFIRMATION_REQUESTED,
-            SubstitutionStatusChanged.class, SUBSTITUTION_STATUS_CHANGED,
-            AbsenceReported.class, ABSENCE_REPORTED,
-            OrderPublished.class, ORDER_PUBLISHED);
+    private static final Map<Class<? extends RozkladEvent>, String> ROUTING_KEYS = Map.ofEntries(
+            Map.entry(TimetableVersionPublished.class, TIMETABLE_VERSION_PUBLISHED),
+            Map.entry(ScheduleChanged.class, SCHEDULE_CHANGED),
+            Map.entry(GenerationRequested.class, GENERATION_REQUESTED),
+            Map.entry(GenerationCancelRequested.class, GENERATION_CANCEL),
+            Map.entry(GenerationProgress.class, GENERATION_PROGRESS),
+            Map.entry(GenerationCompleted.class, GENERATION_COMPLETED),
+            Map.entry(SubstitutionConfirmationRequested.class, SUBSTITUTION_CONFIRMATION_REQUESTED),
+            Map.entry(SubstitutionStatusChanged.class, SUBSTITUTION_STATUS_CHANGED),
+            Map.entry(SubstitutionTeacherReplied.class, SUBSTITUTION_TEACHER_REPLIED),
+            Map.entry(AbsenceReported.class, ABSENCE_REPORTED),
+            Map.entry(OrderPublished.class, ORDER_PUBLISHED));
 
     private static final Map<String, Class<? extends RozkladEvent>> TYPES = ROUTING_KEYS.entrySet().stream()
             .collect(Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
@@ -82,8 +84,8 @@ public final class RozkladEvents {
                 SCHEDULER_GENERATION, List.of(GENERATION_REQUESTED, GENERATION_CANCEL),
                 CORE_SCHEDULER_RESULTS, List.of(GENERATION_PROGRESS, GENERATION_COMPLETED),
                 NOTIFICATION_EVENTS, List.of(TIMETABLE_VERSION_PUBLISHED, SCHEDULE_CHANGED,
-                        SUBSTITUTION_CONFIRMATION_REQUESTED, SUBSTITUTION_STATUS_CHANGED, ABSENCE_REPORTED,
-                        ORDER_PUBLISHED, GENERATION_COMPLETED));
+                        SUBSTITUTION_CONFIRMATION_REQUESTED, SUBSTITUTION_STATUS_CHANGED, SUBSTITUTION_TEACHER_REPLIED,
+                        ABSENCE_REPORTED, ORDER_PUBLISHED, GENERATION_COMPLETED));
 
         private Queues() {
         }

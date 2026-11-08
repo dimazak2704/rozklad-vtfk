@@ -8,13 +8,16 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.AbsenceSource;
+import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
+import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.UnitWeight;
 
 /** Realistic sample of every event type (data from order №35, 19.10.2026). */
@@ -44,8 +47,11 @@ final class EventSamples {
                 new GenerationProgress(envelope(), JOB, 4_000, -2, -340),
                 generationCompleted(),
                 substitutionConfirmationRequested(),
+                substitutionNotice(),
                 new SubstitutionStatusChanged(envelope(), CHANGE, ChangeStatus.CONFIRMED, TEACHER_NEPYIVODA, DATE,
                         "4КІ1"),
+                new SubstitutionTeacherReplied(envelope(), CHANGE, TEACHER_NEPYIVODA, ConfirmationDecision.DECLINE,
+                        ChangeStatus.APPLIED, DATE, 2, "4КІ1"),
                 absenceReported(List.of(1, 2)),
                 absenceReported(null),
                 orderPublished());
@@ -96,6 +102,15 @@ final class EventSamples {
                 LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
                 "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "6",
                 Instant.parse("2026-10-18T17:00:00Z"));
+    }
+
+    /** NOTIFY: a REPLACE_DISCIPLINE change the teacher is informed about (no deadline). */
+    private static SubstitutionConfirmationRequested substitutionNotice() {
+        return new SubstitutionConfirmationRequested(envelope(), CHANGE, TEACHER_NEPYIVODA, DATE, 2,
+                LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
+                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "6", null,
+                SubstitutionRequestMode.NOTIFY, ChangeKind.REPLACE_DISCIPLINE, "Сучасні технології проєктування",
+                "MUTUAL");
     }
 
     private static AbsenceReported absenceReported(List<Integer> pairs) {
