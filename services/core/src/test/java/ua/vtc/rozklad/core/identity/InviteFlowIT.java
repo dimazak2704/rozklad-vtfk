@@ -109,7 +109,8 @@ class InviteFlowIT {
 
         accept(token)
                 .andExpect(status().isGone())
-                .andExpect(jsonPath("$.status").value("USED"));
+                .andExpect(jsonPath("$.status").value(410))
+                .andExpect(jsonPath("$.inviteStatus").value("USED"));
         mvc.perform(get("/api/public/invites/{token}", token))
                 .andExpect(jsonPath("$.valid").value(false))
                 .andExpect(jsonPath("$.status").value("USED"));
@@ -127,7 +128,8 @@ class InviteFlowIT {
         accept(older)
                 .andExpect(status().isGone())
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:invite-gone"))
-                .andExpect(jsonPath("$.status").value("REVOKED"));
+                .andExpect(jsonPath("$.status").value(410))
+                .andExpect(jsonPath("$.inviteStatus").value("REVOKED"));
         mvc.perform(get("/api/admin/invites").param("teacherId", teacher.toString()).with(TestJwts.admin()))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].teacher.shortName").value("Кренцін М.Д."))
@@ -143,7 +145,7 @@ class InviteFlowIT {
 
         accept(token)
                 .andExpect(status().isGone())
-                .andExpect(jsonPath("$.status").value("EXPIRED"))
+                .andExpect(jsonPath("$.inviteStatus").value("EXPIRED"))
                 .andExpect(jsonPath("$.detail").value("Термін дії запрошення минув. Попросіть адміністратора надіслати нове."));
         accept("A".repeat(43)).andExpect(status().isNotFound());
         accept("not-a-token").andExpect(status().isNotFound());

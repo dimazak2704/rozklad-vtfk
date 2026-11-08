@@ -36,7 +36,7 @@ class TeacherAccountServiceTest {
     private final InviteRepository invites = mock(InviteRepository.class);
     private final FakeIdentityProvider keycloak = new FakeIdentityProvider();
     private final TeacherAccountService service = new TeacherAccountService(teachers, invites, keycloak,
-            Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
+            mock(AccountLinkLocks.class), Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
 
     private Teacher krentsin;
     private UUID account;
@@ -45,6 +45,7 @@ class TeacherAccountServiceTest {
     void setUp() {
         krentsin = new Teacher("Кренцін", "Кренцін М.Д.", "Кренцін");
         given(teachers.findById(krentsin.getId())).willReturn(Optional.of(krentsin));
+        given(teachers.existsById(krentsin.getId())).willReturn(true);
         given(teachers.findByKeycloakUserId(any())).willReturn(Optional.empty());
         given(invites.findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(any())).willReturn(List.of());
         account = keycloak.existingUser("krentsin", "teacher", true);

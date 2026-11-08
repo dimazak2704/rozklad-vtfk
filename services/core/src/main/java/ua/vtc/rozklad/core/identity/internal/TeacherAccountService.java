@@ -33,13 +33,15 @@ public class TeacherAccountService {
     private final TeacherRepository teachers;
     private final InviteRepository invites;
     private final IdentityProvider identityProvider;
+    private final AccountLinkLocks locks;
     private final Clock clock;
 
-    public TeacherAccountService(TeacherRepository teachers, InviteRepository invites, IdentityProvider identityProvider,
-                                 Clock clock) {
+    TeacherAccountService(TeacherRepository teachers, InviteRepository invites, IdentityProvider identityProvider,
+                          AccountLinkLocks locks, Clock clock) {
         this.teachers = teachers;
         this.invites = invites;
         this.identityProvider = identityProvider;
+        this.locks = locks;
         this.clock = clock;
     }
 
@@ -59,7 +61,9 @@ public class TeacherAccountService {
      * @throws ConflictException     the account belongs to another teacher, or the teacher has another account (409)
      */
     public TeacherAccountDto link(UUID teacherId, String rawUsername, String actor) {
-        Teacher teacher = teacher(teacherId);
+        if (!teachers.existsById(teacherId)) {
+            throw NotFoundException.of("Викладач", teacherId);
+        }
         String username = rawUsername.strip().toLowerCase(Locale.ROOT);
         Account account = lookup(() -> identityProvider.findUserByUsername(username))
                 .orElseThrow(() -> new BusinessRuleException("ACCOUNT_NOT_FOUND",
@@ -68,6 +72,10 @@ public class TeacherAccountService {
             throw new BusinessRuleException("ACCOUNT_DISABLED", ("Обліковий запис «%s» вимкнено. Надішліть викладачеві "
                     + "запрошення, щоб відновити доступ.").formatted(account.username()));
         }
+        // паралельні прив'язки одного облікового запису чи викладача — по черзі; викладача читаємо
+        // лише після замків, тож повторна прив'язка того самого запису бачить уже готовий зв'язок
+        locks.lockAccountAndTeacher(account.id(), teacherId);
+        Teacher teacher = teacher(teacherId);
         if (account.id().equals(teacher.getKeycloakUserId())) {
             return TeacherAccountDto.of(teacher, Optional.of(account));
         }
@@ -97,6 +105,7 @@ public class TeacherAccountService {
 
     /** Idempotent: a teacher without an account stays as is. The Keycloak user itself is kept. */
     public void unlink(UUID teacherId, String actor) {
+        locks.lockTeacher(teacherId);
         Teacher teacher = teacher(teacherId);
         if (teacher.getKeycloakUserId() != null) {
             log.info("Teacher {} unlinked from account {} by {}", teacher.getId(), teacher.getKeycloakUserId(), actor);

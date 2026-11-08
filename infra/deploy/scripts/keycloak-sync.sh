@@ -2,7 +2,8 @@
 # Makes the realm "rozklad" match infra/deploy/.env. deploy.sh runs it after every start.
 #   - rozklad-web: base URL, redirect URIs, web origins and post-logout URIs for https://DOMAIN
 #     (and EXTRA_WEB_ORIGIN for the Netlify-hosted client);
-#   - secrets of the confidential clients rozklad-core-admin, rozklad-notification, rozklad-importer.
+#   - secrets of the confidential clients rozklad-core-admin, rozklad-notification, rozklad-importer;
+#   - the user profile of infra/keycloak/user-profile.json (e-mail and first name optional).
 # The realm file is imported only on the very first start, so without this a new DOMAIN or a
 # changed secret in .env would never reach Keycloak. Idempotent.
 set -Eeuo pipefail
@@ -35,6 +36,7 @@ IFS= read -r extra
 IFS= read -r core_secret
 IFS= read -r notification_secret
 IFS= read -r importer_secret
+IFS= read -r user_profile
 
 client_uuid() {
   local id
@@ -67,7 +69,14 @@ admin_scope=$(kc get client-scopes -r rozklad --fields id,name --format csv --no
 [[ -n $admin_scope ]] || { echo "client scope kc-admin-api not found in the realm rozklad" >&2; exit 1; }
 kc update "clients/$(client_uuid rozklad-core-admin)/default-client-scopes/$admin_scope" -r rozklad
 echo "rozklad-core-admin: default client scope kc-admin-api"
+
+# E-mail and first name optional: an invited teacher (most have initials only) signs in right after
+# accepting the invite instead of stopping at «Update account information».
+printf "%s" "$user_profile" | kc update users/profile -r rozklad -f - >/dev/null
+echo "user profile: e-mail and first name optional"
 '
 
+profile_file="$here/../../keycloak/user-profile.json"
+[[ -f $profile_file ]] || die "missing $profile_file"
 log "Keycloak: syncing clients with $(basename "$ROZKLAD_ENV_FILE")"
-printf '%s\n' "$origin" "$extra" "${secrets[@]}" | kc_run "$code"
+printf '%s\n' "$origin" "$extra" "${secrets[@]}" "$(tr -d '\n' < "$profile_file")" | kc_run "$code"

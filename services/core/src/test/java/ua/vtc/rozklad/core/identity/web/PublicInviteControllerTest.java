@@ -73,7 +73,8 @@ class PublicInviteControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:invite-gone"))
                 .andExpect(jsonPath("$.title").value("Запрошення недійсне"))
-                .andExpect(jsonPath("$.status").value("EXPIRED"))
+                .andExpect(jsonPath("$.status").value(410))
+                .andExpect(jsonPath("$.inviteStatus").value("EXPIRED"))
                 .andExpect(jsonPath("$.detail").value("Термін дії запрошення минув. Попросіть адміністратора надіслати нове."));
     }
 

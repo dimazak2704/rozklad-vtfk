@@ -16,7 +16,10 @@ public final class IdentityProblems {
     private IdentityProblems() {
     }
 
-    /** 410: the invite exists but cannot be used any more. */
+    /**
+     * 410: the invite exists but cannot be used any more. Its state is the extension member
+     * {@code inviteStatus}; the standard {@code status} stays the HTTP status (RFC 9457).
+     */
     public static ErrorResponseException inviteGone(InviteStatus status) {
         String detail = switch (status) {
             case USED -> "Запрошення вже використано. Увійдіть зі своїм ім'ям користувача або попросіть нове запрошення.";
@@ -25,7 +28,7 @@ public final class IdentityProblems {
             case ACTIVE -> throw new IllegalArgumentException("an active invite is not gone");
         };
         ProblemDetail body = problem(HttpStatus.GONE, "invite-gone", "Запрошення недійсне", detail);
-        body.setProperty("status", status);
+        body.setProperty("inviteStatus", status);
         return new ErrorResponseException(HttpStatus.GONE, body, null);
     }
 

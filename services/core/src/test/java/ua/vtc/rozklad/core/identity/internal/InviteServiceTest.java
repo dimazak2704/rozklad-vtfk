@@ -221,7 +221,7 @@ class InviteServiceTest {
         assertThatThrownBy(() -> service.accept(token, "krentsin", "secret-password"))
                 .isInstanceOfSatisfying(ErrorResponseException.class, error -> {
                     assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE);
-                    assertThat(error.getBody().getProperties()).containsEntry("status", status);
+                    assertThat(error.getBody().getProperties()).containsEntry("inviteStatus", status);
                 });
     }
 

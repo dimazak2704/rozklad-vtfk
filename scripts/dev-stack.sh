@@ -62,6 +62,21 @@ keycloak_admin_scope() {
   echo "  keycloak: rozklad-core-admin has the scope kc-admin-api"
 }
 
+# The user profile of infra/keycloak/user-profile.json: e-mail and first name are optional, so a teacher
+# invited without them (most teachers of the Excel have initials only) signs in right after accepting
+# the invite instead of stopping at «Update account information». Realms imported before 08.11.2026 have
+# the Keycloak default (both required). Idempotent.
+keycloak_user_profile() {
+  MSYS_NO_PATHCONV=1 docker exec -i rozklad-keycloak-1 bash -c '
+    set -euo pipefail
+    cfg=$(mktemp); trap "rm -f $cfg" EXIT
+    kc() { /opt/keycloak/bin/kcadm.sh "$@" --config "$cfg"; }
+    kc config credentials --server http://localhost:8080 --realm master \
+      --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1
+    kc update users/profile -r rozklad -f - >/dev/null' < "$root/infra/keycloak/user-profile.json"
+  echo "  keycloak: user profile without required e-mail and first name"
+}
+
 cmd_up() {
   local build=1 web=0 telegram=${TELEGRAM:-on}
   for arg in "$@"; do
@@ -80,6 +95,7 @@ cmd_up() {
   docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d
   wait_healthy postgres rabbitmq redis keycloak
   keycloak_admin_scope
+  keycloak_user_profile
 
   if ((build)); then
     echo "== jars (mvn package, tests skipped)"
