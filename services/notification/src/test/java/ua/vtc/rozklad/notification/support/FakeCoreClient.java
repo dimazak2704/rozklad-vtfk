@@ -38,6 +38,7 @@ public class FakeCoreClient implements CoreClient {
     private volatile boolean unavailable;
     private volatile RuntimeException replyFailure;
     private volatile RuntimeException absenceFailure;
+    private volatile ChangeStatus noticeStatus;
     private volatile LocalDate today = LocalDate.of(2026, 10, 19);
 
     public void reset() {
@@ -50,7 +51,16 @@ public class FakeCoreClient implements CoreClient {
         unavailable = false;
         replyFailure = null;
         absenceFailure = null;
+        noticeStatus = null;
         today = LocalDate.of(2026, 10, 19);
+    }
+
+    /**
+     * Answers as core does for a NOTIFY change in {@code status}: «Добре» keeps the status, «Не можу» declines a
+     * CONFIRMED change and keeps an APPLIED one (an objection). {@code null} switches back to CONFIRM answers.
+     */
+    public void answerAsNotice(ChangeStatus status) {
+        this.noticeStatus = status;
     }
 
     public void setUnavailable(boolean value) {
@@ -186,9 +196,15 @@ public class FakeCoreClient implements CoreClient {
             throw replyFailure;
         }
         replies.add(new Reply(changeId, teacherId, decision));
+        ChangeStatus notice = noticeStatus;
+        if (notice != null) {
+            ChangeStatus after = decision == ConfirmationDecision.DECLINE && notice == ChangeStatus.CONFIRMED
+                    ? ChangeStatus.DECLINED : notice;
+            return new ChangeSummary(changeId, after, "NOTIFY", decision);
+        }
         return new ChangeSummary(changeId, decision == ConfirmationDecision.CONFIRM
                 ? ChangeStatus.CONFIRMED
-                : ChangeStatus.DECLINED);
+                : ChangeStatus.DECLINED, "CONFIRM", decision);
     }
 
     @Override

@@ -14,6 +14,7 @@ import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
+import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.events.TimetableVersionPublished;
 import ua.vtc.rozklad.notification.core.CoreQueries;
 import ua.vtc.rozklad.notification.orders.OrderDistribution;
@@ -53,6 +54,7 @@ public class EventHandlers {
             case OrderPublished published -> orders.onPublished(published);
             case SubstitutionConfirmationRequested requested -> substitutions.onConfirmationRequested(requested);
             case SubstitutionStatusChanged changed -> substitutions.onStatusChanged(changed);
+            case SubstitutionTeacherReplied replied -> substitutions.onTeacherReplied(replied);
             case AbsenceReported absence -> adminNotices.onAbsenceReported(absence);
             case GenerationCompleted completed -> adminNotices.onGenerationCompleted(completed);
             case ScheduleChanged ignored -> queries.invalidateSchedules();

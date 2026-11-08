@@ -22,8 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
+import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
+import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.config.BotProperties;
@@ -38,12 +40,14 @@ import ua.vtc.rozklad.notification.delivery.OutboundDraft;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageSent;
 import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
+import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
 import ua.vtc.rozklad.notification.text.WebLinks;
 
 /**
- * Substitution confirmations in Telegram: sends the request to the teacher's chat, takes his
- * answer (core {@code POST /api/internal/changes/{id}/reply}), edits the messages to the final
- * state, reminds after the deadline and keeps admin chats informed.
+ * Substitutions in Telegram: sends the request (CONFIRM) or the notice of an assigned change (NOTIFY) to the
+ * teacher's chat, takes his answer (core {@code POST /api/internal/changes/{id}/reply}), edits the messages to
+ * the state core reports, reminds after the deadline (CONFIRM only) and keeps admin chats informed: a refusal,
+ * an objection to a published change, a teacher without Telegram.
  *
  * <p>The local copy of a request is written by the teacher's button and by core's events at the
  * same time (core publishes {@code substitution.status-changed} for the very answer the button sent).
@@ -90,15 +94,17 @@ public class SubstitutionRequests {
 
     /**
      * {@code substitution.confirmation-requested}. A repeated request for a pending change is a reminder.
-     * A teacher without Telegram is not reported right away: {@link #reportTeachersWithoutTelegram()}
-     * tells admins once per teacher and date about requests that are still unanswered.
+     * A notice (NOTIFY) about a lesson that is already over is not sent. A teacher without Telegram is not
+     * reported right away: {@link #reportTeachersWithoutTelegram()} tells admins once per teacher and date
+     * about requests and notices that are still unanswered.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void onConfirmationRequested(SubstitutionConfirmationRequested event) {
         Instant now = clock.instant();
+        boolean notice = event.effectiveMode() == SubstitutionRequestMode.NOTIFY;
         Optional<SubstitutionRequest> existing = requests.findForUpdate(event.changeId());
         boolean sameTeacher = existing.map(found -> found.getTeacherId().equals(event.teacherId())).orElse(false);
-        boolean reminder = sameTeacher && existing.get().isPending()
+        boolean reminder = !notice && sameTeacher && existing.get().isPending()
                 && !messages.findByChangeId(event.changeId()).isEmpty();
         if (existing.isPresent() && !sameTeacher) {
             retireMessages(existing.get(), event.eventId());
@@ -108,29 +114,40 @@ public class SubstitutionRequests {
             return found;
         }).orElseGet(() -> requests.save(SubstitutionRequest.from(event, now)));
 
+        if (notice && event.date().isBefore(LocalDate.now(clock))) {
+            // пара вже минула: повідомляти нема про що (минулі дні диспетчер вносить для обліку)
+            return;
+        }
         Optional<ChatBinding> chat = bindings.teacherChat(event.teacherId());
         if (chat.isPresent()) {
             request.markSent(now);
-            outbox.enqueue(OutboundDraft.text(Recipient.of(chat.get()),
+            OutboundDraft draft = notice
+                    ? OutboundDraft.text(Recipient.of(chat.get()), DeliveryPurpose.SUBSTITUTION_NOTICE,
+                            SubstitutionTexts.notice(request))
+                    .withKeyboard(SubstitutionTexts.noticeButtons(event.changeId()))
+                    : OutboundDraft.text(Recipient.of(chat.get()),
                             reminder ? DeliveryPurpose.SUBSTITUTION_REMINDER : DeliveryPurpose.SUBSTITUTION_REQUEST,
                             SubstitutionTexts.request(request, reminder))
-                    .withKeyboard(SubstitutionTexts.buttons(event.changeId()))
-                    .correlatedWith(event.changeId())
-                    .forEvent(event.eventId(), "request"));
+                    .withKeyboard(SubstitutionTexts.buttons(event.changeId()));
+            outbox.enqueue(draft.correlatedWith(event.changeId()).forEvent(event.eventId(), "request"));
             return;
         }
         request.markNoTelegram(now);
     }
 
-    /** {@code substitution.status-changed}: final states edit the request messages; a refusal goes to admins. */
+    /**
+     * {@code substitution.status-changed}: final states edit the request messages (a notice of a published
+     * change keeps its buttons until the teacher answers); a refusal goes to admins.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void onStatusChanged(SubstitutionStatusChanged event) {
         Optional<SubstitutionRequest> request = requests.findForUpdate(event.changeId());
         request.ifPresent(found -> {
             boolean changed = found.changeStatus(event.status(), clock.instant());
-            String finalText = SubstitutionTexts.finalState(found, event.status());
-            if (changed && finalText != null) {
-                editMessages(found, finalText, null, null, event.eventId());
+            String text = found.isNotice() ? SubstitutionTexts.noticeState(found)
+                    : SubstitutionTexts.finalState(found, event.status());
+            if (changed && text != null) {
+                editMessages(found, text, keyboardOf(found), null, null, event.eventId());
             }
         });
         if (event.status() == ChangeStatus.DECLINED) {
@@ -140,6 +157,32 @@ public class SubstitutionRequests {
                     .orElseGet(() -> SubstitutionTexts.adminDeclinedUnknown(name, event.date(), event.groupCode(),
                             event.date() == null ? "" : links.adminChanges(event.date())));
             notifyAdmins(text, event.eventId(), "declined");
+        }
+    }
+
+    /**
+     * {@code substitution.teacher-replied} (NOTIFY): «Добре» or «Не можу» that kept the status, given in Telegram
+     * or the cabinet. The notice messages show the answer; an objection to a published change goes to admins
+     * (the order stays, the dispatcher prepares an amendment). The teacher's name is looked up before the row
+     * is locked.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onTeacherReplied(SubstitutionTeacherReplied event) {
+        String name = event.raisesObjection() ? teacherName(event.teacherId()) : null;
+        Optional<SubstitutionRequest> request = requests.findForUpdate(event.changeId());
+        request.ifPresent(found -> {
+            if (found.isNotice() && found.getTeacherId().equals(event.teacherId())
+                    && found.recordAnswer(event.decision(), event.status(), clock.instant())) {
+                String text = SubstitutionTexts.noticeState(found);
+                if (text != null) {
+                    editMessages(found, text, keyboardOf(found), null, null, event.eventId());
+                }
+            }
+        });
+        if (event.raisesObjection()) {
+            String text = SubstitutionTexts.adminObjection(name, event.pair(), event.groupCode(), event.date(),
+                    links.adminChanges(event.date()));
+            notifyAdmins(text, event.eventId(), "objection");
         }
     }
 
@@ -179,7 +222,7 @@ public class SubstitutionRequests {
             result = core.replyToChange(changeId, teacherId, decision, null);
         } catch (UpstreamRejectedException e) {
             if (e.isConflict()) {
-                return alreadyAnswered(changeId, wanted, known);
+                return alreadyAnswered(changeId, decision, wanted, known);
             }
             if (e.isForbidden()) {
                 return new ReplyOutcome.WrongTeacher();
@@ -193,29 +236,37 @@ public class SubstitutionRequests {
             return new ReplyOutcome.Unavailable();
         }
         ChangeStatus status = result != null && result.status() != null ? result.status() : wanted;
-        SubstitutionRequest updated = recordReplySafely(changeId, status, chatId, clickedMessageId);
+        boolean notice = result != null && result.approvalMode() != null ? result.notice()
+                : known.map(SubstitutionRequest::isNotice).orElse(false);
+        SubstitutionRequest updated = recordReplySafely(changeId, status, notice ? decision : null, chatId,
+                clickedMessageId);
         log.info("Teacher answered {} for change {} → {}", decision, changeId, status);
-        return new ReplyOutcome.Done(updated != null ? updated : known.orElse(null), status);
+        return new ReplyOutcome.Done(updated != null ? updated : known.orElse(null), status, notice);
     }
 
     /**
-     * core says the change no longer waits for an answer. If it already holds exactly this answer (a
+     * core says the change no longer takes this answer. If it already holds exactly this answer (a
      * double tap, or the answer given from another copy of the request), the teacher gets the same
      * result again instead of «неактуальний».
      */
-    private ReplyOutcome alreadyAnswered(UUID changeId, ChangeStatus wanted, Optional<SubstitutionRequest> known) {
+    private ReplyOutcome alreadyAnswered(UUID changeId, ConfirmationDecision decision, ChangeStatus wanted,
+                                         Optional<SubstitutionRequest> known) {
         Optional<SubstitutionRequest> fresh = requests.findById(changeId).or(() -> known);
-        if (fresh.isPresent() && fresh.get().getStatus() == wanted) {
-            return new ReplyOutcome.Done(fresh.get(), wanted);
+        if (fresh.isPresent() && fresh.get().isNotice() && fresh.get().getTeacherAnswer() == decision) {
+            return new ReplyOutcome.Done(fresh.get(), fresh.get().getStatus(), true);
+        }
+        if (fresh.isPresent() && !fresh.get().isNotice() && fresh.get().getStatus() == wanted) {
+            return new ReplyOutcome.Done(fresh.get(), wanted, false);
         }
         return new ReplyOutcome.NotPending(fresh.orElse(null));
     }
 
-    private SubstitutionRequest recordReplySafely(UUID changeId, ChangeStatus status, long chatId,
-                                                  Long clickedMessageId) {
+    /** {@code answer} is the notice answer (NOTIFY) or {@code null} for a request. */
+    private SubstitutionRequest recordReplySafely(UUID changeId, ChangeStatus status, ConfirmationDecision answer,
+                                                  long chatId, Long clickedMessageId) {
         for (int attempt = 1; attempt <= MAX_RECORD_ATTEMPTS; attempt++) {
             try {
-                return transactions.execute(tx -> recordReply(changeId, status, chatId, clickedMessageId));
+                return transactions.execute(tx -> recordReply(changeId, status, answer, chatId, clickedMessageId));
             } catch (ConcurrencyFailureException e) {
                 log.debug("Recording the answer for change {} collided (attempt {}): {}", changeId, attempt,
                         e.getMessage());
@@ -230,15 +281,26 @@ public class SubstitutionRequests {
         return null;
     }
 
-    private SubstitutionRequest recordReply(UUID changeId, ChangeStatus status, long chatId, Long clickedMessageId) {
+    private SubstitutionRequest recordReply(UUID changeId, ChangeStatus status, ConfirmationDecision answer,
+                                           long chatId, Long clickedMessageId) {
         Optional<SubstitutionRequest> request = requests.findForUpdate(changeId);
         request.ifPresent(found -> {
+            if (found.isNotice()) {
+                // відповідь на повідомлення: подія core (той самий стан) могла встигнути першою — тоді нічого
+                if (answer != null && found.recordAnswer(answer, status, clock.instant())) {
+                    String text = SubstitutionTexts.noticeState(found);
+                    if (text != null) {
+                        editMessages(found, text, keyboardOf(found), chatId, clickedMessageId, null);
+                    }
+                }
+                return;
+            }
             // лише очікуваний запит переходить у фінальний стан: подія core могла встигнути першою
             // (той самий статус) або вже пізніша (APPLIED) — тоді нічого не перезаписуємо
             if (found.isPending() && found.changeStatus(status, clock.instant())) {
                 String text = SubstitutionTexts.finalState(found, status);
                 if (text != null) {
-                    editMessages(found, text, chatId, clickedMessageId, null);
+                    editMessages(found, text, null, chatId, clickedMessageId, null);
                 }
             }
         });
@@ -316,8 +378,8 @@ public class SubstitutionRequests {
         for (SubstitutionRequest request : due) {
             request.markAdminWarned(now);
             if (!request.getLessonDate().isBefore(today)) {
-                byTeacherAndDate.computeIfAbsent(new TeacherDate(request.getTeacherId(), request.getLessonDate()),
-                        key -> new ArrayList<>()).add(request);
+                byTeacherAndDate.computeIfAbsent(new TeacherDate(request.getTeacherId(), request.getLessonDate(),
+                        request.isNotice()), key -> new ArrayList<>()).add(request);
             }
         }
         if (byTeacherAndDate.isEmpty()) {
@@ -333,7 +395,8 @@ public class SubstitutionRequests {
             for (ChatBinding admin : admins) {
                 queued |= !outbox.enqueue(OutboundDraft.text(Recipient.of(admin), DeliveryPurpose.SUBSTITUTION_ADMIN,
                                 text)
-                        .dedupBy("no-telegram:" + key.teacherId() + ":" + key.date() + ":" + admin.getChatId()))
+                        .dedupBy("no-telegram:" + key.teacherId() + ":" + key.date() + (key.notice() ? ":notice:" : ":")
+                                + admin.getChatId()))
                         .isEmpty();
             }
             if (queued) {
@@ -367,8 +430,14 @@ public class SubstitutionRequests {
         messages.deleteAll(sent);
     }
 
-    private void editMessages(SubstitutionRequest request, String text, Long skipChatId, Long skipMessageId,
-                              UUID eventId) {
+    /** Buttons a message keeps in the request's state: an unanswered notice of a change in force keeps them. */
+    private static InlineKeyboard keyboardOf(SubstitutionRequest request) {
+        return request.isNotice() ? SubstitutionTexts.noticeKeyboard(request.getChangeId(), request.getStatus(),
+                request.getTeacherAnswer()) : null;
+    }
+
+    private void editMessages(SubstitutionRequest request, String text, InlineKeyboard keyboard, Long skipChatId,
+                              Long skipMessageId, UUID eventId) {
         for (SubstitutionMessage message : messages.findByChangeId(request.getChangeId())) {
             if (skipChatId != null && skipChatId == message.getChatId() && skipMessageId != null
                     && skipMessageId == message.getMessageId()) {
@@ -379,11 +448,11 @@ public class SubstitutionRequests {
                 continue;
             }
             OutboundDraft draft = OutboundDraft.edit(Recipient.of(chat.get()), DeliveryPurpose.SUBSTITUTION_STATUS,
-                    message.getMessageId(), text, null).correlatedWith(request.getChangeId());
+                    message.getMessageId(), text, keyboard).correlatedWith(request.getChangeId());
             outbox.enqueue(eventId != null
                     ? draft.forEvent(eventId, "edit-" + message.getMessageId())
                     : draft.dedupBy("reply:" + request.getChangeId() + ":" + message.getMessageId() + ":"
-                            + request.getStatus()));
+                            + request.getStatus() + (request.isNotice() ? ":" + request.getTeacherAnswer() : "")));
         }
     }
 
@@ -428,14 +497,17 @@ public class SubstitutionRequests {
         return bindings.teacherChat(teacherId).map(ChatBinding::getTitle).orElse(UNKNOWN_TEACHER);
     }
 
-    private record TeacherDate(UUID teacherId, LocalDate date) {
+    private record TeacherDate(UUID teacherId, LocalDate date, boolean notice) {
     }
 
     /** Result of a teacher's answer, for the bot's reply. */
     public sealed interface ReplyOutcome {
 
-        /** {@code request} is null when the change was never seen by notification. */
-        record Done(SubstitutionRequest request, ChangeStatus status) implements ReplyOutcome {
+        /**
+         * {@code request} is null when the change was never seen by notification; {@code notice}: the change is
+         * a NOTIFY assignment (the answer kept or declined a change in force).
+         */
+        record Done(SubstitutionRequest request, ChangeStatus status, boolean notice) implements ReplyOutcome {
         }
 
         record NotTeacher() implements ReplyOutcome {

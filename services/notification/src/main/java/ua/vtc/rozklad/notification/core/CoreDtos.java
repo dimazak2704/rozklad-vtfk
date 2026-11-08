@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.Parity;
 
 /**
@@ -147,8 +148,20 @@ public final class CoreDtos {
     public record CurrentUser(UUID userId, String username, List<String> roles, PublicTeacher teacher) {
     }
 
-    /** Subset of {@code ChangeDto} returned by {@code POST /api/internal/changes/{id}/reply}. */
+    /**
+     * Subset of {@code ChangeDto} returned by {@code POST /api/internal/changes/{id}/reply}: the status after
+     * the answer, {@code approvalMode} ({@code AUTO|CONFIRM|NOTIFY}) and the recorded {@code teacherAnswer}.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ChangeSummary(UUID id, ChangeStatus status) {
+    public record ChangeSummary(UUID id, ChangeStatus status, String approvalMode, ConfirmationDecision teacherAnswer) {
+
+        public ChangeSummary(UUID id, ChangeStatus status) {
+            this(id, status, null, null);
+        }
+
+        /** The change is a NOTIFY assignment (the teacher was informed, not asked). */
+        public boolean notice() {
+            return "NOTIFY".equals(approvalMode);
+        }
     }
 }

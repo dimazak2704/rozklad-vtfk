@@ -6,6 +6,8 @@ public enum DeliveryPurpose {
     ORDER_TEACHER,
     ORDER_ADMIN,
     SUBSTITUTION_REQUEST,
+    /** NOTIFY: «Вам поставили заміну» with [👍 Добре] [❌ Не можу]. */
+    SUBSTITUTION_NOTICE,
     SUBSTITUTION_REMINDER,
     SUBSTITUTION_STATUS,
     SUBSTITUTION_ADMIN,
@@ -14,8 +16,8 @@ public enum DeliveryPurpose {
     DIGEST,
     TEST;
 
-    /** Messages with confirmation buttons whose ids must be remembered for later edits. */
+    /** Messages with answer buttons whose ids must be remembered for later edits. */
     public boolean isSubstitutionRequest() {
-        return this == SUBSTITUTION_REQUEST || this == SUBSTITUTION_REMINDER;
+        return this == SUBSTITUTION_REQUEST || this == SUBSTITUTION_NOTICE || this == SUBSTITUTION_REMINDER;
     }
 }

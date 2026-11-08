@@ -28,10 +28,17 @@ public interface SubstitutionRequestRepository extends JpaRepository<Substitutio
               and r.remindedAt is null and r.deadline is not null and r.deadline < :now
             """;
 
-    /** Pending requests of teachers without Telegram, older than {@code noticedBefore}, not reported to admins yet. */
+    /**
+     * Messages that never reached a teacher without Telegram, older than {@code noticedBefore}, not reported to
+     * admins yet, and still worth a word: a pending request (CONFIRM) or an unanswered notice of a change in
+     * force (NOTIFY: CONFIRMED or already APPLIED).
+     */
     String UNREPORTED_WITHOUT_TELEGRAM = """
-            r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
-              and r.noTelegramAt is not null and r.noTelegramAt <= :noticedBefore and r.adminWarnedAt is null
+            r.noTelegramAt is not null and r.noTelegramAt <= :noticedBefore and r.adminWarnedAt is null
+              and (r.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
+                   or (r.mode = ua.vtc.rozklad.contracts.SubstitutionRequestMode.NOTIFY and r.teacherAnswer is null
+                       and r.status in (ua.vtc.rozklad.contracts.ChangeStatus.CONFIRMED,
+                                        ua.vtc.rozklad.contracts.ChangeStatus.APPLIED)))
             """;
 
     /*

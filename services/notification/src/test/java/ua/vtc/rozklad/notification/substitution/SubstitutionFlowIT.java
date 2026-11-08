@@ -16,11 +16,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
+import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
+import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
+import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.events.EventHandlers;
@@ -95,13 +99,13 @@ class SubstitutionFlowIT extends IntegrationTest {
         Sent request = telegram.lastSentTo(TEACHER);
 
         press(TEACHER, request.messageId(), request.callbackOf("❌ Не можу").orElseThrow());
-        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("Диспетчер підбере іншого викладача.");
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("Диспетчер обере інший варіант.");
 
         handlers.handle(statusChanged(ChangeStatus.DECLINED));
         worker.drain();
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).isEqualTo("❌ <b>Відмова від заміни</b>\n"
-                + "Непийвода М.В. не може провести пару: понеділок, 19 жовтня · 2 пара · 4КІ1 · Надійність, "
-                + "діагностика та експлуатація комп'ютерних систем і мереж\nПідберіть іншого викладача.");
+                + "Непийвода М.В. не може взяти 2 пару 4КІ1 у понеділок, 19 жовтня. "
+                + "Оберіть інший варіант на сторінці змін.");
     }
 
     @Test
@@ -260,7 +264,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         raceButtonWithStatusEvent("❌ Не можу", ChangeStatus.DECLINED);
         assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Відмову передано диспетчеру");
         assertThat(telegram.editsIn(TEACHER))
-                .allSatisfy(edit -> assertThat(edit.text()).endsWith("Диспетчер підбере іншого викладача."));
+                .allSatisfy(edit -> assertThat(edit.text()).endsWith("Диспетчер обере інший варіант."));
         assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
                 .startsWith("❌ <b>Відмова від заміни</b>");
     }
@@ -384,6 +388,248 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.lastEditIn(TEACHER).messageId()).isEqualTo(first.messageId());
         assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("Цей запит уже неактуальний.</b>");
         assertThat(telegram.lastSentTo(2002).text()).startsWith("🙋 <b>Прохання про заміну</b>");
+    }
+
+    // ───────────── NOTIFY: «Вам поставили заміну» з [👍 Добре] [❌ Не можу] ─────────────
+
+    @Test
+    void noticeIsAnsweredWithOkAndTheChangeStays() {
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+
+        Sent notice = telegram.lastSentTo(TEACHER);
+        assertThat(notice.text()).startsWith("📌 <b>Вам поставили заміну</b>")
+                .contains("🔁 Замість «Сучасні технології проєктування» (Кренцін М.Д.) (взаємна заміна)")
+                .doesNotContain("дайте відповідь до")
+                .endsWith("Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.");
+        assertThat(notice.buttons()).containsExactly("👍 Добре", "❌ Не можу");
+        assertThat(jdbc.queryForObject("select purpose from outbound_message where correlation_id = ? and kind = 'TEXT'",
+                String.class, CHANGE)).isEqualTo("SUBSTITUTION_NOTICE");
+
+        core.answerAsNotice(ChangeStatus.CONFIRMED);
+        press(TEACHER, notice.messageId(), notice.callbackOf("👍 Добре").orElseThrow());
+        assertThat(core.replies()).containsExactly(new Reply(CHANGE, CoreFixtures.TEACHER_NEPYIVODA,
+                ConfirmationDecision.CONFIRM));
+        Edit done = telegram.lastEditIn(TEACHER);
+        assertThat(done.messageId()).isEqualTo(notice.messageId());
+        assertThat(done.text()).endsWith("👍 <b>Добре, заміну прийнято.</b> Дякуємо!");
+        assertThat(done.keyboard()).isNull();
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Дякуємо! 👍");
+        assertThat(substitutions.find(CHANGE)).get().satisfies(request -> {
+            assertThat(request.getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+            assertThat(request.getTeacherAnswer()).isEqualTo(ConfirmationDecision.CONFIRM);
+        });
+
+        // подія core про ту саму відповідь нічого вже не змінює; публікація прибирає «Дякуємо» на «внесено»
+        handlers.handle(teacherReplied(ConfirmationDecision.CONFIRM, ChangeStatus.CONFIRMED));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).hasSize(1);
+        handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        worker.drain();
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("📄 <b>Заміну внесено до розпорядження.</b> Дякуємо!");
+        assertThat(telegram.lastEditIn(TEACHER).keyboard()).isNull();
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
+    @Test
+    void cannotBeforeTheOrderIsADeclineTheDispatcherHearsAbout() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+        Sent notice = telegram.lastSentTo(TEACHER);
+
+        core.answerAsNotice(ChangeStatus.CONFIRMED);
+        press(TEACHER, notice.messageId(), notice.callbackOf("❌ Не можу").orElseThrow());
+        assertThat(telegram.lastEditIn(TEACHER).text()).startsWith("📌 <b>Вам поставили заміну</b>")
+                .endsWith("❌ <b>Ви відмовилися від заміни.</b> Диспетчер обере інший варіант.");
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Відмову передано диспетчеру");
+
+        handlers.handle(statusChanged(ChangeStatus.DECLINED));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).hasSize(1);
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .isEqualTo("❌ <b>Відмова від заміни</b>\nНепийвода М.В. не може взяти 2 пару 4КІ1 у понеділок, "
+                        + "19 жовтня. Оберіть інший варіант на сторінці змін.");
+
+        // «Добре» після відмови: core каже 409, повідомлення лишає підсумок
+        core.failReplies(new UpstreamRejectedException(409, "Ви вже відмовилися від цієї заміни."));
+        press(TEACHER, notice.messageId(), notice.callbackOf("👍 Добре").orElseThrow());
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Цей запит уже неактуальний");
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("Диспетчер обере інший варіант.");
+    }
+
+    @Test
+    void publishedNoticeKeepsItsButtonsAndAnObjectionAsksForAnAmendment() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+        Sent notice = telegram.lastSentTo(TEACHER);
+
+        handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        worker.drain();
+        Edit published = telegram.lastEditIn(TEACHER);
+        assertThat(published.text()).endsWith("📄 Заміну внесено до розпорядження.");
+        assertThat(published.buttons()).as("still answerable").containsExactly("👍 Добре", "❌ Не можу");
+
+        core.answerAsNotice(ChangeStatus.APPLIED);
+        press(TEACHER, notice.messageId(), notice.callbackOf("❌ Не можу").orElseThrow());
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("❗ <b>Ви повідомили, що не можете.</b> Заміна вже "
+                + "в розпорядженні, тож диспетчера повідомлено: він внесе доповнення.");
+        assertThat(telegram.lastEditIn(TEACHER).keyboard()).isNull();
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Диспетчера повідомлено");
+        assertThat(telegram.sentTo(OWNER_CHAT)).as("admins hear it from core's event").isEmpty();
+
+        SubstitutionTeacherReplied objection = teacherReplied(ConfirmationDecision.DECLINE, ChangeStatus.APPLIED);
+        handlers.handle(objection);
+        handlers.handle(objection);
+        worker.drain();
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("❗ <b>Потрібне доповнення до розпорядження</b>\nНепийвода М.В. не може взяти 2 пару 4КІ1 "
+                        + "у понеділок, 19 жовтня, а заміна вже в опублікованому розпорядженні.");
+        assertThat(telegram.editsIn(TEACHER)).hasSize(2);
+        assertThat(substitutions.find(CHANGE)).get().satisfies(request -> {
+            assertThat(request.getStatus()).isEqualTo(ChangeStatus.APPLIED);
+            assertThat(request.getTeacherAnswer()).isEqualTo(ConfirmationDecision.DECLINE);
+        });
+    }
+
+    /** The teacher answered in the cabinet: core's event edits the Telegram notice and alerts admins. */
+    @Test
+    void objectionFromTheCabinetEditsTheNoticeToo() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        worker.drain();
+
+        handlers.handle(teacherReplied(ConfirmationDecision.DECLINE, ChangeStatus.APPLIED));
+        worker.drain();
+
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("диспетчера повідомлено: він внесе доповнення.");
+        assertThat(telegram.lastEditIn(TEACHER).keyboard()).isNull();
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("❗ <b>Потрібне доповнення до розпорядження</b>");
+    }
+
+    @Test
+    void noticeToATeacherWithoutTelegramAsksAdminsToTellHim() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 2));
+        handlers.handle(notice(CHANGE_2, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 3));
+        handlers.handle(statusChanged(CHANGE_2, ChangeStatus.APPLIED, CoreFixtures.TEACHER_KRENTSIN));
+        // відповів у кабінеті до попередження — про цю зміну мовчимо
+        handlers.handle(notice(CHANGE_3, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 4));
+        handlers.handle(new SubstitutionTeacherReplied(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE_3,
+                CoreFixtures.TEACHER_KRENTSIN, ConfirmationDecision.CONFIRM, ChangeStatus.CONFIRMED, Order35.DATE, 4,
+                "4КІ1"));
+        // минулий день: нічого не надсилаємо і не попереджаємо
+        handlers.handle(notice(CHANGE_4, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE.minusDays(3), 2));
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+
+        clock.advance(NOTICE_DELAY);
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        worker.drain();
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .isEqualTo("⚠️ <b>Кренцін М.Д. не підключив Telegram — повідомте про заміну самі</b>\n"
+                        + "Повідомлення не надіслано, понеділок, 19 жовтня:\n"
+                        + "• 2 пара · 4КІ1 · Надійність, діагностика та експлуатація комп'ютерних систем і мереж\n"
+                        + "• 3 пара · 4КІ1 · Надійність, діагностика та експлуатація комп'ютерних систем і мереж");
+        // без строку немає нагадувань
+        clock.advance(Duration.ofDays(1));
+        assertThat(substitutions.remindOverdue()).isZero();
+    }
+
+    @Test
+    void pastLessonGetsNoNotice() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE.minusDays(1), 2));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+    }
+
+    @Test
+    void okRacingWithCoresEventNeverShowsAnError() throws Exception {
+        raceNoticeButtonWithEvent("👍 Добре", ChangeStatus.CONFIRMED,
+                teacherReplied(ConfirmationDecision.CONFIRM, ChangeStatus.CONFIRMED));
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Дякуємо! 👍");
+        assertThat(telegram.editsIn(TEACHER))
+                .allSatisfy(edit -> assertThat(edit.text()).endsWith("👍 <b>Добре, заміну прийнято.</b> Дякуємо!"));
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
+    @Test
+    void cannotRacingWithTheDeclineEventNeverShowsAnError() throws Exception {
+        raceNoticeButtonWithEvent("❌ Не можу", ChangeStatus.CONFIRMED, statusChanged(ChangeStatus.DECLINED));
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Відмову передано диспетчеру");
+        assertThat(telegram.editsIn(TEACHER))
+                .allSatisfy(edit -> assertThat(edit.text()).endsWith("Диспетчер обере інший варіант."));
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("❌ <b>Відмова від заміни</b>");
+    }
+
+    @Test
+    void objectionRacingWithTheObjectionEventNeverShowsAnError() throws Exception {
+        raceNoticeButtonWithEvent("❌ Не можу", ChangeStatus.APPLIED,
+                teacherReplied(ConfirmationDecision.DECLINE, ChangeStatus.APPLIED));
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Диспетчера повідомлено");
+        assertThat(telegram.editsIn(TEACHER))
+                .allSatisfy(edit -> assertThat(edit.text()).endsWith("він внесе доповнення."));
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("❗ <b>Потрібне доповнення до розпорядження</b>");
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getTeacherAnswer)
+                .isEqualTo(ConfirmationDecision.DECLINE);
+    }
+
+    /**
+     * Like {@link #raceButtonWithStatusEvent}: core's event for the very answer is flushed (not committed) while
+     * the teacher's button records the same answer; the button waits for the row and then sees the event's state.
+     */
+    private void raceNoticeButtonWithEvent(String button, ChangeStatus statusBefore, RozkladEvent coreEvent)
+            throws Exception {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        if (statusBefore == ChangeStatus.APPLIED) {
+            handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        }
+        worker.drain();
+        Sent notice = telegram.lastSentTo(TEACHER);
+        core.answerAsNotice(statusBefore);
+        int editsBefore = telegram.editsIn(TEACHER).size();
+
+        CountDownLatch eventFlushed = new CountDownLatch(1);
+        CountDownLatch buttonPressed = new CountDownLatch(1);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        CompletableFuture<Void> event = CompletableFuture.runAsync(() -> transaction.executeWithoutResult(tx -> {
+            handlers.handle(coreEvent);
+            requestRepository.flush();
+            eventFlushed.countDown();
+            try {
+                assertThat(buttonPressed.await(10, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            await(Duration.ofSeconds(10), this::anotherTransactionWaitsForThisOne);
+        }));
+        assertThat(eventFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+        buttonPressed.countDown();
+        press(TEACHER, notice.messageId(), notice.callbackOf(button).orElseThrow());
+        event.get(10, TimeUnit.SECONDS);
+        worker.drain();
+
+        assertThat(telegram.callbackAnswers()).singleElement()
+                .satisfies(answer -> assertThat(answer.alert()).as("no error alert").isFalse());
+        assertThat(core.replies()).hasSize(1);
+        // усі редагування стосуються натиснутого повідомлення: і подія, і кнопка приходять до одного стану
+        assertThat(telegram.editsIn(TEACHER).subList(editsBefore, telegram.editsIn(TEACHER).size())).isNotEmpty()
+                .allSatisfy(edit -> assertThat(edit.messageId()).isEqualTo(notice.messageId()));
+    }
+
+    private static SubstitutionConfirmationRequested notice(UUID changeId, UUID teacherId, LocalDate date, int pair) {
+        return new SubstitutionConfirmationRequested(EventEnvelope.create(java.time.Clock.systemUTC()), changeId,
+                teacherId, date, pair, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
+                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "6", null,
+                SubstitutionRequestMode.NOTIFY, ChangeKind.REPLACE_DISCIPLINE, "Сучасні технології проєктування",
+                "MUTUAL");
+    }
+
+    private static SubstitutionTeacherReplied teacherReplied(ConfirmationDecision decision, ChangeStatus status) {
+        return new SubstitutionTeacherReplied(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
+                CoreFixtures.TEACHER_NEPYIVODA, decision, status, Order35.DATE, 2, "4КІ1");
     }
 
     private static SubstitutionConfirmationRequested requested(UUID teacherId) {

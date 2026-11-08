@@ -15,10 +15,17 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
 import org.springframework.data.domain.Persistable;
+import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
+import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 
-/** A substitution the bot asked a teacher to confirm (keyed by core's change id). */
+/**
+ * A substitution the bot sent to a teacher (keyed by core's change id): a request to confirm (CONFIRM,
+ * starts PENDING_CONFIRMATION) or a notice about an assigned change (NOTIFY, starts CONFIRMED and waits for
+ * «Добре» / «Не можу» in {@code teacherAnswer}).
+ */
 @Entity
 @Table(name = "substitution_request")
 public class SubstitutionRequest implements Persistable<UUID> {
@@ -59,6 +66,25 @@ public class SubstitutionRequest implements Persistable<UUID> {
 
     @Column(name = "deadline")
     private Instant deadline;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode", nullable = false, length = 16)
+    private SubstitutionRequestMode mode = SubstitutionRequestMode.CONFIRM;
+
+    /** NOTIFY: the teacher's answer to the notice ({@code null} until he answers). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "teacher_answer", length = 16)
+    private ConfirmationDecision teacherAnswer;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "change_kind", length = 24)
+    private ChangeKind changeKind;
+
+    @Column(name = "original_discipline_name", length = 300)
+    private String originalDisciplineName;
+
+    @Column(name = "reason_code", length = 16)
+    private String reasonCode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -117,9 +143,30 @@ public class SubstitutionRequest implements Persistable<UUID> {
         this.originalTeacherName = event.originalTeacherName();
         this.roomName = event.roomName();
         this.deadline = event.deadline();
-        this.status = ChangeStatus.PENDING_CONFIRMATION;
+        this.mode = event.effectiveMode();
+        this.changeKind = event.kind();
+        this.originalDisciplineName = event.originalDisciplineName();
+        this.reasonCode = event.reasonCode();
+        // повідомлення NOTIFY — про вже підтверджену заміну; прохання CONFIRM чекає відповіді
+        this.status = mode == SubstitutionRequestMode.NOTIFY ? ChangeStatus.CONFIRMED : ChangeStatus.PENDING_CONFIRMATION;
+        this.teacherAnswer = null;
         this.remindedAt = null;
         this.updatedAt = now;
+    }
+
+    /**
+     * NOTIFY: the teacher's answer as core recorded it, with the status it left.
+     *
+     * @return true when the answer or the status really changed
+     */
+    boolean recordAnswer(ConfirmationDecision answer, ChangeStatus newStatus, Instant now) {
+        if (answer == teacherAnswer && newStatus == status) {
+            return false;
+        }
+        this.teacherAnswer = answer;
+        this.status = newStatus;
+        this.updatedAt = now;
+        return true;
     }
 
     /** @return true when the status really changed */
@@ -164,6 +211,39 @@ public class SubstitutionRequest implements Persistable<UUID> {
 
     public boolean isPending() {
         return status == ChangeStatus.PENDING_CONFIRMATION;
+    }
+
+    /** NOTIFY: a notice about an assigned change rather than a request to confirm. */
+    public boolean isNotice() {
+        return mode == SubstitutionRequestMode.NOTIFY;
+    }
+
+    /** The teacher can still answer: a pending request, or a notice of a change in force without an answer. */
+    public boolean isAwaitingAnswer() {
+        if (!isNotice()) {
+            return isPending();
+        }
+        return teacherAnswer == null && (status == ChangeStatus.CONFIRMED || status == ChangeStatus.APPLIED);
+    }
+
+    public SubstitutionRequestMode getMode() {
+        return mode;
+    }
+
+    public ConfirmationDecision getTeacherAnswer() {
+        return teacherAnswer;
+    }
+
+    public ChangeKind getChangeKind() {
+        return changeKind;
+    }
+
+    public String getOriginalDisciplineName() {
+        return originalDisciplineName;
+    }
+
+    public String getReasonCode() {
+        return reasonCode;
     }
 
     @Override

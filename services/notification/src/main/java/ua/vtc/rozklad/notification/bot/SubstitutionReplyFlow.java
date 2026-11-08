@@ -8,7 +8,10 @@ import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 import ua.vtc.rozklad.notification.substitution.SubstitutionRequests.ReplyOutcome;
 import ua.vtc.rozklad.notification.substitution.SubstitutionTexts;
 
-/** [✅ Підтверджую] / [❌ Не можу] under a substitution request: answer core, edit the message to the final state. */
+/**
+ * [✅ Підтверджую] / [❌ Не можу] under a request and [👍 Добре] / [❌ Не можу] under a notice of an assigned
+ * change: answer core, edit the message to the state core reports.
+ */
 @Component
 public class SubstitutionReplyFlow {
 
@@ -36,6 +39,14 @@ public class SubstitutionReplyFlow {
         long messageId = action.messageId();
         ReplyOutcome outcome = substitutions.reply(changeId, chatId, messageId, decision);
         switch (outcome) {
+            case ReplyOutcome.Done done when done.notice() -> {
+                // повідомлення NOTIFY: «Добре» лишає заміну, «Не можу» відхиляє її або (після розпорядження)
+                // повідомляє диспетчера; кнопки зникають, бо відповідь уже записана
+                String text = SubstitutionTexts.noticeState(done.request(), done.status(), decision);
+                replies.edit(chatId, messageId, text != null ? text
+                        : SubstitutionTexts.outdated(done.request()), null);
+                replies.answer(action.callbackId(), SubstitutionTexts.noticeToast(done.status(), decision));
+            }
             case ReplyOutcome.Done done -> {
                 replies.edit(chatId, messageId, SubstitutionTexts.finalState(done.request(), done.status()), null);
                 replies.answer(action.callbackId(), decision == ConfirmationDecision.CONFIRM
@@ -44,10 +55,8 @@ public class SubstitutionReplyFlow {
             }
             case ReplyOutcome.NotPending notPending -> {
                 // відомий фінальний стан («Ви підтвердили», «Заміну скасовано») не затираємо «неактуальним»
-                String finalText = notPending.request() == null ? null
-                        : SubstitutionTexts.finalState(notPending.request(), notPending.request().getStatus());
-                replies.edit(chatId, messageId,
-                        finalText != null ? finalText : SubstitutionTexts.outdated(notPending.request()), null);
+                replies.edit(chatId, messageId, notPending.request() == null
+                        ? SubstitutionTexts.outdated(null) : SubstitutionTexts.current(notPending.request()), null);
                 replies.answer(action.callbackId(), "Цей запит уже неактуальний");
             }
             case ReplyOutcome.NotFound notFound -> {
