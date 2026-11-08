@@ -28,6 +28,7 @@ import ua.vtc.rozklad.core.substitution.internal.effect.AbsentSubstitutes;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffect;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffectPlanner;
 import ua.vtc.rozklad.core.substitution.internal.effect.DatedSlotChecker;
+import ua.vtc.rozklad.core.substitution.internal.effect.SubstituteRooms;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
 import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -42,7 +43,9 @@ import ua.vtc.rozklad.core.timetable.LessonRepository;
  * locking ({@code version} is required in PUT). Every transition of an existing change takes the
  * date lock before it touches the change row: the cabinet, the bot and the dispatcher then queue
  * up in one order instead of deadlocking, and the loser's stale change fails the version check
- * (409 stale-data).
+ * (409 stale-data). A cover of another discipline (REPLACE_DISCIPLINE) without {@code newRoomId}
+ * goes to the substitute's usual room when it is free ({@link SubstituteRooms}), else the lesson
+ * keeps its room; the response tells which room was chosen ({@code new.room}).
  */
 @Service
 @Transactional
@@ -59,11 +62,12 @@ public class ChangeCommands {
     private final ChangeNotifications notifications;
     private final ChangeViews views;
     private final AbsentSubstitutes absentSubstitutes;
+    private final SubstituteRooms substituteRooms;
 
     public ChangeCommands(ChangeRepository changes, AbsenceRepository absences, LessonRepository lessons,
                           CatalogLookup catalog, SubstitutionCalendar calendar, ChangeEffectPlanner planner,
                           DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                          ChangeViews views, AbsentSubstitutes absentSubstitutes) {
+                          ChangeViews views, AbsentSubstitutes absentSubstitutes, SubstituteRooms substituteRooms) {
         this.changes = changes;
         this.absences = absences;
         this.lessons = lessons;
@@ -75,6 +79,7 @@ public class ChangeCommands {
         this.notifications = notifications;
         this.views = views;
         this.absentSubstitutes = absentSubstitutes;
+        this.substituteRooms = substituteRooms;
     }
 
     public ChangeDto create(CreateChangeRequest request, String actor) {
@@ -85,8 +90,9 @@ public class ChangeCommands {
         List<Lesson> groupDay = lessons.lockGroupDay(group.getId(), request.date());
         Change change = new Change(request.kind(), request.date(), request.pairFrom(), request.lastPair(),
                 group.getId(), cohortOf(request, groupDay), actor);
+        Lesson original = null;
         if (request.originalLessonId() != null) {
-            Lesson original = lessonOfDay(request.originalLessonId(), groupDay, request);
+            original = lessonOfDay(request.originalLessonId(), groupDay, request);
             change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
                     original.getRoomId());
         } else {
@@ -94,6 +100,12 @@ public class ChangeCommands {
             requireKnownSubgroup(group, change.getSubgroupNumber());
         }
         fillReplacement(change, request, groupDay);
+        if (change.getKind() == ChangeKind.REPLACE_DISCIPLINE && request.newRoomId() == null && original != null) {
+            // аудиторія належить викладачу: група йде до замінника, якщо його аудиторія вільна
+            substituteRooms.usualFreeRoom(original, change.getNewTeacherId(), change.getNewDisciplineId(), null)
+                    .ifPresent(room -> change.setReplacement(change.getNewDisciplineId(), change.getNewTeacherId(),
+                            room));
+        }
         change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
         if (request.absenceId() != null) {
             change.setAbsenceId(activeAbsenceFor(request.absenceId(), change).getId());

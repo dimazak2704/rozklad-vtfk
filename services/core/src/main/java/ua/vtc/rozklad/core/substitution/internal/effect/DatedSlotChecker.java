@@ -85,6 +85,20 @@ public class DatedSlotChecker {
         return conflicts.stream().distinct().toList();
     }
 
+    /**
+     * Only the room checks of one planned lesson (occupancy with open changes counted, capacity,
+     * room type): whether a room is free for the lesson, whoever teaches it.
+     */
+    public List<ConflictDto> roomConflicts(PlannedLesson lesson, Set<UUID> freedLessonIds, UUID ownChangeId) {
+        Context context = new Context(List.of(lesson), freedLessonIds, ownChangeId, true);
+        List<ConflictDto> conflicts = new ArrayList<>();
+        roomConflicts(lesson, context.lessonsAt(lesson.date(), lesson.pair()),
+                context.openChangesAt(lesson.date(), lesson.pair()), List.of(), context, conflicts);
+        capacityConflict(lesson, context, conflicts);
+        roomTypeConflict(lesson, context, conflicts);
+        return conflicts.stream().distinct().toList();
+    }
+
     private void teacherConflicts(PlannedLesson lesson, List<Lesson> atSlot, List<Change> openAtSlot,
                                   List<PlannedLesson> accepted, Context context, List<ConflictDto> conflicts) {
         if (lesson.teacherId() == null) {

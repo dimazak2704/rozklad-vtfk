@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.node.JsonNodeFactory;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.AcademicYear;
 import ua.vtc.rozklad.core.calendar.BellProfile;
@@ -32,6 +33,9 @@ import ua.vtc.rozklad.core.settings.Setting;
 import ua.vtc.rozklad.core.support.ReferenceData;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
+import ua.vtc.rozklad.core.timetable.TemplateLesson;
+import ua.vtc.rozklad.core.timetable.TimetableVersion;
+import ua.vtc.rozklad.core.timetable.VersionSource;
 
 /**
  * Test data of the semester of order №35 (DOMAIN §12): «I семестр 2026/2027», 01.09–30.12.2026,
@@ -142,6 +146,22 @@ public final class ScheduleFixture {
             lesson.setTeacherId(teacher.getId());
             lesson.setRoom(room.getId(), true);
             lesson.setStreamId(streamId);
+        });
+    }
+
+    /** A published weekly timetable of the semester (no dated lessons are derived from it). */
+    public TimetableVersion publishedVersion(Semester semester) {
+        return persist(new TimetableVersion(semester.getId(), "Опублікований розклад", VersionSource.MANUAL),
+                version -> version.markPublished(SEMESTER_START, Instant.parse("2026-08-31T12:00:00Z"), "admin"));
+    }
+
+    /** A weekly lesson of both weeks in the version. */
+    public TemplateLesson templateLesson(TimetableVersion version, int weekday, int pair, StudentGroup group,
+                                         Discipline discipline, Teacher teacher, Room room) {
+        return persist(new TemplateLesson(version.getId(), weekday, pair, Parity.BOTH,
+                group.getId(), 0, discipline.getId()), lesson -> {
+            lesson.setTeacherId(teacher.getId());
+            lesson.setRoomId(room.getId());
         });
     }
 
