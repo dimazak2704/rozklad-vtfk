@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.stats;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -11,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeKind;
@@ -19,14 +21,16 @@ import ua.vtc.rozklad.core.accounting.TeacherActivity;
 import ua.vtc.rozklad.core.accounting.TeacherActivityProvider;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.internal.support.ReplacedLessons;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 
 /**
  * Teacher statistics from confirmed and applied changes (DOMAIN §9). A substitution is a change in
  * which the teacher takes a colleague's pair (same or another discipline); a missed pair is an own
- * pair that was given to someone else, moved away or cancelled. Moving one's own lesson (SWAP),
- * extra pairs and blocks are not substitutions; «Вичит.» without a replacement is not a miss.
+ * pair that was given to someone else, moved away or cancelled, also by a block of pairs (each own
+ * lesson the block replaces is one missed pair). Moving one's own lesson (SWAP), extra pairs and
+ * blocks are not substitutions; «Вичит.» without a replacement is not a miss.
  * <p>
  * A later change may decide about a lesson an earlier change created (an amendment cancels or
  * re-assigns a substitute's pair). Then the earlier substitution did not happen, and the later
@@ -46,10 +50,12 @@ class SubstitutionTeacherActivity implements TeacherActivityProvider {
 
     private final ChangeRepository changes;
     private final LessonRepository lessons;
+    private final ReplacedLessons replacedLessons;
 
-    SubstitutionTeacherActivity(ChangeRepository changes, LessonRepository lessons) {
+    SubstitutionTeacherActivity(ChangeRepository changes, LessonRepository lessons, ReplacedLessons replacedLessons) {
         this.changes = changes;
         this.lessons = lessons;
+        this.replacedLessons = replacedLessons;
     }
 
     @Override
@@ -87,10 +93,51 @@ class SubstitutionTeacherActivity implements TeacherActivityProvider {
                 counters.computeIfAbsent(original, id -> new Counter()).missedPairs += change.pairCount();
             }
         }
+        for (Lesson lesson : ownLessonsTakenByBlocks(done)) {
+            counters.computeIfAbsent(lesson.getTeacherId(), id -> new Counter()).missedPairs++;
+        }
         return counters.entrySet().stream()
                 .map(entry -> new TeacherActivity(entry.getKey(), entry.getValue().substitutions,
                         entry.getValue().substitutedPairs, entry.getValue().missedPairs))
                 .toList();
+    }
+
+    /**
+     * Timetable lessons (not created by another change) that blocks replace, taught by someone else
+     * than the block's teacher: the lessons a published block cancelled, or for a confirmed block the
+     * lessons of its cohort in its pairs that it will cancel. A lesson another change decides about is
+     * counted with that change.
+     */
+    private List<Lesson> ownLessonsTakenByBlocks(List<Change> done) {
+        List<Change> blocks = done.stream().filter(change -> change.getKind() == ChangeKind.BLOCK).toList();
+        if (blocks.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<UUID>> applied = replacedLessons.of(blocks.stream()
+                .filter(block -> block.getStatus() == ChangeStatus.APPLIED).map(Change::getId).toList());
+        // пару, про яку є окреме рішення (скасування в тому ж розпорядженні), уже враховано
+        Set<UUID> decidedElsewhere = done.stream().filter(change -> change.getKind() != ChangeKind.BLOCK)
+                .flatMap(change -> Stream.of(change.getOriginalLessonId(), change.getSwapLessonId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<Lesson> taken = new ArrayList<>();
+        for (Change block : blocks) {
+            List<Lesson> replaced = block.getStatus() == ChangeStatus.APPLIED
+                    ? lessons.findAllById(applied.getOrDefault(block.getId(), List.of()))
+                    : lessons.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(block.getGroupId(),
+                                    block.getDate(), block.getDate()).stream()
+                            .filter(Lesson::isScheduled)
+                            .filter(lesson -> block.coversPair(lesson.getPairNumber()))
+                            .filter(lesson -> block.getSubgroupNumber() == 0 || lesson.getSubgroupNumber() == 0
+                                    || block.getSubgroupNumber() == lesson.getSubgroupNumber())
+                            .toList();
+            replaced.stream()
+                    .filter(lesson -> lesson.getChangeId() == null && lesson.getTeacherId() != null)
+                    .filter(lesson -> !decidedElsewhere.contains(lesson.getId()))
+                    .filter(lesson -> !lesson.getTeacherId().equals(block.getNewTeacherId()))
+                    .forEach(taken::add);
+        }
+        return taken;
     }
 
     /** The teacher takes a colleague's pair. */

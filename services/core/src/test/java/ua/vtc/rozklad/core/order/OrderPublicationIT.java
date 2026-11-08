@@ -8,7 +8,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +30,8 @@ import ua.vtc.rozklad.contracts.events.OrderPublished;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.ScheduleChangeReason;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
+import ua.vtc.rozklad.core.accounting.TeacherActivity;
+import ua.vtc.rozklad.core.accounting.TeacherActivityProvider;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.catalog.Discipline;
@@ -101,6 +106,9 @@ class OrderPublicationIT {
 
     @Autowired
     private RestTestClient client;
+
+    @Autowired
+    private TeacherActivityProvider teacherActivity;
 
     private ScheduleFixture fixture;
     private Semester semester;
@@ -263,6 +271,41 @@ class OrderPublicationIT {
                 .jsonPath("$.groups[3].group.code").isEqualTo("1ТК1")
                 .jsonPath("$.groups[3].items[1].subgroupNote").isEqualTo("1 підгрупа")
                 .jsonPath("$.groups[3].items[1].to.discipline").isEqualTo("Пари не буде");
+    }
+
+    /**
+     * Order №35's block 1-4 of 1ТК1 replaces every lesson of the group in its pairs: the cancelled
+     * lessons carry the block (teacher views), the group sees one row per pair, refreshes keep them
+     * and their teachers missed those pairs (Крисак's subgroup pair also has its own cancellation and
+     * counts once).
+     */
+    @Test
+    void blockIsTheReasonOfTheLessonsItReplacesAndTheirTeachersMissedThem() {
+        List<UUID> changeIds = createOrder35Changes();
+        UUID block = changeIds.getFirst();
+        publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM change_replaced_lesson WHERE change_id = ?", Integer.class,
+                block)).isEqualTo(5);
+        client.get().uri("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-19", tk1.getId()).exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.days[0].lessons.length()").isEqualTo(4)
+                .jsonPath("$.days[0].lessons[?(@.kind != 'BLOCK')]").isEmpty();
+        UUID sharovarska = jdbc.queryForObject("SELECT id FROM teacher WHERE short_name = 'Шароварська Т.М.'",
+                UUID.class);
+        client.get().uri("/api/public/schedule/teacher/{id}?from=2026-10-19&to=2026-10-19", sharovarska).exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.days[0].lessons.length()").isEqualTo(3)
+                .jsonPath("$.days[0].lessons[?(@.kind == 'CANCELLED' && @.changeId == '%s')]".formatted(block))
+                .value(found -> assertThat((List<?>) found).hasSize(3));
+
+        Map<UUID, TeacherActivity> stats = teacherActivity.activityBetween(MONDAY, MONDAY).stream()
+                .collect(Collectors.toMap(TeacherActivity::teacherId, Function.identity()));
+        assertThat(stats.get(sharovarska).missedPairs()).isEqualTo(3);
+        assertThat(stats.get(krysak.getId()).missedPairs()).as("p1 (п.), 1КІ2, 1М and 3Ф once each").isEqualTo(4);
+        assertThat(stats).doesNotContainKey(yemelianenko.getId());
     }
 
     @Test

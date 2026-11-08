@@ -34,11 +34,13 @@ class LessonMaterializationRepository {
 
     /**
      * A change that still keeps its lesson: anything but an abandoned decision. A declined change
-     * waits for a new decision and an applied one keeps its cancelled original as history.
+     * waits for a new decision and an applied one keeps its cancelled original as history (a block
+     * keeps every lesson it cancelled, {@code change_replaced_lesson}).
      */
     private static final String LIVE_DECISION = """
             SELECT 1 FROM change c
-            WHERE (c.original_lesson_id = l.id OR c.swap_lesson_id = l.id)
+            WHERE (c.original_lesson_id = l.id OR c.swap_lesson_id = l.id
+                   OR c.id IN (SELECT rl.change_id FROM change_replaced_lesson rl WHERE rl.lesson_id = l.id))
               AND c.status NOT IN ('CANCELLED', 'DECLINED')""";
 
     /**

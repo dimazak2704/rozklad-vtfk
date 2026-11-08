@@ -54,8 +54,9 @@ class ScheduleReadRepository {
                        ch.orig_room_id
                 FROM change ch
                 WHERE ch.id = l.change_id
-                   OR (l.status = 'CANCELLED'
-                       AND (ch.original_lesson_id = l.id OR ch.swap_lesson_id = l.id) AND ch.status = 'APPLIED')
+                   OR (l.status = 'CANCELLED' AND ch.status = 'APPLIED'
+                       AND (ch.original_lesson_id = l.id OR ch.swap_lesson_id = l.id
+                            OR ch.id IN (SELECT rl.change_id FROM change_replaced_lesson rl WHERE rl.lesson_id = l.id)))
                 -- скасоване заняття показує зміну, що його скасувала (і для заняття, яке саме поставила зміна)
                 ORDER BY (l.status = 'CANCELLED' AND ch.id IS DISTINCT FROM l.change_id) DESC, ch.updated_at DESC
                 LIMIT 1

@@ -22,6 +22,7 @@ import ua.vtc.rozklad.core.accounting.TeacherActivity;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.internal.support.ReplacedLessons;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
@@ -44,8 +45,9 @@ class SubstitutionTeacherActivityTest {
 
     private final ChangeRepository changeRepository = mock(ChangeRepository.class);
     private final LessonRepository lessonRepository = mock(LessonRepository.class);
+    private final ReplacedLessons replacedLessons = mock(ReplacedLessons.class);
     private final SubstitutionTeacherActivity activity = new SubstitutionTeacherActivity(changeRepository,
-            lessonRepository);
+            lessonRepository, replacedLessons);
     private final List<Change> changes = new ArrayList<>();
     private final List<Lesson> lessons = new ArrayList<>();
 
@@ -105,6 +107,38 @@ class SubstitutionTeacherActivityTest {
         applied(ChangeKind.CANCEL, moved, NEPYIVODA, null, null);
 
         assertThat(of(stats(), NEPYIVODA)).isEqualTo(new TeacherActivity(NEPYIVODA, 0, 0, 0));
+    }
+
+    /**
+     * Order №58: a block 1-4 (ЗУ Ємельяненко) took ФВ of Бурбела (p1) and Укр.мова of Зоріна (p3);
+     * both missed a pair, the block's own teacher did not. A confirmed block counts the same.
+     */
+    @Test
+    void blockOfPairsIsAMissForTheTeachersOfTheLessonsItReplaces() {
+        UUID burbela = UUID.randomUUID();
+        UUID zorina = UUID.randomUUID();
+        UUID yemelianenko = UUID.randomUUID();
+        Lesson pe = lesson(LessonOrigin.TEMPLATE, burbela, null);
+        Lesson ukrainian = lesson(LessonOrigin.TEMPLATE, zorina, null);
+        Change block = new Change(ChangeKind.BLOCK, DAY, 1, 4, GROUP, 0, "admin");
+        block.setReplacement(PROGRAMMING, yemelianenko, ROOM);
+        block.setReason(ReasonCode.OTHER, "ЗУ");
+        block.setStatus(ChangeStatus.APPLIED);
+        changes.add(block);
+        given(replacedLessons.of(anyCollection())).willReturn(Map.of(block.getId(),
+                List.of(pe.getId(), ukrainian.getId())));
+
+        Map<UUID, TeacherActivity> stats = stats();
+
+        assertThat(stats.get(burbela)).isEqualTo(new TeacherActivity(burbela, 0, 0, 1));
+        assertThat(stats.get(zorina)).isEqualTo(new TeacherActivity(zorina, 0, 0, 1));
+        assertThat(stats).doesNotContainKey(yemelianenko);
+
+        block.setStatus(ChangeStatus.CONFIRMED);
+        given(lessonRepository.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(GROUP, DAY, DAY))
+                .willReturn(List.of(pe, ukrainian));
+
+        assertThat(stats().get(zorina)).isEqualTo(new TeacherActivity(zorina, 0, 0, 1));
     }
 
     private Map<UUID, TeacherActivity> stats() {

@@ -17,6 +17,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
@@ -32,6 +33,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeNotifications;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeStatusMachine;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeWorkflow;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
+import ua.vtc.rozklad.core.substitution.internal.support.ReplacedLessons;
 import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
@@ -56,10 +58,12 @@ class ChangeApplier implements ChangePublication {
     private final CatalogLookup catalog;
     private final AbsentSubstitutes absentSubstitutes;
     private final SubstitutionCalendar calendar;
+    private final ReplacedLessons replacedLessons;
 
     ChangeApplier(ChangeRepository changes, LessonRepository lessons, ChangeEffectPlanner planner,
                   DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                  CatalogLookup catalog, AbsentSubstitutes absentSubstitutes, SubstitutionCalendar calendar) {
+                  CatalogLookup catalog, AbsentSubstitutes absentSubstitutes, SubstitutionCalendar calendar,
+                  ReplacedLessons replacedLessons) {
         this.changes = changes;
         this.lessons = lessons;
         this.planner = planner;
@@ -69,6 +73,7 @@ class ChangeApplier implements ChangePublication {
         this.catalog = catalog;
         this.absentSubstitutes = absentSubstitutes;
         this.calendar = calendar;
+        this.replacedLessons = replacedLessons;
     }
 
     @Override
@@ -116,6 +121,10 @@ class ChangeApplier implements ChangePublication {
             throw ConflictException.schedule(conflicts);
         }
         insertLessons(plans);
+        // блок не має одного оригіналу: скасовані ним заняття записуємо окремо
+        plans.stream().filter(plan -> plan.change().getKind() == ChangeKind.BLOCK)
+                .forEach(plan -> replacedLessons.record(plan.change().getId(),
+                        plan.effect().cancelled().stream().map(Lesson::getId).toList()));
         try {
             lessons.checkSlotConstraintsNow();
         } catch (DataIntegrityViolationException clash) {

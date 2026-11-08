@@ -20,7 +20,8 @@ import ua.vtc.rozklad.core.timetable.LessonViewKind;
  * the change, {@code original} from the change row, {@code reasonText} is the public short reason
  * of the order. A cancelled lesson whose replacement (the lesson its change created) is in the same
  * view is hidden: the replacement already shows it as the original, and when an amendment later
- * cancelled the replacement, the cancelled replacement stands for the pair (one row per pair).
+ * cancelled the replacement, the cancelled replacement stands for the pair (one row per pair). A
+ * block of pairs hides the cancelled lessons of its cohort in its pairs the same way.
  */
 final class LessonViewAssembler {
 
@@ -38,10 +39,24 @@ final class LessonViewAssembler {
                 .map(LessonRow::createdBy)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        List<LessonRow> blocks = rows.stream()
+                .filter(row -> row.scheduled() && row.origin() == LessonOrigin.BLOCK)
+                .toList();
         return rows.stream()
-                .filter(row -> !hideReplaced || row.scheduled() || !replaced(row, takingPlace, creating))
+                .filter(row -> !hideReplaced || row.scheduled()
+                        || !(replaced(row, takingPlace, creating) || underBlock(row, blocks)))
                 .map(row -> view(row, bells))
                 .toList();
+    }
+
+    /**
+     * A block of pairs takes the whole pair of its cohort: a lesson cancelled in that pair (by the
+     * block or by another change of the same order) is not shown next to it.
+     */
+    private static boolean underBlock(LessonRow row, List<LessonRow> blocks) {
+        return blocks.stream().anyMatch(block -> block.pair() == row.pair()
+                && block.group().id().equals(row.group().id())
+                && (block.subgroup() == 0 || row.subgroup() == 0 || block.subgroup() == row.subgroup()));
     }
 
     /** The change that cancelled the row put another lesson into the view (scheduled or cancelled later). */
