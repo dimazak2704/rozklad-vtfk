@@ -40,11 +40,11 @@ public class ChangeEffectPlanner {
 
     public ChangeEffect plan(Change change) {
         return switch (change.getKind()) {
-            case REPLACE_TEACHER, ROOM_CHANGE -> replace(change, scheduledOriginal(change), true);
-            case REPLACE_DISCIPLINE -> replace(change, scheduledOriginal(change), false);
+            case REPLACE_TEACHER, ROOM_CHANGE, REPLACE_DISCIPLINE -> replace(change, scheduledOriginal(change), true);
             case DISCIPLINE_FINISHED -> change.getNewDisciplineId() == null
                     ? new ChangeEffect(List.of(scheduledOriginal(change)), List.of())
                     : replace(change, scheduledOriginal(change), false);
+            case MERGE_SUBGROUPS -> merge(change);
             case CANCEL -> cancel(change);
             case SWAP -> swap(change);
             case ADDITIONAL -> additional(change);
@@ -52,15 +52,19 @@ public class ChangeEffectPlanner {
         };
     }
 
-    /** The original lesson is replaced in its own slot; the room stays unless a new one is given. */
-    private ChangeEffect replace(Change change, Lesson original, boolean sameDiscipline) {
+    /**
+     * The original lesson is replaced in its own slot; the room stays unless a new one is given.
+     * {@code keepStream}: the replacement stays in the original's stream (one class for several
+     * groups), so the stream's other groups may get the same substitute in the same slot; a
+     * finished discipline leaves the stream.
+     */
+    private ChangeEffect replace(Change change, Lesson original, boolean keepStream) {
         UUID discipline = change.getNewDisciplineId() != null ? change.getNewDisciplineId()
                 : original.getDisciplineId();
         UUID teacher = change.getKind() == ChangeKind.ROOM_CHANGE || change.getNewTeacherId() == null
                 ? original.getTeacherId() : change.getNewTeacherId();
         UUID room = change.getNewRoomId() != null ? change.getNewRoomId() : original.getRoomId();
-        // потік (одне заняття для кількох груп) зберігаємо лише для тієї самої дисципліни
-        UUID stream = sameDiscipline ? original.getStreamId() : null;
+        UUID stream = keepStream ? original.getStreamId() : null;
         PlannedLesson replacement = new PlannedLesson(original.getSemesterId(), original.getDate(),
                 original.getPairNumber(), original.getGroupId(), original.getSubgroupNumber(), discipline, teacher,
                 room, original.getLessonKind(), original.isOnline(), stream, LessonOrigin.CHANGE);
@@ -86,6 +90,22 @@ public class ChangeEffectPlanner {
                 change.getNewDisciplineId(), change.getNewTeacherId(), room, moved.getLessonKind(),
                 original.isOnline(), null, LessonOrigin.CHANGE);
         return new ChangeEffect(List.of(original, moved), List.of(replacement));
+    }
+
+    /**
+     * MERGE_SUBGROUPS: the absent teacher's subgroup lesson and the other subgroup's lesson of the
+     * same discipline at the same pair become one whole-group lesson of the other subgroup's
+     * teacher, in the change's room (by default that teacher's room). Both subgroups keep the
+     * discipline's hours; the teacher teaches one pair.
+     */
+    private ChangeEffect merge(Change change) {
+        Lesson original = scheduledOriginal(change);
+        Lesson partner = scheduled(change.getSwapLessonId(), change);
+        UUID room = change.getNewRoomId() != null ? change.getNewRoomId() : partner.getRoomId();
+        PlannedLesson merged = new PlannedLesson(original.getSemesterId(), original.getDate(),
+                original.getPairNumber(), original.getGroupId(), 0, partner.getDisciplineId(), partner.getTeacherId(),
+                room, partner.getLessonKind(), partner.isOnline(), null, LessonOrigin.CHANGE);
+        return new ChangeEffect(List.of(original, partner), List.of(merged));
     }
 
     private ChangeEffect additional(Change change) {

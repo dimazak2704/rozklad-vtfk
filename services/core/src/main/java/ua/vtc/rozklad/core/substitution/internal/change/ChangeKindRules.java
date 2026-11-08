@@ -52,6 +52,16 @@ public final class ChangeKindRules {
                         "Під час перестановки дисципліна береться з переставленої пари", violations);
                 singlePair(range, violations);
             }
+            case MERGE_SUBGROUPS -> {
+                require(request.originalLessonId(), "originalLessonId", NEEDS_ORIGINAL, violations);
+                require(request.swapLessonId(), "swapLessonId", "Вкажіть пару іншої підгрупи, до якої приєднується ця",
+                        violations);
+                forbid(request.newTeacherId(), "newTeacherId",
+                        "Під час об'єднання підгруп викладач береться з пари іншої підгрупи", violations);
+                forbid(request.newDisciplineId(), "newDisciplineId",
+                        "Під час об'єднання підгруп дисципліна лишається та сама", violations);
+                singlePair(range, violations);
+            }
             case CANCEL -> {
                 require(request.originalLessonId(), "originalLessonId", NEEDS_ORIGINAL, violations);
                 forbid(request.newTeacherId(), "newTeacherId", "Скасована пара не має нового викладача", violations);

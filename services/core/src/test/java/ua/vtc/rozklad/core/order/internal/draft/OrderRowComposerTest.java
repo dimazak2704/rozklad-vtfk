@@ -90,6 +90,15 @@ class OrderRowComposerTest {
     }
 
     @Test
+    void mergedSubgroupsNameTheAbsentSubgroupOnTheLeftAndTheTeacherOfBothOnTheRight() {
+        ChangeRow merge = row(ChangeKind.MERGE_SUBGROUPS, "1КІ2", 1, 2, 2, "Ін.мова", "Крисак Л.", "Відп.", "Ін.мова",
+                "Можаровська", "12");
+
+        assertThat(OrderRowComposer.compose(List.of(merge)).changes()).extracting(OrderRowComposerTest::printed)
+                .containsExactly("1КІ2 | 2 | MERGE_SUBGROUPS | Ін.мова | Крисак Л. (п.) | Відп. | Ін.мова | Можаровська | 12");
+    }
+
+    @Test
     void roomChangesGoToTheirOwnSection() {
         List<ChangeRow> changes = List.of(
                 row(ChangeKind.ROOM_CHANGE, "1РТ2", 0, 3, 3, "Матем.", "Вихристюк", null, null, null, "403"),

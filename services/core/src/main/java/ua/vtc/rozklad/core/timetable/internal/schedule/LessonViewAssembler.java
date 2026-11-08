@@ -96,7 +96,8 @@ final class LessonViewAssembler {
             return row.origin() == LessonOrigin.CHANGE ? LessonViewKind.SUBSTITUTED : LessonViewKind.REGULAR;
         }
         return switch (row.change().kind()) {
-            case "REPLACE_TEACHER", "REPLACE_DISCIPLINE", "DISCIPLINE_FINISHED" -> LessonViewKind.SUBSTITUTED;
+            case "REPLACE_TEACHER", "REPLACE_DISCIPLINE", "DISCIPLINE_FINISHED", "MERGE_SUBGROUPS" ->
+                    LessonViewKind.SUBSTITUTED;
             case "SWAP" -> LessonViewKind.MOVED;
             case "ROOM_CHANGE" -> LessonViewKind.ROOM_CHANGED;
             case "ADDITIONAL" -> LessonViewKind.ADDITIONAL;

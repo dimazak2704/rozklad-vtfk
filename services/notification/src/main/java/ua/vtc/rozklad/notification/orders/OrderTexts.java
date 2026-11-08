@@ -108,6 +108,8 @@ public final class OrderTexts {
             case AS_SCHEDULED -> "↩️ " + head + ": за розкладом" + (to.isEmpty() ? "" : " — " + boldLesson(to)) + room;
             case ROOM_CHANGE -> "🚪 " + head + ": аудиторія " + b(nullToEmpty(row.roomText()))
                     + (from.isEmpty() ? "" : " (" + escape(from) + ")");
+            case MERGE_SUBGROUPS -> "👥 " + head + ": обидві підгрупи разом — " + boldLesson(to) + room
+                    + (from.isEmpty() ? "" : "\n      замість " + s(from)) + reason;
         };
     }
 

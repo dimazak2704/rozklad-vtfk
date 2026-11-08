@@ -22,7 +22,9 @@ import ua.vtc.rozklad.core.shared.text.UkrainianText;
  *   <li>BLOCK — pairs «1-4», the block on the left plus the room; the group's other pairs that day
  *       follow as AS_SCHEDULED rows («За розкладом», as in order №105);</li>
  *   <li>FINISHED — reason «Вичит.», right side only when another discipline takes the pair;</li>
- *   <li>ROOM_CHANGE — group, pair and room in the «ЗАМІНА АУДИТОРІЙ» section.</li>
+ *   <li>ROOM_CHANGE — group, pair and room in the «ЗАМІНА АУДИТОРІЙ» section;</li>
+ *   <li>MERGE_SUBGROUPS — the absent teacher's subgroup on the left («(п.)»), on the right the
+ *       teacher who takes both subgroups and the room (printed «Об'єднання підгруп: …»).</li>
  * </ul>
  * Rows of different subgroups of one group and pair with the same type and reason merge into one
  * row («Харченко О./Михальчук», «304/309»); a row of a single subgroup marks its teacher «(п.)».
@@ -72,6 +74,9 @@ public final class OrderRowComposer {
                             change.toDiscipline(), change.toTeacher(), null, null, null, change.room()));
                     change.pairsAsScheduled().forEach(pair -> main.add(Draft.asScheduled(change, pair)));
                 }
+                case MERGE_SUBGROUPS -> main.add(Draft.of(change, change.pairFrom(), change.pairTo(),
+                        OrderRowType.MERGE_SUBGROUPS, change.fromDiscipline(), change.fromTeacher(), change.reason(),
+                        change.toDiscipline(), change.toTeacher(), change.room()));
                 case ROOM_CHANGE -> rooms.add(Draft.of(change, change.pairFrom(), change.pairTo(),
                         OrderRowType.ROOM_CHANGE, null, null, null, null, null, change.room()));
             }

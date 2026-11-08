@@ -62,6 +62,7 @@ public class OrderDocxRenderer {
     static final String ADDITIONAL = "ДОДАТКОВО";
     static final String AS_SCHEDULED = "За розкладом";
     static final String FINISHED_REASON = "Вичит.";
+    static final String MERGED = "Об'єднання підгруп";
 
     private static final Locale UK = Locale.forLanguageTag("uk");
     private static final int PAGE_WIDTH = 11906;
@@ -205,12 +206,31 @@ public class OrderDocxRenderer {
         cells.add(new CellSpec(reason, 4, 1, false, ParagraphAlignment.LEFT));
         if (item.rowType() == OrderRowType.CANCELLATION) {
             cells.add(new CellSpec(NO_PAIR, 5, 2, false, ParagraphAlignment.LEFT));
+        } else if (item.rowType() == OrderRowType.MERGE_SUBGROUPS) {
+            cells.add(new CellSpec(merged(item), 5, 2, false, ParagraphAlignment.LEFT));
         } else {
             cells.add(new CellSpec(item.toDiscipline(), 5, 1, false, ParagraphAlignment.LEFT));
             cells.add(new CellSpec(item.toTeacher(), 6, 1, true, ParagraphAlignment.LEFT));
         }
         cells.add(new CellSpec(item.roomText(), 7, 1, true, ParagraphAlignment.CENTER));
         return cells;
+    }
+
+    /** «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи». */
+    static String merged(Item item) {
+        StringBuilder text = new StringBuilder(MERGED);
+        boolean discipline = !isBlank(item.toDiscipline());
+        boolean teacher = !isBlank(item.toTeacher());
+        if (discipline || teacher) {
+            text.append(':');
+        }
+        if (discipline) {
+            text.append(' ').append(item.toDiscipline().strip());
+        }
+        if (teacher) {
+            text.append(discipline ? " (" + item.toTeacher().strip() + ")" : " " + item.toTeacher().strip());
+        }
+        return text.append(" — обидві підгрупи").toString();
     }
 
     private static void setUpTable(XWPFTable table) {

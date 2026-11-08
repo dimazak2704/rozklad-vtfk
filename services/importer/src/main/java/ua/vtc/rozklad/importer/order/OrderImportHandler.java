@@ -55,7 +55,7 @@ public class OrderImportHandler implements ImportHandler {
             OrderRowType.REPLACEMENT, "«заміна»", OrderRowType.CANCELLATION, "«пари не буде»",
             OrderRowType.ADDITIONAL, "«додатково»", OrderRowType.BLOCK, "«блок пар»",
             OrderRowType.FINISHED, "«вичитано»", OrderRowType.AS_SCHEDULED, "«за розкладом»",
-            OrderRowType.ROOM_CHANGE, "«заміна аудиторії»");
+            OrderRowType.ROOM_CHANGE, "«заміна аудиторії»", OrderRowType.MERGE_SUBGROUPS, "«об'єднання підгруп»");
     static final String HEADER = "заголовок";
     static final String REVIEW_REQUIRED = "Рядки розпорядження прочитав ШІ з фото/скану: звірте кожен рядок з оригіналом, "
             + "виправте помилки й збережіть рядки — лише після цього розпорядження можна застосувати.";
