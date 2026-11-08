@@ -73,6 +73,11 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
     }
 
     static Problem classify(Throwable error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof RequestSizeFilter.BodyTooLargeException tooLarge) {
+                return RequestSizeFilter.tooLarge(tooLarge.limit());
+            }
+        }
         // the service is down: refused connection, no route, or (Docker) its container name no longer resolves
         if (hasCause(error, ConnectException.class) || hasCause(error, UnknownHostException.class)
                 || hasCause(error, NoRouteToHostException.class)) {

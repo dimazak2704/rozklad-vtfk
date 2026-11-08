@@ -139,6 +139,28 @@ class GatewayRoutingIT {
         assertRoutedTo("/api/public/meta", "core");
     }
 
+    /** A body far above any legitimate JSON is refused before it reaches core; uploads have their own limit. */
+    @Test
+    void oversizedBodyIs413BeforeRouting() {
+        byte[] json = new byte[3 * 1024 * 1024];
+        java.util.Arrays.fill(json, (byte) 'a');
+        client.post().uri("/api/public/invites/AAAA/accept").contentType(MediaType.APPLICATION_JSON).bodyValue(json)
+                .exchange()
+                .expectStatus().isEqualTo(413)
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.type").isEqualTo("urn:rozklad:problem:payload-too-large")
+                .jsonPath("$.status").isEqualTo(413);
+        client.post().uri("/api/import/jobs").contentType(MediaType.APPLICATION_OCTET_STREAM).bodyValue(json)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.service").isEqualTo("importer");
+        client.post().uri("/api/admin/changes").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.service").isEqualTo("core");
+    }
+
     @Test
     void exposesRequestIdToTheBrowser() {
         client.get().uri("/api/public/meta").header(HttpHeaders.ORIGIN, "http://localhost:8088")
