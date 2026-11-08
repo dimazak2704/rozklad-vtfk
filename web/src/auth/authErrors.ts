@@ -53,3 +53,15 @@ export function callbackErrorText(error: unknown, search = ''): string {
   if (cause?.name === 'TypeError') return 'Немає звʼязку із сервером входу коледжу.';
   return 'Сервер входу не відповів або відхилив запит.';
 }
+
+/**
+ * Чи є в адресі повернення дані входу. Та сама умова, що й `hasAuthParams` у react-oidc-context:
+ * без `code`/`error` разом зі `state` (у query чи в `#`) AuthProvider не завершує вхід і помилки не дає,
+ * тож сторінка повернення мусить сама сказати, що входу тут немає.
+ */
+export function hasCallbackParams(search: string, hash = ''): boolean {
+  return [search, hash.replace('#', '?')].some((part) => {
+    const params = new URLSearchParams(part);
+    return Boolean((params.get('code') || params.get('error')) && params.get('state'));
+  });
+}

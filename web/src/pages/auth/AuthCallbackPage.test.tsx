@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import type * as PostLogin from '@/auth/postLogin';
@@ -10,6 +11,8 @@ const auth = vi.hoisted((): { state: unknown; status: string; error: Error | nul
   error: null,
 }));
 
+const signIn = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+
 const stored = vi.hoisted((): { user: unknown; opened: string[] } => ({ user: null, opened: [] }));
 
 vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { state: auth.state } }) }));
@@ -19,7 +22,7 @@ vi.mock('@/auth/postLogin', async (importOriginal) => ({
   openAfterLogin: (path: string) => stored.opened.push(path),
 }));
 vi.mock('@/auth/useCurrentUser', () => ({
-  useCurrentUser: () => ({ status: auth.status, roles: ['ADMIN'], error: auth.error, signIn: vi.fn() }),
+  useCurrentUser: () => ({ status: auth.status, roles: ['ADMIN'], error: auth.error, signIn }),
 }));
 
 function fakeToken(roles: string[]): string {
@@ -89,5 +92,33 @@ describe('AuthCallbackPage', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent(/state|denied|застаріло/);
     auth.status = 'authenticated';
     auth.error = null;
+  });
+
+  it('адреса без даних входу (закладка): не висить на «Завершуємо вхід…», а пропонує увійти ще раз', async () => {
+    auth.status = 'anonymous';
+    signIn.mockClear();
+    renderCallback('/auth/callback');
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Вхід не завершився');
+    expect(alert).toHaveTextContent('даних входу в адресі немає');
+    expect(screen.queryByText('Завершуємо вхід…')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Увійти ще раз' }));
+    expect(signIn).toHaveBeenCalledTimes(1);
+    auth.status = 'authenticated';
+  });
+
+  it('code без state бібліотека теж не обробляє — так само пропонує увійти ще раз', () => {
+    auth.status = 'anonymous';
+    renderCallback('/auth/callback?code=x');
+    expect(screen.getByRole('alert')).toHaveTextContent('Вхід не завершився');
+    auth.status = 'authenticated';
+  });
+
+  it('поки AuthProvider завершує вхід (є code і state) — показує очікування', () => {
+    auth.status = 'loading';
+    renderCallback('/auth/callback?code=x&state=y');
+    expect(screen.getByText('Завершуємо вхід…')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    auth.status = 'authenticated';
   });
 });

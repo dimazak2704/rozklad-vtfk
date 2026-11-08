@@ -1,6 +1,6 @@
 import { ErrorResponse, ErrorTimeout } from 'oidc-client-ts';
 import { describe, expect, it } from 'vitest';
-import { callbackErrorText, loginErrorText } from './authErrors';
+import { callbackErrorText, hasCallbackParams, loginErrorText } from './authErrors';
 
 /** Як react-oidc-context передає помилку: копія name/message і сама помилка в innerError. */
 const wrapped = (error: Error) => ({ name: error.name, message: error.message, innerError: error });
@@ -33,5 +33,14 @@ describe('помилки входу українською', () => {
     expect(callbackErrorText(noState, '?error=login_required&state=abc')).toBe('Сервер входу не підтвердив вхід.');
     expect(callbackErrorText(noState, '?code=x&state=abc')).toMatch(/^Посилання входу застаріло/);
     expect(callbackErrorText(new TypeError('Failed to fetch'))).toBe('Немає звʼязку із сервером входу коледжу.');
+  });
+
+  it('дані входу в адресі повернення — як у react-oidc-context: code чи error разом зі state', () => {
+    expect(hasCallbackParams('?code=x&state=y')).toBe(true);
+    expect(hasCallbackParams('?error=access_denied&state=y')).toBe(true);
+    expect(hasCallbackParams('', '#code=x&state=y')).toBe(true);
+    expect(hasCallbackParams('')).toBe(false);
+    expect(hasCallbackParams('?code=x')).toBe(false);
+    expect(hasCallbackParams('?state=y')).toBe(false);
   });
 });
