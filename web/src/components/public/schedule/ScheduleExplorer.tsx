@@ -95,14 +95,18 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     }
   } else if (schedule.days.every((d) => d.lessons.length === 0) && !placeholder) {
     const noStudy = schedule.days.every((d) => !d.studyDay);
+    // причина з календаря (практика групи, канікули) важливіша за загальну здогадку
+    const notes = [...new Set(schedule.days.map((d) => d.note?.trim().replace(/\.$/, '')).filter((note): note is string => Boolean(note)))];
     content = (
       <EmptyState
         className="rounded-panel border border-default bg-surface"
         title={noStudy ? 'Цього тижня занять немає' : `У ${ownerLabel} цього тижня пар немає`}
         description={
-          noStudy
-            ? 'Це канікули або дні поза семестром. Розклад на інші тижні відкривається стрілками або календарем.'
-            : 'Можливо, практика чи зміни в розкладі. Перевірте інший тиждень або сторінку замін.'
+          notes.length > 0
+            ? `${notes.join('; ')}. Розклад на інші тижні відкривається стрілками або календарем.`
+            : noStudy
+              ? 'Це канікули або дні поза семестром. Розклад на інші тижні відкривається стрілками або календарем.'
+              : 'Можливо, практика чи зміни в розкладі. Перевірте інший тиждень або сторінку замін.'
         }
         action={
           homeDate < week.from || homeDate > week.to ? (

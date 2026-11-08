@@ -80,3 +80,24 @@ describe('ScheduleExplorer без мережі', () => {
     expect(screen.queryByRole('button', { name: 'До поточного тижня' })).not.toBeInTheDocument();
   });
 });
+
+describe('ScheduleExplorer: тиждень без пар', () => {
+  it('група на практиці бачить назву практики, а не «канікули або дні поза семестром»', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const practice: ScheduleDto = {
+      ...DEMO_WEEK,
+      days: DEMO_WEEK.days.map((d) => ({ ...d, studyDay: false, note: 'Електрорадіомонтажна практика 2КІ3', lessons: [] })),
+    };
+    renderWithProviders(
+      <ScheduleExplorer
+        query={query(practice, { placeholder: false, paused: false })}
+        params={params('2026-11-09', '2026-11-09', '2026-11-13')}
+        perspective="group"
+        ownerLabel="2КІ3"
+      />,
+    );
+    expect(screen.getByText('Цього тижня занять немає')).toBeInTheDocument();
+    expect(screen.getByText(/Електрорадіомонтажна практика 2КІ3\. Розклад на інші тижні/)).toBeInTheDocument();
+    expect(screen.queryByText(/канікули або дні поза семестром/)).not.toBeInTheDocument();
+  });
+});
