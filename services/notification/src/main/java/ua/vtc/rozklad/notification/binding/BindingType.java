@@ -25,4 +25,9 @@ public enum BindingType {
     public boolean needsGroup() {
         return this == GROUP_CHAT || this == SUBSCRIBER;
     }
+
+    /** Chats that can get the 07:30 schedule of their group: a subscriber (on by default) and a group chat (opt-in). */
+    public boolean canGetDigest() {
+        return needsGroup();
+    }
 }

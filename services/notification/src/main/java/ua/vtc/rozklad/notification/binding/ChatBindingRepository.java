@@ -22,7 +22,7 @@ public interface ChatBindingRepository extends JpaRepository<ChatBinding, UUID> 
 
     Optional<ChatBinding> findByTypeAndTeacherId(BindingType type, UUID teacherId);
 
-    List<ChatBinding> findByTypeAndDigestEnabledTrue(BindingType type);
+    List<ChatBinding> findByTypeInAndDigestEnabledTrue(Collection<BindingType> types);
 
     @Query("select b from ChatBinding b order by b.type, b.createdAt desc")
     List<ChatBinding> findAllForListing();

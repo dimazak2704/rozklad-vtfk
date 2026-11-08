@@ -27,7 +27,8 @@ import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
 
 /**
- * 07:30 on study days: each subscriber with the digest on gets today's card of his group. Core
+ * 07:30 on study days: each subscriber and each group chat with the digest on (group chats opt in with
+ * {@code /rozklad_on}) gets today's card of its group. Core
  * decides what a study day is ({@code meta.studyDay}); groups without lessons today get nothing.
  * Idempotent per (date, chat), so a second run or a second instance sends nothing twice.
  */

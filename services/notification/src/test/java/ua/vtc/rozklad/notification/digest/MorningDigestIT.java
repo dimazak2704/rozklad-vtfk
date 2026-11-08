@@ -37,6 +37,23 @@ class MorningDigestIT extends IntegrationTest {
     }
 
     @Test
+    void groupChatsGetTheMorningScheduleOnlyAfterSwitchingItOn() {
+        groupChatOf(-1001, CoreFixtures.GROUP_4KI1, "4КІ1");
+        groupChatOf(-1002, CoreFixtures.GROUP_4KI1, "4КІ1");
+        bindings.setGroupChatDigest(-1002, true);
+        subscriber(3001, CoreFixtures.GROUP_4KI1, "4КІ1");
+
+        assertThat(digest.run(MONDAY)).isEqualTo(2);
+        worker.drain();
+
+        // новий чат групи ранкового розкладу не отримує, поки адміністратор не ввімкне /rozklad_on
+        assertThat(telegram.sentTo(-1001)).isEmpty();
+        assertThat(telegram.lastSentTo(-1002).text())
+                .startsWith("☀️ Доброго ранку! Розклад на сьогодні:\n\n👥 <b>4КІ1</b> · понеділок, 19 жовтня");
+        assertThat(telegram.sentTo(3001)).hasSize(1);
+    }
+
+    @Test
     void noDigestOnDaysOffOrWithoutCore() {
         subscriber(3001, CoreFixtures.GROUP_4KI1, "4КІ1");
         core.setToday(LocalDate.of(2026, 10, 24));

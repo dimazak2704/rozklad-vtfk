@@ -39,6 +39,9 @@ public class TelegramBotRunner implements SmartLifecycle {
     static final List<BotCommandSpec> GROUP_COMMANDS = List.of(
             new BotCommandSpec("today", "Розклад групи на сьогодні"),
             new BotCommandSpec("tomorrow", "Розклад групи на завтра"),
+            new BotCommandSpec("status", "Що отримує цей чат"),
+            new BotCommandSpec("rozklad_on", "Щоранку надсилати розклад групи"),
+            new BotCommandSpec("rozklad_off", "Не надсилати ранковий розклад"),
             new BotCommandSpec("bind", "Прив’язати чат до групи (код з веб-панелі)"),
             new BotCommandSpec("help", "Команди бота"));
 

@@ -14,6 +14,7 @@ import ua.vtc.rozklad.notification.bot.BotUpdate.ChatRef;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
 import ua.vtc.rozklad.notification.shared.ChatIds;
+import ua.vtc.rozklad.notification.web.BusinessRuleException;
 import ua.vtc.rozklad.notification.web.NotFoundException;
 
 /** Chat bindings: who receives what. The single source for "may the bot write to this chat". */
@@ -103,9 +104,10 @@ public class ChatBindings {
         return repository.findByType(BindingType.ADMIN_CHAT);
     }
 
+    /** Subscribers and group chats with the morning schedule on (one query). */
     @Transactional(readOnly = true)
     public List<ChatBinding> digestSubscribers() {
-        return repository.findByTypeAndDigestEnabledTrue(BindingType.SUBSCRIBER);
+        return repository.findByTypeInAndDigestEnabledTrue(List.of(BindingType.SUBSCRIBER, BindingType.GROUP_CHAT));
     }
 
     /** «Моя група» in a private chat: subscribe or switch the group (digest stays as chosen). */
@@ -126,6 +128,45 @@ public class ChatBindings {
         Optional<ChatBinding> subscription = repository.findByChatIdAndType(chatId, BindingType.SUBSCRIBER);
         subscription.ifPresent(binding -> binding.setDigestEnabled(enabled, now()));
         return subscription.isPresent();
+    }
+
+    /**
+     * {@code /rozklad_on}, {@code /rozklad_off} in a group chat (the caller checked that the author is a chat admin).
+     *
+     * @return the group chat binding, empty when the chat is not bound to a group
+     */
+    @Transactional
+    public Optional<ChatBinding> setGroupChatDigest(long chatId, boolean enabled) {
+        Optional<ChatBinding> groupChat = repository.findByChatIdAndType(chatId, BindingType.GROUP_CHAT);
+        groupChat.ifPresent(binding -> {
+            if (binding.isDigestEnabled() != enabled) {
+                binding.setDigestEnabled(enabled, now());
+                log.info("Morning schedule of group chat {} switched {}", ChatIds.mask(chatId), enabled ? "on" : "off");
+            }
+        });
+        return groupChat;
+    }
+
+    /**
+     * The admin's switch in the web panel ({@code PATCH /api/notify/bindings/{id}}).
+     *
+     * @throws NotFoundException unknown binding
+     * @throws BusinessRuleException {@code digest-not-supported} for teacher and admin chats
+     */
+    @Transactional
+    public ChatBinding setDigest(UUID id, boolean enabled) {
+        ChatBinding binding = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Прив’язку не знайдено."));
+        if (!binding.getType().canGetDigest()) {
+            throw new BusinessRuleException("digest-not-supported",
+                    "Ранковий розклад надсилається лише в чати груп і підписникам.");
+        }
+        if (binding.isDigestEnabled() != enabled) {
+            binding.setDigestEnabled(enabled, now());
+            log.info("Morning schedule of {} {} switched {} in the web panel", binding.getType(), id,
+                    enabled ? "on" : "off");
+        }
+        return binding;
     }
 
     /** Applies a redeemed code to a chat (replaces an existing binding of the same type). */

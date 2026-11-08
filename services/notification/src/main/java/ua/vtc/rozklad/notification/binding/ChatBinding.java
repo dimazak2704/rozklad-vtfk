@@ -61,9 +61,11 @@ public class ChatBinding extends IdentifiableEntity {
         this.updatedAt = now;
     }
 
+    /** The morning schedule of a group chat is opt-in ({@code /rozklad_on}): a new group chat starts without it. */
     public static ChatBinding groupChat(long chatId, UUID groupId, String groupCode, String title, Instant now) {
         ChatBinding binding = new ChatBinding(chatId, BindingType.GROUP_CHAT, now);
         binding.retarget(groupId, groupCode, title, now);
+        binding.digestEnabled = false;
         return binding;
     }
 
@@ -117,8 +119,8 @@ public class ChatBinding extends IdentifiableEntity {
     }
 
     public void setDigestEnabled(boolean enabled, Instant now) {
-        if (type != BindingType.SUBSCRIBER) {
-            throw new IllegalStateException("Only subscribers receive the morning digest");
+        if (!type.canGetDigest()) {
+            throw new IllegalStateException(type + " does not receive the morning digest");
         }
         this.digestEnabled = enabled;
         this.updatedAt = now;

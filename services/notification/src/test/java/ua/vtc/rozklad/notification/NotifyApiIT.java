@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -145,6 +146,40 @@ class NotifyApiIT extends IntegrationTest {
         mockMvc.perform(delete("/api/notify/bindings/" + group.getId()).with(admin())).andExpect(status().isNoContent());
         mockMvc.perform(delete("/api/notify/bindings/" + group.getId()).with(admin())).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/notify/bindings").with(teacher("teacher-token"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminSwitchesTheMorningScheduleOfAGroupChatInTheWebPanel() throws Exception {
+        var group = groupChatOf(-1001234567890L, CoreFixtures.GROUP_4KI1, "4КІ1");
+        var teacherChat = teacherChat(2001, CoreFixtures.TEACHER_NEPYIVODA, "Непийвода М.В.");
+        // новий чат групи — без ранкового розкладу
+        mockMvc.perform(get("/api/notify/bindings").with(admin()))
+                .andExpect(jsonPath("$[?(@.type == 'GROUP_CHAT')].digestEnabled").value(false));
+
+        mockMvc.perform(patch("/api/notify/bindings/" + group.getId()).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"digestEnabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(group.getId().toString()))
+                .andExpect(jsonPath("$.digestEnabled").value(true))
+                .andExpect(jsonPath("$.chatId").value("-•••7890"));
+        assertThat(bindings.groupChat(-1001234567890L)).get().extracting(b -> b.isDigestEnabled()).isEqualTo(true);
+
+        mockMvc.perform(patch("/api/notify/bindings/" + teacherChat.getId()).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"digestEnabled\":true}"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("digest-not-supported"))
+                .andExpect(jsonPath("$.detail").value("Ранковий розклад надсилається лише в чати груп і підписникам."));
+        mockMvc.perform(patch("/api/notify/bindings/" + group.getId()).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("digestEnabled"));
+        mockMvc.perform(patch("/api/notify/bindings/" + CoreFixtures.SEMESTER).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"digestEnabled\":false}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(patch("/api/notify/bindings/" + group.getId()).with(teacher("teacher-token"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"digestEnabled\":false}"))
+                .andExpect(status().isForbidden());
+        assertThat(bindings.groupChat(-1001234567890L)).get().extracting(b -> b.isDigestEnabled()).isEqualTo(true);
     }
 
     @Test

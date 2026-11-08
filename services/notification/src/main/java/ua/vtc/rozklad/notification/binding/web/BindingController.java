@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -68,6 +69,12 @@ public class BindingController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}")
+    @Operation(summary = "Увімкнути чи вимкнути ранковий розклад о 7:30 (чат групи, підписник; 422 для інших)")
+    public BindingDto update(@PathVariable UUID id, @Valid @RequestBody BindingUpdate request) {
+        return BindingDto.of(bindings.setDigest(id, request.digestEnabled()));
+    }
+
     @PostMapping("/codes")
     @Operation(summary = "Одноразовий код прив’язки (24 год) і deep link; викладач — лише для себе")
     public BindingCodeDto createCode(@Valid @RequestBody BindingCodeRequest request, @AuthenticationPrincipal Jwt jwt) {
@@ -75,6 +82,10 @@ public class BindingController {
                 ? jwt.getClaimAsString("preferred_username") : jwt.getSubject(),
                 KeycloakRealmRoleConverter.realmRoles(jwt), jwt.getTokenValue());
         return BindingCodeDto.of(codeRequests.create(request.type(), request.groupId(), request.teacherId(), caller));
+    }
+
+    /** {@code PATCH /api/notify/bindings/{id}}: the only setting an admin changes in a binding. */
+    public record BindingUpdate(@NotNull(message = "Вкажіть, чи надсилати ранковий розклад.") Boolean digestEnabled) {
     }
 
     public record BindingCodeRequest(@NotNull(message = "Оберіть тип прив’язки.") BindingType type, UUID groupId,
