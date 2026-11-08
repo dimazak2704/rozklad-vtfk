@@ -20,6 +20,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import tools.jackson.databind.ext.javatime.ser.LocalTimeSerializer;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
+import ua.vtc.rozklad.importer.web.NulFreeStringDeserializer;
 
 /**
  * Cross-cutting beans: Kyiv {@link Clock}, JSON conventions (times as {@code HH:mm}), Jackson 3 for
@@ -43,6 +44,7 @@ public class InfrastructureConfig {
     JsonMapperBuilderCustomizer rozkladJsonConventions() {
         SimpleModule module = new SimpleModule("rozklad-conventions");
         module.addSerializer(LocalTime.class, new LocalTimeSerializer(DateTimeFormatter.ofPattern("HH:mm")));
+        module.addDeserializer(String.class, new NulFreeStringDeserializer());
         return builder -> builder.addModule(module);
     }
 

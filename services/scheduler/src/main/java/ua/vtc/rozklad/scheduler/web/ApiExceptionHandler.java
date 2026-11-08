@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ElementKind;
 import jakarta.validation.Path;
 import java.net.URI;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -145,7 +146,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        // повідомлення PostgreSQL містить значення рядка: у журнал — лише SQLState (ARCHITECTURE §10)
+        String state = sqlState(ex);
+        log.warn("Data integrity violation: SQLState {}", state);
+        if (state != null && state.startsWith("22")) {
+            // клас 22 «data exception» (недопустимий символ, значення поза типом): некоректне значення,
+            // а не «запис уже існує»
+            return problem(HttpStatus.BAD_REQUEST, "bad-request", "Некоректні дані",
+                    "Одне зі значень запиту не можна зберегти: перевірте текст, дати й числа.", request);
+        }
         return problem(HttpStatus.CONFLICT, "data-integrity", "Конфлікт даних",
                 "Операція порушує цілісність даних: такий запис уже існує або на нього посилаються інші дані.",
                 request);
@@ -251,4 +260,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty("requestId", requestId);
         }
     }
+
+    /** SQLState of the database error behind the exception, or {@code null}. */
+    static String sqlState(Throwable ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && sql.getSQLState() != null) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
+    }
+
 }

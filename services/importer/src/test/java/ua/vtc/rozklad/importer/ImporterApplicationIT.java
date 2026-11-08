@@ -111,6 +111,13 @@ class ImporterApplicationIT {
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
                 .andExpect(jsonPath("$.errors[0].field").value("today"))
                 .andExpect(jsonPath("$.errors[0].message").value("Очікується дата у форматі РРРР-ММ-ДД."));
+        // NUL (U+0000) PostgreSQL не збереже: 400 із полем, як у core, а не 409 «запис уже існує»
+        mockMvc.perform(post("/api/import/ai/parse-absence").with(token("SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"a\\u0000b\",\"today\":\"2026-11-07\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("text"))
+                .andExpect(jsonPath("$.errors[0].message").value("Текст містить недопустимий символ NUL (U+0000)."));
         mockMvc.perform(post("/api/import/ai/parse-absence").with(token("TEACHER"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"завтра\",\"today\":\"2026-11-07\"}"))
                 .andExpect(status().isForbidden());

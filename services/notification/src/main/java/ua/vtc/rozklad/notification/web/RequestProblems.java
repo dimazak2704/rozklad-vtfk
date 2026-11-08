@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.InvalidFormatException;
 import tools.jackson.databind.exc.MismatchedInputException;
 
 /**
@@ -61,6 +62,9 @@ final class RequestProblems {
     }
 
     private static String expected(MismatchedInputException ex) {
+        if (ex instanceof InvalidFormatException && ex.getTargetType() == String.class) {
+            return NulFreeStringDeserializer.MESSAGE;
+        }
         return expected(ex.getTargetType());
     }
 

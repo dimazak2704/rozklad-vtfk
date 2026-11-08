@@ -9,6 +9,11 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:notification}
     username: ${DB_USER:notification}
     password: ${DB_PASSWORD:notification}
+    hikari:
+      data-source-properties:
+        # повідомлення помилок PostgreSQL без значень рядків і параметрів запиту: вони потрапляють
+        # у журнал Hibernate і у винятки (ARCHITECTURE §10), як у core
+        logServerErrorDetail: false
   jpa:
     open-in-view: false
     hibernate:
