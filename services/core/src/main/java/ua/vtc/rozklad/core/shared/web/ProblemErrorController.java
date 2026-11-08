@@ -54,6 +54,14 @@ public class ProblemErrorController implements ErrorController {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status,
                 DETAILS.getOrDefault(status.value(), "Запит не вдалося виконати."));
         body.setType(URI.create(TYPE_PREFIX + TYPES.getOrDefault(status.value(), "http-" + status.value())));
+        // адреса, на яку прийшов запит, а не сторінка помилки /error
+        if (request.getAttribute(RequestDispatcher.ERROR_REQUEST_URI) instanceof String path && path.startsWith("/")) {
+            try {
+                body.setInstance(URI.create(path));
+            } catch (IllegalArgumentException unparsable) {
+                body.setInstance(null);
+            }
+        }
         String requestId = requestId(request);
         body.setProperty("requestId", requestId);
         if (!response.containsHeader(REQUEST_ID_HEADER)) {

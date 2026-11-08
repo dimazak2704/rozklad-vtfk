@@ -20,6 +20,7 @@ class ProblemErrorControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest("TRACE", "/error");
         request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 405);
         request.addHeader("X-Request-Id", "abc-123");
+        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/api/public/meta");
 
         ResponseEntity<ProblemDetail> response = controller.error(request, new MockHttpServletResponse());
 
@@ -27,6 +28,7 @@ class ProblemErrorControllerTest {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(response.getBody().getType().toString()).isEqualTo("urn:rozklad:problem:method-not-allowed");
         assertThat(response.getBody().getProperties()).containsEntry("requestId", "abc-123");
+        assertThat(response.getBody().getInstance()).hasToString("/api/public/meta");
     }
 
     @Test

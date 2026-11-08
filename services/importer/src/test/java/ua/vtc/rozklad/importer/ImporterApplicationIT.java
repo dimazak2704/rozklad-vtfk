@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -66,6 +68,19 @@ class ImporterApplicationIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:bad-request"));
+    }
+
+    /** {@code createNew} is a JSON tree, not bound through the String deserializer: NUL is checked by hand. */
+    @Test
+    void nulInANewCatalogEntryIsAFieldError() throws Exception {
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", UUID.randomUUID()).with(token("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mappings\":[{\"type\":\"TEACHER\",\"raw\":\"Хтось\","
+                                + "\"createNew\":{\"lastName\":\"R5\\u0000x\"},\"addAlias\":false}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                .andExpect(jsonPath("$.errors[0].field").value("mappings[0].createNew.lastName"))
+                .andExpect(jsonPath("$.errors[0].message").value("Текст містить недопустимий символ NUL (U+0000)."));
     }
 
     @Test

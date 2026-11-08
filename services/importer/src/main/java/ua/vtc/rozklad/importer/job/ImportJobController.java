@@ -34,6 +34,7 @@ import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.importer.normalize.EntityType;
 import ua.vtc.rozklad.importer.normalize.MappingDecision;
 import ua.vtc.rozklad.importer.web.InvalidRequestException;
+import ua.vtc.rozklad.importer.web.NulFreeStringDeserializer;
 import ua.vtc.rozklad.importer.web.PageResponse;
 
 /** CONTRACTS §5: upload, list, details, mappings and apply of import jobs (role ADMIN). */
@@ -108,6 +109,14 @@ public class ImportJobController {
             }
             if (hasCreate && !item.createNew().isObject()) {
                 errors.add(Map.entry(prefix + ".createNew", "createNew має бути JSON-об'єктом (можна порожнім)."));
+            }
+            // createNew — дерево JSON, а не рядки DTO: NUL перевіряємо тут, як NulFreeStringDeserializer
+            if (hasCreate && item.createNew().isObject()) {
+                for (Map.Entry<String, JsonNode> field : item.createNew().properties()) {
+                    if (field.getValue().isString() && field.getValue().asString().indexOf('\0') >= 0) {
+                        errors.add(Map.entry(prefix + ".createNew." + field.getKey(), NulFreeStringDeserializer.MESSAGE));
+                    }
+                }
             }
             if (item.addAlias() && item.targetId() == null) {
                 errors.add(Map.entry(prefix + ".addAlias", "Псевдонім додається лише при зіставленні з наявним записом."));
