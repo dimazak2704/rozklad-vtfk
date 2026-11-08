@@ -40,6 +40,17 @@ class UpdateMapperTest {
                  "chat":{"id":-1001234567890,"type":"supergroup","title":"4КІ1 — офіційний"},"text":"/today@scheduler_vtfk_bot"}}
                 """.formatted(USER)).orElseThrow();
         assertThat(group.chat()).isEqualTo(new BotUpdate.ChatRef(-1001234567890L, ChatKind.GROUP, "4КІ1 — офіційний"));
+        assertThat(group.fromAnonymousAdmin()).isFalse();
+
+        // анонімний адміністратор пише від імені самої групи: from = GroupAnonymousBot, sender_chat = група
+        ChatMessage anonymous = (ChatMessage) map("""
+                {"update_id":15,"message":{"message_id":8,"date":1760000000,
+                 "from":{"id":1087968824,"is_bot":true,"first_name":"Group","username":"GroupAnonymousBot"},
+                 "sender_chat":{"id":-1001234567890,"type":"supergroup","title":"4КІ1 — офіційний"},
+                 "chat":{"id":-1001234567890,"type":"supergroup","title":"4КІ1 — офіційний"},"text":"/rozklad_on"}}
+                """).orElseThrow();
+        assertThat(anonymous.senderChatId()).isEqualTo(-1001234567890L);
+        assertThat(anonymous.fromAnonymousAdmin()).isTrue();
 
         CallbackAction callback = (CallbackAction) map("""
                 {"update_id":12,"callback_query":{"id":"cb-1","from":%s,"chat_instance":"77","data":"mg:c:4",

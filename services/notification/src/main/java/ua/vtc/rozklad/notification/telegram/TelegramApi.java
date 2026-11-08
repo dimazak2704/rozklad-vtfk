@@ -25,6 +25,9 @@ public interface TelegramApi {
 
     void setCommands(CommandScope scope, List<BotCommandSpec> commands);
 
+    /** {@code getChatMember}: the user's status in a group chat (who may switch the chat's settings). */
+    MemberStatus memberStatus(long chatId, long userId);
+
     void deleteWebhook();
 
     void setWebhook(String url, String secretToken, List<String> allowedUpdates);
@@ -41,6 +44,36 @@ public interface TelegramApi {
     }
 
     record BotCommandSpec(String command, String description) {
+    }
+
+    /** {@code ChatMember.status}; an unknown future status is {@link #OTHER}, never an admin. */
+    enum MemberStatus {
+        CREATOR,
+        ADMINISTRATOR,
+        MEMBER,
+        RESTRICTED,
+        LEFT,
+        KICKED,
+        OTHER;
+
+        public boolean isAdmin() {
+            return this == CREATOR || this == ADMINISTRATOR;
+        }
+
+        public static MemberStatus of(String status) {
+            if (status == null) {
+                return OTHER;
+            }
+            return switch (status) {
+                case "creator" -> CREATOR;
+                case "administrator" -> ADMINISTRATOR;
+                case "member" -> MEMBER;
+                case "restricted" -> RESTRICTED;
+                case "left" -> LEFT;
+                case "kicked" -> KICKED;
+                default -> OTHER;
+            };
+        }
     }
 
     enum CommandScope {

@@ -72,6 +72,25 @@ class OkHttpTelegramApiTest {
     }
 
     @Test
+    void readsTheMemberStatusOfAUserInAGroup() {
+        responses.put("getchatmember", "{\"ok\":true,\"result\":{\"status\":\"administrator\",\"user\":{\"id\":42,"
+                + "\"is_bot\":false,\"first_name\":\"Оля\"},\"can_be_edited\":false,\"is_anonymous\":false,"
+                + "\"can_manage_chat\":true,\"can_delete_messages\":true,\"can_manage_video_chats\":true,"
+                + "\"can_restrict_members\":true,\"can_promote_members\":false,\"can_change_info\":true,"
+                + "\"can_invite_users\":true,\"can_post_stories\":false,\"can_edit_stories\":false,"
+                + "\"can_delete_stories\":false}}");
+        assertThat(api.memberStatus(-100123, 42)).isEqualTo(TelegramApi.MemberStatus.ADMINISTRATOR);
+        assertThat(requests.getFirst()).startsWith("getchatmember").contains("\"chat_id\":\"-100123\"")
+                .contains("\"user_id\":42");
+
+        responses.put("getchatmember", "{\"ok\":true,\"result\":{\"status\":\"member\",\"user\":{\"id\":43,"
+                + "\"is_bot\":false,\"first_name\":\"Петро\"}}}");
+        assertThat(api.memberStatus(-100123, 43)).isEqualTo(TelegramApi.MemberStatus.MEMBER);
+        assertThat(TelegramApi.MemberStatus.of("creator").isAdmin()).isTrue();
+        assertThat(TelegramApi.MemberStatus.of("something_new").isAdmin()).isFalse();
+    }
+
+    @Test
     void tooManyRequestsCarriesRetryAfter() {
         statuses.put("sendmessage", 429);
         responses.put("sendmessage", "{\"ok\":false,\"error_code\":429,\"description\":\"Too Many Requests: "

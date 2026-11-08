@@ -53,8 +53,9 @@ public final class UpdateMapper {
         if (message.getText() == null || message.getFrom() == null) {
             return Optional.empty();
         }
+        Long senderChatId = message.getSenderChat() == null ? null : message.getSenderChat().getId();
         return Optional.of(new BotUpdate.ChatMessage(updateId, chat(message.getChat()), message.getFrom().getId(),
-                message.getMessageId(), message.getText()));
+                message.getMessageId(), message.getText(), senderChatId));
     }
 
     private static BotUpdate callback(long updateId, CallbackQuery query) {

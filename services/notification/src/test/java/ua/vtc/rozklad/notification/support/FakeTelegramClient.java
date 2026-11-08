@@ -1,7 +1,9 @@
 package ua.vtc.rozklad.notification.support;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -61,6 +63,24 @@ public class FakeTelegramClient implements TelegramApi {
     private final List<Call> calls = new CopyOnWriteArrayList<>();
     private final ConcurrentLinkedDeque<TelegramApiFailure> failures = new ConcurrentLinkedDeque<>();
     private final AtomicLong nextMessageId = new AtomicLong(100);
+    private final Map<String, MemberStatus> members = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedDeque<TelegramApiFailure> memberFailures = new ConcurrentLinkedDeque<>();
+
+    /** {@code getChatMember} answers this status for the user in the chat (default: an ordinary member). */
+    public void setMemberStatus(long chatId, long userId, MemberStatus status) {
+        members.put(chatId + ":" + userId, status);
+    }
+
+    /** The next {@code getChatMember} throws this failure. */
+    public void failNextMemberStatus(TelegramApiFailure failure) {
+        memberFailures.add(failure);
+    }
+
+    /** How many {@code getChatMember} calls were made (the admin check is cached). */
+    public long memberStatusCalls() {
+        return calls.stream().filter(call -> call instanceof Other other && other.method().startsWith("getChatMember"))
+                .count();
+    }
 
     /** The next message call (send/photo/edit) throws this failure. */
     public void failNext(TelegramApiFailure failure) {
@@ -70,6 +90,8 @@ public class FakeTelegramClient implements TelegramApi {
     public void reset() {
         calls.clear();
         failures.clear();
+        members.clear();
+        memberFailures.clear();
     }
 
     public List<Call> calls() {
@@ -165,6 +187,16 @@ public class FakeTelegramClient implements TelegramApi {
     @Override
     public void setCommands(CommandScope scope, List<BotCommandSpec> commands) {
         calls.add(new Other("setCommands " + scope));
+    }
+
+    @Override
+    public MemberStatus memberStatus(long chatId, long userId) {
+        calls.add(new Other("getChatMember " + chatId + " " + userId));
+        TelegramApiFailure failure = memberFailures.poll();
+        if (failure != null) {
+            throw failure;
+        }
+        return members.getOrDefault(chatId + ":" + userId, MemberStatus.MEMBER);
     }
 
     @Override

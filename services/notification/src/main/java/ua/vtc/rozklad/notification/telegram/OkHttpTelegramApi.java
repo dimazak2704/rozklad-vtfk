@@ -7,6 +7,7 @@ import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updates.DeleteWebhook;
@@ -16,6 +17,7 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.LinkPreviewOptions;
 import org.telegram.telegrambots.meta.api.objects.ResponseParameters;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeAllGroupChats;
@@ -149,6 +151,13 @@ public class OkHttpTelegramApi implements TelegramApi {
                 .scope(telegramScope)
                 .build();
         call(() -> client.execute(method));
+    }
+
+    @Override
+    public MemberStatus memberStatus(long chatId, long userId) {
+        GetChatMember method = new GetChatMember(Long.toString(chatId), userId);
+        ChatMember member = call(() -> client.execute(method));
+        return MemberStatus.of(member == null ? null : member.getStatus());
     }
 
     @Override

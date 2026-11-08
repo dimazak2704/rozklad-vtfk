@@ -35,12 +35,25 @@ public sealed interface BotUpdate permits BotUpdate.ChatMessage, BotUpdate.Callb
         }
     }
 
-    /** A text message (commands included). */
-    record ChatMessage(long updateId, ChatRef chat, long fromUserId, long messageId, String text) implements BotUpdate {
+    /**
+     * A text message (commands included). {@code senderChatId} is set when the message was sent on behalf
+     * of a chat ({@code sender_chat}): an anonymous group administrator writes as the group itself.
+     */
+    record ChatMessage(long updateId, ChatRef chat, long fromUserId, long messageId, String text, Long senderChatId)
+            implements BotUpdate {
 
         public ChatMessage {
             Objects.requireNonNull(chat, "chat");
             Objects.requireNonNull(text, "text");
+        }
+
+        public ChatMessage(long updateId, ChatRef chat, long fromUserId, long messageId, String text) {
+            this(updateId, chat, fromUserId, messageId, text, null);
+        }
+
+        /** Sent by an anonymous administrator of this very group (only admins can stay anonymous). */
+        public boolean fromAnonymousAdmin() {
+            return senderChatId != null && senderChatId == chat.id();
         }
 
         @Override

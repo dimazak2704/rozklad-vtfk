@@ -42,6 +42,11 @@ public class DisabledTelegramApi implements TelegramApi {
     }
 
     @Override
+    public MemberStatus memberStatus(long chatId, long userId) {
+        throw TelegramApiFailure.botDisabled();
+    }
+
+    @Override
     public void deleteWebhook() {
         throw TelegramApiFailure.botDisabled();
     }
