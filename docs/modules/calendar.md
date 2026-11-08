@@ -65,6 +65,10 @@ bell/period readers were removed.
 - **Bells**: the default bell profile in settings must exist and be active (`SettingsConstraint`
   implemented here); it cannot be deleted or deactivated. A profile used by a semester → 409 on delete.
   Slots of a weekday must be unique per pair and not overlap in pair order.
+- **Public meta `nextStudyDay`** (added 08.11.2026 for the bot): the first date after today that is a
+  study day for the whole college (`StudyCalendar.day(date, null)`: Mon–Fri, inside a semester, no
+  HOLIDAY/NO_CLASSES with scope ALL), with its week number and parity (overrides applied); one batch
+  calendar read over 120 days; `null` when there is none.
 - **Public meta**: semester of today, otherwise the active one; `weekNumber`/`parity` are `null` when
   today is outside it (no invented parity between semesters). `bells` returns 404 when neither the
   semester nor settings name a profile; `profiles` only without `date`; `weekday` is ISO 1..7.

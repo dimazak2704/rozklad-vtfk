@@ -133,7 +133,11 @@ public final class CalendarDtos {
     public record ShiftWindowDto(Integer shift, Integer weekday, Integer firstPair, Integer lastPair) {
     }
 
-    /** {@code GET /api/public/meta}; week fields are {@code null} when today is outside the semester. */
+    /**
+     * {@code GET /api/public/meta}; week fields are {@code null} when today is outside the semester.
+     * {@code nextStudyDay} is the first study day after today (holidays skipped), {@code null} when
+     * none is known within {@link PublicCalendarService#NEXT_STUDY_DAY_HORIZON_DAYS} days.
+     */
     public record PublicMetaDto(
             String collegeName,
             SemesterRefDto semester,
@@ -143,7 +147,12 @@ public final class CalendarDtos {
             boolean studyDay,
             PairDto currentPair,
             PairDto nextPair,
-            ProfileRefDto bellProfile) {
+            ProfileRefDto bellProfile,
+            StudyDayDto nextStudyDay) {
+    }
+
+    /** A study day with its week: {@code weekday} ISO 1..5, parity NUMERATOR/DENOMINATOR. */
+    public record StudyDayDto(LocalDate date, int weekday, int weekNumber, Parity parity) {
     }
 
     public record SemesterRefDto(UUID id, String name, LocalDate startsOn, LocalDate endsOn) {

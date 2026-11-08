@@ -21,8 +21,9 @@ internal REST, schedules are read from core's public REST.
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (deadlines every minute, nightly cleanup) |
 | `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
 
-Tables (Flyway `V2`–`V5`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
-`substitution_request`, `substitution_message` (+ `processed_event` from `V1`).
+Tables (Flyway `V2`–`V6`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
+`substitution_request` (`V6`: `no_telegram_at`, `admin_warned_at`), `substitution_message` (+ `processed_event`
+from `V1`).
 
 ## 2. REST (CONTRACTS §6)
 
@@ -53,12 +54,21 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
 * **Сьогодні/Завтра** show the subscribed group (or the teacher's own lessons), with ◀️ ▶️ to the previous/next
   study day (edits the same message) and «⭐ Зробити моєю групою» for groups found by search.
   Changed lessons: «🔁 заміна» + «замість <s>СТП · Кренцін</s>», «❌ пари не буде» (struck through),
-  «➕ додаткова», «↪️ перенесено з N пари», «🚪 інша аудиторія», reason in italics, day note «ℹ️ …».
+  «➕ додаткова», «↪️ перенесено з N пари», «🚪 інша аудиторія», reason in italics **in words**
+  («Зв.зам.» → «Взаємна заміна», «Відп.» → «Викладач відсутній», as `REASON_CODE_HINT` of the public web;
+  the codes stay only in the order document), day note «ℹ️ …». A day without lessons that is not a study day
+  says «🌿 Навчання немає» + «Наступний навчальний день: **пн, 9 листопада**» and ▶️ jumps to that day: the
+  owner's next `studyDay` from one schedule read of the next 30 days (holidays and the group's practice skipped).
 * **Моя група**: course (inline 1–4) → group → SUBSCRIBER binding; digest on/off button.
 * **Знайти**: core's fuzzy search; one hit → card, several → buttons, none → hint. Free text outside a dialog is
   a search too.
-* **Дзвінки**: today's slots in `<pre>`, «Зараз 2 пара — до кінця 23 хв» / «Перерва — 3 пара о 11:00»;
-  weekend → Monday. **Чисельник?**: «Цього тижня — ЗНАМЕННИК (8-й тиждень)».
+* **Дзвінки**: today's slots as plain lines «1 · 08:30–09:30», the current one bold with «◀ зараз»;
+  «Зараз 2 пара — до кінця 23 хв» / «Перерва — 3 пара о 11:00»; weekend → Monday; footer = bell profile name
+  with the shift count agreed («2 зміни, 60 хв» even if the profile was typed «2 змін»). No `<pre>`: the pair
+  number and `HH:mm–HH:mm` have the same width in Telegram's fonts (tabular digits), so the column is straight
+  without a monospace block with its «copy» header. **Чисельник?**: «Цього тижня — ЗНАМЕННИК (8-й тиждень)»;
+  on a weekend/holiday also «Завтра (пн, 9 листопада) — **чисельник**, 11-й тиждень» (or «Наступний навчальний
+  день (…)») from core's `meta.nextStudyDay` — notification computes no parity itself.
 * **Absence wizard** (teacher): quick dates (today/next study day) or an inline calendar of study days
   (Mon–Fri, past days and > 90 days ahead disabled, month navigation) → one day or a range → whole day or
   picked pairs (toggle buttons) → reason (hidden from everyone but the dispatcher) → confirm → core
@@ -69,9 +79,24 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   Unclear/low confidence (< 0.6)/past/far dates/importer down → explanation + date buttons.
 * **Substitution request**: date, pair + time, group (+ subgroup), discipline, room, whom to replace, deadline,
   [✅ Підтверджую] [❌ Не можу] → core `POST /api/internal/changes/{id}/reply` → the message is edited to the
-  final state (no buttons). 409 → «Цей запит уже неактуальний», 403 → «адресовано іншому викладачу», core
-  down → alert, buttons stay. A repeated `confirmation-requested` for a pending change is sent as «⏰ Нагадування».
-  Deadline passed without an answer → one reminder to the teacher and one notice to admin chats.
+  final state (no buttons). 409 → «Цей запит уже неактуальний» (the message keeps a known final state; a
+  repeated tap of the answer core already holds gets the same success reply), 403 → «адресовано іншому
+  викладачу», core down → alert, buttons stay. A repeated `confirmation-requested` for a pending change is sent
+  as «⏰ Нагадування». Deadline passed without an answer → one reminder to the teacher and one notice to admin
+  chats (not for requests that never reached a teacher without Telegram, not for past lessons).
+  **Race-safe:** core publishes `substitution.status-changed` for the very answer, so the button handler and
+  the event consumer write the same `substitution_request` row at the same time. Both read it with
+  `SELECT … FOR NO KEY UPDATE` and only move a PENDING request to a final state; the second one waits for the
+  first one's commit, sees the state and does nothing. The handler talks to core first; once core accepted the
+  answer the teacher always gets the success reply (a still failing local update is logged and retried
+  3× on lock conflicts, the event brings the copy up to date). `SubstitutionFlowIT.*Racing*` reproduces the
+  interleaving of 08.11.2026 (event's UPDATE flushed but not committed while the button is pressed).
+* **Teacher without Telegram**: the request cannot be sent; instead of one admin message per change, the
+  every-minute job tells admin chats about requests still PENDING after `app.bot.no-telegram-notice-delay`
+  (2 min) — one message per teacher and lesson date listing the pairs (dedup key per teacher, date and chat), so
+  core's reminders and further changes of that date add nothing; past dates are skipped silently. A seeded or
+  quickly confirmed/published order (CONFIRMED/APPLIED within the delay) causes no message. The pending changes
+  are in the web panel (link in the message); the order summary still lists «Без Telegram: …».
 * **Group chat**: `/bind CODE` (or `/start CODE` after `?startgroup=`), `/today`, `/tomorrow`, `/help`;
   chatter and `/cmd@other_bot` are ignored. Bot removed/blocked (`my_chat_member`) → the chat's bindings are
   deleted; group → supergroup migration moves bindings.
@@ -117,7 +142,7 @@ retried 3× and then dead-lettered.
 | Event | Effect |
 |---|---|
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML) + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
-| `substitution.confirmation-requested` | request to the teacher's chat (or reminder); no Telegram → admin notice; reassigned change → old message «неактуальний» |
+| `substitution.confirmation-requested` | request to the teacher's chat (or reminder); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages; DECLINED → admin chats |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
 | `generation.completed` | admin chats: SOLVED (hard/soft, top penalties) / FAILED (error) / CANCELLED |
@@ -136,7 +161,11 @@ signature «Заступник директора з НР ⇥ Микола ПО�
 «ДОПОВНЕННЯ №36» + «до розпорядження №35» (when the main order is known here); drafts «№ ____».
 
 PDF: `soffice --headless --convert-to pdf` with a private profile in the cache dir, one conversion at a time,
-timeout 90 s. PNG: PDFBox at 2× (144 DPI), pages stacked (max 5 pages — Telegram photo limits).
+timeout 90 s. PNG (the picture for Telegram and `….png`): PDFBox at 2× (144 DPI), **cropped to the printed
+content** — one column range for all pages (the table stays aligned), each page cut to its own ink rows, 12 pt
+white margin, blank pages dropped — pages stacked (max 5 pages), then scaled down only if Telegram would refuse
+the photo (width + height ≤ 10000 px, ratio ≤ 20). A one-table order is a compact picture instead of an A4 sheet
+that Telegram shrinks into unreadable lines; PDF and DOCX stay A4.
 Published orders are cached on disk (`DOCUMENTS_CACHE_DIR`, key = order id + payload hash + format); the picture
 is rendered once per order no matter how many chats receive it.
 
@@ -152,6 +181,7 @@ is rendered once per order no matter how many chats receive it.
 | `DOCUMENTS_CACHE_DIR` | `${java.io.tmpdir}/rozklad-notification` | rendered files + LibreOffice profile |
 | `DELIVERY_WORKER_ENABLED`, `DELIVERY_GLOBAL_PER_SECOND`, `DELIVERY_GROUP_CHAT_PER_MINUTE` | `true`, 25, 18 | queue |
 | `BOT_DIGEST_ENABLED` | `true` | morning digest |
+| `app.bot.no-telegram-notice-delay` (property) | `2m` | how long a request of a teacher without Telegram may stay pending before admins are told |
 | `EVENTS_LISTENER_ENABLED` | `true` | `false` = do not consume the shared queue (manual runs) |
 | `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them) |
 
@@ -188,12 +218,14 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 | `GET /api/documents/orders/{id}.{fmt}` | only orders received via `order.published`; ETag + 5 min cache; unknown format → 404 | Drafts are never public; core offers no public order payload. |
 | `POST …/render` | `format` default `pdf`; invalid → 400 `errors[format]` | — |
 | Webhook | `POST /api/notify/telegram/webhook` 404 unless WEBHOOK mode | Reserved path from the foundation. |
+| `GET …/{id}.png` | cropped to the content, not an A4 page (08.11.2026) | Readable on a phone; PDF/DOCX stay A4. |
+| core `GET /api/public/meta` | reads the additive `nextStudyDay` (08.11.2026); an older core without it only loses the «Завтра — …» line | Parity of the next study day comes from core. |
 
 ## 10. How to run and test
 
 ```bash
 source scripts/env.sh
-mvn -q -pl services/notification -am verify          # 60 unit tests + 75 Testcontainers ITs (all green)
+mvn -q -pl services/notification -am verify          # 66 unit tests + 84 Testcontainers ITs (all green)
 ```
 
 * Unit (`*Test`): DOCX of order №35 (header, merged cells, every row type, subgroups, notes, signature —
@@ -244,3 +276,9 @@ image and rasterized by `PdfPngRenderer`; the PNG matches the layout of `seed/or
   overrides the image's `/usr/bin/soffice` and disables PDF/PNG. Leave the key out of `.env` for compose.
 * With the real token in `.env`, `docker compose --profile app up` starts long polling — stop any other
   polling instance (host run, another clone) first.
+* The bells footer is the bell profile name stored in core. The repository's reference data says «2 зміни,
+  60 хв»; the live bot showed «2 змін», so that profile was renamed in the running database. The bot now agrees
+  «N зміна/зміни/змін» when it displays the name; the stored name itself is fixed in the web panel (calendar →
+  bell profiles), not by notification.
+* «One warning per teacher and date» means a second change of the same teacher on the same date, created after
+  the warning, is not announced in Telegram again; the dispatcher sees it as pending in the web panel.

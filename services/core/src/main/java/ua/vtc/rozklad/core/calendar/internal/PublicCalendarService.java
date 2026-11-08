@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.core.calendar.BellProfileRepository;
 import ua.vtc.rozklad.core.calendar.CalendarQueries;
 import ua.vtc.rozklad.core.calendar.CalendarQueries.BellProfileInfo;
+import ua.vtc.rozklad.core.calendar.DayInfo;
 import ua.vtc.rozklad.core.calendar.SemesterInfo;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.WeekInfo;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.BellsDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.PairDto;
@@ -19,6 +21,7 @@ import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.ProfileRefDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.PublicMetaDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SemesterRefDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SlotDto;
+import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.StudyDayDto;
 import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 
@@ -29,6 +32,9 @@ import ua.vtc.rozklad.core.shared.error.NotFoundException;
 @Service
 @Transactional(readOnly = true)
 public class PublicCalendarService {
+
+    /** How far {@code nextStudyDay} looks ahead: covers the summer break between two semesters. */
+    static final int NEXT_STUDY_DAY_HORIZON_DAYS = 120;
 
     private final CalendarQueries calendar;
     private final BellProfileRepository bellProfiles;
@@ -69,7 +75,25 @@ public class PublicCalendarService {
                 studyDay,
                 current,
                 next,
-                calendar.bellProfileOn(today).map(PublicCalendarService::profileRef).orElse(null));
+                calendar.bellProfileOn(today).map(PublicCalendarService::profileRef).orElse(null),
+                nextStudyDay(today));
+    }
+
+    /**
+     * First study day after {@code today} for the whole college (weekends, holidays and days between
+     * semesters skipped), with its week number and parity; one batch read of the calendar.
+     */
+    private StudyDayDto nextStudyDay(LocalDate today) {
+        LocalDate from = today.plusDays(1);
+        LocalDate to = today.plusDays(NEXT_STUDY_DAY_HORIZON_DAYS);
+        StudyCalendar study = calendar.studyCalendar(from, to);
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            DayInfo day = study.day(date, null);
+            if (day.studyDay() && day.parity() != null) {
+                return new StudyDayDto(date, day.weekday(), day.weekNumber(), day.parity());
+            }
+        }
+        return null;
     }
 
     /**

@@ -282,6 +282,40 @@ class CalendarApiIT {
     }
 
     @Test
+    void publicMetaNamesTheNextStudyDayAfterWeekendsAndHolidays() throws Exception {
+        LocalDate today = LocalDate.now(clock);
+        UUID semester = id(create("/api/admin/semesters", """
+                {"number":1,"startsOn":"%s","endsOn":"%s"}""".formatted(today.minusDays(40), today.plusDays(60)))
+                .andReturn());
+        create("/api/admin/calendar-periods", """
+                {"semesterId":"%s","kind":"HOLIDAY","title":"Канікули","startsOn":"%s","endsOn":"%s","scope":"ALL"}"""
+                .formatted(semester, today.plusDays(1), today.plusDays(7)))
+                .andExpect(status().isCreated());
+        LocalDate expected = today.plusDays(8);
+        while (expected.getDayOfWeek().getValue() > 5) {
+            expected = expected.plusDays(1);
+        }
+
+        mvc.perform(get("/api/public/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nextStudyDay.date").value(expected.toString()))
+                .andExpect(jsonPath("$.nextStudyDay.weekday").value(expected.getDayOfWeek().getValue()))
+                .andExpect(jsonPath("$.nextStudyDay.weekNumber").value(calendar.weekNumber(expected)))
+                .andExpect(jsonPath("$.nextStudyDay.parity").value(calendar.parity(expected).name()));
+    }
+
+    @Test
+    void publicMetaHasNoNextStudyDayWithoutASemesterAhead() throws Exception {
+        LocalDate today = LocalDate.now(clock);
+        create("/api/admin/semesters", """
+                {"number":1,"startsOn":"%s","endsOn":"%s"}""".formatted(today.minusDays(60), today));
+
+        mvc.perform(get("/api/public/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nextStudyDay").doesNotExist());
+    }
+
+    @Test
     void bellProfilesAreValidatedAndProtected() throws Exception {
         create("/api/admin/bell-profiles", """
                 {"name":"Тест накладка","slots":[
