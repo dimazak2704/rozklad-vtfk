@@ -38,6 +38,8 @@ import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
+import ua.vtc.rozklad.core.shared.error.FieldErrorDto;
+import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceDto;
@@ -304,6 +306,26 @@ class SubstitutionFlowIT {
                 .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
                         .extracting(ConflictDto::kind).containsExactly(ConflictKind.UNAVAILABLE));
         assertThat(changes.findById(change.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+    }
+
+    /** An unknown id in the request body names its field (400), it is not a 404 of the whole request. */
+    @Test
+    void unknownIdsInTheBodyAreFieldErrors() {
+        UUID unknown = UUID.fromString("00000000-0000-4000-8000-000000000000");
+
+        assertThatThrownBy(() -> absences.report(unknown, new AbsenceRequests.AbsenceData(MONDAY, MONDAY, null,
+                AbsenceReasonCategory.SICK_LEAVE, null), AbsenceSource.ADMIN, "admin"))
+                .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
+                        .extracting(FieldErrorDto::field).containsExactly("teacherId"));
+        assertThatThrownBy(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2,
+                null, ki41.getId(), null, stpLesson.getId(), null, unknown, null, null, ReasonCode.OTHER, null, null),
+                "admin"))
+                .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
+                        .extracting(FieldErrorDto::field).containsExactly("newTeacherId"));
+        assertThatThrownBy(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.CANCEL, MONDAY, 2, null,
+                unknown, null, stpLesson.getId(), null, null, null, null, ReasonCode.OTHER, null, null), "admin"))
+                .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
+                        .extracting(FieldErrorDto::field).containsExactly("groupId"));
     }
 
     private ChangeDto replaceWithHanza() {

@@ -75,7 +75,7 @@ public class ChangeCommands {
     }
 
     public ChangeDto create(CreateChangeRequest request, String actor) {
-        StudentGroup group = catalog.group(request.groupId());
+        StudentGroup group = catalog.group(request.groupId(), "groupId");
         // спершу блокуємо дату (викладач і аудиторія спільні для всіх груп), потім день групи,
         // і лише тоді читаємо заняття та відкриті зміни: так паралельні рішення не перетинаються
         changes.lockDecisionsOf(request.date());
@@ -125,7 +125,7 @@ public class ChangeCommands {
             throw new BusinessRuleException("CHANGE_INVALID", "Скасована пара не має аудиторії.");
         }
         if (request.newRoomId() != null) {
-            catalog.room(request.newRoomId());
+            catalog.room(request.newRoomId(), "newRoomId");
         }
         changes.lockDecisionsOf(change.getDate());
         lessons.lockGroupDay(change.getGroupId(), change.getDate());
@@ -234,7 +234,7 @@ public class ChangeCommands {
                 .orElse(null);
         if (lesson == null) {
             if (!lessons.existsById(lessonId)) {
-                throw NotFoundException.of("Заняття", lessonId);
+                throw FieldValidationException.of("originalLessonId", "Заняття не знайдено.");
             }
             throw mismatch();
         }
@@ -277,10 +277,10 @@ public class ChangeCommands {
     }
 
     private void fillReplacement(Change change, CreateChangeRequest request, List<Lesson> groupDay) {
-        UUID room = request.newRoomId() == null ? null : catalog.room(request.newRoomId()).getId();
+        UUID room = request.newRoomId() == null ? null : catalog.room(request.newRoomId(), "newRoomId").getId();
         switch (change.getKind()) {
             case REPLACE_TEACHER -> {
-                UUID teacher = catalog.teacher(request.newTeacherId()).getId();
+                UUID teacher = catalog.teacher(request.newTeacherId(), "newTeacherId").getId();
                 if (teacher.equals(change.getOrigTeacherId())) {
                     throw new BusinessRuleException("CHANGE_SAME_TEACHER",
                             "Новий викладач збігається з тим, кого замінюють.");
@@ -292,12 +292,12 @@ public class ChangeCommands {
                 change.setReplacement(change.getOrigDisciplineId(), teacher, room);
             }
             case REPLACE_DISCIPLINE -> {
-                UUID discipline = catalog.discipline(request.newDisciplineId()).getId();
+                UUID discipline = catalog.discipline(request.newDisciplineId(), "newDisciplineId").getId();
                 if (discipline.equals(change.getOrigDisciplineId())) {
                     throw new BusinessRuleException("CHANGE_INVALID",
                             "Дисципліна та сама. Для іншого викладача оберіть «Заміна викладача».");
                 }
-                change.setReplacement(discipline, catalog.teacher(request.newTeacherId()).getId(), room);
+                change.setReplacement(discipline, catalog.teacher(request.newTeacherId(), "newTeacherId").getId(), room);
             }
             case ROOM_CHANGE -> {
                 if (room.equals(change.getOrigRoomId())) {
@@ -307,15 +307,15 @@ public class ChangeCommands {
             }
             case CANCEL -> change.setReplacement(null, null, null);
             case DISCIPLINE_FINISHED -> change.setReplacement(
-                    request.newDisciplineId() == null ? null : catalog.discipline(request.newDisciplineId()).getId(),
-                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId()).getId(), room);
+                    request.newDisciplineId() == null ? null : catalog.discipline(request.newDisciplineId(), "newDisciplineId").getId(),
+                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId(), "newTeacherId").getId(), room);
             case SWAP -> {
                 Lesson moved = swappedLesson(request, change, groupDay);
                 change.setSwapLessonId(moved.getId());
                 change.setReplacement(moved.getDisciplineId(), moved.getTeacherId(), room);
             }
-            case ADDITIONAL, BLOCK -> change.setReplacement(catalog.discipline(request.newDisciplineId()).getId(),
-                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId()).getId(), room);
+            case ADDITIONAL, BLOCK -> change.setReplacement(catalog.discipline(request.newDisciplineId(), "newDisciplineId").getId(),
+                    request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId(), "newTeacherId").getId(), room);
         }
     }
 
@@ -337,7 +337,7 @@ public class ChangeCommands {
 
     private Absence activeAbsenceFor(UUID absenceId, Change change) {
         Absence absence = absences.findById(absenceId)
-                .orElseThrow(() -> NotFoundException.of("Відсутність", absenceId));
+                .orElseThrow(() -> FieldValidationException.of("absenceId", "Відсутність не знайдено."));
         if (!absence.isActive()) {
             throw new BusinessRuleException("ABSENCE_CANCELLED", "Ця відсутність уже скасована.");
         }

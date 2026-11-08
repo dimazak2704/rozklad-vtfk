@@ -21,6 +21,7 @@ import ua.vtc.rozklad.core.catalog.SubgroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
+import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 
 /** Catalog reads of the substitution module: single lookups with 404 and batch maps for DTOs. */
@@ -61,6 +62,27 @@ public class CatalogLookup {
 
     public Room room(UUID id) {
         return rooms.findById(id).orElseThrow(() -> NotFoundException.of("Аудиторію", id));
+    }
+
+    /*
+     * Ids sent in a request body: an unknown id is a 400 on that field (the client can highlight it),
+     * while an id in the path stays a 404.
+     */
+
+    public Teacher teacher(UUID id, String field) {
+        return teachers.findById(id).orElseThrow(() -> FieldValidationException.of(field, "Викладача не знайдено."));
+    }
+
+    public StudentGroup group(UUID id, String field) {
+        return groups.findById(id).orElseThrow(() -> FieldValidationException.of(field, "Групу не знайдено."));
+    }
+
+    public Discipline discipline(UUID id, String field) {
+        return disciplines.findById(id).orElseThrow(() -> FieldValidationException.of(field, "Дисципліну не знайдено."));
+    }
+
+    public Room room(UUID id, String field) {
+        return rooms.findById(id).orElseThrow(() -> FieldValidationException.of(field, "Аудиторію не знайдено."));
     }
 
     public Map<UUID, Teacher> teachers(Collection<UUID> ids) {

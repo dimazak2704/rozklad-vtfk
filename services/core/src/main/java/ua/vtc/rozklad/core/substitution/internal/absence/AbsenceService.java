@@ -81,7 +81,7 @@ public class AbsenceService {
     }
 
     public AbsenceDto report(UUID teacherId, AbsenceData data, AbsenceSource source, String actor) {
-        Teacher teacher = catalog.teacher(teacherId);
+        Teacher teacher = catalog.teacher(teacherId, "teacherId");
         if (source != AbsenceSource.ADMIN && data.dateTo().isBefore(LocalDate.now(clock))) {
             throw new BusinessRuleException("ABSENCE_IN_PAST", "Не можна повідомити про відсутність, яка вже минула.");
         }
