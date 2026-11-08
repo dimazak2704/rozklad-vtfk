@@ -208,6 +208,46 @@ class LoadApiIT {
                 .andExpect(jsonPath("$.errors[0].field").value("items[0].groupCode"));
     }
 
+    /** A program carries hours only: it must not erase the teacher, room requirements or note of the item. */
+    @Test
+    void importWithoutTeachersKeepsWhatTheRequestDoesNotCarry() throws Exception {
+        UUID room = id(create("/api/admin/rooms", "{\"name\":\"6\",\"type\":\"COMPUTER_LAB\",\"capacity\":30}")
+                .andReturn());
+        UUID item = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":3,"plannedHours":54,
+                 "teachers":[{"subgroup":0,"teacherId":"%s"}],"requiredRoomType":"COMPUTER_LAB",
+                 "preferredRoomId":"%s","controlForm":"EXAM","note":"з розкладу"}"""
+                .formatted(semester, group, stp, krentsin, room)).andReturn());
+
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"СТП",
+                                 "lessonKind":"MIXED","hoursPerWeek":3,"plannedHours":60,"source":"PROGRAM"}]}"""
+                                .formatted(semester)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updated").value(1));
+
+        mvc.perform(get("/api/admin/load/" + item).with(TestJwts.admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.plannedHours").value(60))
+                .andExpect(jsonPath("$.source").value("PROGRAM"))
+                .andExpect(jsonPath("$.teachers[0].teacher.id").value(krentsin.toString()))
+                .andExpect(jsonPath("$.requiredRoomType").value("COMPUTER_LAB"))
+                .andExpect(jsonPath("$.preferredRoom.id").value(room.toString()))
+                .andExpect(jsonPath("$.controlForm").value("EXAM"))
+                .andExpect(jsonPath("$.note").value("з розкладу"));
+
+        // явний порожній список — свідоме зняття викладачів
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"СТП",
+                                 "hoursPerWeek":3,"plannedHours":60,"source":"PROGRAM","teachers":[]}]}"""
+                                .formatted(semester)))
+                .andExpect(jsonPath("$.updated").value(1));
+        mvc.perform(get("/api/admin/load/" + item).with(TestJwts.admin()))
+                .andExpect(jsonPath("$.teachers").isEmpty());
+    }
+
     private void lesson(TimetableVersion version, int weekday, int pair, Parity parity, int subgroup, UUID discipline,
                         UUID teacher) {
         TemplateLesson lesson = new TemplateLesson(version.getId(), weekday, pair, parity, group, subgroup, discipline);

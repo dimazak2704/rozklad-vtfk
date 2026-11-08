@@ -18,7 +18,6 @@ import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupInfo;
 import ua.vtc.rozklad.core.catalog.RoomInfo;
 import ua.vtc.rozklad.core.catalog.TeacherInfo;
-import ua.vtc.rozklad.core.load.ControlForm;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportItem;
@@ -33,6 +32,11 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * split, referring to the catalog by natural keys (group code, short names, room name — aliases
  * and DOMAIN §10 spelling variants are accepted). All or nothing: any unknown reference rejects
  * the whole request with field errors {@code items[i]…}.
+ * <p>
+ * An update keeps what the request does not carry: a field that is absent ({@code null}) leaves the
+ * stored value as it is, so a program or a curriculum (hours only) does not erase the teachers, the
+ * room requirements or the note of an item derived from the timetable. An explicit empty list of
+ * teachers or a blank room name / note clears the value.
  */
 @Service
 public class LoadImportService {
@@ -112,17 +116,18 @@ public class LoadImportService {
         if (discipline.isEmpty()) {
             errors.add(field + ".disciplineShortName", "Дисципліну «%s» не знайдено.".formatted(item.disciplineShortName()));
         }
-        UUID roomId = null;
+        Optional<UUID> roomId = item.preferredRoomName() == null ? null : Optional.empty();
         if (item.preferredRoomName() != null && !item.preferredRoomName().isBlank()) {
             Optional<RoomInfo> room = catalog.roomByName(item.preferredRoomName());
             if (room.isEmpty()) {
                 errors.add(field + ".preferredRoomName", "Аудиторію «%s» не знайдено.".formatted(item.preferredRoomName()));
             } else {
-                roomId = room.get().id();
+                roomId = Optional.of(room.get().id());
             }
         }
         boolean split = Boolean.TRUE.equals(item.splitSubgroups());
-        Map<Integer, UUID> teachers = new TreeMap<>();
+        // null = викладачів у запиті немає (програма, навчальний план): наявні призначення лишаються
+        Map<Integer, UUID> teachers = item.teachers() == null ? null : new TreeMap<>();
         List<LoadImportTeacher> requestedTeachers = item.teachers() == null ? List.of() : item.teachers();
         for (int t = 0; t < requestedTeachers.size(); t++) {
             LoadImportTeacher teacher = requestedTeachers.get(t);
@@ -150,45 +155,61 @@ public class LoadImportService {
     }
 
     private static boolean differs(Resolved item, LoadItem target, int plannedHours) {
-        Map<Integer, UUID> current = new TreeMap<>();
-        target.getTeachers().forEach(link -> current.put(link.getSubgroupNumber(), link.getTeacherId()));
         LoadImportItem source = item.source();
         return target.getHoursPerWeek().compareTo(source.hoursPerWeek()) != 0
                 || target.getPlannedHours() != plannedHours
                 || target.getSource() != source.source()
-                || !current.equals(item.teachers())
-                || target.getControlForm() != controlForm(source)
-                || target.getRequiredRoomType() != source.requiredRoomType()
-                || !java.util.Objects.equals(target.getPreferredRoomId(), item.preferredRoomId())
-                || !java.util.Objects.equals(target.getNote(), blankToNull(source.note()));
+                || (item.teachers() != null && !teachersOf(target).equals(item.teachers()))
+                || (source.controlForm() != null && target.getControlForm() != source.controlForm())
+                || (source.requiredRoomType() != null && target.getRequiredRoomType() != source.requiredRoomType())
+                || (item.preferredRoomId() != null
+                && !java.util.Objects.equals(target.getPreferredRoomId(), item.preferredRoomId().orElse(null)))
+                || (source.note() != null && !java.util.Objects.equals(target.getNote(), blankToNull(source.note())));
     }
 
+    /** Copies what the request carries; absent ({@code null}) fields keep the stored values. */
     private static void apply(Resolved item, LoadItem target) {
         LoadImportItem source = item.source();
         target.setLessonKind(item.lessonKind());
         target.setSplitSubgroups(item.split());
         target.setSource(source.source());
-        target.setControlForm(controlForm(source));
-        target.setRequiredRoomType(source.requiredRoomType());
-        target.setPreferredRoomId(item.preferredRoomId());
-        target.setNote(blankToNull(source.note()));
-        target.getTeachers().stream().map(link -> link.getSubgroupNumber())
-                .filter(subgroup -> !item.teachers().containsKey(subgroup))
-                .toList()
-                .forEach(target::unassignTeacher);
-        item.teachers().forEach(target::assignTeacher);
+        if (source.controlForm() != null) {
+            target.setControlForm(source.controlForm());
+        }
+        if (source.requiredRoomType() != null) {
+            target.setRequiredRoomType(source.requiredRoomType());
+        }
+        if (item.preferredRoomId() != null) {
+            target.setPreferredRoomId(item.preferredRoomId().orElse(null));
+        }
+        if (source.note() != null) {
+            target.setNote(blankToNull(source.note()));
+        }
+        if (item.teachers() != null) {
+            target.getTeachers().stream().map(link -> link.getSubgroupNumber())
+                    .filter(subgroup -> !item.teachers().containsKey(subgroup))
+                    .toList()
+                    .forEach(target::unassignTeacher);
+            item.teachers().forEach(target::assignTeacher);
+        }
     }
 
-    private static ControlForm controlForm(LoadImportItem item) {
-        return item.controlForm() == null ? ControlForm.NONE : item.controlForm();
+    private static Map<Integer, UUID> teachersOf(LoadItem target) {
+        Map<Integer, UUID> current = new TreeMap<>();
+        target.getTeachers().forEach(link -> current.put(link.getSubgroupNumber(), link.getTeacherId()));
+        return current;
     }
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }
 
+    /**
+     * {@code teachers == null}: the request has no teachers; {@code preferredRoomId == null}: no room
+     * name in the request, {@code Optional.empty()}: a blank name (clear the room).
+     */
     private record Resolved(LoadImportItem source, GroupInfo group, DisciplineRef discipline, LessonKind lessonKind,
-                            boolean split, Map<Integer, UUID> teachers, UUID preferredRoomId) {
+                            boolean split, Map<Integer, UUID> teachers, Optional<UUID> preferredRoomId) {
 
         String naturalKey() {
             return "%s | %s | %s | %s".formatted(group.code(), discipline.shortName(), lessonKind,
