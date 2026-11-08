@@ -276,6 +276,18 @@ export function useUpdateOrderNotes() {
   });
 }
 
+/**
+ * `DELETE /admin/orders/{id}` для імпортованого паперового розпорядження з помилкою в номері чи даті:
+ * його видаляють і імпортують знову. Розпорядження, яке опублікувала система, — 422, з доповненнями — 409.
+ */
+export function useDeleteImportedOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: Uuid) => api.delete(`/admin/orders/${id}`),
+    onSuccess: () => invalidateDaily(queryClient),
+  });
+}
+
 export function usePublishOrder() {
   const queryClient = useQueryClient();
   return useMutation({

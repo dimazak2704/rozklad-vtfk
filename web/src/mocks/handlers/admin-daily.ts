@@ -16,7 +16,7 @@ import type {
   UpdateOrderNotesRequest,
 } from '@/api/types';
 import { compareIsoDates, isIsoDate, todayInKyiv } from '@/lib/date';
-import { apiPath, badRequest, notFound, requiredParam, readJson } from '../kit';
+import { apiPath, badRequest, businessRule, conflict, notFound, requiredParam, readJson } from '../kit';
 import {
   cancelAbsence,
   cancelChange,
@@ -190,6 +190,20 @@ export const handlers = [
   http.put(apiPath('/admin/orders/:id/notes'), async ({ params, request }) => {
     const body = await readJson<Partial<UpdateOrderNotesRequest>>(request);
     return HttpResponse.json(toOrderDto(updateNotes(String(params.id), body.notes, body.version)));
+  }),
+
+  // як core: чернетку відкидають, імпортоване паперове видаляють (без доповнень), опубліковане системою — 422
+  http.delete(apiPath('/admin/orders/:id'), ({ params }) => {
+    const order = getOrder(String(params.id));
+    const amendments = [...world().orders.values()].filter((o) => o.parentId === order.id);
+    if (order.status === 'PUBLISHED' && !order.imported) {
+      return businessRule('ORDER_ALREADY_PUBLISHED', 'Опубліковане розпорядження видаляти не можна.');
+    }
+    if (amendments.length > 0) {
+      return conflict(`До розпорядження №${order.number ?? '—'} є доповнення ${amendments.map((a) => `№${a.number ?? '—'}`).join(', ')}: спершу видаліть їх.`);
+    }
+    world().orders.delete(order.id);
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.post(apiPath('/admin/orders/:id/publish'), ({ params }) =>

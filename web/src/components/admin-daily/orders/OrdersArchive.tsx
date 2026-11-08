@@ -1,10 +1,11 @@
-import { Eye, FileDown, Search, X } from 'lucide-react';
+import { Eye, FileDown, Search, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { downloadOrderFile, useOrders } from '@/api/admin-daily';
+import { downloadOrderFile, useDeleteImportedOrder, useOrders } from '@/api/admin-daily';
 import type { DocumentFormat, IsoDate, OrderSummaryDto, Uuid } from '@/api/types';
 import { DataTable, EmptyState, Field, IconButton, Input, notify, Plate, RowActions, type DataTableColumn } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { formatInstant, formatShortWeekdayDate } from '@/lib/date';
+import { formatInstant, formatNumericDate, formatShortWeekdayDate } from '@/lib/date';
+import { confirm } from '@/stores/confirm';
 
 const PAGE_SIZE = 10;
 
@@ -31,6 +32,27 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
     sort: 'date,desc',
   });
   const filtered = Boolean(q || from || to);
+  const removeImported = useDeleteImportedOrder();
+
+  /** Імпортоване з помилкою в номері чи даті розпорядження видаляють і імпортують знову. */
+  const deleteImported = async (row: OrderSummaryDto) => {
+    const ok = await confirm({
+      title: 'Видалити імпортоване розпорядження?',
+      description:
+        'Це лише текст паперового розпорядження: змін і пар за ним немає. Після видалення його номер більше не впливає на нумерацію, а правильне розпорядження можна імпортувати знову.',
+      objectName: `№${row.number ?? '—'} на ${formatNumericDate(row.date)}`,
+      confirmLabel: 'Видалити',
+      cancelLabel: 'Залишити',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await removeImported.mutateAsync(row.id);
+      notify.success(`Імпортоване розпорядження №${row.number ?? '—'} видалено`);
+    } catch (error) {
+      notify.error(error, 'Не вдалося видалити розпорядження');
+    }
+  };
 
   const download = async (row: OrderSummaryDto, format: DocumentFormat) => {
     try {
@@ -117,7 +139,15 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
               { label: 'Переглянути', icon: <Eye aria-hidden="true" />, onSelect: () => onOpen(row) },
               // імпортоване паперове розпорядження — лише текст: файлів у сервісі документів немає
               ...(row.imported
-                ? []
+                ? [
+                    {
+                      label: 'Видалити імпортоване',
+                      icon: <Trash2 aria-hidden="true" />,
+                      onSelect: () => void deleteImported(row),
+                      separatorBefore: true,
+                      tone: 'danger' as const,
+                    },
+                  ]
                 : [
                     { label: 'Завантажити DOCX', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'docx'), separatorBefore: true },
                     { label: 'Завантажити PDF', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'pdf') },
