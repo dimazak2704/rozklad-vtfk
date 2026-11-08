@@ -130,8 +130,11 @@ and `web/src/api/contract.test.ts` checks every mocked response against the Java
 CHANGELOG-CONTRACTS, «Web: wiring to the backend contracts»). Still open, backend side:
 - `GET /api/admin/absences/{id}/affected` has no `date` per item; the changes screen needs it for absences
   longer than one day (the client fails loudly instead of guessing).
-- Item 15 (teacher's own binding status, `maxParallel` in public rooms, unlinking/deleting invites, historic
-  order import in core) and item 16 (streams in the solver) are unchanged.
+- Item 15: `maxParallel` in public rooms, deleting invites and historic order import in core are still
+  missing. The endpoints added on 08.11 (`GET /api/notify/bindings/me`, `PUT/DELETE
+  /api/admin/teachers/{id}/account`, `GET/PUT /api/admin/orders/numbering`) are not wired into the SPA
+  and the mock API yet.
+- Item 16 (streams in the solver) is unchanged.
 
 ## 6. How to verify
 
