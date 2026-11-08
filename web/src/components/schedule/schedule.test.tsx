@@ -69,7 +69,8 @@ describe('DayList і NowIndicator', () => {
     expect(screen.getByText('хв до кінця')).toBeInTheDocument();
     const current = screen.getAllByRole('listitem').find((item) => item.getAttribute('aria-current') === 'time');
     expect(current).toBeDefined();
-    expect(within(current!).getByText('НДЕКСМ')).toBeInTheDocument();
+    // у денному списку предмет названо повністю, а не скороченням
+    expect(within(current!).getByText('Надійність, діагностика та експлуатація компʼютерних систем і мереж')).toBeInTheDocument();
   });
 
   it('пояснює, коли пари закінчилися', () => {

@@ -23,7 +23,7 @@ function TabFace({ icon: Icon, label, active }: { icon: LucideIcon; label: strin
         />
         <Icon aria-hidden="true" className={cn('relative size-5', active ? 'text-accent' : 'text-muted group-hover/tab:text-secondary')} />
       </span>
-      <span className={cn('max-w-full truncate text-meta', active ? 'font-semibold text-primary' : 'font-medium text-secondary')}>
+      <span className={cn('max-w-full truncate text-meta', active ? 'font-semibold text-primary' : 'font-normal text-secondary')}>
         {label}
       </span>
     </>

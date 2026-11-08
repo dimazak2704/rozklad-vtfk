@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { capitalize, PARITY_HINT, PARITY_LABEL } from '@/lib/labels';
 import { weekOrdinal } from '@/lib/ordinal';
 import { Popover, PopoverContent, PopoverTrigger } from './Popover';
+import { Tooltip } from './Tooltip';
 
 interface ParityMarkProps {
   parity: WeekParity;
@@ -10,24 +11,29 @@ interface ParityMarkProps {
 }
 
 /**
- * Знак парності з друкованого розкладу: пара займає два рядки, верхній — чисельник, нижній — знаменник.
- * Заповнена половина показує, який рядок діє цього тижня. Ніколи не стоїть сам — поруч завжди слово.
+ * Знак парності — дріб із друкованого розкладу: дві смужки й риска між ними. Верхня смужка — чисельник,
+ * нижня — знаменник; заповнена та, що діє цього тижня. Ніколи не стоїть сам — поруч завжди слово.
  */
 export function ParityMark({ parity, className }: ParityMarkProps) {
+  const top = parity === 'NUMERATOR';
+  const filled = (y: number) => <rect x="3" y={y} width="10" height="4" rx="1" fill="currentColor" />;
+  const hollow = (y: number) => (
+    <rect x="3.75" y={y + 0.75} width="8.5" height="2.5" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+  );
   return (
-    <svg viewBox="0 0 12 14" aria-hidden="true" className={cn('h-3.5 w-3 shrink-0', className)}>
-      <rect x="0.75" y="0.75" width="10.5" height="12.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect
-        x="0.75"
-        y={parity === 'NUMERATOR' ? 0.75 : 7}
-        width="10.5"
-        height="6.25"
-        rx={1.5}
-        fill="currentColor"
-      />
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={cn('size-3.5 shrink-0', className)}>
+      {top ? filled(2) : hollow(2)}
+      <rect x="1" y="7.5" width="14" height="1" fill="currentColor" />
+      {top ? hollow(10) : filled(10)}
     </svg>
   );
 }
+
+/** Коротка підказка до знака: що означає парність цього тижня. */
+const PARITY_TIP: Record<WeekParity, string> = {
+  NUMERATOR: 'Чисельник: пари з верхнього рядка розкладу',
+  DENOMINATOR: 'Знаменник: пари з нижнього рядка розкладу',
+};
 
 interface ParityBadgeProps {
   parity: WeekParity;
@@ -59,7 +65,7 @@ export function ParityBadge({
   const quiet = onShell ? 'text-on-shell-muted' : 'text-secondary';
   const content = (
     <>
-      <ParityMark parity={parity} className={cn(size === 'md' ? 'h-4 w-3.5' : 'h-3.5 w-3', onShell ? 'text-on-shell' : 'text-accent')} />
+      <ParityMark parity={parity} className={cn(size === 'md' ? 'size-4' : 'size-3.5', onShell ? 'text-on-shell' : 'text-accent')} />
       {prefix ? <span className={quiet}>{prefix}</span> : null}
       <span className={cn('font-semibold', onShell ? 'text-on-shell' : 'text-primary')}>{capitalize(PARITY_LABEL[parity])}</span>
       {weekNumber ? (
@@ -81,16 +87,20 @@ export function ParityBadge({
 
   return (
     <Popover>
-      <PopoverTrigger
-        className={cn(
-          shape,
-          'transition-[background-color] duration-100 ease-out focus-visible:outline-2 focus-visible:outline-offset-2',
-          onShell ? 'hover:bg-shell-hover focus-visible:outline-focus-on-shell' : 'hover:bg-hover focus-visible:outline-focus',
-        )}
-        aria-label={`${capitalize(PARITY_LABEL[parity])}${weekNumber ? `, ${weekOrdinal(weekNumber)}` : ''}. Як чергуються тижні`}
-      >
-        {content}
-      </PopoverTrigger>
+      <Tooltip content={PARITY_TIP[parity]}>
+        <PopoverTrigger
+          className={cn(
+            shape,
+            'transition-[background-color] duration-100 ease-out focus-visible:outline-2 focus-visible:outline-offset-2',
+            onShell
+              ? 'hover:bg-shell-hover active:bg-shell-raised focus-visible:outline-focus-on-shell'
+              : 'hover:bg-hover active:bg-active focus-visible:outline-focus',
+          )}
+          aria-label={`${capitalize(PARITY_LABEL[parity])}${weekNumber ? `, ${weekOrdinal(weekNumber)}` : ''}. Як чергуються тижні`}
+        >
+          {content}
+        </PopoverTrigger>
+      </Tooltip>
       <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[parity]}`}>
         <p className="text-ui text-secondary">{PARITY_HINT[parity]}</p>
       </PopoverContent>

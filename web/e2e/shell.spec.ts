@@ -10,15 +10,11 @@ async function openApp(page: Page, path: string): Promise<void> {
 }
 
 test.describe('оболонка публічного сайту', () => {
-  test('головна має шапку зі знаком і вибір теми', async ({ page }, testInfo) => {
+  test('головна має шапку зі знаком і вибір теми', async ({ page }) => {
     await openApp(page, '/');
     await expect(page).toHaveTitle(/Розклад ВТФК/);
-    // на десктопі тема — кнопка в смузі, на телефоні — перемикач у підвалі
-    if (testInfo.project.name === 'mobile') {
-      await expect(page.getByRole('radiogroup', { name: 'Тема оформлення' })).toBeVisible();
-    } else {
-      await expect(page.getByRole('button', { name: /^Тема:/ })).toBeVisible();
-    }
+    // тема — одна на сайті: перемикач у підвалі на будь-якій ширині
+    await expect(page.getByRole('radiogroup', { name: 'Тема оформлення' })).toBeVisible();
   });
 
   test('на сторінці групи активний розділ «Розклад» — рівно один у шапці й у вкладках', async ({ page }, testInfo) => {
@@ -48,14 +44,9 @@ test.describe('оболонка публічного сайту', () => {
     await expect(page.getByRole('link', { name: 'Розклад групи 4КІ2' })).toBeVisible();
   });
 
-  test('вибір теми зберігається після перезавантаження', async ({ page }, testInfo) => {
+  test('вибір теми зберігається після перезавантаження', async ({ page }) => {
     await openApp(page, '/');
-    if (testInfo.project.name === 'mobile') {
-      await page.getByRole('radiogroup', { name: 'Тема оформлення' }).getByRole('radio', { name: 'Темна' }).click();
-    } else {
-      await page.getByRole('button', { name: /^Тема:/ }).click();
-      await page.getByRole('menuitemradio', { name: 'Темна' }).click();
-    }
+    await page.getByRole('radiogroup', { name: 'Тема оформлення' }).getByRole('radio', { name: 'Темна' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

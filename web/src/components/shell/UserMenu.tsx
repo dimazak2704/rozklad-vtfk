@@ -61,11 +61,11 @@ export function UserMenu({ tone = 'default' }: UserMenuProps) {
           // у смузі — лише аватар 32 px, але ціль натискання 44 px
           onShell
             ? '-m-1.5 size-11 justify-center hover:bg-shell-hover focus-visible:outline-focus-on-shell'
-            : 'gap-2 p-1 pe-2.5 hover:bg-hover focus-visible:outline-focus',
+            : 'size-10 justify-center hover:bg-hover active:bg-active focus-visible:outline-focus',
         )}
       >
-        <Avatar name={user.name} tone={onShell ? 'on-shell' : 'default'} className={onShell ? undefined : 'size-7'} />
-        {!onShell ? <span className="hidden max-w-40 truncate text-ui font-medium text-primary lg:inline">{user.name}</span> : null}
+        {/* лише аватар 32 px: імʼя й роль — у заголовку меню */}
+        <Avatar name={user.name} tone={onShell ? 'on-shell' : 'default'} />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content

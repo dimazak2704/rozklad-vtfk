@@ -108,14 +108,14 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
               <tr key={pair}>
                 <th
                   scope="row"
-                  className={cn('sticky left-0 z-[5] bg-surface px-3 py-2 text-start align-top', !lastRow && 'border-b border-separator')}
+                  className={cn('sticky left-0 z-[5] bg-surface px-3 py-2 text-start align-top font-normal', !lastRow && 'border-b border-separator')}
                 >
                   <span className="flex flex-col leading-none">
                     <span className={cn('font-condensed text-headline font-bold figures', currentRow ? 'text-accent' : 'text-primary')}>
                       {pair}
                     </span>
                     {time ? (
-                      <span className={cn('mt-1 text-caption figures', currentRow ? 'text-accent' : 'text-muted')}>
+                      <span className={cn('mt-1 text-caption figures', currentRow ? 'font-medium text-accent' : 'text-muted')}>
                         {time.startsAt}–{time.endsAt}
                       </span>
                     ) : null}

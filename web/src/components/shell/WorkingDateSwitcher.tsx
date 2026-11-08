@@ -2,10 +2,9 @@ import { usePublicMeta } from '@/api/meta';
 import type { IsoDate, WeekParity } from '@/api/types';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { diffDays, isoWeekday, shiftStudyDay, startOfWeek } from '@/lib/date';
-import { capitalize, PARITY_LABEL, weekdayName } from '@/lib/labels';
-import { weekOrdinalShort } from '@/lib/ordinal';
+import { capitalize, weekdayName } from '@/lib/labels';
 import { DateNav } from '../ui/DateNav';
-import { ParityMark } from '../ui/ParityBadge';
+import { ParityBadge } from '../ui/ParityBadge';
 import { SegmentedControl } from '../ui/SegmentedControl';
 
 type Quick = 'today' | 'next' | 'other';
@@ -21,16 +20,20 @@ function parityFor(date: IsoDate, today: IsoDate, parity: WeekParity, weekNumber
   return { parity: weeks % 2 === 0 ? parity : flipped, week: weekNumber + weeks };
 }
 
-/** Табличка парності робочої дати: у неділю — знаменник, а в понеділок, на який дивиться диспетчер, — чисельник. */
+/**
+ * Парність робочої дати — тим самим рядком, що й у публічній смузі: «Знаменник · 10-й тиждень», без плашки.
+ * У неділю — знаменник, а в понеділок, на який дивиться диспетчер, — чисельник. На вужчих екранах — лише слово.
+ */
 function WorkingParity({ date }: { date: IsoDate }) {
   const meta = usePublicMeta();
   if (!meta.data) return null;
   const info = parityFor(date, meta.data.today, meta.data.parity, meta.data.weekNumber);
   if (!info) return null;
   return (
-    <span className="hidden h-6 shrink-0 items-center gap-1.5 rounded-plate bg-sunken px-2 text-meta font-medium whitespace-nowrap text-secondary figures sm:inline-flex">
-      <ParityMark parity={info.parity} className="text-accent" />
-      {PARITY_LABEL[info.parity]} · {weekOrdinalShort(info.week)}
+    <span className="hidden shrink-0 items-center gap-2 sm:inline-flex">
+      <span aria-hidden="true" className="h-5 w-px bg-[var(--border-color-separator)]" />
+      <ParityBadge parity={info.parity} weekNumber={info.week} size="sm" className="hidden xl:inline-flex" />
+      <ParityBadge parity={info.parity} size="sm" className="xl:hidden" />
     </span>
   );
 }
@@ -61,25 +64,8 @@ export function WorkingDateSwitcher() {
         ]}
         className="hidden shrink-0 lg:inline-flex"
       />
-      {/* на lg+ відносний день уже видно в перемикачі, тож у кнопці дати — лише «нд, 8 листопада» */}
-      <DateNav
-        value={date}
-        onChange={(value) => setDate(value)}
-        today={today}
-        size="sm"
-        hotkeys
-        showTodayButton={false}
-        className="lg:hidden"
-      />
-      <DateNav
-        value={date}
-        onChange={(value) => setDate(value)}
-        today={today}
-        size="sm"
-        showTodayButton={false}
-        showRelative={false}
-        className="hidden lg:inline-flex"
-      />
+      {/* одна мітка дати на всіх ширинах: «Сьогодні · нд, 8 листопада»; перемикач — лише швидкий перехід */}
+      <DateNav value={date} onChange={(value) => setDate(value)} today={today} size="sm" hotkeys showTodayButton={false} />
       <WorkingParity date={date} />
     </div>
   );

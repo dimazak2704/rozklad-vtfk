@@ -5,7 +5,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dang
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BASE =
-  'relative inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-control text-ui font-semibold ' +
+  'relative inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-control text-ui font-medium ' +
   'transition-[background-color,border-color,color,scale] duration-100 ease-out ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ' +
   'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
@@ -13,17 +13,19 @@ const BASE =
 /**
  * Стани: спокій → наведення (hover) → натискання (active, на тон темніше) → фокус → вимкнено.
  * Вимкнена кнопка не «прозоріє»: заглиблене тло і приглушений текст, щоб читалася як недоступна, а не бліда.
+ * Вага: 600 лише в заповнених (головна, небезпечна) — єдина заповнена дія веде і кольором, і вагою; решта 500.
+ * Другорядна тримає рамку в усіх станах: наведення — тло й темніша рамка, натискання — ще на тон темніше.
  */
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active ' +
+    'bg-accent font-semibold text-on-accent hover:bg-accent-hover active:bg-accent-active ' +
     'disabled:border disabled:border-separator disabled:bg-sunken disabled:text-disabled',
   secondary:
-    'border border-default bg-surface text-primary hover:bg-hover active:bg-active ' +
+    'border border-default bg-surface text-primary hover:border-control hover:bg-hover active:border-control active:bg-active ' +
     'disabled:border-separator disabled:bg-sunken disabled:text-disabled',
   ghost: 'text-secondary hover:bg-hover hover:text-primary active:bg-active disabled:bg-transparent disabled:text-disabled',
   danger:
-    'bg-danger text-on-accent hover:bg-danger-hover active:bg-danger-active ' +
+    'bg-danger font-semibold text-on-accent hover:bg-danger-hover active:bg-danger-active ' +
     'disabled:border disabled:border-separator disabled:bg-sunken disabled:text-disabled',
   'danger-ghost': 'text-danger hover:bg-danger-subtle active:bg-danger-subtle disabled:bg-transparent disabled:text-disabled',
   shell:
@@ -54,7 +56,8 @@ export const CONTROL_BASE =
   'w-full min-w-0 rounded-control border border-control bg-surface text-primary ' +
   'transition-[border-color,background-color] duration-100 ease-out ' +
   'placeholder:text-muted hover:border-strong ' +
-  'focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ' +
+  // фокус — одне кільце: рамка стає синьою й товщає до 2 px (тінь 1 px поверх неї), без окремого контуру з проміжком
+  'focus-visible:border-accent focus-visible:shadow-[0_0_0_1px_var(--border-color-accent)] focus-visible:outline-none ' +
   'aria-invalid:border-danger aria-invalid:hover:border-danger ' +
   'disabled:cursor-not-allowed disabled:border-separator disabled:bg-sunken disabled:text-disabled';
 

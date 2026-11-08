@@ -84,7 +84,7 @@ export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, counts,
                           collapsed ? 'justify-center px-0' : 'px-3',
                           isActive
                             ? 'bg-selected font-semibold text-accent before:absolute before:start-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-accent'
-                            : 'font-medium text-secondary hover:bg-hover hover:text-primary active:bg-active',
+                            : 'font-normal text-secondary hover:bg-hover hover:text-primary active:bg-active',
                         )
                       }
                     >

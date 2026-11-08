@@ -83,9 +83,10 @@ export function Chip({
         onClick={onToggle}
         disabled={disabled}
         className={cn(
-          'inline-flex items-center gap-1.5 ps-3 transition-[background-color,color] duration-100 ease-out',
+          'inline-flex items-center gap-1.5 ps-3 transition-[background-color,color,scale] duration-100 ease-out active:scale-[0.98]',
           onRemove ? 'pe-1.5' : 'pe-3',
-          selected ? 'hover:bg-selected-hover' : 'hover:bg-hover hover:text-primary active:bg-active',
+          // натискання — нейтральне затемнення поточного стану, а не «вибраний» вигляд
+          selected ? 'hover:bg-selected-hover active:bg-active' : 'hover:bg-hover hover:text-primary active:bg-active',
           'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus disabled:cursor-not-allowed',
         )}
         {...props}

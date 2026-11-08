@@ -12,14 +12,6 @@ const DOT: Record<StatusTone, string> = {
   room: 'bg-[var(--fill-room)]',
 };
 
-const LABEL: Record<StatusTone, string> = {
-  neutral: 'text-secondary',
-  live: 'text-accent',
-  change: 'text-change',
-  cancel: 'text-danger',
-  add: 'text-add',
-  room: 'text-room',
-};
 
 interface StatusDotProps {
   tone?: StatusTone;
@@ -34,12 +26,15 @@ interface StatusDotProps {
   className?: string;
 }
 
-/** Крапка 8 px + слово: «● Підключено». Підпис обовʼязковий — колір сам по собі нічого не каже. */
+/**
+ * Крапка 8 px + слово: «● Підключено». Колір несе лише крапка, слово — звичайним текстом (один носій кольору).
+ * Підпис обовʼязковий — колір сам по собі нічого не каже.
+ */
 export function StatusDot({ tone = 'neutral', label, showLabel = false, className }: StatusDotProps) {
   return (
     <span className={cn('inline-flex items-center gap-1.5', className)}>
       <span aria-hidden="true" className={cn('inline-block size-2 shrink-0 rounded-full', DOT[tone])} />
-      <span className={showLabel ? cn('text-caption font-medium', LABEL[tone]) : 'sr-only'}>{label}</span>
+      <span className={showLabel ? 'text-ui text-primary' : 'sr-only'}>{label}</span>
     </span>
   );
 }

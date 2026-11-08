@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarDays, CircleCheck, CircleX, Clock3, Copy, Download, FileText, Info, Pencil, Plus, Search, Trash, Users } from 'lucide-react';
+import { CalendarDays, Copy, Download, FileText, Info, Pencil, Plus, Search, Trash, Users } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -51,6 +51,7 @@ import {
   Skeleton,
   SkeletonText,
   StatusDot,
+  StatusText,
   Switch,
   Tabs,
   TabsContent,
@@ -83,7 +84,7 @@ const NAV = [
 function Demo({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-3 rounded-panel border border-default bg-surface p-4', className)}>
-      <h3 className="text-caption font-semibold text-muted">{title}</h3>
+      <h3 className="text-ui font-semibold text-primary">{title}</h3>
       {children}
     </div>
   );
@@ -132,6 +133,8 @@ const STATE_COLUMNS = ['Спокій', 'Наведення', 'Натиснуто
 type StateColumn = (typeof STATE_COLUMNS)[number];
 /** Примусовий фокус для матриці: той самий контур, що дає :focus-visible. */
 const FORCED_FOCUS = 'outline-2 outline-offset-2 outline-focus';
+/** Фокус поля — одне кільце: синя рамка 2 px без окремого контуру. */
+const FORCED_FIELD_FOCUS = 'border-accent shadow-[0_0_0_1px_var(--border-color-accent)]';
 
 /**
  * Матриця станів: кожен контрол у спокої, при наведенні, натисканні, фокусі, вимкнений, у завантаженні й з помилкою.
@@ -169,7 +172,11 @@ function StateMatrix() {
             size="sm"
             static
             disabled={c === 'Вимкнено'}
-            className={cn(c === 'Наведення' && 'bg-hover', c === 'Натиснуто' && 'scale-[0.96] bg-active', c === 'Фокус' && FORCED_FOCUS)}
+            className={cn(
+              c === 'Наведення' && 'border-control bg-hover',
+              c === 'Натиснуто' && 'scale-[0.96] border-control bg-active',
+              c === 'Фокус' && FORCED_FOCUS,
+            )}
           >
             Чернетка
           </Button>
@@ -185,7 +192,7 @@ function StateMatrix() {
             defaultValue={c === 'Помилка' ? '4КІ' : '4КІ1'}
             disabled={c === 'Вимкнено'}
             aria-invalid={c === 'Помилка' || undefined}
-            className={cn('w-24', c === 'Наведення' && 'border-strong', c === 'Фокус' && cn('border-accent', FORCED_FOCUS))}
+            className={cn('w-24', c === 'Наведення' && 'border-strong', c === 'Фокус' && FORCED_FIELD_FOCUS)}
           />
         ),
     },
@@ -194,9 +201,12 @@ function StateMatrix() {
       render: (c) =>
         c === 'Помилка' || c === 'Завантаження' ? null : (
           <Chip
-            selected={c === 'Натиснуто'}
             disabled={c === 'Вимкнено'}
-            className={cn(c === 'Наведення' && 'bg-hover text-primary', c === 'Фокус' && FORCED_FOCUS)}
+            className={cn(
+              c === 'Наведення' && 'bg-hover text-primary',
+              c === 'Натиснуто' && 'scale-[0.98] bg-active',
+              c === 'Фокус' && FORCED_FOCUS,
+            )}
           >
             4 курс
           </Chip>
@@ -209,14 +219,14 @@ function StateMatrix() {
           <span
             className={cn(
               'relative flex h-9 w-36 items-center gap-3 rounded-control px-3 text-ui',
-              c === 'Спокій' && 'font-medium text-secondary',
-              c === 'Наведення' && 'bg-hover font-medium text-primary',
-              c === 'Натиснуто' &&
-                'bg-selected font-semibold text-accent before:absolute before:start-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-accent',
-              c === 'Фокус' && cn('font-medium text-secondary', 'outline-2 -outline-offset-2 outline-focus'),
+              c === 'Спокій' && 'text-secondary',
+              c === 'Наведення' && 'bg-hover text-primary',
+              // натискання — на тон темніше, без рисочки й синього: це ще не «тут ви зараз»
+              c === 'Натиснуто' && 'bg-active text-primary',
+              c === 'Фокус' && cn('text-secondary', 'outline-2 -outline-offset-2 outline-focus'),
             )}
           >
-            <CalendarDays aria-hidden="true" className={cn('size-[1.125rem]', c === 'Натиснуто' ? 'text-accent' : 'text-muted')} />
+            <CalendarDays aria-hidden="true" className="size-[1.125rem] text-muted" />
             Заміни
           </span>
         ),
@@ -229,17 +239,15 @@ function StateMatrix() {
             <span
               className={cn(
                 'inline-flex h-9 items-center rounded-control px-3 text-ui',
-                c === 'Спокій' && 'font-medium text-on-shell-muted',
-                c === 'Наведення' && 'bg-shell-hover font-medium text-on-shell',
-                c === 'Натиснуто' && 'font-semibold text-on-shell',
-                c === 'Фокус' && 'font-medium text-on-shell-muted outline-2 outline-offset-2 outline-focus-on-shell',
+                c === 'Спокій' && 'text-on-shell-muted',
+                c === 'Наведення' && 'bg-shell-hover text-on-shell',
+                // риска 3 px — лише в aria-current; натискання — світліша плашка
+                c === 'Натиснуто' && 'bg-shell-raised text-on-shell',
+                c === 'Фокус' && 'text-on-shell-muted outline-2 outline-offset-2 outline-focus-on-shell',
               )}
             >
               Заміни
             </span>
-            {c === 'Натиснуто' ? (
-              <span className="absolute inset-x-5 bottom-0 h-[3px] rounded-t-[2px] bg-[var(--text-color-on-shell)]" />
-            ) : null}
           </span>
         ),
     },
@@ -278,7 +286,7 @@ function StateMatrix() {
         <tbody>
           {rows.map((row) => (
             <tr key={row.name}>
-              <th scope="row" className="border-b border-separator px-3 py-3 text-start font-medium text-primary">
+              <th scope="row" className="border-b border-separator px-3 py-3 text-start font-normal text-primary">
                 {row.name}
               </th>
               {STATE_COLUMNS.map((column) => cell(column, row.render))}
@@ -575,72 +583,16 @@ export default function KitchenSinkPage() {
 
       <Section id="states" title="Стани" description="Матриця станів контролів; бейджі, оцінки, парність, завантаження, порожнеча, помилка.">
         <StateMatrix />
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Demo title="Бейджі, статуси й таблетки">
-            <div className="flex flex-wrap gap-1.5">
-              <Badge>Чернетка</Badge>
-              <Badge>Чекає підтвердження</Badge>
-              <Badge tone="success">Опубліковано</Badge>
-              <Badge tone="danger">Помилка розсилки</Badge>
-            </div>
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-caption font-medium">
-              <li className="flex items-center gap-1.5 text-secondary">
-                <Clock3 aria-hidden="true" className="size-4" /> Чекає
-              </li>
-              <li className="flex items-center gap-1.5 text-add">
-                <CircleCheck aria-hidden="true" className="size-4" /> Підтверджено
-              </li>
-              <li className="flex items-center gap-1.5 text-danger">
-                <CircleX aria-hidden="true" className="size-4" /> Відхилено
-              </li>
-            </ul>
-            <p className="flex gap-3 text-meta font-semibold text-secondary">
-              <span>Відп.</span>
-              <span>Зв.зам.</span>
-              <span>Вичит.</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Chip selected={onlyMine} onToggle={() => setOnlyMine((value) => !value)}>
-                Лише мої зміни
-              </Chip>
-              <Chip icon={<Users aria-hidden="true" className="size-3.5" />} onRemove={() => notify.info('Фільтр прибрано')} count={3}>
-                4 курс
-              </Chip>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <StatusDot tone="add" label="Підключено" showLabel />
-              <StatusDot tone="neutral" label="Очікує" showLabel />
-              <StatusDot tone="cancel" label="Офлайн" showLabel />
-            </div>
-          </Demo>
-          <Demo title="Парність, таблички, люди">
-            <div className="flex flex-wrap items-center gap-2">
-              <Plate size="xl">4КІ1</Plate>
-              <Plate tone="accent">2ОБ1</Plate>
-              <Plate>ауд. 309</Plate>
-              <Plate size="sm">1ТК1</Plate>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <ParityBadge parity="NUMERATOR" weekNumber={11} />
-              <ParityBadge parity="DENOMINATOR" weekNumber={8} size="sm" plain />
-            </div>
-            <div className="flex items-center gap-3">
-              <Avatar name="Кренцін М.Д." />
-              <Avatar name="Непийвода М.В." size="lg" />
-              <Avatar name="Микола Поліщук" size="sm" />
-            </div>
-          </Demo>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Demo title="Кандидати на заміну: причина й оцінка">
             <ul className="-mx-4 flex flex-col">
               {DEMO_OPTIONS.filter((option) => option.teacher).map((option, index) => (
                 <li
                   key={option.title}
-                  className={cn(
-                    'grid min-h-14 grid-cols-[1.25rem_minmax(0,1fr)_6rem_1.5rem] items-center gap-x-3 px-4 py-2',
-                    index === 0 && 'bg-selected',
-                  )}
+                  className="grid min-h-14 grid-cols-[1.25rem_minmax(0,1fr)_7.5rem_1.5rem] items-center gap-x-3 px-4 py-2"
                 >
-                  <Kbd>{index + 1}</Kbd>
+                  {/* номер — клавіша вибору 1–9, звичайним текстом; тло лише в того, кого диспетчер вибрав */}
+                  <span className="text-caption font-semibold text-muted figures">{index + 1}</span>
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-ui font-semibold">{option.title}</span>
                     {index === 0 ? <span className="text-meta font-semibold text-accent">Найкращий варіант</span> : null}
@@ -681,10 +633,72 @@ export default function KitchenSinkPage() {
               </ul>
             </div>
           </Demo>
+          <div className="flex min-w-0 flex-col gap-4">
+          <Demo title="Бейджі, статуси й таблетки">
+              {/* одна ідіома на значення: стан документа чи підтвердження — іконка й слово */}
+              <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+                <li>
+                  <StatusText kind="draft">Чернетка</StatusText>
+                </li>
+                <li>
+                  <StatusText kind="pending">Чекає підтвердження</StatusText>
+                </li>
+                <li>
+                  <StatusText kind="done">Опубліковано</StatusText>
+                </li>
+                <li>
+                  <StatusText kind="rejected">Відхилено</StatusText>
+                </li>
+                <li>
+                  <StatusText kind="failed">Помилка розсилки</StatusText>
+                </li>
+              </ul>
+              {/* тонований бейдж — лише легенда станів занять */}
+              <div className="flex flex-wrap gap-1.5">
+                <Badge tone="change">Заміна</Badge>
+                <Badge tone="cancel">Пари не буде</Badge>
+              </div>
+              <p className="flex gap-3 text-meta font-medium text-secondary">
+                <span>Відп.</span>
+                <span>Зв.зам.</span>
+                <span>Вичит.</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Chip selected={onlyMine} onToggle={() => setOnlyMine((value) => !value)}>
+                  Лише мої зміни
+                </Chip>
+                <Chip icon={<Users aria-hidden="true" className="size-3.5" />} onRemove={() => notify.info('Фільтр прибрано')} count={3}>
+                  4 курс
+                </Chip>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <StatusDot tone="add" label="Підключено" showLabel />
+                <StatusDot tone="neutral" label="Очікує підключення" showLabel />
+                <StatusDot tone="cancel" label="Офлайн" showLabel />
+              </div>
+            </Demo>
+            <Demo title="Парність, таблички, люди">
+              <div className="flex flex-wrap items-center gap-2">
+                <Plate size="xl">4КІ1</Plate>
+                <Plate tone="accent">2ОБ1</Plate>
+                <Plate>ауд. 309</Plate>
+                <Plate size="sm">1ТК1</Plate>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ParityBadge parity="NUMERATOR" weekNumber={11} />
+                <ParityBadge parity="DENOMINATOR" weekNumber={8} size="sm" plain />
+              </div>
+              <div className="flex items-center gap-3">
+                <Avatar name="Кренцін М.Д." />
+                <Avatar name="Непийвода М.В." size="lg" />
+                <Avatar name="Микола Поліщук" size="sm" />
+              </div>
+            </Demo>
+          </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Demo title="Завантаження">
-            <div className="flex flex-col gap-3">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Demo title="Завантаження" className="lg:col-span-2">
+            <div className="flex max-w-xl flex-col gap-3">
               <Skeleton className="h-6 w-40" />
               <SkeletonText lines={3} />
               <Skeleton className="h-16 w-full" />
@@ -901,16 +915,18 @@ export default function KitchenSinkPage() {
           </label>
         }
       >
-        <Demo title="NowIndicator: лінія дня (сторінка дзвінків)">
-          <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} />
-        </Demo>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Demo title="NowIndicator compact (телефон, над списком)">
-            <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} variant="compact" />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <Demo title="NowIndicator: лінія дня (сторінка дзвінків)">
+            <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} />
           </Demo>
-          <Demo title="NowIndicator inline (рядок даних заголовка)">
-            <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} variant="inline" />
-          </Demo>
+          <div className="flex min-w-0 flex-col gap-4">
+            <Demo title="NowIndicator compact (телефон, над списком)">
+              <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} variant="compact" />
+            </Demo>
+            <Demo title="NowIndicator inline (рядок даних заголовка)">
+              <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} variant="inline" />
+            </Demo>
+          </div>
         </div>
         <Demo title="Стани клітинки (наведіть або натисніть Enter — деталі)">
           <div className="grid overflow-hidden rounded-control border border-default sm:grid-cols-2 xl:grid-cols-4">

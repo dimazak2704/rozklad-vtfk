@@ -33,6 +33,7 @@ export { Select, type SelectOption } from './Select';
 export { LoadingRegion, Skeleton, SkeletonText } from './Skeleton';
 export { Spinner } from './Spinner';
 export { StatusDot, type StatusTone } from './StatusDot';
+export { StatusText, type StatusKind } from './StatusText';
 export { buttonClass, CONTROL_BASE, CONTROL_SIZE, type ButtonSize, type ButtonVariant, type ControlSize } from './styles';
 export { Switch } from './Switch';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';

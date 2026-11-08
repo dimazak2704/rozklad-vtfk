@@ -25,7 +25,8 @@ export function Avatar({ name, size = 'md', tone = 'default', className }: Avata
         className,
       )}
     >
-      {initials(name)}
+      {/* «Розробник (dev)» → «Р»: пояснення в дужках ініціалів не дає */}
+      {initials(name.replace(/\s*\([^)]*\)/g, '').trim() || name)}
     </span>
   );
 }

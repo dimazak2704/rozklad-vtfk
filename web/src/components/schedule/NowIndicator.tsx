@@ -47,54 +47,84 @@ function inlineText(status: PairStatus): string {
   }
 }
 
-/** Заголовок стану: що зараз, і великий відлік праворуч. */
-function Headline({ status, numeral }: { status: PairStatus; numeral: string }) {
+/**
+ * Стан дня одним стовпчиком від лівого краю: що зараз (14 px) і під ним великий відлік з підписом
+ * на спільній базовій лінії — як температура й підпис у «Погоді».
+ */
+function Headline({ status }: { status: PairStatus }) {
+  const numeral = 'font-condensed text-display font-bold text-accent figures';
   switch (status.kind) {
     case 'in-pair':
       return (
-        <>
+        <div className="flex flex-col">
           <p className="text-ui text-secondary figures">
-            Зараз <span className="font-condensed text-cell font-bold text-primary">{pairOrdinalLabel(status.current.pair)}</span>
+            Зараз <span className="font-semibold text-primary">{pairOrdinalLabel(status.current.pair)}</span>
             <span aria-hidden="true"> · </span>
             {status.current.startsAt}–{status.current.endsAt}
           </p>
-          <p className="flex items-baseline gap-1.5">
-            <span className={cn('font-condensed font-bold text-accent figures', numeral)}>{status.minutesLeft}</span>
-            <span className="text-ui text-secondary">хв до кінця</span>
+          <p className="flex items-baseline gap-2">
+            <span className={numeral}>{status.minutesLeft}</span>
+            <span className="text-body text-secondary">хв до кінця</span>
           </p>
-        </>
+        </div>
       );
     case 'break':
       return (
-        <>
+        <div className="flex flex-col">
           <p className="text-ui text-secondary figures">
-            Перерва до <span className="font-condensed text-cell font-bold text-primary">{status.next.startsAt}</span>
+            Перерва до <span className="font-semibold text-primary">{status.next.startsAt}</span>
           </p>
-          <p className="flex items-baseline gap-1.5">
-            <span className={cn('font-condensed font-bold text-accent figures', numeral)}>{status.minutesLeft}</span>
-            <span className="text-ui text-secondary">хв до {pairOrdinalGenitive(status.next.pair)} пари</span>
+          <p className="flex items-baseline gap-2">
+            <span className={numeral}>{status.minutesLeft}</span>
+            <span className="text-body text-secondary">хв до {pairOrdinalGenitive(status.next.pair)} пари</span>
           </p>
-        </>
+        </div>
       );
     case 'before-day':
       return (
-        <>
+        <div className="flex flex-col">
           <p className="text-ui text-secondary figures">
-            Пари ще не почалися. Перша — о{' '}
-            <span className="font-condensed text-cell font-bold text-primary">{status.next.startsAt}</span>
+            Пари ще не почалися. Перша — о <span className="font-semibold text-primary">{status.next.startsAt}</span>
           </p>
           {status.minutesUntil <= 180 ? (
-            <p className="text-ui text-secondary">
+            <p className="text-body text-secondary">
               через <span className="font-semibold text-primary figures">{durationLabel(status.minutesUntil)}</span>
             </p>
           ) : null}
-        </>
+        </div>
       );
     case 'after-day':
       return <p className="text-ui text-secondary">Пари на сьогодні закінчилися о {status.last.endsAt}</p>;
     case 'no-classes':
       return <p className="text-ui text-secondary">Сьогодні пар немає</p>;
   }
+}
+
+/** Підпис зупинки: два рядки на одній сітці для всіх зупинок, зокрема «кінець». */
+function StopLabel({
+  title,
+  time,
+  align,
+  muted = false,
+}: {
+  title: string;
+  time: string;
+  align: 'start' | 'center' | 'end';
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        'absolute top-3 flex flex-col whitespace-nowrap',
+        align === 'start' && 'start-0 items-start',
+        align === 'center' && '-translate-x-1/2 items-center rtl:translate-x-1/2',
+        align === 'end' && 'end-0 items-end',
+      )}
+    >
+      <span className={cn('text-ui font-semibold figures', muted ? 'text-muted' : 'text-primary')}>{title}</span>
+      <span className="text-caption text-muted figures">{time}</span>
+    </span>
+  );
 }
 
 /** Позиція 0..1 у масштабі часу дня. */
@@ -145,8 +175,8 @@ export function NowIndicator({ bells, lessonPairs, date = null, variant = 'strip
 
   if (variant === 'compact') {
     return (
-      <section aria-label="Стан навчального дня" className={cn('flex flex-wrap items-end justify-between gap-x-4 gap-y-1', className)}>
-        <Headline status={status} numeral="text-display" />
+      <section aria-label="Стан навчального дня" className={className}>
+        <Headline status={status} />
         {announcement}
       </section>
     );
@@ -157,13 +187,11 @@ export function NowIndicator({ bells, lessonPairs, date = null, variant = 'strip
   const currentPair = status.kind === 'in-pair' ? status.current.pair : null;
 
   return (
-    <section aria-label="Стан навчального дня" className={cn('flex max-w-3xl flex-col gap-5', className)}>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-        <Headline status={status} numeral="text-display" />
-      </div>
+    <section aria-label="Стан навчального дня" className={cn('flex w-full flex-col gap-4', className)}>
+      <Headline status={status} />
 
-      <div className="relative mx-1.5 h-14" aria-hidden="true">
-        {/* відрізки: пари суцільні 4 px, перерви — пунктир 2 px; пройдене — синім */}
+      <div className="relative mx-1.5 mb-1 h-14" aria-hidden="true">
+        {/* відрізки: пари суцільні 4 px, перерви — пунктир 2 px, що відступає на задній план; пройдене — синім */}
         {slots.map((slot, index) => {
           const next = slots[index + 1];
           const from = x(slot.start);
@@ -187,7 +215,7 @@ export function NowIndicator({ bells, lessonPairs, date = null, variant = 'strip
                     'absolute top-1.5 h-0.5 -translate-y-1/2',
                     breakPassed
                       ? '[background-image:repeating-linear-gradient(90deg,var(--fill-accent)_0_2px,transparent_2px_6px)]'
-                      : '[background-image:repeating-linear-gradient(90deg,var(--border-color-control)_0_2px,transparent_2px_6px)]',
+                      : '[background-image:repeating-linear-gradient(90deg,var(--stroke-rule)_0_2px,transparent_2px_6px)]',
                   )}
                   style={{ insetInlineStart: `${to * 100}%`, width: `${(x(next.start) - to) * 100}%` }}
                 />
@@ -196,12 +224,11 @@ export function NowIndicator({ bells, lessonPairs, date = null, variant = 'strip
           );
         })}
 
-        {/* зупинки на початку кожної пари: номер і час під ними; крайні підписи не виходять за межі */}
+        {/* зупинки: два стани — кільце 8 px (пройдене заповнене) і поточна 12 px з єдиною хвилею */}
         {slots.map((slot, index) => {
           const hasLesson = !ownPairs || ownPairs.has(slot.pair);
           const current = currentPair === slot.pair;
           const passed = minutes >= slot.start && !current;
-          const align = index === 0 ? 'start' : 'center';
           return (
             <span key={slot.pair} className="absolute top-1.5" style={{ insetInlineStart: `${x(slot.start) * 100}%` }}>
               <span
@@ -211,39 +238,19 @@ export function NowIndicator({ bells, lessonPairs, date = null, variant = 'strip
                   current
                     ? 'live-ring size-3 bg-accent'
                     : passed
-                      ? 'size-2.5 bg-accent'
-                      : hasLesson
-                        ? 'size-2.5 border-2 border-strong bg-[var(--fill-surface)]'
-                        : 'size-2 border-2 border-default bg-[var(--fill-surface)]',
+                      ? 'size-2 bg-accent'
+                      : 'size-2 border-[1.5px] border-[var(--stroke-muted)] bg-[var(--fill-surface)]',
                 )}
               />
-              <span
-                className={cn(
-                  'absolute top-3 flex flex-col leading-none whitespace-nowrap',
-                  align === 'start' ? 'items-start' : '-translate-x-1/2 items-center rtl:translate-x-1/2',
-                )}
-              >
-                <span
-                  className={cn(
-                    'font-condensed text-cell font-bold figures',
-                    current ? 'text-accent' : hasLesson ? 'text-primary' : 'text-muted',
-                  )}
-                >
-                  {slot.pair}
-                </span>
-                <span className={cn('mt-1 text-meta figures', current ? 'text-accent' : 'text-muted')}>{slot.startsAt}</span>
-              </span>
+              <StopLabel title={String(slot.pair)} time={slot.startsAt} align={index === 0 ? 'start' : 'center'} muted={!hasLesson} />
             </span>
           );
         })}
 
-        {/* кінцева: вертикальна риска й час завершення останньої пари */}
+        {/* кінцева: вертикальна риска, слово й час завершення останньої пари — на тій самій сітці */}
         <span className="absolute end-0 top-1.5">
           <span className="absolute end-0 top-0 block h-3 w-0.5 -translate-y-1/2 rounded-full bg-[var(--border-color-strong)]" />
-          <span className="absolute end-0 top-3 flex flex-col items-end leading-none whitespace-nowrap">
-            <span className="font-condensed text-cell font-bold text-muted">кінець</span>
-            <span className="mt-1 text-meta text-muted figures">{lastSlot.endsAt}</span>
-          </span>
+          <StopLabel title="кінець" time={lastSlot.endsAt} align="end" />
         </span>
       </div>
       {announcement}

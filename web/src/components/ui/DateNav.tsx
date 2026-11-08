@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
@@ -82,7 +82,7 @@ export function DateNav({
   const iconVariant = onShell ? 'shell' : 'ghost';
 
   return (
-    <div className={cn('inline-flex items-center gap-1', className)} role="group" aria-label="Вибір дня">
+    <div className={cn('inline-flex items-center gap-0.5', className)} role="group" aria-label="Вибір дня">
       <IconButton
         label="Попередній день"
         shortcut={hotkeys ? 'arrowleft' : undefined}
@@ -98,11 +98,10 @@ export function DateNav({
             variant={onShell ? 'shell' : 'ghost'}
             size={size}
             static
-            iconStart={<CalendarDays aria-hidden="true" className={cn('size-4', onShell ? 'text-on-shell-muted' : 'text-muted')} />}
             aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}
-            className={cn('min-w-0 justify-start', !onShell && 'text-primary')}
+            className={cn('min-w-[8.25rem] px-2', !onShell && 'text-primary')}
           >
-            <span className="truncate figures">
+            <span className="truncate font-semibold figures">
               {relative ? <span>{relative} · </span> : null}
               <span className={cn(relative && 'font-normal', relative && (onShell ? 'text-on-shell-muted' : 'text-secondary'))}>
                 {shortLabel}

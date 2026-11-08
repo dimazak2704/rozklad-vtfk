@@ -255,7 +255,7 @@ export function DataTable<T>({
                             className={cn(
                               cellPad,
                               'border-b border-separator align-middle',
-                              column.rowHeader ? 'font-medium text-primary' : 'font-normal text-primary',
+                              'font-normal text-primary',
                               ALIGN[column.numeric ? 'end' : (column.align ?? 'start')],
                               column.numeric && 'figures',
                               column.hideBelow && HIDE[column.hideBelow],

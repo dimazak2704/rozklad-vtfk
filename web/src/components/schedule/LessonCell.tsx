@@ -31,13 +31,15 @@ export interface LessonCellProps {
 
 /**
  * Тло стану — як маркер на надрукованому аркуші: тонування від краю до краю, без рамок.
+ * Справжній «маркер» один — бурштин заміни; «пари не буде» тонована ледь-ледь, бо значення несе закреслення.
+ * Додаткова пара без заливки: лише риска 3 px на початку клітинки (або заливка, або межа — ніколи обидві).
  * Зміна аудиторії тла не має: її видно в самому рядку «ауд. 17 → ауд. 309».
  */
 const TONE_SURFACE = {
   regular: 'hover:bg-hover',
   change: 'bg-change-subtle',
   cancel: 'bg-cancel-subtle',
-  add: 'bg-add-subtle',
+  add: 'hover:bg-hover before:absolute before:inset-y-0 before:start-0 before:w-[3px] before:bg-[var(--fill-add)]',
   room: 'hover:bg-hover',
   block: 'hatch bg-block-subtle',
 } as const;
@@ -49,8 +51,15 @@ const STATE_WORD = {
   add: 'text-add',
 } as const;
 
-/** Змінене значення підкреслено бурштином — так само, як нова аудиторія підсвічена блакитним. */
-const MARKED = 'font-semibold text-primary underline decoration-[var(--text-decoration-color-change)] decoration-2 underline-offset-[3px]';
+/**
+ * Змінене значення — напівжирним: клітинка вже тонована бурштином, а оригінал закреслений рядком нижче,
+ * тож підкреслення було б уже пʼятим сигналом.
+ */
+const MARKED = 'font-semibold text-primary';
+
+/** Закреслення оригіналу нейтральне; червоне — лише коли пари справді не буде. */
+const STRUCK = 'decoration-[var(--text-decoration-color-muted)] decoration-1';
+const STRUCK_CANCEL = 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2';
 
 /** Деталі: на компʼютері — картка при наведенні/Enter, на телефоні — шторка знизу. */
 function DetailsTrigger({
@@ -116,7 +125,8 @@ export function LessonCell({
   const movedFrom = lesson.kind === 'MOVED' && original?.pair ? original.pair : null;
   const isList = variant === 'list';
   const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
-  const fullName = lesson.discipline.name && lesson.discipline.name !== lesson.discipline.shortName ? lesson.discipline.name : null;
+  // у списку (телефон) предмет названо повністю: скорочення зрозумілі не всім, а місця вистачає
+  const title = isList ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName;
   // один маркер на клітинку: змінився предмет — підкреслено предмет, інакше — нового викладача
   const markCounterpart = Boolean(changedTeacher && !changedDiscipline && perspective !== 'teacher');
 
@@ -133,7 +143,8 @@ export function LessonCell({
           'group/lesson relative flex w-full min-w-0 flex-col items-stretch overflow-hidden text-start',
           'transition-[background-color] duration-100 ease-out',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-          isList ? 'gap-1 rounded-control px-3 py-2.5' : 'h-full gap-0.5 px-3 py-2',
+          // у списку лівий край прямий — урівень із колонкою лінії маршруту, заокруглено лише праворуч
+          isList ? 'gap-0.5 rounded-e-control px-3 py-2.5' : 'h-full gap-0.5 px-3 py-2',
           TONE_SURFACE[tone],
           className,
         )}
@@ -156,14 +167,14 @@ export function LessonCell({
         >
           <span
             className={cn(
-              'min-w-0 truncate font-condensed font-bold',
-              isList ? 'text-heading' : 'text-cell',
+              'min-w-0',
+              isList ? 'line-clamp-2 text-body font-semibold' : 'truncate font-condensed text-cell font-bold',
               past ? 'text-secondary' : 'text-primary',
-              cancelled && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2',
+              cancelled && cn('text-secondary', STRUCK_CANCEL),
               changedDiscipline && !cancelled && MARKED,
             )}
           >
-            {lesson.discipline.shortName}
+            {title}
           </span>
           {lesson.subgroup > 0 ? (
             <span className="shrink-0 text-meta font-medium whitespace-nowrap text-muted figures">{lesson.subgroup}&nbsp;п/г</span>
@@ -175,14 +186,10 @@ export function LessonCell({
           ) : null}
         </span>
 
-        {isList && fullName ? (
-          <span className={cn('line-clamp-2 text-caption text-muted', cancelled && 'line-through')}>{fullName}</span>
-        ) : null}
-
         <span
           className={cn(
             'flex min-w-0 flex-wrap items-center gap-x-1.5',
-            isList ? 'text-body' : 'text-caption',
+            isList ? 'text-cell' : 'text-caption',
             past ? 'text-muted' : 'text-secondary',
             cancelled && 'line-through decoration-[var(--text-decoration-color-cancel)]',
             tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
@@ -192,7 +199,7 @@ export function LessonCell({
           {counterpart && (room || originalRoom) ? <span aria-hidden="true">·</span> : null}
           {originalRoom ? (
             <span className="inline-flex items-center gap-1 whitespace-nowrap text-room figures">
-              <s className="text-muted decoration-[var(--text-decoration-color-cancel)]">{originalRoom}</s>
+              <s className={cn('text-muted', STRUCK)}>{originalRoom}</s>
               <ArrowRight aria-hidden="true" className="size-3 text-muted rtl:rotate-180" />
               <span className="font-semibold">{room}</span>
             </span>
@@ -209,10 +216,10 @@ export function LessonCell({
 
         {replacedText || movedFrom || (lesson.reasonText && tone !== 'regular') ? (
           <span className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted', isList ? 'text-caption' : 'text-meta')}>
-            {replacedText ? <s className="truncate decoration-[var(--text-decoration-color-cancel)]">{replacedText}</s> : null}
+            {replacedText ? <s className={cn('truncate', STRUCK)}>{replacedText}</s> : null}
             {movedFrom ? <span className="text-secondary">з {pairOrdinalGenitive(movedFrom)} пари</span> : null}
             {lesson.reasonText && tone !== 'regular' ? (
-              <span className="text-meta font-semibold text-secondary">{lesson.reasonText}</span>
+              <span className="text-meta font-medium text-secondary">{lesson.reasonText}</span>
             ) : null}
           </span>
         ) : null}

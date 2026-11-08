@@ -8,7 +8,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import { Skeleton } from '../ui/Skeleton';
 import { activeNavId } from './activeSection';
 import { SearchTrigger } from './SearchTrigger';
-import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 import { Wordmark } from './Wordmark';
 
@@ -43,7 +42,7 @@ function CompactParity() {
 
 /**
  * Шапка публічного сайту — одна спокійна емальована смуга: знак, три розділи текстом, одне поле пошуку,
- * парність тижня словами, тема й вхід. На телефоні смуга нижча й не липне — постійна лише нижня панель.
+ * парність тижня словами й вхід. Тема — одна, у підвалі. На телефоні смуга нижча й не липне — постійна лише нижня панель.
  */
 export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKind, 'public' | 'teacher'> }) {
   const nav = navFor(layout).filter((route) => route.nav.header);
@@ -76,7 +75,7 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
                         'group-focus-visible/nav:outline-2 group-focus-visible/nav:outline-offset-2 group-focus-visible/nav:outline-focus-on-shell',
                         active
                           ? 'font-semibold text-on-shell'
-                          : 'font-medium text-on-shell-muted group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell',
+                          : 'font-normal text-on-shell-muted group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell group-active/nav:bg-shell-raised',
                       )}
                     >
                       {route.nav.label}
@@ -88,7 +87,7 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
             {layout === 'teacher' ? (
               <li className="flex">
                 <Link to="/" className="group/nav relative flex items-center px-0.5 outline-none">
-                  <span className="inline-flex h-9 items-center rounded-control px-3 text-ui font-medium text-on-shell-muted transition-[background-color,color] duration-100 group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell group-focus-visible/nav:outline-2 group-focus-visible/nav:outline-offset-2 group-focus-visible/nav:outline-focus-on-shell">
+                  <span className="inline-flex h-9 items-center rounded-control px-3 text-ui font-normal text-on-shell-muted transition-[background-color,color] duration-100 group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell group-active/nav:bg-shell-raised group-focus-visible/nav:outline-2 group-focus-visible/nav:outline-offset-2 group-focus-visible/nav:outline-focus-on-shell">
                     Розклад коледжу
                   </span>
                 </Link>
@@ -108,7 +107,6 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
           <div className="md:hidden">
             <CompactParity />
           </div>
-          <ThemeToggle tone="on-shell" className="hidden lg:inline-flex" />
           <div className="ms-1 flex items-center">
             <UserMenu tone="on-shell" />
           </div>
