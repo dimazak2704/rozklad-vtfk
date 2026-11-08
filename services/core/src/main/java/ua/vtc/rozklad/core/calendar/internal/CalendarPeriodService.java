@@ -18,6 +18,7 @@ import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.internal.CalendarChangePublisher.PeriodSnapshot;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.CalendarPeriodDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.CalendarPeriodRequest;
@@ -71,11 +72,13 @@ public class CalendarPeriodService {
     public CalendarPeriodDto create(CalendarPeriodRequest request) {
         Semester semester = semester(request.semesterId());
         validate(request, semester);
+        StudyCalendar before = changes.before(semester.getStartsOn(), semester.getEndsOn());
         CalendarPeriod period = new CalendarPeriod(semester.getId(), request.kind(), request.title().strip(),
                 request.startsOn(), request.endsOn());
         copy(request, period);
         periods.save(period);
-        changes.periodsChanged(List.of(PeriodSnapshot.of(period)), semester.getStartsOn(), semester.getEndsOn());
+        changes.periodsChanged(List.of(PeriodSnapshot.of(period)), semester.getStartsOn(), semester.getEndsOn(),
+                before);
         return toDto(period, catalog.groupRefs(period.getGroupIds()));
     }
 
@@ -88,13 +91,15 @@ public class CalendarPeriodService {
         }
         Semester semester = semester(period.getSemesterId());
         validate(request, semester);
+        StudyCalendar calendarBefore = changes.before(semester.getStartsOn(), semester.getEndsOn());
         PeriodSnapshot before = PeriodSnapshot.of(period);
         period.setKind(request.kind());
         period.setTitle(request.title().strip());
         period.setPeriod(request.startsOn(), request.endsOn());
         copy(request, period);
         periods.flush();
-        changes.periodsChanged(List.of(before, PeriodSnapshot.of(period)), semester.getStartsOn(), semester.getEndsOn());
+        changes.periodsChanged(List.of(before, PeriodSnapshot.of(period)), semester.getStartsOn(),
+                semester.getEndsOn(), calendarBefore);
         return toDto(period, catalog.groupRefs(period.getGroupIds()));
     }
 
@@ -103,10 +108,11 @@ public class CalendarPeriodService {
         CalendarPeriod period = find(id);
         Semester semester = semester(period.getSemesterId());
         PeriodSnapshot removed = PeriodSnapshot.of(period);
+        StudyCalendar before = changes.before(semester.getStartsOn(), semester.getEndsOn());
         periods.delete(period);
         // слухачі (матеріалізація занять) читають календар уже без цього періоду
         periods.flush();
-        changes.periodsChanged(List.of(removed), semester.getStartsOn(), semester.getEndsOn());
+        changes.periodsChanged(List.of(removed), semester.getStartsOn(), semester.getEndsOn(), before);
     }
 
     private CalendarPeriod find(UUID id) {

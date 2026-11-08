@@ -114,6 +114,70 @@ class MaterializationPlannerTest {
         assertThat(plan.clashes()).isEmpty();
     }
 
+    /**
+     * Order cancelled the denominator lesson of 05.10, then the week was overridden to a numerator
+     * week: the cancelled lesson speaks only for its own (now not due) template lesson, so the
+     * numerator lesson of the slot takes place.
+     */
+    @Test
+    void cancelledLessonOfTheOtherWeekDoesNotHoldTheSlotAfterAParityOverride() {
+        TemplateLesson numerator = lesson(1, 3, Parity.NUMERATOR, G_4KI1);
+        TemplateLesson denominator = lesson(1, 3, Parity.DENOMINATOR, G_4KI1);
+        denominator.setDisciplineId(D_KM);
+        KeptLesson cancelled = rooted(MONDAY_DEN, 3, G_4KI1, denominator, VERSION_ID, false);
+
+        MaterializationPlanner.Plan asItWas = plan(List.of(numerator, denominator), calendar(List.of()),
+                List.of(cancelled), MONDAY_DEN, MONDAY_DEN);
+        MaterializationPlanner.Plan overridden = plan(List.of(numerator, denominator),
+                calendar(List.of(), Map.of(MONDAY_DEN, Parity.NUMERATOR)), List.of(cancelled), MONDAY_DEN,
+                MONDAY_DEN);
+
+        assertThat(asItWas.lessons()).isEmpty();
+        assertThat(asItWas.coveredByChanges()).isOne();
+        assertThat(overridden.lessons()).singleElement()
+                .satisfies(lesson -> assertThat(lesson.templateLessonId()).isEqualTo(numerator.getId()));
+        assertThat(overridden.clashes()).isEmpty();
+    }
+
+    /** A substitution of the denominator lesson cannot stay on a day that became a numerator day. */
+    @Test
+    void changedLessonOfTheOtherWeekIsReportedAndKeepsTheSlot() {
+        TemplateLesson numerator = lesson(1, 3, Parity.NUMERATOR, G_4KI1);
+        TemplateLesson denominator = lesson(1, 3, Parity.DENOMINATOR, G_4KI1);
+        denominator.setDisciplineId(D_KM);
+        KeptLesson substitution = rooted(MONDAY_DEN, 3, G_4KI1, denominator, VERSION_ID, true);
+
+        MaterializationPlanner.Plan plan = plan(List.of(numerator, denominator),
+                calendar(List.of(), Map.of(MONDAY_DEN, Parity.NUMERATOR)), List.of(substitution), MONDAY_DEN,
+                MONDAY_DEN);
+
+        assertThat(plan.lessons()).as("the group cannot have two lessons in the slot").isEmpty();
+        assertThat(plan.found()).singleElement().satisfies(clash -> {
+            assertThat(clash.subjectId()).isEqualTo(substitution.id());
+            assertThat(clash.conflict().kind()).isEqualTo(ConflictKind.GROUP);
+            assertThat(clash.conflict().lessonIds()).containsExactly(substitution.id());
+            assertThat(clash.conflict().message()).startsWith("4КІ1 КМ (знаменник), 05.10.2026, 3 пара: заняття "
+                    + "змінене розпорядженням");
+        });
+    }
+
+    /** Across versions an applied change keeps governing its slot (republication, DOMAIN §6). */
+    @Test
+    void cancelledLessonOfAnotherVersionStillHoldsTheSlot() {
+        TemplateLesson numerator = lesson(1, 3, Parity.NUMERATOR, G_4KI1);
+        TemplateLesson olderDenominator = new TemplateLesson(UUID.randomUUID(), 1, 3, Parity.DENOMINATOR, G_4KI1, 0,
+                D_KM);
+        KeptLesson cancelled = rooted(MONDAY_DEN, 3, G_4KI1, olderDenominator, olderDenominator.getVersionId(), false);
+
+        MaterializationPlanner.Plan plan = plan(List.of(numerator),
+                calendar(List.of(), Map.of(MONDAY_DEN, Parity.NUMERATOR)), List.of(cancelled), MONDAY_DEN,
+                MONDAY_DEN);
+
+        assertThat(plan.lessons()).isEmpty();
+        assertThat(plan.coveredByChanges()).isOne();
+        assertThat(plan.clashes()).isEmpty();
+    }
+
     @Test
     void teacherBusyInAKeptLessonIsReportedAndNotDoubleBooked() {
         TemplateLesson template = lesson(1, 2, Parity.BOTH, G_4KI2);
@@ -197,6 +261,13 @@ class MaterializationPlannerTest {
 
     private static TemplateLesson lesson(int weekday, int pair, Parity parity, UUID groupId) {
         return new TemplateLesson(VERSION_ID, weekday, pair, parity, groupId, 0, D_STP);
+    }
+
+    /** A lesson an order created (scheduled) or cancelled, standing for {@code root}. */
+    private static KeptLesson rooted(LocalDate date, int pair, UUID groupId, TemplateLesson root, UUID versionId,
+                                     boolean scheduled) {
+        return new KeptLesson(UUID.randomUUID(), date, pair, groupId, 0, null, null, true, null, scheduled, false, 4,
+                false, new KeptLesson.Root(root.getId(), versionId, false), scheduled);
     }
 
     private static KeptLesson kept(LocalDate date, int pair, UUID groupId, int subgroup, UUID teacherId, UUID roomId,

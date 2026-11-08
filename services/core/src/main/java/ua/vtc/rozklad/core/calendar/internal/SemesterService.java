@@ -25,6 +25,7 @@ import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterCalendar;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.WeekParityOverride;
 import ua.vtc.rozklad.core.calendar.WeekParityOverrideRepository;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SemesterDto;
@@ -96,6 +97,8 @@ public class SemesterService {
         checkVersion(semester, request.version());
         Values values = validate(request, id);
         ensurePeriodsFit(semester, request.startsOn(), request.endsOn());
+        StudyCalendar before = changes.before(earlier(semester.getStartsOn(), request.startsOn()),
+                later(semester.getEndsOn(), request.endsOn()));
         LocalDate oldStart = semester.getStartsOn();
         LocalDate oldEnd = semester.getEndsOn();
         Parity oldParity = semester.getFirstWeekParity();
@@ -108,7 +111,7 @@ public class SemesterService {
         semesters.flush();
         if (!oldStart.equals(semester.getStartsOn()) || !oldEnd.equals(semester.getEndsOn())
                 || oldParity != semester.getFirstWeekParity()) {
-            changes.semesterChanged(oldStart, oldEnd, semester.getStartsOn(), semester.getEndsOn());
+            changes.semesterChanged(oldStart, oldEnd, semester.getStartsOn(), semester.getEndsOn(), before);
         }
         return toDto(semester);
     }
@@ -163,6 +166,7 @@ public class SemesterService {
             errors.add("parity", "Парність тижня — чисельник (NUMERATOR) або знаменник (DENOMINATOR).");
         }
         errors.throwIfAny();
+        StudyCalendar before = changes.before(weekStart, weekStart.plusDays(4));
         var existing = overrides.findBySemesterIdAndWeekStart(id, weekStart);
         if (parity == null) {
             existing.ifPresent(overrides::delete);
@@ -172,7 +176,7 @@ public class SemesterService {
             overrides.save(new WeekParityOverride(id, weekStart, parity));
         }
         overrides.flush();
-        changes.weekChanged(weekStart, semester.getStartsOn(), semester.getEndsOn());
+        changes.weekChanged(weekStart, semester.getStartsOn(), semester.getEndsOn(), before);
         return calendar(semester).weeks().stream()
                 .filter(week -> week.weekStart().equals(weekStart))
                 .map(SemesterService::weekDto)
@@ -278,6 +282,14 @@ public class SemesterService {
 
     private static String roman(int number) {
         return number == 1 ? "I" : "II";
+    }
+
+    private static LocalDate earlier(LocalDate a, LocalDate b) {
+        return a.isBefore(b) ? a : b;
+    }
+
+    private static LocalDate later(LocalDate a, LocalDate b) {
+        return a.isAfter(b) ? a : b;
     }
 
     private record Values(AcademicYear academicYear, String name) {

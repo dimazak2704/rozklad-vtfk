@@ -488,6 +488,141 @@ class TimetablePublicationIT {
         assertThat(lessonsOf(group, wednesday)).as("the numerator-only lesson").isOne();
     }
 
+    /**
+     * A lesson an order created follows the study mode of its day like a template lesson: online
+     * while the group studies online (its room is free), offline again when the period ends. If the
+     * room was given to another group meanwhile, ending the period is refused.
+     */
+    @Test
+    void lessonsOfAppliedChangesFollowTheStudyModeOfTheirDay() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID group = data.group4ki1.getId();
+        UUID replacement = applySubstitution(lessonAt(group, day, 2), day);
+
+        UUID online = periods.create(period(CalendarPeriodKind.STUDY_MODE, day, StudyMode.ONLINE, PeriodScope.GROUPS,
+                List.of(group))).id();
+
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND online AND NOT room_exclusive", replacement))
+                .isOne();
+        UUID taken = transaction.execute(status -> {
+            Lesson additional = new Lesson(data.semester.getId(), day, 2, data.group4ki2.getId(), 0,
+                    data.ndeksm.getId(), LessonOrigin.ADDITIONAL);
+            additional.setTeacherId(data.krentsin.getId());
+            additional.setRoom(data.lab6.getId(), true);
+            em.persist(additional);
+            return additional.getId();
+        });
+
+        assertThatThrownBy(() -> periods.delete(online))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.kind()).isEqualTo(ConflictKind.ROOM);
+                            assertThat(conflict.lessonIds()).containsExactly(replacement, taken);
+                            assertThat(conflict.message()).contains("4КІ1 СТП Непийвода М.В.").contains("аудиторія 6");
+                        }));
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND online", replacement)).isOne();
+
+        jdbc.update("DELETE FROM lesson WHERE id = ?", taken);
+        periods.delete(online);
+
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND NOT online AND room_exclusive", replacement))
+                .isOne();
+    }
+
+    /**
+     * An order cancelled the denominator lesson of a Wednesday; the week is then made a numerator
+     * week: the numerator lesson of that slot takes place, and turning the week back restores the
+     * cancelled state.
+     */
+    @Test
+    void parityOverrideGivesACancelledSlotToTheOtherWeeksLesson() {
+        publication.publish(imports.importTimetable(withDenominatorWednesday()).versionId(),
+                data.semester.getStartsOn(), "admin");
+        LocalDate wednesday = data.monday(4).plusDays(2);
+        UUID group = data.group4ki1.getId();
+        Lesson km = lessonAt(group, wednesday, 3);
+        applyCancel(km);
+
+        semesters.overrideWeek(data.semester.getId(), data.monday(4), Parity.NUMERATOR);
+
+        assertThat(teacherAt(group, wednesday, 3)).as("НДЕКСМ of the numerator week").isEqualTo(data.nepyivoda.getId());
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND status = 'CANCELLED'", km.getId())).isOne();
+
+        semesters.overrideWeek(data.semester.getId(), data.monday(4), null);
+
+        assertThat(lessonsOf(group, wednesday)).isZero();
+    }
+
+    /** A substitution of the denominator lesson would stay on a numerator day: the override is refused. */
+    @Test
+    void parityOverrideOverASubstitutionOfTheOtherWeekIsRefused() {
+        publication.publish(imports.importTimetable(withDenominatorWednesday()).versionId(),
+                data.semester.getStartsOn(), "admin");
+        LocalDate wednesday = data.monday(4).plusDays(2);
+        UUID replacement = applySubstitution(lessonAt(data.group4ki1.getId(), wednesday, 3), wednesday);
+
+        assertThatThrownBy(() -> semesters.overrideWeek(data.semester.getId(), data.monday(4), Parity.NUMERATOR))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.kind()).isEqualTo(ConflictKind.GROUP);
+                            assertThat(conflict.lessonIds()).containsExactly(replacement);
+                            assertThat(conflict.message()).startsWith("4КІ1 КМ (знаменник)");
+                        }));
+        assertThat(count("SELECT count(*) FROM week_parity_override WHERE week_start = ?", data.monday(4))).isZero();
+    }
+
+    /**
+     * A publication left 4КІ1's КМ out of 304 on one Monday because an order gave 304 to 4КІ2. Edits that
+     * do not change that day for 4КІ1 (an «offline» period, which is the default, and a new semester end)
+     * are not refused because of that old hole.
+     */
+    @Test
+    void editsThatDoNotChangeADayAreNotRefusedForAnEarlierHole() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID group = data.group4ki1.getId();
+        jdbc.update("DELETE FROM lesson WHERE group_id = ? AND date = ? AND pair_number = 1", group, day);
+        transaction.executeWithoutResult(status -> {
+            Lesson additional = new Lesson(data.semester.getId(), day, 1, data.group4ki2.getId(), 0,
+                    data.ndeksm.getId(), LessonOrigin.ADDITIONAL);
+            additional.setTeacherId(data.nepyivoda.getId());
+            additional.setRoom(data.room304.getId(), true);
+            em.persist(additional);
+        });
+
+        UUID offline = periods.create(period(CalendarPeriodKind.STUDY_MODE, day, StudyMode.OFFLINE,
+                PeriodScope.GROUPS, List.of(group))).id();
+        periods.delete(offline);
+        CalendarDtos.SemesterDto semester = semesters.get(data.semester.getId());
+        semesters.update(semester.id(), new CalendarDtos.SemesterRequest(semester.academicYear(), semester.number(),
+                semester.name(), semester.startsOn(), semester.endsOn().minusDays(2), semester.firstWeekParity(),
+                semester.weeksCount(), semester.bellProfileId(), semester.version()));
+
+        assertThat(semesters.get(data.semester.getId()).endsOn()).isEqualTo(semester.endsOn().minusDays(2));
+        assertThat(lessonsOf(group, day)).as("the hole stays: 304 is still taken").isOne();
+    }
+
+    /** A shorter semester would leave a published substitution outside it: refused. */
+    @Test
+    void shrinkingTheSemesterOverAPublishedSubstitutionIsRefused() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate lastMonday = data.monday(10);
+        UUID replacement = applySubstitution(lessonAt(data.group4ki1.getId(), lastMonday, 2), lastMonday);
+        CalendarDtos.SemesterDto semester = semesters.get(data.semester.getId());
+
+        assertThatThrownBy(() -> semesters.update(semester.id(), new CalendarDtos.SemesterRequest(
+                semester.academicYear(), semester.number(), semester.name(), semester.startsOn(),
+                lastMonday.minusDays(3), semester.firstWeekParity(), semester.weeksCount(), semester.bellProfileId(),
+                semester.version())))
+                .isInstanceOfSatisfying(ConflictException.class, error -> assertThat(error.getConflicts())
+                        .singleElement().satisfies(conflict -> {
+                            assertThat(conflict.lessonIds()).containsExactly(replacement);
+                            assertThat(conflict.message()).contains("опублікованим розпорядженням");
+                        }));
+        assertThat(semesters.get(data.semester.getId()).endsOn()).isEqualTo(semester.endsOn());
+    }
+
     @Test
     void republicationReportsLessonsKeptForOpenDecisionsAndReplacesThemOnceAbandoned() {
         UUID firstVersion = imports.importTimetable(importCommand()).versionId();
@@ -573,20 +708,44 @@ class TimetablePublicationIT {
                         false)));
     }
 
-    /** What the substitution module does when an order is published: cancel the original, add the replacement. */
-    private UUID applySubstitution(Lesson original, LocalDate date) {
-        return transaction.execute(status -> {
-            Change change = new Change(ChangeKind.REPLACE_TEACHER, date, 2, 2, data.group4ki1.getId(), 0, "admin");
-            change.setOriginal(original.getId(), data.stp.getId(), data.krentsin.getId(), data.lab6.getId());
-            change.setReplacement(data.stp.getId(), data.nepyivoda.getId(), data.lab6.getId());
+    /** The base timetable with a denominator КМ of Кренцін on Wednesday, pair 3 (the numerator one is НДЕКСМ). */
+    private ImportTimetableCommand withDenominatorWednesday() {
+        List<ImportTimetableCommand.Lesson> lessons = new ArrayList<>(importCommand().lessons());
+        lessons.add(new ImportTimetableCommand.Lesson(3, 3, Parity.DENOMINATOR, "4КІ1", 0, "КМ", "Кренцін М.Д.", "304",
+                false));
+        return new ImportTimetableCommand(data.semester.getId(), "Розклад з знаменником у середу", lessons);
+    }
+
+    /** An applied CANCEL of the lesson (order published). */
+    private void applyCancel(Lesson original) {
+        transaction.executeWithoutResult(status -> {
+            Change change = new Change(ChangeKind.CANCEL, original.getDate(), original.getPairNumber(),
+                    original.getPairNumber(), original.getGroupId(), 0, "admin");
+            change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
+                    original.getRoomId());
             change.setReason(ReasonCode.ABSENT, null);
             change.setStatus(ChangeStatus.APPLIED);
             em.persist(change);
             em.find(Lesson.class, original.getId()).cancel();
-            Lesson replacement = new Lesson(data.semester.getId(), date, 2, data.group4ki1.getId(), 0,
-                    data.stp.getId(), LessonOrigin.CHANGE);
+        });
+    }
+
+    /** What the substitution module does when an order is published: cancel the original, add the replacement. */
+    private UUID applySubstitution(Lesson original, LocalDate date) {
+        return transaction.execute(status -> {
+            int pair = original.getPairNumber();
+            Change change = new Change(ChangeKind.REPLACE_TEACHER, date, pair, pair, data.group4ki1.getId(), 0, "admin");
+            change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
+                    original.getRoomId());
+            change.setReplacement(original.getDisciplineId(), data.nepyivoda.getId(), original.getRoomId());
+            change.setReason(ReasonCode.ABSENT, null);
+            change.setStatus(ChangeStatus.APPLIED);
+            em.persist(change);
+            em.find(Lesson.class, original.getId()).cancel();
+            Lesson replacement = new Lesson(data.semester.getId(), date, pair, data.group4ki1.getId(), 0,
+                    original.getDisciplineId(), LessonOrigin.CHANGE);
             replacement.setTeacherId(data.nepyivoda.getId());
-            replacement.setRoom(data.lab6.getId(), true);
+            replacement.setRoom(original.getRoomId(), true);
             replacement.setChangeId(change.getId());
             em.persist(replacement);
             return replacement.getId();
