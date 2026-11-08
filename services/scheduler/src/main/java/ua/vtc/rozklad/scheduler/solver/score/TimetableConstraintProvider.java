@@ -178,7 +178,10 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 .asConstraint(UNWANTED_SLOT.id());
     }
 
-    /** The lesson is not in its preferred room (load item) or, failing that, the group's home room. */
+    /**
+     * The lesson is not in its desired room: the load item's preferred room, else the teacher's usual
+     * room (round 7: the room belongs to the teacher), else the home room of an older snapshot.
+     */
     Constraint roomPreference(ConstraintFactory factory) {
         return factory.forEach(LessonUnit.class)
                 .filter(LessonUnit::isOutsideDesiredRoom)

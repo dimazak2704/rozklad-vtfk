@@ -33,12 +33,14 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  *
  * <p>Value ranges per unit: timeslots of the group's shift window where the teacher is not
  * UNAVAILABLE; rooms of the required type that fit the group (special-purpose rooms — sports
- * hall and ground — only for units that require them or name them as preferred/home room); parity
+ * hall and ground — only for units that require them or name them as preferred, teacher's or home
+ * room); parity
  * BOTH for WHOLE units, NUMERATOR or DENOMINATOR for HALF units. When a filter leaves nothing, the
  * wider range is used and the matching hard constraint reports the violation.
  *
  * <p>Rooms are warm-started: every unit starts in its desired room (preferred room of the load
- * item, else the group's home room) or in the least used compatible room. A unit with an
+ * item, else the teacher's usual room, else the group's home room of an older snapshot) or in the
+ * least used compatible room. A unit with an
  * {@code initial} placement (where it stands in the base version) starts there when the slot,
  * parity and room are inside its value ranges; the construction heuristic places only the units
  * that have no start, so a feasible base is improved, never rebuilt worse. Local search may still
@@ -115,10 +117,7 @@ public final class TimetableProblemFactory {
             return UnitPlan.pinned(unit, group, teacher, new Timeslot(pin.weekday(), pin.pair()), room, pin.parity());
         }
         List<Room> roomRange = roomRange(unit, group, rooms.values());
-        Room preferred = unit.preferredRoomId() == null ? null : rooms.get(unit.preferredRoomId());
-        Room home = unit.homeRoomId() == null ? null : rooms.get(unit.homeRoomId());
-        Room desired = preferred != null && roomRange.contains(preferred) ? preferred
-                : home != null && roomRange.contains(home) ? home : null;
+        Room desired = desiredRoom(unit, rooms, roomRange);
         List<Parity> parities = unit.weight() == UnitWeight.HALF ? HALF_PARITIES : WHOLE_PARITIES;
         List<Timeslot> slotRange = timeslotRange(unit, group, teacher, timeslots);
         UnitPlan plan = UnitPlan.free(unit, group, teacher, slotRange, roomRange, parities, desired);
@@ -138,6 +137,20 @@ public final class TimetableProblemFactory {
         Room startRoom = start.roomId() == null ? null : rooms.get(start.roomId());
         return plan.startingAt(slot, start.parity(), startRoom != null && roomRange.contains(startRoom) ? startRoom
                 : null);
+    }
+
+    /**
+     * The first compatible room of: the load item's preferred room, the teacher's usual room (the room
+     * belongs to the teacher, round 7), the group's home room (sent only by cores before round 7).
+     */
+    static Room desiredRoom(ProblemSnapshot.Unit unit, Map<UUID, Room> rooms, List<Room> roomRange) {
+        for (UUID id : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId(), unit.homeRoomId()}) {
+            Room room = id == null ? null : rooms.get(id);
+            if (room != null && roomRange.contains(room)) {
+                return room;
+            }
+        }
+        return null;
     }
 
     private static List<Timeslot> timeslotRange(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
@@ -170,8 +183,8 @@ public final class TimetableProblemFactory {
         if (unit.requiredRoomType() != null) {
             return room.getType() == unit.requiredRoomType();
         }
-        return !SPECIAL_PURPOSE.contains(room.getType())
-                || room.getId().equals(unit.preferredRoomId()) || room.getId().equals(unit.homeRoomId());
+        return !SPECIAL_PURPOSE.contains(room.getType()) || room.getId().equals(unit.preferredRoomId())
+                || room.getId().equals(unit.teacherRoomId()) || room.getId().equals(unit.homeRoomId());
     }
 
     private static boolean fitsCapacity(ProblemSnapshot.Unit unit, StudentGroup group, Room room) {

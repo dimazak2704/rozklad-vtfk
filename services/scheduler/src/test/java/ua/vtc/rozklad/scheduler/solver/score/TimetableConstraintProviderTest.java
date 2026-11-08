@@ -16,6 +16,8 @@ import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
+import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
+import ua.vtc.rozklad.scheduler.solver.TimetableProblemFactory;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 import ua.vtc.rozklad.scheduler.solver.domain.Room;
 import ua.vtc.rozklad.scheduler.solver.domain.ShiftWindow;
@@ -393,6 +395,44 @@ class TimetableConstraintProviderTest {
                     .given(lesson(KI1, slot(1, 1), BOTH).desiredRoom(ROOM_6).room(ROOM_304).build(),
                             lesson(KI1, slot(1, 2), NUMERATOR).desiredRoom(ROOM_6).room(ROOM_304).build())
                     .penalizesBy(3);
+        }
+
+        /**
+         * Round 7: core sends the teacher's usual room ({@code teacherRoomId}); the factory makes it
+         * the desired room, so a lesson of that teacher in another room is penalized, also when the
+         * group has a home room.
+         */
+        @Test
+        void lessonOutsideTheTeachersRoomIsPenalizedNotOutsideTheGroupsHomeRoom() {
+            List<ProblemSnapshot.ShiftWindow> windows = new ArrayList<>();
+            for (int weekday = 1; weekday <= 5; weekday++) {
+                windows.add(new ProblemSnapshot.ShiftWindow(1, weekday, 1, 4));
+            }
+            List<ProblemSnapshot.Unit> snapshotUnits = List.of(
+                    new ProblemSnapshot.Unit("inTeachersRoom", null, KI1.getId(), 0, STP, NEPYIVODA.getId(),
+                            UnitWeight.WHOLE, null, null, ROOM_304.getId(), null, null, ROOM_6.getId()),
+                    new ProblemSnapshot.Unit("inHomeRoom", null, KI1.getId(), 0, STP, NEPYIVODA.getId(),
+                            UnitWeight.WHOLE, null, null, ROOM_304.getId(), null, null, ROOM_6.getId()));
+            Timetable timetable = new TimetableProblemFactory(4).create(new ProblemSnapshot(
+                    List.of(new ProblemSnapshot.Timeslot(1, 1), new ProblemSnapshot.Timeslot(1, 2)), windows,
+                    List.of(new ProblemSnapshot.Group(KI1.getId(), "4КІ1", 20, 1, List.of())),
+                    List.of(new ProblemSnapshot.Room(ROOM_6.getId(), "6", RoomType.CLASSROOM, 30, 1),
+                            new ProblemSnapshot.Room(ROOM_304.getId(), "304", RoomType.CLASSROOM, 30, 1)),
+                    List.of(new ProblemSnapshot.Teacher(NEPYIVODA.getId(), "Непийвода М.В.", List.of(), List.of())),
+                    snapshotUnits), GenerationWeights.DEFAULT);
+            List<LessonUnit> units = timetable.getUnits();
+            Room teachersRoom = units.getFirst().getDesiredRoom();
+            Room homeRoom = units.getFirst().getRoomRange().stream()
+                    .filter(room -> room.getId().equals(ROOM_304.getId())).findFirst().orElseThrow();
+            units.forEach(unit -> unit.setParity(BOTH));
+            units.get(0).setTimeslot(slot(1, 1));
+            units.get(0).setRoom(teachersRoom);
+            units.get(1).setTimeslot(slot(1, 2));
+            units.get(1).setRoom(homeRoom);
+
+            verifier.verifyThat(TimetableConstraintProvider::roomPreference)
+                    .given(units.toArray())
+                    .penalizesBy(2);
         }
 
         @Test

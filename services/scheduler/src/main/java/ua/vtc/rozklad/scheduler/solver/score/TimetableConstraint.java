@@ -26,7 +26,7 @@ public enum TimetableConstraint {
     LATE_PAIR("Late pair", "Пізні пари в межах зміни", false),
     DISCIPLINE_REPEAT("Discipline repeated", "Дисципліна три й більше разів на день", false),
     UNWANTED_SLOT("Unwanted slot", "Небажаний для викладача час", false),
-    ROOM_PREFERENCE("Room preference", "Заняття не у своїй аудиторії", false),
+    ROOM_PREFERENCE("Room preference", "Заняття не в аудиторії викладача", false),
     HALF_PAIRING("Halves paired", "Чисельник і знаменник в одному слоті (бонус)", false);
 
     private static final Map<String, TimetableConstraint> BY_ID = Arrays.stream(values())

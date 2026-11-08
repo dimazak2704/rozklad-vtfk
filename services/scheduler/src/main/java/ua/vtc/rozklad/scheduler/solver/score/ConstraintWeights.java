@@ -10,7 +10,8 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
  * Soft weights of a generation request mapped to constraints (0 switches a constraint off):
  * {@code windows} → group and teacher windows, {@code brokenDays} → broken days and the bonus for
  * paired halves, {@code latePairs} → late pairs, {@code preferences} → unwanted teacher slots,
- * {@code homeRoom} → room preference. The request has no weight for a discipline repeated three
+ * {@code homeRoom} → room preference (the teacher's usual room since round 7; the request keeps the
+ * old name for compatibility). The request has no weight for a discipline repeated three
  * times a day, so it comes from the service configuration. Hard constraints are never weighted.
  */
 public final class ConstraintWeights {

@@ -99,6 +99,24 @@ class TimetableProblemFactoryTest {
         assertThat(timetable.getUnits().get(2).getDesiredRoom()).isNull();
     }
 
+    /** Round 7: the room belongs to the teacher; the load item's preferred room still comes first. */
+    @Test
+    void teachersRoomComesAfterThePreferredAndBeforeTheHomeRoom() {
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("teacher").teacherRoom(LAB).homeRoom(ROOM_304).build(),
+                unit("preferred").preferredRoom(ROOM_304).teacherRoom(LAB).build(),
+                unit("tooSmallTeacherRoom").teacherRoom(ROOM_SMALL).homeRoom(ROOM_304).build(),
+                unit("peTeacher").teacherRoom(GYM).build())), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits()).extracting(unit -> unit.getDesiredRoom().getId())
+                .containsExactly(LAB, ROOM_304, ROOM_304, GYM);
+        assertThat(timetable.getUnits().getFirst().getRoom().getId()).as("warm start in the teacher's room")
+                .isEqualTo(LAB);
+        // спортзал лише для тих, кому він потрібен або чия це аудиторія
+        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(ROOM_304, LAB, GYM);
+        assertThat(roomIds(timetable.getUnits().get(0))).doesNotContain(GYM);
+    }
+
     @Test
     void unitsWithoutDesiredRoomStartInTheLeastUsedCompatibleRoom() {
         Timetable timetable = factory.create(snapshot(List.of(
@@ -292,6 +310,7 @@ class TimetableProblemFactoryTest {
         private RoomType requiredRoomType;
         private UUID preferredRoom;
         private UUID homeRoom;
+        private UUID teacherRoom;
         private ProblemSnapshot.PinnedSlot pinned;
         private ProblemSnapshot.PinnedSlot initial;
 
@@ -334,6 +353,11 @@ class TimetableProblemFactoryTest {
             return this;
         }
 
+        UnitBuilder teacherRoom(UUID teacherRoom) {
+            this.teacherRoom = teacherRoom;
+            return this;
+        }
+
         UnitBuilder pinned(ProblemSnapshot.PinnedSlot pinned) {
             this.pinned = pinned;
             return this;
@@ -346,7 +370,7 @@ class TimetableProblemFactoryTest {
 
         ProblemSnapshot.Unit build() {
             return new ProblemSnapshot.Unit(id, UUID.randomUUID(), group, subgroup, DISCIPLINE, teacher, weight,
-                    requiredRoomType, preferredRoom, homeRoom, pinned, initial);
+                    requiredRoomType, preferredRoom, homeRoom, pinned, initial, teacherRoom);
         }
     }
 }

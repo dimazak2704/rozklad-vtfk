@@ -154,7 +154,7 @@ final class ProblemSnapshotValidator {
             if (unit.teacherId() != null && !teachers.contains(unit.teacherId())) {
                 errors.add(label + " посилається на невідомого викладача " + unit.teacherId() + ".");
             }
-            for (UUID roomId : new UUID[] {unit.preferredRoomId(), unit.homeRoomId()}) {
+            for (UUID roomId : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId(), unit.homeRoomId()}) {
                 if (roomId != null && !rooms.contains(roomId)) {
                     errors.add(label + " посилається на невідому аудиторію " + roomId + ".");
                 }
