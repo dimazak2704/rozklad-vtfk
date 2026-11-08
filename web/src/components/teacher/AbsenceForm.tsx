@@ -21,7 +21,7 @@ import {
   localDateFromIso,
   nearestStudyDay,
 } from '@/lib/date';
-import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS } from '@/lib/labels';
+import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
 import { DAY_PICKER_CLASSES } from '../public/schedule/day-picker-classes';
 import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
 
@@ -216,7 +216,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
               <p className="text-secondary">У ці дні за розкладом у вас пар немає.</p>
             ) : (
               <>
-                <p className="font-semibold text-primary">Зачепить {countLabel(affected.length, PAIR_FORMS)}:</p>
+                <p className="font-semibold text-primary">Зачепить {countLabel(affected.length, PAIR_FORMS_ACC)}:</p>
                 <ul className="mt-1 flex flex-col gap-0.5 text-secondary">
                   {affected.slice(0, 6).map(({ day, lesson }) => (
                     <li key={`${day.date}-${lesson.id}`} className="figures">

@@ -12,7 +12,7 @@ import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl
 import { cn } from '@/lib/cn';
 import { compareIsoDates, diffDays, formatNumericDate, formatShortWeekdayDate } from '@/lib/date';
 import { ABSENCE_REASON_LABEL } from '@/lib/labels';
-import { pairsCount } from '../format';
+import { pairsCountGenitive } from '../format';
 
 const REASONS = Object.keys(ABSENCE_REASON_LABEL) as AbsenceReasonCategory[];
 const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -333,7 +333,7 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
             ) : (
               <>
                 <p className="text-caption text-secondary">
-                  Потрібні рішення для <span className="font-semibold text-primary">{pairsCount(affected.length)}</span>
+                  Потрібні рішення для <span className="font-semibold text-primary">{pairsCountGenitive(affected.length)}</span>
                 </p>
                 <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                   {affected.map(({ day, lesson }) => (

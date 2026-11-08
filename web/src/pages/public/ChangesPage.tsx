@@ -44,8 +44,12 @@ import {
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 
-const GROUP_FORMS = ['група', 'групи', 'груп'] as const;
+/** Знахідний після дієслова: «мають 1 групу». */
+const GROUP_FORMS_ACC = ['групу', 'групи', 'груп'] as const;
 const ROW_FORMS = ['зміна', 'зміни', 'змін'] as const;
+/** Знахідний після «Показано» і родовий після «з»: «Показано 1 зміну з 2 змін». */
+const ROW_FORMS_ACC = ['зміну', 'зміни', 'змін'] as const;
+const ROW_FORMS_GEN = ['зміни', 'змін', 'змін'] as const;
 
 function ChangesSkeleton() {
   return (
@@ -168,7 +172,7 @@ export default function ChangesPage() {
       <EmptyState
         className="rounded-panel border border-default bg-surface"
         title="За цим фільтром змін немає"
-        description={`Загалом зміни мають ${countLabel(groups.length, GROUP_FORMS)}. Перевірте код групи або скиньте фільтри.`}
+        description={`Загалом зміни мають ${countLabel(groups.length, GROUP_FORMS_ACC)}. Перевірте код групи або скиньте фільтри.`}
         action={
           <Button variant="secondary" onClick={() => patch({ q: null, course: null, mine: null })}>
             Скинути фільтри
@@ -332,7 +336,7 @@ export default function ChangesPage() {
           <p className="ms-auto flex items-center gap-2 text-caption text-muted" aria-live="polite">
             {date === today && online ? <StatusDot tone="live" pulse label="Оновлюється наживо" /> : null}
             {filtering
-              ? `Показано ${countLabel(rowCount, ROW_FORMS)} з ${countLabel(groups.reduce((s, g) => s + g.items.length, 0), ROW_FORMS)}`
+              ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(groups.reduce((s, g) => s + g.items.length, 0), ROW_FORMS_GEN)}`
               : `${countLabel(rowCount, ROW_FORMS)} у ${countLabel(groups.length, ['групі', 'групах', 'групах'])}`}
             {changes.dataUpdatedAt > 0 ? ` · о ${formatInstantTime(new Date(changes.dataUpdatedAt).toISOString())}` : ''}
           </p>

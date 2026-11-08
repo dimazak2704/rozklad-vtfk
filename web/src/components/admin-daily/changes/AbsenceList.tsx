@@ -2,7 +2,7 @@ import { CalendarX } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
 import { Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { ABSENCE_REASON_LABEL } from '@/lib/labels';
+import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { ABSENCE_SOURCE_TEXT, absencePeriod } from '../format';
 import { LESSON_STATE, type LessonEntry, type LessonState } from '../model';
 
@@ -31,7 +31,7 @@ function ProgressSegments({ entries }: { entries: readonly LessonEntry[] }) {
       </span>
       <span className="shrink-0 text-meta text-secondary figures">
         {done} з {entries.length}
-        <span className="sr-only"> пар вирішено</span>
+        <span className="sr-only"> {plural(entries.length, PAIR_FORMS_GEN)} вирішено</span>
       </span>
     </span>
   );

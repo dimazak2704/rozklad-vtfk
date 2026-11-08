@@ -177,6 +177,10 @@ export function countLabel(count: number, forms: readonly [string, string, strin
 }
 
 export const PAIR_FORMS = ['пара', 'пари', 'пар'] as const;
+/** Знахідний після дієслова: «Зачепить 1 пару», «Показано 2 пари». */
+export const PAIR_FORMS_ACC = ['пару', 'пари', 'пар'] as const;
+/** Родовий після прийменника: «для 1 пари», «з 2 пар». */
+export const PAIR_FORMS_GEN = ['пари', 'пар', 'пар'] as const;
 export const MINUTE_FORMS = ['хвилина', 'хвилини', 'хвилин'] as const;
 
 /** «23 хв», «1 год 5 хв» — для зворотного відліку. */

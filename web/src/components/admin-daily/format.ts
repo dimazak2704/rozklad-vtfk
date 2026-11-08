@@ -1,7 +1,7 @@
 /** Підписи для екранів щоденної роботи: пари, періоди відсутності, джерела, суми. */
 import type { AbsenceDto, AbsenceSource, ChangeDto } from '@/api/types';
 import { formatDateRange } from '@/lib/date';
-import { countLabel } from '@/lib/labels';
+import { countLabel, PAIR_FORMS_GEN } from '@/lib/labels';
 
 const PAIRS_FORMS = ['пара', 'пари', 'пар'] as const;
 
@@ -40,6 +40,11 @@ export const NBSP = String.fromCharCode(0xa0);
 
 export function pairsCount(count: number): string {
   return countLabel(count, PAIRS_FORMS);
+}
+
+/** Після прийменника: «для 1 пари», «для 5 пар». */
+export function pairsCountGenitive(count: number): string {
+  return countLabel(count, PAIR_FORMS_GEN);
 }
 
 /** «СТП — Кренцін» без висячих тире, коли якоїсь частини немає. */
