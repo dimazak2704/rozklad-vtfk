@@ -179,9 +179,10 @@ describe('контракт мок-API ↔ core', () => {
 
   it('публічні: meta, дзвінки, довідники, розклад, зміни', async () => {
     const calendar = `${CORE}calendar/internal/CalendarDtos.java`;
-    const meta = await api.get<{ semester: unknown; bellProfile: unknown }>('/public/meta');
+    const meta = await api.get<{ semester: unknown; nextStudyDay: unknown }>('/public/meta');
     await expectShape(meta, calendar, 'PublicMetaDto');
     await expectShape(meta.semester, calendar, 'SemesterRefDto');
+    await expectShape(meta.nextStudyDay, calendar, 'StudyDayDto');
     const bells = await api.get<{ slots: unknown[] }>('/public/bells', { date: DAY });
     await expectShape(bells, calendar, 'BellsDto');
     await expectShape(first(bells.slots, 'дзвінки'), calendar, 'SlotDto');

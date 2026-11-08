@@ -187,6 +187,16 @@ export interface PublicMetaDto {
   currentPair: Nullable<PairTimeDto>;
   nextPair: Nullable<PairTimeDto>;
   bellProfile: Nullable<{ id: Uuid; name: string }>;
+  /** Перший навчальний день після сьогодні (вихідні й канікули пропущено); null, якщо такого не видно. */
+  nextStudyDay: Nullable<StudyDayDto>;
+}
+
+/** Навчальний день з тижнем: `weekday` ISO 1..5. */
+export interface StudyDayDto {
+  date: IsoDate;
+  weekday: number;
+  weekNumber: number;
+  parity: WeekParity;
 }
 
 /** GET /api/public/search?q=&limit=10 */

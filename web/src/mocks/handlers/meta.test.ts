@@ -45,6 +45,17 @@ describe('GET /api/public/meta', () => {
     expect(await getMeta()).toMatchObject({ today: '2026-11-07', studyDay: false, currentPair: null, nextPair: null });
   });
 
+  it('називає наступний навчальний день з його тижнем: у неділю — понеділок, в останній день семестру — нічого', async () => {
+    at('2026-11-08T09:00:00Z'); // неділя
+    expect((await getMeta()).nextStudyDay).toEqual({ date: '2026-11-09', weekday: 1, weekNumber: 11, parity: 'NUMERATOR' });
+
+    at('2026-10-19T07:00:00Z'); // понеділок ⇒ завтрашній вівторок того ж (знаменникового) тижня
+    expect((await getMeta()).nextStudyDay).toEqual({ date: '2026-10-20', weekday: 2, weekNumber: 8, parity: 'DENOMINATOR' });
+
+    at('2026-12-30T09:00:00Z'); // останній день семестру; наступного мок не знає
+    expect((await getMeta()).nextStudyDay).toBeNull();
+  });
+
   it('у тесті можна підмінити відповідь помилкою ProblemDetail', async () => {
     server.use(http.get(apiPath('/public/meta'), () => problem({ status: 503, detail: 'Сервер оновлюється.' })));
     const error = await getMeta().catch((e: unknown) => e);

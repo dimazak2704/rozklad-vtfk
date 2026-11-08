@@ -82,6 +82,7 @@ describe('null-поля публічних DTO', () => {
       currentPair: null,
       nextPair: null,
       bellProfile: null,
+      nextStudyDay: null,
     };
     server.use(http.get(apiPath('/public/meta'), () => HttpResponse.json(meta)));
     const { container } = renderWithProviders(<NowPanel />);

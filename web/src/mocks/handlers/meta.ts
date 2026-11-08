@@ -2,9 +2,17 @@
  * Мета й пошук для оболонки (CONTRACTS §1): GET /api/public/meta і GET /api/public/search.
  */
 import { http, HttpResponse } from 'msw';
-import type { EntityType, GroupDto, PairTimeDto, PublicMetaDto, SearchResultDto, Weekday } from '@/api/types';
+import type {
+  EntityType,
+  GroupDto,
+  PairTimeDto,
+  PublicMetaDto,
+  SearchResultDto,
+  StudyDayDto,
+  Weekday,
+} from '@/api/types';
 import { pairStatus } from '@/lib/bells';
-import { isoWeekday, kyivClock } from '@/lib/date';
+import { addDays, isoWeekday, kyivClock } from '@/lib/date';
 import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { matchScore } from '@/lib/search';
 import {
@@ -26,6 +34,20 @@ import { apiPath, badRequest } from '../kit';
 
 /** Назва з затвердження таблиці розкладу (R2: «Директор Вінницького технічного фахового коледжу»). */
 export const COLLEGE_NAME = 'Вінницький технічний фаховий коледж';
+
+/** Як у core: дивимось уперед до 120 днів, щоб перекрити канікули між семестрами. */
+const NEXT_STUDY_DAY_HORIZON_DAYS = 120;
+
+/** Перший навчальний день після `today` (вихідні й канікули пропущено) або null. */
+export function nextStudyDay(today: string): StudyDayDto | null {
+  for (let offset = 1; offset <= NEXT_STUDY_DAY_HORIZON_DAYS; offset += 1) {
+    const date = addDays(today, offset);
+    if (isStudyDay(date)) {
+      return { date, weekday: isoWeekday(date), weekNumber: semesterWeekNumber(date), parity: parityOn(date) };
+    }
+  }
+  return null;
+}
 
 /** Стан «зараз» за київським часом: семестр, тиждень, парність, поточна й наступна пара. */
 export function publicMeta(now: Date = new Date()): PublicMetaDto {
@@ -63,6 +85,7 @@ export function publicMeta(now: Date = new Date()): PublicMetaDto {
     currentPair,
     nextPair,
     bellProfile: { id: ACTIVE_BELL_PROFILE.id, name: ACTIVE_BELL_PROFILE.name },
+    nextStudyDay: nextStudyDay(clock.date),
   };
 }
 
