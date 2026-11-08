@@ -388,6 +388,24 @@ class ChangeLifecycleIT {
     }
 
     @Test
+    void declinedChangeCannotBeAskedAgainOnceTheLessonHasAnotherDecision() {
+        ChangeDto declined = commands.create(replaceTeacher(nepyivoda), "admin");
+        replies.replyFromBot(declined.id(), nepyivoda.getId(), ConfirmationDecision.DECLINE, null);
+        ChangeDto cancel = commands.create(new CreateChangeRequest(ChangeKind.CANCEL, MONDAY, 2, null,
+                group.getId(), null, lesson.getId(), null, null, null, null, ReasonCode.ABSENT, null, null), "admin");
+        assertThat(cancel.status()).isEqualTo(ChangeStatus.CONFIRMED);
+
+        assertThatThrownBy(() -> commands.requestConfirmation(declined.id(), "admin"))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("вже є рішення");
+        assertThat(changes.findById(declined.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.DECLINED);
+
+        commands.cancel(cancel.id(), "admin");
+        assertThat(commands.requestConfirmation(declined.id(), "admin").status())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+    }
+
+    @Test
     void lessonOfAnotherDayIsAMismatch() {
         assertThatThrownBy(() -> commands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY.plusDays(1),
                 2, null, group.getId(), null, lesson.getId(), null, nepyivoda.getId(), null, null, ReasonCode.ABSENT,

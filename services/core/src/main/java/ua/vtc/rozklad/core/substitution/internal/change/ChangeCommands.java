@@ -151,13 +151,19 @@ public class ChangeCommands {
         finish(change);
     }
 
-    /** Asks the assigned teacher again; the slot is checked once more because time has passed. */
+    /**
+     * Asks the assigned teacher again. A declined (or draft) change is not a live decision, so it
+     * goes through the same checks as a new one: another decision may have been made for the lesson
+     * meanwhile, and the slot may have been taken.
+     */
     public ChangeDto requestConfirmation(UUID id, String actor) {
         Change change = find(id);
         if (change.getStatus() == ChangeStatus.DRAFT || change.getStatus() == ChangeStatus.DECLINED) {
             changes.lockDecisionsOf(change.getDate());
             lessons.lockGroupDay(change.getGroupId(), change.getDate());
-            requireFreeSlot(change, planner.plan(change));
+            ChangeEffect effect = planner.plan(change);
+            requireNoCompetingDecision(change, effect);
+            requireFreeSlot(change, effect);
         } else {
             requireSubstitutePresent(change);
         }

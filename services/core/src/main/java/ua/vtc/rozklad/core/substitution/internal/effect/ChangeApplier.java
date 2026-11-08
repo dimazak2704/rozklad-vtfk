@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,6 +21,7 @@ import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
+import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.AppliedChanges;
 import ua.vtc.rozklad.core.substitution.Change;
@@ -79,6 +82,7 @@ class ChangeApplier implements ChangePublication {
                         .formatted(ChangeStatusMachine.label(change.getStatus())));
             }
         }
+        requireOneDecisionPerLesson(toApply);
         // блокуємо дні груп у сталому порядку, щоб паралельні публікації не взаємоблокувалися
         toApply.stream()
                 .map(change -> new GroupDay(change.getGroupId(), change.getDate()))
@@ -128,6 +132,31 @@ class ChangeApplier implements ChangePublication {
                 toApply.stream().map(Change::getGroupId).collect(Collectors.toSet()),
                 teacherIds,
                 toApply.stream().map(Change::getDate).collect(Collectors.toSet()));
+    }
+
+    /**
+     * A lesson has one decision (DOMAIN §7). Creation and repeated confirmation requests enforce it;
+     * this is the last line of defence, so an order never both cancels and replaces one pair.
+     */
+    private void requireOneDecisionPerLesson(List<Change> toApply) {
+        Map<UUID, Change> deciders = new HashMap<>();
+        List<ConflictDto> conflicts = new ArrayList<>();
+        for (Change change : toApply) {
+            for (UUID lessonId : Stream.of(change.getOriginalLessonId(), change.getSwapLessonId())
+                    .filter(Objects::nonNull).distinct().toList()) {
+                Change other = deciders.putIfAbsent(lessonId, change);
+                if (other != null) {
+                    String group = catalog.group(change.getGroupId()).getCode();
+                    conflicts.add(ConflictDto.hard(ConflictKind.GROUP,
+                            "Для пари групи %s (%d пара) підтверджено два рішення. Скасуйте одне з них."
+                                    .formatted(group, change.getPairFrom()),
+                            List.of(lessonId), change.getDate(), change.getPairFrom()));
+                }
+            }
+        }
+        if (!conflicts.isEmpty()) {
+            throw ConflictException.schedule(conflicts);
+        }
     }
 
     private void insertLessons(List<Planned> plans) {
