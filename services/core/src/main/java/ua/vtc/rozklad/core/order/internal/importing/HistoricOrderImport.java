@@ -3,6 +3,7 @@ package ua.vtc.rozklad.core.order.internal.importing;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -14,6 +15,7 @@ import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.order.OrderDocument;
 import ua.vtc.rozklad.core.order.OrderDocumentRepository;
+import ua.vtc.rozklad.core.order.OrderItem;
 import ua.vtc.rozklad.core.order.OrderItemContent;
 import ua.vtc.rozklad.core.order.OrderSection;
 import ua.vtc.rozklad.core.order.internal.draft.OrderTexts;
@@ -27,7 +29,9 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * of record: its number, date, rows, notes and signature exactly as printed. It is history only:
  * no change is created, no lesson is touched and nothing is distributed (no {@code order.published}),
  * because the rows are text the dispatcher has not matched to lessons. Its number counts in the
- * semester's numbering, so the next published order continues after it.
+ * semester's numbering, so the next published order continues after it. Importing the same order
+ * again (same number, date and rows) answers with the stored one; the same number with other rows
+ * — for example an order the system already published for that date — is a 409.
  */
 @Service
 @Transactional
@@ -61,8 +65,13 @@ public class HistoricOrderImport {
         if (sameNumber.isPresent()) {
             OrderDocument existing = sameNumber.get();
             if (existing.getDate().equals(date) && existing.getKind() == kind) {
-                // повторний імпорт того самого розпорядження (повтор кроку імпортера) нічого не змінює
-                return result(existing, false);
+                // повтор того самого імпорту нічого не змінює; інший текст під тим самим номером — не повтор
+                if (contents(existing).equals(contents(request))) {
+                    return result(existing, false);
+                }
+                throw new ConflictException(("На %s уже є розпорядження №%d, і його рядки відрізняються від "
+                        + "імпортованих. Звірте розпорядження в системі з паперовим.").formatted(date.format(DATE),
+                        request.number()));
             }
             throw new ConflictException("Розпорядження №%d уже є в семестрі «%s» (на %s).".formatted(request.number(),
                     semester.name(), existing.getDate().format(DATE)));
@@ -73,14 +82,32 @@ public class HistoricOrderImport {
         order.setSignatory(blankToNull(request.signatoryPosition()), blankToNull(request.signatoryName()));
         order.setNotes(request.notes() == null ? List.of() : request.notes().stream().map(String::strip).toList());
         for (HistoricOrderRequest.Item item : request.items()) {
-            order.addItem(item.section() == null ? OrderSection.CHANGES : item.section(), new OrderItemContent(
-                    item.groupCode().strip(), item.pairLabel().strip(), item.rowType(), blankToNull(item.fromDiscipline()),
-                    blankToNull(item.fromTeacher()), blankToNull(item.reasonText()), blankToNull(item.toDiscipline()),
-                    blankToNull(item.toTeacher()), blankToNull(item.roomText()), null));
+            order.addItem(item.section() == null ? OrderSection.CHANGES : item.section(), content(item));
         }
         order.markPublished(request.number(), clock.instant(), actor);
         orders.saveAndFlush(order);
         return result(order, true);
+    }
+
+    /** Rows as stored: the main table first, then room changes, each in printed order. */
+    private static List<OrderItemContent> contents(OrderDocument order) {
+        return order.getItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getSection).thenComparingInt(OrderItem::getPosition))
+                .map(OrderItem::content)
+                .toList();
+    }
+
+    private static List<OrderItemContent> contents(HistoricOrderRequest request) {
+        return request.items().stream()
+                .sorted(Comparator.comparing(item -> item.section() == null ? OrderSection.CHANGES : item.section()))
+                .map(HistoricOrderImport::content)
+                .toList();
+    }
+
+    private static OrderItemContent content(HistoricOrderRequest.Item item) {
+        return new OrderItemContent(item.groupCode().strip(), item.pairLabel().strip(), item.rowType(),
+                blankToNull(item.fromDiscipline()), blankToNull(item.fromTeacher()), blankToNull(item.reasonText()),
+                blankToNull(item.toDiscipline()), blankToNull(item.toTeacher()), blankToNull(item.roomText()), null);
     }
 
     private OrderDocument mainOrder(SemesterInfo semester, HistoricOrderRequest request) {

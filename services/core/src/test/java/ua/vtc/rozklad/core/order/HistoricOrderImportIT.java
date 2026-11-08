@@ -111,6 +111,10 @@ class HistoricOrderImportIT {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("Розпорядження №35 уже є в семестрі «%s» (на 19.10.2026)."
                         .formatted(semester.getName())));
+        importOrder(ORDER_35.replace("\"toTeacher\":\"Прокопчук\"", "\"toTeacher\":\"Прокопчук О.\""))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("На 19.10.2026 уже є розпорядження №35, і його рядки "
+                        + "відрізняються від імпортованих. Звірте розпорядження в системі з паперовим."));
         importOrder(ORDER_35.replace("\"number\":35", "\"number\":36"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("На 19.10.2026 уже є розпорядження №35."));
