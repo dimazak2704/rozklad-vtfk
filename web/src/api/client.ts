@@ -4,6 +4,7 @@
  * - додає `Authorization: Bearer …`, якщо користувач увійшов;
  * - розбирає ProblemDetail у типізований ApiError (errors[], conflicts[]).
  */
+import { noteUnsavedChange } from '@/auth/unsavedChange';
 import { getAccessToken } from '@/auth/userManager';
 import { ApiError, errorFromResponse } from './errors';
 
@@ -126,7 +127,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     const error = await errorFromResponse(response);
-    if (error.isUnauthorized) unauthorizedHandler?.(error);
+    if (error.isUnauthorized) {
+      // збереження, яке відхилили через вхід, не мовчить: після повторного входу буде пояснення
+      if (method !== 'GET') noteUnsavedChange();
+      unauthorizedHandler?.(error);
+    }
     throw error;
   }
 

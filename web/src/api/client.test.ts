@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, buildUrl, onUnauthorized } from './client';
 import { ApiError, errorMessage } from './errors';
+import { takeUnsavedChange } from '@/auth/unsavedChange';
 
 vi.mock('@/auth/userManager', () => ({
   getAccessToken: vi.fn(() => Promise.resolve('token-123')),
@@ -125,6 +126,15 @@ describe('apiRequest', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { status: 401 }));
     await api.get('/me').catch(() => undefined);
     expect(handler).toHaveBeenCalledOnce();
+    expect(takeUnsavedChange()).toBe(false);
+    off();
+  });
+
+  it('збереження, відхилене з 401, позначається, щоб після входу сказати «не збережено»', async () => {
+    const off = onUnauthorized(vi.fn());
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, { status: 401 }));
+    await api.put('/admin/settings', { signatoryPosition: 'x' }).catch(() => undefined);
+    expect(takeUnsavedChange()).toBe(true);
     off();
   });
 });

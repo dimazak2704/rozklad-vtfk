@@ -3,6 +3,7 @@ import { Outlet, ScrollRestoration, useLocation, useMatches, useNavigate } from 
 import { onUnauthorized } from '@/api/client';
 import { paths } from '@/app/routes';
 import { loginAfterRejection, noteRejectedToken } from '@/auth/rejectedToken';
+import { takeUnsavedChange } from '@/auth/unsavedChange';
 import { userManager } from '@/auth/userManager';
 import { CommandPaletteHost } from '@/components/shell/CommandPaletteHost';
 import { NavigationProgress } from '@/components/shell/NavigationProgress';
@@ -10,6 +11,7 @@ import { ShortcutsDialog } from '@/components/shell/ShortcutsDialog';
 import { ThemeController } from '@/components/shell/ThemeController';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialog';
 import { Toaster } from '@/components/ui/Toaster';
+import { notify } from '@/components/ui/toast';
 
 const SITE = 'Розклад ВТФК';
 
@@ -61,6 +63,24 @@ export function UnauthorizedRedirect() {
   return null;
 }
 
+/**
+ * Після повторного входу (збереження відхилили з 401, сторінка пішла на вхід) пояснює, що зміну не
+ * збережено: форма повернулася порожньою, і без цього диспетчер міг би вважати правку збереженою.
+ */
+export function UnsavedChangeNotice() {
+  const location = useLocation();
+  useEffect(() => {
+    if (!isProtected(location.pathname)) return;
+    if (takeUnsavedChange()) {
+      notify.error('Останню зміну не збережено', undefined, {
+        description: 'Сесія входу завершилася до збереження. Ви знову увійшли — повторіть дію.',
+        duration: 15_000,
+      });
+    }
+  }, [location.pathname]);
+  return null;
+}
+
 function isProtected(path: string): boolean {
   return path.startsWith('/admin') || path.startsWith('/me');
 }
@@ -72,6 +92,7 @@ export function RootLayout() {
       <ThemeController />
       <DocumentTitle />
       <UnauthorizedRedirect />
+      <UnsavedChangeNotice />
       <NavigationProgress />
       <Outlet />
       <CommandPaletteHost />
