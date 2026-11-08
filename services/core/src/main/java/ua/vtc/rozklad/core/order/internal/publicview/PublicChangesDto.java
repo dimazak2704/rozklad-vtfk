@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.catalog.GroupRef;
 
 /**
  * {@code GET /api/public/changes?date=}: the published changes of a date grouped by group. Only
@@ -23,7 +22,14 @@ public record PublicChangesDto(
     public record PublishedOrder(UUID id, Integer number, Instant publishedAt) {
     }
 
-    public record GroupChanges(GroupRef group, List<ChangeView> items) {
+    public record GroupChanges(ChangeGroup group, List<ChangeView> items) {
+    }
+
+    /**
+     * {@code GroupRef} shape; {@code id} is {@code null} when a row of an imported paper order names
+     * a group that is not in the catalog (the printed code is kept).
+     */
+    public record ChangeGroup(UUID id, String code, int course) {
     }
 
     /** {@code ChangeView} of CONTRACTS.md §1. */

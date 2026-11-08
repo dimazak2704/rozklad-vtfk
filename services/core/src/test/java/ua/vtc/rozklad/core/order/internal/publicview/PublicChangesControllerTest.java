@@ -18,7 +18,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
 
 @WebMvcTest(PublicChangesController.class)
@@ -39,7 +38,7 @@ class PublicChangesControllerTest {
         LocalDate date = LocalDate.of(2026, 10, 19);
         given(changes.of(date)).willReturn(new PublicChangesDto(date, Parity.DENOMINATOR, "Понеділок",
                 new PublicChangesDto.PublishedOrder(UUID.randomUUID(), 35, Instant.parse("2026-10-18T14:00:00Z")),
-                List.of(new PublicChangesDto.GroupChanges(new GroupRef(UUID.randomUUID(), "1ТК1", 1),
+                List.of(new PublicChangesDto.GroupChanges(new PublicChangesDto.ChangeGroup(UUID.randomUUID(), "1ТК1", 1),
                         List.of(new PublicChangesDto.ChangeView("1", OrderRowType.CANCELLATION,
                                 new PublicChangesDto.Side("Ін. мова", "Крисак Л. (п.)"), "Відп.",
                                 new PublicChangesDto.Side("Пари не буде", null), null, "1 підгрупа"))))));

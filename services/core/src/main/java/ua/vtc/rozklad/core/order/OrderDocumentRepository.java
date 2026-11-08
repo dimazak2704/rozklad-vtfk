@@ -20,6 +20,8 @@ public interface OrderDocumentRepository extends JpaRepository<OrderDocument, UU
 
     Optional<OrderDocument> findBySemesterIdAndDateAndKind(UUID semesterId, LocalDate date, OrderKind kind);
 
+    Optional<OrderDocument> findBySemesterIdAndNumber(UUID semesterId, int number);
+
     Optional<OrderDocument> findFirstBySemesterIdAndDateAndKindAndStatus(UUID semesterId, LocalDate date,
                                                                           OrderKind kind, OrderStatus status);
 

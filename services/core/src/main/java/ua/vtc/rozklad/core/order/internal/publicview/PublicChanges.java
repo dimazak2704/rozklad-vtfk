@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.order.OrderDocument;
@@ -87,14 +86,14 @@ class PublicChanges {
                 .toList();
     }
 
-    private GroupRef groupRef(String code, Map<String, StudentGroup> known) {
+    private PublicChangesDto.ChangeGroup groupRef(String code, Map<String, StudentGroup> known) {
         StudentGroup group = known.get(code);
         if (group == null) {
             group = groups.findByCode(code).orElse(null);
         }
         // рядок історичного розпорядження може посилатися на групу, якої вже немає в каталозі
-        return group != null ? new GroupRef(group.getId(), group.getCode(), group.getCourse())
-                : new GroupRef(null, code, Character.isDigit(code.charAt(0)) ? code.charAt(0) - '0' : 0);
+        return group != null ? new PublicChangesDto.ChangeGroup(group.getId(), group.getCode(), group.getCourse())
+                : new PublicChangesDto.ChangeGroup(null, code, Character.isDigit(code.charAt(0)) ? code.charAt(0) - '0' : 0);
     }
 
     private static PublicChangesDto.ChangeView view(OrderItem item, Change change) {
