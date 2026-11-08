@@ -73,8 +73,11 @@ class AdminSettingsControllerTest {
                                  "showTeacherFullNames":false}"""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("confirmTimeoutMinutes"))
+                .andExpect(jsonPath("$.errors[0].message").value("Від 5 до 1440 хвилин"))
                 .andExpect(jsonPath("$.errors[1].field").value("hoursPerPair"))
-                .andExpect(jsonPath("$.errors[2].field").value("signatoryPosition"));
+                .andExpect(jsonPath("$.errors[1].message").value("Від 1 до 4 годин"))
+                .andExpect(jsonPath("$.errors[2].field").value("signatoryPosition"))
+                .andExpect(jsonPath("$.errors[2].message").value("Вкажіть посаду підписанта"));
     }
 
     @Test
