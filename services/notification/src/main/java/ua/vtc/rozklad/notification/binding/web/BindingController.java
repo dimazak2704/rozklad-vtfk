@@ -23,7 +23,9 @@ import ua.vtc.rozklad.notification.binding.BindingCodes.IssuedCode;
 import ua.vtc.rozklad.notification.binding.BindingType;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
+import ua.vtc.rozklad.notification.binding.MyTelegramBinding;
 import ua.vtc.rozklad.notification.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 
 /** Chat bindings and one-time binding codes (CONTRACTS §6). */
@@ -34,16 +36,29 @@ public class BindingController {
 
     private final ChatBindings bindings;
     private final BindingCodeRequests codeRequests;
+    private final MyTelegramBinding myBinding;
+    private final TelegramProperties telegram;
 
-    public BindingController(ChatBindings bindings, BindingCodeRequests codeRequests) {
+    public BindingController(ChatBindings bindings, BindingCodeRequests codeRequests, MyTelegramBinding myBinding,
+                             TelegramProperties telegram) {
         this.bindings = bindings;
         this.codeRequests = codeRequests;
+        this.myBinding = myBinding;
+        this.telegram = telegram;
     }
 
     @GetMapping
     @Operation(summary = "Прив’язані чати (id чату замасковано)")
     public List<BindingDto> list() {
         return bindings.list().stream().map(BindingDto::of).toList();
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Чи прив’язано мій Telegram (викладач; 422 teacher-not-linked без викладача)")
+    public MyBindingDto mine(@AuthenticationPrincipal Jwt jwt) {
+        MyTelegramBinding.Status status = myBinding.of(jwt.getTokenValue());
+        return new MyBindingDto(status.teacherId(), status.teacherName(), status.binding().isPresent(),
+                status.binding().map(BindingDto::of).orElse(null), telegram.botUsername(), telegram.botLink());
     }
 
     @DeleteMapping("/{id}")
@@ -77,6 +92,11 @@ public class BindingController {
                     binding.getTitle(), binding.getGroupId(), binding.getGroupCode(), binding.getTeacherId(),
                     binding.isDigestEnabled(), binding.getCreatedAt());
         }
+    }
+
+    /** Own Telegram of the signed-in teacher; {@code binding} is {@code null} until the bot is linked. */
+    public record MyBindingDto(UUID teacherId, String teacherName, boolean bound, BindingDto binding,
+                               String botUsername, String botLink) {
     }
 
     /**

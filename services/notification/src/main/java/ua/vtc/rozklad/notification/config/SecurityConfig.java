@@ -55,6 +55,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/documents/orders/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notify/telegram/webhook").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notify/bindings/codes").hasAnyRole(ADMIN, TEACHER)
+                        .requestMatchers(HttpMethod.GET, "/api/notify/bindings/me").hasAnyRole(ADMIN, TEACHER)
                         .requestMatchers("/api/notify/**").hasRole(ADMIN)
                         .requestMatchers("/actuator/**").hasRole(ADMIN)
                         .anyRequest().denyAll())

@@ -77,6 +77,31 @@ class NotifyApiIT extends IntegrationTest {
     }
 
     @Test
+    void teacherSeesWhetherHisOwnTelegramIsBound() throws Exception {
+        mockMvc.perform(get("/api/notify/bindings/me").with(teacher("teacher-token")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherId").value(CoreFixtures.TEACHER_NEPYIVODA.toString()))
+                .andExpect(jsonPath("$.teacherName").value("Непийвода М.В."))
+                .andExpect(jsonPath("$.bound").value(false))
+                .andExpect(jsonPath("$.binding").value(nullValue()))
+                .andExpect(jsonPath("$.botLink").value("https://t.me/scheduler_vtfk_bot"));
+
+        teacherChat(4242L, CoreFixtures.TEACHER_NEPYIVODA, "Непийвода М.В.");
+        teacherChat(4343L, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        mockMvc.perform(get("/api/notify/bindings/me").with(teacher("teacher-token")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bound").value(true))
+                .andExpect(jsonPath("$.binding.type").value("TEACHER"))
+                .andExpect(jsonPath("$.binding.teacherId").value(CoreFixtures.TEACHER_NEPYIVODA.toString()))
+                .andExpect(jsonPath("$.binding.chatId").value("•••4242"));
+
+        mockMvc.perform(get("/api/notify/bindings/me").with(teacher("unlinked-token")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("teacher-not-linked"));
+        mockMvc.perform(get("/api/notify/bindings/me")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void coreOutageIsAnHonest503() throws Exception {
         core.setUnavailable(true);
         createCode(admin(), "{\"type\":\"GROUP_CHAT\",\"groupId\":\"" + CoreFixtures.GROUP_4KI1 + "\"}")
