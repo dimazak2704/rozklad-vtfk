@@ -115,7 +115,7 @@ public class PublicCatalogService {
                 .map(room -> {
                     Building building = buildingsById.get(room.getBuildingId());
                     return new PublicRoomDto(room.getId(), room.getName(), room.getType(), room.getCapacity(),
-                            building == null ? null : building.getName());
+                            building == null ? null : building.getName(), room.getMaxParallel());
                 })
                 .toList();
     }

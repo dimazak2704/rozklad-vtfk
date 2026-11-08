@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.catalog.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -55,8 +56,17 @@ class PublicCatalogSearchTest {
                 krentsin,
                 new Teacher("Гарболінська", "Гарболінська О.", "Гарболінська")));
         given(aliases.findAll()).willReturn(List.of());
+        Room gym = new Room("с.з.", RoomType.GYM);
+        gym.setMaxParallel(3);
         given(rooms.findAll()).willReturn(List.of(new Room("6", RoomType.COMPUTER_LAB),
-                new Room("16", RoomType.CLASSROOM), new Room("с.з.", RoomType.GYM)));
+                new Room("16", RoomType.CLASSROOM), gym));
+    }
+
+    @Test
+    void publicRoomsTellHowManyGroupsTheyHostAtOnce() {
+        assertThat(service.rooms()).extracting(PublicCatalogDtos.PublicRoomDto::name,
+                        PublicCatalogDtos.PublicRoomDto::maxParallel)
+                .containsExactly(tuple("6", 1), tuple("16", 1), tuple("с.з.", 3));
     }
 
     @Test

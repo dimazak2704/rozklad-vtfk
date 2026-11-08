@@ -1,10 +1,22 @@
 /**
  * Чиста логіка сторінок розкладу: підгрупи, перелік змін тижня, текст «Поділитися», зайнятість аудиторії.
  */
-import type { BellSlotDto, DayDto, IsoDate, LessonView, ScheduleDto, SemesterRef } from '@/api/types';
+import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, ScheduleDto, SemesterRef } from '@/api/types';
 import { compareIsoDates, diffDays, formatWeekdayDate, startOfWeek } from '@/lib/date';
-import { PARITY_LABEL, REASON_CODE_HINT } from '@/lib/labels';
+import { capitalize, PARITY_LABEL, REASON_CODE_HINT, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { isChangedLesson, lessonCounterpart, roomLabel, type Perspective } from '@/lib/schedule';
+
+/** «Компʼютерний клас · 30 місць · корпус 2», «Спортзал · до 3 груп одночасно»; невідоме не показуємо. */
+export function roomDetails(room: PublicRoomDto): string {
+  return [
+    capitalize(ROOM_TYPE_LABEL[room.type]),
+    room.capacity ? `${room.capacity} місць` : null,
+    room.maxParallel > 1 ? `до ${room.maxParallel} груп одночасно` : null,
+    room.building ? `корпус: ${room.building}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 /** Номери підгруп, що трапляються в розкладі (для перемикача «Уся група · 1 п/г · 2 п/г»). */
 export function subgroupsIn(schedule: ScheduleDto | undefined): number[] {

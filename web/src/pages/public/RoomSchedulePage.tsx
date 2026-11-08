@@ -1,28 +1,16 @@
 import { useParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { useBellProfiles, usePublicRooms, usePublicSchedule } from '@/api/public';
-import type { PublicRoomDto } from '@/api/types';
 import { paths } from '@/app/routes';
 import { RoomOccupancy } from '@/components/public/schedule/RoomOccupancy';
 import { ScheduleHeaderSkeleton } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
+import { roomDetails } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
 import { ErrorState } from '@/components/ui';
-import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
-
-/** «Компʼютерний клас · 30 місць · корпус 2»; невідомі місткість і корпус не показуємо. */
-function roomDetails(room: PublicRoomDto): string {
-  return [
-    capitalize(ROOM_TYPE_LABEL[room.type]),
-    room.capacity ? `${room.capacity} місць` : null,
-    room.building ? `корпус: ${room.building}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
 
 /** Розклад аудиторії /r/:id і її зайнятість за тиждень. */
 export default function RoomSchedulePage() {

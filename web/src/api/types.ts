@@ -226,6 +226,8 @@ export interface PublicRoomDto {
   type: RoomType;
   capacity: Nullable<number>;
   building: Nullable<string>;
+  /** Скільки груп займаються в аудиторії одночасно (спортзал «с.з.» приймає кілька). */
+  maxParallel: number;
 }
 
 export interface BellSlotDto {

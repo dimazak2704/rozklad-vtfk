@@ -342,4 +342,5 @@ export const toPublicRoom = (room: RoomDto): PublicRoomDto => ({
   type: room.type,
   capacity: room.capacity,
   building: room.building?.label ?? null,
+  maxParallel: room.maxParallel,
 });

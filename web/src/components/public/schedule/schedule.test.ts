@@ -10,6 +10,7 @@ import {
   dayShareText,
   filterBySubgroup,
   reasonHint,
+  roomDetails,
   roomOccupancy,
   semesterWeekOf,
   subgroupsIn,
@@ -187,5 +188,16 @@ describe('колонки дзвінків', () => {
     expect(columns.map((c) => c.short)).toEqual(['Пн–Чт', 'Пт']);
     expect(breakAfter(columns[1]?.slots ?? [], 1)).toBe(20);
     expect(breakAfter(columns[1]?.slots ?? [], 2)).toBeNull();
+  });
+});
+
+describe('roomDetails', () => {
+  it('для спортзалу каже, скільки груп приймає одночасно; звичайну аудиторію не обтяжує', () => {
+    expect(roomDetails({ id: 'g', name: 'с.з.', type: 'GYM', capacity: null, building: null, maxParallel: 3 })).toBe(
+      'Спортзал · до 3 груп одночасно',
+    );
+    expect(roomDetails({ id: 'r', name: '6', type: 'COMPUTER_LAB', capacity: 30, building: '2', maxParallel: 1 })).toBe(
+      'Компʼютерний клас · 30 місць · корпус: 2',
+    );
   });
 });

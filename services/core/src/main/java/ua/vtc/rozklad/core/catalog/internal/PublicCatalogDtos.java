@@ -25,7 +25,9 @@ public final class PublicCatalogDtos {
                                    String fullName) {
     }
 
-    public record PublicRoomDto(UUID id, String name, RoomType type, Integer capacity, String building) {
+    /** {@code maxParallel}: how many groups the room hosts at once (the sports hall «с.з.» takes several). */
+    public record PublicRoomDto(UUID id, String name, RoomType type, Integer capacity, String building,
+                                int maxParallel) {
     }
 
     /** {@code url} is the SPA route of the schedule: {@code /g/{code}}, {@code /t/{id}}, {@code /r/{id}}. */
