@@ -129,7 +129,7 @@ public class ImportJobService {
         ImportJob job = get(id);
         if (!job.acceptsMappings()) {
             throw ProblemException.conflict("Зіставлення можна змінювати, лише коли завдання очікує перевірки "
-                    + "(NEEDS_REVIEW або READY); зараз — " + job.status() + ".");
+                    + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
         }
         if (changes.size() > MAX_MAPPINGS) {
             throw InvalidRequestException.field("mappings", "Не більше " + MAX_MAPPINGS + " зіставлень за раз.");
@@ -188,7 +188,7 @@ public class ImportJobService {
         }
         if (!job.acceptsMappings()) {
             throw ProblemException.conflict("Чернетку можна змінювати, лише коли завдання очікує перевірки "
-                    + "(NEEDS_REVIEW або READY); зараз — " + job.status() + ".");
+                    + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
         }
         if (job.version() != expectedVersion) {
             throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");

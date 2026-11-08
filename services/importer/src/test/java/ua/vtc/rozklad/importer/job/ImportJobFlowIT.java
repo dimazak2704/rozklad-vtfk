@@ -92,7 +92,8 @@ class ImportJobFlowIT {
     @BeforeEach
     void setUp() {
         reset(catalog, core);
-        aiUsage.deleteAll();
+        // записи обліку ШІ лише вставляються (Persistable.isNew), тож deleteAll() їх не видаляв
+        aiUsage.deleteAllInBatch();
         ((FakeAiAdapter) aiPort).reset();
         when(catalog.snapshot()).thenReturn(TestCatalogs.college());
     }
@@ -294,6 +295,62 @@ class ImportJobFlowIT {
         assertThat(changes.getValue().date()).isEqualTo(LocalDate.of(2026, 10, 19));
         assertThat(changes.getValue().items()).hasSize(3);
         assertThat(changes.getValue().replace()).isTrue();
+    }
+
+    /** A header-less reading cannot become READY, and a core rejection at apply goes back to review. */
+    @Test
+    void orderHeaderIsRequiredAndACoreRejectionReturnsTheJobToReview() throws Exception {
+        ((FakeAiAdapter) aiPort).reply(AiPurpose.ORDER_DOCUMENT, """
+                {"number":null,"kind":"ORDER","parentNumber":null,"date":null,"weekdayLabel":null,"parityLabel":null,
+                 "rows":[{"section":"CHANGES","groupCode":"4КІ1","pairLabel":"2","rowType":"REPLACEMENT",
+                   "fromDiscipline":"СТП","fromTeacher":"Кренцін","reasonText":"Зв.зам.","toDiscipline":"НДКС",
+                   "toTeacher":"Непийвода","roomText":"6"}],
+                 "notes":[],"signatoryPosition":null,"signatoryName":null,"warnings":[]}
+                """, 2000, 500);
+        UUID id = UUID.fromString(upload("orders/order-035-2026-10-19.jpg", "ORDER_DOCUMENT", null, null)
+                .get("id").asString());
+        String rows = """
+                "rows":[{"section":"CHANGES","groupCode":"4КІ1","pairLabel":"2","rowType":"REPLACEMENT",
+                  "fromDiscipline":"СТП","fromTeacher":"Кренцін","reasonText":"Зв.зам.","toDiscipline":"НДКС",
+                  "toTeacher":"Непийвода","roomText":"6"}]""";
+
+        mockMvc.perform(put("/api/import/jobs/{id}/draft", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"number\":null,\"date\":\"1999-01-01\",%s}"
+                                .formatted(job(id).get("version").asLong(), rows)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NEEDS_REVIEW"))
+                .andExpect(jsonPath("$.canApply").value(false))
+                .andExpect(jsonPath("$.report[?(@.severity == 'ERROR')].message").value(org.hamcrest.Matchers
+                        .hasItems("Вкажіть номер розпорядження: його не розпізнано.",
+                                "Дата має бути в межах 2000–2100 років.")));
+
+        // дата з одруком: core відхиляє номер, завдання повертається на перевірку, а не в FAILED
+        mockMvc.perform(put("/api/import/jobs/{id}/draft", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"number\":35,\"date\":\"2026-10-20\",%s}"
+                                .formatted(job(id).get("version").asLong(), rows)))
+                .andExpect(jsonPath("$.status").value("READY"));
+        when(core.importChanges(any(), anyString())).thenThrow(new CoreImportException(409,
+                "Core відхилив імпорт (/api/admin/import/changes, HTTP 409): Розпорядження №35 уже є в семестрі.", null));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin())).andExpect(status().isAccepted());
+        JsonNode rejected = job(id);
+        assertThat(rejected.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(rejected.get("error").asString()).contains("№35 уже є в семестрі");
+
+        reset(core);
+        when(core.importChanges(any(), anyString())).thenReturn(jsonMapper.readTree("{\"items\":1}"));
+        mockMvc.perform(put("/api/import/jobs/{id}/draft", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"number\":35,\"date\":\"2026-10-19\",%s}"
+                                .formatted(rejected.get("version").asLong(), rows)))
+                .andExpect(jsonPath("$.status").value("READY"));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin())).andExpect(status().isAccepted());
+        assertThat(job(id).get("status").asString()).isEqualTo("APPLIED");
+        ArgumentCaptor<CoreImportPayloads.ChangesRequest> changes = ArgumentCaptor.forClass(CoreImportPayloads.ChangesRequest.class);
+        verify(core).importChanges(changes.capture(), anyString());
+        assertThat(changes.getValue().date()).isEqualTo(LocalDate.of(2026, 10, 19));
+        assertThat(((FakeAiAdapter) aiPort).requests()).as("one paid reading").hasSize(1);
     }
 
     @Test

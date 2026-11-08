@@ -1,5 +1,7 @@
 package ua.vtc.rozklad.importer.order;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +46,7 @@ import ua.vtc.rozklad.importer.web.ProblemException;
 public class OrderImportHandler implements ImportHandler {
 
     static final String STEP_CHANGES = "changes";
+    static final String HEADER = "заголовок";
     static final String REVIEW_REQUIRED = "Рядки розпорядження прочитав ШІ з фото/скану: звірте кожен рядок з оригіналом, "
             + "виправте помилки й збережіть рядки — лише після цього розпорядження можна застосувати.";
     private static final List<String> NOT_A_DISCIPLINE = List.of("додатково", "пари не буде", "за розкладом");
@@ -52,13 +55,15 @@ public class OrderImportHandler implements ImportHandler {
     private final AiExtractionService ai;
     private final CoreImportClient core;
     private final JsonMapper jsonMapper;
+    private final Clock clock;
 
     public OrderImportHandler(OrderDocxParser docxParser, AiExtractionService ai, CoreImportClient core,
-                              JsonMapper jsonMapper) {
+                              JsonMapper jsonMapper, Clock clock) {
         this.docxParser = docxParser;
         this.ai = ai;
         this.core = core;
         this.jsonMapper = jsonMapper;
+        this.clock = clock;
     }
 
     @Override
@@ -100,7 +105,30 @@ public class OrderImportHandler implements ImportHandler {
         if (draft.rows().isEmpty()) {
             issues.warn(RowType.ORDER, null, null, "У розпорядженні не знайдено жодного рядка змін.");
         }
+        checkHeader(draft, issues);
         return new ParseOutcome(draft, issues.rows());
+    }
+
+    /**
+     * The header core needs to store the order of record (CONTRACTS §2 import/changes): a number, a
+     * date in 2000–2100 that has already come, and the parent number of an amendment. Anything
+     * missing is a blocking error, so the job waits for review instead of failing at apply.
+     */
+    void checkHeader(OrderDraft draft, Issues issues) {
+        if (draft.number() == null) {
+            issues.error(RowType.ORDER, null, HEADER, "Вкажіть номер розпорядження: його не розпізнано.");
+        }
+        if (draft.date() == null) {
+            issues.error(RowType.ORDER, null, HEADER, "Вкажіть дату розпорядження: її не розпізнано.");
+        } else if (draft.date().getYear() < 2000 || draft.date().getYear() > 2100) {
+            issues.error(RowType.ORDER, draft.date().toString(), HEADER, "Дата має бути в межах 2000–2100 років.");
+        } else if (draft.date().isAfter(LocalDate.now(clock))) {
+            issues.error(RowType.ORDER, draft.date().toString(), HEADER, "Дата розпорядження ще не настала: "
+                    + "імпортують лише видані розпорядження. Перевірте дату.");
+        }
+        if (draft.kind() == OrderKind.AMENDMENT && draft.parentNumber() == null) {
+            issues.error(RowType.ORDER, null, HEADER, "Вкажіть номер розпорядження, яке доповнюють.");
+        }
     }
 
     /** Validates the model's answer: unknown enum values and dates become warnings, codes are canonical. */
@@ -247,6 +275,7 @@ public class OrderImportHandler implements ImportHandler {
                 edit.notes() == null ? List.of()
                         : edit.notes().stream().map(TextNormalizer::clean).filter(note -> !note.isEmpty()).toList(),
                 clean(edit.signatoryPosition()), clean(edit.signatoryName()), before.source(), true);
+        checkHeader(revised, issues);
         return new ParseOutcome(revised, issues.rows());
     }
 

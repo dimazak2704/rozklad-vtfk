@@ -194,7 +194,15 @@ public class ImportJobProcessor {
                     job.semesterId(), normalized.result(), snapshot, steps));
             update(id, fresh -> fresh.applied(result, clock.instant()));
             log.info("Import job {} ({}) applied", id, job.kind());
-        } catch (ApplyException | CoreImportException | CatalogUnavailableException e) {
+        } catch (CoreImportException e) {
+            if (e.fixableByReview()) {
+                log.info("Import job {} was rejected by core and returns to review: {}", id, e.getMessage());
+                update(id, fresh -> fresh.rejectedByCore(e.getMessage(), clock.instant()));
+            } else {
+                log.info("Import job {} could not be applied: {}", id, e.getMessage());
+                update(id, fresh -> fresh.applyFailed(e.getMessage(), clock.instant()));
+            }
+        } catch (ApplyException | CatalogUnavailableException e) {
             log.info("Import job {} could not be applied: {}", id, e.getMessage());
             update(id, fresh -> fresh.applyFailed(e.getMessage(), clock.instant()));
         } catch (RuntimeException e) {

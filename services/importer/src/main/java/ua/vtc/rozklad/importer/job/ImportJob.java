@@ -226,6 +226,18 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
+    /**
+     * Core rejected the content (e.g. the number is taken or the date is wrong): back to review with
+     * core's answer as the error, so the admin corrects the draft or the mappings instead of paying
+     * for another AI reading.
+     */
+    public void rejectedByCore(String message, Instant now) {
+        require(status == ImportJobStatus.APPLYING, "return to review");
+        status = ImportJobStatus.NEEDS_REVIEW;
+        error = message;
+        updatedAt = now;
+    }
+
     /** The catalog changed after review: back to review with fresh matching rows. */
     public void needsReviewAgain(List<ReportRow> entityRows, String message, Instant now) {
         require(status == ImportJobStatus.APPLYING, "return to review");
@@ -248,8 +260,10 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
+    /** Waiting for review, or failed while applying: the parsed draft is intact and can be corrected. */
     public boolean acceptsMappings() {
-        return status == ImportJobStatus.NEEDS_REVIEW || status == ImportJobStatus.READY;
+        return status == ImportJobStatus.NEEDS_REVIEW || status == ImportJobStatus.READY
+                || status == ImportJobStatus.FAILED && draft != null && parsedAt != null;
     }
 
     /** READY, or FAILED while applying (the draft is intact and nothing blocks). */

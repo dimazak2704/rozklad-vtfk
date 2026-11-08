@@ -13,4 +13,13 @@ public class CoreImportException extends RuntimeException {
     public int status() {
         return status;
     }
+
+    /**
+     * Core understood the request and rejected its content (a taken number, a date outside the
+     * semester, an invalid field): the admin can correct the draft or the mappings and apply again.
+     * Outages (5xx, no answer) and auth problems are not fixed by a review.
+     */
+    public boolean fixableByReview() {
+        return status == 400 || status == 409 || status == 422;
+    }
 }
