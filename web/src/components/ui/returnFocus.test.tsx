@@ -58,7 +58,6 @@ describe('повернення фокуса після закриття вікн
     const opener = screen.getByRole('button', { name: 'Додати викладача' });
     await user.click(opener);
     expect(await screen.findByRole('dialog', { name: 'Новий викладач' })).toBeInTheDocument();
-    // перший Esc на кнопці «Закрити» ховає її підказку, тож працюємо в полі форми
     await user.click(screen.getByRole('textbox', { name: 'Прізвище' }));
 
     await user.keyboard('{Escape}');

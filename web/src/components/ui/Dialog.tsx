@@ -69,7 +69,15 @@ export function DialogContent({
             </div>
             {!hideClose ? (
               <RadixDialog.Close asChild>
-                <IconButton label="Закрити" icon={<X aria-hidden="true" className="size-4" />} size="sm" className="-me-1.5 -mt-1" />
+                {/* Без підказки: вікно ставить сюди фокус при відкритті, а відкрита підказка забирала
+                    перший Esc собі, і вікно закривалося лише з другого. Назва лишається в aria-label. */}
+                <IconButton
+                  label="Закрити"
+                  icon={<X aria-hidden="true" className="size-4" />}
+                  size="sm"
+                  hideTooltip
+                  className="-me-1.5 -mt-1"
+                />
               </RadixDialog.Close>
             ) : null}
           </div>
