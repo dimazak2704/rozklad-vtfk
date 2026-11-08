@@ -107,7 +107,7 @@ public class TimetableImportHandler implements ImportHandler {
         }
         CatalogSnapshot catalog = input.catalog();
         if (!catalog.semesters().isEmpty() && !catalog.hasSemester(semesterId)) {
-            throw new ApplyException("SEMESTER_NOT_FOUND", "Обраного семестру немає в core.");
+            throw new ApplyException("SEMESTER_NOT_FOUND", "Обраного семестру немає на сервері розкладу — оберіть інший семестр.");
         }
         TimetableDraft draft = jsonMapper.treeToValue(input.draft(), TimetableDraft.class);
         CatalogKeys keys = new CatalogKeys(input.normalization(), catalog);

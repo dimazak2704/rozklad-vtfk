@@ -72,7 +72,10 @@ public final class FileTypeSniffer {
                 excel |= name.equals("xl/workbook.xml");
             }
         } catch (IOException | IllegalArgumentException e) {
-            return Optional.empty();
+            // обрізаний пакет: тип за тим, що вже прочитано, — розбір потім скаже «файл пошкоджено»
+            if (!contentTypes || word == excel) {
+                return Optional.empty();
+            }
         }
         if (!contentTypes) {
             return Optional.empty();

@@ -62,8 +62,9 @@ class CoreImportClientTest {
         assertThatThrownBy(() -> client.importCatalog(new CoreImportPayloads.CatalogRequest(List.of(), List.of(),
                 List.of(), List.of(), List.of(), List.of(), List.of()), "import-job:1:catalog"))
                 .isInstanceOf(CoreImportException.class)
-                .hasMessage("Core відхилив імпорт (/api/admin/import/catalog, HTTP 400): Перевірте виділені поля. "
-                        + "(aliases[0].target — не може бути порожнім)");
+                // r3-ui-real-32: без шляху, коду HTTP і назв полів JSON
+                .hasMessage("Сервер розкладу не прийняв довідники (групи, викладачів, дисципліни, аудиторії): "
+                        + "Перевірте виділені поля. (синонім 1: не може бути порожнім)");
     }
 
     @Test
@@ -74,6 +75,6 @@ class CoreImportClientTest {
         assertThatThrownBy(() -> client.importTimetable(new CoreImportPayloads.TimetableRequest(null, "v", List.of()),
                 "import-job:1:timetable"))
                 .isInstanceOf(CoreImportException.class)
-                .hasMessage("Core відхилив імпорт (/api/admin/import/timetable, HTTP 502).");
+                .hasMessage("Сервер розкладу не зміг зберегти розклад через внутрішню помилку. Спробуйте пізніше.");
     }
 }

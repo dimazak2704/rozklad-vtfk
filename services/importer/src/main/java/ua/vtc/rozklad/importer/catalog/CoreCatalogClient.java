@@ -27,10 +27,10 @@ public class CoreCatalogClient implements CatalogPort {
         } catch (RuntimeException e) {
             // RestClientException, а також помилка отримання сервісного токена (OAuth2AuthorizationException)
             log.warn("Catalog snapshot from core failed: {}", e.toString());
-            throw new CatalogUnavailableException("Не вдалося отримати каталог з core.", e);
+            throw new CatalogUnavailableException("Не вдалося отримати каталог із сервера розкладу.", e);
         }
         if (snapshot == null) {
-            throw new CatalogUnavailableException("Core повернув порожню відповідь замість каталогу.", null);
+            throw new CatalogUnavailableException("Сервер розкладу повернув порожню відповідь замість каталогу.", null);
         }
         return snapshot;
     }

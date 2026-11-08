@@ -213,6 +213,39 @@ class TimetableWorkbookParserTest {
                 .isInstanceOf(ImportParseException.class);
     }
 
+    /** r4-ai-imports-57: a cut sheet XML is a damaged file (plain message), not an internal error. */
+    @Test
+    void damagedSheetIsADamagedFile() throws Exception {
+        byte[] original = SeedFiles.read("schedule-2025-26.xlsx");
+        java.io.ByteArrayOutputStream damaged = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(original));
+             java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(damaged)) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                byte[] data = in.readAllBytes();
+                if (entry.getName().startsWith("xl/worksheets/sheet")) {
+                    data = java.util.Arrays.copyOf(data, data.length / 2);
+                }
+                out.putNextEntry(new java.util.zip.ZipEntry(entry.getName()));
+                out.write(data);
+                out.closeEntry();
+            }
+        }
+        assertThat(ua.vtc.rozklad.importer.job.FileTypeSniffer.detect(damaged.toByteArray()))
+                .contains(ua.vtc.rozklad.importer.job.FileType.XLSX);
+
+        assertThatThrownBy(() -> new TimetableWorkbookParser().parse(damaged.toByteArray(), null))
+                .isInstanceOf(ImportParseException.class)
+                .hasMessage(TimetableWorkbookParser.DAMAGED);
+        // обрізаний посередині zip — той самий тип і те саме «пошкоджено» під час розбору
+        byte[] truncated = java.util.Arrays.copyOf(original, original.length / 2);
+        assertThat(ua.vtc.rozklad.importer.job.FileTypeSniffer.detect(truncated))
+                .contains(ua.vtc.rozklad.importer.job.FileType.XLSX);
+        assertThatThrownBy(() -> new TimetableWorkbookParser().parse(truncated, null))
+                .isInstanceOf(ImportParseException.class)
+                .hasMessage(TimetableWorkbookParser.DAMAGED);
+    }
+
     private static Map<String, Group> groupsByCode() {
         return draft.groups().stream().collect(Collectors.toMap(Group::code, Function.identity()));
     }

@@ -184,7 +184,7 @@ public class ImportJobProcessor {
             JobNormalizer.Normalized normalized = normalizer.normalize(job.kind(), job.draft(), options, job.mappings(),
                     snapshot);
             if (handler.entitiesBlockApply() && normalized.blocking()) {
-                update(id, fresh -> fresh.needsReviewAgain(normalized.rows(), "Каталог у core змінився після перевірки — "
+                update(id, fresh -> fresh.needsReviewAgain(normalized.rows(), "Каталог на сервері розкладу змінився після перевірки — "
                         + "перегляньте зіставлення і застосуйте ще раз.", clock.instant()));
                 return;
             }

@@ -2,6 +2,9 @@ package ua.vtc.rozklad.importer.apply;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -24,6 +27,10 @@ public class CoreImportClient {
 
     private static final Logger log = LoggerFactory.getLogger(CoreImportClient.class);
     private static final int MAX_FIELD_ERRORS = 5;
+    private static final Pattern INDEXED = Pattern.compile("^([A-Za-z]+)\\[(\\d+)]");
+    private static final Map<String, String> POSITIONS = Map.of(
+            "items", "рядок", "teachers", "викладач", "groups", "група", "disciplines", "дисципліна",
+            "rooms", "аудиторія", "aliases", "синонім", "lessons", "заняття");
 
     private final RestClient coreRestClient;
 
@@ -32,22 +39,27 @@ public class CoreImportClient {
     }
 
     public JsonNode importCatalog(CoreImportPayloads.CatalogRequest request, String idempotencyKey) {
-        return post("/api/admin/import/catalog", request, idempotencyKey);
+        return post("/api/admin/import/catalog", "довідники (групи, викладачів, дисципліни, аудиторії)", request,
+                idempotencyKey);
     }
 
     public JsonNode importTimetable(CoreImportPayloads.TimetableRequest request, String idempotencyKey) {
-        return post("/api/admin/import/timetable", request, idempotencyKey);
+        return post("/api/admin/import/timetable", "розклад", request, idempotencyKey);
     }
 
     public JsonNode importLoad(CoreImportPayloads.LoadRequest request, String idempotencyKey) {
-        return post("/api/admin/import/load", request, idempotencyKey);
+        return post("/api/admin/import/load", "навантаження", request, idempotencyKey);
     }
 
     public JsonNode importChanges(CoreImportPayloads.ChangesRequest request, String idempotencyKey) {
-        return post("/api/admin/import/changes", request, idempotencyKey);
+        return post("/api/admin/import/changes", "розпорядження", request, idempotencyKey);
     }
 
-    private JsonNode post(String path, Object body, String idempotencyKey) {
+    /**
+     * The exception message is shown to the dispatcher: plain Ukrainian, without paths, HTTP codes
+     * or JSON field names; those go to the log.
+     */
+    private JsonNode post(String path, String what, Object body, String idempotencyKey) {
         try {
             JsonNode response = coreRestClient.post()
                     .uri(path)
@@ -58,17 +70,32 @@ public class CoreImportClient {
                     .body(JsonNode.class);
             return response == null ? JsonNodeFactory.instance.objectNode() : response;
         } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
             String detail = detailOf(e);
-            log.warn("Core rejected {}: HTTP {} {}", path, e.getStatusCode().value(), detail);
-            throw new CoreImportException(e.getStatusCode().value(), "Core відхилив імпорт (" + path + ", HTTP "
-                    + e.getStatusCode().value() + ")" + (detail == null ? "." : ": " + detail), e);
+            log.warn("Core rejected {}: HTTP {} {}", path, status, detail);
+            throw new CoreImportException(status, rejection(status, what, detail), e);
         } catch (RuntimeException e) {
             log.warn("Core call {} failed: {}", path, e.toString());
-            throw new CoreImportException(0, "Core недоступний: не вдалося виконати " + path + ". Спробуйте пізніше.", e);
+            throw new CoreImportException(0, "Сервер розкладу недоступний — " + what + " не передано. Спробуйте пізніше.",
+                    e);
         }
     }
 
-    /** {@code detail} of core's ProblemDetail plus its field errors, so the admin sees what was rejected. */
+    static String rejection(int status, String what, String detail) {
+        if (status == 401 || status == 403) {
+            return "Сервер розкладу відмовив імпорту в доступі — " + what + " не передано. Повідомте адміністратора "
+                    + "системи.";
+        }
+        if (status >= 500) {
+            return "Сервер розкладу не зміг зберегти " + what + " через внутрішню помилку. Спробуйте пізніше.";
+        }
+        return "Сервер розкладу не прийняв " + what + (detail == null ? "." : ": " + detail);
+    }
+
+    /**
+     * {@code detail} of core's ProblemDetail plus its field errors, so the admin sees what was
+     * rejected; a list index becomes a human position («рядок 3»), the rest of the field path is dropped.
+     */
     static String detailOf(RestClientResponseException e) {
         JsonNode problem;
         try {
@@ -92,10 +119,21 @@ public class CoreImportClient {
                     fields.add("ще " + (errors.size() - MAX_FIELD_ERRORS));
                     break;
                 }
-                fields.add(error.path("field").asString("?") + " — " + error.path("message").asString(""));
+                String position = position(error.path("field").asString(""));
+                String message = error.path("message").asString("");
+                fields.add(position == null ? message : position + ": " + message);
             }
             text.append(text.isEmpty() ? "" : " ").append('(').append(String.join("; ", fields)).append(')');
         }
         return text.isEmpty() ? null : text.toString();
+    }
+
+    /** «items[2].groupCode» → «рядок 3»; a field without a list index → {@code null}. */
+    static String position(String field) {
+        Matcher matcher = INDEXED.matcher(field);
+        if (!matcher.find()) {
+            return null;
+        }
+        return POSITIONS.getOrDefault(matcher.group(1), "запис") + " " + (Integer.parseInt(matcher.group(2)) + 1);
     }
 }

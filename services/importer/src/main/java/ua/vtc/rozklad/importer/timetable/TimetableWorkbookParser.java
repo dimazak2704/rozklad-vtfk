@@ -1,14 +1,12 @@
 package ua.vtc.rozklad.importer.timetable;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.importer.job.ExcelWorkbooks;
 import ua.vtc.rozklad.importer.job.ImportParseException;
 import ua.vtc.rozklad.importer.report.Issues;
 import ua.vtc.rozklad.importer.report.ReportRow;
@@ -23,13 +21,15 @@ import ua.vtc.rozklad.importer.text.TextNormalizer;
 public class TimetableWorkbookParser {
 
     public static final String DEFAULT_SHEET = "Розклад друк";
+    static final String DAMAGED = "Файл Excel пошкоджений або має інший формат — його не вдалося прочитати. Відкрийте "
+            + "його в Excel, збережіть ще раз як .xlsx і завантажте знову.";
 
     public record Result(TimetableDraft draft, List<ReportRow> issues) {
     }
 
     public Result parse(byte[] content, String requestedSheet) {
         Issues issues = new Issues();
-        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
+        try (Workbook workbook = ExcelWorkbooks.open(content, DAMAGED)) {
             Sheet sheet = chooseSheet(workbook, requestedSheet);
             SheetParse raw = new TimetableSheetParser(new SheetGrid(sheet), issues).parse();
             List<TimetableDraft.BellProfile> bells = new BellSheetParser(issues).parse(workbook);
@@ -38,10 +38,9 @@ public class TimetableWorkbookParser {
             }
             TimetableDraft draft = new TimetableAssembler(issues).assemble(sheet.getSheetName(), raw, bells);
             return new Result(draft, issues.rows());
-        } catch (EncryptedDocumentException e) {
-            throw new ImportParseException("Файл Excel захищено паролем — збережіть його без пароля.", e);
         } catch (IOException e) {
-            throw new ImportParseException("Не вдалося прочитати файл Excel: він пошкоджений або має інший формат.", e);
+            // закриття книги в пам'яті нічого не пише; помилку тут не очікуємо
+            throw new ImportParseException(DAMAGED, e);
         }
     }
 
