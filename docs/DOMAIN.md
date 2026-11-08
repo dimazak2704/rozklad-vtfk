@@ -116,6 +116,9 @@ Two lessons on the same weekday/date and pair conflict when parities overlap (BO
 - same group and cohorts overlap (subgroup 0 overlaps all subgroups of the group; k overlaps 0 and k);
 - same room with `max_parallel = 1` (unless same stream); rooms with `max_parallel = n` allow n lessons.
 
+An **online** lesson (template flag, or a dated lesson on a STUDY_MODE ONLINE day) keeps its room for
+reference but does not occupy it: room occupancy, capacity and room type are not checked for it, and its
+dated lesson is not room-exclusive (order №35 gives room 403 to 1ОП2 while 3ОБ studies online there).
 Hard violations (block publication, 409 with `conflicts[]`): the above, capacity < group size (whole-group
 lesson), required room type mismatch, lesson outside the group's shift window, teacher UNAVAILABLE slot.
 Soft warnings (shown, not blocking): cohort/teacher **windows** (gap inside a day for a given parity),

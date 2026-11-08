@@ -21,7 +21,7 @@ public record PlannedLesson(
         UUID streamId,
         LessonOrigin origin) {
 
-    /** New entity for the change; {@code roomExclusive} must be {@code room.maxParallel == 1}. */
+    /** New entity for the change; {@code roomExclusive}: {@code room.maxParallel == 1} and not online. */
     public Lesson toLesson(UUID changeId, boolean roomExclusive) {
         Lesson lesson = new Lesson(semesterId, date, pair, groupId, subgroup, disciplineId, origin);
         lesson.setTeacherId(teacherId);

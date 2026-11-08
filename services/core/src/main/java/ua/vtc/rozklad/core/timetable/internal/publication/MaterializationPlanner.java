@@ -68,28 +68,30 @@ public final class MaterializationPlanner {
                     covered++;
                     continue;
                 }
-                Optional<ConflictDto> clash = clash(lesson, date, keptHere, input.facts());
+                boolean online = lesson.isOnline() || groupDay.online();
+                Optional<ConflictDto> clash = clash(lesson, date, online, keptHere, input.facts());
                 if (clash.isPresent()) {
                     clashes.add(clash.get());
                     continue;
                 }
-                created.add(newLesson(input, lesson, date, groupDay.online()));
+                created.add(newLesson(input, lesson, date, online));
             }
         }
         return new Plan(created, covered, clashes, dates);
     }
 
-    private NewLesson newLesson(Input input, TemplateLesson lesson, LocalDate date, boolean onlineDay) {
+    /** An online lesson keeps its room for reference but does not occupy it (DOMAIN §5). */
+    private NewLesson newLesson(Input input, TemplateLesson lesson, LocalDate date, boolean online) {
         RoomFact room = input.facts().room(lesson.getRoomId());
         return new NewLesson(Ids.newId(), input.semesterId(), input.versionId(), lesson.getId(), date,
                 lesson.getPairNumber(), lesson.getGroupId(), lesson.getSubgroupNumber(), lesson.getDisciplineId(),
-                lesson.getTeacherId(), lesson.getRoomId(), room == null || room.maxParallel() == 1,
-                lesson.getStreamId(), lesson.getLessonKind(), lesson.isOnline() || onlineDay);
+                lesson.getTeacherId(), lesson.getRoomId(), !online && (room == null || room.maxParallel() == 1),
+                lesson.getStreamId(), lesson.getLessonKind(), online);
     }
 
     /** The teacher or the exclusive room is busy with a kept lesson (the DB would reject both lessons). */
-    private static Optional<ConflictDto> clash(TemplateLesson lesson, LocalDate date, List<KeptLesson> keptHere,
-                                               ConflictFacts facts) {
+    private static Optional<ConflictDto> clash(TemplateLesson lesson, LocalDate date, boolean online,
+                                               List<KeptLesson> keptHere, ConflictFacts facts) {
         String what = "%s %s%s не поставлено на %s, %d пара".formatted(facts.groupCode(lesson.getGroupId()),
                 facts.disciplineName(lesson.getDisciplineId()),
                 lesson.getSubgroupNumber() > 0 ? " (підгр. " + lesson.getSubgroupNumber() + ")" : "",
@@ -108,7 +110,7 @@ public final class MaterializationPlanner {
             }
         }
         RoomFact room = facts.room(lesson.getRoomId());
-        if (room != null && room.maxParallel() == 1) {
+        if (!online && room != null && room.maxParallel() == 1) {
             Optional<KeptLesson> busy = keptHere.stream()
                     .filter(KeptLesson::scheduled)
                     .filter(KeptLesson::roomExclusive)

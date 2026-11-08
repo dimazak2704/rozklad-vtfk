@@ -135,11 +135,13 @@ public class DatedSlotChecker {
 
     private void roomConflicts(PlannedLesson lesson, List<Lesson> atSlot, List<Change> openAtSlot,
                                List<PlannedLesson> accepted, Context context, List<ConflictDto> conflicts) {
-        if (lesson.roomId() == null) {
+        // онлайн-заняття не займає аудиторію і не перетинається з тими, хто в ній сидить (DOMAIN §5)
+        if (lesson.roomId() == null || lesson.online()) {
             return;
         }
         Room room = context.room(lesson.roomId());
         List<Lesson> occupants = atSlot.stream()
+                .filter(other -> !other.isOnline())
                 .filter(other -> lesson.roomId().equals(other.getRoomId()) && !sameStream(lesson, other))
                 .toList();
         // зміна, що переносить пару в цю аудиторію, займає її ще до публікації
@@ -148,6 +150,7 @@ public class DatedSlotChecker {
                         && !Objects.equals(change.getNewRoomId(), change.getOrigRoomId()))
                 .toList();
         List<PlannedLesson> planned = accepted.stream()
+                .filter(other -> !other.online())
                 .filter(other -> sameSlot(lesson, other) && lesson.roomId().equals(other.roomId()))
                 .toList();
         List<String> groups = Stream.of(
@@ -170,7 +173,7 @@ public class DatedSlotChecker {
     }
 
     private static void capacityConflict(PlannedLesson lesson, Context context, List<ConflictDto> conflicts) {
-        if (lesson.roomId() == null || lesson.subgroup() != 0) {
+        if (lesson.roomId() == null || lesson.subgroup() != 0 || lesson.online()) {
             return;
         }
         Room room = context.room(lesson.roomId());
@@ -183,7 +186,7 @@ public class DatedSlotChecker {
     }
 
     private void roomTypeConflict(PlannedLesson lesson, Context context, List<ConflictDto> conflicts) {
-        if (lesson.roomId() == null) {
+        if (lesson.roomId() == null || lesson.online()) {
             return;
         }
         Room room = context.room(lesson.roomId());

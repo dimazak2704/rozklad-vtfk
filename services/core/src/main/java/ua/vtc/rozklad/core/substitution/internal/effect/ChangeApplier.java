@@ -136,7 +136,9 @@ class ChangeApplier implements ChangePublication {
         for (Planned plan : plans) {
             for (PlannedLesson lesson : plan.effect().created()) {
                 Room room = lesson.roomId() == null ? null : rooms.get(lesson.roomId());
-                inserted.add(lesson.toLesson(plan.change().getId(), room == null || room.isExclusive()));
+                // онлайн-заняття не займає аудиторію: індекс унікальності аудиторії його не бачить
+                inserted.add(lesson.toLesson(plan.change().getId(),
+                        !lesson.online() && (room == null || room.isExclusive())));
             }
         }
         lessons.saveAll(inserted);

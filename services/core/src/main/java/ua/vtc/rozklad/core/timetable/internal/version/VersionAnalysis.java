@@ -48,10 +48,12 @@ public class VersionAnalysis {
                 .toList();
     }
 
+    /** An online lesson is checked without its room: it does not occupy it (DOMAIN §5). */
     public static SlotLesson slotLesson(TemplateLesson lesson, RoomType requiredRoomType) {
         return new SlotLesson(lesson.getId(), LessonDay.ofWeekday(lesson.getWeekday()), lesson.getPairNumber(),
                 lesson.getParity(), lesson.getGroupId(), lesson.getSubgroupNumber(), lesson.getDisciplineId(),
-                lesson.getTeacherId(), lesson.getRoomId(), lesson.getStreamId(), requiredRoomType);
+                lesson.getTeacherId(), lesson.isOnline() ? null : lesson.getRoomId(), lesson.getStreamId(),
+                requiredRoomType);
     }
 
     public ConflictReport conflicts(UUID semesterId, Collection<SlotLesson> lessons) {

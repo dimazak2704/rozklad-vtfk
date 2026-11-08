@@ -13,14 +13,14 @@ import ua.vtc.rozklad.contracts.RoomType;
 
 /**
  * SCHEDULED dated lessons as conflict-engine input, with the room type required by the load item
- * of their template lesson (one query per call).
+ * of their template lesson (one query per call). Online lessons are given without their room.
  */
 @Repository
 class DatedLessonReadRepository {
 
     private static final String SELECT = """
             SELECT l.id, l.semester_id, l.date, l.pair_number, l.group_id, l.subgroup_number, l.discipline_id,
-                   l.teacher_id, l.room_id, l.stream_id, li.required_room_type
+                   l.teacher_id, l.room_id, l.online, l.stream_id, li.required_room_type
             FROM lesson l
             LEFT JOIN template_lesson t ON t.id = l.template_lesson_id
             LEFT JOIN load_item li ON li.id = t.load_item_id
@@ -64,7 +64,8 @@ class DatedLessonReadRepository {
                 rs.getInt("subgroup_number"),
                 rs.getObject("discipline_id", UUID.class),
                 rs.getObject("teacher_id", UUID.class),
-                rs.getObject("room_id", UUID.class),
+                // онлайн-заняття не займає аудиторію (DOMAIN §5): рушій бачить його без аудиторії
+                rs.getBoolean("online") ? null : rs.getObject("room_id", UUID.class),
                 rs.getObject("stream_id", UUID.class),
                 requiredType == null ? null : RoomType.valueOf(requiredType)));
     }

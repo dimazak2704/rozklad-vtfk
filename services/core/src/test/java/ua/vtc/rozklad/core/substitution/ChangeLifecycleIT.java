@@ -271,6 +271,29 @@ class ChangeLifecycleIT {
     }
 
     @Test
+    void roomOfAGroupStudyingOnlineIsFree() {
+        // розпорядження №35: 1ОП2 отримує 403, бо 3ОБ у цей час навчається дистанційно
+        Room room403 = fixture.room("403");
+        StudentGroup online = fixture.group("3ОБ", 3);
+        Lesson remote = fixture.lesson(semester, MONDAY, 4, online, 0, fixture.discipline("ФЕА", "ФЕА"), krentsin,
+                room403);
+        jdbc.update("UPDATE lesson SET online = true, room_exclusive = false WHERE id = ?", remote.getId());
+
+        ChangeDto additional = commands.create(new CreateChangeRequest(ChangeKind.ADDITIONAL, MONDAY, 4, null,
+                group.getId(), null, null, stp.getId(), nepyivoda.getId(), room403.getId(), null, ReasonCode.OTHER,
+                null, null), "admin");
+        assertThat(additional.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+
+        jdbc.update("UPDATE lesson SET online = false, room_exclusive = true WHERE id = ?", remote.getId());
+        StudentGroup third = fixture.group("4КІ3", 4);
+        assertThatThrownBy(() -> commands.create(new CreateChangeRequest(ChangeKind.ADDITIONAL, MONDAY, 4, null,
+                third.getId(), null, null, stp.getId(), null, room403.getId(), null, ReasonCode.OTHER, null, null),
+                "admin"))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .extracting(ConflictDto::kind).contains(ConflictKind.ROOM));
+    }
+
+    @Test
     void oneOpenDecisionPerLesson() {
         commands.create(replaceTeacher(nepyivoda), "admin");
 

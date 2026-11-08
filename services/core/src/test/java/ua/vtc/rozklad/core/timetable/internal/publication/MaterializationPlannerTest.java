@@ -155,6 +155,23 @@ class MaterializationPlannerTest {
     }
 
     @Test
+    void onlineLessonKeepsItsRoomButDoesNotOccupyIt() {
+        TemplateLesson remote = lesson(1, 2, Parity.BOTH, G_4KI2);
+        remote.setRoomId(R_304);
+
+        MaterializationPlanner.Plan plan = plan(List.of(remote),
+                calendar(List.of(onlineForCourses("Дистанційно", CalendarFixtures.STARTS, LocalDate.of(2026, 10, 31),
+                        4))), List.of(kept(MONDAY_DEN, 2, G_4KI1, 0, null, R_304, true)), MONDAY_DEN, MONDAY_DEN);
+
+        assertThat(plan.clashes()).isEmpty();
+        assertThat(plan.lessons()).singleElement().satisfies(lesson -> {
+            assertThat(lesson.roomId()).isEqualTo(R_304);
+            assertThat(lesson.online()).isTrue();
+            assertThat(lesson.roomExclusive()).isFalse();
+        });
+    }
+
+    @Test
     void newLessonCopiesTheTemplate() {
         TemplateLesson template = lesson(1, 1, Parity.BOTH, G_4KI1);
         template.setTeacherId(T_KRENTSIN);
