@@ -35,6 +35,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.util.DisconnectedClientHelper;
 import ua.vtc.rozklad.core.shared.web.RequestIdFilter;
+import ua.vtc.rozklad.core.shared.web.SupportedDates;
 
 /**
  * Turns every error into an RFC 9457 ProblemDetail with Ukrainian {@code title}/{@code detail}.
@@ -95,8 +96,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
                                                         HttpStatusCode status, WebRequest request) {
         String field = ex.getPropertyName() == null ? "value" : ex.getPropertyName();
-        return validationProblem(List.of(new FieldErrorDto(field, RequestProblems.expected(ex))),
-                "Значення «%s» параметра «%s» має неправильний формат.".formatted(ex.getValue(), field));
+        String message = RequestProblems.expected(ex);
+        return validationProblem(List.of(new FieldErrorDto(field, message)), SupportedDates.MESSAGE.equals(message)
+                ? "Значення «%s» параметра «%s» поза підтримуваним діапазоном дат.".formatted(ex.getValue(), field)
+                : "Значення «%s» параметра «%s» має неправильний формат.".formatted(ex.getValue(), field));
     }
 
     @Override

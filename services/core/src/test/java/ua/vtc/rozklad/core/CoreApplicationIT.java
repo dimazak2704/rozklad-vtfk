@@ -2,12 +2,17 @@ package ua.vtc.rozklad.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Arrays;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.client.RestTestClient;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
@@ -25,6 +30,9 @@ class CoreApplicationIT {
 
     @Autowired
     private AmqpAdmin amqpAdmin;
+
+    @LocalServerPort
+    private int port;
 
     @Test
     void allMigrationsAreAppliedAndSchemaMatchesEntities() {
@@ -49,6 +57,21 @@ class CoreApplicationIT {
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectHeader().exists("X-Request-Id")
                 .expectBody().jsonPath("$.title").isEqualTo("Потрібна автентифікація");
+    }
+
+    /** Tomcat rejects an encoded slash or NUL before Spring: the answer is still a ProblemDetail, not HTML. */
+    @Test
+    void requestsRejectedByTomcatGetAProblemDetail() throws Exception {
+        HttpClient http = HttpClient.newHttpClient();
+        for (String path : new String[] {"/api/public/groups/a%2Fb", "/api/public/groups/%00"}) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                    .header("X-Request-Id", "r2-tomcat-test").build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).as(path).isEqualTo(400);
+            assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(type ->
+                    assertThat(type).startsWith("application/problem+json"));
+            assertThat(response.body()).contains("\"type\":\"urn:rozklad:problem:bad-request\"")
+                    .contains("\"requestId\":\"r2-tomcat-test\"");
+        }
     }
 
     @Test
