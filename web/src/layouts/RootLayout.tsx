@@ -30,30 +30,39 @@ function DocumentTitle() {
 /**
  * 401 на захищеній сторінці — сервер не прийняв токен: забуваємо його (інакше сторінка входу побачить
  * «увійшов» і поверне сюди ж — нескінченне коло), ведемо на вхід і повертаємо сюди ж. Кілька запитів
- * сторінки отримують 401 одночасно — реагуємо один раз.
+ * сторінки отримують 401 одночасно, а ті, що ще в дорозі, відповідають уже після переходу на вхід, —
+ * реагуємо один раз на сторінку (вхід через Keycloak однаково перезавантажує застосунок).
  */
 export function UnauthorizedRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
   const handling = useRef(false);
+  const protectedPage = isProtected(location.pathname);
+  useEffect(() => {
+    // нова захищена сторінка (не запізнілі відповіді попередньої) знову може відреагувати на 401
+    if (protectedPage) handling.current = false;
+  }, [protectedPage, location.pathname]);
   useEffect(
     () =>
       onUnauthorized(() => {
         const path = location.pathname;
-        if (!(path.startsWith('/admin') || path.startsWith('/me')) || handling.current) return;
+        if (!isProtected(path) || handling.current) return;
         handling.current = true;
         const repeated = noteRejectedToken();
         void userManager
           .removeUser()
           .catch(() => undefined)
           .finally(() => {
-            handling.current = false;
             void navigate(loginAfterRejection(paths.login(path + location.search), repeated), { replace: true });
           });
       }),
     [navigate, location.pathname, location.search],
   );
   return null;
+}
+
+function isProtected(path: string): boolean {
+  return path.startsWith('/admin') || path.startsWith('/me');
 }
 
 /** Корінь застосунку: усе, що потрібне на кожній сторінці й залежить від роутера. */

@@ -53,6 +53,19 @@ describe('UnauthorizedRedirect', () => {
     expect(mocks.removeUser).toHaveBeenCalledTimes(1);
   });
 
+  it('запізнілі 401 сторінки після переходу на вхід не рахуються другою відмовою', async () => {
+    renderAt('/admin/changes');
+    const pageHandler = mocks.handler;
+    const error = new ApiError({ status: 401, title: 'Потрібна автентифікація' });
+    act(() => pageHandler?.(error));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/login?returnTo=%2Fadmin%2Fchanges'));
+
+    act(() => pageHandler?.(error));
+
+    await waitFor(() => expect(mocks.removeUser).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('rejected=1');
+  });
+
   it('друга відмова поспіль зупиняє автоматичний вхід (rejected=1)', async () => {
     window.sessionStorage.setItem('rozklad.auth.rejectedAt', String(Date.now()));
     renderAt('/admin');
