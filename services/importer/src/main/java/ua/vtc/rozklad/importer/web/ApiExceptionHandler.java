@@ -1,7 +1,10 @@
 package ua.vtc.rozklad.importer.web;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ElementKind;
+import jakarta.validation.Path;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,12 +23,14 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -95,6 +100,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "Значення «%s» параметра «%s» має неправильний формат.".formatted(ex.getValue(), field));
     }
 
+    /** A missing multipart part ({@code file}) is a field error like a missing parameter. */
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestPart(MissingServletRequestPartException ex,
+                                                                     HttpHeaders headers, HttpStatusCode status,
+                                                                     WebRequest request) {
+        return validationProblem(List.of(new FieldErrorDto(ex.getRequestPartName(), "Додайте файл.")),
+                "Бракує частини запиту «%s».".formatted(ex.getRequestPartName()));
+    }
+
     @Override
     protected ResponseEntity<Object> handleMissingServletRequestParameter(MissingServletRequestParameterException ex,
                                                                           HttpHeaders headers,
@@ -104,10 +118,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "Обов'язковий параметр «%s» відсутній.".formatted(ex.getParameterName()));
     }
 
+    /** The security firewall rejected the request line ({@code /../}, {@code ;} parameters, …). */
+    @ExceptionHandler(RequestRejectedException.class)
+    ResponseEntity<Object> handleRejected(RequestRejectedException ex, HttpServletRequest request) {
+        log.info("Request rejected by the firewall: {}", ex.getMessage());
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Адреса запиту містить недопустимі символи або сегменти шляху.");
+        body.setType(URI.create(TYPE_PREFIX + "bad-request"));
+        body.setTitle("Некоректний запит");
+        addRequestId(body);
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex) {
         return validationProblem(ex.getConstraintViolations().stream()
-                .map(violation -> new FieldErrorDto(violation.getPropertyPath().toString(), violation.getMessage()))
+                .map(violation -> new FieldErrorDto(parameterPath(violation), violation.getMessage()))
                 .toList());
     }
 
@@ -181,6 +207,31 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "internal", "Внутрішня помилка сервера",
                 "Сталася непередбачена помилка. Спробуйте пізніше або повідомте адміністратора код запиту.",
                 request);
+    }
+
+    /**
+     * Field of a method-validation violation without the Java method name: {@code list.size} → {@code size}
+     * (the request parameter), {@code update.body.rows[0].name} → {@code body.rows[0].name}.
+     */
+    static String parameterPath(ConstraintViolation<?> violation) {
+        StringBuilder path = new StringBuilder();
+        for (Path.Node node : violation.getPropertyPath()) {
+            if (node.getKind() == ElementKind.METHOD || node.getKind() == ElementKind.CONSTRUCTOR) {
+                continue;
+            }
+            if (node.getIndex() != null) {
+                path.append('[').append(node.getIndex()).append(']');
+            } else if (node.getKey() != null) {
+                path.append('[').append(node.getKey()).append(']');
+            }
+            if (node.getName() != null && node.getKind() != ElementKind.CONTAINER_ELEMENT) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(node.getName());
+            }
+        }
+        return path.isEmpty() ? violation.getPropertyPath().toString() : path.toString();
     }
 
     @Override

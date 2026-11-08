@@ -1,7 +1,10 @@
 package ua.vtc.rozklad.scheduler.web;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ElementKind;
+import jakarta.validation.Path;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,10 +21,12 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -69,11 +74,31 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return validationProblem(errors);
     }
 
+    /** The security firewall rejected the request line ({@code /../}, {@code ;} parameters, …). */
+    @ExceptionHandler(RequestRejectedException.class)
+    ResponseEntity<Object> handleRejected(RequestRejectedException ex, HttpServletRequest request) {
+        log.info("Request rejected by the firewall: {}", ex.getMessage());
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Адреса запиту містить недопустимі символи або сегменти шляху.");
+        body.setType(URI.create(TYPE_PREFIX + "bad-request"));
+        body.setTitle("Некоректний запит");
+        addRequestId(body);
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex) {
         return validationProblem(ex.getConstraintViolations().stream()
-                .map(violation -> new FieldErrorDto(violation.getPropertyPath().toString(), violation.getMessage()))
+                .map(violation -> new FieldErrorDto(parameterPath(violation), violation.getMessage()))
                 .toList());
+    }
+
+    /** A query or path parameter that does not convert ({@code /jobs/abc}): 400 with the parameter as the field. */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+                                                        HttpStatusCode status, WebRequest request) {
+        String field = ex.getPropertyName() == null ? "value" : ex.getPropertyName();
+        return validationProblem(List.of(new FieldErrorDto(field, "Значення має неправильний формат.")));
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -126,10 +151,46 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request);
     }
 
+    /**
+     * Field of a method-validation violation without the Java method name: {@code list.size} → {@code size}
+     * (the request parameter), {@code update.body.rows[0].name} → {@code body.rows[0].name}.
+     */
+    static String parameterPath(ConstraintViolation<?> violation) {
+        StringBuilder path = new StringBuilder();
+        for (Path.Node node : violation.getPropertyPath()) {
+            if (node.getKind() == ElementKind.METHOD || node.getKind() == ElementKind.CONSTRUCTOR) {
+                continue;
+            }
+            if (node.getIndex() != null) {
+                path.append('[').append(node.getIndex()).append(']');
+            } else if (node.getKey() != null) {
+                path.append('[').append(node.getKey()).append(']');
+            }
+            if (node.getName() != null && node.getKind() != ElementKind.CONTAINER_ELEMENT) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(node.getName());
+            }
+        }
+        return path.isEmpty() ? violation.getPropertyPath().toString() : path.toString();
+    }
+
     @Override
     protected ResponseEntity<Object> createResponseEntity(Object body, HttpHeaders headers, HttpStatusCode status,
                                                           WebRequest request) {
         if (body instanceof ProblemDetail problem) {
+            // помилки фреймворку (404 невідомого шляху, 405, 406 …) отримують сталий type, як в інших сервісах
+            if (problem.getType() == null || "about:blank".equals(problem.getType().toString())) {
+                problem.setType(URI.create(TYPE_PREFIX + switch (status.value()) {
+                    case 400 -> "bad-request";
+                    case 404 -> "not-found";
+                    case 405 -> "method-not-allowed";
+                    case 406 -> "not-acceptable";
+                    case 415 -> "unsupported-media-type";
+                    default -> "http-" + status.value();
+                }));
+            }
             addRequestId(problem);
         }
         return super.createResponseEntity(body, headers, status, request);

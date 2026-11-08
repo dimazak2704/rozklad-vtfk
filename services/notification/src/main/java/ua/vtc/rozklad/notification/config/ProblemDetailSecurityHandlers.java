@@ -9,12 +9,18 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.firewall.RequestRejectedException;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
-/** Renders 401/403 from the security filter chain as ProblemDetail via the MVC exception handlers. */
+/**
+ * Renders 401/403 from the security filter chain as ProblemDetail via the MVC exception handlers;
+ * a request the firewall rejects ({@code /../}, {@code ;x=1}) becomes a 400 ProblemDetail too.
+ */
 @Component
-public class ProblemDetailSecurityHandlers implements AuthenticationEntryPoint, AccessDeniedHandler {
+public class ProblemDetailSecurityHandlers implements AuthenticationEntryPoint, AccessDeniedHandler,
+        RequestRejectedHandler {
 
     private final BearerTokenAuthenticationEntryPoint bearerEntryPoint = new BearerTokenAuthenticationEntryPoint();
     private final HandlerExceptionResolver resolver;
@@ -33,6 +39,12 @@ public class ProblemDetailSecurityHandlers implements AuthenticationEntryPoint, 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
                        AccessDeniedException exception) {
+        resolver.resolveException(request, response, null, exception);
+    }
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response,
+                       RequestRejectedException exception) {
         resolver.resolveException(request, response, null, exception);
     }
 }

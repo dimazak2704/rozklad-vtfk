@@ -3,6 +3,7 @@ package ua.vtc.rozklad.notification.documents.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
@@ -16,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.WebRequest;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.events.OrderPayload;
 import ua.vtc.rozklad.notification.documents.DocumentFormat;
 import ua.vtc.rozklad.notification.documents.OrderDocuments;
@@ -34,9 +38,13 @@ public class DocumentsController {
 
     private static final String FORMATS = "docx, pdf або png";
 
-    private final OrderDocuments documents;
+    private static final List<String> REQUIRED = List.of("id", "date", "kind", "status");
 
-    public DocumentsController(OrderDocuments documents) {
+    private final OrderDocuments documents;
+    private final JsonMapper jsonMapper;
+
+    public DocumentsController(OrderDocuments documents, JsonMapper jsonMapper) {
+        this.jsonMapper = jsonMapper;
         this.documents = documents;
     }
 
@@ -62,15 +70,38 @@ public class DocumentsController {
     @PostMapping("/render")
     @Operation(summary = "Попередній перегляд чернетки розпорядження (ADMIN)")
     public ResponseEntity<byte[]> render(@RequestParam(defaultValue = "pdf") String format,
-                                         @RequestBody OrderPayload order) {
+                                         @RequestBody JsonNode body) {
+        // формат перевіряється до тіла, а тіло читається тут, щоб назвати обов'язкові поля, яких бракує
         DocumentFormat documentFormat = DocumentFormat.fromExtension(format)
                 .orElseThrow(() -> new FieldValidationException("format", "Формат має бути " + FORMATS + "."));
-        RenderedDocument document = documents.render(order, documentFormat);
+        RenderedDocument document = documents.render(payload(body), documentFormat);
         return ResponseEntity.ok()
                 .contentType(document.format().mediaType())
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition(document).toString())
                 .body(document.content());
+    }
+
+    /** {@code OrderPayload} of the body; a missing required field is a 400 on that field. */
+    private OrderPayload payload(JsonNode body) {
+        if (!body.isObject()) {
+            throw new FieldValidationException("body", "Очікується об'єкт розпорядження.");
+        }
+        for (String required : REQUIRED) {
+            if (!body.hasNonNull(required)) {
+                throw new FieldValidationException(required, "Обов'язкове поле.");
+            }
+        }
+        try {
+            return jsonMapper.treeToValue(body, OrderPayload.class);
+        } catch (JacksonException unreadable) {
+            String field = unreadable.getPath().stream()
+                    .map(reference -> reference.getPropertyName() != null ? reference.getPropertyName()
+                            : "[" + reference.getIndex() + "]")
+                    .reduce((left, right) -> right.startsWith("[") ? left + right : left + "." + right)
+                    .orElse("body");
+            throw new FieldValidationException(field, "Значення має неправильний тип або формат.");
+        }
     }
 
     private static ContentDisposition disposition(RenderedDocument document) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +55,19 @@ class SchedulerApplicationIT {
                         .authorities(new KeycloakRealmRoleConverter())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.title").value("Доступ заборонено"));
+    }
+
+    /** Framework errors carry a stable type; an unconvertible path parameter names itself. */
+    @Test
+    void frameworkErrorsHaveATypeAndFields() throws Exception {
+        var admin = jwt().jwt(token -> token.claim("realm_access", Map.of("roles", List.of("ADMIN"))))
+                .authorities(new KeycloakRealmRoleConverter());
+        mockMvc.perform(get("/api/scheduler/no-such-thing").with(admin))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:not-found"));
+        mockMvc.perform(post("/api/scheduler/status").with(admin))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:method-not-allowed"));
     }
 
     @Test

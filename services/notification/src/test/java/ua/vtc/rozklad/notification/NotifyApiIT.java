@@ -44,6 +44,25 @@ class NotifyApiIT extends IntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Службовий чат"));
     }
 
+    /** The format is checked before the body; missing required fields of the order are named. */
+    @Test
+    void renderNamesTheFormatAndTheMissingFields() throws Exception {
+        mockMvc.perform(post("/api/documents/orders/render").param("format", "exe").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("format"));
+        mockMvc.perform(post("/api/documents/orders/render").param("format", "pdf").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("id"));
+        mockMvc.perform(get("/api/notify/deliveries").param("size", "100000").with(admin()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("size"));
+        mockMvc.perform(get(java.net.URI.create("/api/notify/x/../bot")).with(admin()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:bad-request"));
+    }
+
     @Test
     void invalidRequestsAreExplained() throws Exception {
         createCode(admin(), "{}").andExpect(status().isBadRequest())
