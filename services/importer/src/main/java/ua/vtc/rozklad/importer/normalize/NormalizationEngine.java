@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
@@ -31,9 +32,15 @@ import ua.vtc.rozklad.importer.timetable.KnownDisciplines;
 /**
  * Matches draft entities against the core catalog (DOMAIN §10). Teachers: alias or exact
  * name → surname with compatible initials → Jaro-Winkler ≥ 0.92 on the surname as suggestions
- * only. Disciplines: abbreviation key of short name or alias → full name → close names as
- * suggestions. Groups by canonical code, rooms by canonical name. Admin mappings override all of
- * it. Fuzzy results never bind automatically: they become suggestions that need a decision.
+ * only. Disciplines: abbreviation key of short name or alias → full name (conjunctions «та», «й»,
+ * «і» are one word) → close names as suggestions; a full name from a curriculum or a program is
+ * also suggested for the catalog entry it is written short as: the same name without the
+ * qualifier in brackets («Іноземна мова (за професійним спрям.)» → «Іноземна мова»), its initials
+ * («Комп'ютерні мережі» → «КМ», «Економіка та управління ІТ-проєктами» → «ЕУ», «ЕУІТ») or, for
+ * a one-word name, the letters of the abbreviation in order («Кібербезпека» → «КБ»). Groups by
+ * canonical code, rooms by canonical name. Characters a reader could not decode (U+FFFD) are
+ * left out when comparing. Admin mappings override all of it. Fuzzy results never bind
+ * automatically: they become suggestions that need a decision.
  */
 @Component
 public class NormalizationEngine {
@@ -42,6 +49,17 @@ public class NormalizationEngine {
     private static final double EXACT = 1.0;
     private static final double NAME_WITH_INITIALS = 0.95;
     private static final double SURNAME_ONLY = 0.9;
+    private static final double WITHOUT_QUALIFIER = 0.95;
+    private static final double INITIALS = 0.93;
+    private static final double INITIALS_PREFIX = 0.9;
+    private static final double NAME_PREFIX = 0.9;
+    private static final double LETTERS_IN_ORDER = 0.88;
+    private static final Pattern QUALIFIER = Pattern.compile("\\([^)]*\\)?");
+    private static final Pattern NAME_NOISE = Pattern.compile("[.,;:«»\"“”]");
+    private static final Pattern CONJUNCTION = Pattern.compile("(?<=\\s)(?:та|й)(?=\\s)");
+    private static final Pattern WORD_SEPARATOR = Pattern.compile("[\\s\\-–—/]+");
+    private static final Set<String> FUNCTION_WORDS = Set.of(
+            "та", "і", "й", "в", "у", "з", "із", "зі", "на", "до", "за", "по", "від", "для", "як", "а", "о");
 
     public NormalizationResult normalize(List<EntityCandidate> entities, CatalogSnapshot catalog,
                                          List<MappingDecision> mappings) {
@@ -88,7 +106,7 @@ public class NormalizationEngine {
         if (!byText.isEmpty()) {
             return decided(entity, byText.stream().map(item -> ref(item, EXACT)).toList());
         }
-        PersonName name = PersonName.parse(entity.raw());
+        PersonName name = PersonName.parse(readable(entity.raw()));
         if (name == null) {
             return new Resolution(entity, Outcome.NEW, null, List.of(), null);
         }
@@ -121,31 +139,123 @@ public class NormalizationEngine {
         if (!byAbbreviation.isEmpty()) {
             return decided(entity, byAbbreviation.stream().map(item -> ref(item, EXACT)).toList());
         }
-        String fullName = entity.fullName() != null ? entity.fullName()
-                : KnownDisciplines.fullName(entity.raw()).orElse(entity.raw());
-        List<DisciplineItem> byName = index.disciplinesByName.getOrDefault(TextNormalizer.key(fullName), List.of());
+        String fullName = readable(entity.fullName() != null ? entity.fullName()
+                : KnownDisciplines.fullName(entity.raw()).orElse(entity.raw()));
+        List<DisciplineItem> byName = index.disciplinesByName.getOrDefault(nameKey(fullName), List.of());
         if (!byName.isEmpty()) {
             return decided(entity, byName.stream().map(item -> ref(item, NAME_WITH_INITIALS)).toList());
         }
         String nameKey = TextNormalizer.key(fullName);
-        String abbreviationKey = TextNormalizer.abbreviationKey(entity.raw());
-        List<ScoredRef> similar = index.disciplines.stream()
+        String abbreviationKey = TextNormalizer.abbreviationKey(readable(entity.raw()));
+        Map<UUID, ScoredRef> similar = new HashMap<>();
+        index.disciplines.stream()
                 .map(item -> ref(item, Math.max(
                         Similarity.jaroWinkler(nameKey, TextNormalizer.key(item.name())),
                         abbreviationKey.length() >= 5
                                 ? Similarity.jaroWinkler(abbreviationKey, TextNormalizer.abbreviationKey(item.shortName()))
                                 : 0)))
                 .filter(ref -> ref.score() >= Similarity.SURNAME_THRESHOLD)
-                .sorted(Comparator.comparingDouble(ScoredRef::score).reversed())
+                .forEach(ref -> similar.merge(ref.id(), ref, NormalizationEngine::better));
+        if (namedInFull(entity)) {
+            shortForms(fullName, index).forEach(ref -> similar.merge(ref.id(), ref, NormalizationEngine::better));
+        }
+        return suggestionsOrNew(entity, similar.values().stream()
+                .sorted(Comparator.comparingDouble(ScoredRef::score).reversed().thenComparing(ScoredRef::label))
                 .limit(MAX_SUGGESTIONS)
+                .toList());
+    }
+
+    private static ScoredRef better(ScoredRef a, ScoredRef b) {
+        return a.score() >= b.score() ? a : b;
+    }
+
+    /**
+     * The draft writes the discipline by its full name (curriculum, program), not by an
+     * abbreviation of the timetable: only then are short catalog forms looked for.
+     */
+    private static boolean namedInFull(EntityCandidate entity) {
+        return entity.fullName() != null
+                && TextNormalizer.key(entity.fullName()).equals(TextNormalizer.key(entity.raw()));
+    }
+
+    /** Catalog entries the full name is written short as (see the class comment); suggestions only. */
+    private static List<ScoredRef> shortForms(String fullName, CatalogIndex index) {
+        String base = TextNormalizer.clean(QUALIFIER.matcher(fullName).replaceAll(" "));
+        String baseKey = nameKey(base);
+        boolean qualified = !baseKey.equals(nameKey(fullName));
+        List<String> words = WORD_SEPARATOR.splitAsStream(NAME_NOISE.matcher(base).replaceAll(" "))
+                .filter(word -> !word.isBlank())
+                .filter(word -> !FUNCTION_WORDS.contains(word.toLowerCase(TextNormalizer.UK)))
                 .toList();
-        return suggestionsOrNew(entity, similar);
+        StringBuilder initials = new StringBuilder();
+        for (String word : words) {
+            boolean acronym = word.length() >= 2 && word.length() <= 4 && word.equals(word.toUpperCase(TextNormalizer.UK))
+                    && word.chars().allMatch(Character::isLetter);
+            String lower = TextNormalizer.key(word);
+            initials.append(acronym ? lower : lower.substring(0, 1));
+        }
+        String singleWord = words.size() == 1 ? TextNormalizer.key(words.getFirst()) : null;
+        List<ScoredRef> refs = new ArrayList<>();
+        for (DisciplineItem item : index.disciplines) {
+            double score = 0;
+            String itemName = item.name() == null ? "" : nameKey(item.name());
+            if (qualified && itemName.equals(baseKey)) {
+                score = WITHOUT_QUALIFIER;
+            } else if (!itemName.isEmpty() && itemName.contains(" ") && baseKey.startsWith(itemName + " ")) {
+                score = NAME_PREFIX;
+            }
+            for (String abbreviation : index.abbreviationsOf(item)) {
+                if (abbreviation.length() < 2 || abbreviation.length() > 6
+                        || !abbreviation.chars().allMatch(Character::isLetter)) {
+                    continue;
+                }
+                if (words.size() >= 2 && initials.toString().equals(abbreviation)) {
+                    score = Math.max(score, INITIALS);
+                } else if (words.size() >= 2 && initials.length() > abbreviation.length()
+                        && initials.toString().startsWith(abbreviation)) {
+                    score = Math.max(score, INITIALS_PREFIX);
+                } else if (singleWord != null && singleWord.length() >= 6 && lettersInOrder(abbreviation, singleWord)) {
+                    score = Math.max(score, LETTERS_IN_ORDER);
+                }
+            }
+            if (score > 0) {
+                refs.add(ref(item, score));
+            }
+        }
+        return refs;
+    }
+
+    /** «кб» in «кібербезпека»: the same first letter, the rest in order. */
+    private static boolean lettersInOrder(String abbreviation, String word) {
+        if (abbreviation.charAt(0) != word.charAt(0)) {
+            return false;
+        }
+        int at = 1;
+        for (int i = 1; i < abbreviation.length(); i++) {
+            at = word.indexOf(abbreviation.charAt(i), at);
+            if (at < 0) {
+                return false;
+            }
+            at++;
+        }
+        return true;
+    }
+
+    /** Name comparison key: {@link TextNormalizer#key}, the conjunctions «та» and «й» written as «і». */
+    static String nameKey(String name) {
+        return CONJUNCTION.matcher(TextNormalizer.key(name)).replaceAll("і");
+    }
+
+    /** The text without U+FFFD (a character the reader could not decode), for comparisons only. */
+    static String readable(String text) {
+        return text == null ? null : TextNormalizer.clean(text.replace("\uFFFD", ""));
     }
 
     // ───────────────────────── групи та аудиторії ─────────────────────────
 
     private static Resolution matchGroup(EntityCandidate entity, CatalogIndex index) {
-        String code = GroupCode.parse(entity.raw()).map(GroupCode::code).orElse(TextNormalizer.clean(entity.raw()));
+        String raw = readable(entity.raw());
+        String code = GroupCode.parse(raw).map(GroupCode::code).orElse(raw);
         GroupItem item = index.groupsByCode.get(code);
         return item == null
                 ? new Resolution(entity, Outcome.NEW, null, List.of(), null)
@@ -153,7 +263,7 @@ public class NormalizationEngine {
     }
 
     private static Resolution matchRoom(EntityCandidate entity, CatalogIndex index) {
-        RoomItem item = index.roomsByKey.get(RoomNames.key(entity.raw()));
+        RoomItem item = index.roomsByKey.get(RoomNames.key(readable(entity.raw())));
         return item == null
                 ? new Resolution(entity, Outcome.NEW, null, List.of(), null)
                 : new Resolution(entity, Outcome.MATCHED, ref(item, EXACT), List.of(), null);
@@ -162,7 +272,7 @@ public class NormalizationEngine {
     // ───────────────────────── допоміжне ─────────────────────────
 
     private static Stream<String> allSpellings(EntityCandidate entity) {
-        return Stream.concat(Stream.of(entity.raw()), entity.variants().stream());
+        return Stream.concat(Stream.of(entity.raw()), entity.variants().stream()).map(NormalizationEngine::readable);
     }
 
     /** One candidate = matched; several = the admin chooses. */
@@ -231,6 +341,7 @@ public class NormalizationEngine {
         private final List<DisciplineItem> disciplines;
         private final Map<String, List<DisciplineItem>> disciplinesByAbbreviation = new HashMap<>();
         private final Map<String, List<DisciplineItem>> disciplinesByName = new HashMap<>();
+        private final Map<UUID, List<String>> abbreviations = new HashMap<>();
         private final Map<String, GroupItem> groupsByCode = new HashMap<>();
         private final Map<String, RoomItem> roomsByKey = new HashMap<>();
 
@@ -248,17 +359,23 @@ public class NormalizationEngine {
             }
             this.disciplines = catalog.disciplines();
             for (DisciplineItem discipline : disciplines) {
-                Stream.concat(Stream.of(discipline.shortName()), discipline.aliases().stream())
+                List<String> keys = Stream.concat(Stream.of(discipline.shortName()), discipline.aliases().stream())
                         .filter(text -> text != null && !text.isBlank())
                         .map(TextNormalizer::abbreviationKey).distinct()
-                        .forEach(key -> add(disciplinesByAbbreviation, key, discipline));
+                        .toList();
+                keys.forEach(key -> add(disciplinesByAbbreviation, key, discipline));
+                abbreviations.put(discipline.id(), keys);
                 if (discipline.name() != null) {
-                    add(disciplinesByName, TextNormalizer.key(discipline.name()), discipline);
+                    add(disciplinesByName, nameKey(discipline.name()), discipline);
                 }
             }
             catalog.groups().forEach(group -> groupsByCode.put(
                     GroupCode.parse(group.code()).map(GroupCode::code).orElse(group.code()), group));
             catalog.rooms().forEach(room -> roomsByKey.put(RoomNames.key(room.name()), room));
+        }
+
+        List<String> abbreviationsOf(DisciplineItem discipline) {
+            return abbreviations.getOrDefault(discipline.id(), List.of());
         }
 
         private static <T> void add(Map<String, List<T>> map, String key, T value) {

@@ -32,6 +32,12 @@ public class ProgramStructureExtractor {
     private static final Pattern CYCLE_COMMISSION = Pattern.compile("^циклова комісія\\s+(.+)$");
     private static final Pattern NUMERIC_TOKEN = Pattern.compile("^\\d{1,4}$");
     private static final Pattern WORDS = Pattern.compile("[\\p{L}'’ʼ]+|[^\\p{L}'’ʼ]+");
+    /** «робоча програма навчальної дисципліни «Кібербезпека»» — the name in the title line (group 1). */
+    private static final Pattern TITLE_WITH_NAME =
+            Pattern.compile("(?iu)^(?:робоча\\s+)?програма\\s+(?:навчальної\\s+)?дисципліни\\s*[:\\-–—]?\\s*(\\S.*)$");
+    private static final List<String> NOT_A_NAME = List.of("спеціальн", "освітня програма", "освітньо", "галузь", "галузі", "для студент",
+            "для здобувач", "рівень", "ступінь", "циклова комісія", "кафедр", "курс ", "семестр", "форма навчання",
+            "затверджено", "погоджено", "розробник", "укладач", "міністерство", "вінницький", "коледж");
 
     /** Column kinds of the structure table, matched by label fragments. */
     enum Column {
@@ -274,9 +280,23 @@ public class ProgramStructureExtractor {
 
     // ───────────────────────── назва дисципліни ─────────────────────────
 
-    private static String disciplineTitle(List<String> paragraphs) {
+    /**
+     * The discipline name of the title page: in the title line itself («Робоча програма навчальної
+     * дисципліни «Кібербезпека»») or in one of the next lines. Lines that describe the program
+     * rather than name it («Спеціальність 123 …», «Освітня програма …», «для студентів …») are never
+     * taken; {@code null} when no line qualifies, so the admin chooses the discipline.
+     */
+    static String disciplineTitle(List<String> paragraphs) {
         for (int i = 0; i < paragraphs.size(); i++) {
             String key = TextNormalizer.key(paragraphs.get(i));
+            String line = TextNormalizer.unifyApostrophes(TextNormalizer.clean(paragraphs.get(i)));
+            Matcher inline = TITLE_WITH_NAME.matcher(line);
+            if (inline.matches()) {
+                String candidate = stripQuotes(inline.group(1));
+                if (isName(candidate)) {
+                    return candidate;
+                }
+            }
             if (key.equals("програма") || key.equals("робоча програма") || key.startsWith("робоча програма навчальної")
                     || key.startsWith("програма навчальної")) {
                 for (int j = i + 1; j < Math.min(paragraphs.size(), i + 5); j++) {
@@ -286,11 +306,18 @@ public class ProgramStructureExtractor {
                             || candidateKey.equals("дисципліни")) {
                         continue;
                     }
-                    return candidate;
+                    return isName(candidate) ? candidate : null;
                 }
             }
         }
         return null;
+    }
+
+    /** Not a description line of the title page and not a bare number. */
+    private static boolean isName(String candidate) {
+        String key = TextNormalizer.key(candidate);
+        return !key.isEmpty() && key.chars().anyMatch(Character::isLetter)
+                && NOT_A_NAME.stream().noneMatch(key::startsWith);
     }
 
     private static String stripQuotes(String text) {

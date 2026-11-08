@@ -105,6 +105,21 @@ class ProgramStructureExtractorTest {
                 .hasMessageContaining("Не вдалося прочитати документ");
     }
 
+    /** r4-ai-imports-53: the name in the title line itself; description lines are never a name. */
+    @Test
+    void titleLineNameAndDescriptionLines() {
+        assertThat(ProgramStructureExtractor.disciplineTitle(java.util.List.of(
+                "Робоча програма навчальної дисципліни «Кібербезпека»", "Спеціальність 123 Комп'ютерна інженерія",
+                "Загальний обсяг 120 годин")))
+                .isEqualTo("Кібербезпека");
+        assertThat(ProgramStructureExtractor.disciplineTitle(java.util.List.of(
+                "РОБОЧА ПРОГРАМА НАВЧАЛЬНОЇ ДИСЦИПЛІНИ", "Спеціальність 123 Комп'ютерна інженерія")))
+                .isNull();
+        assertThat(ProgramStructureExtractor.disciplineTitle(java.util.List.of(
+                "РОБОЧА ПРОГРАМА НАВЧАЛЬНОЇ ДИСЦИПЛІНИ", "«ЕКОНОМІКА ТА УПРАВЛІННЯ ІТ-ПРОЄКТАМИ»")))
+                .isEqualTo("ЕКОНОМІКА ТА УПРАВЛІННЯ ІТ-ПРОЄКТАМИ");
+    }
+
     private ProgramStructureExtractor.Extraction extract(FileType type, String file, Issues issues) {
         ProgramDocument document = reader.read(type, SeedFiles.read(file));
         return extractor.extract(document, issues);
