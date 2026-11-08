@@ -104,7 +104,8 @@ public class DatedSlotChecker {
                         "%s уже призначений на %d пару в групі %s (зміна ще не опублікована)".formatted(teacher,
                                 lesson.pair(), context.groupCode(change.getGroupId())))));
         accepted.stream()
-                .filter(other -> sameSlot(lesson, other) && lesson.teacherId().equals(other.teacherId()))
+                .filter(other -> sameSlot(lesson, other) && lesson.teacherId().equals(other.teacherId())
+                        && !sameStream(lesson, other))
                 .forEach(other -> conflicts.add(hard(ConflictKind.TEACHER, lesson,
                         "%s отримує дві пари одночасно (%d пара: групи %s і %s)".formatted(teacher, lesson.pair(),
                                 context.groupCode(other.groupId()), context.groupCode(lesson.groupId())))));
@@ -151,7 +152,8 @@ public class DatedSlotChecker {
                 .toList();
         List<PlannedLesson> planned = accepted.stream()
                 .filter(other -> !other.online())
-                .filter(other -> sameSlot(lesson, other) && lesson.roomId().equals(other.roomId()))
+                .filter(other -> sameSlot(lesson, other) && lesson.roomId().equals(other.roomId())
+                        && !sameStream(lesson, other))
                 .toList();
         List<String> groups = Stream.of(
                         occupants.stream().map(Lesson::getGroupId),
@@ -241,6 +243,11 @@ public class DatedSlotChecker {
 
     private static boolean sameStream(PlannedLesson lesson, Lesson other) {
         return lesson.streamId() != null && lesson.streamId().equals(other.getStreamId());
+    }
+
+    /** Two planned lessons of one stream (one teacher takes all its groups) share teacher and room. */
+    private static boolean sameStream(PlannedLesson lesson, PlannedLesson other) {
+        return lesson.streamId() != null && lesson.streamId().equals(other.streamId());
     }
 
     private static ConflictDto hard(ConflictKind kind, PlannedLesson lesson, String message, UUID... lessonIds) {

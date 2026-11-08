@@ -134,6 +134,17 @@ public final class ScheduleFixture {
         });
     }
 
+    /** A lesson of a stream: one teacher and room for several groups in the slot (DOMAIN §1). */
+    public Lesson streamLesson(Semester semester, LocalDate date, int pair, StudentGroup group, Discipline discipline,
+                               Teacher teacher, Room room, UUID streamId) {
+        return persist(new Lesson(semester.getId(), date, pair, group.getId(), 0, discipline.getId(),
+                LessonOrigin.TEMPLATE), lesson -> {
+            lesson.setTeacherId(teacher.getId());
+            lesson.setRoom(room.getId(), true);
+            lesson.setStreamId(streamId);
+        });
+    }
+
     public void competence(Teacher teacher, Discipline discipline) {
         persist(new TeacherDiscipline(teacher.getId(), discipline.getId()), link -> {
         });

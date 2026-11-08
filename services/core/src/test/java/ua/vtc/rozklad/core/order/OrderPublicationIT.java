@@ -49,6 +49,7 @@ import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
+import ua.vtc.rozklad.core.timetable.LessonStatus;
 
 /**
  * The real order №35 of 19.10.2026 (DOMAIN §11) rebuilt from changes: the draft with the exact
@@ -328,6 +329,50 @@ class OrderPublicationIT {
         assertThat(lessons.findById(ki12English.getId()).orElseThrow().isScheduled()).isTrue();
         assertThat(lessons.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(ki12.getId(), MONDAY, MONDAY))
                 .noneMatch(lesson -> lesson.getOrigin() == LessonOrigin.CHANGE);
+    }
+
+    @Test
+    void oneSubstituteTakesTheWholeStream() {
+        UUID stream = UUID.randomUUID();
+        Lesson first = fixture.streamLesson(semester, MONDAY, 5, ki41, bzh, pohosian, room204, stream);
+        Lesson second = fixture.streamLesson(semester, MONDAY, 5, ki42, bzh, pohosian, room204, stream);
+        List<UUID> ids = List.of(replaceTeacher(first, hanza).id(), replaceTeacher(second, hanza).id());
+
+        OrderDto published = publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+
+        assertThat(published.number()).isEqualTo(35);
+        assertThat(changes.findAllById(ids))
+                .allSatisfy(change -> assertThat(change.getStatus()).isEqualTo(ChangeStatus.APPLIED));
+        assertThat(lessons.findAllByDateAndStatus(MONDAY, LessonStatus.SCHEDULED))
+                .filteredOn(lesson -> lesson.getPairNumber() == 5)
+                .hasSize(2)
+                .allSatisfy(lesson -> {
+                    assertThat(lesson.getTeacherId()).isEqualTo(hanza.getId());
+                    assertThat(lesson.getRoomId()).isEqualTo(room204.getId());
+                    assertThat(lesson.getStreamId()).isEqualTo(stream);
+                });
+    }
+
+    @Test
+    void twoConfirmedDecisionsForOneLessonAreNotPublished() {
+        ChangeDto replacement = replaceTeacher(ki12English, prokopchuk);
+        changeCommands.cancel(replacement.id(), "admin");
+        ChangeDto cancellation = cancel(ki12English);
+        // обійдено перевірки створення: обидва рішення про ту саму пару підтверджені
+        jdbc.update("update change set status = 'CONFIRMED' where id = ?", replacement.id());
+        OrderDto draft = drafts.draftFor(MONDAY);
+
+        assertThatThrownBy(() -> publication.publish(draft.id(), "admin"))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .singleElement().satisfies(found -> {
+                            assertThat(found.kind()).isEqualTo(ConflictKind.GROUP);
+                            assertThat(found.lessonIds()).containsExactly(ki12English.getId());
+                            assertThat(found.message()).contains("два рішення");
+                        }));
+        assertThat(orders.findById(draft.id()).orElseThrow().getNumber()).isNull();
+        assertThat(changes.findAllById(List.of(replacement.id(), cancellation.id())))
+                .allSatisfy(change -> assertThat(change.getStatus()).isEqualTo(ChangeStatus.CONFIRMED));
+        assertThat(lessons.findById(ki12English.getId()).orElseThrow().isScheduled()).isTrue();
     }
 
     private List<UUID> createOrder35Changes() {
