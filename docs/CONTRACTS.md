@@ -135,6 +135,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 | `GET /api/import/jobs?kind&status` · `GET /api/import/jobs/{id}` | `ImportJobDto {id, kind, fileName, status: UPLOADED|PARSING|NEEDS_REVIEW|READY|APPLYING|APPLIED|FAILED, createdAt, summary:{recognized, unknown, conflicts, warnings}, report:[ReportRow], draft:json, ai:{model, inputTokens, outputTokens, costUsd}?, error?}` |
 | `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type: TEACHER|DISCIPLINE|GROUP|ROOM, raw, targetId? , createNew?:{...}, addAlias:bool}]}` | re-normalizes, returns job |
 | `PUT /api/import/jobs/{id}/draft` (ORDER_DOCUMENT) `{version, number, kind, date, …, rows:[…], notes, …}` | reviewed rows replace the draft; AI-read orders cannot be applied before this |
+| `PUT /api/import/jobs/{id}/options` `{version, options:{groupCodes?, hoursPerWeek?, versionName?, …}}` | new application parameters (same validation as upload; `sheet`/`semesterNumber` cannot change), report rebuilt, returns job |
 | `POST /api/import/jobs/{id}/apply` | 202 → APPLIED with core result ids |
 | `POST /api/import/ai/parse-absence` `{text, teacherId?, today}` | `{dateFrom, dateTo, pairs?, reasonCategory, confidence, clarification?}` |
 | `GET /api/import/ai/usage` | `{today:{calls, inputTokens, outputTokens, costUsd}, dailyBudgetUsd, model:{text,vision}}` |

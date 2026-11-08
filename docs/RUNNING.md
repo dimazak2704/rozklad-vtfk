@@ -163,7 +163,7 @@ starts the container again and waits until it is healthy (about a minute).
   `message`.
 * 503 «Сервіс входу недоступний» on invites or account links: the scope `kc-admin-api` is missing — run
   `scripts/dev-stack.sh up --no-build` (it adds it) or `infra/deploy/scripts/keycloak-sync.sh` on the server.
-* The importer reports «Не вдалося отримати каталог з core»: core was down during parsing; save mappings
+* The importer reports «Не вдалося отримати каталог із сервера розкладу»: core was down during parsing; save mappings
   (`PUT /api/import/jobs/{id}/mappings` with `{"mappings": []}`) to match again.
 * `GET /api/documents/orders/{id}.pdf` is 404 for a moment after publication: notification gets the order
   through the `order.published` event.

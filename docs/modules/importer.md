@@ -15,7 +15,8 @@ Specs: CONTRACTS §5 (endpoints), DOMAIN §10 (normalization), DOMAIN §11 (sour
 | `POST /api/import/jobs` multipart `file`, `kind`, `semesterId?`, `options?` (JSON text) | ADMIN | 202 + `Location`, job in `UPLOADED`; parsing is queued |
 | `GET /api/import/jobs?kind&status&page=0&size=20` | ADMIN | page `{items,page,size,total}`, newest first; items without `draft`/`report` |
 | `GET /api/import/jobs/{id}` | ADMIN | full `ImportJobDto` |
-| `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type,raw,targetId?,createNew?,addAlias}]}` | ADMIN | merges decisions, re-matches against a fresh catalog, returns the job |
+| `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type,raw,targetId?,createNew?,addAlias}]}` | ADMIN | merges decisions, re-matches against a fresh catalog, returns the job; `createNew` for a value the kind cannot create (an order; a group of a program/plan; a program discipline named only by its file) → 400 `errors[mappings[i].createNew]` |
+| `PUT /api/import/jobs/{id}/options` `{version, options}` | ADMIN | replaces the application parameters (groups, weekly hours, version name; `sheet`/`semesterNumber` → 400, they decide how the file was read), rebuilds the report; stale `version` → 409 |
 | `POST /api/import/jobs/{id}/apply` optional body `{semesterId?}` | ADMIN | 202, job in `APPLYING` (or unchanged when already `APPLYING`/`APPLIED`) |
 | `POST /api/import/ai/parse-absence` `{text, teacherId?, today}` | ADMIN, SERVICE | rules first, AI only when unsure |
 | `GET /api/import/ai/usage` | ADMIN | today's calls/tokens/cost, daily budget, models |
@@ -161,7 +162,12 @@ replacement → FINISHED, else REPLACEMENT; «Вичит.» without a replacemen
 to the vision model with the same rules in the prompt; the answer is validated (unknown row types re-derived with a
 warning, a FINISHED that contradicts the text — or a «Вичит.» row typed otherwise — replaced with the derived type and a
 warning, dates parsed leniently, group codes canonicalized, model warnings copied into the report). An AI draft
-carries a blocking ORDER row until the admin saves the reviewed rows (`PUT /api/import/jobs/{id}/draft`, the SPA's
+carries a blocking ORDER row until the admin saves the reviewed rows. On parse and on every revision: a printed
+weekday that is not the date's weekday, and any U+FFFD (unreadable character) in a row, the header, notes or the
+signature are blocking ERROR rows; a row type sent by the review that contradicts the «Вичит.» rule follows the text
+with a WARN (as for AI answers). Core refuses a printed parity that contradicts its calendar (422
+`ORDER_IMPORT_LABEL_MISMATCH`), which returns the job to review with the message. Matching rows of an order are
+informative and never promise «буде створено» (the order is stored as text). The admin saves the reviewed rows (`PUT /api/import/jobs/{id}/draft`, the SPA's
 «Звірити рядки»); applying a reviewed draft sends `replace: true`, so a corrected re-import replaces an earlier
 import of the same paper order in core.
 
@@ -176,7 +182,11 @@ skipped, no rows → ERROR. See `importer-ai-samples.md` for the live run on `se
 
 `AbsenceTextParser` (rules): «сьогодні», «завтра», «післязавтра», weekdays («у понеділок»), «4.11», «04.11.2026»,
 «4 листопада», ranges «з 4 по 6 листопада», «9-11 листопада», «з 10.11 до 12.11»; a date without a year that passed
-more than 14 days ago is next year's. Pairs: «1-2 пари», «з 1 по 3 пару», «2 і 3 пари», «4 пару», ordinals «на
+more than 14 days ago is next year's; an explicit year is kept («1 січня 2030»). Weekday ranges «з понеділка по
+середу» (genitive forms too; each weekday is the next one after the previous), day lists «11 і 12 листопада». The
+answer is one range with one set of pairs: separate days with a study day between them, different pairs on
+different days («10 листопада 3 пара, 11 листопада 1 пара») and pair numbers outside 1–8 get a clarification and
+confidence 0.4 and the AI is not asked (it answers in the same shape). `today` must lie in 2000–2100 (400). Pairs: «1-2 пари», «з 1 по 3 пару», «2 і 3 пари», «4 пару», ordinals «на
 першій парі», «першу і другу пари»; «весь день» → whole day (`pairs` null). Reasons: лікарняний/хворію/приболів
 → SICK_LEAVE, відпустка → VACATION, відрядження/конференція → BUSINESS_TRIP, сімейні/особисті обставини →
 PERSONAL, else OTHER. Confidence starts at 1 and drops when the date is assumed (−0.45), the reason is unknown
@@ -197,7 +207,10 @@ The text is never logged (absence reasons are private).
   marked as data, not instructions), schemas (`AiSchemas`: every object `additionalProperties:false`, all
   properties required, optional values `anyOf [type, null]`; ranges validated in Java), model choice (vision
   model only when documents are attached), budget check before each call, usage row after each call — also for
-  refusals, cut-offs and invalid JSON (those tokens are billed). Images over 5 MB are downscaled to JPEG ≤ 2000 px.
+  refusals, cut-offs and invalid JSON (those tokens are billed). Before any call `AiDocumentPreparer` opens the
+  file: a damaged image or a «PDF» that is not one fails with a plain message (no tokens); images over 5 MB or with a
+  side over 8000 px (the API limit) are decoded with subsampling and downscaled to JPEG ≤ 2000 px. API rejections are
+  reported in plain words (the file could not be read / the service settings), details only in the log.
 * **Models** `AI_MODEL_TEXT` (default `claude-haiku-5-5`, effort `low`) and `AI_MODEL_VISION` (default
   `claude-sonnet-5-5`, effort `medium`); `AI_MAX_TOKENS` 16000; `AI_TIMEOUT` 180 s; `AI_MAX_RETRIES` 2.
 * **Usage and budget**: table `ai_usage` (Kyiv date, purpose, model, tokens, cost, outcome, job). Cost =
