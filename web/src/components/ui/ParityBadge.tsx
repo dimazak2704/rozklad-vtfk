@@ -12,7 +12,9 @@ interface ParityMarkProps {
 
 /**
  * Знак парності — дріб із друкованого розкладу: дві смужки й риска між ними. Верхня смужка — чисельник,
- * нижня — знаменник; заповнена та, що діє цього тижня. Ніколи не стоїть сам — поруч завжди слово.
+ * нижня — знаменник; заповнена та, що діє цього тижня.
+ * У шапках і сітці його більше немає: при 12–16 px він читався як значок бази даних, тож парність
+ * завжди називає слово. Лишається для пояснення правила (картка деталей, сторінка «Про систему»).
  */
 export function ParityMark({ parity, className }: ParityMarkProps) {
   const top = parity === 'NUMERATOR';
@@ -49,8 +51,8 @@ interface ParityBadgeProps {
 }
 
 /**
- * «Знаменник · 10-й тиждень» — звичайним регістром, як у реченні. Натискання (мишею, дотиком чи Enter)
- * відкриває пояснення, як чергуються тижні.
+ * «Знаменник · 10-й тиждень» — словами, звичайним регістром, як у реченні; без вигаданого знака.
+ * Натискання (мишею, дотиком чи Enter) відкриває пояснення, як чергуються тижні.
  */
 export function ParityBadge({
   parity,
@@ -65,7 +67,6 @@ export function ParityBadge({
   const quiet = onShell ? 'text-on-shell-muted' : 'text-secondary';
   const content = (
     <>
-      <ParityMark parity={parity} className={cn(size === 'md' ? 'size-4' : 'size-3.5', onShell ? 'text-on-shell' : 'text-accent')} />
       {prefix ? <span className={quiet}>{prefix}</span> : null}
       <span className={cn('font-semibold', onShell ? 'text-on-shell' : 'text-primary')}>{capitalize(PARITY_LABEL[parity])}</span>
       {weekNumber ? (

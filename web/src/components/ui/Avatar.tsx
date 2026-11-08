@@ -20,7 +20,8 @@ export function Avatar({ name, size = 'md', tone = 'default', className }: Avata
       aria-hidden="true"
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full font-condensed leading-none font-bold select-none',
-        tone === 'default' ? 'bg-active text-secondary' : 'text-on-shell ring-1 ring-[var(--text-color-on-shell-muted)] ring-inset',
+        // у смузі — заповнене коло на тон світліше за смугу: кільце без заливки читалось як порожній радіо-перемикач
+        tone === 'default' ? 'bg-active text-secondary' : 'bg-shell-raised text-on-shell',
         SIZES[size],
         className,
       )}

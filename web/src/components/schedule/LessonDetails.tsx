@@ -4,12 +4,11 @@ import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { LESSON_VIEW_KIND_LABEL, PARITY_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { LESSON_VIEW_KIND_LABEL, PARITY_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, roomLabel } from '@/lib/schedule';
 import { Badge } from '../ui/Badge';
 import { Plate } from '../ui/Plate';
-import { ParityMark } from '../ui/ParityBadge';
 import { TONE_BADGE } from './tones';
 
 function Row({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
@@ -30,6 +29,14 @@ interface LessonDetailsProps {
   lesson: LessonView;
   date?: IsoDate;
   dayParity?: WeekParity;
+}
+
+/** Скорочення з розпорядження («Зв.зам.») — словами («взаємна заміна»): у публічній картці кодів не лишаємо. */
+function reasonInWords(text: string): string {
+  const code = (Object.keys(REASON_CODE_LABEL) as Array<keyof typeof REASON_CODE_LABEL>).find(
+    (key) => REASON_CODE_LABEL[key].toLocaleLowerCase('uk') === text.trim().toLocaleLowerCase('uk'),
+  );
+  return code ? REASON_CODE_HINT[code].toLocaleLowerCase('uk') : text;
 }
 
 /**
@@ -122,15 +129,14 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           {movedFrom ? <p className="text-secondary">Перенесено з {pairOrdinalGenitive(movedFrom)} пари</p> : null}
           {lesson.reasonText ? (
             <p className="text-secondary">
-              Причина: <span className="font-semibold text-primary">{lesson.reasonText}</span>
+              Причина: <span className="font-semibold text-primary">{reasonInWords(lesson.reasonText)}</span>
             </p>
           ) : null}
         </div>
       ) : null}
 
       {dayParity ? (
-        <p className="flex items-center gap-2 border-t border-separator pt-2.5 text-caption text-secondary">
-          <ParityMark parity={dayParity} className="text-accent" />
+        <p className="border-t border-separator pt-2.5 text-caption text-secondary">
           <span>
             Цього тижня <span className="font-semibold text-primary">{PARITY_LABEL[dayParity]}</span>:{' '}
             {dayParity === 'NUMERATOR' ? 'діють пари з верхнього рядка' : 'діють пари з нижнього рядка'} друкованого розкладу

@@ -20,13 +20,13 @@ import {
   Info,
   LayoutDashboard,
   Layers,
-  Puzzle,
   Send,
   Settings,
   Table2,
   Upload,
   UserRound,
   Users,
+  Wand,
   type LucideIcon,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -236,7 +236,7 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/GenerationPage'),
-    nav: { label: 'Генератор', icon: Puzzle, section: 'Розклад', order: 5, keywords: ['timefold', 'оптимізація'] },
+    nav: { label: 'Генератор', icon: Wand, section: 'Розклад', order: 5, keywords: ['timefold', 'оптимізація'] },
   },
   {
     id: 'admin-load',

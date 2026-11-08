@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError } from '@/api/errors';
 import type { IsoDate, WeekParity } from '@/api/types';
-import { DayColumn, DayList, LessonCell, NowIndicator, WeekGrid } from '@/components/schedule';
+import { DayColumn, DayList, DayListSkeleton, LessonCell, NowIndicator, WeekGrid } from '@/components/schedule';
 import {
   Avatar,
   Badge,
@@ -48,8 +48,6 @@ import {
   Section,
   SegmentedControl,
   Select,
-  Skeleton,
-  SkeletonText,
   StatusDot,
   StatusText,
   Switch,
@@ -254,8 +252,9 @@ function StateMatrix() {
     {
       name: 'Клітинка заняття',
       render: (c) => {
-        const lesson = DEMO_WEEK.days[0]?.lessons[c === 'Помилка' ? 1 : 0];
-        if (!lesson || c === 'Завантаження' || c === 'Вимкнено') return null;
+        // у клітинки немає станів «вимкнено», «завантаження» й «помилка»: заміна — це дані, а не стан контролу
+        const lesson = DEMO_WEEK.days[0]?.lessons[0];
+        if (!lesson || c === 'Завантаження' || c === 'Вимкнено' || c === 'Помилка') return null;
         return (
           <div className="w-40 overflow-hidden rounded-control border border-default">
             <LessonCell
@@ -589,13 +588,15 @@ export default function KitchenSinkPage() {
               {DEMO_OPTIONS.filter((option) => option.teacher).map((option, index) => (
                 <li
                   key={option.title}
-                  className="grid min-h-14 grid-cols-[1.25rem_minmax(0,1fr)_7.5rem_1.5rem] items-center gap-x-3 px-4 py-2"
+                  className="group/row grid min-h-14 grid-cols-[1.25rem_minmax(0,1fr)_2.5rem_1.5rem_auto] items-center gap-x-3 px-4 py-2 hover:bg-hover"
                 >
-                  {/* номер — клавіша вибору 1–9, звичайним текстом; тло лише в того, кого диспетчер вибрав */}
+                  {/* номер — клавіша вибору 1–9, звичайним текстом; перший рядок і є рекомендацією */}
                   <span className="text-caption font-semibold text-muted figures">{index + 1}</span>
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-ui font-semibold">{option.title}</span>
-                    {index === 0 ? <span className="text-meta font-semibold text-accent">Найкращий варіант</span> : null}
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="truncate text-ui font-semibold">{option.title}</span>
+                      {index === 0 ? <span className="shrink-0 text-meta font-medium text-secondary">рекомендовано</span> : null}
+                    </span>
                     <span className="truncate text-caption text-secondary">{option.reasons.join(' · ').toLocaleLowerCase('uk')}</span>
                   </span>
                   <ScoreBar value={option.score} label={`Оцінка: ${option.title}`} recommended={index === 0} />
@@ -618,6 +619,14 @@ export default function KitchenSinkPage() {
                       </ul>
                     </PopoverContent>
                   </Popover>
+                  {/* одна заповнена кнопка на екран — у рекомендованого; решта зʼявляються при наведенні чи фокусі */}
+                  <Button
+                    size="sm"
+                    variant={index === 0 ? 'primary' : 'secondary'}
+                    className={cn(index > 0 && 'opacity-0 transition-opacity duration-100 group-focus-within/row:opacity-100 group-hover/row:opacity-100')}
+                  >
+                    Призначити
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -698,11 +707,8 @@ export default function KitchenSinkPage() {
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <Demo title="Завантаження" className="lg:col-span-2">
-            <div className="flex max-w-xl flex-col gap-3">
-              <Skeleton className="h-6 w-40" />
-              <SkeletonText lines={3} />
-              <Skeleton className="h-16 w-full" />
-            </div>
+            {/* силует повторює справжній денний список: номер, час, дві лінії тексту */}
+            <DayListSkeleton className="max-w-sm" />
           </Demo>
           <Demo title="Порожньо">
             <EmptyState
@@ -941,11 +947,13 @@ export default function KitchenSinkPage() {
           <WeekGrid schedule={DEMO_WEEK} today={DEMO_TODAY} at={minutes} stickyTop="var(--header-height)" />
         </div>
         <div className="grid gap-4 lg:grid-cols-[22.5rem_minmax(0,1fr)]">
-          <Demo title="DayList — телефон (360 px)">
-            <div className="mx-auto w-full max-w-[22.5rem]">
+          {/* на телефоні список лежить просто на тлі сторінки, без рамки панелі: прямий лівий край тонування — на лінії маршруту */}
+          <div className="flex min-w-0 flex-col gap-3">
+            <h3 className="text-ui font-semibold text-primary">DayList — телефон (360 px), на тлі сторінки</h3>
+            <div className="w-full max-w-[22.5rem]">
               {monday ? <DayList day={monday} bells={BELLS_MON_THU} today={DEMO_TODAY} at={minutes} /> : null}
             </div>
-          </Demo>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {monday ? <DayColumn day={monday} bells={BELLS_MON_THU} today={DEMO_TODAY} at={minutes} /> : null}
             {tuesday ? <DayColumn day={tuesday} bells={BELLS_MON_THU} today={DEMO_TODAY} perspective="group" /> : null}

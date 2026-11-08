@@ -29,7 +29,8 @@ describe('LessonCell', () => {
     const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
     expect(within(details).getByText('Надійність, діагностика та експлуатація компʼютерних систем і мереж')).toBeInTheDocument();
     expect(within(details).getByText('Непийвода М.В.')).toBeInTheDocument();
-    expect(within(details).getByText('Зв.зам.')).toBeInTheDocument();
+    // код розпорядження в публічній картці розгорнуто словами
+    expect(within(details).getByText('взаємна заміна')).toBeInTheDocument();
     expect(within(details).getByText(/чисельник/)).toBeInTheDocument();
   });
 

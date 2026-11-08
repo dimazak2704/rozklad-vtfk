@@ -5,7 +5,6 @@ import { cn } from '@/lib/cn';
 import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
 import { lessonsByPair, pairRange, rowTimes, type Perspective } from '@/lib/schedule';
-import { ParityBadge } from '../ui/ParityBadge';
 import { LessonCell } from './LessonCell';
 
 export interface WeekGridProps {
@@ -66,7 +65,11 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
               className="sticky left-0 z-20 h-10 border-b border-default bg-sunken px-3 text-start align-middle font-normal"
               style={{ top: stickyTop }}
             >
-              {weekParity ? <ParityBadge parity={weekParity} size="sm" plain /> : <span className="sr-only">Пара</span>}
+              {weekParity ? (
+                <span className="text-meta font-semibold text-secondary">{capitalize(PARITY_LABEL[weekParity])}</span>
+              ) : (
+                <span className="sr-only">Пара</span>
+              )}
             </th>
             {days.map((day) => {
               const isToday = day.date === liveDate || day.date === today;

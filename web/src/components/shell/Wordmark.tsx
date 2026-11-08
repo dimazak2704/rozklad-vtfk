@@ -3,18 +3,20 @@ import { cn } from '@/lib/cn';
 
 interface WordmarkProps {
   to?: string;
-  /** Лише табличка «ВТФК» (згорнута бічна панель, вузька верхня панель). */
+  /** Лише квадратний знак «ВТФК» емаллю (згорнута бічна панель на 64 px). */
   compact?: boolean;
   /**
-   * `shell` — у синій смузі: біле слово й біла табличка з синім кодом;
-   * `surface` — на білій панелі диспетчера: табличка емаллю, слово чорнилом.
+   * `shell` — у синій смузі: білі літери, риска напівпрозора;
+   * `surface` — на білій панелі диспетчера: чорнило й звичайна лінія.
    */
   tone?: 'shell' | 'surface';
   className?: string;
 }
 
 /**
- * Словесний знак: «Розклад» і табличка «ВТФК», як номер маршруту на емальованій табличці зупинки.
+ * Словесний знак — один і той самий скрізь: «ВТФК» вузьким жирним, тонка вертикальна риска і «Розклад»,
+ * як рядок назви на титулі надрукованого розкладу. Без «таблички»: біла плашка на смузі читалась як бейдж версії.
+ * Квадратний знак емаллю — лише там, де справді потрібен квадрат (згорнута панель, іконка застосунку).
  * Офіційного логотипа коледжу в системі немає — герб не вигадуємо.
  */
 export function Wordmark({ to = '/', compact = false, tone = 'shell', className }: WordmarkProps) {
@@ -24,33 +26,37 @@ export function Wordmark({ to = '/', compact = false, tone = 'shell', className 
       to={to}
       aria-label="Розклад ВТФК — на головну"
       className={cn(
-        'group/wordmark inline-flex shrink-0 items-center gap-2 rounded-control',
+        'inline-flex shrink-0 items-center rounded-control',
         'focus-visible:outline-2 focus-visible:outline-offset-4',
         onShell ? 'focus-visible:outline-focus-on-shell' : 'focus-visible:outline-focus',
         className,
       )}
     >
-      {!compact ? (
+      {compact ? (
         <span
-          className={cn(
-            'leading-none',
-            onShell
-              ? 'font-condensed text-[1.375rem] font-bold tracking-[-0.01em] text-on-shell'
-              : 'text-heading font-semibold text-primary',
-          )}
+          aria-hidden="true"
+          className="inline-flex size-8 items-center justify-center rounded-control bg-shell font-condensed text-[0.8125rem] leading-none font-bold tracking-[0.02em] text-on-shell"
         >
-          Розклад
+          ВТФК
         </span>
-      ) : null}
-      <span
-        aria-hidden="true"
-        className={cn(
-          'rounded-plate px-1.5 py-0.5 font-condensed text-ui leading-[1.125rem] font-bold tracking-[0.03em]',
-          onShell ? 'bg-plate text-plate' : 'bg-shell text-on-shell',
-        )}
-      >
-        ВТФК
-      </span>
+      ) : (
+        <span aria-hidden="true" className="inline-flex items-center gap-2.5 leading-none">
+          <span
+            className={cn(
+              'font-condensed text-[1.0625rem] leading-5 font-bold tracking-[0.02em] md:text-[1.125rem] md:leading-5',
+              onShell ? 'text-on-shell' : 'text-primary',
+            )}
+          >
+            ВТФК
+          </span>
+          <span
+            className={cn('h-5 w-px', onShell ? 'bg-[var(--text-color-on-shell)] opacity-35' : 'bg-[var(--border-color-default)]')}
+          />
+          <span className={cn('text-[0.9375rem] leading-5 font-medium md:text-body md:leading-5', onShell ? 'text-on-shell' : 'text-primary')}>
+            Розклад
+          </span>
+        </span>
+      )}
     </Link>
   );
 }

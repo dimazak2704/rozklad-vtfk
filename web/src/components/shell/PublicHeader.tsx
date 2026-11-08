@@ -3,7 +3,7 @@ import { usePublicMeta } from '@/api/meta';
 import { navFor, type LayoutKind } from '@/app/routes';
 import { cn } from '@/lib/cn';
 import { capitalize, PARITY_HINT, PARITY_LABEL } from '@/lib/labels';
-import { ParityBadge, ParityMark } from '../ui/ParityBadge';
+import { ParityBadge } from '../ui/ParityBadge';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import { Skeleton } from '../ui/Skeleton';
 import { activeNavId } from './activeSection';
@@ -19,7 +19,7 @@ function HeaderParity({ withWeek }: { withWeek: boolean }) {
   return <ParityBadge parity={meta.data.parity} weekNumber={withWeek ? meta.data.weekNumber : undefined} tone="on-shell" />;
 }
 
-/** Телефон: лише знак і слово, конденсованим, — найважливіший факт для студента; тап пояснює правило. */
+/** Телефон: лише слово, конденсованим, — найважливіший факт для студента; тап пояснює правило. */
 function CompactParity() {
   const meta = usePublicMeta();
   if (!meta.data) return null;
@@ -28,9 +28,8 @@ function CompactParity() {
     <Popover>
       <PopoverTrigger
         aria-label={`${label}, ${meta.data.weekNumber}-й тиждень. Як чергуються тижні`}
-        className="inline-flex h-11 items-center gap-1.5 rounded-control px-2 text-on-shell focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-on-shell"
+        className="inline-flex h-11 items-center rounded-control px-2 text-on-shell focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-on-shell"
       >
-        <ParityMark parity={meta.data.parity} className="h-4 w-3.5" />
         <span className="font-condensed text-cell font-bold">{label}</span>
       </PopoverTrigger>
       <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[meta.data.parity]}, ${meta.data.weekNumber}-й тиждень`}>

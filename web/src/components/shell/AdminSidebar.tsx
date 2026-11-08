@@ -27,7 +27,7 @@ interface AdminSidebarProps {
 /**
  * Бічна панель диспетчера — спокійна біла панель (як Outlook чи Google Admin): розділи
  * «Щодня / Розклад / Дані / Система», іконки з підписами, згортається до іконок з підказками.
- * Емаль тут лише в табличці «ВТФК»; вибраний пункт — тонований синім з рискою на початку.
+ * Емаль тут лише в табличці «ВТФК»; вибраний пункт — лише тонування, синій текст і вага 600 (без окремої риски).
  */
 export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, counts, className }: AdminSidebarProps) {
   const items = navFor('admin');
@@ -83,7 +83,7 @@ export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, counts,
                           'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus pointer-coarse:h-11',
                           collapsed ? 'justify-center px-0' : 'px-3',
                           isActive
-                            ? 'bg-selected font-semibold text-accent before:absolute before:start-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-accent'
+                            ? 'bg-selected font-semibold text-accent'
                             : 'font-normal text-secondary hover:bg-hover hover:text-primary active:bg-active',
                         )
                       }

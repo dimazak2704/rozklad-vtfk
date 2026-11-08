@@ -216,14 +216,14 @@ export function DataTable<T>({
               : null}
             {showError ? (
               <tr>
-                <td colSpan={colCount} className="border-b border-separator">
+                <td colSpan={colCount} className="border-b border-separator px-4">
                   <ErrorState error={error} onRetry={onRetry} size="sm" />
                 </td>
               </tr>
             ) : null}
             {showEmpty ? (
               <tr>
-                <td colSpan={colCount} className="border-b border-separator">
+                <td colSpan={colCount} className="border-b border-separator px-4">
                   {empty ?? <EmptyState title="Записів немає" description="Змініть фільтри або додайте перший запис." size="sm" />}
                 </td>
               </tr>

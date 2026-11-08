@@ -57,8 +57,9 @@ export function ErrorState({
       role="alert"
       className={cn(
         'flex flex-col gap-2',
-        align === 'center' ? 'items-center text-center' : 'items-start text-start',
-        size === 'md' ? 'px-4 py-8' : 'px-4 py-5',
+        // ліворуч — у колонці заголовка панелі, без власного відступу; по центру — з полями
+        align === 'center' ? 'items-center px-4 text-center' : 'items-start text-start',
+        size === 'md' ? 'py-8' : 'py-5',
         className,
       )}
     >

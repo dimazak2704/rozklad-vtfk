@@ -23,7 +23,8 @@ export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-default bg-surface px-3 sm:gap-3 sm:px-5 lg:px-8">
       <div className="flex shrink-0 items-center gap-1 lg:hidden">
         <IconButton label="Меню розділів" icon={<Menu aria-hidden="true" className="size-5" />} size="lg" className="-ms-2" onClick={onOpenMenu} />
-        <Wordmark to="/admin" tone="surface" compact className="me-1" />
+        <Wordmark to="/admin" tone="surface" className="me-2 hidden sm:inline-flex" />
+        <Wordmark to="/admin" tone="surface" compact className="me-1 sm:hidden" />
       </div>
       <WorkingDateSwitcher />
       <div className="ms-auto flex shrink-0 items-center gap-2">

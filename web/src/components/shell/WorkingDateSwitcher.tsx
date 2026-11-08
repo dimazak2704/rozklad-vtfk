@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { usePublicMeta } from '@/api/meta';
 import type { IsoDate, WeekParity } from '@/api/types';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
@@ -8,6 +9,22 @@ import { ParityBadge } from '../ui/ParityBadge';
 import { SegmentedControl } from '../ui/SegmentedControl';
 
 type Quick = 'today' | 'next' | 'other';
+
+/** ≥1024 px: поруч із датою стоїть «Сьогодні | Завтра», тож сама мітка дати — без відносного слова. */
+const WIDE = '(min-width: 1024px)';
+function subscribeWide(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const list = window.matchMedia(WIDE);
+  list.addEventListener?.('change', onChange);
+  return () => list.removeEventListener?.('change', onChange);
+}
+function useWide(): boolean {
+  return useSyncExternalStore(
+    subscribeWide,
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.(WIDE).matches),
+    () => true,
+  );
+}
 
 /**
  * Парність і номер тижня для робочої дати від сьогоднішніх з /public/meta: тижні чергуються.
@@ -48,9 +65,10 @@ export function WorkingDateSwitcher() {
   const next = shiftStudyDay(today, 1);
   const nextLabel = diffDays(today, next) === 1 ? 'Завтра' : capitalize(weekdayName(isoWeekday(next)));
   const quick: Quick = date === today ? 'today' : date === next ? 'next' : 'other';
+  const wide = useWide();
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2 lg:gap-3">
       <SegmentedControl<Quick>
         aria-label="Робоча дата"
         value={quick}
@@ -64,8 +82,20 @@ export function WorkingDateSwitcher() {
         ]}
         className="hidden shrink-0 lg:inline-flex"
       />
-      {/* одна мітка дати на всіх ширинах: «Сьогодні · нд, 8 листопада»; перемикач — лише швидкий перехід */}
-      <DateNav value={date} onChange={(value) => setDate(value)} today={today} size="sm" hotkeys showTodayButton={false} />
+      {/*
+        «Сьогодні» — лише одним словом на екрані: на широкому його несе перемикач, а мітка між стрілками —
+        абсолютна дата «нд, 8 листопада»; на вужчому перемикача немає, тож мітка відносна, а для іншої дати
+        зʼявляється кнопка «Сьогодні».
+      */}
+      <DateNav
+        value={date}
+        onChange={(value) => setDate(value)}
+        today={today}
+        size="sm"
+        hotkeys
+        showRelative={!wide}
+        showTodayButton={!wide}
+      />
       <WorkingParity date={date} />
     </div>
   );

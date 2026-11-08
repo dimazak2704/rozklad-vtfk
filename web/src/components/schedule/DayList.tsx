@@ -91,7 +91,7 @@ export function DayList({
               <li
                 key={slot.pair}
                 aria-current={current ? 'time' : undefined}
-                className="grid min-h-16 grid-cols-[2.75rem_1rem_minmax(0,1fr)] gap-x-2.5"
+                className="grid min-h-16 grid-cols-[3rem_1rem_minmax(0,1fr)] gap-x-2.5"
               >
                 {/* номер пари великою цифрою, під ним час — як година в розкладі на зупинці */}
                 <div className="flex flex-col items-end pt-1.5 pb-3 leading-none">
@@ -104,9 +104,16 @@ export function DayList({
                     {slot.pair}
                   </span>
                   {slot.startsAt ? (
-                    <span className={cn('mt-1.5 flex flex-col items-end text-caption leading-[1.125rem] figures', current ? 'text-accent' : 'text-muted')}>
-                      <span>{slot.startsAt}</span>
-                      <span>{slot.endsAt}</span>
+                    // початок — основним, кінець — тихіше і з тире, щоб другий рядок не читався як окремий час
+                    <span className="mt-1.5 flex flex-col items-end text-caption leading-[1.125rem] figures">
+                      <span className={current ? 'text-accent' : past || slot.isWindow ? 'text-muted' : 'text-secondary'}>{slot.startsAt}</span>
+                      {slot.endsAt ? (
+                        <span className="text-muted">
+                          <span aria-hidden="true">–</span>
+                          <span className="sr-only">до </span>
+                          {slot.endsAt}
+                        </span>
+                      ) : null}
                     </span>
                   ) : null}
                 </div>
@@ -176,7 +183,7 @@ export function DayListSkeleton({ rows = 4, className }: { rows?: number; classN
   return (
     <ol aria-hidden="true" className={cn('flex flex-col', className)}>
       {Array.from({ length: rows }, (_, index) => (
-        <li key={index} className="grid min-h-16 grid-cols-[2.75rem_1rem_minmax(0,1fr)] gap-x-2.5 pb-3">
+        <li key={index} className="grid min-h-16 grid-cols-[3rem_1rem_minmax(0,1fr)] gap-x-2.5 pb-3">
           <span className="flex flex-col items-end gap-1.5 pt-1.5">
             <Skeleton className="h-7 w-5" />
             <Skeleton className="h-2.5 w-9" />

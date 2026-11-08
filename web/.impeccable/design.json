@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T02:45:00Z",
+  "generatedAt": "2026-11-08T12:00:00Z",
   "title": "Design System: Розклад ВТФК",
   "extensions": {
     "colorMeta": {
@@ -116,9 +116,9 @@
       "name": "Shell Band",
       "kind": "nav",
       "refersTo": "shell-band",
-      "description": "Емальована смуга з табличкою «ВТФК» і розділами.",
-      "html": "<nav class=\"ds-shell\"><span class=\"ds-mark\">Розклад <b>ВТФК</b></span><a class=\"ds-link is-active\">Розклад</a><a class=\"ds-link\">Заміни</a><a class=\"ds-link\">Дзвінки</a></nav>",
-      "css": ".ds-shell { display: flex; align-items: stretch; gap: 4px; height: 56px; padding: 0 32px; background: oklch(33.5% 0.1 256); font-family: 'Fira Sans', system-ui, sans-serif; } .ds-mark { display: flex; align-items: center; margin-right: 16px; color: #fff; font: 700 1.375rem/1 'Fira Sans Condensed', 'Arial Narrow', sans-serif; } .ds-mark b { margin-left: 6px; padding: 2px 6px; border-radius: 3px; background: oklch(99% 0.004 256); color: oklch(33.5% 0.1 256); font-size: 0.875rem; font-weight: 700; } .ds-link { position: relative; display: flex; align-items: center; padding: 0 12px; color: oklch(85% 0.04 256); font-weight: 400; font-size: 0.875rem; cursor: pointer; } .ds-link:hover { color: #fff; } .ds-link.is-active { color: #fff; font-weight: 600; } .ds-link.is-active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px; border-radius: 2px 2px 0 0; background: #fff; }"
+      "description": "Емальована смуга: знак «ВТФК | Розклад» без коробки і розділи текстом.",
+      "html": "<nav class=\"ds-shell\"><span class=\"ds-mark\"><b>ВТФК</b><i></i>Розклад</span><a class=\"ds-link is-active\">Розклад</a><a class=\"ds-link\">Заміни</a><a class=\"ds-link\">Дзвінки</a></nav>",
+      "css": ".ds-shell { display: flex; align-items: stretch; gap: 4px; height: 56px; padding: 0 32px; background: oklch(33.5% 0.1 256); font-family: 'Fira Sans', system-ui, sans-serif; } .ds-mark { display: flex; align-items: center; gap: 10px; margin-right: 16px; color: #fff; font: 500 1rem/1.25rem 'Fira Sans', system-ui, sans-serif; } .ds-mark b { font: 700 1.125rem/1.25rem 'Fira Sans Condensed', 'Arial Narrow', sans-serif; letter-spacing: 0.02em; } .ds-mark i { width: 1px; height: 20px; background: rgb(255 255 255 / 0.35); } .ds-link { position: relative; display: flex; align-items: center; padding: 0 12px; color: oklch(85% 0.04 256); font-weight: 400; font-size: 0.875rem; cursor: pointer; } .ds-link:hover { color: #fff; } .ds-link.is-active { color: #fff; font-weight: 600; } .ds-link.is-active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px; border-radius: 2px 2px 0 0; background: #fff; }"
     },
     {
       "name": "State Badge",

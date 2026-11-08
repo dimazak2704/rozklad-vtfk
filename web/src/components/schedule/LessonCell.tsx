@@ -44,7 +44,7 @@ const TONE_SURFACE = {
   block: 'hatch bg-block-subtle',
 } as const;
 
-/** Одне слово стану праворуч угорі — звичайним текстом, без «таблички». */
+/** Одне слово стану над назвою — звичайним текстом, без «таблички». */
 const STATE_WORD = {
   change: 'text-change',
   cancel: 'text-cancel',
@@ -91,8 +91,9 @@ function DetailsTrigger({
 }
 
 /**
- * Заняття в розкладі. Предмет називає коротка назва (кольорів дисциплін у сітці немає), стан — тонування
- * і одне слово; для змін оригінал лишається видимим закресленим, а нове значення підкреслене.
+ * Заняття в розкладі. Предмет названо повністю, коли є місце (список; клітинка сітки від ~200 px), інакше —
+ * кодом; кольорів дисциплін у сітці немає. Стан — тонування і одне слово; для змін оригінал лишається
+ * видимим закресленим («замість …»), а нове значення виділене вагою.
  * Наведення або Enter відкривають повні деталі.
  */
 export function LessonCell({
@@ -126,9 +127,15 @@ export function LessonCell({
   const isList = variant === 'list';
   const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
   // у списку (телефон) предмет названо повністю: скорочення зрозумілі не всім, а місця вистачає
-  const title = isList ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName;
+  const title = lesson.discipline.name || lesson.discipline.shortName;
   // один маркер на клітинку: змінився предмет — підкреслено предмет, інакше — нового викладача
   const markCounterpart = Boolean(changedTeacher && !changedDiscipline && perspective !== 'teacher');
+  const emphasised = now || tone !== 'regular';
+  const titleTone = cn(
+    past ? 'text-secondary' : 'text-primary',
+    cancelled && cn('text-secondary', STRUCK_CANCEL),
+    changedDiscipline && !cancelled && MARKED,
+  );
 
   return (
     <DetailsTrigger
@@ -144,7 +151,7 @@ export function LessonCell({
           'transition-[background-color] duration-100 ease-out',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
           // у списку лівий край прямий — урівень із колонкою лінії маршруту, заокруглено лише праворуч
-          isList ? 'gap-0.5 rounded-e-control px-3 py-2.5' : 'h-full gap-0.5 px-3 py-2',
+          isList ? 'gap-0.5 rounded-e-control px-3 py-2.5' : '@container/cell h-full gap-0.5 px-3 py-2',
           TONE_SURFACE[tone],
           className,
         )}
@@ -158,6 +165,11 @@ export function LessonCell({
           </span>
         ) : null}
 
+        {/* слово стану — окремим рядком над назвою (як рубрика), щоб назва мала всю ширину й не обрізалась */}
+        {stateWord ? (
+          <span className={cn('text-meta font-semibold', STATE_WORD[tone as keyof typeof STATE_WORD])}>{stateWord}</span>
+        ) : null}
+
         <span
           className={cn(
             'flex min-w-0 items-baseline gap-1.5',
@@ -165,24 +177,38 @@ export function LessonCell({
             tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
           )}
         >
-          <span
-            className={cn(
-              'min-w-0',
-              isList ? 'line-clamp-2 text-body font-semibold' : 'truncate font-condensed text-cell font-bold',
-              past ? 'text-secondary' : 'text-primary',
-              cancelled && cn('text-secondary', STRUCK_CANCEL),
-              changedDiscipline && !cancelled && MARKED,
-            )}
-          >
-            {title}
-          </span>
+          {isList ? (
+            <span
+              className={cn(
+                'min-w-0 text-body font-semibold text-pretty',
+                // змінену й поточну пару не обрізаємо ніколи: саме її людина відкрила сайт подивитись
+                !emphasised && 'line-clamp-3',
+                titleTone,
+              )}
+            >
+              {title}
+            </span>
+          ) : (
+            <>
+              {/* вузька колонка — код вузьким жирним; від ~200 px — повна назва, до двох рядків */}
+              <span className={cn('min-w-0 truncate font-condensed text-cell font-bold @[12.5rem]/cell:hidden', titleTone)}>
+                {lesson.discipline.shortName}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'hidden min-w-0 text-cell font-semibold text-pretty',
+                  // змінена чи поточна пара — до трьох рядків, звичайна — до двох
+                  emphasised ? '@[12.5rem]/cell:line-clamp-3' : '@[12.5rem]/cell:line-clamp-2',
+                  titleTone,
+                )}
+              >
+                {lesson.discipline.name || lesson.discipline.shortName}
+              </span>
+            </>
+          )}
           {lesson.subgroup > 0 ? (
             <span className="shrink-0 text-meta font-medium whitespace-nowrap text-muted figures">{lesson.subgroup}&nbsp;п/г</span>
-          ) : null}
-          {stateWord ? (
-            <span className={cn('ms-auto shrink-0 ps-1 text-meta font-semibold whitespace-nowrap', STATE_WORD[tone as keyof typeof STATE_WORD])}>
-              {stateWord}
-            </span>
           ) : null}
         </span>
 
@@ -214,13 +240,18 @@ export function LessonCell({
           ) : null}
         </span>
 
-        {replacedText || movedFrom || (lesson.reasonText && tone !== 'regular') ? (
-          <span className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted', isList ? 'text-caption' : 'text-meta')}>
-            {replacedText ? <s className={cn('truncate', STRUCK)}>{replacedText}</s> : null}
-            {movedFrom ? <span className="text-secondary">з {pairOrdinalGenitive(movedFrom)} пари</span> : null}
-            {lesson.reasonText && tone !== 'regular' ? (
-              <span className="text-meta font-medium text-secondary">{lesson.reasonText}</span>
+        {/*
+          Що було замість — простими словами: «замість СТП · Кренцін». Внутрішні коди розпорядження
+          («Зв.зам.», «Відп.») у клітинку не виносимо — причину словами показує картка деталей.
+        */}
+        {replacedText || movedFrom ? (
+          <span className={cn('flex min-w-0 flex-wrap items-baseline gap-x-1 text-muted', isList ? 'text-caption' : 'text-meta')}>
+            {replacedText ? (
+              <span className="min-w-0 truncate">
+                замість <s className={STRUCK}>{replacedText}</s>
+              </span>
             ) : null}
+            {movedFrom ? <span className="text-secondary">з {pairOrdinalGenitive(movedFrom)} пари</span> : null}
           </span>
         ) : null}
 

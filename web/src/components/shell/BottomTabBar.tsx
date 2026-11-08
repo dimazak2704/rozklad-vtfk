@@ -6,7 +6,7 @@ import { useCommandStore } from '@/stores/commands';
 import { activeNavId } from './activeSection';
 
 const TAB =
-  'group/tab relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 outline-none ' +
+  'group/tab relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 pt-0.5 pb-1.5 outline-none ' +
   'focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-focus';
 
 /** Іконка у «таблетці» 56×32: вибрана вкладка — тло selected, яке розкривається з центру. */
