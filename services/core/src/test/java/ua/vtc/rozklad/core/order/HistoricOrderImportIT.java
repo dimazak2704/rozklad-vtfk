@@ -239,6 +239,26 @@ class HistoricOrderImportIT {
                 .andExpect(jsonPath("$.errors[0].field").value("items[0].groupCode"));
     }
 
+    /** r4-ai-imports-51: a printed weekday or parity that the date does not have is a misread date. */
+    @Test
+    void labelsThatContradictTheDateAreRejected() throws Exception {
+        importOrder(ORDER_35.replace("\"weekdayLabel\":\"ПОНЕДІЛОК\"", "\"weekdayLabel\":\"П'ЯТНИЦЯ\""))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("ORDER_IMPORT_LABEL_MISMATCH"))
+                .andExpect(jsonPath("$.detail").value("У розпорядженні надруковано «П'ЯТНИЦЯ», а 19.10.2026 — "
+                        + "понеділок. Перевірте дату або день тижня."));
+        String computed = JsonPath.read(mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+                .andReturn().getResponse().getContentAsString(), "$.parity");
+        String wrong = "NUMERATOR".equals(computed) ? "ЗНАМЕННИК" : "ЧИСЕЛЬНИК";
+        importOrder(ORDER_35.replace("\"parityLabel\":\"ЗНАМЕННИК\"", "\"parityLabel\":\"" + wrong + "\""))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("ORDER_IMPORT_LABEL_MISMATCH"));
+        // регістр і апостроф не важать; порожня парність — береться з календаря
+        importOrder(ORDER_35.replace("\"weekdayLabel\":\"ПОНЕДІЛОК\"", "\"weekdayLabel\":\"Понеділок\"")
+                .replace("\"parityLabel\":\"ЗНАМЕННИК\"", "\"parityLabel\":null"))
+                .andExpect(status().isOk());
+    }
+
     private ResultActions importOrder(String body) throws Exception {
         return mvc.perform(post("/api/admin/import/changes").with(TestJwts.service())
                 .contentType(MediaType.APPLICATION_JSON).content(body));

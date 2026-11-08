@@ -25,6 +25,7 @@ import ua.vtc.rozklad.core.order.internal.support.OrderCalendar;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.FieldValidationException;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /**
  * Stores an order that was issued on paper before the system (or beside it) as a published order
@@ -36,13 +37,16 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * is a 409 — unless the request says {@code replace} and the stored order was imported too: then the
  * corrected rows, notes, labels and signature replace the earlier import (a misreading fixed by the
  * admin). An order the system published itself is never replaced. An imported order can also be
- * deleted (a misread number or date), see {@link #deleteIfImported}.
+ * deleted (a misread number or date), see {@link #deleteIfImported}. A printed weekday or week
+ * parity that contradicts the date in the calendar is refused (422 {@code ORDER_IMPORT_LABEL_MISMATCH}):
+ * it is the surest sign of a misread date, and the order of record would print both.
  */
 @Service
 @Transactional
 public class HistoricOrderImport {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    static final String LABEL_MISMATCH = "ORDER_IMPORT_LABEL_MISMATCH";
 
     private final OrderDocumentRepository orders;
     private final OrderCalendar calendar;
@@ -61,6 +65,7 @@ public class HistoricOrderImport {
                     + "лише видані розпорядження, а майбутні зміни створюють у системі.").formatted(date.format(DATE)));
         }
         SemesterInfo semester = calendar.requireOrderDate(date);
+        checkLabels(request);
         OrderKind kind = request.kind() == null ? OrderKind.ORDER : request.kind();
         // той самий замок, що й у публікації: номер і «одне розпорядження на дату» перевіряються без гонок
         orders.lockNumbering(semester.id());
@@ -187,6 +192,33 @@ public class HistoricOrderImport {
                                 request.date().format(DATE))));
         return OrderDocument.amendment(semester.id(), request.date(), parent.getId(),
                 OrderTexts.amendmentTitle(request.parentNumber()));
+    }
+
+    /** The printed weekday and parity must be those of the date (parity: when the calendar knows the week). */
+    private void checkLabels(HistoricOrderRequest request) {
+        LocalDate date = request.date();
+        String weekday = blankToNull(request.weekdayLabel());
+        if (weekday != null && !sameLabel(weekday, OrderTexts.weekdayLabel(date))) {
+            throw new BusinessRuleException(LABEL_MISMATCH, ("У розпорядженні надруковано «%s», а %s — %s. Перевірте "
+                    + "дату або день тижня.").formatted(weekday, date.format(DATE),
+                    UkrainianText.weekdayLower(date.getDayOfWeek().getValue())));
+        }
+        String parity = blankToNull(request.parityLabel());
+        String computed = parityLabel(date);
+        if (parity != null && computed != null && !sameLabel(parity, computed)) {
+            throw new BusinessRuleException(LABEL_MISMATCH, ("У розпорядженні надруковано «%s», а за календарем %s — "
+                    + "%s. Перевірте дату; якщо в календарі неправильна парність тижня, спершу виправте її в календарі.")
+                    .formatted(parity, date.format(DATE), computed.toLowerCase(UkrainianText.LOCALE)));
+        }
+    }
+
+    /** «ПʼЯТНИЦЯ» = «П'ятниця»: case, apostrophe variants and spaces do not matter. */
+    private static boolean sameLabel(String printed, String expected) {
+        return labelKey(printed).equals(labelKey(expected));
+    }
+
+    private static String labelKey(String label) {
+        return label.replaceAll("[ʼ'’`\\s]", "").toUpperCase(UkrainianText.LOCALE);
     }
 
     private String parityLabel(LocalDate date) {
