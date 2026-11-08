@@ -219,7 +219,7 @@ class HistoricOrderImportIT {
     void takenNumberFutureDateAndUnreadableRowAreRejected() throws Exception {
         importOrder(ORDER_35).andExpect(status().isOk());
 
-        importOrder(ORDER_35.replace("2026-10-19", "2026-10-20"))
+        importOrder(ORDER_35.replace("2026-10-19", "2026-10-20").replace("ПОНЕДІЛОК", "ВІВТОРОК"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("Розпорядження №35 уже є в семестрі «%s» (на 19.10.2026)."
                         .formatted(semester.getName())));
