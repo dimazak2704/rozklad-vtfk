@@ -35,7 +35,7 @@ export function ChangesStrip({ items, onSelect, title = 'Зміни цього �
         <span className="text-caption font-normal text-secondary">{countLabel(items.length, ['зміна', 'зміни', 'змін'])}</span>
       </h2>
       <ul className="flex flex-col gap-1">
-        {items.map(({ day, lesson }) => {
+        {items.map(({ day, lesson, pairTo }) => {
           const tone = LESSON_TONE[lesson.kind];
           const reason = lesson.reasonText;
           const hint = reasonHint(reason);
@@ -43,7 +43,7 @@ export function ChangesStrip({ items, onSelect, title = 'Зміни цього �
             <>
               <span className="min-w-[8.25rem] shrink-0 text-caption font-semibold whitespace-nowrap text-secondary figures">
                 {showDate ? `${formatShortWeekdayDate(day.date)} · ` : ''}
-                {lesson.pair} пара
+                {pairTo ? `${lesson.pair}–${pairTo} пари` : `${lesson.pair} пара`}
               </span>
               <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
                 <Badge tone={TONE_BADGE[tone]} size="sm">

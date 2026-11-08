@@ -36,3 +36,11 @@ export function returnToFromState(state: unknown): string | undefined {
   const value = (state as SigninState).returnTo;
   return isSafeReturnPath(value) ? value : undefined;
 }
+
+/**
+ * Повне відкриття сторінки після входу: AuthProvider підхоплює сесію з `sessionStorage` під час
+ * завантаження, тож так сторінка бачить користувача, навіть коли обробка повернення з Keycloak не вдалася.
+ */
+export function openAfterLogin(path: string): void {
+  window.location.replace(path);
+}

@@ -97,6 +97,16 @@ describe('логіка розкладу', () => {
     expect(reasonHint('Зв.зам.')).toBe('Взаємна заміна');
   });
 
+  it('блок пар однієї зміни у «Змінах цього тижня» — одним рядком «1–4 пари»', () => {
+    const block = (pair: number) => lesson({ pair, kind: 'BLOCK', changeId: 'block-1', discipline: ref('ЗУ') });
+    const blocked: ScheduleDto = {
+      ...schedule,
+      days: [day('2026-11-19', [block(1), block(2), block(3), block(4), lesson({ pair: 5, kind: 'CANCELLED', changeId: 'c-2' })])],
+    };
+    const changed = changedLessons(blocked);
+    expect(changed.map((c) => [c.lesson.pair, c.pairTo ?? null])).toEqual([[1, 4], [5, null]]);
+  });
+
   it('текст «Поділитися» містить день, парність, пари й зміни', () => {
     const text = dayShareText('4КІ1', schedule.days[0], 'group');
     expect(text.split('\n')[0]).toBe('4КІ1 — понеділок, 19 жовтня (знаменник)');

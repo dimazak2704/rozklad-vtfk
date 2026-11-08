@@ -40,14 +40,31 @@ export function filterBySubgroup(schedule: ScheduleDto, subgroup: number | null)
 export interface ChangedLesson {
   day: DayDto;
   lesson: LessonView;
+  /** Остання пара блоку («1–4»), коли одна зміна (блок пар) займає кілька пар поспіль. */
+  pairTo?: number;
 }
 
-/** Змінені заняття в порядку днів і пар. */
+/** Змінені заняття в порядку днів і пар; блок пар однієї зміни — одним рядком. */
 export function changedLessons(schedule: ScheduleDto | undefined): ChangedLesson[] {
   const out: ChangedLesson[] = [];
   for (const day of schedule?.days ?? []) {
     for (const lesson of [...day.lessons].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup)) {
-      if (isChangedLesson(lesson)) out.push({ day, lesson });
+      if (!isChangedLesson(lesson)) continue;
+      const last = out.at(-1);
+      if (
+        lesson.kind === 'BLOCK' &&
+        last &&
+        last.day.date === day.date &&
+        last.lesson.kind === 'BLOCK' &&
+        last.lesson.changeId != null &&
+        last.lesson.changeId === lesson.changeId &&
+        last.lesson.subgroup === lesson.subgroup &&
+        (last.pairTo ?? last.lesson.pair) + 1 === lesson.pair
+      ) {
+        last.pairTo = lesson.pair;
+        continue;
+      }
+      out.push({ day, lesson });
     }
   }
   return out;
