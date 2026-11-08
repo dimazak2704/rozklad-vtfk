@@ -70,7 +70,8 @@ public class TemplateLessonMapper {
         return new TemplateLessonDto(lesson.getId(), weekday, pair, parity, refs.group(lesson.getGroupId()),
                 lesson.getSubgroupNumber(), refs.discipline(lesson.getDisciplineId()),
                 refs.teacher(lesson.getTeacherId()), refs.room(roomId), lesson.getLessonKind(),
-                lesson.getLoadItemId(), lesson.isPinned(), lesson.isOnline(), lesson.getStreamId());
+                lesson.getLoadItemId(), lesson.isPinned(), lesson.isOnline(), lesson.getStreamId(),
+                lesson.getVersion());
     }
 
     private static List<UUID> ids(Collection<TemplateLesson> lessons, Function<TemplateLesson, UUID> id) {

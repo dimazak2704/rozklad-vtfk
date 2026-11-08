@@ -284,7 +284,7 @@ class TimetablePublicationIT {
         TemplateLesson ndeksm4ki2 = transaction.execute(status -> em.createQuery(
                         "select t from TemplateLesson t where t.versionId = :v and t.groupId = :g", TemplateLesson.class)
                 .setParameter("v", secondVersion).setParameter("g", data.group4ki2.getId()).getSingleResult());
-        templateLessons.move(secondVersion, ndeksm4ki2.getId(), new MoveCommand(1, 2, Parity.BOTH, null));
+        templateLessons.move(secondVersion, ndeksm4ki2.getId(), new MoveCommand(1, 2, Parity.BOTH, null), null);
         Queue published = probe(RozkladEvents.TIMETABLE_VERSION_PUBLISHED);
         Queue changed = probe(RozkladEvents.SCHEDULE_CHANGED);
 
@@ -642,7 +642,7 @@ class TimetablePublicationIT {
                         """, TemplateLesson.class)
                 .setParameter("v", secondVersion).setParameter("g", group).getSingleResult());
         templateLessons.update(secondVersion, stp.getId(), new TemplateLessonCommand(1, 2, Parity.BOTH, group, 0,
-                data.stp.getId(), null, data.lab6.getId(), stp.getLessonKind(), null, false, false, null));
+                data.stp.getId(), null, data.lab6.getId(), stp.getLessonKind(), null, false, false, null), null);
 
         PublicationResult result = publication.publish(secondVersion, pendingDay, "admin");
 

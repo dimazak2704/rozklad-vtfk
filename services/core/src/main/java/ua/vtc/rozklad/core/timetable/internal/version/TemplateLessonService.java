@@ -1,5 +1,7 @@
 package ua.vtc.rozklad.core.timetable.internal.version;
 
+import static ua.vtc.rozklad.core.shared.persistence.EntityGuards.checkVersion;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -70,9 +72,16 @@ public class TemplateLessonService {
         return response(version, lesson, Set.of(new Slot(command.weekday(), command.pair())));
     }
 
-    public TemplateLessonMutationResponse update(UUID versionId, UUID lessonId, TemplateLessonCommand command) {
+    /**
+     * Replaces the lesson. {@code expectedVersion} is the lesson's {@code version} the dispatcher
+     * edited: an older one is 409 {@code stale-data} (another dispatcher changed it meanwhile);
+     * {@code null} skips the check.
+     */
+    public TemplateLessonMutationResponse update(UUID versionId, UUID lessonId, TemplateLessonCommand command,
+                                                 Long expectedVersion) {
         TimetableVersion version = versions.requireDraftForUpdate(versionId);
         TemplateLesson lesson = requireLesson(versionId, lessonId);
+        checkVersion(lesson, expectedVersion);
         references.validate(command, version.getSemesterId());
         Slot before = Slot.of(lesson);
         lesson.moveTo(command.weekday(), command.pair(), command.parity());
@@ -80,6 +89,8 @@ public class TemplateLessonService {
         lesson.setSubgroupNumber(command.subgroup());
         lesson.setDisciplineId(command.disciplineId());
         apply(lesson, command);
+        // нова версія уроку — у відповіді, щоб наступна правка її надіслала
+        lessons.flush();
         return response(version, lesson, slots(before, Slot.of(lesson)));
     }
 
@@ -107,10 +118,15 @@ public class TemplateLessonService {
                 touched(report, lessonId, slots(Slot.of(lesson), new Slot(target.weekday(), target.pair()))));
     }
 
-    /** Moves the lesson unless the move gives it a hard conflict (409 with {@code conflicts[]}). */
-    public TemplateLessonMutationResponse move(UUID versionId, UUID lessonId, MoveCommand target) {
+    /**
+     * Moves the lesson unless the move gives it a hard conflict (409 with {@code conflicts[]}); a stale
+     * {@code expectedVersion} is 409 {@code stale-data} ({@code null} skips the check).
+     */
+    public TemplateLessonMutationResponse move(UUID versionId, UUID lessonId, MoveCommand target,
+                                               Long expectedVersion) {
         TimetableVersion version = versions.requireDraftForUpdate(versionId);
         TemplateLesson lesson = requireLesson(versionId, lessonId);
+        checkVersion(lesson, expectedVersion);
         references.validateRoom(target.roomId());
         Slot before = Slot.of(lesson);
         ConflictReport report = reportAfterMove(version, lesson, target);
@@ -118,6 +134,7 @@ public class TemplateLessonService {
         if (target.roomId() != null) {
             lesson.setRoomId(target.roomId());
         }
+        lessons.flush();
         return new TemplateLessonMutationResponse(mapper.toDto(lesson),
                 touched(report, lessonId, slots(before, Slot.of(lesson))));
     }

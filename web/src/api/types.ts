@@ -606,6 +606,8 @@ export interface TemplateLessonDto {
   pinned: boolean;
   online: boolean;
   streamId?: Nullable<Uuid>;
+  /** Версія уроку (оптимістичне блокування): правка з іншою версією → 409 `stale-data`. */
+  version?: number;
 }
 
 /** Тіло POST/PUT уроку чернетки. @inferred */
@@ -623,6 +625,8 @@ export interface TemplateLessonRequest {
   pinned?: boolean;
   online?: boolean;
   streamId?: Nullable<Uuid>;
+  /** PUT: версія уроку, яку бачив диспетчер (застаріла → 409 `stale-data`). */
+  version?: number;
 }
 
 /** Відповідь на редагування чернетки: урок + конфлікти зачепленого слота. @inferred */
@@ -637,6 +641,8 @@ export interface MoveLessonRequest {
   pair: number;
   parity: Parity;
   roomId?: Nullable<Uuid>;
+  /** Версія уроку, яку бачив диспетчер (застаріла → 409 `stale-data`). */
+  version?: number;
 }
 
 /** GET …/versions/{id}/conflicts */

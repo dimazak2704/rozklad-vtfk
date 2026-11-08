@@ -52,7 +52,7 @@ class TemplateLessonControllerTest {
     private static final TemplateLessonDto DTO = new TemplateLessonDto(LESSON, 1, 2, Parity.BOTH,
             new GroupRef(GROUP, "4КІ1", 4), 0, new DisciplineRef(DISCIPLINE, "СТП", "Сучасні технології проєктування",
             null), new TeacherRef(UUID.randomUUID(), "Кренцін М.Д.", "Кренцін"),
-            new RoomRef(UUID.randomUUID(), "6", RoomType.COMPUTER_LAB), LessonKind.LAB, null, false, false, null);
+            new RoomRef(UUID.randomUUID(), "6", RoomType.COMPUTER_LAB), LessonKind.LAB, null, false, false, null, 3);
 
     @Autowired
     private MockMvc mockMvc;
@@ -107,7 +107,7 @@ class TemplateLessonControllerTest {
         ConflictDto clash = ConflictDto.hardInTemplate(ConflictKind.TEACHER,
                 "Викладач Кренцін М.Д. одночасно має кілька занять: 4КІ1 СТП, 4КІ2 НДЕКСМ (вівторок, 3 пара)",
                 List.of(LESSON, OTHER_LESSON), 2, 3);
-        given(lessons.move(eq(VERSION), eq(LESSON), any(MoveCommand.class)))
+        given(lessons.move(eq(VERSION), eq(LESSON), any(MoveCommand.class), any()))
                 .willThrow(new ConflictException("Перенесення створює конфлікти в розкладі", List.of(clash)));
 
         mockMvc.perform(post("/api/admin/timetable/versions/{v}/lessons/{l}/move", VERSION, LESSON)
@@ -136,7 +136,7 @@ class TemplateLessonControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lesson.id").value(LESSON.toString()))
                 .andExpect(jsonPath("$.conflicts").isEmpty());
-        verify(lessons, never()).move(any(), any(), any());
+        verify(lessons, never()).move(any(), any(), any(), any());
     }
 
     @Test

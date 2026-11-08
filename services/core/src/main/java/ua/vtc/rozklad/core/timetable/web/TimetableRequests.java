@@ -32,7 +32,10 @@ final class TimetableRequests {
     record Publish(@NotNull LocalDate effectiveFrom) {
     }
 
-    /** Body of {@code POST/PUT …/lessons}; {@code subgroup} 0 (default) = the whole group. */
+    /**
+     * Body of {@code POST/PUT …/lessons}; {@code subgroup} 0 (default) = the whole group;
+     * {@code version} (PUT) — the lesson's version the edit is based on (stale → 409).
+     */
     record TemplateLesson(
             @NotNull @Min(1) @Max(5) Integer weekday,
             @NotNull @Min(1) @Max(8) Integer pair,
@@ -46,7 +49,8 @@ final class TimetableRequests {
             UUID loadItemId,
             Boolean pinned,
             Boolean online,
-            UUID streamId) {
+            UUID streamId,
+            Long version) {
 
         TemplateLessonCommand toCommand() {
             return new TemplateLessonCommand(weekday, pair, parity, groupId, subgroup == null ? 0 : subgroup,
@@ -55,9 +59,12 @@ final class TimetableRequests {
         }
     }
 
-    /** {@code POST …/lessons/{lessonId}/move}; without {@code roomId} the room stays. */
+    /**
+     * {@code POST …/lessons/{lessonId}/move}; without {@code roomId} the room stays; {@code version} —
+     * the lesson's version the move is based on (stale → 409).
+     */
     record Move(@NotNull @Min(1) @Max(5) Integer weekday, @NotNull @Min(1) @Max(8) Integer pair,
-                @NotNull Parity parity, UUID roomId) {
+                @NotNull Parity parity, UUID roomId, Long version) {
 
         MoveCommand toCommand() {
             return new MoveCommand(weekday, pair, parity, roomId);

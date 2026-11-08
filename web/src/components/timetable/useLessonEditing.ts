@@ -61,7 +61,12 @@ export function useLessonEditing(versionId: Uuid) {
   async function moveLesson(lesson: TemplateLessonDto, target: MoveLessonRequest, room: PublicRoomDto | null): Promise<boolean> {
     const toRoom = room ? toRoomRef(room) : (lesson.room ?? null);
     try {
-      const result = await move.mutateAsync({ lessonId: lesson.id, target, room: room ? toRoomRef(room) : undefined });
+      // версія уроку, який диспетчер перетягнув: якщо його щойно змінив інший, сервер відповість 409
+      const result = await move.mutateAsync({
+        lessonId: lesson.id,
+        target: { ...target, version: lesson.version },
+        room: room ? toRoomRef(room) : undefined,
+      });
       const label = `${lessonShort(lesson)}: ${slotShort(lesson)} → ${slotShort(target)}`;
       record({ kind: 'move', lessonId: lesson.id, from: slotOf(lesson), to: target, fromRoom: lesson.room ?? null, toRoom, label });
       notify.undo(`Пару перенесено: ${label}`, { description: warningsDescription(result.conflicts), onUndo: () => void undo() });
@@ -89,7 +94,8 @@ export function useLessonEditing(versionId: Uuid) {
 
   async function updateLesson(before: TemplateLessonDto, body: TemplateLessonRequest): Promise<TemplateLessonDto | null> {
     try {
-      const result = await update.mutateAsync({ lessonId: before.id, body });
+      // версія уроку, з якого відкрили форму: чужа правка за цей час не перезапишеться мовчки
+      const result = await update.mutateAsync({ lessonId: before.id, body: { ...body, version: before.version } });
       record({ kind: 'update', before, after: result.lesson, label: `змінено ${lessonShort(result.lesson)}` });
       notify.undo(`Пару змінено: ${lessonShort(result.lesson)}, ${slotShort(result.lesson)}`, {
         description: warningsDescription(result.conflicts),
@@ -134,7 +140,11 @@ export function useLessonEditing(versionId: Uuid) {
         return;
       }
       case 'update':
-        await update.mutateAsync({ lessonId: entry.before.id, body: toLessonRequest(back ? entry.before : entry.after) });
+        // збережена в історії версія вже не поточна: її бере мутація з кешу
+        await update.mutateAsync({
+          lessonId: entry.before.id,
+          body: { ...toLessonRequest(back ? entry.before : entry.after), version: undefined },
+        });
         return;
       case 'create':
       case 'delete': {

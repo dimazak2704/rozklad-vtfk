@@ -51,7 +51,7 @@ class TemplateLessonController {
     @PutMapping("/{lessonId}")
     TemplateLessonMutationResponse update(@PathVariable UUID versionId, @PathVariable UUID lessonId,
                                           @Valid @RequestBody TimetableRequests.TemplateLesson request) {
-        return lessons.update(versionId, lessonId, request.toCommand());
+        return lessons.update(versionId, lessonId, request.toCommand(), request.version());
     }
 
     /** 200 with the conflicts left in the slot (the lesson itself is {@code null}). */
@@ -65,6 +65,6 @@ class TemplateLessonController {
                                         @RequestParam(defaultValue = "false") boolean dryRun,
                                         @Valid @RequestBody TimetableRequests.Move request) {
         return dryRun ? lessons.previewMove(versionId, lessonId, request.toCommand())
-                : lessons.move(versionId, lessonId, request.toCommand());
+                : lessons.move(versionId, lessonId, request.toCommand(), request.version());
     }
 }

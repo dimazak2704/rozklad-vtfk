@@ -23,5 +23,6 @@ public record TemplateLessonDto(
         UUID loadItemId,
         boolean pinned,
         boolean online,
-        UUID streamId) {
+        UUID streamId,
+        long version) {
 }

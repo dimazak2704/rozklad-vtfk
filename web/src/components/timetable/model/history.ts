@@ -112,5 +112,6 @@ export function toLessonRequest(lesson: TemplateLessonDto): TemplateLessonReques
     pinned: lesson.pinned,
     online: lesson.online,
     streamId: lesson.streamId ?? null,
+    version: lesson.version,
   };
 }

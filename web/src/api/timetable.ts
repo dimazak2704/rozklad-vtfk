@@ -218,11 +218,28 @@ export function applyMoveToLessons(lessons: readonly TemplateLessonDto[], variab
 
 // ───────────────────────── Мутації занять ─────────────────────────
 
+/**
+ * Версія уроку для правки: та, що прийшла з тілом (бачив диспетчер), або з кешу — для повторів і
+ * скасувань з історії, де збережена версія вже не поточна.
+ */
+function withVersion<T extends { version?: number }>(
+  queryClient: QueryClient,
+  versionId: Uuid,
+  lessonId: Uuid,
+  body: T,
+): T {
+  if (body.version !== undefined) return body;
+  const cached = queryClient
+    .getQueryData<TemplateLessonDto[]>(qk.admin.timetable.lessons(versionId, {}))
+    ?.find((lesson) => lesson.id === lessonId)?.version;
+  return cached === undefined ? body : { ...body, version: cached };
+}
+
 export function useMoveLesson(versionId: Uuid) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ lessonId, target }: MoveLessonVariables) =>
-      api.post<LessonMutationResult>(`${lessonPath(versionId, lessonId)}/move`, target),
+      api.post<LessonMutationResult>(`${lessonPath(versionId, lessonId)}/move`, withVersion(queryClient, versionId, lessonId, target)),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: qk.admin.timetable.lessons(versionId, {}) });
       return { previous: patchLessons(queryClient, versionId, (lessons) => applyMoveToLessons(lessons, variables)) };
@@ -279,7 +296,7 @@ export function useUpdateLesson(versionId: Uuid) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ lessonId, body }: { lessonId: Uuid; body: TemplateLessonRequest }) =>
-      api.put<LessonMutationResult>(lessonPath(versionId, lessonId), body),
+      api.put<LessonMutationResult>(lessonPath(versionId, lessonId), withVersion(queryClient, versionId, lessonId, body)),
     onSuccess: (result) => {
       patchLessons(queryClient, versionId, (lessons) => lessons.map((l) => (l.id === result.lesson.id ? result.lesson : l)));
     },

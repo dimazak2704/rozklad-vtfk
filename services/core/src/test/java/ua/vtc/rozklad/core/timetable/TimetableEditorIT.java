@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.LessonKind;
 import ua.vtc.rozklad.contracts.Parity;
@@ -108,14 +109,14 @@ class TimetableEditorIT {
         assertThat(pairOf(stp)).isEqualTo(1);
 
         UUID km = lessonId(data.group4ki1.getId(), 3);
-        assertThatThrownBy(() -> lessons.move(draftId, km, new MoveCommand(1, 2, Parity.BOTH, null)))
+        assertThatThrownBy(() -> lessons.move(draftId, km, new MoveCommand(1, 2, Parity.BOTH, null), null))
                 .isInstanceOfSatisfying(ConflictException.class, refused -> assertThat(refused.getConflicts())
                         .extracting(ConflictDto::kind)
                         .containsExactlyInAnyOrder(ConflictKind.TEACHER, ConflictKind.ROOM));
         assertThat(pairOf(km)).isEqualTo(3);
 
         TemplateLessonMutationResponse moved = lessons.move(draftId, km, new MoveCommand(2, 1, Parity.NUMERATOR,
-                data.lab6.getId()));
+                data.lab6.getId()), null);
         assertThat(moved.lesson().parity()).isEqualTo(Parity.NUMERATOR);
         assertThat(moved.lesson().room().name()).isEqualTo("6");
     }
@@ -125,17 +126,25 @@ class TimetableEditorIT {
         UUID km = lessonId(data.group4ki1.getId(), 3);
 
         // заміна аудиторії / онлайн без переміщення: той самий слот до і після (раніше — 500 з Set.of)
-        TemplateLessonMutationResponse edited = lessons.update(draftId, km, new TemplateLessonCommand(1, 3,
-                Parity.BOTH, data.group4ki1.getId(), 0, data.km.getId(), data.nepyivoda.getId(), null,
-                LessonKind.MIXED, null, false, true, null));
+        TemplateLessonCommand online = new TemplateLessonCommand(1, 3, Parity.BOTH, data.group4ki1.getId(), 0,
+                data.km.getId(), data.nepyivoda.getId(), null, LessonKind.MIXED, null, false, true, null);
+        long loaded = lessons.list(draftId, data.group4ki1.getId(), null, null).stream()
+                .filter(lesson -> lesson.id().equals(km)).findFirst().orElseThrow().version();
+        TemplateLessonMutationResponse edited = lessons.update(draftId, km, online, loaded);
         assertThat(edited.lesson().room()).isNull();
         assertThat(edited.lesson().online()).isTrue();
+        assertThat(edited.lesson().version()).as("the answer carries the new version").isEqualTo(loaded + 1);
+        // друга правка з тієї самої (вже застарілої) версії не перезаписує першу мовчки
+        assertThatThrownBy(() -> lessons.update(draftId, km, online, loaded))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThatThrownBy(() -> lessons.move(draftId, km, new MoveCommand(1, 3, Parity.NUMERATOR, null), loaded))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
         TemplateLessonMutationResponse preview = lessons.previewMove(draftId, km,
                 new MoveCommand(1, 3, Parity.NUMERATOR, null));
         assertThat(preview.lesson().parity()).isEqualTo(Parity.NUMERATOR);
         TemplateLessonMutationResponse moved = lessons.move(draftId, km, new MoveCommand(1, 3, Parity.DENOMINATOR,
-                data.lab6.getId()));
+                data.lab6.getId()), edited.lesson().version());
         assertThat(moved.lesson().parity()).isEqualTo(Parity.DENOMINATOR);
         assertThat(moved.lesson().room().name()).isEqualTo("6");
     }
@@ -176,7 +185,7 @@ class TimetableEditorIT {
                         select t.id from TemplateLesson t where t.versionId = :v and t.groupId = :g and t.pairNumber = 3
                         """, UUID.class)
                 .setParameter("v", copy.id()).setParameter("g", data.group4ki1.getId()).getSingleResult());
-        lessons.move(copy.id(), km4ki1, new MoveCommand(2, 1, Parity.BOTH, null));
+        lessons.move(copy.id(), km4ki1, new MoveCommand(2, 1, Parity.BOTH, null), null);
         lessons.create(copy.id(), lesson(data.group4ki2.getId(), 3, 2, null, null));
 
         assertThat(versions.list(data.semester.getId())).extracting(TimetableVersionDto::name,

@@ -55,7 +55,20 @@ import {
   TEMPLATE_LESSONS,
 } from '../fixtures';
 import { mockId } from '../ids';
-import { apiPath, badRequest, businessRule, conflict, notFound, readJson } from '../kit';
+import { apiPath, badRequest, businessRule, conflict, notFound, problem, readJson } from '../kit';
+
+/** Правка з версією, старішою за збережену (як EntityGuards.checkVersion у core); без версії не перевіряємо. */
+const isStale = (lesson: TemplateLessonDto, version: number | undefined): boolean =>
+  version !== undefined && version !== (lesson.version ?? 0);
+
+/** 409 `stale-data`: урок щойно змінив інший диспетчер. */
+const staleLesson = (): Response =>
+  problem({
+    status: 409,
+    slug: 'stale-data',
+    title: 'Дані змінилися',
+    detail: 'Цю пару щойно змінив інший користувач. Оновіть сторінку та повторіть дію.',
+  });
 import { createMockStore } from '../store';
 
 // ───────────────────────── Правила слотів (DOMAIN §5) ─────────────────────────
@@ -744,7 +757,9 @@ export const handlers = [
     editableOr422(version);
     const current = version.lessons.find((l) => l.id === params.lessonId);
     if (!current) return notFound(`Заняття з id ${String(params.lessonId)} у цій версії немає.`);
-    const lesson = lessonFromRequest(await readJson<Partial<TemplateLessonRequest>>(request), current.id, current);
+    const body = await readJson<Partial<TemplateLessonRequest>>(request);
+    if (isStale(current, body.version)) return staleLesson();
+    const lesson = { ...lessonFromRequest(body, current.id, current), version: (current.version ?? 0) + 1 };
     const next = saveVersion({ ...version, lessons: version.lessons.map((l) => (l.id === current.id ? lesson : l)) });
     return HttpResponse.json(mutationResult(version.lessons, next.lessons, lesson));
   }),
@@ -766,6 +781,7 @@ export const handlers = [
     const lesson = version.lessons.find((l) => l.id === params.lessonId);
     if (!lesson) return notFound(`Заняття з id ${String(params.lessonId)} у цій версії немає.`);
     const body = await readJson<Partial<MoveLessonRequest>>(request);
+    if (!dryRun && isStale(lesson, body.version)) return staleLesson();
     const errors: FieldErrorDto[] = [];
     validateSlot(body, errors);
     const room = resolveRoom(body.roomId, errors);
@@ -782,6 +798,7 @@ export const handlers = [
           pair: body.pair as number,
           parity: body.parity as Parity,
           ...(room ? { room: roomRef(room) } : {}),
+          version: (l.version ?? 0) + 1,
         },
       ]),
     );
