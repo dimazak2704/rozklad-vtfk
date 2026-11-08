@@ -159,12 +159,14 @@ def step_substitution(admin: seed.Client, stream: EventStream, **_) -> None:
     if option.get("discipline"):
         request["newDisciplineId"] = option["discipline"]["id"]
     change = admin.post("/api/admin/changes", request)
-    check(change["status"] == "PENDING_CONFIRMATION", "change waits for the teacher's confirmation")
+    # NOTIFY (типовий): заміна діє одразу, викладачу повідомлено; CONFIRM: чекає його згоди
+    notify = change["approvalMode"] == "NOTIFY"
+    check(change["status"] == ("CONFIRMED" if notify else "PENDING_CONFIRMATION"),
+          f"approval mode {change['approvalMode']}: status {change['status']}")
 
     # викладач відмовляється, диспетчер просить ще раз, викладач підтверджує
-    pending = [c for c in seed.items(krentsin.get("/api/me/changes?status=PENDING_CONFIRMATION"))
-               if c["id"] == change["id"]]
-    check(len(pending) == 1, "the change is in «мої заміни» of krentsin")
+    mine = [c for c in seed.items(krentsin.get("/api/me/changes")) if c["id"] == change["id"]]
+    check(len(mine) == 1, "the change is in «мої заміни» of krentsin")
     declined = krentsin.post(f"/api/me/changes/{change['id']}/decline", {"comment": "Маю іншу пару"})
     check(declined["status"] == "DECLINED", "krentsin declines")
     admin.post(f"/api/admin/changes/{change['id']}/request-confirmation")

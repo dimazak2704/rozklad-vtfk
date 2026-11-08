@@ -2,7 +2,8 @@ package ua.vtc.rozklad.core.settings.internal;
 
 /**
  * Keys of the {@code setting} table. The default rows are inserted by migration
- * {@code V1_802__setting_defaults.sql}; {@code SystemSettings.DEFAULTS} holds the same values.
+ * {@code V1_802__setting_defaults.sql} ({@code V1_805} moves the approval mode to NOTIFY);
+ * {@code SystemSettings.DEFAULTS} holds the same values.
  */
 enum SettingKey {
     APPROVAL_MODE("substitution.approvalMode"),

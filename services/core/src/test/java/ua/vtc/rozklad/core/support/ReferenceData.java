@@ -28,7 +28,7 @@ public final class ReferenceData {
 
     /**
      * Removes test bell profiles and setting overrides; settings without a row fall back to
-     * {@code SystemSettings.DEFAULTS}, which equal the V1_802 values. Call after the semesters of
+     * {@code SystemSettings.DEFAULTS}, which equal the V1_802/V1_805 values. Call after the semesters of
      * the test are deleted.
      */
     public static void restore(JdbcTemplate jdbc) {
