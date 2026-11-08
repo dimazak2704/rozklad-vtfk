@@ -21,7 +21,7 @@ import ua.vtc.rozklad.core.substitution.TeacherPreferenceRepository;
 /**
  * Unwanted / unavailable slots of a teacher in a semester (DOMAIN §5): UNAVAILABLE excludes the
  * teacher from substitutions in that slot, UNWANTED lowers the candidate score. PUT replaces the
- * whole grid.
+ * whole grid; parallel replacements of one grid run one after another (the last one wins).
  */
 @Service
 @Transactional
@@ -59,6 +59,8 @@ public class PreferenceService {
                         .formatted(UkrainianText.weekday(DayOfWeek.of(slot.weekday())), slot.pair()));
             }
         }
+        // паралельні збереження (подвійний клік) виконуються по черзі: перемагає останнє
+        preferences.lockGridOf(teacherId, semester.getId());
         preferences.deleteAllOf(teacherId, semester.getId());
         preferences.saveAll(grid.stream()
                 .map(slot -> new TeacherPreference(teacherId, semester.getId(), slot.weekday(), slot.pair(),
