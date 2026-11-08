@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
   addDays,
@@ -291,4 +292,37 @@ test('налаштування: помилки перевірки від сер�
   await expect(page.getByText('Не вдалося зберегти налаштування')).toBeVisible();
   // нічого не збереглося
   expect(await getJson<Record<string, unknown>>(admin, '/api/admin/settings')).toEqual(before);
+});
+
+/**
+ * Сервіс упав: importer зупинено на час тесту (docker stop), gateway відповідає 503, сторінка імпорту показує
+ * помилку з повтором, а решта панелі працює. Лише з REAL_STOP_SERVICES=1: тест зупиняє контейнер стенду.
+ */
+test('importer зупинено: імпорт показує помилку сервера з повтором, панель працює', async ({ page }) => {
+  test.skip(process.env.REAL_STOP_SERVICES !== '1', 'зупиняє контейнер importer: лише з REAL_STOP_SERVICES=1');
+  test.setTimeout(240_000);
+  const container = process.env.REAL_IMPORTER_CONTAINER || 'rozklad-importer-1';
+  await login(page, 'ADMIN', '/admin');
+  await expect(page.getByRole('heading', { level: 1, name: 'Панель диспетчера' })).toBeVisible({ timeout: 30_000 });
+
+  execFileSync('docker', ['stop', container], { stdio: 'ignore' });
+  try {
+    const failed = page.waitForResponse((r) => r.url().includes('/api/import/jobs') && r.status() === 503);
+    await page.goto('/admin/import');
+    expect((await failed).status()).toBe(503);
+    // після повторів запиту (5xx повторюються двічі) — помилка в таблиці завдань з кнопкою повтору
+    const table = page.getByRole('table', { name: 'Завдання імпорту' });
+    await expect(table.getByRole('alert')).toContainText('Сервіс тимчасово недоступний', { timeout: 30_000 });
+    await expect(table.getByRole('alert')).toContainText('Спробуйте ще раз за хвилину.');
+    await expect(table.getByRole('button', { name: /Спробувати ще раз/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Імпорт' })).toBeVisible();
+  } finally {
+    execFileSync('docker', ['start', container], { stdio: 'ignore' });
+  }
+  // сервіс повернувся — «Спробувати ще раз» завантажує список
+  await expect
+    .poll(() => execFileSync('docker', ['inspect', '-f', '{{.State.Health.Status}}', container]).toString().trim(), { timeout: 180_000 })
+    .toBe('healthy');
+  await page.getByRole('table', { name: 'Завдання імпорту' }).getByRole('button', { name: /Спробувати ще раз/ }).click();
+  await expect(page.getByRole('table', { name: 'Завдання імпорту' }).getByRole('row').filter({ hasText: 'schedule-2025-26.xlsx' }).first()).toBeVisible();
 });

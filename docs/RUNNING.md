@@ -153,6 +153,10 @@ fresh seed). The date is the first school day a week ahead without an absence of
 so the suite can run again; a two-day absence of Стець is created and cancelled. For clean demo data afterwards:
 `reset-data --yes`, `up --no-build`, `seed`.
 
+`REAL_STOP_SERVICES=1` adds one more desktop test: it stops the importer container (`docker stop`), checks that the
+import page shows «Сервіс тимчасово недоступний» (gateway 503) with a retry while the rest of the panel works,
+starts the container again and waits until it is healthy (about a minute).
+
 ## 7. Troubleshooting
 
 * A service stays `starting`: `scripts/dev-stack.sh logs <service>`; the JSON lines have `log.level` and
