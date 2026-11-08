@@ -8,38 +8,69 @@ import { Wordmark } from './Wordmark';
 
 const SECTIONS: ReadonlyArray<NonNullable<NavMeta['section']>> = ['Щодня', 'Розклад', 'Дані', 'Система'];
 
+/** Лічильник біля пункту: скільки записів чекає; `unresolved` — є невирішені (тоді синім). */
+export interface SidebarCount {
+  value: number;
+  unresolved?: boolean;
+}
+
 interface AdminSidebarProps {
   collapsed: boolean;
   onToggleCollapsed?: () => void;
   /** Клік по пункту (закрити шторку на планшеті). */
   onNavigate?: () => void;
+  /** Живі лічильники за id маршруту: `{ 'admin-changes': { value: 3, unresolved: true } }`. */
+  counts?: Readonly<Record<string, SidebarCount | undefined>>;
   className?: string;
 }
 
 /**
- * Бічна панель диспетчера — «лінія» маршрутного синього: розділи «Щодня / Розклад / Дані / Система»,
- * іконки з підписами, згортається до іконок з підказками.
+ * Бічна панель диспетчера — спокійна біла панель (як Outlook чи Google Admin): розділи
+ * «Щодня / Розклад / Дані / Система», іконки з підписами, згортається до іконок з підказками.
+ * Емаль тут лише в табличці «ВТФК»; вибраний пункт — тонований синім з рискою на початку.
  */
-export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, className }: AdminSidebarProps) {
+export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, counts, className }: AdminSidebarProps) {
   const items = navFor('admin');
   return (
-    <div className={cn('flex h-full flex-col bg-shell text-on-shell', className)}>
-      <div className={cn('flex h-14 shrink-0 items-center border-b border-shell', collapsed ? 'justify-center px-2' : 'px-4')}>
-        <Wordmark to="/admin" compact={collapsed} />
+    <div className={cn('flex h-full flex-col border-e border-default bg-surface text-primary', className)}>
+      <div
+        className={cn(
+          'flex h-14 shrink-0 items-center gap-2 border-b border-default',
+          collapsed ? 'flex-col justify-center px-2' : 'ps-4 pe-2',
+        )}
+      >
+        {collapsed ? null : <Wordmark to="/admin" tone="surface" />}
+        {onToggleCollapsed ? (
+          <IconButton
+            label={collapsed ? 'Розгорнути панель' : 'Згорнути панель'}
+            icon={
+              collapsed ? (
+                <PanelLeftOpen aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
+              ) : (
+                <PanelLeftClose aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
+              )
+            }
+            size="sm"
+            tooltipSide="right"
+            className={collapsed ? undefined : 'ms-auto'}
+            onClick={onToggleCollapsed}
+          />
+        ) : null}
       </div>
-      <nav aria-label="Розділи панелі диспетчера" className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain py-3">
-        {SECTIONS.map((section) => {
+      <nav aria-label="Розділи панелі диспетчера" className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+        {SECTIONS.map((section, sectionIndex) => {
           const sectionItems = items.filter((item) => item.nav.section === section);
           if (sectionItems.length === 0) return null;
           return (
-            <div key={section} className="mb-3 last:mb-0">
+            <div key={section}>
               {collapsed ? (
-                <div aria-hidden="true" className="mx-4 mb-2 h-px bg-[var(--border-color-shell)] first:hidden" />
+                sectionIndex > 0 ? <div aria-hidden="true" className="mx-2 my-3 h-px bg-[var(--border-color-separator)]" /> : null
               ) : (
-                <p className="px-5 pb-1 text-caption font-semibold text-on-shell-muted">{section}</p>
+                <p className={cn('px-3 pb-1 text-meta font-semibold text-muted', sectionIndex > 0 && 'pt-4')}>{section}</p>
               )}
-              <ul className={cn('flex flex-col gap-0.5', collapsed ? 'px-2' : 'px-2.5')}>
+              <ul className="flex flex-col gap-1">
                 {sectionItems.map((item) => {
+                  const count = counts?.[item.id];
                   const link = (
                     <NavLink
                       to={item.path}
@@ -48,21 +79,31 @@ export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, classNa
                       aria-label={collapsed ? item.nav.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          'flex h-9 items-center gap-3 rounded-control text-ui transition-[background-color,color] duration-100',
-                          'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-on-shell',
-                          collapsed ? 'justify-center px-0' : 'px-2.5',
+                          'group/item relative flex h-9 items-center gap-3 rounded-control text-ui transition-[background-color,color] duration-100',
+                          'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus pointer-coarse:h-11',
+                          collapsed ? 'justify-center px-0' : 'px-3',
                           isActive
-                            ? 'bg-shell-raised font-semibold text-on-shell'
-                            : 'text-on-shell-muted hover:bg-shell-hover hover:text-on-shell',
+                            ? 'bg-selected font-semibold text-accent before:absolute before:start-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-accent'
+                            : 'font-medium text-secondary hover:bg-hover hover:text-primary active:bg-active',
                         )
                       }
                     >
                       {({ isActive }) => (
                         <>
-                          <item.nav.icon aria-hidden="true" className="size-[1.125rem]" />
+                          <item.nav.icon
+                            aria-hidden="true"
+                            className={cn('size-[1.125rem]', isActive ? 'text-accent' : 'text-muted group-hover/item:text-secondary')}
+                          />
                           {!collapsed ? <span className="truncate">{item.nav.label}</span> : null}
-                          {isActive && !collapsed ? (
-                            <span aria-hidden="true" className="ms-auto size-1.5 rounded-full bg-[var(--text-color-on-shell)]" />
+                          {!collapsed && count && count.value > 0 ? (
+                            <span
+                              className={cn(
+                                'ms-auto text-meta figures',
+                                count.unresolved ? 'font-semibold text-accent' : 'font-normal text-muted',
+                              )}
+                            >
+                              {count.value}
+                            </span>
                           ) : null}
                         </>
                       )}
@@ -85,23 +126,6 @@ export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, classNa
           );
         })}
       </nav>
-      {onToggleCollapsed ? (
-        <div className={cn('flex shrink-0 border-t border-shell p-2', collapsed ? 'justify-center' : 'justify-end')}>
-          <IconButton
-            label={collapsed ? 'Розгорнути панель' : 'Згорнути панель'}
-            icon={
-              collapsed ? (
-                <PanelLeftOpen aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
-              ) : (
-                <PanelLeftClose aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
-              )
-            }
-            variant="shell"
-            tooltipSide="right"
-            onClick={onToggleCollapsed}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

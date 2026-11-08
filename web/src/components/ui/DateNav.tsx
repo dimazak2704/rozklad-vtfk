@@ -5,11 +5,13 @@ import { uk } from 'react-day-picker/locale/uk';
 import type { IsoDate } from '@/api/types';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
+import { weekdayShort } from '@/lib/labels';
 import {
   addDays,
   formatDayMonth,
   formatWeekdayDate,
   isoFromLocalDate,
+  isoWeekday,
   isWeekend,
   localDateFromIso,
   relativeDayLabel,
@@ -33,10 +35,14 @@ export interface DateNavProps {
   hotkeys?: boolean;
   tone?: 'default' | 'on-shell';
   size?: 'sm' | 'md';
+  /** Кнопка «Сьогодні» поруч, коли вибрано інший день. Вимкніть, якщо поруч уже є «Сьогодні | Завтра». */
+  showTodayButton?: boolean;
+  /** «Сьогодні, 8 листопада» замість «нд, 8 листопада». Вимкніть, якщо відносний день видно поруч. */
+  showRelative?: boolean;
   className?: string;
 }
 
-/** Перемикач дня: ‹ Сьогодні [Пн, 9 листопада] › з календарем. */
+/** Перемикач дня: ‹ [нд, 8 листопада] › з календарем і, за потреби, «Сьогодні». */
 export function DateNav({
   value,
   onChange,
@@ -47,6 +53,8 @@ export function DateNav({
   hotkeys = false,
   tone = 'default',
   size = 'md',
+  showTodayButton = true,
+  showRelative = true,
   className,
 }: DateNavProps) {
   const [open, setOpen] = useState(false);
@@ -55,7 +63,8 @@ export function DateNav({
   const next = step(1);
   const prevDisabled = min !== undefined && prev < min;
   const nextDisabled = max !== undefined && next > max;
-  const relative = relativeDayLabel(value, today);
+  const relative = showRelative ? relativeDayLabel(value, today) : null;
+  const shortLabel = `${weekdayShort(isoWeekday(value)).toLocaleLowerCase('uk')}, ${formatDayMonth(value)}`;
   const isToday = value === today;
 
   const go = (date: IsoDate) => {
@@ -86,16 +95,17 @@ export function DateNav({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant={onShell ? 'shell' : 'secondary'}
+            variant={onShell ? 'shell' : 'ghost'}
             size={size}
-            iconStart={<CalendarDays aria-hidden="true" className="size-4" />}
+            static
+            iconStart={<CalendarDays aria-hidden="true" className={cn('size-4', onShell ? 'text-on-shell-muted' : 'text-muted')} />}
             aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}
-            className="min-w-0 justify-start"
+            className={cn('min-w-0 justify-start', !onShell && 'text-primary')}
           >
             <span className="truncate figures">
-              {relative ? <span className="me-1">{relative},</span> : null}
+              {relative ? <span>{relative} · </span> : null}
               <span className={cn(relative && 'font-normal', relative && (onShell ? 'text-on-shell-muted' : 'text-secondary'))}>
-                {relative ? formatDayMonth(value) : formatWeekdayDate(value)}
+                {shortLabel}
               </span>
             </span>
           </Button>
@@ -119,7 +129,7 @@ export function DateNav({
             modifiers={{ weekend: (date: Date) => isWeekend(isoFromLocalDate(date)), college_today: localDateFromIso(today) }}
             modifiersClassNames={{
               weekend: 'text-muted',
-              college_today: '[&>button]:font-bold [&>button]:text-accent [&>button]:underline [&>button]:decoration-2 [&>button]:underline-offset-4',
+              college_today: '[&>button]:font-semibold [&>button]:text-accent [&>button]:underline [&>button]:decoration-2 [&>button]:underline-offset-4',
             }}
             showOutsideDays
             classNames={{
@@ -178,7 +188,7 @@ export function DateNav({
         disabled={nextDisabled}
         onClick={() => go(next)}
       />
-      {!isToday ? (
+      {showTodayButton && !isToday ? (
         <Button variant={onShell ? 'shell' : 'ghost'} size={size} onClick={() => go(today)} className="hidden sm:inline-flex">
           Сьогодні
         </Button>

@@ -1,13 +1,23 @@
 /**
- * Детермінований колір «лінії» дисципліни. Якщо в каталозі заданий колір, беремо його відтінок
- * і знаходимо найближчу лінію з перевіреної палітри (контраст AA гарантовано в обох темах).
- * Інакше — хеш від id: та сама дисципліна завжди має той самий колір на всіх екранах.
+ * Колір «лінії» дисципліни. Ліній лише 5 (src/styles/lines.css), і всі далеко від кольорів станів.
+ * У сітці розкладу кольорів немає — лінія потрібна лише картці деталей заняття й діаграмам адмінки.
+ *
+ * Два способи:
+ *  - `assignLines(disciplines)` — для одного екрана: дисципліни отримують лінії з найбільшою відстанню
+ *    відтінків, без збігів у межах п'яти; шоста й далі — нейтральні (-1 → --fill-muted).
+ *  - `disciplineLine(d)` — без контексту екрана: колір з каталогу → найближча лінія, інакше хеш від id.
  */
 import type { DisciplineRef } from '@/api/types';
 
-/** Відтінки OKLCH для 12 ліній (порядок відповідає data-line у src/styles/lines.css). */
-export const LINE_HUES = [12, 40, 75, 105, 135, 165, 192, 215, 245, 280, 310, 340] as const;
+/** Відтінки OKLCH для 5 ліній (порядок відповідає data-line у src/styles/lines.css). */
+export const LINE_HUES = [115, 186, 290, 320, 352] as const;
 export const LINE_COUNT = LINE_HUES.length;
+
+/** Порядок видачі ліній на екрані: кожна наступна якнайдалі від уже виданих (115 → 290 → 186 → 352 → 320). */
+const SPREAD_ORDER = [0, 2, 1, 4, 3] as const;
+
+/** Лінія «без кольору» — нейтральна крапка. */
+export const NEUTRAL_LINE = -1;
 
 /** FNV-1a 32-bit: стабільний і рівномірний для коротких рядків. */
 export function hashString(value: string): number {
@@ -46,23 +56,27 @@ export function oklchHue(hex: string): number | null {
   return hue < 0 ? hue + 360 : hue;
 }
 
-function nearestLine(hue: number): number {
-  let best = 0;
+function hueDistance(a: number, b: number): number {
+  const raw = Math.abs(a - b);
+  return Math.min(raw, 360 - raw);
+}
+
+function nearestLine(hue: number, among: readonly number[] = SPREAD_ORDER): number {
+  let best = among[0] ?? 0;
   let bestDistance = Number.POSITIVE_INFINITY;
-  LINE_HUES.forEach((lineHue, index) => {
-    const raw = Math.abs(lineHue - hue);
-    const distance = Math.min(raw, 360 - raw);
+  for (const index of among) {
+    const distance = hueDistance(LINE_HUES[index] ?? 0, hue);
     if (distance < bestDistance) {
       best = index;
       bestDistance = distance;
     }
-  });
+  }
   return best;
 }
 
 type DisciplineLike = Pick<DisciplineRef, 'id' | 'color'> & Partial<Pick<DisciplineRef, 'shortName'>>;
 
-/** Індекс лінії 0..11 для дисципліни. */
+/** Індекс лінії 0..4 для дисципліни без контексту екрана. */
 export function disciplineLine(discipline: DisciplineLike): number {
   const hue = discipline.color ? oklchHue(discipline.color) : null;
   if (hue !== null) return nearestLine(hue);
@@ -70,7 +84,38 @@ export function disciplineLine(discipline: DisciplineLike): number {
   return hashString(key) % LINE_COUNT;
 }
 
-/** Атрибут для елемента: `<span {...lineAttr(d)} className="bg-[var(--line-dot)]" />`. */
-export function lineAttr(discipline: DisciplineLike): { 'data-line': number } {
-  return { 'data-line': disciplineLine(discipline) };
+/**
+ * Лінії для всіх дисциплін одного екрана: перші п'ять різних дисциплін отримують різні лінії
+ * (колір каталогу — найближча ще вільна, інакше наступна з SPREAD_ORDER), решта — NEUTRAL_LINE.
+ * Порядок стабільний: за id, тож той самий розклад завжди фарбується однаково.
+ */
+export function assignLines(disciplines: Iterable<DisciplineLike>): Map<string, number> {
+  const unique = new Map<string, DisciplineLike>();
+  for (const discipline of disciplines) {
+    if (discipline.id && !unique.has(discipline.id)) unique.set(discipline.id, discipline);
+  }
+  const ordered = [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const free: number[] = [...SPREAD_ORDER];
+  const result = new Map<string, number>();
+  // спершу ті, хто має колір у каталозі: їм — найближча вільна лінія
+  for (const discipline of ordered) {
+    const hue = discipline.color ? oklchHue(discipline.color) : null;
+    if (hue === null || free.length === 0) continue;
+    const line = nearestLine(hue, free);
+    result.set(discipline.id, line);
+    free.splice(free.indexOf(line), 1);
+  }
+  for (const discipline of ordered) {
+    if (result.has(discipline.id)) continue;
+    result.set(discipline.id, free.shift() ?? NEUTRAL_LINE);
+  }
+  return result;
+}
+
+/**
+ * Атрибут для елемента: `<span {...lineAttr(d)} className="bg-[var(--line-dot)]" />`.
+ * Другим аргументом можна передати карту з `assignLines`, щоб кольори на екрані не повторювались.
+ */
+export function lineAttr(discipline: DisciplineLike, lines?: ReadonlyMap<string, number>): { 'data-line': number } {
+  return { 'data-line': lines?.get(discipline.id) ?? disciplineLine(discipline) };
 }

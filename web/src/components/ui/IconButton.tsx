@@ -6,9 +6,10 @@ import { Tooltip } from './Tooltip';
 
 type IconButtonSize = 'sm' | 'md' | 'lg';
 
+/** 32/36/44 px; на дотику — щонайменше 44 px. */
 const SIZES: Record<IconButtonSize, string> = {
-  sm: 'size-8 px-0',
-  md: 'size-9 px-0',
+  sm: 'size-8 px-0 pointer-coarse:size-11',
+  md: 'size-9 px-0 pointer-coarse:size-11',
   lg: 'size-11 px-0',
 };
 
@@ -58,6 +59,9 @@ export function IconButton({
           buttonClass({ variant }),
           SIZES[size],
           'enabled:active:scale-[0.96]',
+          // «кошик» у спокої нейтральний: червоніє лише при наведенні чи фокусі, щоб рядки не рябіли
+          variant === 'danger-ghost' &&
+            'text-secondary hover:bg-cancel-subtle hover:text-danger focus-visible:bg-cancel-subtle focus-visible:text-danger',
           pressed && 'bg-selected text-accent hover:bg-selected-hover',
           className,
         )}

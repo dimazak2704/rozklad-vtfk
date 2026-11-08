@@ -1,4 +1,4 @@
-import { CircleExclamationPoint } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { FieldContext } from './field-context';
@@ -30,6 +30,8 @@ export function Field({ label, hint, error, required = false, disabled = false, 
   const errorId = error ? `${controlId}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
 
+  const slotClass = cn('mt-0.5 text-caption', layout === 'inline' && 'col-span-2');
+
   return (
     <FieldContext.Provider value={{ id: controlId, describedBy, invalid: Boolean(error), required, disabled }}>
       <div
@@ -40,7 +42,7 @@ export function Field({ label, hint, error, required = false, disabled = false, 
       >
         <label
           htmlFor={controlId}
-          className={cn('text-ui font-semibold text-primary', disabled && 'text-disabled')}
+          className={cn('text-ui font-medium text-primary', error && 'text-danger', disabled && 'text-disabled')}
         >
           {label}
           {required ? (
@@ -51,17 +53,15 @@ export function Field({ label, hint, error, required = false, disabled = false, 
           {required ? <span className="sr-only"> (обовʼязкове поле)</span> : null}
         </label>
         {children}
+        {/* Помилка займає місце підказки: під полем завжди один рядок. Обидва тексти лишаються в aria-describedby. */}
         {hint ? (
-          <p id={hintId} className={cn('text-caption text-muted', layout === 'inline' && 'col-span-2')}>
+          <p id={hintId} className={error ? 'sr-only' : cn(slotClass, 'text-muted')}>
             {hint}
           </p>
         ) : null}
         {error ? (
-          <p
-            id={errorId}
-            className={cn('flex items-start gap-1.5 text-caption font-medium text-danger', layout === 'inline' && 'col-span-2')}
-          >
-            <CircleExclamationPoint aria-hidden="true" className="mt-px size-3.5" />
+          <p id={errorId} className={cn(slotClass, 'flex items-start gap-1.5 font-medium text-danger')}>
+            <CircleAlert aria-hidden="true" className="size-4" />
             <span>{error}</span>
           </p>
         ) : null}

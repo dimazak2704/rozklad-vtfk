@@ -5,21 +5,28 @@ interface ScoreBarProps {
   value: number;
   /** Підпис для читача екрана: «Придатність кандидата». */
   label?: string;
-  /** Показати число праворуч. */
+  /** Показати число ліворуч від шкали. */
   showValue?: boolean;
+  /** `md` — 48×4 px у колонці 96 px рядка кандидата, `sm` — 32×4 px. */
   size?: 'sm' | 'md';
+  /** Рекомендований варіант (перший): лише він має синю заливку. */
+  recommended?: boolean;
   className?: string;
 }
 
 /**
- * Смуга оцінки кандидата на заміну (0–100). Найкращі варіанти — насичений маршрутний синій,
- * середні — приглушений, слабкі — сірий. Число завжди поруч, колір лише підсилює.
+ * Оцінка кандидата на заміну (0–100): число 16/600 і коротка шкала 4 px. Колір не градуює якість —
+ * шкала нейтральна, синя лише в рекомендованого варіанта. Причина оцінки — текстом у рядку кандидата.
  */
-export function ScoreBar({ value, label = 'Оцінка', showValue = true, size = 'md', className }: ScoreBarProps) {
+export function ScoreBar({ value, label = 'Оцінка', showValue = true, size = 'md', recommended = false, className }: ScoreBarProps) {
   const score = Math.max(0, Math.min(100, Math.round(value)));
-  const tier = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('inline-flex items-center justify-end gap-2', className)}>
+      {showValue ? (
+        <span className="min-w-7 text-end text-body font-semibold text-primary figures" aria-hidden="true">
+          {score}
+        </span>
+      ) : null}
       <div
         role="meter"
         aria-label={label}
@@ -27,23 +34,16 @@ export function ScoreBar({ value, label = 'Оцінка', showValue = true, size
         aria-valuemax={100}
         aria-valuenow={score}
         aria-valuetext={`${score} зі 100`}
-        className={cn('relative flex-1 overflow-hidden rounded-full bg-sunken', size === 'md' ? 'h-2' : 'h-1.5')}
+        className={cn('relative h-1 shrink-0 overflow-hidden rounded-[2px] bg-hover', size === 'md' ? 'w-12' : 'w-8')}
       >
         <span
           className={cn(
-            'absolute inset-y-0 start-0 rounded-full transition-[width] duration-300 ease-out',
-            tier === 'high' && 'bg-accent',
-            tier === 'mid' && 'bg-[var(--border-color-accent-subtle)]',
-            tier === 'low' && 'bg-[var(--border-color-strong)]',
+            'absolute inset-y-0 start-0 rounded-[2px] transition-[width] duration-300 ease-out',
+            recommended ? 'bg-accent' : 'bg-[var(--border-color-strong)]',
           )}
           style={{ width: `${score}%` }}
         />
       </div>
-      {showValue ? (
-        <span className="w-7 text-end font-condensed text-ui font-bold figures text-primary" aria-hidden="true">
-          {score}
-        </span>
-      ) : null}
     </div>
   );
 }

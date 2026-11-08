@@ -10,10 +10,25 @@ async function openApp(page: Page, path: string): Promise<void> {
 }
 
 test.describe('оболонка публічного сайту', () => {
-  test('головна має шапку зі знаком, пошуком і темою', async ({ page }) => {
+  test('головна має шапку зі знаком і вибір теми', async ({ page }, testInfo) => {
     await openApp(page, '/');
     await expect(page).toHaveTitle(/Розклад ВТФК/);
-    await expect(page.getByRole('button', { name: /^Тема:/ })).toBeVisible();
+    // на десктопі тема — кнопка в смузі, на телефоні — перемикач у підвалі
+    if (testInfo.project.name === 'mobile') {
+      await expect(page.getByRole('radiogroup', { name: 'Тема оформлення' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('button', { name: /^Тема:/ })).toBeVisible();
+    }
+  });
+
+  test('на сторінці групи активний розділ «Розклад» — рівно один у шапці й у вкладках', async ({ page }, testInfo) => {
+    await openApp(page, '/g/4КІ1');
+    const nav = testInfo.project.name === 'mobile'
+      ? page.getByRole('navigation', { name: 'Основні розділи' })
+      : page.getByRole('navigation', { name: 'Розділи сайту' });
+    const current = nav.locator('[aria-current="page"]');
+    await expect(current).toHaveCount(1);
+    await expect(current).toHaveText(/Розклад/);
   });
 
   test('пошук за кодом групи латиницею веде на сторінку групи', async ({ page }) => {
@@ -33,10 +48,14 @@ test.describe('оболонка публічного сайту', () => {
     await expect(page.getByRole('link', { name: 'Розклад групи 4КІ2' })).toBeVisible();
   });
 
-  test('вибір теми зберігається після перезавантаження', async ({ page }) => {
+  test('вибір теми зберігається після перезавантаження', async ({ page }, testInfo) => {
     await openApp(page, '/');
-    await page.getByRole('button', { name: /^Тема:/ }).click();
-    await page.getByRole('menuitemradio', { name: 'Темна' }).click();
+    if (testInfo.project.name === 'mobile') {
+      await page.getByRole('radiogroup', { name: 'Тема оформлення' }).getByRole('radio', { name: 'Темна' }).click();
+    } else {
+      await page.getByRole('button', { name: /^Тема:/ }).click();
+      await page.getByRole('menuitemradio', { name: 'Темна' }).click();
+    }
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

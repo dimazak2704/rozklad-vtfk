@@ -10,8 +10,9 @@ import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebar';
 
 /**
- * Панель диспетчера: бічна лінія розділів (згортається), верхня панель з робочою датою,
- * палітрою команд і живими оновленнями. Розрахована на планшет і більше; на телефоні меню — шторкою.
+ * Панель диспетчера: нейтральна біла L-рамка — бічна панель розділів (240 px, згортається до 64 px)
+ * і верхня панель з робочою датою, палітрою команд і живими оновленнями. На < 1024 px меню — шторкою.
+ * Згортання анімує лише ширину панелі; відступ вмісту перемикається одразу, без «пливучої» сторінки.
  */
 export function AdminLayout() {
   const collapsed = useSidebarStore((state) => state.collapsed);
@@ -27,8 +28,8 @@ export function AdminLayout() {
       <SkipLink />
       <aside
         className={cn(
-          'fixed inset-y-0 start-0 z-40 hidden transition-[width] duration-200 ease-out lg:block',
-          collapsed ? 'w-16' : 'w-62',
+          'fixed inset-y-0 start-0 z-40 hidden transition-[width] duration-200 ease-out motion-reduce:transition-none lg:block',
+          collapsed ? 'w-16' : 'w-60',
         )}
       >
         <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
@@ -39,7 +40,7 @@ export function AdminLayout() {
           <RadixDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim lg:hidden" />
           <RadixDialog.Content
             aria-describedby={undefined}
-            className="anim-sheet-left fixed inset-y-0 start-0 z-50 w-72 max-w-[85vw] shadow-dialog focus-visible:outline-none lg:hidden"
+            className="anim-sheet-left fixed inset-y-0 start-0 z-50 w-72 max-w-[85vw] bg-surface shadow-dialog focus-visible:outline-none lg:hidden"
           >
             <RadixDialog.Title className="sr-only">Розділи панелі диспетчера</RadixDialog.Title>
             <AdminSidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />
@@ -47,9 +48,9 @@ export function AdminLayout() {
         </RadixDialog.Portal>
       </RadixDialog.Root>
 
-      <div className={cn('flex min-h-dvh flex-col transition-[padding] duration-200 ease-out', collapsed ? 'lg:ps-16' : 'lg:ps-62')}>
+      <div className={cn('flex min-h-dvh flex-col', collapsed ? 'lg:ps-16' : 'lg:ps-60')}>
         <AdminTopBar live={live} onOpenMenu={() => setMobileOpen(true)} />
-        <main id="main" tabIndex={-1} className="w-full flex-1 px-3 py-5 focus:outline-none sm:px-5 lg:px-8 lg:py-6">
+        <main id="main" tabIndex={-1} className="w-full flex-1 px-3 py-6 focus:outline-none sm:px-5 lg:px-8">
           <Outlet />
         </main>
       </div>

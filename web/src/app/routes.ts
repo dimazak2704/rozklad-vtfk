@@ -7,22 +7,23 @@
  */
 import {
   ArrowLeftRight,
-  Bell,
   BookOpen,
   Building,
   Calculator,
   CalendarCog,
   CalendarDays,
-  CalendarRange,
+  CalendarHeart,
   CalendarX,
-  Cpu,
+  Clock3,
   DoorOpen,
   FileText,
   Info,
   LayoutDashboard,
   Layers,
+  Puzzle,
   Send,
   Settings,
+  Table2,
   Upload,
   UserRound,
   Users,
@@ -117,7 +118,7 @@ export const ROUTES: readonly AppRoute[] = [
     description: 'Розклад дзвінків профілю, що діє; сьогоднішній день виділено.',
     layout: 'public',
     page: () => import('@/pages/public/BellsPage'),
-    nav: { label: 'Дзвінки', icon: Bell, order: 3, tab: true, header: true, keywords: ['пари', 'час'] },
+    nav: { label: 'Дзвінки', icon: Clock3, order: 3, tab: true, header: true, keywords: ['пари', 'час'] },
   },
   {
     id: 'about',
@@ -126,7 +127,8 @@ export const ROUTES: readonly AppRoute[] = [
     description: 'Що вміє система, як читати розклад і як підписатися на Telegram-бота.',
     layout: 'public',
     page: () => import('@/pages/public/AboutPage'),
-    nav: { label: 'Про систему', icon: Info, order: 4, header: true, keywords: ['бот', 'telegram'] },
+    // у шапці лише три розділи; «Про систему» — у підвалі й палітрі команд
+    nav: { label: 'Про систему', icon: Info, order: 4, keywords: ['бот', 'telegram'] },
   },
   {
     id: 'invite',
@@ -182,7 +184,7 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'teacher',
     roles: TEACHER_ROLES,
     page: () => import('@/pages/teacher/MyPreferencesPage'),
-    nav: { label: 'Побажання', icon: CalendarCog, order: 3, tab: true, header: true },
+    nav: { label: 'Побажання', icon: CalendarHeart, order: 3, tab: true, header: true },
   },
 
   // ── Панель диспетчера ──
@@ -224,7 +226,7 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/TimetablePage'),
-    nav: { label: 'Базовий розклад', icon: CalendarRange, section: 'Розклад', order: 4, keywords: ['версія', 'сітка'] },
+    nav: { label: 'Базовий розклад', icon: Table2, section: 'Розклад', order: 4, keywords: ['версія', 'сітка'] },
   },
   {
     id: 'admin-generation',
@@ -234,7 +236,7 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/GenerationPage'),
-    nav: { label: 'Генератор', icon: Cpu, section: 'Розклад', order: 5, keywords: ['timefold', 'оптимізація'] },
+    nav: { label: 'Генератор', icon: Puzzle, section: 'Розклад', order: 5, keywords: ['timefold', 'оптимізація'] },
   },
   {
     id: 'admin-load',
@@ -324,7 +326,7 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/CalendarPage'),
-    nav: { label: 'Календар', icon: CalendarDays, section: 'Дані', order: 14, keywords: ['семестр', 'дзвінки', 'канікули'] },
+    nav: { label: 'Календар', icon: CalendarCog, section: 'Дані', order: 14, keywords: ['семестр', 'дзвінки', 'канікули'] },
   },
   {
     id: 'admin-telegram',

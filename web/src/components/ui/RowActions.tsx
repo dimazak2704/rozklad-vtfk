@@ -26,7 +26,13 @@ export function RowActions({ actions, rowLabel }: RowActionsProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <IconButton label={`Дії: ${rowLabel}`} icon={<Ellipsis aria-hidden="true" className="size-4" />} size="sm" />
+        <IconButton
+          label={`Дії: ${rowLabel}`}
+          icon={<Ellipsis aria-hidden="true" className="size-4" />}
+          size="sm"
+          // приглушена в спокої, повна — при наведенні на рядок чи фокусі; лишається в порядку Tab
+          className="opacity-40 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+        />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content

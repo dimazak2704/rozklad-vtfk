@@ -1,6 +1,6 @@
 /** Візуали розкладу: клітинка заняття, день, тиждень, «зараз». */
 export { DayColumn } from './DayColumn';
-export { DayList } from './DayList';
+export { DayList, DayListSkeleton } from './DayList';
 export { LessonCell } from './LessonCell';
 export { LessonDetails } from './LessonDetails';
 export { NowIndicator } from './NowIndicator';

@@ -91,17 +91,18 @@ export function NumberInput({
   const atMin = value !== null && min !== undefined && value <= min;
   const atMax = value !== null && max !== undefined && value >= max;
   const stepButton =
-    'flex h-full w-8 items-center justify-center text-secondary transition-colors duration-100 hover:bg-hover hover:text-primary ' +
-    'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40';
+    'flex h-full w-9 shrink-0 items-center justify-center text-secondary transition-colors duration-100 pointer-coarse:w-11 ' +
+    'hover:bg-hover hover:text-primary active:bg-active ' +
+    'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus disabled:pointer-events-none disabled:text-disabled';
 
   return (
     <div
       className={cn(
         CONTROL_BASE,
         CONTROL_SIZE[size],
-        'flex items-stretch overflow-hidden p-0 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-focus',
+        'flex items-stretch overflow-hidden p-0 focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
         a11y['aria-invalid'] && 'border-danger',
-        a11y.disabled && 'border-default bg-sunken text-disabled',
+        a11y.disabled && 'border-separator bg-sunken text-disabled',
         className,
       )}
     >
@@ -115,7 +116,9 @@ export function NumberInput({
       >
         <Minus aria-hidden="true" className="size-3.5" />
       </button>
-      <input
+      {/* число й одиниця стоять разом праворуч: «4 год», а не «4 … год» */}
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1 pe-3">
+        <input
         ref={ref}
         type="text"
         inputMode={precision > 0 ? 'decimal' : 'numeric'}
@@ -133,13 +136,14 @@ export function NumberInput({
           onBlur?.(event);
         }}
         onKeyDown={handleKeyDown}
-        className="w-full min-w-0 bg-transparent text-center figures outline-none disabled:cursor-not-allowed"
+        className="w-full min-w-0 bg-transparent text-end figures outline-none disabled:cursor-not-allowed"
       />
       {unit ? (
-        <span className="flex items-center pe-2 text-caption text-muted" aria-hidden="true">
+        <span className="shrink-0 text-muted" aria-hidden="true">
           {unit}
         </span>
       ) : null}
+      </div>
       <button
         type="button"
         tabIndex={-1}

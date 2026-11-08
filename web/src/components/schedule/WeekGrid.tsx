@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
 import { lessonsByPair, pairRange, rowTimes, type Perspective } from '@/lib/schedule';
-import { ParityMark } from '../ui/ParityBadge';
+import { ParityBadge } from '../ui/ParityBadge';
 import { LessonCell } from './LessonCell';
 
 export interface WeekGridProps {
@@ -20,8 +20,9 @@ export interface WeekGridProps {
 }
 
 /**
- * Тижнева сітка (десктоп) — справжня таблиця: рядки — пари з великим номером і часом,
- * стовпці — дні. Ритм розкладу на зупинці: година великою, хвилини дрібно.
+ * Тижнева сітка (десктоп) — справжня таблиця, як надрукований аркуш: рядки — пари з великим номером
+ * і часом, стовпці — дні через тонку лінію. Зміни — тонування клітинки від краю до краю, як маркер.
+ * «Зараз» — номер і час рядка синім і доріжка прогресу вгорі поточної клітинки; більше нічого не світиться.
  */
 export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', className }: WeekGridProps) {
   const days = schedule.days;
@@ -35,14 +36,15 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
 
   if (!range) {
     return (
-      <div className={cn('rounded-panel border border-default bg-surface px-4 py-10 text-center', className)}>
+      <div className={cn('rounded-panel border border-default bg-surface px-4 py-8', className)}>
         <p className="text-heading font-semibold text-primary">На цей тиждень пар немає</p>
-        <p className="mt-1 text-ui text-secondary">Перевірте інший тиждень або розклад змін на конкретний день.</p>
+        <p className="mt-1 text-ui text-secondary">Перевірте інший тиждень або заміни на конкретний день.</p>
       </div>
     );
   }
 
   const pairs = Array.from({ length: range.last - range.first + 1 }, (_, i) => range.first + i);
+  const liveDayIndex = days.findIndex((day) => day.date === liveDate);
 
   return (
     <div className={cn('overflow-x-auto rounded-panel border border-default bg-surface lg:overflow-clip', className)}>
@@ -52,7 +54,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
           {weekParity ? `, тиждень — ${PARITY_LABEL[weekParity]}` : ''}
         </caption>
         <colgroup>
-          <col className="w-[6.75rem]" />
+          <col className="w-[6.5rem]" />
           {days.map((day) => (
             <col key={day.date} />
           ))}
@@ -61,17 +63,10 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
           <tr>
             <th
               scope="col"
-              className="sticky left-0 z-20 border-e border-b border-default bg-sunken px-2 py-2 text-start align-bottom"
+              className="sticky left-0 z-20 h-10 border-b border-default bg-sunken px-3 text-start align-middle font-normal"
               style={{ top: stickyTop }}
             >
-              {weekParity ? (
-                <span className="flex items-center gap-1.5 text-meta font-semibold tracking-wide text-secondary uppercase">
-                  <ParityMark parity={weekParity} className="text-accent" />
-                  {PARITY_LABEL[weekParity]}
-                </span>
-              ) : (
-                <span className="sr-only">Пара</span>
-              )}
+              {weekParity ? <ParityBadge parity={weekParity} size="sm" plain /> : <span className="sr-only">Пара</span>}
             </th>
             {days.map((day) => {
               const isToday = day.date === liveDate || day.date === today;
@@ -81,18 +76,20 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                   scope="col"
                   aria-current={isToday ? 'date' : undefined}
                   className={cn(
-                    'sticky z-10 border-b border-default bg-sunken px-3 py-2 text-start align-bottom',
-                    isToday && 'border-b-2 border-b-[var(--border-color-accent)] bg-selected',
+                    'sticky z-10 h-10 border-s border-b border-s-separator border-b-default bg-sunken px-3 text-start align-middle',
+                    isToday && 'shadow-[inset_0_-2px_0_var(--border-color-accent)]',
                   )}
                   style={{ top: stickyTop }}
                 >
-                  <span className="flex items-baseline gap-2">
-                    <span className="text-ui font-semibold text-primary">
+                  <span className="flex items-baseline gap-2 whitespace-nowrap">
+                    <span className={cn('text-ui text-primary', isToday ? 'font-semibold' : 'font-medium')}>
                       <span className="hidden xl:inline">{capitalize(weekdayName(day.weekday))}</span>
                       <span className="xl:hidden">{weekdayShort(day.weekday)}</span>
                     </span>
-                    <span className="text-caption text-secondary figures">{day.date.slice(8, 10)}.{day.date.slice(5, 7)}</span>
-                    {isToday ? <span className="text-caption font-semibold text-accent">сьогодні</span> : null}
+                    <span className="text-caption font-normal text-secondary figures">
+                      {day.date.slice(8, 10)}.{day.date.slice(5, 7)}
+                    </span>
+                    {isToday ? <span className="text-meta font-semibold text-accent">сьогодні</span> : null}
                   </span>
                 </th>
               );
@@ -100,19 +97,26 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
           </tr>
         </thead>
         <tbody>
-          {pairs.map((pair) => {
+          {pairs.map((pair, rowIndex) => {
             const time = times.get(pair);
+            const rowStart = time ? timeToMinutes(time.startsAt) : null;
+            const rowEnd = time ? timeToMinutes(time.endsAt) : null;
+            const currentRow =
+              liveDayIndex >= 0 && rowStart !== null && rowEnd !== null && nowMinutes >= rowStart && nowMinutes < rowEnd;
+            const lastRow = rowIndex === pairs.length - 1;
             return (
               <tr key={pair}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-[5] border-e border-b border-separator bg-surface px-2 py-2 text-start align-top"
+                  className={cn('sticky left-0 z-[5] bg-surface px-3 py-2 text-start align-top', !lastRow && 'border-b border-separator')}
                 >
                   <span className="flex flex-col leading-none">
-                    <span className="font-condensed text-headline font-bold text-primary figures">{pair}</span>
+                    <span className={cn('font-condensed text-headline font-bold figures', currentRow ? 'text-accent' : 'text-primary')}>
+                      {pair}
+                    </span>
                     {time ? (
-                      <span className="mt-1 text-meta text-muted figures">
-                        <span className="font-semibold text-secondary">{time.startsAt}</span>–{time.endsAt}
+                      <span className={cn('mt-1 text-caption figures', currentRow ? 'text-accent' : 'text-muted')}>
+                        {time.startsAt}–{time.endsAt}
                       </span>
                     ) : null}
                   </span>
@@ -125,20 +129,25 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                       <td
                         key={day.date}
                         rowSpan={pairs.length}
-                        className="hatch border-b border-separator bg-block-subtle px-3 py-4 text-center align-middle text-caption text-secondary"
+                        className="hatch border-s border-separator bg-block-subtle px-3 py-4 text-center align-middle"
                       >
-                        {day.note ?? 'Не навчальний день'}
+                        <span className="inline-block rounded-plate bg-surface px-1.5 py-0.5 text-caption text-secondary">
+                          {day.note ?? 'Не навчальний день'}
+                        </span>
                       </td>
                     ) : null;
                   }
                   return (
-                    <td key={day.date} className="border-b border-separator p-1 align-top">
+                    <td
+                      key={day.date}
+                      className={cn('h-px border-s border-separator p-0 align-top', !lastRow && 'border-b')}
+                    >
                       {lessons.length === 0 ? (
-                        <span className="block px-2 py-2 text-caption text-disabled" aria-label="Пари немає">
+                        <span className="block px-3 py-2 text-caption text-muted" aria-label="Пари немає">
                           —
                         </span>
                       ) : (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex h-full flex-col divide-y divide-[var(--border-color-separator)]">
                           {lessons.map((lesson) => {
                             const start = timeToMinutes(lesson.startsAt);
                             const end = timeToMinutes(lesson.endsAt);
@@ -153,6 +162,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                 now={current}
                                 progress={current ? (nowMinutes - start) / (end - start) : 0}
                                 showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
+                                className="flex-1"
                               />
                             );
                           })}

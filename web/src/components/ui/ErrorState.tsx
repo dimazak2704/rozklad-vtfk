@@ -1,4 +1,4 @@
-import { CircleExclamationPoint, RotateCcw, WifiOff } from 'lucide-react';
+import { CircleAlert, RotateCcw, WifiOff } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { isApiError } from '@/api/errors';
 import { cn } from '@/lib/cn';
@@ -37,13 +37,19 @@ export function ErrorState({
   onRetry,
   retrying = false,
   action,
-  align = 'center',
+  align = 'start',
   size = 'md',
   className,
 }: ErrorStateProps) {
   const apiError = isApiError(error) ? error : null;
   const offline = apiError?.kind === 'network';
-  const message = description ?? (error instanceof Error ? error.message : 'Спробуйте ще раз трохи згодом.');
+  const message =
+    description ??
+    (offline || apiError?.kind === 'timeout'
+      ? 'Перевірте інтернет і спробуйте ще раз.'
+      : error instanceof Error && error.message
+        ? error.message
+        : 'Спробуйте ще раз трохи згодом.');
   const canRetry = onRetry && (!apiError || apiError.isRetryable || apiError.status === 0 || apiError.status >= 500);
 
   return (
@@ -52,22 +58,22 @@ export function ErrorState({
       className={cn(
         'flex flex-col gap-2',
         align === 'center' ? 'items-center text-center' : 'items-start text-start',
-        size === 'md' ? 'px-4 py-10' : 'px-3 py-5',
+        size === 'md' ? 'px-4 py-8' : 'px-4 py-5',
         className,
       )}
     >
       <p className={cn('flex items-center gap-2 font-semibold text-primary', size === 'md' ? 'text-heading' : 'text-ui')}>
         {offline ? (
-          <WifiOff aria-hidden="true" className="size-[1.1em] text-danger" />
+          <WifiOff aria-hidden="true" className="size-5 text-danger" />
         ) : (
-          <CircleExclamationPoint aria-hidden="true" className="size-[1.1em] text-danger" />
+          <CircleAlert aria-hidden="true" className="size-5 text-danger" />
         )}
         {title ?? titleFor(error)}
       </p>
       <p className={cn('max-w-prose text-secondary', size === 'md' ? 'text-ui' : 'text-caption')}>{message}</p>
       {apiError?.requestId ? (
-        <p className="text-meta text-muted">
-          Код запиту для звернення: <span className="font-mono select-all">{apiError.requestId}</span>
+        <p className="text-caption text-muted">
+          Код запиту: <span className="font-mono select-all">{apiError.requestId}</span>
         </p>
       ) : null}
       {canRetry || action ? (

@@ -33,10 +33,10 @@ export function Panel({
   return (
     <section className={cn('min-w-0 rounded-panel border border-default bg-surface', className)} {...props}>
       {hasHeader ? (
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-separator px-4 py-3">
+        <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-separator px-4 py-3">
           <div className="flex min-w-0 flex-col gap-0.5">
             {title ? <Heading className="text-heading font-semibold text-primary">{title}</Heading> : null}
-            {description ? <p className="text-caption text-muted">{description}</p> : null}
+            {description ? <p className="text-caption text-secondary">{description}</p> : null}
           </div>
           {actions ? <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </header>
@@ -58,7 +58,7 @@ export interface SectionProps extends Omit<ComponentProps<'section'>, 'title'> {
 export function Section({ title, description, actions, headingLevel = 2, className, children, ...props }: SectionProps) {
   const Heading = headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : 'h4';
   return (
-    <section className={cn('flex min-w-0 flex-col gap-3', className)} {...props}>
+    <section className={cn('flex min-w-0 flex-col gap-4', className)} {...props}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <Heading className={cn('font-semibold text-primary', headingLevel === 2 ? 'text-title' : 'text-heading')}>

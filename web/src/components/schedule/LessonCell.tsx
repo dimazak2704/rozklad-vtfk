@@ -1,46 +1,90 @@
 import { ArrowRight, MonitorSmartphone } from 'lucide-react';
+import type { ComponentProps, ReactElement } from 'react';
 import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
-import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
+import { pairOrdinalGenitive } from '@/lib/ordinal';
 import { LESSON_TONE, lessonCounterpart, lessonSummary, roomLabel, type Perspective } from '@/lib/schedule';
-import { Badge } from '../ui/Badge';
+import { Drawer, DrawerContent, DrawerTrigger } from '../ui/Drawer';
 import { HoverDetails } from '../ui/HoverCard';
 import { LessonDetails } from './LessonDetails';
-import { TONE_BADGE } from './tones';
+import { usePhoneLayout } from './usePhoneLayout';
 
 export interface LessonCellProps {
   lesson: LessonView;
   /** Чий розклад: група бачить викладача, викладач — групу, аудиторія — обох. */
   perspective?: Perspective;
-  /** `grid` — компактна клітинка тижневої сітки, `list` — рядок денного списку. */
+  /** `grid` — клітинка тижневої сітки (на всю клітинку таблиці), `list` — рядок денного списку. */
   variant?: 'grid' | 'list';
   date?: IsoDate;
   dayParity?: WeekParity;
-  /** Пара йде зараз: підсвітка «живим» кольором і смужка прогресу. */
+  /** Пара йде зараз: доріжка прогресу 3 px уздовж верхнього краю. */
   now?: boolean;
-  /** 0..1 — скільки пари минуло (для смужки). */
+  /** 0..1 — скільки пари минуло (для доріжки). */
   progress?: number;
-  /** Пара вже минула (сьогодні): приглушити. */
+  /** Пара вже минула (сьогодні): тихіший текст, без прозорості (контраст лишається AA). */
   past?: boolean;
   /** Показати час (коли він відрізняється від часу рядка сітки, напр. у пʼятницю). */
   showTime?: boolean;
   className?: string;
 }
 
-/** Фон і рамка «обʼїзду» за станом: зміни лягають поверх розкладу, звичайна пара — на чистому тлі. */
+/**
+ * Тло стану — як маркер на надрукованому аркуші: тонування від краю до краю, без рамок.
+ * Зміна аудиторії тла не має: її видно в самому рядку «ауд. 17 → ауд. 309».
+ */
 const TONE_SURFACE = {
-  regular: 'hover:bg-[var(--line-tint)]',
-  change: 'bg-change-subtle ring-1 ring-inset ring-[var(--border-color-change)]',
-  cancel: 'bg-cancel-subtle ring-1 ring-inset ring-[var(--border-color-cancel)]',
-  add: 'bg-add-subtle ring-1 ring-inset ring-[var(--border-color-add)]',
-  room: 'hover:bg-[var(--line-tint)]',
+  regular: 'hover:bg-hover',
+  change: 'bg-change-subtle',
+  cancel: 'bg-cancel-subtle',
+  add: 'bg-add-subtle',
+  room: 'hover:bg-hover',
   block: 'hatch bg-block-subtle',
 } as const;
 
+/** Одне слово стану праворуч угорі — звичайним текстом, без «таблички». */
+const STATE_WORD = {
+  change: 'text-change',
+  cancel: 'text-cancel',
+  add: 'text-add',
+} as const;
+
+/** Змінене значення підкреслено бурштином — так само, як нова аудиторія підсвічена блакитним. */
+const MARKED = 'font-semibold text-primary underline decoration-[var(--text-decoration-color-change)] decoration-2 underline-offset-[3px]';
+
+/** Деталі: на компʼютері — картка при наведенні/Enter, на телефоні — шторка знизу. */
+function DetailsTrigger({
+  phone,
+  label,
+  content,
+  children,
+}: {
+  phone: boolean;
+  label: string;
+  content: ComponentProps<typeof LessonDetails>;
+  children: ReactElement;
+}) {
+  if (phone) {
+    return (
+      <Drawer>
+        <DrawerTrigger asChild>{children}</DrawerTrigger>
+        <DrawerContent title={label} titleClassName="sr-only">
+          <LessonDetails {...content} />
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+  return (
+    <HoverDetails label={label} content={<LessonDetails {...content} />}>
+      {children}
+    </HoverDetails>
+  );
+}
+
 /**
- * Заняття в розкладі. Дисципліна має свій колір лінії (крапка), стан — свій колір «обʼїзду»;
- * для змін оригінал лишається видимим закресленим. Наведення або Enter відкривають повні деталі.
+ * Заняття в розкладі. Предмет називає коротка назва (кольорів дисциплін у сітці немає), стан — тонування
+ * і одне слово; для змін оригінал лишається видимим закресленим, а нове значення підкреслене.
+ * Наведення або Enter відкривають повні деталі.
  */
 export function LessonCell({
   lesson,
@@ -54,99 +98,110 @@ export function LessonCell({
   showTime = false,
   className,
 }: LessonCellProps) {
+  const phone = usePhoneLayout();
   const tone = LESSON_TONE[lesson.kind];
   const cancelled = tone === 'cancel';
   const counterpart = lessonCounterpart(lesson, perspective);
   const room = roomLabel(lesson.room?.name);
   const originalRoom = lesson.kind === 'ROOM_CHANGED' ? roomLabel(lesson.original?.room?.name) : null;
   const original = lesson.original;
+  const changedDiscipline = lesson.kind === 'SUBSTITUTED' && original?.discipline && original.discipline.id !== lesson.discipline.id;
+  const changedTeacher = lesson.kind === 'SUBSTITUTED' && original?.teacher && original.teacher.id !== lesson.teacher?.id;
   const replacedText =
     lesson.kind === 'SUBSTITUTED'
-      ? [
-          original?.discipline && original.discipline.id !== lesson.discipline.id ? original.discipline.shortName : null,
-          original?.teacher && original.teacher.id !== lesson.teacher?.id ? original.teacher.displayName : null,
-        ]
+      ? [changedDiscipline ? original?.discipline?.shortName : null, changedTeacher ? original?.teacher?.displayName : null]
           .filter(Boolean)
           .join(' · ')
       : null;
   const movedFrom = lesson.kind === 'MOVED' && original?.pair ? original.pair : null;
   const isList = variant === 'list';
+  const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
+  const fullName = lesson.discipline.name && lesson.discipline.name !== lesson.discipline.shortName ? lesson.discipline.name : null;
+  // один маркер на клітинку: змінився предмет — підкреслено предмет, інакше — нового викладача
+  const markCounterpart = Boolean(changedTeacher && !changedDiscipline && perspective !== 'teacher');
 
   return (
-    <HoverDetails
+    <DetailsTrigger
+      phone={phone}
       label={`Деталі: ${lesson.discipline.shortName}, ${lesson.pair} пара`}
-      content={<LessonDetails lesson={lesson} date={date} dayParity={dayParity} />}
+      content={{ lesson, date, dayParity }}
     >
       <button
         type="button"
-        {...lineAttr(lesson.discipline)}
-        aria-label={lessonSummary(lesson, perspective)}
+        aria-label={`${lessonSummary(lesson, perspective)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
         className={cn(
-          'group/lesson relative flex w-full min-w-0 flex-col items-stretch text-start',
+          'group/lesson relative flex w-full min-w-0 flex-col items-stretch overflow-hidden text-start',
           'transition-[background-color] duration-100 ease-out',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-          isList ? 'gap-1 rounded-control px-3 py-2.5' : 'gap-0.5 rounded-plate px-2 py-1.5',
-          now && tone === 'regular' ? 'bg-selected ring-1 ring-inset ring-[var(--border-color-accent-subtle)]' : TONE_SURFACE[tone],
-          past && 'opacity-70',
+          isList ? 'gap-1 rounded-control px-3 py-2.5' : 'h-full gap-0.5 px-3 py-2',
+          TONE_SURFACE[tone],
           className,
         )}
       >
         {now ? (
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-0.5 origin-left rounded-full bg-accent transition-transform duration-1000 ease-linear rtl:origin-right"
-            style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, progress))})` }}
-          />
+          <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent-subtle">
+            <span
+              className="block h-full origin-left bg-accent transition-transform duration-1000 ease-linear rtl:origin-right"
+              style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, progress))})` }}
+            />
+          </span>
         ) : null}
 
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
+        <span
+          className={cn(
+            'flex min-w-0 items-baseline gap-1.5',
+            // текст блоку пар лежить на непрозорій «плашці», щоб штрихування не різало літери
+            tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
+          )}
+        >
           <span
             className={cn(
-              'min-w-0 truncate font-condensed font-bold text-primary',
-              isList ? 'text-body leading-tight' : 'text-[0.9375rem] leading-tight',
+              'min-w-0 truncate font-condensed font-bold',
+              isList ? 'text-heading' : 'text-cell',
+              past ? 'text-secondary' : 'text-primary',
               cancelled && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2',
+              changedDiscipline && !cancelled && MARKED,
             )}
           >
             {lesson.discipline.shortName}
           </span>
           {lesson.subgroup > 0 ? (
-            <span className="shrink-0 rounded-plate border border-default px-1 text-meta font-semibold text-secondary figures">
-              {lesson.subgroup}&nbsp;п/г
-            </span>
+            <span className="shrink-0 text-meta font-medium whitespace-nowrap text-muted figures">{lesson.subgroup}&nbsp;п/г</span>
           ) : null}
-          {tone !== 'regular' ? (
-            <Badge tone={TONE_BADGE[tone]} size="sm" className="ms-auto shrink-0">
-              {lesson.kind === 'ROOM_CHANGED' ? 'Аудиторія' : LESSON_VIEW_KIND_LABEL[lesson.kind]}
-            </Badge>
+          {stateWord ? (
+            <span className={cn('ms-auto shrink-0 ps-1 text-meta font-semibold whitespace-nowrap', STATE_WORD[tone as keyof typeof STATE_WORD])}>
+              {stateWord}
+            </span>
           ) : null}
         </span>
 
-        {isList && lesson.discipline.name && lesson.discipline.name !== lesson.discipline.shortName ? (
-          <span className={cn('truncate text-caption text-muted', cancelled && 'line-through')}>{lesson.discipline.name}</span>
+        {isList && fullName ? (
+          <span className={cn('line-clamp-2 text-caption text-muted', cancelled && 'line-through')}>{fullName}</span>
         ) : null}
 
         <span
           className={cn(
-            'flex min-w-0 flex-wrap items-center gap-x-1.5 text-secondary',
-            isList ? 'text-ui' : 'text-caption',
+            'flex min-w-0 flex-wrap items-center gap-x-1.5',
+            isList ? 'text-body' : 'text-caption',
+            past ? 'text-muted' : 'text-secondary',
             cancelled && 'line-through decoration-[var(--text-decoration-color-cancel)]',
+            tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
           )}
         >
-          {counterpart ? <span className="truncate">{counterpart}</span> : null}
+          {counterpart ? <span className={cn('truncate', markCounterpart && !cancelled && MARKED)}>{counterpart}</span> : null}
           {counterpart && (room || originalRoom) ? <span aria-hidden="true">·</span> : null}
           {originalRoom ? (
-            <span className="inline-flex items-center gap-1 text-room">
-              <s className="text-muted">{originalRoom}</s>
-              <ArrowRight aria-hidden="true" className="size-3 rtl:rotate-180" />
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-room figures">
+              <s className="text-muted decoration-[var(--text-decoration-color-cancel)]">{originalRoom}</s>
+              <ArrowRight aria-hidden="true" className="size-3 text-muted rtl:rotate-180" />
               <span className="font-semibold">{room}</span>
             </span>
           ) : room ? (
             <span className="whitespace-nowrap figures">{room}</span>
           ) : null}
           {lesson.online ? (
-            <span className="inline-flex items-center gap-1 text-accent">
-              <MonitorSmartphone aria-hidden="true" className="size-3.5" />
+            <span className="inline-flex items-center gap-1">
+              <MonitorSmartphone aria-hidden="true" className="size-3.5 text-muted" />
               онлайн
             </span>
           ) : null}
@@ -154,20 +209,20 @@ export function LessonCell({
 
         {replacedText || movedFrom || (lesson.reasonText && tone !== 'regular') ? (
           <span className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted', isList ? 'text-caption' : 'text-meta')}>
-            {replacedText ? <s className="truncate decoration-[var(--text-decoration-color-muted)]">{replacedText}</s> : null}
-            {movedFrom ? <span className="text-change">з {movedFrom} пари</span> : null}
+            {replacedText ? <s className="truncate decoration-[var(--text-decoration-color-cancel)]">{replacedText}</s> : null}
+            {movedFrom ? <span className="text-secondary">з {pairOrdinalGenitive(movedFrom)} пари</span> : null}
             {lesson.reasonText && tone !== 'regular' ? (
-              <span className="font-semibold text-secondary">{lesson.reasonText}</span>
+              <span className="text-meta font-semibold text-secondary">{lesson.reasonText}</span>
             ) : null}
           </span>
         ) : null}
 
         {showTime ? (
-          <span className="text-meta font-semibold text-muted figures">
+          <span className="text-meta text-muted figures">
             {lesson.startsAt}–{lesson.endsAt}
           </span>
         ) : null}
       </button>
-    </HoverDetails>
+    </DetailsTrigger>
   );
 }

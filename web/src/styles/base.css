@@ -15,6 +15,7 @@
     color: var(--text-color-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-synthesis-weight: none;
     scrollbar-color: var(--border-color-strong) transparent;
     scrollbar-width: thin;
   }
@@ -30,6 +31,7 @@
     color: var(--text-color-primary);
   }
 
+  /* Фокус лише з клавіатури: 2 px з відступом 2 px скрізь (рядки таблиць і бічна панель — всередину) */
   :focus-visible {
     outline: 2px solid var(--outline-color-focus);
     outline-offset: 2px;
@@ -90,12 +92,12 @@
   }
 }
 
-/* Штрихування: знаменник, «блок» пар, вимкнені слоти. Нейтральні лінії, не декоративний градієнт. */
+/* Штрихування «блоку» пар і неробочих днів: тонкі нейтральні лінії через 8 px, не декоративний градієнт. */
 @utility hatch {
   background-image: repeating-linear-gradient(
     135deg,
-    var(--hatch-color, var(--border-color-default)) 0 1px,
-    transparent 1px 7px
+    var(--hatch-color, var(--border-color-separator)) 0 1px,
+    transparent 1px 8px
   );
 }
 
@@ -111,6 +113,28 @@
   }
 }
 
+/*
+ * Кільце «зараз»: одна-єдина пульсація на екрані — маркер поточної пари. Дві хвилі й тиша;
+ * щоб повторити (нова пара, відновлене зʼєднання), перемонтуйте елемент через key.
+ */
+@utility live-ring {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--fill-accent);
+    opacity: 0;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    &::after {
+      animation: live-pulse var(--duration-live) var(--ease-out) 2;
+    }
+  }
+}
+
 /* Зміна теми — як табло-«жалюзі» трамвая: нова тема опускається згори вниз */
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -120,13 +144,13 @@
 
 @media (prefers-reduced-motion: no-preference) {
   :root[data-theme-switching] ::view-transition-new(root) {
-    animation: blind-roll 380ms var(--ease-out) both;
+    animation: blind-roll 280ms var(--ease-out) both;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme-switching] ::view-transition-new(root) {
-    animation: theme-fade 160ms linear both;
+    animation: theme-fade 150ms linear both;
   }
 
   .animate-shimmer,

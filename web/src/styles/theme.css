@@ -1,9 +1,13 @@
 /*
- * Дизайн-токени «Розклад ВТФК». Світ: трамвайний розклад зупинки (див. web/DESIGN.md).
+ * Дизайн-токени «Розклад ВТФК». Світ: трамвайний розклад зупинки, надрукований аркуш (див. web/DESIGN.md).
  * Два рівні: примітиви (лише тут, без утиліт) → семантичні ролі (утиліти Tailwind).
  * Ролі розкладені по просторах імен Tailwind 4, тож `bg-*` бачить лише фони,
  * `text-*` — лише кольори тексту, `border-*` — лише межі. Палітру Tailwind вимкнено.
- * Усі пари перевірені на WCAG 2.2 AA в обох темах (скрипт і таблиця — у DESIGN.md).
+ * Усі пари перевірені на WCAG 2.2 AA в обох темах (таблиця — у DESIGN.md).
+ *
+ * Колір рідкісний і має значення: синій — лише «живе, вибране, головна дія, фокус»;
+ * бурштин, червоний, зелений, блакитний — лише стани занять. Темна тема — графіт зі слідом синього:
+ * що вище шар, то світліший, заливки малонасичені.
  */
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
@@ -23,21 +27,24 @@
   --grey-600: oklch(42% 0.028 258);
   --grey-850: oklch(24.5% 0.03 258);
 
-  /* Ніч: та сама емаль, що й смуга, — темно-синя, а не сірий «нуль» */
-  --night-50: oklch(95.5% 0.008 258);
-  --night-200: oklch(80% 0.016 258);
-  --night-300: oklch(72% 0.016 258);
-  --night-500: oklch(54% 0.022 258);
-  --night-550: oklch(60% 0.022 258);
-  --night-600: oklch(50% 0.014 258);
-  --night-750: oklch(32% 0.024 256);
-  --night-775: oklch(29% 0.024 256);
-  --night-800: oklch(27% 0.022 256);
-  --night-825: oklch(25.5% 0.022 256);
-  --night-850: oklch(24.5% 0.022 256);
-  --night-900: oklch(21% 0.022 256);
-  --night-925: oklch(17.8% 0.02 256);
-  --night-950: oklch(16.3% 0.018 256);
+  /* Графіт (темна тема): хроматичність ~0.011 — слід маршрутного синього, без «нічного темно-синього» */
+  --graphite-50: oklch(95.5% 0.008 258);
+  --graphite-100: oklch(93% 0.006 258);
+  --graphite-200: oklch(80.5% 0.012 258);
+  --graphite-300: oklch(71% 0.012 258);
+  --graphite-400: oklch(60.5% 0.014 258);
+  --graphite-500: oklch(55% 0.016 258);
+  --graphite-550: oklch(61% 0.014 258);
+  --graphite-600: oklch(48% 0.008 258);
+  --graphite-700: oklch(33.5% 0.012 256);
+  --graphite-750: oklch(29.5% 0.013 256);
+  --graphite-775: oklch(27% 0.012 256);
+  --graphite-800: oklch(26.5% 0.012 256);
+  --graphite-820: oklch(25% 0.012 256);
+  --graphite-850: oklch(23.5% 0.012 256);
+  --graphite-870: oklch(23% 0.009 256);
+  --graphite-900: oklch(20.5% 0.011 256);
+  --graphite-950: oklch(17% 0.01 256);
 
   /* Маршрутний синій: емаль табличок зупинок, фірмова смуга і «живий» колір */
   --route-50: oklch(95.5% 0.022 253);
@@ -49,40 +56,44 @@
   --route-550: oklch(56% 0.15 256);
   --route-600: oklch(49% 0.16 256);
   --route-650: oklch(50% 0.15 256);
+  --route-675: oklch(46% 0.145 256);
   --route-700: oklch(44% 0.15 256);
   --route-720: oklch(47% 0.15 256);
+  --route-740: oklch(40% 0.14 256);
   --route-750: oklch(50% 0.11 256);
-  --route-800: oklch(39.5% 0.105 256);
   --route-850: oklch(33.5% 0.1 256);
-  --route-870: oklch(31% 0.07 256);
-  --route-880: oklch(32% 0.065 256);
+  --route-860: oklch(35% 0.07 256);
   --route-890: oklch(28% 0.05 256);
-  --route-900: oklch(29% 0.085 256);
-  --route-920: oklch(25.5% 0.06 256);
-  --route-940: oklch(22.5% 0.05 256);
+  --route-895: oklch(31% 0.06 256);
+  --route-night-shell: oklch(28.5% 0.065 256);
+  --route-night-shell-hover: oklch(34% 0.058 256);
+  --route-night-shell-raised: oklch(38% 0.052 256);
+  --route-day-shell-hover: oklch(38.5% 0.085 256);
+  --route-day-shell-raised: oklch(42% 0.08 256);
   --route-onshell-day: oklch(85% 0.04 256);
   --route-onshell-night: oklch(80% 0.035 256);
   --route-shellsep-day: oklch(45% 0.085 256);
-  --route-shellsep-night: oklch(36% 0.06 256);
+  --route-shellsep-night: oklch(37% 0.06 256);
 
   /* Бурштин — заміна / «обʼїзд» */
   --amber-50: oklch(95.4% 0.044 81);
   --amber-300: oklch(80% 0.13 70);
   --amber-500: oklch(64.5% 0.149 62);
   --amber-700: oklch(46% 0.11 58);
-  --amber-n-subtle: oklch(30% 0.055 70);
-  --amber-n-border: oklch(52% 0.1 70);
+  --amber-n-subtle: oklch(27% 0.04 70);
+  --amber-n-border: oklch(40% 0.06 70);
   --amber-n-solid: oklch(80% 0.15 70);
   --amber-n-text: oklch(85.5% 0.117 72);
 
-  /* Червоний — скасовано / небезпечна дія */
+  /* Червоний — «пари не буде» / небезпечна дія */
   --red-50: oklch(95.9% 0.02 29);
   --red-300: oklch(80% 0.09 27);
   --red-550: oklch(55% 0.2 27);
   --red-600: oklch(50% 0.19 27);
+  --red-650: oklch(46% 0.18 27);
   --red-700: oklch(47% 0.17 27);
-  --red-n-subtle: oklch(28.5% 0.06 27);
-  --red-n-border: oklch(50% 0.13 27);
+  --red-n-subtle: oklch(26.5% 0.045 27);
+  --red-n-border: oklch(40% 0.07 27);
   --red-n-solid: oklch(68% 0.18 27);
   --red-n-text: oklch(81% 0.1 27);
 
@@ -91,8 +102,8 @@
   --green-300: oklch(80% 0.1 150);
   --green-550: oklch(58% 0.15 150);
   --green-700: oklch(44% 0.12 150);
-  --green-n-subtle: oklch(28.5% 0.05 150);
-  --green-n-border: oklch(50% 0.1 150);
+  --green-n-subtle: oklch(26.5% 0.035 150);
+  --green-n-border: oklch(40% 0.055 150);
   --green-n-solid: oklch(73% 0.15 150);
   --green-n-text: oklch(84% 0.12 150);
 
@@ -101,8 +112,8 @@
   --azure-300: oklch(80% 0.08 222);
   --azure-550: oklch(56.7% 0.108 226);
   --azure-700: oklch(45.7% 0.088 226);
-  --azure-n-subtle: oklch(28.5% 0.045 222);
-  --azure-n-border: oklch(50% 0.08 222);
+  --azure-n-subtle: oklch(26.5% 0.035 222);
+  --azure-n-border: oklch(40% 0.055 222);
   --azure-n-solid: oklch(72% 0.11 222);
   --azure-n-text: oklch(83% 0.08 222);
 
@@ -114,7 +125,7 @@
   --duration-live: 1600ms;
 
   --header-height: 3.5rem;
-  --tabbar-height: 3.5rem;
+  --tabbar-height: 3.75rem;
 }
 
 /* ---------- Семантичні ролі (світла тема за замовчуванням) ---------- */
@@ -128,26 +139,29 @@
   --font-condensed: 'Fira Sans Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
 
-  /* Шкала тексту: фіксовані rem, крок ~1.15; ролі замість xs…9xl */
+  /* Шкала тексту: цілі пікселі для розміру й інтерліньяжу; ролі замість xs…9xl */
   --text-*: initial;
   --text-meta: 0.75rem;
-  --text-meta--line-height: 1.35;
+  --text-meta--line-height: 1rem;
   --text-caption: 0.8125rem;
-  --text-caption--line-height: 1.4;
+  --text-caption--line-height: 1.125rem;
   --text-ui: 0.875rem;
-  --text-ui--line-height: 1.45;
+  --text-ui--line-height: 1.25rem;
+  --text-cell: 0.9375rem;
+  --text-cell--line-height: 1.25rem;
   --text-body: 1rem;
-  --text-body--line-height: 1.55;
+  --text-body--line-height: 1.5rem;
   --text-heading: 1.125rem;
-  --text-heading--line-height: 1.35;
+  --text-heading--line-height: 1.5rem;
   --text-title: 1.375rem;
-  --text-title--line-height: 1.25;
+  --text-title--line-height: 1.75rem;
   --text-headline: 1.75rem;
-  --text-headline--line-height: 1.15;
+  --text-headline--line-height: 2rem;
+  --text-headline--letter-spacing: -0.01em;
   --text-display: 2.5rem;
-  --text-display--line-height: 1.05;
+  --text-display--line-height: 2.75rem;
   --text-numeral: 3.5rem;
-  --text-numeral--line-height: 1;
+  --text-numeral--line-height: 3.5rem;
 
   /* Радіуси: дрібні, як у емальованих табличках */
   --radius-*: initial;
@@ -162,37 +176,41 @@
   --shadow-popover: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 4px 12px -2px oklch(24.5% 0.03 258 / 0.12),
     0 12px 32px -8px oklch(24.5% 0.03 258 / 0.14);
   --shadow-dialog: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 16px 48px -12px oklch(24.5% 0.03 258 / 0.28);
-  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22);
+  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 4px 10px -4px oklch(24.5% 0.03 258 / 0.18);
 
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Нічого не крутиться безкінечно, крім спінера: «живе» блимає двічі й замовкає */
   --animate-*: initial;
   --animate-spin: spin 0.9s linear infinite;
-  --animate-shimmer: shimmer 1.6s var(--ease-in-out) infinite;
-  --animate-live: live-pulse var(--duration-live) var(--ease-out) infinite;
+  --animate-shimmer: fade-in 240ms var(--ease-out) both;
+  --animate-live: live-dot var(--duration-live) var(--ease-out) 2;
 
   /* Фони */
-  --background-color-canvas: light-dark(var(--grey-25), var(--night-925));
-  --background-color-surface: light-dark(var(--grey-0), var(--night-900));
-  --background-color-raised: light-dark(var(--grey-0), var(--night-850));
-  --background-color-sunken: light-dark(var(--grey-50), var(--night-950));
-  --background-color-hover: light-dark(var(--grey-75), var(--night-825));
-  --background-color-active: light-dark(var(--grey-100), var(--night-775));
-  --background-color-skeleton: light-dark(var(--grey-100), var(--night-800));
+  --background-color-canvas: light-dark(var(--grey-25), var(--graphite-950));
+  --background-color-surface: light-dark(var(--grey-0), var(--graphite-900));
+  --background-color-raised: light-dark(var(--grey-0), var(--graphite-820));
+  --background-color-sunken: light-dark(var(--grey-50), var(--graphite-850));
+  --background-color-hover: light-dark(var(--grey-75), var(--graphite-800));
+  --background-color-active: light-dark(var(--grey-100), var(--graphite-750));
+  --background-color-skeleton: light-dark(var(--grey-100), var(--graphite-775));
   --background-color-selected: light-dark(var(--route-50), var(--route-890));
-  --background-color-selected-hover: light-dark(var(--route-100), var(--route-880));
-  --background-color-shell: light-dark(var(--route-850), var(--route-920));
-  --background-color-shell-hover: light-dark(var(--route-800), var(--route-870));
-  --background-color-shell-raised: light-dark(var(--route-900), var(--route-940));
-  --background-color-plate: light-dark(var(--grey-0), var(--night-50));
+  --background-color-selected-hover: light-dark(var(--route-100), var(--route-895));
+  --background-color-shell: light-dark(var(--route-850), var(--route-night-shell));
+  --background-color-shell-hover: light-dark(var(--route-day-shell-hover), var(--route-night-shell-hover));
+  --background-color-shell-raised: light-dark(var(--route-day-shell-raised), var(--route-night-shell-raised));
+  --background-color-plate: light-dark(oklch(99% 0.004 256), var(--graphite-50));
   --background-color-scrim: light-dark(oklch(24.5% 0.03 258 / 0.45), oklch(8% 0.01 258 / 0.62));
-  --background-color-inverse: light-dark(var(--grey-850), var(--night-50));
+  --background-color-inverse: light-dark(var(--grey-850), var(--graphite-50));
   --background-color-accent: light-dark(var(--route-600), var(--route-550));
   --background-color-accent-hover: light-dark(var(--route-700), var(--route-650));
+  --background-color-accent-active: light-dark(var(--route-740), var(--route-675));
+  --background-color-accent-subtle: light-dark(var(--route-100), var(--route-860));
   --background-color-danger: light-dark(var(--red-550), var(--red-550));
   --background-color-danger-hover: light-dark(var(--red-600), var(--red-600));
+  --background-color-danger-active: light-dark(var(--red-650), var(--red-650));
   --background-color-danger-subtle: light-dark(var(--red-50), var(--red-n-subtle));
   --background-color-change: light-dark(var(--amber-300), var(--amber-n-solid));
   --background-color-change-subtle: light-dark(var(--amber-50), var(--amber-n-subtle));
@@ -200,19 +218,19 @@
   --background-color-add: light-dark(var(--green-550), var(--green-n-solid));
   --background-color-add-subtle: light-dark(var(--green-50), var(--green-n-subtle));
   --background-color-room-subtle: light-dark(var(--azure-50), var(--azure-n-subtle));
-  --background-color-block-subtle: light-dark(var(--grey-50), var(--night-950));
+  --background-color-block-subtle: light-dark(var(--grey-50), var(--graphite-850));
 
   /* Текст */
-  --text-color-primary: light-dark(var(--grey-850), var(--night-50));
-  --text-color-secondary: light-dark(var(--grey-600), var(--night-200));
-  --text-color-muted: light-dark(var(--grey-550), var(--night-300));
-  --text-color-disabled: light-dark(var(--grey-400), var(--night-600));
-  --text-color-inverse: light-dark(var(--grey-0), var(--night-925));
+  --text-color-primary: light-dark(var(--grey-850), var(--graphite-100));
+  --text-color-secondary: light-dark(var(--grey-600), var(--graphite-200));
+  --text-color-muted: light-dark(var(--grey-550), var(--graphite-300));
+  --text-color-disabled: light-dark(var(--grey-400), var(--graphite-600));
+  --text-color-inverse: light-dark(var(--grey-0), var(--graphite-950));
   --text-color-on-accent: light-dark(var(--grey-0), var(--grey-0));
   --text-color-on-shell: light-dark(oklch(99% 0.004 256), oklch(97% 0.006 256));
   --text-color-on-shell-muted: light-dark(var(--route-onshell-day), var(--route-onshell-night));
-  --text-color-on-change: light-dark(var(--grey-850), var(--night-925));
-  --text-color-plate: light-dark(var(--route-850), var(--route-920));
+  --text-color-on-change: light-dark(var(--grey-850), var(--graphite-950));
+  --text-color-plate: light-dark(var(--route-850), var(--route-night-shell));
   --text-color-accent: light-dark(var(--route-720), var(--route-450));
   --text-color-danger: light-dark(var(--red-700), var(--red-n-text));
   --text-color-change: light-dark(var(--amber-700), var(--amber-n-text));
@@ -221,10 +239,10 @@
   --text-color-room: light-dark(var(--azure-700), var(--azure-n-text));
 
   /* Межі */
-  --border-color-separator: light-dark(var(--grey-150), var(--night-800));
-  --border-color-default: light-dark(var(--grey-200), var(--night-750));
-  --border-color-control: light-dark(var(--grey-400), var(--night-500));
-  --border-color-strong: light-dark(var(--grey-500), var(--night-550));
+  --border-color-separator: light-dark(var(--grey-150), oklch(26.5% 0.008 256));
+  --border-color-default: light-dark(var(--grey-200), oklch(31% 0.009 256));
+  --border-color-control: light-dark(var(--grey-400), var(--graphite-500));
+  --border-color-strong: light-dark(var(--grey-500), var(--graphite-550));
   --border-color-accent: light-dark(var(--route-600), var(--route-400));
   --border-color-accent-subtle: light-dark(var(--route-300), var(--route-750));
   --border-color-danger: light-dark(var(--red-550), var(--red-n-solid));
@@ -234,7 +252,7 @@
   --border-color-room: light-dark(var(--azure-300), var(--azure-n-border));
   --border-color-shell: light-dark(var(--route-shellsep-day), var(--route-shellsep-night));
 
-  --outline-color-focus: light-dark(var(--route-500), var(--route-400));
+  --outline-color-focus: light-dark(var(--route-500), oklch(74.5% 0.125 256));
   --outline-color-focus-on-shell: light-dark(var(--route-onshell-day), var(--route-onshell-night));
 
   --fill-accent: light-dark(var(--route-600), var(--route-400));
@@ -242,19 +260,20 @@
   --fill-cancel: light-dark(var(--red-550), var(--red-n-solid));
   --fill-add: light-dark(var(--green-550), var(--green-n-solid));
   --fill-room: light-dark(var(--azure-550), var(--azure-n-solid));
-  --fill-muted: light-dark(var(--grey-400), var(--night-500));
-  --fill-surface: light-dark(var(--grey-0), var(--night-900));
+  --fill-muted: light-dark(var(--grey-400), var(--graphite-500));
+  --fill-surface: light-dark(var(--grey-0), var(--graphite-900));
   --stroke-accent: light-dark(var(--route-600), var(--route-400));
-  --stroke-rule: light-dark(var(--grey-200), var(--night-750));
-  --stroke-muted: light-dark(var(--grey-400), var(--night-500));
+  --stroke-rule: light-dark(var(--grey-200), oklch(31% 0.009 256));
+  --stroke-muted: light-dark(var(--grey-400), var(--graphite-500));
   --stroke-change: light-dark(var(--amber-500), var(--amber-n-solid));
   --stroke-cancel: light-dark(var(--red-550), var(--red-n-solid));
 
   --text-decoration-color-cancel: light-dark(var(--red-550), var(--red-n-solid));
+  --text-decoration-color-change: light-dark(var(--amber-300), var(--amber-n-text));
   --text-decoration-color-accent: light-dark(var(--route-300), var(--route-750));
-  --text-decoration-color-muted: light-dark(var(--grey-400), var(--night-500));
+  --text-decoration-color-muted: light-dark(var(--grey-400), var(--graphite-500));
   --caret-color-accent: light-dark(var(--route-600), var(--route-400));
-  --placeholder-color-muted: light-dark(var(--grey-550), var(--night-300));
+  --placeholder-color-muted: light-dark(var(--grey-550), var(--graphite-300));
 }
 
 /* ---------- Теми ----------
@@ -265,46 +284,47 @@
   color-scheme: light;
   --shadow-popover: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 4px 12px -2px oklch(24.5% 0.03 258 / 0.12), 0 12px 32px -8px oklch(24.5% 0.03 258 / 0.14);
   --shadow-dialog: 0 0 0 1px oklch(24.5% 0.03 258 / 0.08), 0 16px 48px -12px oklch(24.5% 0.03 258 / 0.28);
-  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 6px 16px -6px oklch(24.5% 0.03 258 / 0.22);
+  --shadow-lift: 0 1px 2px oklch(24.5% 0.03 258 / 0.1), 0 4px 10px -4px oklch(24.5% 0.03 258 / 0.18);
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
   --shadow-popover: 0 0 0 1px oklch(100% 0 0 / 0.08), 0 8px 24px -6px oklch(0% 0 0 / 0.6);
   --shadow-dialog: 0 0 0 1px oklch(100% 0 0 / 0.09), 0 20px 56px -12px oklch(0% 0 0 / 0.7);
-  --shadow-lift: 0 0 0 1px oklch(100% 0 0 / 0.1), 0 8px 20px -6px oklch(0% 0 0 / 0.6);
+  --shadow-lift: 0 0 0 1px oklch(100% 0 0 / 0.1), 0 6px 16px -6px oklch(0% 0 0 / 0.6);
 }
 
 /* Підвищений контраст: розсуваємо вторинний текст і межі, окремо для кожної теми */
 @media (prefers-contrast: more) {
   :root {
-    --text-color-secondary: light-dark(var(--grey-850), var(--night-50));
-    --text-color-muted: light-dark(var(--grey-600), var(--night-200));
-    --border-color-default: light-dark(var(--grey-400), var(--night-500));
-    --border-color-control: light-dark(var(--grey-500), var(--night-550));
+    --text-color-secondary: light-dark(var(--grey-850), var(--graphite-50));
+    --text-color-muted: light-dark(var(--grey-600), var(--graphite-200));
+    --border-color-default: light-dark(var(--grey-400), var(--graphite-500));
+    --border-color-control: light-dark(var(--grey-500), var(--graphite-550));
   }
 }
 
-@keyframes shimmer {
-  0% {
-    opacity: 1;
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
+}
+
+/* «Живе» на крапці-стані: два спокійні вдихи прозорістю, без тіні й масштабу */
+@keyframes live-dot {
   50% {
-    opacity: 0.55;
-  }
-  100% {
-    opacity: 1;
+    opacity: 0.45;
   }
 }
 
+/* Кільце маркера «зараз»: лише transform і opacity — працює на композиторі */
 @keyframes live-pulse {
-  0% {
-    box-shadow: 0 0 0 0 oklch(55% 0.17 256 / 0.45);
+  from {
+    transform: scale(1);
+    opacity: 0.45;
   }
-  70% {
-    box-shadow: 0 0 0 8px oklch(55% 0.17 256 / 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 oklch(55% 0.17 256 / 0);
+  to {
+    transform: scale(2.25);
+    opacity: 0;
   }
 }

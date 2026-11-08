@@ -5,7 +5,6 @@ import { cn } from '@/lib/cn';
 import { formatDayMonth, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, weekdayName } from '@/lib/labels';
 import { daySlots, type Perspective } from '@/lib/schedule';
-import { ParityMark } from '../ui/ParityBadge';
 import { LessonCell } from './LessonCell';
 
 export interface DayColumnProps {
@@ -36,25 +35,24 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
     >
       <header
         className={cn(
-          'flex items-center justify-between gap-2 border-b border-separator px-3',
-          compact ? 'py-2' : 'py-2.5',
-          isToday && 'border-b-2 border-b-[var(--border-color-accent)]',
+          'flex items-center gap-2 border-b border-separator px-3',
+          compact ? 'h-10' : 'h-12',
+          isToday && 'shadow-[inset_0_-2px_0_var(--border-color-accent)]',
         )}
       >
         <p className="flex min-w-0 items-baseline gap-2">
-          <span className={cn('font-semibold text-primary', compact ? 'text-ui' : 'text-heading')}>
+          <span className={cn('font-semibold text-primary', compact ? 'text-ui' : 'text-body')}>
             {capitalize(weekdayName(day.weekday))}
           </span>
           <span className="text-caption text-secondary figures">{formatDayMonth(day.date)}</span>
-          {isToday ? <span className="text-caption font-semibold text-accent">сьогодні</span> : null}
+          {isToday ? <span className="text-meta font-semibold text-accent">сьогодні</span> : null}
         </p>
-        <ParityMark parity={day.parity} className="text-muted" />
       </header>
 
-      {day.note ? <p className="border-b border-separator bg-sunken px-3 py-2 text-caption text-secondary">{day.note}</p> : null}
+      {day.note ? <p className="border-b border-separator px-3 py-2 text-caption text-secondary">{day.note}</p> : null}
 
       {!day.studyDay || slots.length === 0 ? (
-        <p className="px-3 py-6 text-center text-caption text-muted">{day.studyDay ? 'Пар немає' : 'Не навчальний день'}</p>
+        <p className="px-3 py-5 text-caption text-muted">{day.studyDay ? 'Пар немає' : 'Не навчальний день'}</p>
       ) : (
         <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
           {slots.map((slot) => {
@@ -63,16 +61,18 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
             const current = minutes !== null && start !== null && end !== null && minutes >= start && minutes < end;
             const progress = current && start !== null && end !== null ? (minutes - start) / (end - start) : 0;
             return (
-              <li key={slot.pair} className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 px-2 py-1.5" aria-current={current ? 'time' : undefined}>
-                <div className="flex flex-col items-center pt-1 leading-none">
+              <li key={slot.pair} className="grid grid-cols-[3.25rem_minmax(0,1fr)]" aria-current={current ? 'time' : undefined}>
+                <div className="flex flex-col items-center py-2 leading-none">
                   <span className={cn('font-condensed text-title font-bold figures', current ? 'text-accent' : slot.isWindow ? 'text-muted' : 'text-primary')}>
                     {slot.pair}
                   </span>
-                  {slot.startsAt ? <span className="mt-1 text-meta text-muted figures">{slot.startsAt}</span> : null}
+                  {slot.startsAt ? (
+                    <span className={cn('mt-1 text-meta figures', current ? 'text-accent' : 'text-muted')}>{slot.startsAt}</span>
+                  ) : null}
                 </div>
-                <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex min-w-0 flex-col divide-y divide-[var(--border-color-separator)]">
                   {slot.isWindow ? (
-                    <p className="py-2 text-caption text-muted">Вікно</p>
+                    <p className="px-3 py-2 text-caption text-muted">Вікно</p>
                   ) : (
                     slot.lessons.map((lesson) => (
                       <LessonCell

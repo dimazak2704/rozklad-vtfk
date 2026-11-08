@@ -1,81 +1,53 @@
 /*
- * «Лінії» дисциплін: як кольори маршрутів на схемі. 12 відтінків з однаковою світлотою,
- * кожен перевірено на AA в обох темах (крапка ≥ 3:1 до тла, текст ≥ 4.5:1 до тла й до тонування).
- * Значення в light-dark(): колір бере тему найближчого предка (працює й у «острівцях»).
+ * «Лінії» дисциплін: як кольори маршрутів на схемі. Лише 5 відтінків, кожен ≥ 30° від зарезервованих
+ * (стани занять 27° / 58–81° / 150° / 221–226°, «живий» синій 256°), тож дисципліна ніколи не схожа на стан.
+ * У сітці розкладу кольорів дисциплін немає: предмет називає коротка назва. Лінія живе лише в картці деталей
+ * заняття та в діаграмах адмінки (редактор, навантаження).
+ * Крапка світла — oklch(56% 0.12 h), ≥ 4.2:1 до білого; темна — oklch(72% 0.09 h), ≥ 6.9:1 до поверхні.
  * Елемент отримує data-line="N" (див. src/lib/discipline-color.ts) і читає змінні:
  *   --line-dot   — крапка/позначка (графічний елемент)
- *   --line-tint  — ледь помітне тонування клітинки
- *   --line-text  — кольоровий текст короткої назви (за потреби)
+ *   --line-tint  — ледь помітне тонування (діаграми)
+ *   --line-text  — кольоровий текст (за потреби, ≥ 4.5:1 до тла й до тонування)
+ * Шоста й далі дисципліна на одному екрані — нейтральна (--fill-muted).
  */
 
+[data-line] {
+  --line-dot: var(--fill-muted);
+  --line-tint: var(--background-color-sunken);
+  --line-text: var(--text-color-secondary);
+}
+
+/* 115° — оливковий */
 [data-line='0'] {
-  --line-dot: light-dark(#c5586a, #f48998);
-  --line-tint: light-dark(#fff0f1, #2f1d1f);
-  --line-text: light-dark(#81313f, #fdb9c0);
+  --line-dot: light-dark(oklch(56% 0.12 115), oklch(72% 0.09 115));
+  --line-tint: light-dark(oklch(96.5% 0.025 115), oklch(26.5% 0.03 115));
+  --line-text: light-dark(oklch(44% 0.095 115), oklch(85% 0.07 115));
 }
 
+/* 186° — бірюзовий */
 [data-line='1'] {
-  --line-dot: light-dark(#c45e39, #f3906d);
-  --line-tint: light-dark(#fff1ec, #2f1e19);
-  --line-text: light-dark(#80361b, #fcbda7);
+  --line-dot: light-dark(oklch(56% 0.12 186), oklch(72% 0.09 186));
+  --line-tint: light-dark(oklch(96.5% 0.025 186), oklch(26.5% 0.03 186));
+  --line-text: light-dark(oklch(44% 0.095 186), oklch(85% 0.07 186));
 }
 
+/* 290° — фіалковий */
 [data-line='2'] {
-  --line-dot: light-dark(#b07100, #dea143);
-  --line-tint: light-dark(#fbf3e9, #2b2113);
-  --line-text: light-dark(#724400, #edc793);
+  --line-dot: light-dark(oklch(56% 0.12 290), oklch(72% 0.09 290));
+  --line-tint: light-dark(oklch(96.5% 0.025 290), oklch(26.5% 0.03 290));
+  --line-text: light-dark(oklch(44% 0.095 290), oklch(85% 0.07 290));
 }
 
+/* 320° — сливовий */
 [data-line='3'] {
-  --line-dot: light-dark(#8d8300, #bab245);
-  --line-tint: light-dark(#f6f5e9, #252414);
-  --line-text: light-dark(#595200, #d5d194);
+  --line-dot: light-dark(oklch(56% 0.12 320), oklch(72% 0.09 320));
+  --line-tint: light-dark(oklch(96.5% 0.025 320), oklch(26.5% 0.03 320));
+  --line-text: light-dark(oklch(44% 0.095 320), oklch(85% 0.07 320));
 }
 
+/* 352° — малиновий */
 [data-line='4'] {
-  --line-dot: light-dark(#599234, #89c06a);
-  --line-tint: light-dark(#f0f7ec, #1d2618);
-  --line-text: light-dark(#335c15, #b8daa5);
-}
-
-[data-line='5'] {
-  --line-dot: light-dark(#00996b, #4bc899);
-  --line-tint: light-dark(#ebf8f2, #15271f);
-  --line-text: light-dark(#006240, #9cdfc1);
-}
-
-[data-line='6'] {
-  --line-dot: light-dark(#009693, #00c7c3);
-  --line-tint: light-dark(#e9f8f7, #112726);
-  --line-text: light-dark(#005f5d, #8ddfdb);
-}
-
-[data-line='7'] {
-  --line-dot: light-dark(#0092af, #15c2e1);
-  --line-tint: light-dark(#e9f7fb, #12262b);
-  --line-text: light-dark(#005c70, #8fdcef);
-}
-
-[data-line='8'] {
-  --line-dot: light-dark(#1f86cd, #60b6fa);
-  --line-tint: light-dark(#ecf6ff, #172430);
-  --line-text: light-dark(#005487, #a2d4ff);
-}
-
-[data-line='9'] {
-  --line-dot: light-dark(#7174d1, #9ea4ff);
-  --line-tint: light-dark(#f2f4ff, #202130);
-  --line-text: light-dark(#45468a, #c3c9ff);
-}
-
-[data-line='10'] {
-  --line-dot: light-dark(#9a66be, #c796eb);
-  --line-tint: light-dark(#f8f2fd, #271f2d);
-  --line-text: light-dark(#623c7c, #dec0f5);
-}
-
-[data-line='11'] {
-  --line-dot: light-dark(#b55b9a, #e48cc8);
-  --line-tint: light-dark(#fcf0f8, #2c1e27);
-  --line-text: light-dark(#763463, #f2bade);
+  --line-dot: light-dark(oklch(56% 0.12 352), oklch(72% 0.09 352));
+  --line-tint: light-dark(oklch(96.5% 0.025 352), oklch(26.5% 0.03 352));
+  --line-text: light-dark(oklch(44% 0.095 352), oklch(85% 0.07 352));
 }

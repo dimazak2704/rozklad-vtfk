@@ -1,7 +1,8 @@
 import type { WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
-import { PARITY_HINT, PARITY_LABEL } from '@/lib/labels';
-import { Tooltip } from './Tooltip';
+import { capitalize, PARITY_HINT, PARITY_LABEL } from '@/lib/labels';
+import { weekOrdinal } from '@/lib/ordinal';
+import { Popover, PopoverContent, PopoverTrigger } from './Popover';
 
 interface ParityMarkProps {
   parity: WeekParity;
@@ -10,7 +11,7 @@ interface ParityMarkProps {
 
 /**
  * Знак парності з друкованого розкладу: пара займає два рядки, верхній — чисельник, нижній — знаменник.
- * Заповнена половина показує, який рядок діє цього тижня.
+ * Заповнена половина показує, який рядок діє цього тижня. Ніколи не стоїть сам — поруч завжди слово.
  */
 export function ParityMark({ parity, className }: ParityMarkProps) {
   return (
@@ -32,16 +33,19 @@ interface ParityBadgeProps {
   parity: WeekParity;
   /** Номер навчального тижня семестру. */
   weekNumber?: number;
-  /** «Зараз» — для шапки сайту. */
+  /** Слово перед парністю (необовʼязково; у шапці його немає). */
   prefix?: string;
   tone?: 'default' | 'on-shell';
   size?: 'sm' | 'md';
-  /** Без підказки (коли пояснення вже поруч). */
+  /** Просто текст, без кнопки з поясненням (коли пояснення вже поруч). */
   plain?: boolean;
   className?: string;
 }
 
-/** «Зараз ЗНАМЕННИК · 8 тиждень» з підказкою, як працює чергування. */
+/**
+ * «Знаменник · 10-й тиждень» — звичайним регістром, як у реченні. Натискання (мишею, дотиком чи Enter)
+ * відкриває пояснення, як чергуються тижні.
+ */
 export function ParityBadge({
   parity,
   weekNumber,
@@ -51,35 +55,45 @@ export function ParityBadge({
   plain = false,
   className,
 }: ParityBadgeProps) {
-  const label = PARITY_LABEL[parity];
-  const badge = (
-    <span
-      tabIndex={plain ? undefined : 0}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-control font-semibold whitespace-nowrap',
-        size === 'md' ? 'h-8 px-2.5 text-ui' : 'h-6 px-2 text-caption',
-        tone === 'default' && 'border border-default bg-surface text-primary',
-        tone === 'on-shell' && 'bg-shell-raised text-on-shell',
-        !plain && 'cursor-help focus-visible:outline-2 focus-visible:outline-offset-2',
-        !plain && (tone === 'on-shell' ? 'focus-visible:outline-focus-on-shell' : 'focus-visible:outline-focus'),
-        className,
-      )}
-    >
-      <ParityMark parity={parity} className={tone === 'on-shell' ? 'text-on-shell' : 'text-accent'} />
-      {prefix ? <span className={tone === 'on-shell' ? 'text-on-shell-muted' : 'text-secondary'}>{prefix}</span> : null}
-      <span className="font-condensed text-[1.05em] font-bold tracking-wider uppercase">{label}</span>
+  const onShell = tone === 'on-shell';
+  const quiet = onShell ? 'text-on-shell-muted' : 'text-secondary';
+  const content = (
+    <>
+      <ParityMark parity={parity} className={cn(size === 'md' ? 'h-4 w-3.5' : 'h-3.5 w-3', onShell ? 'text-on-shell' : 'text-accent')} />
+      {prefix ? <span className={quiet}>{prefix}</span> : null}
+      <span className={cn('font-semibold', onShell ? 'text-on-shell' : 'text-primary')}>{capitalize(PARITY_LABEL[parity])}</span>
       {weekNumber ? (
-        <>
-          <span aria-hidden="true" className={tone === 'on-shell' ? 'text-on-shell-muted' : 'text-muted'}>
-            ·
-          </span>
-          <span className={cn('figures', tone === 'on-shell' ? 'text-on-shell-muted' : 'text-secondary')}>
-            {weekNumber}&nbsp;тиждень
-          </span>
-        </>
+        <span className={cn('figures', quiet)}>
+          <span aria-hidden="true">· </span>
+          {weekOrdinal(weekNumber)}
+        </span>
       ) : null}
-    </span>
+    </>
   );
-  if (plain) return badge;
-  return <Tooltip content={PARITY_HINT[parity]}>{badge}</Tooltip>;
+  const shape = cn(
+    'inline-flex items-center gap-1.5 rounded-control whitespace-nowrap',
+    size === 'md' ? 'h-9 px-2 text-ui' : 'h-6 text-caption',
+    size === 'sm' && !plain && 'px-1.5',
+    className,
+  );
+
+  if (plain) return <span className={shape}>{content}</span>;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          shape,
+          'transition-[background-color] duration-100 ease-out focus-visible:outline-2 focus-visible:outline-offset-2',
+          onShell ? 'hover:bg-shell-hover focus-visible:outline-focus-on-shell' : 'hover:bg-hover focus-visible:outline-focus',
+        )}
+        aria-label={`${capitalize(PARITY_LABEL[parity])}${weekNumber ? `, ${weekOrdinal(weekNumber)}` : ''}. Як чергуються тижні`}
+      >
+        {content}
+      </PopoverTrigger>
+      <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[parity]}`}>
+        <p className="text-ui text-secondary">{PARITY_HINT[parity]}</p>
+      </PopoverContent>
+    </Popover>
+  );
 }

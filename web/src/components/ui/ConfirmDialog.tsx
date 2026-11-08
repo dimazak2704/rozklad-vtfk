@@ -21,7 +21,8 @@ export interface ConfirmDialogProps {
 
 /**
  * Підтвердження дії. Для небезпечних дій (`tone="danger"`) називає обʼєкт, щоб не видалити не те.
- * Фокус за замовчуванням на «Скасувати», щоб Enter випадково не підтвердив.
+ * Фокус за замовчуванням на «Не зараз», щоб Enter випадково не підтвердив. «Скасувати …» лишаємо для
+ * доменних дій («Скасувати заміну»), щоб кнопка закриття з ними не плуталась.
  */
 export function ConfirmDialog({
   open,
@@ -30,7 +31,7 @@ export function ConfirmDialog({
   description,
   objectName,
   confirmLabel = 'Підтвердити',
-  cancelLabel = 'Скасувати',
+  cancelLabel = 'Не зараз',
   tone = 'default',
   onConfirm,
 }: ConfirmDialogProps) {
@@ -79,7 +80,7 @@ export function ConfirmDialog({
                     <div className="flex flex-col gap-2 text-ui text-secondary">
                       {description ? <p>{description}</p> : null}
                       {objectName ? (
-                        <p className="rounded-control border border-default bg-sunken px-3 py-2 font-semibold break-words text-primary">
+                        <p className="rounded-control bg-sunken px-3 py-2 font-medium break-words text-primary">
                           {objectName}
                         </p>
                       ) : null}

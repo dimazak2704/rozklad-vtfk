@@ -1,5 +1,5 @@
 import { ToggleGroup } from 'radix-ui';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 export interface SegmentOption<V extends string = string> {
@@ -23,7 +23,11 @@ export interface SegmentedControlProps<V extends string = string> {
   className?: string;
 }
 
-/** Перемикач подання: «День / Тиждень», «Сьогодні / Завтра». Порожнім бути не може. */
+/**
+ * Перемикач подання: «День / Тиждень», «Сьогодні / Завтра». Порожнім бути не може.
+ * Один «бігунок» під вибраним сегментом їде до нового вибору (200 мс), а не перефарбовує сегменти.
+ * Значення, якого немає серед варіантів, означає «нічого не вибрано» — бігунок ховається.
+ */
 export function SegmentedControl<V extends string = string>({
   value,
   onValueChange,
@@ -34,8 +38,40 @@ export function SegmentedControl<V extends string = string>({
   className,
   'aria-label': ariaLabel,
 }: SegmentedControlProps<V>) {
+  const root = useRef<HTMLDivElement | null>(null);
+  const thumb = useRef<HTMLSpanElement | null>(null);
+
+  // положення бігунка пишемо прямо в стиль: це вимір DOM, а не стан React
+  useLayoutEffect(() => {
+    const track = root.current;
+    const indicator = thumb.current;
+    if (!track || !indicator) return;
+    const place = () => {
+      const active = track.querySelector<HTMLElement>('[data-state="on"]');
+      if (!active) {
+        indicator.style.opacity = '0';
+        return;
+      }
+      indicator.style.opacity = '1';
+      indicator.style.width = `${active.offsetWidth}px`;
+      indicator.style.transform = `translateX(${active.offsetLeft}px)`;
+    };
+    place();
+    // перше розміщення — без анімації, далі бігунок їде
+    const frame = requestAnimationFrame(() => indicator.setAttribute('data-ready', ''));
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    observer?.observe(track);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [value, options]);
+
+  const onShell = tone === 'on-shell';
+
   return (
     <ToggleGroup.Root
+      ref={root}
       type="single"
       value={value}
       onValueChange={(next) => {
@@ -44,12 +80,23 @@ export function SegmentedControl<V extends string = string>({
       }}
       aria-label={ariaLabel}
       className={cn(
-        'scrollbar-none inline-flex max-w-full items-stretch gap-0.5 overflow-x-auto rounded-control p-0.5',
-        tone === 'default' ? 'bg-sunken ring-1 ring-[var(--border-color-default)] ring-inset' : 'bg-shell-raised',
-        stretch && 'flex w-full',
+        'scrollbar-none relative isolate inline-flex max-w-full items-stretch overflow-x-auto rounded-control p-0.5',
+        size === 'sm' ? 'h-7 pointer-coarse:h-9' : 'h-8 pointer-coarse:h-10',
+        // світла доріжка на тон темніша за полотно, тож однаково читається і на панелі, і на тлі сторінки
+        onShell ? 'bg-shell-hover' : 'bg-active dark:bg-sunken',
+        stretch ? 'flex w-full' : 'w-fit self-start',
         className,
       )}
     >
+      <span
+        ref={thumb}
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-y-0.5 left-0 -z-10 rounded-[calc(var(--radius-control)-2px)] opacity-0',
+          'data-ready:transition-[transform,width] data-ready:duration-200 data-ready:ease-out motion-reduce:transition-none',
+          onShell ? 'bg-shell-raised' : 'bg-surface shadow-lift dark:bg-active',
+        )}
+      />
       {options.map((option) => (
         <ToggleGroup.Item
           key={option.value}
@@ -57,19 +104,25 @@ export function SegmentedControl<V extends string = string>({
           disabled={option.disabled}
           aria-label={option.ariaLabel}
           className={cn(
-            'inline-flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 font-semibold whitespace-nowrap',
-            'transition-[background-color,color] duration-100 ease-out',
-            'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            size === 'sm' ? 'h-7 text-caption' : 'h-8 text-ui',
+            'inline-flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 whitespace-nowrap',
+            'transition-[color] duration-100 ease-out',
+            'focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus',
+            'disabled:cursor-not-allowed disabled:text-disabled',
+            size === 'sm' ? 'text-caption' : 'text-ui',
             stretch && 'flex-1',
-            tone === 'default'
-              ? 'text-secondary hover:text-primary data-[state=on]:bg-raised data-[state=on]:text-primary data-[state=on]:shadow-[0_1px_2px_oklch(24.5%_0.03_258/0.12)]'
-              : 'text-on-shell-muted hover:text-on-shell data-[state=on]:bg-shell-hover data-[state=on]:text-on-shell',
+            onShell
+              ? 'text-on-shell-muted hover:text-on-shell data-[state=on]:font-semibold data-[state=on]:text-on-shell'
+              : 'text-secondary hover:text-primary data-[state=on]:font-semibold data-[state=on]:text-primary',
           )}
         >
           {option.icon}
-          {option.label}
+          {/* невидимий жирний дублікат тримає ширину, щоб сегмент не «стрибав» при виборі */}
+          <span className="inline-grid">
+            <span className="col-start-1 row-start-1">{option.label}</span>
+            <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-semibold">
+              {option.label}
+            </span>
+          </span>
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>

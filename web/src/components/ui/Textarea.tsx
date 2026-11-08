@@ -18,7 +18,7 @@ export function Textarea({ ref, autoGrow = true, className, rows = 3, ...props }
       {...a11y}
       className={cn(
         CONTROL_BASE,
-        'min-h-20 px-3 py-2 text-body leading-normal sm:text-ui',
+        'min-h-24 px-3 py-2 text-body sm:text-ui',
         autoGrow && 'field-sizing-content max-h-80',
         className,
       )}

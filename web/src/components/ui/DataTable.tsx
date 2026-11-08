@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { sortRows, type SortState } from '@/lib/sort';
@@ -68,9 +68,13 @@ export interface DataTableProps<T> {
 const ALIGN = { start: 'text-start', center: 'text-center', end: 'text-end' } as const;
 const HIDE = { sm: 'hidden sm:table-cell', md: 'hidden md:table-cell', lg: 'hidden lg:table-cell' } as const;
 
+/** Перша й остання клітинки — з відступом панелі (16 px), щоб таблиця стояла врівень із заголовком панелі. */
+const EDGE = 'first:ps-4 last:pe-4';
+
 /**
  * Таблиця даних: сортування (клієнт або сервер), липка шапка, стани завантаження/помилки/порожнечі,
  * пагінація і дії рядка. Перша колонка з назвою має бути `rowHeader` і містити посилання на деталі.
+ * Ставиться в `<Panel flush>` без обгорток: шапка таблиці на всю ширину, клітинки врівень із заголовком панелі.
  */
 export function DataTable<T>({
   columns,
@@ -115,7 +119,8 @@ export function DataTable<T>({
     onSortChange?.(next);
   };
 
-  const cellPad = density === 'compact' ? 'px-3 py-1.5' : 'px-3 py-2.5';
+  // рядок 44 px для щоденних черг, 36 px для довідників
+  const cellPad = cn(density === 'compact' ? 'h-9 px-3 py-1.5' : 'h-11 px-3 py-2', EDGE);
   const hasActions = Boolean(rowActions);
   const colCount = columns.length + (hasActions ? 1 : 0);
   const showSkeleton = loading && (!rows || rows.length === 0);
@@ -123,13 +128,16 @@ export function DataTable<T>({
   const showEmpty = !loading && !showError && rows !== undefined && rows.length === 0;
 
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <div className={cn('flex flex-col', className)}>
       <div
         className={cn('relative w-full overflow-x-auto', maxHeight && 'overflow-y-auto overscroll-contain')}
         style={maxHeight ? { maxHeight } : undefined}
       >
-        <table className="w-full border-separate border-spacing-0 text-ui" aria-busy={loading || undefined}>
-          <caption className={cn(showCaption ? 'pb-2 text-start text-caption text-muted' : 'sr-only')}>{caption}</caption>
+        <table
+          className="w-full border-separate border-spacing-0 text-ui [&>tbody>tr:last-child>*]:border-b-0"
+          aria-busy={loading || undefined}
+        >
+          <caption className={cn(showCaption ? 'px-4 pb-2 text-start text-caption text-muted' : 'sr-only')}>{caption}</caption>
           <thead>
             <tr>
               {columns.map((column) => {
@@ -141,10 +149,10 @@ export function DataTable<T>({
                     key={column.id}
                     scope="col"
                     aria-sort={canSort ? (ariaSort ?? 'none') : undefined}
-                    style={column.width ? { width: column.width } : undefined}
+                    style={column.width ? { width: column.width } : column.numeric ? { width: '5.5rem' } : undefined}
                     className={cn(
-                      'sticky top-0 z-10 border-b border-default bg-sunken text-caption font-semibold whitespace-nowrap text-secondary',
-                      density === 'compact' ? 'px-3 py-2' : 'px-3 py-2.5',
+                      'group/th sticky top-0 z-10 h-9 border-b border-separator bg-sunken px-3 py-0 text-meta font-semibold whitespace-nowrap text-secondary',
+                      EDGE,
                       ALIGN[column.numeric ? 'end' : (column.align ?? 'start')],
                       column.hideBelow && HIDE[column.hideBelow],
                     )}
@@ -154,22 +162,26 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => changeSort(column.id)}
                         className={cn(
-                          '-mx-1 inline-flex items-center gap-1 rounded-plate px-1 hover:text-primary',
+                          'group/sort -mx-1 inline-flex items-center gap-1 rounded-plate px-1 hover:text-primary',
                           'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
                           active && 'text-primary',
                           column.numeric && 'flex-row-reverse',
                         )}
                       >
                         {column.header}
-                        {active ? (
-                          sort?.direction === 'asc' ? (
-                            <ArrowUp aria-hidden="true" className="size-3.5" />
+                        {/* місце під стрілку зарезервоване (16 px), щоб підпис не зсувався; неактивна — лише при наведенні */}
+                        <span className="inline-flex size-4 items-center justify-center" aria-hidden="true">
+                          {active && sort?.direction === 'desc' ? (
+                            <ArrowDown className="size-3.5" />
                           ) : (
-                            <ArrowDown aria-hidden="true" className="size-3.5" />
-                          )
-                        ) : (
-                          <ArrowUpDown aria-hidden="true" className="size-3.5 opacity-50" />
-                        )}
+                            <ArrowUp
+                              className={cn(
+                                'size-3.5',
+                                !active && 'opacity-0 transition-opacity duration-100 group-hover/th:opacity-60 group-focus-visible/sort:opacity-60',
+                              )}
+                            />
+                          )}
+                        </span>
                       </button>
                     ) : (
                       column.header
@@ -178,7 +190,7 @@ export function DataTable<T>({
                 );
               })}
               {hasActions ? (
-                <th scope="col" className="sticky top-0 z-10 w-12 border-b border-default bg-sunken px-2">
+                <th scope="col" className="sticky top-0 z-10 h-9 w-12 border-b border-separator bg-sunken px-2 last:pe-3">
                   <span className="sr-only">Дії</span>
                 </th>
               ) : null}
@@ -229,7 +241,8 @@ export function DataTable<T>({
                         'group transition-[background-color] duration-100',
                         onRowClick && 'cursor-pointer',
                         selected ? 'bg-selected' : 'hover:bg-hover',
-                        loading && 'opacity-60',
+                        'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                        loading && 'text-muted',
                         rowClassName?.(row),
                       )}
                     >
@@ -242,7 +255,7 @@ export function DataTable<T>({
                             className={cn(
                               cellPad,
                               'border-b border-separator align-middle',
-                              column.rowHeader ? 'font-semibold text-primary' : 'font-normal text-primary',
+                              column.rowHeader ? 'font-medium text-primary' : 'font-normal text-primary',
                               ALIGN[column.numeric ? 'end' : (column.align ?? 'start')],
                               column.numeric && 'figures',
                               column.hideBelow && HIDE[column.hideBelow],
@@ -255,7 +268,7 @@ export function DataTable<T>({
                       })}
                       {hasActions ? (
                         <td
-                          className="border-b border-separator px-2 py-1 text-end"
+                          className="border-b border-separator px-2 py-1 text-end last:pe-3"
                           onClick={(event) => event.stopPropagation()}
                         >
                           {rowActions?.(row)}
@@ -268,7 +281,11 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {pagination && !showError ? <Pagination {...pagination} /> : null}
+      {pagination && !showError ? (
+        <div className="border-t border-separator px-4 py-3">
+          <Pagination {...pagination} />
+        </div>
+      ) : null}
     </div>
   );
 }

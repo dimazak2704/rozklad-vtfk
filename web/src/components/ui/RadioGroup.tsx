@@ -52,29 +52,30 @@ export function RadioGroup<V extends string = string>({
         name={name}
         aria-labelledby={legendId}
         aria-label={legendId ? undefined : ariaLabel}
-        className={cn('flex gap-2.5', orientation === 'vertical' ? 'flex-col' : 'flex-row flex-wrap gap-x-5')}
+        className={cn('flex', orientation === 'vertical' ? 'flex-col' : 'flex-row flex-wrap gap-x-6')}
       >
         {options.map((option) => {
           const itemId = `${groupId}-${option.value}`;
           const descriptionId = option.description ? `${itemId}-description` : undefined;
           return (
-            <div key={option.value} className="flex items-start gap-2.5">
+            <div key={option.value} className="relative flex min-h-11 items-start gap-3 py-2.5 sm:min-h-9 sm:py-1.5">
               <RadixRadioGroup.Item
                 id={itemId}
                 value={option.value}
                 disabled={option.disabled}
                 aria-describedby={descriptionId}
                 className={cn(
-                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-control bg-surface',
+                  'mt-px flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-control bg-surface',
                   'transition-[border-color] duration-100 ease-out hover:border-strong',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                  'data-[state=checked]:border-accent disabled:cursor-not-allowed disabled:opacity-50',
+                  'data-[state=checked]:border-accent',
+                  'disabled:cursor-not-allowed disabled:border-separator disabled:bg-sunken',
                 )}
               >
-                <RadixRadioGroup.Indicator className="block size-2 rounded-full bg-accent" />
+                <RadixRadioGroup.Indicator className="block size-2.5 rounded-full bg-accent" />
               </RadixRadioGroup.Item>
               <div className="flex flex-col gap-0.5">
-                <label htmlFor={itemId} className="cursor-pointer text-ui text-primary select-none">
+                <label htmlFor={itemId} className="cursor-pointer text-ui text-primary select-none after:absolute after:inset-0">
                   {option.label}
                 </label>
                 {option.description ? (

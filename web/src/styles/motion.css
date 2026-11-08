@@ -1,6 +1,7 @@
 /*
- * Рух накладених шарів (Radix ставить data-state="open|closed").
- * Вхід — коротко з ease-out, вихід — ще коротший і менший. Без вподобання руху — лише прозорість.
+ * Рух лише як відповідь на зміну стану. Radix ставить data-state="open|closed" і data-side.
+ * Вхід — ease-out, вихід — коротший з ease-in. Нічого не розмивається й не крутиться безкінечно.
+ * Без вподобання руху (prefers-reduced-motion) — лише прозорість ≤ 150 мс.
  */
 
 @layer components {
@@ -14,7 +15,7 @@
   }
 
   .anim-pop[data-state='open'] {
-    animation: fade-in 160ms var(--ease-out);
+    animation: fade-in 150ms var(--ease-out);
   }
 
   .anim-pop[data-state='closed'] {
@@ -22,49 +23,74 @@
   }
 
   .anim-overlay[data-state='open'] {
-    animation: fade-in 200ms var(--ease-out);
+    animation: fade-in 150ms var(--ease-out);
   }
 
   .anim-overlay[data-state='closed'] {
-    animation: fade-out 150ms var(--ease-in) forwards;
+    animation: fade-out 140ms var(--ease-in) forwards;
   }
 
   .anim-dialog[data-state='open'] {
-    animation: fade-in 200ms var(--ease-out);
+    animation: fade-in 150ms var(--ease-out);
   }
 
   .anim-dialog[data-state='closed'] {
-    animation: fade-out 150ms var(--ease-in) forwards;
+    animation: fade-out 140ms var(--ease-in) forwards;
   }
 
   .anim-sheet-left[data-state='open'] {
-    animation: fade-in 200ms var(--ease-out);
+    animation: fade-in 150ms var(--ease-out);
   }
 
   .anim-sheet-left[data-state='closed'] {
-    animation: fade-out 150ms var(--ease-in) forwards;
+    animation: fade-out 140ms var(--ease-in) forwards;
+  }
+
+  /* Поява зміни з живого оновлення: тонування «наливається» один раз */
+  .anim-tint-in {
+    animation: fade-in 150ms var(--ease-out);
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .anim-tooltip[data-state='delayed-open'],
-    .anim-tooltip[data-state='instant-open'] {
-      animation-name: pop-in;
+    /* Спливні шари зсуваються від тригера: знизу — згори вниз, ліворуч — справа наліво тощо */
+    .anim-pop[data-side='bottom'],
+    .anim-tooltip[data-side='bottom'] {
+      --pop-y: -4px;
+    }
+
+    .anim-pop[data-side='top'],
+    .anim-tooltip[data-side='top'] {
+      --pop-y: 4px;
+    }
+
+    .anim-pop[data-side='left'],
+    .anim-tooltip[data-side='left'] {
+      --pop-x: 4px;
+    }
+
+    .anim-pop[data-side='right'],
+    .anim-tooltip[data-side='right'] {
+      --pop-x: -4px;
     }
 
     .anim-pop[data-state='open'] {
-      animation-name: pop-in;
+      animation: pop-in 160ms var(--ease-out);
     }
 
     .anim-pop[data-state='closed'] {
-      animation-name: pop-out;
+      animation: pop-out 100ms var(--ease-in) forwards;
     }
 
     .anim-dialog[data-state='open'] {
-      animation: dialog-in 240ms var(--ease-out);
+      animation: dialog-in 220ms var(--ease-out);
     }
 
     .anim-dialog[data-state='closed'] {
-      animation: dialog-out 150ms var(--ease-in) forwards;
+      animation: dialog-out 140ms var(--ease-in) forwards;
+    }
+
+    .anim-overlay[data-state='open'] {
+      animation: fade-in 220ms var(--ease-out);
     }
 
     .anim-sheet-left[data-state='open'] {
@@ -74,12 +100,11 @@
     .anim-sheet-left[data-state='closed'] {
       animation: sheet-left-out 200ms var(--ease-in) forwards;
     }
-  }
-}
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
+    .anim-tint-in {
+      background-repeat: no-repeat;
+      animation: tint-sweep 320ms var(--ease-out);
+    }
   }
 }
 
@@ -89,11 +114,11 @@
   }
 }
 
-/* Зсув у бік від тригера: Radix ставить data-side */
+/* Зсув у бік від тригера (див. --pop-x / --pop-y вище) */
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
+    transform: translate(var(--pop-x, 0), var(--pop-y, 0)) scale(0.98);
   }
 }
 
@@ -107,16 +132,14 @@
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
-    filter: blur(4px);
+    transform: translateY(8px) scale(0.98);
   }
 }
 
 @keyframes dialog-out {
   to {
     opacity: 0;
-    transform: translateY(-12px);
-    filter: blur(4px);
+    transform: scale(0.98);
   }
 }
 
@@ -132,6 +155,16 @@
   }
 }
 
+/* Тонування зміни, що прийшла наживо: «маркер» проводять по рядку один раз */
+@keyframes tint-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 /* Поява нового рядка з живого оновлення: колір «наливається» і тримається, поки не побачили */
 @keyframes live-flash {
   from {
@@ -139,11 +172,12 @@
   }
 }
 
+/* Перехід між сторінками: смужка дотягується до 85 % і чекає — без безкінечного циклу */
 @keyframes nav-progress {
   from {
-    transform: translateX(-100%);
+    transform: scaleX(0);
   }
   to {
-    transform: translateX(300%);
+    transform: scaleX(0.85);
   }
 }

@@ -134,7 +134,7 @@ describe('confirm()', () => {
       result = confirm({ title: 'Скасувати заміну?' });
     });
     const dialog = await screen.findByRole('alertdialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Скасувати' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Не зараз' }));
     await expect(result).resolves.toBe(false);
   });
 });

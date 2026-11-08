@@ -4,17 +4,20 @@ import { cn } from '@/lib/cn';
 
 export type BadgeTone = 'neutral' | 'accent' | 'change' | 'cancel' | 'add' | 'room' | 'danger' | 'success' | 'warning';
 
-/** Кольори тонів збігаються з мовою станів занять: бурштин — заміна, червоний — скасовано тощо. */
+/**
+ * Кольори тонів збігаються з мовою станів занять: бурштин — заміна, червоний — «пари не буде» тощо.
+ * Без рамки: тоноване тло + текст стану. Рамка навколо бейджа на тонованій клітинці — це «коробка в коробці».
+ */
 const TONES: Record<BadgeTone, string> = {
-  neutral: 'border-default bg-sunken text-secondary',
-  accent: 'border-accent-subtle bg-selected text-accent',
-  change: 'border-change bg-change-subtle text-change',
-  cancel: 'border-cancel bg-cancel-subtle text-cancel',
-  add: 'border-add bg-add-subtle text-add',
-  room: 'border-room bg-room-subtle text-room',
-  danger: 'border-cancel bg-danger-subtle text-danger',
-  success: 'border-add bg-add-subtle text-add',
-  warning: 'border-change bg-change-subtle text-change',
+  neutral: 'bg-active text-secondary',
+  accent: 'bg-selected text-accent',
+  change: 'bg-change-subtle text-change',
+  cancel: 'bg-cancel-subtle text-cancel',
+  add: 'bg-add-subtle text-add',
+  room: 'bg-room-subtle text-room',
+  danger: 'bg-danger-subtle text-danger',
+  success: 'bg-add-subtle text-add',
+  warning: 'bg-change-subtle text-change',
 };
 
 export interface BadgeProps extends ComponentProps<'span'> {
@@ -23,12 +26,12 @@ export interface BadgeProps extends ComponentProps<'span'> {
   size?: 'sm' | 'md';
 }
 
-/** Статична позначка: стан, причина («Відп.»), тип заняття. Колір завжди підкріплений текстом. */
+/** Статична позначка: стан, тип заняття. Колір завжди підкріплений текстом. */
 export function Badge({ tone = 'neutral', icon, size = 'md', className, children, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-plate border font-semibold whitespace-nowrap',
+        'inline-flex max-w-full items-center gap-1 rounded-plate font-medium whitespace-nowrap',
         size === 'sm' ? 'h-5 px-1.5 text-meta' : 'h-6 px-2 text-caption',
         TONES[tone],
         className,
@@ -68,9 +71,9 @@ export function Chip({
   return (
     <span
       className={cn(
-        'inline-flex h-8 items-stretch overflow-hidden rounded-full border text-ui font-semibold',
-        selected ? 'border-accent bg-selected text-accent' : 'border-default bg-surface text-secondary',
-        disabled && 'opacity-50',
+        'inline-flex h-8 items-stretch overflow-hidden rounded-full border text-caption font-medium pointer-coarse:h-10',
+        selected ? 'border-transparent bg-selected text-accent' : 'border-default bg-surface text-secondary',
+        disabled && 'border-separator bg-sunken text-disabled',
         className,
       )}
     >
@@ -82,14 +85,14 @@ export function Chip({
         className={cn(
           'inline-flex items-center gap-1.5 ps-3 transition-[background-color,color] duration-100 ease-out',
           onRemove ? 'pe-1.5' : 'pe-3',
-          selected ? 'hover:bg-selected-hover' : 'hover:bg-hover hover:text-primary',
+          selected ? 'hover:bg-selected-hover' : 'hover:bg-hover hover:text-primary active:bg-active',
           'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus disabled:cursor-not-allowed',
         )}
         {...props}
       >
         {icon}
         {children}
-        {count !== undefined ? <span className="figures text-caption opacity-80">{count}</span> : null}
+        {count !== undefined ? <span className="text-meta figures">{count}</span> : null}
       </button>
       {onRemove ? (
         <button

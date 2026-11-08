@@ -23,6 +23,10 @@ export function HoverCardContent({ className, sideOffset = 6, collisionPadding =
   );
 }
 
+/** Коли закрилася остання картка: якщо щойно — наступна відкривається без затримки (огляд рядка мишею). */
+let lastClosedAt = 0;
+const WARM_UP_MS = 300;
+
 export interface HoverDetailsProps {
   /** Елемент-тригер (кнопка або посилання, що приймає ref). */
   children: ReactElement;
@@ -37,15 +41,16 @@ export interface HoverDetailsProps {
 }
 
 /**
- * Деталі, доступні всім: мишею — при наведенні (300 мс), з клавіатури й на дотик — по Enter/тапу.
- * Так влаштована картка заняття: повна назва, викладач, аудиторія, що змінилося і чому.
+ * Деталі, доступні всім: мишею — при наведенні (500 мс, а одразу після іншої картки — без затримки),
+ * з клавіатури й на дотик — по Enter/тапу. Так влаштована картка заняття: повна назва, викладач,
+ * аудиторія, що змінилося і чому.
  */
 export function HoverDetails({
   children,
   content,
   side = 'bottom',
   align = 'start',
-  openDelay = 300,
+  openDelay = 500,
   closeDelay = 150,
   label,
   contentClassName,
@@ -57,9 +62,14 @@ export function HoverDetails({
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
   };
+  const change = (next: boolean) => {
+    if (!next) lastClosedAt = Date.now();
+    setOpen(next);
+  };
   const schedule = (next: boolean, delay: number) => {
     clear();
-    timer.current = setTimeout(() => setOpen(next), delay);
+    const warm = next && Date.now() - lastClosedAt < WARM_UP_MS;
+    timer.current = setTimeout(() => change(next), warm ? 0 : delay);
   };
 
   useEffect(() => clear, []);
@@ -78,7 +88,7 @@ export function HoverDetails({
       open={open}
       onOpenChange={(next) => {
         clear();
-        setOpen(next);
+        change(next);
       }}
     >
       <RadixPopover.Trigger asChild {...hoverHandlers}>

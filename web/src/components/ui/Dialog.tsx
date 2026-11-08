@@ -54,7 +54,7 @@ export function DialogContent({
           {...(description ? {} : { 'aria-describedby': undefined })}
           {...props}
         >
-          <div className="flex items-start gap-3 px-5 pt-5 pb-3">
+          <div className="flex items-start gap-3 px-5 pt-5 pb-4">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <RadixDialog.Title className="text-heading font-semibold text-primary">{title}</RadixDialog.Title>
               {description ? (
@@ -69,7 +69,7 @@ export function DialogContent({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>
           {footer ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-separator bg-sunken px-5 py-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-separator px-5 py-3">
               {footer}
             </div>
           ) : null}

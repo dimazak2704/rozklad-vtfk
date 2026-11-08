@@ -1,15 +1,60 @@
 import { Tabs as RadixTabs } from 'radix-ui';
-import type { ComponentProps, ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 export const Tabs = RadixTabs.Root;
 
-export function TabsList({ className, ...props }: ComponentProps<typeof RadixTabs.List>) {
+/**
+ * Список вкладок з одним індикатором: смужка 3 px під активною вкладкою їде до нової (200 мс).
+ * Положення пишемо прямо в стиль; стежимо за data-state вкладок, бо значення живе в <Tabs>.
+ */
+export function TabsList({ className, children, ...props }: ComponentProps<typeof RadixTabs.List>) {
+  const list = useRef<HTMLDivElement | null>(null);
+  const bar = useRef<HTMLSpanElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = list.current;
+    const indicator = bar.current;
+    if (!root || !indicator) return;
+    const place = () => {
+      const active = root.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+      if (!active) {
+        indicator.style.opacity = '0';
+        return;
+      }
+      indicator.style.opacity = '1';
+      indicator.style.width = `${active.offsetWidth - 16}px`;
+      indicator.style.transform = `translateX(${active.offsetLeft + 8}px)`;
+    };
+    place();
+    const frame = requestAnimationFrame(() => indicator.setAttribute('data-ready', ''));
+    const mutations = new MutationObserver(place);
+    mutations.observe(root, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    resize?.observe(root);
+    return () => {
+      cancelAnimationFrame(frame);
+      mutations.disconnect();
+      resize?.disconnect();
+    };
+  }, []);
+
   return (
     <RadixTabs.List
-      className={cn('scrollbar-none flex items-stretch gap-1 overflow-x-auto border-b border-separator', className)}
+      ref={list}
+      className={cn('scrollbar-none relative flex items-stretch overflow-x-auto border-b border-separator', className)}
       {...props}
-    />
+    >
+      {children}
+      <span
+        ref={bar}
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute bottom-0 left-0 h-[3px] rounded-t-[2px] bg-accent opacity-0',
+          'data-ready:transition-[transform,width] data-ready:duration-200 data-ready:ease-out motion-reduce:transition-none',
+        )}
+      />
+    </RadixTabs.List>
   );
 }
 
@@ -19,26 +64,27 @@ export interface TabsTriggerProps extends ComponentProps<typeof RadixTabs.Trigge
   icon?: ReactNode;
 }
 
-/** Вкладка з підкресленням маршрутним синім — як активна лінія на схемі. */
+/** Вкладка: неактивна — звичайна вага, активна — напівжирна з синім індикатором знизу. */
 export function TabsTrigger({ className, count, icon, children, ...props }: TabsTriggerProps) {
   return (
     <RadixTabs.Trigger
       className={cn(
-        'relative -mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-ui font-semibold whitespace-nowrap',
-        'text-secondary transition-[color,border-color] duration-100 ease-out hover:text-primary',
+        'relative inline-flex h-10 shrink-0 items-center gap-2 px-3 text-ui whitespace-nowrap pointer-coarse:h-12',
+        'text-secondary transition-[color] duration-100 ease-out hover:text-primary',
         'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-        'data-[state=active]:border-accent data-[state=active]:text-primary disabled:opacity-50',
+        'data-[state=active]:font-semibold data-[state=active]:text-primary disabled:text-disabled',
         className,
       )}
       {...props}
     >
       {icon}
-      {children}
-      {count !== undefined ? (
-        <span className="min-w-5 rounded-full bg-sunken px-1.5 text-center text-meta font-semibold figures text-secondary">
-          {count}
+      <span className="inline-grid">
+        <span className="col-start-1 row-start-1">{children}</span>
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-semibold">
+          {children}
         </span>
-      ) : null}
+      </span>
+      {count !== undefined ? <span className="text-meta font-normal text-muted figures">{count}</span> : null}
     </RadixTabs.Trigger>
   );
 }

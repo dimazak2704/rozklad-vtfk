@@ -35,6 +35,7 @@ test.describe('мок-API', () => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Панель диспетчера', { timeout: 30_000 });
-    await expect(page.getByLabel('Наживо').first()).toBeAttached();
+    // здорове зʼєднання нічого не показує (видно лише збій), тож перевіряємо стан у атрибуті
+    await expect(page.locator('[data-live-status="open"]')).toBeAttached({ timeout: 15_000 });
   });
 });

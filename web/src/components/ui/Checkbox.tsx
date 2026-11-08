@@ -21,21 +21,21 @@ export function Checkbox({ label, description, className, id, disabled, ...props
       disabled={disabled}
       aria-describedby={descriptionId}
       className={cn(
-        'peer mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-plate border border-control bg-surface',
+        'peer flex size-[1.125rem] shrink-0 items-center justify-center rounded-plate border-[1.5px] border-control bg-surface',
         'transition-[background-color,border-color] duration-100 ease-out hover:border-strong',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         'data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-on-accent',
         'data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent data-[state=indeterminate]:text-on-accent',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:border-separator disabled:bg-sunken disabled:text-disabled',
         !label && className,
       )}
       {...props}
     >
       <RadixCheckbox.Indicator className="flex items-center justify-center">
         {props.checked === 'indeterminate' ? (
-          <Minus aria-hidden="true" className="size-3 stroke-[2.5]" />
+          <Minus aria-hidden="true" className="size-3.5 [stroke-width:2.5]" />
         ) : (
-          <Check aria-hidden="true" className="size-3 stroke-[2.5]" />
+          <Check aria-hidden="true" className="size-3.5 [stroke-width:2.5]" />
         )}
       </RadixCheckbox.Indicator>
     </RadixCheckbox.Root>
@@ -44,12 +44,15 @@ export function Checkbox({ label, description, className, id, disabled, ...props
   if (!label) return box;
 
   return (
-    <div className={cn('flex items-start gap-2.5', className)}>
-      {box}
+    <div className={cn('relative flex min-h-11 items-start gap-3 py-2.5 sm:min-h-9 sm:py-1.5', className)}>
+      <span className="flex h-5 items-center">{box}</span>
       <div className="flex flex-col gap-0.5">
         <label
           htmlFor={controlId}
-          className={cn('cursor-pointer text-ui text-primary select-none', disabled && 'cursor-not-allowed text-disabled')}
+          className={cn(
+            'cursor-pointer text-ui text-primary select-none after:absolute after:inset-0',
+            disabled && 'cursor-not-allowed text-disabled',
+          )}
         >
           {label}
         </label>

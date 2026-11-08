@@ -21,19 +21,20 @@ export function Switch({ label, description, labelPosition = 'end', className, i
       disabled={disabled}
       aria-describedby={descriptionId}
       className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent',
-        'bg-[var(--border-color-strong)] transition-[background-color] duration-150 ease-out',
+        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full',
+        'bg-[var(--border-color-strong)] transition-[background-color] duration-150 ease-out hover:bg-[var(--text-color-secondary)]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        'data-[state=checked]:bg-accent disabled:cursor-not-allowed disabled:opacity-50',
+        'data-[state=checked]:bg-accent data-[state=checked]:hover:bg-accent-hover',
+        'disabled:cursor-not-allowed disabled:bg-active data-[state=checked]:disabled:bg-selected-hover',
         !label && className,
       )}
       {...props}
     >
       <RadixSwitch.Thumb
         className={cn(
-          'block size-4 rounded-full bg-[var(--fill-surface)] shadow-[0_1px_2px_oklch(0%_0_0/0.25)]',
-          'translate-x-0.5 transition-transform duration-150 ease-out data-[state=checked]:translate-x-[1.125rem]',
-          'rtl:-translate-x-0.5 rtl:data-[state=checked]:-translate-x-[1.125rem]',
+          'block size-5 rounded-full bg-[var(--grey-0)] shadow-[0_1px_2px_oklch(0%_0_0/0.25)]',
+          'translate-x-0.5 transition-transform duration-150 ease-out data-[state=checked]:translate-x-[1.375rem]',
+          'rtl:-translate-x-0.5 rtl:data-[state=checked]:-translate-x-[1.375rem]',
         )}
       />
     </RadixSwitch.Root>
@@ -42,8 +43,14 @@ export function Switch({ label, description, labelPosition = 'end', className, i
   if (!label) return control;
 
   return (
-    <div className={cn('flex items-start gap-3', labelPosition === 'start' && 'flex-row-reverse justify-between', className)}>
-      <span className="mt-0.5">{control}</span>
+    <div
+      className={cn(
+        'flex min-h-11 items-start gap-3 py-2.5 sm:min-h-9 sm:py-1.5',
+        labelPosition === 'start' && 'flex-row-reverse justify-between',
+        className,
+      )}
+    >
+      <span className="-mt-0.5">{control}</span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <label
           htmlFor={controlId}

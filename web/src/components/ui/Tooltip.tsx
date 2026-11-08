@@ -3,10 +3,13 @@ import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { KbdCombo } from './Kbd';
 
-/** Один провайдер на застосунок: затримка 300 мс (UI.md §3), між сусідніми підказками — без затримки. */
+/**
+ * Один провайдер на застосунок: підказка зʼявляється через 400 мс, а якщо інша була відкрита
+ * менш ніж 300 мс тому — одразу (користувач уже «читає» панель).
+ */
 export function TooltipProvider({ children }: { children: ReactNode }) {
   return (
-    <RadixTooltip.Provider delayDuration={300} skipDelayDuration={200}>
+    <RadixTooltip.Provider delayDuration={400} skipDelayDuration={300}>
       {children}
     </RadixTooltip.Provider>
   );

@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL, PARITY_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, roomLabel } from '@/lib/schedule';
 import { Badge } from '../ui/Badge';
 import { Plate } from '../ui/Plate';
@@ -31,7 +32,10 @@ interface LessonDetailsProps {
   dayParity?: WeekParity;
 }
 
-/** Повні відомості про заняття для картки при наведенні (UI.md §3). */
+/**
+ * Повні відомості про заняття для картки при наведенні чи шторки на телефоні (UI.md §3).
+ * Лише тут предмет має свій колір лінії — у сітці його називає коротка назва.
+ */
 export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
   const tone = LESSON_TONE[lesson.kind];
   const original = lesson.original;
@@ -42,12 +46,14 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
   const movedFrom = original?.pair && original.pair !== lesson.pair ? original.pair : null;
 
   return (
-    <div className="flex w-[min(20rem,calc(100vw-3rem))] flex-col gap-3">
+    <div className="flex w-full flex-col gap-3 sm:w-[min(20rem,calc(100vw-3rem))]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="flex items-center gap-2 font-condensed text-heading leading-tight font-bold">
             <span {...lineAttr(lesson.discipline)} className="size-2.5 shrink-0 rounded-full bg-[var(--line-dot)]" aria-hidden="true" />
-            <span className={cn(tone === 'cancel' && 'line-through decoration-cancel decoration-2')}>{lesson.discipline.shortName}</span>
+            <span className={cn(tone === 'cancel' && 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2')}>
+              {lesson.discipline.shortName}
+            </span>
           </p>
           {lesson.discipline.name && lesson.discipline.name !== lesson.discipline.shortName ? (
             <p className="text-caption text-secondary">{lesson.discipline.name}</p>
@@ -63,7 +69,7 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
       <div className="flex flex-col gap-1.5">
         <Row icon={<Clock />} label="Час">
           <span className="figures">
-            {lesson.pair} пара · {lesson.startsAt}–{lesson.endsAt}
+            {pairOrdinalLabel(lesson.pair)} · {lesson.startsAt}–{lesson.endsAt}
           </span>
           {date ? <span className="block text-caption text-secondary">{formatWeekdayDate(date)}</span> : null}
         </Row>
@@ -91,19 +97,16 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
         ) : null}
       </div>
 
-      {tone !== 'regular' && tone !== 'block' ? (
-        <div className="flex flex-col gap-1.5 rounded-control border border-separator bg-sunken p-2.5 text-caption">
-          {lesson.kind === 'CANCELLED' ? (
-            <p className="font-semibold text-cancel">Пари не буде</p>
-          ) : null}
+      {tone !== 'regular' && tone !== 'block' && (replacedDiscipline || replacedTeacher || replacedRoom || movedFrom || lesson.reasonText) ? (
+        <div className="flex flex-col gap-1.5 border-t border-separator pt-2.5 text-ui">
           {replacedDiscipline || replacedTeacher ? (
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="text-muted line-through decoration-[var(--text-decoration-color-muted)]">
+              <span className="text-muted line-through decoration-[var(--text-decoration-color-cancel)]">
                 {[original?.discipline?.shortName ?? lesson.discipline.shortName, original?.teacher?.shortName]
                   .filter(Boolean)
                   .join(', ')}
               </span>
-              <ArrowRight aria-label="замінено на" className="size-3.5 text-change rtl:rotate-180" />
+              <ArrowRight aria-label="замінено на" className="size-3.5 text-muted rtl:rotate-180" />
               <span className="font-semibold text-primary">
                 {[lesson.discipline.shortName, lesson.teacher?.shortName].filter(Boolean).join(', ')}
               </span>
@@ -112,11 +115,11 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           {replacedRoom ? (
             <p className="flex items-center gap-1.5">
               <span className="text-muted line-through">{roomLabel(original?.room?.name)}</span>
-              <ArrowRight aria-label="перенесено в" className="size-3.5 text-room rtl:rotate-180" />
+              <ArrowRight aria-label="перенесено в" className="size-3.5 text-muted rtl:rotate-180" />
               <span className="font-semibold text-room">{roomLabel(lesson.room?.name)}</span>
             </p>
           ) : null}
-          {movedFrom ? <p className="text-change">Перенесено з {movedFrom} пари</p> : null}
+          {movedFrom ? <p className="text-secondary">Перенесено з {pairOrdinalGenitive(movedFrom)} пари</p> : null}
           {lesson.reasonText ? (
             <p className="text-secondary">
               Причина: <span className="font-semibold text-primary">{lesson.reasonText}</span>

@@ -48,9 +48,9 @@ export function Pagination({ page, size, total, onPageChange, noun = 'запис
                     aria-label={`Сторінка ${item + 1}`}
                     onClick={() => onPageChange(item)}
                     className={cn(
-                      'h-8 min-w-8 rounded-control px-2 text-caption font-semibold figures',
+                      'h-8 min-w-8 rounded-control px-2 text-ui figures pointer-coarse:h-10 pointer-coarse:min-w-10',
                       'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                      item === page ? 'bg-selected text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
+                      item === page ? 'bg-selected font-semibold text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
                     )}
                   >
                     {item + 1}
