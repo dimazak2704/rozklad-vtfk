@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import AuthCallbackPage from './AuthCallbackPage';
 
-const auth = vi.hoisted(() => ({ state: undefined as unknown }));
+const auth = vi.hoisted((): { state: unknown } => ({ state: undefined }));
 
 vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { state: auth.state } }) }));
 vi.mock('@/auth/useCurrentUser', () => ({

@@ -8,16 +8,9 @@ function renderChunkFailure() {
   const router = createMemoryRouter(
     [
       {
-        path: '/',
-        element: <p>Шапка макета</p>,
-        children: [],
-      },
-      {
         path: '/changes',
         errorElement: <RouteErrorPage />,
-        lazy: async () => {
-          throw new TypeError('Failed to fetch dynamically imported module: http://localhost/assets/ChangesPage.js');
-        },
+        lazy: () => Promise.reject(new TypeError('Failed to fetch dynamically imported module: http://localhost/assets/ChangesPage.js')),
       },
     ],
     { initialEntries: ['/changes'] },
