@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +18,8 @@ import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
+import ua.vtc.rozklad.core.shared.error.ConflictKind;
+import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
@@ -33,8 +36,10 @@ import ua.vtc.rozklad.core.timetable.LessonRepository;
 /**
  * Dispatcher commands on changes: create (with approval rules and a conflict check), edit the room
  * or reason, cancel, ask the teacher again, confirm on the teacher's behalf. Decisions about one
- * group-day are serialized with {@code lessonRepository.lockGroupDay}; concurrent edits of one
- * change are caught by optimistic locking.
+ * date are serialized with {@code changeRepository.lockDecisionsOf} (a teacher or a room is shared
+ * by all groups of the date), then the group-day lessons are locked with
+ * {@code lessonRepository.lockGroupDay}; concurrent edits of one change are caught by optimistic
+ * locking ({@code version} is required in PUT).
  */
 @Service
 @Transactional
@@ -69,7 +74,9 @@ public class ChangeCommands {
 
     public ChangeDto create(CreateChangeRequest request, String actor) {
         StudentGroup group = catalog.group(request.groupId());
-        // спершу блокуємо день групи, потім читаємо заняття: так рішення не перетинаються
+        // спершу блокуємо дату (викладач і аудиторія спільні для всіх груп), потім день групи,
+        // і лише тоді читаємо заняття та відкриті зміни: так паралельні рішення не перетинаються
+        changes.lockDecisionsOf(request.date());
         List<Lesson> groupDay = lessons.lockGroupDay(group.getId(), request.date());
         Change change = new Change(request.kind(), request.date(), request.pairFrom(), request.lastPair(),
                 group.getId(), cohortOf(request, groupDay), actor);
@@ -79,6 +86,7 @@ public class ChangeCommands {
                     original.getRoomId());
         } else {
             requireClassesFor(group, request.date());
+            requireKnownSubgroup(group, change.getSubgroupNumber());
         }
         fillReplacement(change, request, groupDay);
         change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
@@ -88,10 +96,7 @@ public class ChangeCommands {
 
         ChangeEffect effect = planner.plan(change);
         requireNoCompetingDecision(change, effect);
-        List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(), true);
-        if (!conflicts.isEmpty()) {
-            throw ConflictException.schedule(conflicts);
-        }
+        requireFreeSlot(change, effect);
         changes.save(change);
         workflow.open(change, actor);
         return finish(change);
@@ -99,7 +104,8 @@ public class ChangeCommands {
 
     public ChangeDto update(UUID id, UpdateChangeRequest request, String actor) {
         Change change = find(id);
-        if (request.version() != null && request.version() != change.getVersion()) {
+        // version обов'язкова (400 на рівні контролера); без неї зміну не перезаписуємо мовчки
+        if (request.version() == null || request.version() != change.getVersion()) {
             throw new ObjectOptimisticLockingFailureException(Change.class, id);
         }
         if (!change.isOpen() && change.getStatus() != ChangeStatus.DECLINED) {
@@ -119,16 +125,12 @@ public class ChangeCommands {
         if (request.newRoomId() != null) {
             catalog.room(request.newRoomId());
         }
+        changes.lockDecisionsOf(change.getDate());
         lessons.lockGroupDay(change.getGroupId(), change.getDate());
         change.setReplacement(change.getNewDisciplineId(), change.getNewTeacherId(), request.newRoomId());
         change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
         if (change.isOpen()) {
-            ChangeEffect effect = planner.plan(change);
-            List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(),
-                    true);
-            if (!conflicts.isEmpty()) {
-                throw ConflictException.schedule(conflicts);
-            }
+            requireFreeSlot(change, planner.plan(change));
         }
         return finish(change);
     }
@@ -151,13 +153,9 @@ public class ChangeCommands {
     public ChangeDto requestConfirmation(UUID id, String actor) {
         Change change = find(id);
         if (change.getStatus() == ChangeStatus.DRAFT || change.getStatus() == ChangeStatus.DECLINED) {
+            changes.lockDecisionsOf(change.getDate());
             lessons.lockGroupDay(change.getGroupId(), change.getDate());
-            ChangeEffect effect = planner.plan(change);
-            List<ConflictDto> conflicts = checker.check(effect.created(), effect.cancelledIds(), change.getId(),
-                    true);
-            if (!conflicts.isEmpty()) {
-                throw ConflictException.schedule(conflicts);
-            }
+            requireFreeSlot(change, planner.plan(change));
         }
         workflow.requestConfirmation(change, actor);
         return finish(change);
@@ -183,6 +181,40 @@ public class ChangeCommands {
                     workflow.moveTo(change, ChangeStatus.CANCELLED, actor, comment);
                     finish(change);
                 });
+    }
+
+    /**
+     * Hard conflicts of the lessons the change creates (busy teacher, cohort or room, slots promised
+     * by other open changes) plus a newly assigned teacher who is absent at the slot (DOMAIN §7).
+     */
+    private void requireFreeSlot(Change change, ChangeEffect effect) {
+        List<ConflictDto> conflicts = new ArrayList<>(checker.check(effect.created(), effect.cancelledIds(),
+                change.getId(), true));
+        conflicts.addAll(absentSubstitute(change));
+        if (!conflicts.isEmpty()) {
+            throw ConflictException.schedule(conflicts);
+        }
+    }
+
+    private List<ConflictDto> absentSubstitute(Change change) {
+        UUID teacher = change.getNewTeacherId();
+        if (teacher == null || teacher.equals(change.getOrigTeacherId())) {
+            return List.of();
+        }
+        List<Absence> active = absences.findActiveOverlapping(change.getDate(), change.getDate(), teacher);
+        if (active.isEmpty()) {
+            return List.of();
+        }
+        String name = catalog.teacher(teacher).getShortName();
+        List<ConflictDto> conflicts = new ArrayList<>();
+        for (int pair = change.getPairFrom(); pair <= change.getPairTo(); pair++) {
+            int slot = pair;
+            if (active.stream().anyMatch(absence -> absence.covers(change.getDate(), slot))) {
+                conflicts.add(ConflictDto.hard(ConflictKind.UNAVAILABLE, "%s відсутній %s на %d парі".formatted(name,
+                        change.getDate().format(SubstitutionCalendar.DATE), slot), List.of(), change.getDate(), slot));
+            }
+        }
+        return conflicts;
     }
 
     private ChangeDto finish(Change change) {
@@ -237,6 +269,19 @@ public class ChangeCommands {
                             "У групи %s %s занять немає: %s.".formatted(group.getCode(),
                                     date.format(SubstitutionCalendar.DATE), reason));
                 });
+    }
+
+    /**
+     * A pair without an original lesson (additional pair, block) may name a subgroup only if the
+     * group has it: a subgroup of the catalog or one the group's timetable uses.
+     */
+    private void requireKnownSubgroup(StudentGroup group, int subgroup) {
+        if (subgroup == 0 || catalog.hasSubgroup(group.getId(), subgroup)
+                || lessons.existsByGroupIdAndSubgroupNumber(group.getId(), subgroup)) {
+            return;
+        }
+        throw FieldValidationException.of("subgroup", "У групи %s немає підгрупи %d.".formatted(group.getCode(),
+                subgroup));
     }
 
     private void fillReplacement(Change change, CreateChangeRequest request, List<Lesson> groupDay) {

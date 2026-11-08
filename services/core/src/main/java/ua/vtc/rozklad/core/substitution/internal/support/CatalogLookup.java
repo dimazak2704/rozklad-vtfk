@@ -17,6 +17,7 @@ import ua.vtc.rozklad.core.catalog.RoomRef;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
+import ua.vtc.rozklad.core.catalog.SubgroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
@@ -30,13 +31,20 @@ public class CatalogLookup {
     private final StudentGroupRepository groups;
     private final DisciplineRepository disciplines;
     private final RoomRepository rooms;
+    private final SubgroupRepository subgroups;
 
     public CatalogLookup(TeacherRepository teachers, StudentGroupRepository groups, DisciplineRepository disciplines,
-                         RoomRepository rooms) {
+                         RoomRepository rooms, SubgroupRepository subgroups) {
         this.teachers = teachers;
         this.groups = groups;
         this.disciplines = disciplines;
         this.rooms = rooms;
+        this.subgroups = subgroups;
+    }
+
+    /** Whether the catalog stores subgroup {@code number} of the group. */
+    public boolean hasSubgroup(UUID groupId, int number) {
+        return subgroups.findByGroupIdAndNumber(groupId, number).isPresent();
     }
 
     public Teacher teacher(UUID id) {

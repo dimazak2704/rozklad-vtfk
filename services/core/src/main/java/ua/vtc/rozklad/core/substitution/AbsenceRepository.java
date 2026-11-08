@@ -19,4 +19,15 @@ public interface AbsenceRepository extends JpaRepository<Absence, UUID> {
     List<Absence> findActiveOverlapping(LocalDate from, LocalDate to, UUID teacherId);
 
     List<Absence> findAllByTeacherIdOrderByDateFromDesc(UUID teacherId);
+
+    /**
+     * Serializes absence writes of one teacher (transaction-scoped advisory lock), so the overlap
+     * check and the insert cannot interleave with a parallel request for the same teacher.
+     */
+    default void lockTeacher(UUID teacherId) {
+        acquireAdvisoryLock("absence-teacher:" + teacherId);
+    }
+
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:key, 0))", nativeQuery = true)
+    Integer acquireAdvisoryLock(String key);
 }

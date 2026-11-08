@@ -33,7 +33,8 @@ import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
  * Teacher absences (DOMAIN §7) reported by the dispatcher, by the teacher in the cabinet or via the
  * Telegram bot. A new absence publishes {@code absence.reported} (without the private reason) and
  * notifies dispatchers; cancelling or shrinking an absence cancels the changes made for the lessons
- * it no longer covers. Overlapping absences of one teacher are rejected.
+ * it no longer covers. Overlapping absences of one teacher are rejected; writes of one teacher are
+ * serialized by {@link AbsenceRepository#lockTeacher}, so parallel requests cannot both pass the check.
  */
 @Service
 @Transactional
@@ -88,6 +89,7 @@ public class AbsenceService {
                 actor);
         absence.setPairs(data.pairs());
         absence.setComment(data.cleanComment());
+        absences.lockTeacher(teacher.getId());
         requireNoOverlap(absence);
         absences.save(absence);
         events.publishEvent(new AbsenceReported(EventEnvelope.create(clock), absence.getId(), teacher.getId(),
@@ -115,6 +117,7 @@ public class AbsenceService {
         absence.setPairs(data.pairs());
         absence.setReasonCategory(data.reasonCategory());
         absence.setComment(data.cleanComment());
+        absences.lockTeacher(absence.getTeacherId());
         requireNoOverlap(absence);
         changeCommands.cancelForAbsence(absence.getId(), change -> !stillCovered(absence, change), actor,
                 "Пара більше не входить у відсутність");

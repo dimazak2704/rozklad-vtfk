@@ -22,6 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.support.TransactionTemplate;
+import ua.vtc.rozklad.contracts.AbsenceReasonCategory;
+import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
@@ -39,9 +41,15 @@ import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
+import ua.vtc.rozklad.core.shared.error.FieldErrorDto;
+import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
+import ua.vtc.rozklad.core.substitution.fixture.Parallel;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
+import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceDto;
+import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceRequests;
+import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceService;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeReplies;
@@ -69,6 +77,9 @@ class ChangeLifecycleIT {
 
     @Autowired
     private ChangeReplies replies;
+
+    @Autowired
+    private AbsenceService absences;
 
     @Autowired
     private ConfirmationReminders reminders;
@@ -203,8 +214,9 @@ class ChangeLifecycleIT {
         commands.cancel(created.id(), "admin");
 
         assertThat(changes.findById(created.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.CANCELLED);
+        long current = changes.findById(created.id()).orElseThrow().getVersion();
         assertThatThrownBy(() -> commands.update(created.id(),
-                new UpdateChangeRequest(null, ReasonCode.ABSENT, null, null), "admin"))
+                new UpdateChangeRequest(null, ReasonCode.ABSENT, null, current), "admin"))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
                         error -> assertThat(error.getCode()).isEqualTo("CHANGE_NOT_EDITABLE"));
         assertThatThrownBy(() -> commands.confirm(created.id(), "admin")).isInstanceOf(BusinessRuleException.class);
@@ -268,6 +280,78 @@ class ChangeLifecycleIT {
                             assertThat(found.message()).isEqualTo("Непийвода М.В. уже має 2 пару: група 4КІ2 (НДКС)");
                         }));
         assertThat(changes.count()).isZero();
+    }
+
+    @Test
+    void absentTeacherCannotBeTheSubstitute() {
+        absences.report(nepyivoda.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(2),
+                AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin");
+
+        assertThatThrownBy(() -> commands.create(replaceTeacher(nepyivoda), "admin"))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .singleElement().satisfies(found -> {
+                            assertThat(found.kind()).isEqualTo(ConflictKind.UNAVAILABLE);
+                            assertThat(found.severity()).isEqualTo(ConflictDto.Severity.HARD);
+                            assertThat(found.message()).isEqualTo("Непийвода М.В. відсутній 19.10.2026 на 2 парі");
+                        }));
+        assertThat(changes.count()).isZero();
+    }
+
+    @Test
+    void absenceAtAnotherPairDoesNotBlockTheSubstitute() {
+        absences.report(nepyivoda.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(5),
+                AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin");
+
+        assertThat(commands.create(replaceTeacher(nepyivoda), "admin").status())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+    }
+
+    @Test
+    void parallelRequestsCannotPromiseOneTeacherToTwoGroups() throws Exception {
+        StudentGroup other = fixture.group("4КІ2", 4);
+        Lesson otherLesson = fixture.lesson(semester, MONDAY, 2, other, 0, stp, fixture.teacher("Стець О.В.", "Стець"),
+                fixture.room("110"));
+        CreateChangeRequest forOther = new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2, null,
+                other.getId(), null, otherLesson.getId(), null, nepyivoda.getId(), null, null, ReasonCode.ABSENT,
+                null, null);
+
+        List<Object> results = Parallel.run(() -> commands.create(replaceTeacher(nepyivoda), "admin"),
+                () -> commands.create(forOther, "admin"));
+
+        assertThat(results).filteredOn(ChangeDto.class::isInstance).hasSize(1);
+        assertThat(results).filteredOn(ConflictException.class::isInstance).singleElement()
+                .satisfies(error -> assertThat(((ConflictException) error).getConflicts())
+                        .extracting(ConflictDto::kind).containsExactly(ConflictKind.TEACHER));
+        assertThat(changes.count()).isOne();
+    }
+
+    @Test
+    void parallelAbsencesOfOneTeacherDoNotOverlap() throws Exception {
+        AbsenceRequests.AbsenceData sameDay = new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(8),
+                AbsenceReasonCategory.OTHER, null);
+
+        List<Object> results = Parallel.run(
+                () -> absences.report(krentsin.getId(), sameDay, AbsenceSource.ADMIN, "admin"),
+                () -> absences.report(krentsin.getId(), sameDay, AbsenceSource.ADMIN, "admin"),
+                () -> absences.report(krentsin.getId(), sameDay, AbsenceSource.ADMIN, "admin"));
+
+        assertThat(results).filteredOn(AbsenceDto.class::isInstance).hasSize(1);
+        assertThat(results).filteredOn(ConflictException.class::isInstance).hasSize(2)
+                .allSatisfy(error -> assertThat(((ConflictException) error).getMessage())
+                        .startsWith("Відсутність перетинається з уже зареєстрованою"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM absence WHERE status = 'ACTIVE'", Integer.class))
+                .isOne();
+    }
+
+    @Test
+    void additionalPairNamesOnlyASubgroupTheGroupHas() {
+        fixture.lesson(semester, MONDAY.plusDays(1), 3, group, 1, fixture.discipline("Ін.мова", "Іноземна мова"),
+                nepyivoda, fixture.room("110"));
+
+        assertThatThrownBy(() -> commands.create(additional(7), "admin"))
+                .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
+                        .containsExactly(new FieldErrorDto("subgroup", "У групи 4КІ1 немає підгрупи 7.")));
+        assertThat(commands.create(additional(1), "admin").subgroup()).isEqualTo(1);
     }
 
     @Test
@@ -345,6 +429,11 @@ class ChangeLifecycleIT {
         assertThat(reminders.remindOverdue()).isZero();
         assertThat(probe.await(SubstitutionConfirmationRequested.class,
                 event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+    }
+
+    private CreateChangeRequest additional(int subgroup) {
+        return new CreateChangeRequest(ChangeKind.ADDITIONAL, MONDAY, 5, null, group.getId(), subgroup, null,
+                stp.getId(), nepyivoda.getId(), null, null, ReasonCode.OTHER, "Відпрацювання", null);
     }
 
     private CreateChangeRequest replaceTeacher(Teacher substitute) {

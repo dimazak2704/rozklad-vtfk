@@ -22,6 +22,9 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 
     List<Lesson> findAllByDateAndStatus(LocalDate date, LessonStatus status);
 
+    /** Whether the group's timetable uses the subgroup on any date (the Excel import stores no subgroup rows). */
+    boolean existsByGroupIdAndSubgroupNumber(UUID groupId, int subgroupNumber);
+
     /**
      * Locks all lessons of a group on a date ({@code SELECT … FOR UPDATE}) so that concurrent
      * changes cannot create a whole-group / subgroup overlap (DOMAIN §3). Call inside a transaction.

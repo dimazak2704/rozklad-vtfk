@@ -157,6 +157,16 @@ class AdminChangeControllerTest {
     }
 
     @Test
+    void editWithoutVersionIsRejectedSoConcurrentEditsAreNotOverwritten() throws Exception {
+        mockMvc.perform(put("/api/admin/changes/{id}", ChangeDtos.ID).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reasonCode\":\"ABSENT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                .andExpect(jsonPath("$.errors[0].field").value("version"));
+        verifyNoInteractions(commands);
+    }
+
+    @Test
     void listFiltersByDateAndStatus() throws Exception {
         given(queries.forDate(LocalDate.of(2026, 10, 19), ChangeStatus.CONFIRMED))
                 .willReturn(List.of(ChangeDtos.sample(ChangeStatus.CONFIRMED)));
