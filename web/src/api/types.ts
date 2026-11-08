@@ -1350,8 +1350,17 @@ export interface ChatBindingDto {
   groupId: Nullable<Uuid>;
   groupCode: Nullable<string>;
   teacherId: Nullable<Uuid>;
+  /**
+   * Ранковий розклад о 7:30 (лише GROUP_CHAT і SUBSCRIBER). Новий чат групи — `false` (вмикає адміністратор
+   * чату командою /rozklad_on або диспетчер тут), підписник — `true`. Змінює `PATCH /notify/bindings/{id}`.
+   */
   digestEnabled: boolean;
   createdAt: IsoInstant;
+}
+
+/** PATCH /api/notify/bindings/{id} (адитивно, раунд 7). 422 `digest-not-supported` для викладача й диспетчерської. */
+export interface BindingUpdateRequest {
+  digestEnabled: boolean;
 }
 
 /** POST /api/notify/bindings/codes */

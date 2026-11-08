@@ -7,6 +7,7 @@ import { qk } from './queryKeys';
 import type {
   BindingCodeDto,
   BindingCodeRequest,
+  BindingUpdateRequest,
   BotStatusDto,
   ChatBindingDto,
   DeliveryDto,
@@ -72,6 +73,16 @@ export function useDeleteBinding() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: Uuid) => api.delete(`/notify/bindings/${id}`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.notify.bindings() }),
+  });
+}
+
+/** PATCH /notify/bindings/{id}: ранковий розклад о 7:30 для чату групи чи підписника (адмін). */
+export function useSetBindingDigest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, digestEnabled }: { id: Uuid } & BindingUpdateRequest) =>
+      api.patch<ChatBindingDto>(`/notify/bindings/${id}`, { digestEnabled } satisfies BindingUpdateRequest),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.notify.bindings() }),
   });
 }

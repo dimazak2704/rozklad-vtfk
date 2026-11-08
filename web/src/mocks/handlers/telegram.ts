@@ -29,7 +29,7 @@ import {
   TEACHERS,
 } from '../fixtures';
 import { mockId } from '../ids';
-import { apiPath, badRequest, notFound, paginate, readJson } from '../kit';
+import { apiPath, badRequest, businessRule, notFound, paginate, readJson } from '../kit';
 import { createMockCollection, createMockStore } from '../store';
 
 export const BOT_USERNAME = 'scheduler_vtfk_bot';
@@ -49,7 +49,8 @@ function maskedChatId(type: BindingType, key: string): string {
   return type === 'GROUP_CHAT' || type === 'ADMIN_CHAT' ? `-•••${tail}` : `•••${tail}`;
 }
 
-function groupBinding(code: string, createdAt: string): ChatBindingDto {
+/** Ранковий розклад у чаті групи вмикає адміністратор чату (/rozklad_on): новий чат — без нього. */
+function groupBinding(code: string, createdAt: string, digestEnabled = false): ChatBindingDto {
   const group = groupNamed(code);
   return {
     id: mockId('binding', `group:${code}`),
@@ -59,7 +60,7 @@ function groupBinding(code: string, createdAt: string): ChatBindingDto {
     groupId: group.id,
     groupCode: group.code,
     teacherId: null,
-    digestEnabled: true,
+    digestEnabled,
     createdAt: at(createdAt),
   };
 }
@@ -108,13 +109,13 @@ const seedBindings = (): ChatBindingDto[] => [
     groupId: null,
     groupCode: null,
     teacherId: null,
-    digestEnabled: true,
+    digestEnabled: false,
     createdAt: at('2026-08-28T09:12:00Z'),
   },
-  groupBinding('4КІ1', '2026-09-01T07:40:00Z'),
+  groupBinding('4КІ1', '2026-09-01T07:40:00Z', true),
   groupBinding('4КІ2', '2026-09-01T07:52:00Z'),
   groupBinding('4КІ3', '2026-09-02T10:05:00Z'),
-  groupBinding('1КІ2', '2026-09-03T11:30:00Z'),
+  groupBinding('1КІ2', '2026-09-03T11:30:00Z', true),
   groupBinding('1М', '2026-09-04T08:15:00Z'),
   groupBinding('1ТК1', '2026-09-08T12:20:00Z'),
   groupBinding('2ОБ', '2026-09-09T13:45:00Z'),
@@ -311,6 +312,21 @@ export const handlers = [
   http.get(apiPath('/notify/bindings'), () =>
     HttpResponse.json([...bindings.all()].sort((a, b) => b.createdAt.localeCompare(a.createdAt))),
   ),
+
+  // як ChatBindings.setDigest: лише чат групи й підписник отримують ранковий розклад
+  http.patch(apiPath('/notify/bindings/:id'), async ({ params, request }) => {
+    const body = await readJson<{ digestEnabled?: unknown }>(request);
+    if (typeof body.digestEnabled !== 'boolean') {
+      return badRequest('Перевірте дані запиту.', [{ field: 'digestEnabled', message: 'Вкажіть, чи надсилати ранковий розклад.' }]);
+    }
+    const current = bindings.find(String(params.id));
+    if (!current) return notFound('Привʼязку не знайдено.');
+    if (current.type !== 'GROUP_CHAT' && current.type !== 'SUBSCRIBER') {
+      return businessRule('digest-not-supported', 'Ранковий розклад надсилається лише в чати груп і підписникам.');
+    }
+    const digestEnabled = body.digestEnabled;
+    return HttpResponse.json(bindings.update(current.id, (binding) => ({ ...binding, digestEnabled })));
+  }),
 
   http.delete(apiPath('/notify/bindings/:id'), ({ params }) => {
     bindings.remove(String(params.id));

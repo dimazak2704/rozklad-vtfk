@@ -1,9 +1,9 @@
 import { Search, Unlink, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { usePublicGroups, usePublicTeachers } from '@/api/public';
-import { useDeleteBinding } from '@/api/telegram';
+import { useDeleteBinding, useSetBindingDigest } from '@/api/telegram';
 import type { BindingType, ChatBindingDto } from '@/api/types';
-import { Badge, Chip, DataTable, EmptyState, IconButton, Input, notify, Plate, RowActions, type DataTableColumn } from '@/components/ui';
+import { Badge, Chip, DataTable, EmptyState, IconButton, Input, notify, Plate, RowActions, Switch, type DataTableColumn } from '@/components/ui';
 import { formatNumericDate, todayInKyiv } from '@/lib/date';
 import { fuzzyFilter } from '@/lib/search';
 import { sortRows, type SortState } from '@/lib/sort';
@@ -13,6 +13,9 @@ import { BINDING_TYPE_LABEL } from './labels';
 const PAGE_SIZE = 15;
 const TYPES: readonly BindingType[] = ['GROUP_CHAT', 'TEACHER', 'ADMIN_CHAT', 'SUBSCRIBER'];
 const TYPE_ORDER: Record<BindingType, number> = { ADMIN_CHAT: 0, GROUP_CHAT: 1, TEACHER: 2, SUBSCRIBER: 3 };
+/** Так само, як у боті (/status, /rozklad_on): ранковий розклад отримують лише чати груп і підписники. */
+export const DIGEST_LABEL = 'Ранковий розклад о 7:30';
+const canGetDigest = (type: BindingType) => type === 'GROUP_CHAT' || type === 'SUBSCRIBER';
 
 interface BindingsTableProps {
   bindings: readonly ChatBindingDto[] | undefined;
@@ -26,6 +29,7 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
   const groups = usePublicGroups();
   const teachers = usePublicTeachers();
   const remove = useDeleteBinding();
+  const setDigest = useSetBindingDigest();
   const [type, setType] = useState<BindingType | null>(null);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
@@ -77,6 +81,15 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
     }
   };
 
+  const switchDigest = async (row: ChatBindingDto, digestEnabled: boolean) => {
+    try {
+      await setDigest.mutateAsync({ id: row.id, digestEnabled });
+      notify.success(digestEnabled ? `«${row.title}»: ранковий розклад увімкнено` : `«${row.title}»: ранковий розклад вимкнено`);
+    } catch (cause) {
+      notify.error(cause, 'Не вдалося змінити ранковий розклад');
+    }
+  };
+
   const columns: Array<DataTableColumn<ChatBindingDto>> = [
     {
       id: 'title',
@@ -107,6 +120,23 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
         if (!value) return <span className="text-muted">—</span>;
         return row.groupId ? <Plate size="sm">{value}</Plate> : value;
       },
+    },
+    {
+      id: 'digest',
+      header: DIGEST_LABEL,
+      cell: (row) =>
+        canGetDigest(row.type) ? (
+          <Switch
+            aria-label={`${DIGEST_LABEL}: ${row.title}`}
+            checked={row.digestEnabled}
+            disabled={setDigest.isPending && setDigest.variables?.id === row.id}
+            onCheckedChange={(checked) => void switchDigest(row, checked)}
+          />
+        ) : (
+          <span className="text-muted">
+            —<span className="sr-only">не надсилається</span>
+          </span>
+        ),
     },
     {
       id: 'created',
