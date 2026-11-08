@@ -288,6 +288,44 @@ class TimetablePublicationIT {
     }
 
     @Test
+    void appliedSwapKeepsBothLessonsAndCancelledChangePinsNothingOnRepublication() {
+        UUID firstVersion = imports.importTimetable(importCommand()).versionId();
+        publication.publish(firstVersion, data.semester.getStartsOn(), "admin");
+        LocalDate swapDay = data.monday(4);
+        Lesson firstPair = lessonAt(data.group4ki1.getId(), swapDay, 1);
+        Lesson secondPair = lessonAt(data.group4ki1.getId(), swapDay, 2);
+        UUID movedId = applySwap(firstPair, secondPair, swapDay);
+        LocalDate abandonedDay = data.monday(5);
+        Lesson abandoned = lessonAt(data.group4ki1.getId(), abandonedDay, 2);
+        UUID cancelledChange = cancelledChangeFor(abandoned, abandonedDay);
+
+        UUID secondVersion = versions.create(data.semester.getId(), "Копія", firstVersion).id();
+        PublicationResult result = publication.publish(secondVersion, swapDay, "admin");
+
+        assertThat(result.conflicts()).isEmpty();
+        assertThat(count("SELECT count(*) FROM lesson WHERE id IN (?, ?) AND status = 'CANCELLED'", firstPair.getId(),
+                secondPair.getId())).as("the swapped lessons stay cancelled").isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ? AND status = 'SCHEDULED'", movedId)).isOne();
+        assertThat(lessonsOf(data.group4ki1.getId(), swapDay)).as("only the moved lesson takes place").isOne();
+        assertThat(count("SELECT count(*) FROM lesson WHERE id = ?", abandoned.getId()))
+                .as("a cancelled change does not keep the old version's lesson").isZero();
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND pair_number = 2 "
+                        + "AND version_id = ? AND status = 'SCHEDULED'", data.group4ki1.getId(), abandonedDay,
+                secondVersion)).isOne();
+        assertThat(count("SELECT count(*) FROM change WHERE id = ? AND original_lesson_id IS NULL", cancelledChange))
+                .isOne();
+        client.get().uri("/api/public/schedule/group/{id}?from={day}&to={day}", data.group4ki1.getId(), swapDay,
+                        swapDay)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.days[0].lessons.length()").isEqualTo(1)
+                .jsonPath("$.days[0].lessons[0].pair").isEqualTo(1)
+                .jsonPath("$.days[0].lessons[0].kind").isEqualTo("MOVED")
+                .jsonPath("$.days[0].lessons[0].original.pair").isEqualTo(2);
+    }
+
+    @Test
     void draftWithHardConflictsIsNotPublished() {
         List<ImportTimetableCommand.Lesson> lessons = new ArrayList<>(importCommand().lessons());
         lessons.add(new ImportTimetableCommand.Lesson(1, 2, Parity.BOTH, "4КІ2", 0, "КМ", "Кренцін М.Д.", "304",
@@ -344,6 +382,44 @@ class TimetablePublicationIT {
             replacement.setChangeId(change.getId());
             em.persist(replacement);
             return replacement.getId();
+        });
+    }
+
+    /** An applied SWAP: the later pair moves into the earlier slot, both template lessons are cancelled. */
+    private UUID applySwap(Lesson original, Lesson moved, LocalDate date) {
+        return transaction.execute(status -> {
+            Change change = new Change(ChangeKind.SWAP, date, original.getPairNumber(), original.getPairNumber(),
+                    data.group4ki1.getId(), 0, "admin");
+            change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
+                    original.getRoomId());
+            change.setSwapLessonId(moved.getId());
+            change.setReplacement(moved.getDisciplineId(), moved.getTeacherId(), null);
+            change.setReason(ReasonCode.ABSENT, null);
+            change.setStatus(ChangeStatus.APPLIED);
+            em.persist(change);
+            em.find(Lesson.class, original.getId()).cancel();
+            em.find(Lesson.class, moved.getId()).cancel();
+            Lesson replacement = new Lesson(data.semester.getId(), date, original.getPairNumber(),
+                    data.group4ki1.getId(), 0, moved.getDisciplineId(), LessonOrigin.CHANGE);
+            replacement.setTeacherId(moved.getTeacherId());
+            replacement.setRoom(moved.getRoomId(), true);
+            replacement.setChangeId(change.getId());
+            em.persist(replacement);
+            return replacement.getId();
+        });
+    }
+
+    /** A decision the dispatcher abandoned: it still names its original lesson. */
+    private UUID cancelledChangeFor(Lesson original, LocalDate date) {
+        return transaction.execute(status -> {
+            Change change = new Change(ChangeKind.CANCEL, date, original.getPairNumber(), original.getPairNumber(),
+                    original.getGroupId(), 0, "admin");
+            change.setOriginal(original.getId(), original.getDisciplineId(), original.getTeacherId(),
+                    original.getRoomId());
+            change.setReason(ReasonCode.OTHER, "тест");
+            change.setStatus(ChangeStatus.CANCELLED);
+            em.persist(change);
+            return change.getId();
         });
     }
 

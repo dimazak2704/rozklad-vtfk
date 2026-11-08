@@ -36,13 +36,17 @@ class LessonMaterializationRepository {
 
     /**
      * Deletes TEMPLATE lessons of the semester from {@code from} on that no change created, modified
-     * or refers to (DOMAIN.md §6); everything else is kept.
+     * or refers to (DOMAIN.md §6); everything else is kept. A change refers to a lesson as its
+     * original or as the lesson a SWAP moves. A cancelled change is an abandoned decision and pins
+     * nothing: its link to a deleted lesson is cleared by the foreign key (V1_502).
      */
     public int deleteReplaceable(UUID semesterId, LocalDate from) {
         return jdbc.update("""
                 DELETE FROM lesson l
                 WHERE l.semester_id = ? AND l.date >= ? AND l.origin = 'TEMPLATE' AND l.change_id IS NULL
-                  AND NOT EXISTS (SELECT 1 FROM change c WHERE c.original_lesson_id = l.id)
+                  AND NOT EXISTS (SELECT 1 FROM change c
+                                  WHERE (c.original_lesson_id = l.id OR c.swap_lesson_id = l.id)
+                                    AND c.status <> 'CANCELLED')
                 """, semesterId, from);
     }
 

@@ -97,9 +97,15 @@ final class LessonViewAssembler {
                 pair);
     }
 
-    /** Pair the lesson came from: the original lesson's pair, else the other end of the change's pair range. */
+    /**
+     * Pair the lesson came from: for a SWAP the pair of the moved lesson, else the original lesson's
+     * pair, else the other end of the change's pair range.
+     */
     private static Integer movedFrom(LessonRow row) {
         LessonRow.Change change = row.change();
+        if (change.swapPair() != null) {
+            return change.swapPair() != row.pair() ? change.swapPair() : null;
+        }
         if (change.originalPair() != null) {
             return change.originalPair() != row.pair() ? change.originalPair() : null;
         }

@@ -41,7 +41,7 @@ class ScheduleReadRepository {
                    ot.id AS orig_teacher_id, ot.short_name AS orig_teacher_short_name,
                    ot.display_name AS orig_teacher_display_name,
                    orm.id AS orig_room_id, orm.name AS orig_room_name, orm.type AS orig_room_type,
-                   ol.pair_number AS orig_pair
+                   ol.pair_number AS orig_pair, sl.pair_number AS swap_pair
             FROM lesson l
             JOIN student_group g ON g.id = l.group_id
             JOIN discipline d ON d.id = l.discipline_id
@@ -49,11 +49,12 @@ class ScheduleReadRepository {
             LEFT JOIN room r ON r.id = l.room_id
             LEFT JOIN LATERAL (
                 SELECT ch.id, ch.kind, ch.reason_code, ch.reason_text, ch.pair_from, ch.pair_to,
-                       ch.original_lesson_id, ch.orig_discipline_id, ch.orig_teacher_id, ch.orig_room_id
+                       ch.original_lesson_id, ch.swap_lesson_id, ch.orig_discipline_id, ch.orig_teacher_id,
+                       ch.orig_room_id
                 FROM change ch
                 WHERE ch.id = l.change_id
-                   OR (l.change_id IS NULL AND l.status = 'CANCELLED' AND ch.original_lesson_id = l.id
-                       AND ch.status = 'APPLIED')
+                   OR (l.change_id IS NULL AND l.status = 'CANCELLED'
+                       AND (ch.original_lesson_id = l.id OR ch.swap_lesson_id = l.id) AND ch.status = 'APPLIED')
                 ORDER BY (ch.id = l.change_id) DESC NULLS LAST, ch.updated_at DESC
                 LIMIT 1
             ) c ON TRUE
@@ -61,6 +62,7 @@ class ScheduleReadRepository {
             LEFT JOIN teacher ot ON ot.id = c.orig_teacher_id
             LEFT JOIN room orm ON orm.id = c.orig_room_id
             LEFT JOIN lesson ol ON ol.id = c.original_lesson_id
+            LEFT JOIN lesson sl ON sl.id = c.swap_lesson_id
             """;
 
     private static final String ORDER = " ORDER BY l.date, l.pair_number, g.code, l.subgroup_number, l.id";
@@ -102,7 +104,7 @@ class ScheduleReadRepository {
                 rs.getString("change_kind"), rs.getString("change_reason_code"), rs.getString("change_reason_text"),
                 rs.getInt("change_pair_from"), rs.getInt("change_pair_to"),
                 discipline(rs, "orig_discipline_"), teacher(rs, "orig_teacher_"), room(rs, "orig_room_"),
-                (Integer) rs.getObject("orig_pair"));
+                (Integer) rs.getObject("orig_pair"), (Integer) rs.getObject("swap_pair"));
         return new LessonRow(
                 rs.getObject("id", UUID.class),
                 rs.getObject("date", LocalDate.class),

@@ -105,6 +105,28 @@ class LessonViewAssemblerTest {
     }
 
     @Test
+    void swapNamesThePairTheMovedLessonCameFrom() {
+        // SWAP зберігає пару вихідного заняття (2) і заняття, яке переставили (3), окремо
+        LessonRow.Change swap = new LessonRow.Change(UUID.randomUUID(), "SWAP", "ABSENT", null, 2, 2, STP, KRENTSIN,
+                ROOM_301, 2, 3);
+        LessonRow moved = row(2, LessonStatus.SCHEDULED, LessonOrigin.CHANGE, NDKS, NEPYIVODA, ROOM_6, swap);
+        LessonRow original = row(2, LessonStatus.CANCELLED, LessonOrigin.TEMPLATE, STP, KRENTSIN, ROOM_301, swap);
+        LessonRow vacated = row(3, LessonStatus.CANCELLED, LessonOrigin.TEMPLATE, NDKS, NEPYIVODA, ROOM_6, swap);
+
+        List<LessonView> group = LessonViewAssembler.assemble(List.of(original, moved, vacated), bells, true);
+
+        assertThat(group).singleElement().satisfies(view -> {
+            assertThat(view.kind()).isEqualTo(LessonViewKind.MOVED);
+            assertThat(view.original()).isEqualTo(new LessonView.Original(STP, KRENTSIN, ROOM_301, 3));
+        });
+        assertThat(LessonViewAssembler.view(vacated, bells)).satisfies(view -> {
+            assertThat(view.kind()).isEqualTo(LessonViewKind.CANCELLED);
+            assertThat(view.reasonText()).isEqualTo("Відп.");
+            assertThat(view.changeId()).isEqualTo(swap.id());
+        });
+    }
+
+    @Test
     void roomChangeAdditionalPairAndBlock() {
         LessonView roomChanged = LessonViewAssembler.view(row(4, LessonStatus.SCHEDULED, LessonOrigin.TEMPLATE, STP,
                 KRENTSIN, ROOM_6, change("ROOM_CHANGE", null, null, 4, 4, null, null, ROOM_301, null)), bells);
@@ -145,7 +167,7 @@ class LessonViewAssemblerTest {
                                            int pairTo, DisciplineRef discipline, TeacherRef teacher, RoomRef room,
                                            Integer originalPair) {
         return new LessonRow.Change(UUID.randomUUID(), kind, reasonCode, reasonText, pairFrom, pairTo, discipline,
-                teacher, room, originalPair);
+                teacher, room, originalPair, null);
     }
 
     private static BellTimes bells() {

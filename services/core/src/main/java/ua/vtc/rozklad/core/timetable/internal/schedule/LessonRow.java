@@ -39,10 +39,11 @@ record LessonRow(
 
     /**
      * Change columns: kind and reason as stored by the substitution module, the original lesson's
-     * discipline, teacher and room, and its pair ({@code originalPair}).
+     * discipline, teacher and room, its pair ({@code originalPair}) and, for a SWAP, the pair of the
+     * lesson that was moved ({@code swapPair}).
      */
     record Change(UUID id, String kind, String reasonCode, String reasonText, int pairFrom, int pairTo,
                   DisciplineRef originalDiscipline, TeacherRef originalTeacher, RoomRef originalRoom,
-                  Integer originalPair) {
+                  Integer originalPair, Integer swapPair) {
     }
 }
