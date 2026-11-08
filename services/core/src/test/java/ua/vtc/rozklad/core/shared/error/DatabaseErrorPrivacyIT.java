@@ -47,6 +47,20 @@ class DatabaseErrorPrivacyIT {
         assertThat(ApiExceptionHandler.describe(single)).isEqualTo("SQLState 23505").doesNotContain(SECRET);
     }
 
+    /** A value out of the column's range (SQLState 22008) is not «the record already exists». */
+    @Test
+    void outOfRangeValueIsRecognizedAsADataException() {
+        DataIntegrityViolationException outOfRange = catchThrowableOfType(DataIntegrityViolationException.class,
+                () -> jdbc.queryForObject("SELECT CAST(? AS date) + 1000000000", Object.class, "5874897-12-31"));
+        DataIntegrityViolationException duplicate = catchThrowableOfType(DataIntegrityViolationException.class, () -> {
+            jdbc.update(INSERT, UUID.randomUUID(), SECRET);
+            jdbc.update(INSERT, UUID.randomUUID(), SECRET);
+        });
+
+        assertThat(ApiExceptionHandler.isDataException(outOfRange)).isTrue();
+        assertThat(ApiExceptionHandler.isDataException(duplicate)).isFalse();
+    }
+
     private static List<String> messages(Throwable error) {
         List<String> messages = new ArrayList<>();
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {

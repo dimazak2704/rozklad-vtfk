@@ -7,9 +7,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,7 +40,8 @@ class ProbeController {
 
     enum Category { SICK_LEAVE, OTHER }
 
-    record AbsenceForm(LocalDate dateFrom, List<Integer> pairs, Category reasonCategory, String comment) {
+    record AbsenceForm(LocalDate dateFrom, List<Integer> pairs, Category reasonCategory, String comment,
+                       Integer capacity) {
     }
 
     record GridRow(@Min(1) @Max(5) int weekday, @Min(1) @Max(8) int pair) {
@@ -57,6 +60,16 @@ class ProbeController {
     @GetMapping("/api/admin/probe/days")
     LocalDate day(@RequestParam LocalDate from) {
         return from;
+    }
+
+    @GetMapping("/api/admin/probe/dated")
+    LocalDate dated(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return date;
+    }
+
+    @GetMapping("/api/admin/probe/months")
+    YearMonth month(@RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
+        return month;
     }
 
     @PostMapping("/api/admin/probe/groups")

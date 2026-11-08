@@ -87,7 +87,38 @@ class ApiErrorHandlingTest {
         expectFieldError("{\"reasonCategory\":\"HACK\"}", "reasonCategory", "Допустимі значення: SICK_LEAVE, OTHER.");
         expectFieldError("{\"dateFrom\":\"2026-13-40\"}", "dateFrom", "Очікується дата у форматі РРРР-ММ-ДД.");
         expectFieldError("{\"pairs\":\"8\"}", "pairs", "Очікується список.");
-        expectFieldError("{\"pairs\":[1,\"x\"]}", "pairs[1]", "Очікується число.");
+        expectFieldError("{\"pairs\":[1,\"x\"]}", "pairs[1]", "Очікується ціле число.");
+    }
+
+    /** Years outside 2000–2100 overflow date arithmetic and PostgreSQL: a 400 on the field, not a 500/409. */
+    @Test
+    void dateOutsideTheSupportedYearsIsAFieldError() throws Exception {
+        expectFieldError("{\"dateFrom\":\"+5874898-01-01\"}", "dateFrom", "Дата має бути в межах 2000–2100 років.");
+        expectFieldError("{\"dateFrom\":\"+100000-01-01\"}", "dateFrom", "Дата має бути в межах 2000–2100 років.");
+        for (String path : List.of("/api/admin/probe/dated?date=%2B999999999-12-28",
+                "/api/admin/probe/dated?date=-999999999-01-01", "/api/admin/probe/days?from=1999-12-31")) {
+            mockMvc.perform(get(URI.create(path)).with(TestJwts.admin()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type").value("urn:rozklad:problem:validation"))
+                    .andExpect(jsonPath("$.errors[0].message").value("Дата має бути в межах 2000–2100 років."));
+        }
+        mockMvc.perform(get("/api/admin/probe/months").param("month", "+999999999-12").with(TestJwts.admin()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("month"));
+        mockMvc.perform(get("/api/admin/probe/dated").param("date", "2026-10-19").with(TestJwts.admin()))
+                .andExpect(status().isOk());
+    }
+
+    /** No silent truncation: 1.5 for an integer is rejected, an int overflow names its field. */
+    @Test
+    void fractionalOrOverflowingIntegerIsAFieldError() throws Exception {
+        expectFieldError("{\"capacity\":1.5}", "capacity", "Очікується ціле число.");
+        expectFieldError("{\"pairs\":[5.9]}", "pairs[0]", "Очікується ціле число.");
+        expectFieldError("{\"capacity\":2147483648}", "capacity", "Число поза допустимим діапазоном.");
+        mockMvc.perform(put("/api/admin/probe/grid").with(TestJwts.admin()).contentType(MediaType.APPLICATION_JSON)
+                        .content("[{\"weekday\":5.9,\"pair\":1}]"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("grid[0].weekday"));
     }
 
     @Test

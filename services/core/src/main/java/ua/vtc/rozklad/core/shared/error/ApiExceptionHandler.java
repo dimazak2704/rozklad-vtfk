@@ -85,7 +85,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
                                                                   HttpHeaders headers, HttpStatusCode status,
                                                                   WebRequest request) {
-        List<FieldErrorDto> errors = RequestProblems.unreadableBody(ex);
+        List<FieldErrorDto> errors = RequestProblems.unreadableBody(ex, RequestProblems.listBodyName(request));
         return validationProblem(errors, errors.isEmpty()
                 ? "Тіло запиту не вдалося прочитати: перевірте формат JSON." : "Перевірте виділені поля.");
     }
@@ -95,7 +95,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
                                                         HttpStatusCode status, WebRequest request) {
         String field = ex.getPropertyName() == null ? "value" : ex.getPropertyName();
-        return validationProblem(List.of(new FieldErrorDto(field, RequestProblems.expected(ex.getRequiredType()))),
+        return validationProblem(List.of(new FieldErrorDto(field, RequestProblems.expected(ex))),
                 "Значення «%s» параметра «%s» має неправильний формат.".formatted(ex.getValue(), field));
     }
 
@@ -152,6 +152,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         // деталі SQL не віддаємо клієнту (вони розкривають схему БД) і не пишемо в журнал: повідомлення
         // PostgreSQL містить значення рядка (коментарі відсутностей, назви), ARCHITECTURE §10
         log.warn("Data integrity violation: {}", describe(ex));
+        if (isDataException(ex)) {
+            // SQLState класу 22 (значення поза діапазоном типу, занадто довгий текст): це не «запис уже
+            // існує», а некоректне значення; поля, яке його дало, тут уже не видно
+            return problem(HttpStatus.BAD_REQUEST, ProblemTypes.BAD_REQUEST, "Некоректні дані",
+                    "Одне зі значень запиту виходить за допустимі межі. Перевірте дати й числа.", request);
+        }
         return problem(HttpStatus.CONFLICT, ProblemTypes.DATA_INTEGRITY, "Конфлікт даних",
                 "Операція порушує цілісність даних: такий запис уже існує або на нього посилаються інші дані.",
                 request);
@@ -203,6 +209,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             addRequestId(problem);
         }
         return super.createResponseEntity(body, headers, status, request);
+    }
+
+    /** SQLState class 22 «data exception» (PostgreSQL: date or number out of range, value too long). */
+    static boolean isDataException(DataIntegrityViolationException ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof JDBCException jdbc) {
+                return jdbc.getSQLState() != null && jdbc.getSQLState().startsWith("22");
+            }
+            if (cause instanceof SQLException sql) {
+                return sql.getSQLState() != null && sql.getSQLState().startsWith("22");
+            }
+        }
+        return false;
     }
 
     /** SQLState and constraint only: never the message, which carries row values. */
