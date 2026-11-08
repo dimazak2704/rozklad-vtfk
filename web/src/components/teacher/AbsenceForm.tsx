@@ -6,7 +6,7 @@ import { uk } from 'react-day-picker/locale/uk';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import { useCreateAbsence, useMySchedule } from '@/api/me';
-import type { IsoDate, Uuid } from '@/api/types';
+import type { DayDto, IsoDate, LessonView, Uuid } from '@/api/types';
 import { Button, Field, RadioGroup, Textarea, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import {
@@ -21,11 +21,56 @@ import {
   localDateFromIso,
   nearestStudyDay,
 } from '@/lib/date';
-import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
+import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS, PAIR_FORMS_ACC } from '@/lib/labels';
 import { DAY_PICKER_CLASSES } from '../public/schedule/day-picker-classes';
 import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
 
 const FIELDS: ReadonlyArray<keyof AbsenceFormValues> = ['dateFrom', 'dateTo', 'pairs', 'reasonCategory', 'comment'];
+
+type OwnLesson = { day: DayDto; lesson: LessonView };
+
+function LessonLines({ items }: { items: readonly OwnLesson[] }) {
+  return (
+    <ul className="mt-1 flex flex-col gap-0.5 text-secondary">
+      {items.slice(0, 6).map(({ day, lesson }) => (
+        <li key={`${day.date}-${lesson.id}`} className="figures">
+          {formatShortWeekdayDate(day.date)} · {lesson.pair} пара — {lesson.group.code}, {lesson.discipline.shortName}
+        </li>
+      ))}
+      {items.length > 6 ? <li>і ще {items.length - 6}</li> : null}
+    </ul>
+  );
+}
+
+/**
+ * Що зачепить відсутність. «Пар немає» — лише коли у викладача справді немає пар у ці дні; якщо пари є,
+ * а обрані номери їх не зачіпають (або номери ще не обрано), показуємо його пари, щоб було видно, які обрати.
+ */
+function AffectedPreview({ own, affected, pairsChosen }: { own: readonly OwnLesson[]; affected: readonly OwnLesson[]; pairsChosen: boolean }) {
+  if (own.length === 0) return <p className="text-secondary">У ці дні за розкладом у вас пар немає.</p>;
+  if (!pairsChosen) {
+    return (
+      <>
+        <p className="font-semibold text-primary">Оберіть пари вище. За розкладом у ці дні у вас {countLabel(own.length, PAIR_FORMS)}:</p>
+        <LessonLines items={own} />
+      </>
+    );
+  }
+  if (affected.length === 0) {
+    return (
+      <>
+        <p className="font-semibold text-primary">Обрані пари не зачеплять ваших занять. За розкладом у ці дні у вас {countLabel(own.length, PAIR_FORMS)}:</p>
+        <LessonLines items={own} />
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="font-semibold text-primary">Зачепить {countLabel(affected.length, PAIR_FORMS_ACC)}:</p>
+      <LessonLines items={affected} />
+    </>
+  );
+}
 
 function studyDaysBetween(from: IsoDate, to: IsoDate): number {
   let count = 0;
@@ -65,14 +110,15 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
     container.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
   }, [autoFocus]);
 
-  const affected = useMemo(() => {
-    if (!rangeValid || !preview.data) return [];
-    return preview.data.days.flatMap((day) =>
-      day.lessons
-        .filter((lesson) => lesson.teacher?.id === teacherId && lesson.kind !== 'CANCELLED' && (wholeDay || pairs.includes(lesson.pair)))
-        .map((lesson) => ({ day, lesson })),
+  // useMySchedule тримає попередню відповідь, поки вантажиться нова: її дні — не ті, що обрано
+  const previewData = rangeValid && !preview.isPlaceholderData ? preview.data : undefined;
+  const own = useMemo(() => {
+    if (!previewData) return [];
+    return previewData.days.flatMap((day) =>
+      day.lessons.filter((lesson) => lesson.teacher?.id === teacherId && lesson.kind !== 'CANCELLED').map((lesson) => ({ day, lesson })),
     );
-  }, [rangeValid, preview.data, teacherId, wholeDay, pairs]);
+  }, [previewData, teacherId]);
+  const affected = useMemo(() => (wholeDay ? own : own.filter(({ lesson }) => pairs.includes(lesson.pair))), [own, wholeDay, pairs]);
 
   const submit = form.handleSubmit(async (values) => {
     try {
@@ -210,22 +256,14 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             {errors.pairs.message}
           </p>
         ) : null}
-        {rangeValid && preview.data ? (
-          <div className="rounded-control border border-separator bg-sunken px-3 py-2.5 text-caption" aria-live="polite">
-            {affected.length === 0 ? (
-              <p className="text-secondary">У ці дні за розкладом у вас пар немає.</p>
+        {rangeValid ? (
+          <div className="rounded-control border border-separator bg-sunken px-3 py-2.5 text-caption" aria-live="polite" aria-busy={!previewData && !preview.isError}>
+            {previewData ? (
+              <AffectedPreview own={own} affected={affected} pairsChosen={wholeDay || pairs.length > 0} />
+            ) : preview.isError && !preview.isPlaceholderData ? (
+              <p className="text-secondary">Не вдалося перевірити ваш розклад на ці дні. Відсутність можна повідомити й так.</p>
             ) : (
-              <>
-                <p className="font-semibold text-primary">Зачепить {countLabel(affected.length, PAIR_FORMS_ACC)}:</p>
-                <ul className="mt-1 flex flex-col gap-0.5 text-secondary">
-                  {affected.slice(0, 6).map(({ day, lesson }) => (
-                    <li key={`${day.date}-${lesson.id}`} className="figures">
-                      {formatShortWeekdayDate(day.date)} · {lesson.pair} пара — {lesson.group.code}, {lesson.discipline.shortName}
-                    </li>
-                  ))}
-                  {affected.length > 6 ? <li>і ще {affected.length - 6}</li> : null}
-                </ul>
-              </>
+              <p className="text-secondary">Перевіряємо ваші пари на ці дні…</p>
             )}
           </div>
         ) : null}

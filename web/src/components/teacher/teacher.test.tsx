@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BellSlotDto, ChangeDto, PreferenceKind, Weekday } from '@/api/types';
+import type { BellSlotDto, ChangeDto, DayDto, LessonView, PreferenceKind, Weekday } from '@/api/types';
 import { ConfirmDialogHost, notify } from '@/components/ui';
 import { teacherNamed } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
@@ -138,6 +138,88 @@ describe('AbsenceForm: дні', () => {
 
     await user.click(day(/вівторок, 24/));
     expect(summary()).toContain('навчальних днів: 1');
+  });
+});
+
+describe('AbsenceForm: які пари зачепить', () => {
+  const nepyivoda = teacherNamed('Непийвода');
+  const day = (date: string, lessons: LessonView[]): DayDto => ({
+    date,
+    weekday: date === '2026-11-19' ? 4 : 5,
+    weekdayLabel: date === '2026-11-19' ? 'ЧЕТВЕР' : 'ПʼЯТНИЦЯ',
+    parity: 'NUMERATOR',
+    studyDay: true,
+    note: null,
+    lessons,
+  });
+  const pair3: LessonView = {
+    id: '00000000-0000-4000-8000-0000000000a3',
+    pair: 3,
+    startsAt: '11:20',
+    endsAt: '12:20',
+    discipline: { id: '00000000-0000-4000-8000-0000000000d1', shortName: 'НДЕКС', name: 'НДЕКС', color: null },
+    teacher: { id: nepyivoda.id, shortName: 'Непийвода М.В.', displayName: 'Непийвода М.В.' },
+    room: null,
+    group: { id: '00000000-0000-4000-8000-0000000000b1', code: '4КІ3', course: 4 },
+    subgroup: 0,
+    kind: 'REGULAR',
+    online: false,
+    original: null,
+    reasonText: null,
+    changeId: null,
+  };
+  let releaseFriday: () => void = () => {};
+
+  beforeEach(() => {
+    const fridayGate = new Promise<void>((resolve) => {
+      releaseFriday = resolve;
+    });
+    server.use(
+      http.get(apiPath('/me/schedule'), async ({ request }) => {
+        const url = new URL(request.url);
+        const from = url.searchParams.get('from') ?? '';
+        const to = url.searchParams.get('to') ?? '';
+        const days = [day('2026-11-19', [pair3]), day('2026-11-20', [])].filter((d) => d.date >= from && d.date <= to);
+        if (from === '2026-11-20') await fridayGate;
+        return Response.json({ owner: { type: 'TEACHER', id: nepyivoda.id, label: 'Непийвода М.В.' }, from, to, days });
+      }),
+    );
+  });
+
+  const preview = () => screen.getByText(/Зачепить|пар немає|Оберіть пари|не зачеплять|Перевіряємо/).closest('div')?.textContent ?? '';
+
+  it('окремі пари: без вибору й з парою, що не збігається, не каже «пар немає», а показує її пари', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
+    await user.click(screen.getByRole('button', { name: /четвер, 19/ }));
+    await waitFor(() => expect(preview()).toMatch(/Зачепить 1\sпару:.*Чт, 19\.11 · 3 пара — 4КІ3, НДЕКС/));
+
+    await user.click(screen.getByRole('radio', { name: 'Окремі пари' }));
+    expect(preview()).toMatch(/Оберіть пари вище\. За розкладом у ці дні у вас 1\sпара:.*3 пара — 4КІ3/);
+    expect(preview()).not.toContain('пар немає');
+
+    await user.click(screen.getByRole('button', { name: '1 пара' }));
+    expect(preview()).toMatch(/Обрані пари не зачеплять ваших занять\..*3 пара — 4КІ3/);
+
+    await user.click(screen.getByRole('button', { name: '3 пара' }));
+    expect(preview()).toMatch(/Зачепить 1\sпару:.*3 пара/);
+  });
+
+  it('поки вантажиться новий діапазон, не показує пари попереднього', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
+    await user.click(screen.getByRole('button', { name: /четвер, 19/ }));
+    await waitFor(() => expect(preview()).toContain('Чт, 19.11 · 3 пара'));
+    await user.click(screen.getByRole('button', { name: /четвер, 19/ }));
+    await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
+    await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
+
+    expect(screen.getByText(/навчальних днів/).closest('p')?.textContent).toMatch(/^20\sлистопада/);
+    expect(preview()).toBe('Перевіряємо ваші пари на ці дні…');
+    expect(preview()).not.toContain('19.11');
+
+    releaseFriday();
+    await waitFor(() => expect(preview()).toBe('У ці дні за розкладом у вас пар немає.'));
   });
 });
 
