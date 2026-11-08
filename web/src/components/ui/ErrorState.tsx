@@ -25,6 +25,9 @@ function titleFor(error: unknown): string {
   if (error.isNotFound) return 'Не знайдено';
   if (error.isForbidden) return 'Немає доступу';
   if (error.isUnauthorized) return 'Потрібно увійти';
+  // gateway: сервіс зупинено чи перезапускається (503) або він не відповів вчасно (504)
+  if (error.status === 503) return 'Сервіс тимчасово недоступний';
+  if (error.status === 504) return 'Сервер не відповів вчасно';
   if (error.status >= 500) return 'Сервер не відповів як слід';
   return 'Не вдалося виконати запит';
 }

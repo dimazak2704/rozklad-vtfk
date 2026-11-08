@@ -2,10 +2,12 @@ import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@/api/errors';
 import { confirm } from '@/stores/confirm';
 import { renderWithProviders } from '@/test/render';
 import { ConfirmDialogHost } from './ConfirmDialog';
 import { DataTable, type DataTableColumn } from './DataTable';
+import { ErrorState } from './ErrorState';
 import { Field } from './Field';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
@@ -138,3 +140,20 @@ describe('confirm()', () => {
     await expect(result).resolves.toBe(false);
   });
 });
+
+describe('ErrorState', () => {
+  it('503 від gateway — сервіс тимчасово недоступний, з порадою сервера і повтором', () => {
+    const error = new ApiError({ status: 503, title: 'Сервіс тимчасово недоступний', detail: 'Спробуйте ще раз за хвилину.' });
+    renderWithProviders(<ErrorState error={error} onRetry={vi.fn()} />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Сервіс тимчасово недоступний');
+    expect(alert).toHaveTextContent('Спробуйте ще раз за хвилину.');
+    expect(within(alert).getByRole('button', { name: /Спробувати ще раз/ })).toBeInTheDocument();
+  });
+
+  it('інша 5xx — загальне пояснення', () => {
+    renderWithProviders(<ErrorState error={new ApiError({ status: 500, detail: 'Сталася непередбачена помилка.' })} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Сервер не відповів як слід');
+  });
+});
+
