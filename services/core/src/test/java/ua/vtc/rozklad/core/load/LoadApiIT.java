@@ -248,6 +248,71 @@ class LoadApiIT {
                 .andExpect(jsonPath("$.teachers").isEmpty());
     }
 
+    /**
+     * r4-ai-imports-48: a curriculum or program row does not say whether the group is split; it updates the
+     * split item of the timetable (teachers per subgroup kept) instead of creating a second whole-group one.
+     */
+    @Test
+    void importWithoutSplitUpdatesTheSplitItemThatIsThere() throws Exception {
+        UUID item = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":2,"splitSubgroups":true,
+                 "teachers":[{"subgroup":1,"teacherId":"%s"},{"subgroup":2,"teacherId":"%s"}]}"""
+                .formatted(semester, group, english, krysak, mozharovska)).andReturn());
+        String curriculumRow = """
+                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Ін.мова",
+                 "lessonKind":"MIXED","hoursPerWeek":2,"plannedHours":44,"controlForm":"CREDIT",
+                 "source":"CURRICULUM"}]}""".formatted(semester);
+
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content(curriculumRow))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(0))
+                .andExpect(jsonPath("$.updated").value(1))
+                .andExpect(jsonPath("$.ids['4КІ1 | Ін.мова | MIXED | split']").value(item.toString()));
+
+        mvc.perform(get("/api/admin/load").param("semesterId", semester.toString()).with(TestJwts.admin()))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(item.toString()))
+                .andExpect(jsonPath("$[0].splitSubgroups").value(true))
+                .andExpect(jsonPath("$[0].plannedHours").value(44))
+                .andExpect(jsonPath("$[0].controlForm").value("CREDIT"))
+                .andExpect(jsonPath("$[0].source").value("CURRICULUM"))
+                .andExpect(jsonPath("$[0].teachers", hasSize(2)));
+
+        // a repeated import changes nothing
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content(curriculumRow))
+                .andExpect(jsonPath("$.unchanged").value(1));
+
+        // an explicit split = false still means the whole-group item, which is created next to the split one
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Ін.мова",
+                                 "hoursPerWeek":1,"splitSubgroups":false,"source":"MANUAL"}]}""".formatted(semester)))
+                .andExpect(jsonPath("$.created").value(1))
+                .andExpect(jsonPath("$.ids['4КІ1 | Ін.мова | MIXED | whole']").exists());
+
+        // with both a whole-group and a split item a row without the split is ambiguous: refused, nothing written
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content(curriculumRow.replace("\"plannedHours\":44", "\"plannedHours\":40")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("items[0].splitSubgroups"));
+        mvc.perform(get("/api/admin/load/" + item).with(TestJwts.admin()))
+                .andExpect(jsonPath("$.plannedHours").value(44));
+    }
+
+    /** Without any item of the group × discipline a row without the split creates a whole-group item. */
+    @Test
+    void importWithoutSplitCreatesAWholeGroupItem() throws Exception {
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Матем.",
+                                 "hoursPerWeek":2,"source":"PROGRAM"}]}""".formatted(semester)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1))
+                .andExpect(jsonPath("$.ids['4КІ1 | Матем. | MIXED | whole']").exists());
+    }
+
     private void lesson(TimetableVersion version, int weekday, int pair, Parity parity, int subgroup, UUID discipline,
                         UUID teacher) {
         TemplateLesson lesson = new TemplateLesson(version.getId(), weekday, pair, parity, group, subgroup, discipline);

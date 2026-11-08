@@ -85,7 +85,8 @@ public final class LoadDtos {
 
     /**
      * {@code POST /api/admin/import/load}: items refer to the catalog by natural keys; the upsert
-     * key is group × discipline × lesson kind × split.
+     * key is group × discipline × lesson kind × split ({@code splitSubgroups} absent: the split of the
+     * item that is there).
      */
     public record LoadImportRequest(@NotNull UUID semesterId, @NotNull List<@Valid @NotNull LoadImportItem> items) {
     }

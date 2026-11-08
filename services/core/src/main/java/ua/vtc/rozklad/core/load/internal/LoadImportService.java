@@ -33,6 +33,11 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * and DOMAIN §10 spelling variants are accepted). All or nothing: any unknown reference rejects
  * the whole request with field errors {@code items[i]…}.
  * <p>
+ * {@code splitSubgroups} absent ({@code null}) means «the item that is there»: a curriculum or a program
+ * row does not know whether the group studies the discipline by subgroups, so it updates the only item of
+ * that group × discipline × lesson kind and keeps its split (a new item is for the whole group). When the
+ * semester has both a whole-group and a split item for it the row is refused ({@code items[i].splitSubgroups}).
+ * <p>
  * An update keeps what the request does not carry: a field that is absent ({@code null}) leaves the
  * stored value as it is, so a program or a curriculum (hours only) does not erase the teachers, the
  * room requirements or the note of an item derived from the timetable. An explicit empty list of
@@ -55,11 +60,12 @@ public class LoadImportService {
     public LoadImportResult apply(LoadImportRequest request) {
         SemesterInfo semester = calendar.semester(request.semesterId())
                 .orElseThrow(() -> FieldValidationException.of("semesterId", "Семестр не знайдено."));
+        List<LoadItem> existing = new java.util.ArrayList<>(items.findAllBySemesterId(semester.id()));
         FieldErrors errors = new FieldErrors();
         List<Resolved> resolved = new java.util.ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < request.items().size(); i++) {
-            resolve(request.items().get(i), "items[%d]".formatted(i), errors).ifPresent(item -> {
+            resolve(request.items().get(i), "items[%d]".formatted(i), existing, errors).ifPresent(item -> {
                 if (seen.add(item.naturalKey())) {
                     resolved.add(item);
                 } else {
@@ -69,7 +75,6 @@ public class LoadImportService {
         }
         errors.throwIfAny();
 
-        List<LoadItem> existing = new java.util.ArrayList<>(items.findAllBySemesterId(semester.id()));
         int created = 0;
         int updated = 0;
         int unchanged = 0;
@@ -107,7 +112,8 @@ public class LoadImportService {
         return new LoadImportResult(created, updated, unchanged, ids);
     }
 
-    private Optional<Resolved> resolve(LoadImportItem item, String field, FieldErrors errors) {
+    private Optional<Resolved> resolve(LoadImportItem item, String field, List<LoadItem> existing,
+                                       FieldErrors errors) {
         Optional<GroupInfo> group = catalog.groupByCode(item.groupCode());
         if (group.isEmpty()) {
             errors.add(field + ".groupCode", "Групу «%s» не знайдено.".formatted(item.groupCode()));
@@ -125,7 +131,22 @@ public class LoadImportService {
                 roomId = Optional.of(room.get().id());
             }
         }
-        boolean split = Boolean.TRUE.equals(item.splitSubgroups());
+        LessonKind kind = item.lessonKind() == null ? LessonKind.MIXED : item.lessonKind();
+        boolean split;
+        if (item.splitSubgroups() != null) {
+            split = item.splitSubgroups();
+        } else if (group.isEmpty() || discipline.isEmpty()) {
+            split = false;
+        } else {
+            Set<Boolean> stored = storedSplits(existing, group.get(), discipline.get(), kind);
+            if (stored.size() > 1) {
+                errors.add(field + ".splitSubgroups", ("Група %s має з «%s» два рядки навантаження: для всієї групи "
+                        + "й по підгрупах. Уточніть, який оновити.").formatted(group.get().code(),
+                        discipline.get().shortName()));
+                return Optional.empty();
+            }
+            split = stored.contains(true);
+        }
         // null = викладачів у запиті немає (програма, навчальний план): наявні призначення лишаються
         Map<Integer, UUID> teachers = item.teachers() == null ? null : new TreeMap<>();
         List<LoadImportTeacher> requestedTeachers = item.teachers() == null ? List.of() : item.teachers();
@@ -150,8 +171,19 @@ public class LoadImportService {
         if (group.isEmpty() || discipline.isEmpty()) {
             return Optional.empty();
         }
-        LessonKind kind = item.lessonKind() == null ? LessonKind.MIXED : item.lessonKind();
         return Optional.of(new Resolved(item, group.get(), discipline.get(), kind, split, teachers, roomId));
+    }
+
+    /** The split states of the stored items of group × discipline × lesson kind (none, one or both). */
+    private static Set<Boolean> storedSplits(List<LoadItem> existing, GroupInfo group, DisciplineRef discipline,
+                                             LessonKind kind) {
+        Set<Boolean> splits = new HashSet<>();
+        existing.stream()
+                .filter(candidate -> candidate.getGroupId().equals(group.id())
+                        && candidate.getDisciplineId().equals(discipline.id())
+                        && candidate.getLessonKind() == kind)
+                .forEach(candidate -> splits.add(candidate.isSplitSubgroups()));
+        return splits;
     }
 
     private static boolean differs(Resolved item, LoadItem target, int plannedHours) {
