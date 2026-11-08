@@ -98,3 +98,18 @@ Details and DTO shapes: `docs/modules/catalog.md`, `calendar.md`, `load.md`, `id
 | Dashboard | `aiSpendToday` is always `null`; `alerts[]` = `{kind: NO_SEMESTER\|DECLINED\|UNCOVERED_LESSONS\|PENDING_OVERDUE\|ORDER_NOT_PUBLISHED, severity: INFO\|WARN\|ERROR, message, link}`. | AI usage lives in the importer. |
 | Accounting | Rows only for group × discipline with load items. `suggestion` = `{kind: DISCIPLINE_FINISHED\|ADDITIONAL, text, fromDate?, lessons, lessonIds}`. Teacher statistics list only teachers with activity in the month. | Accounting needs a plan; `lessonIds` make the one-click action possible. |
 | Settings keys | `substitution.approvalMode`, `substitution.confirmTimeoutMinutes`, `order.signatoryPosition`, `order.signatoryName`, `accounting.hoursPerPair` (defaults in the module doc). | To be aligned with the settings module. |
+
+## Web: public site and teacher cabinet (client-side interpretations)
+
+No endpoint was changed. These are the readings the SPA and its mock API use where CONTRACTS.md is silent.
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/public/changes` | Rows (`groups`) come only from a published order; before publication `order: null`, `groups: []`. | DOMAIN §7: changes enter the schedule on publication, so the changes page and the group schedule never disagree. |
+| `ChangeView.from/to.teacher` | Order-style text: surname, plus first initial for namesakes (`TeacherRef.displayName`, «Крисак Л.»). | The «лише мої» filter matches surname and initials. |
+| `ChangeView.subgroupNote` | Human text «1 підгрупа» (null = whole group). | Shown as is; the paper «(п.)» is unclear to students. |
+| `ChangeView` for `ROOM_CHANGE` | `from` = the lesson, `to` empty, `room` = the new room, `reasonText` null. | The «Заміна аудиторій» section prints only group, pair and room. |
+| `GET /api/public/bells?date=` on a weekend | `slots: []`, `weekday` = ISO weekday (6/7). | No bells on weekends; the SPA never asks (weekend → Monday). |
+| `PUT /api/me/preferences?semesterId` | Body is the full list `[{weekday,pair,kind,note}]` replacing the previous one; response = saved list. | The grid is saved as a whole in one action. |
+| `POST /api/me/absences` | Past `dateFrom` → 422 (`ABSENCE_IN_PAST`); overlap with an existing absence → 409. `DELETE` of a non-future absence → 422 (`ABSENCE_NOT_FUTURE`). | «Own only, future only» (CONTRACTS §3); 422 for business rules as in the foundation. |
+| `POST /api/notify/bindings/codes` by a teacher | Only `{type: TEACHER, teacherId: <own>}`; another `teacherId` → 403. `deepLink` = `https://t.me/<bot>?start=<code>`. | CONTRACTS §6: «TEACHER may create own TEACHER code». |
