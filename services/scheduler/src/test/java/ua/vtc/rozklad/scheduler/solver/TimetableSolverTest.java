@@ -104,6 +104,35 @@ class TimetableSolverTest {
         assertThat(TimetableResults.assignments(solution)).containsExactlyElementsOf(problem.planted());
     }
 
+    /**
+     * R4: generation for nearly full 2nd-course shifts came back with group overlaps although the
+     * base timetable had none, because every unit was placed from scratch. Started from a feasible
+     * base the best solution can only be as good or better, however short the run.
+     */
+    @Test
+    void solutionStartedFromAFeasibleBaseIsNeverWorse() {
+        SyntheticCollege.Problem problem = SyntheticCollege.generate(SyntheticCollege.Options.medium());
+        Map<String, Assignment> planted = problem.planted().stream()
+                .collect(Collectors.toMap(Assignment::unitId, Function.identity()));
+        List<ProblemSnapshot.Unit> started = problem.snapshot().units().stream()
+                .map(unit -> {
+                    Assignment place = planted.get(unit.unitId());
+                    return new ProblemSnapshot.Unit(unit.unitId(), unit.loadItemId(), unit.groupId(), unit.subgroup(),
+                            unit.disciplineId(), unit.teacherId(), unit.weight(), unit.requiredRoomType(),
+                            unit.preferredRoomId(), unit.homeRoomId(), null,
+                            new ProblemSnapshot.PinnedSlot(place.weekday(), place.pair(), place.parity(), place.roomId()));
+                })
+                .toList();
+        Timetable timetable = factory.create(withUnits(problem.snapshot(), started), GenerationWeights.DEFAULT);
+        assertThat(timetable.isFullyPlaced()).as("nothing is left to the construction heuristic").isTrue();
+
+        Timetable solution = TestSolvers.solveTimed(TestSolvers.factory(
+                new TerminationConfig().withSpentLimit(Duration.ofSeconds(2))), timetable).solution();
+
+        assertThat(solution.getScore().hardScore()).isZero();
+        assertThat(solution.getUnits()).noneMatch(unit -> unit.isPinned());
+    }
+
     @Test
     void incrementalScoreMatchesAFullRecalculationAfterEveryMove() {
         // FULL_ASSERT перераховує рахунок з нуля після кожного ходу й падає при розбіжності

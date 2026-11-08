@@ -111,6 +111,32 @@ class TimetableProblemFactoryTest {
                 .containsExactly(ROOM_304, LAB, ROOM_304);
     }
 
+    /** The base placement is a warm start: placed, not pinned; outside the value range it is ignored. */
+    @Test
+    void unitsStartAtTheirBasePlacementWithoutBeingPinned() {
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("base").teacher(TEACHER).initial(new ProblemSnapshot.PinnedSlot(3, 2, Parity.BOTH, ROOM_SMALL))
+                        .build(),
+                unit("half").weight(UnitWeight.HALF)
+                        .initial(new ProblemSnapshot.PinnedSlot(3, 2, Parity.DENOMINATOR, null)).build(),
+                unit("unavailable").teacher(TEACHER)
+                        .initial(new ProblemSnapshot.PinnedSlot(1, 1, Parity.BOTH, ROOM_304)).build(),
+                unit("wrongParity").initial(new ProblemSnapshot.PinnedSlot(2, 2, Parity.NUMERATOR, ROOM_304))
+                        .build())), GenerationWeights.DEFAULT);
+
+        LessonUnit base = timetable.getUnits().get(0);
+        assertThat(base.isPinned()).isFalse();
+        assertThat(base.getTimeslot()).isEqualTo(new Timeslot(3, 2)).isIn(base.getTimeslotRange());
+        assertThat(base.getParity()).isEqualTo(Parity.BOTH);
+        assertThat(base.getRoom().getId()).as("a small room is out of range for the whole group").isNotEqualTo(ROOM_SMALL);
+        LessonUnit half = timetable.getUnits().get(1);
+        assertThat(half.getTimeslot()).isEqualTo(new Timeslot(3, 2));
+        assertThat(half.getParity()).isEqualTo(Parity.DENOMINATOR);
+        assertThat(half.getRoom()).isNotNull();
+        assertThat(timetable.getUnits().get(2).getTimeslot()).as("the teacher is unavailable on Monday 1").isNull();
+        assertThat(timetable.getUnits().get(3).getTimeslot()).as("a whole unit cannot be NUMERATOR").isNull();
+    }
+
     @Test
     void pinnedUnitsKeepTheirPlacementAndRoomlessPinsGetNoRoom() {
         Timetable timetable = factory.create(snapshot(List.of(
@@ -267,6 +293,7 @@ class TimetableProblemFactoryTest {
         private UUID preferredRoom;
         private UUID homeRoom;
         private ProblemSnapshot.PinnedSlot pinned;
+        private ProblemSnapshot.PinnedSlot initial;
 
         private UnitBuilder(String id) {
             this.id = id;
@@ -312,9 +339,14 @@ class TimetableProblemFactoryTest {
             return this;
         }
 
+        UnitBuilder initial(ProblemSnapshot.PinnedSlot initial) {
+            this.initial = initial;
+            return this;
+        }
+
         ProblemSnapshot.Unit build() {
             return new ProblemSnapshot.Unit(id, UUID.randomUUID(), group, subgroup, DISCIPLINE, teacher, weight,
-                    requiredRoomType, preferredRoom, homeRoom, pinned);
+                    requiredRoomType, preferredRoom, homeRoom, pinned, initial);
         }
     }
 }

@@ -62,7 +62,9 @@ public record ProblemSnapshot(
     /**
      * One weekly lesson to place. {@code unitId} is opaque and unique within the snapshot;
      * {@code subgroup} 0 means the whole group. Nullable: teacherId, requiredRoomType,
-     * preferredRoomId, homeRoomId, pinned.
+     * preferredRoomId, homeRoomId, pinned, initial. {@code initial} (additive) is where the unit
+     * stands in the base version: a warm start the solver may change, so a feasible base is never
+     * returned worse; {@code pinned} fixes the unit.
      */
     public record Unit(
             String unitId,
@@ -75,13 +77,22 @@ public record ProblemSnapshot(
             RoomType requiredRoomType,
             UUID preferredRoomId,
             UUID homeRoomId,
-            PinnedSlot pinned) {
+            PinnedSlot pinned,
+            PinnedSlot initial) {
 
         public Unit {
             Objects.requireNonNull(unitId, "unitId");
             Objects.requireNonNull(groupId, "groupId");
             Objects.requireNonNull(disciplineId, "disciplineId");
             Objects.requireNonNull(weight, "weight");
+        }
+
+        /** A unit without a warm start. */
+        public Unit(String unitId, UUID loadItemId, UUID groupId, int subgroup, UUID disciplineId, UUID teacherId,
+                    UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
+                    PinnedSlot pinned) {
+            this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
+                    preferredRoomId, homeRoomId, pinned, null);
         }
     }
 

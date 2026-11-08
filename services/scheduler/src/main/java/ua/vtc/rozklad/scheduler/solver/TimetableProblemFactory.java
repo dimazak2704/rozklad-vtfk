@@ -38,8 +38,11 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * wider range is used and the matching hard constraint reports the violation.
  *
  * <p>Rooms are warm-started: every unit starts in its desired room (preferred room of the load
- * item, else the group's home room) or in the least used compatible room. The construction
- * heuristic then chooses timeslots and parities; local search may still change any room.
+ * item, else the group's home room) or in the least used compatible room. A unit with an
+ * {@code initial} placement (where it stands in the base version) starts there when the slot,
+ * parity and room are inside its value ranges; the construction heuristic places only the units
+ * that have no start, so a feasible base is improved, never rebuilt worse. Local search may still
+ * change anything that is not pinned.
  */
 public final class TimetableProblemFactory {
 
@@ -117,8 +120,24 @@ public final class TimetableProblemFactory {
         Room desired = preferred != null && roomRange.contains(preferred) ? preferred
                 : home != null && roomRange.contains(home) ? home : null;
         List<Parity> parities = unit.weight() == UnitWeight.HALF ? HALF_PARITIES : WHOLE_PARITIES;
-        return UnitPlan.free(unit, group, teacher, timeslotRange(unit, group, teacher, timeslots), roomRange,
-                parities, desired);
+        List<Timeslot> slotRange = timeslotRange(unit, group, teacher, timeslots);
+        UnitPlan plan = UnitPlan.free(unit, group, teacher, slotRange, roomRange, parities, desired);
+        ProblemSnapshot.PinnedSlot start = unit.initial();
+        if (start == null) {
+            return plan;
+        }
+        // те саме значення, що в діапазоні (ходи розв'язувача працюють з екземплярами діапазону)
+        Timeslot slot = slotRange.stream()
+                .filter(candidate -> candidate.equals(new Timeslot(start.weekday(), start.pair())))
+                .findFirst().orElse(null);
+        if (slot == null || !parities.contains(start.parity())) {
+            log.debug("Unit {}: base placement {}/{} {} is outside its value range, placed from scratch",
+                    unit.unitId(), start.weekday(), start.pair(), start.parity());
+            return plan;
+        }
+        Room startRoom = start.roomId() == null ? null : rooms.get(start.roomId());
+        return plan.startingAt(slot, start.parity(), startRoom != null && roomRange.contains(startRoom) ? startRoom
+                : null);
     }
 
     private static List<Timeslot> timeslotRange(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
@@ -163,18 +182,30 @@ public final class TimetableProblemFactory {
     /** Everything known about a unit before its initial room is chosen. */
     private record UnitPlan(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
                             List<Timeslot> timeslotRange, List<Room> roomRange, List<Parity> parityRange,
-                            Room desiredRoom, Timeslot pinnedSlot, Room pinnedRoom, Parity pinnedParity) {
+                            Room desiredRoom, Timeslot pinnedSlot, Room pinnedRoom, Parity pinnedParity,
+                            Timeslot startSlot, Parity startParity, Room startRoom) {
 
         static UnitPlan pinned(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher, Timeslot slot,
                                Room room, Parity parity) {
-            return new UnitPlan(unit, group, teacher, List.of(), List.of(), List.of(), null, slot, room, parity);
+            return new UnitPlan(unit, group, teacher, List.of(), List.of(), List.of(), null, slot, room, parity,
+                    null, null, null);
         }
 
         static UnitPlan free(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
                              List<Timeslot> timeslotRange, List<Room> roomRange, List<Parity> parityRange,
                              Room desiredRoom) {
             return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom,
-                    null, null, null);
+                    null, null, null, null, null, null);
+        }
+
+        /** Starts at the base placement; {@code room} {@code null} keeps the usual initial room. */
+        UnitPlan startingAt(Timeslot slot, Parity parity, Room room) {
+            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom, null, null,
+                    null, slot, parity, room);
+        }
+
+        boolean hasStart() {
+            return startSlot != null;
         }
 
         boolean isPinned() {
@@ -200,11 +231,14 @@ public final class TimetableProblemFactory {
             if (isPinned()) {
                 return builder.pinnedAt(pinnedSlot, pinnedRoom, pinnedParity).build();
             }
-            return builder.timeslotRange(timeslotRange)
+            builder.timeslotRange(timeslotRange)
                     .roomRange(roomRange)
                     .parityRange(parityRange)
-                    .initialRoom(initialRoom)
-                    .build();
+                    .initialRoom(initialRoom);
+            if (hasStart()) {
+                builder.placedAt(startSlot, initialRoom, startParity);
+            }
+            return builder.build();
         }
     }
 
@@ -225,7 +259,8 @@ public final class TimetableProblemFactory {
             Room[] initialRooms = new Room[plans.size()];
             for (int i = 0; i < plans.size(); i++) {
                 UnitPlan plan = plans.get(i);
-                Room fixed = plan.isPinned() ? plan.pinnedRoom() : plan.desiredRoom();
+                Room fixed = plan.isPinned() ? plan.pinnedRoom()
+                        : plan.startRoom() != null ? plan.startRoom() : plan.desiredRoom();
                 if (fixed != null) {
                     load.merge(fixed, plan.occurrences(), Integer::sum);
                     initialRooms[i] = fixed;

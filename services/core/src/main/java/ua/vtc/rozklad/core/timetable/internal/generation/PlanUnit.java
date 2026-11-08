@@ -44,9 +44,10 @@ public record PlanUnit(
                 lessonId);
     }
 
-    ProblemSnapshot.Unit toSnapshotUnit(UUID homeRoomId) {
+    /** @param initial where the unit stands in the base version (a warm start), or {@code null} */
+    ProblemSnapshot.Unit toSnapshotUnit(UUID homeRoomId, ProblemSnapshot.PinnedSlot initial) {
         return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight,
-                requiredRoomType, preferredRoomId, homeRoomId, pinned);
+                requiredRoomType, preferredRoomId, homeRoomId, pinned, pinned == null ? initial : null);
     }
 
     /**

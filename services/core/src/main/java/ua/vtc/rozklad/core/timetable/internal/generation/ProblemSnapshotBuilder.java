@@ -47,6 +47,9 @@ import ua.vtc.rozklad.core.timetable.internal.support.PreferenceReadRepository;
  * outside the scope as pinned units (the solver works around them), teachers with UNAVAILABLE /
  * UNWANTED slots, rooms, groups with subgroups and shift windows. Unknown sizes and capacities are
  * sent as 0 and {@link Integer#MAX_VALUE}, so the solver never invents a capacity violation.
+ * Free units of the scope start where the matching base lesson stands ({@code initial}): the
+ * solver improves the base instead of rebuilding a nearly full shift from scratch, and its best
+ * result is never worse than a feasible base.
  */
 @Component
 class ProblemSnapshotBuilder {
@@ -116,6 +119,12 @@ class ProblemSnapshotBuilder {
                 .map(lesson -> pinnedUnit(lesson, requiredTypeOf(lesson, requiredTypes)))
                 .forEach(units::add);
 
+        Map<String, ProblemSnapshot.PinnedSlot> starts = warmStarts(units, baseLessons.stream()
+                .filter(lesson -> scopeIds.contains(lesson.getGroupId()) && !lesson.isPinned()
+                        && lesson.getStreamId() == null)
+                .sorted(LESSON_ORDER)
+                .toList());
+
         Set<UUID> outsideGroupIds = units.stream().map(PlanUnit::groupId)
                 .filter(id -> !groupsById.containsKey(id)).collect(Collectors.toSet());
         groups.findAllById(outsideGroupIds).forEach(group -> groupsById.put(group.getId(), group));
@@ -128,7 +137,8 @@ class ProblemSnapshotBuilder {
                 units.stream().map(unit -> {
                     UUID homeRoom = homeRoom(groupsById.get(unit.groupId()));
                     PlanUnit.StreamSlot stream = unit.streamSlot();
-                    return stream == null || streamLeaders.add(stream) ? unit.toSnapshotUnit(homeRoom)
+                    return stream == null || streamLeaders.add(stream)
+                            ? unit.toSnapshotUnit(homeRoom, starts.get(unit.unitId()))
                             : unit.toStreamFollowerUnit(homeRoom);
                 }).toList());
         return new Built(snapshot, new GenerationPlan(units));
@@ -173,6 +183,19 @@ class ProblemSnapshotBuilder {
             }
         }
         return result;
+    }
+
+    /** Each free unit starts at the slot of one matching base lesson of its group (each lesson used once). */
+    static Map<String, ProblemSnapshot.PinnedSlot> warmStarts(List<PlanUnit> units, List<TemplateLesson> baseLessons) {
+        Map<String, ProblemSnapshot.PinnedSlot> starts = new HashMap<>();
+        for (TemplateLesson lesson : baseLessons) {
+            UnitWeight weight = weightOf(lesson);
+            units.stream()
+                    .filter(unit -> !starts.containsKey(unit.unitId()) && matches(unit, lesson, weight))
+                    .findFirst()
+                    .ifPresent(unit -> starts.put(unit.unitId(), slotOf(lesson)));
+        }
+        return starts;
     }
 
     private static boolean matches(PlanUnit unit, TemplateLesson lesson, UnitWeight weight) {
