@@ -61,12 +61,15 @@ public record PlanUnit(
                 homeRoomId, slot);
     }
 
-    /** Key of one stream occurrence: the stream and its pinned slot. */
+    /**
+     * Key of one stream occurrence: the stream and its pinned weekday and pair. Parity is not part of
+     * it: groups of one stream may meet in different weeks (e.g. one NUM, one BOTH), and the teacher
+     * still takes them in one slot.
+     */
     StreamSlot streamSlot() {
-        return streamId == null || pinned == null ? null
-                : new StreamSlot(streamId, pinned.weekday(), pinned.pair(), pinned.parity());
+        return streamId == null || pinned == null ? null : new StreamSlot(streamId, pinned.weekday(), pinned.pair());
     }
 
-    record StreamSlot(UUID streamId, int weekday, int pair, ua.vtc.rozklad.contracts.Parity parity) {
+    record StreamSlot(UUID streamId, int weekday, int pair) {
     }
 }

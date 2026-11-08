@@ -212,7 +212,8 @@ class GenerationFlowIT {
     void streamOfTheBaseVersionStaysTogether() {
         UUID stream = UUID.randomUUID();
         transaction.executeWithoutResult(status -> {
-            TemplateLesson secondGroup = new TemplateLesson(baseVersionId, 4, 2, Parity.BOTH, data.group4ki2.getId(), 0,
+            // інша група потоку ходить лише в чисельник: той самий слот і викладач
+            TemplateLesson secondGroup = new TemplateLesson(baseVersionId, 4, 2, Parity.NUMERATOR, data.group4ki2.getId(), 0,
                     data.km.getId());
             secondGroup.setTeacherId(data.nepyivoda.getId());
             secondGroup.setRoomId(data.lab6.getId());
