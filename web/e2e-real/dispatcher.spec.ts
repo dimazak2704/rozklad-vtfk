@@ -83,10 +83,13 @@ test('відсутність → Непийводу призначено → в�
   await expect(form).toBeHidden();
   await expect(page.getByRole('heading', { level: 3, name: 'Кренцін' })).toBeVisible();
 
-  // 2. Пара відкрита, серед варіантів «інша дисципліна» — пара Непийводи
+  // 2. Пара відкрита, серед варіантів «інша дисципліна групи» — пара Непийводи: вибір, потім дія
   const decision = page.getByRole('region', { name: 'Рішення щодо пари' });
-  await page.getByRole('tab', { name: /Інша дисципліна/ }).click();
-  await page.getByRole('button', { name: `Призначити: ${option.title}` }).click();
+  const options = page.getByRole('list', { name: 'Варіанти' });
+  const more = page.getByRole('button', { name: /^Ще варіанти/ });
+  if (await more.isVisible()) await more.click();
+  await options.locator('button[aria-pressed]').filter({ hasText: option.title }).click();
+  await options.getByRole('button', { name: 'Призначити', exact: true }).click();
   await expect(decision.getByText('Підтверджено', { exact: true }).first()).toBeVisible();
 
   // 3. Непийвода у своєму кабінеті бачить нову заміну і відповідає «Добре»

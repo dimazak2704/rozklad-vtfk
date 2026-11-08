@@ -62,6 +62,8 @@ export function decisionSummary(change: ChangeDto): string {
       return `${change.swapFromPair !== null ? `Переставлено ${change.swapFromPair} пару` : 'Перестановка'}: ${partiesText(change.new)}`;
     case 'REPLACE_DISCIPLINE':
       return partiesText(change.new);
+    case 'MERGE_SUBGROUPS':
+      return `${change.new.teacher?.shortName ?? "Викладач"}: обидві підгрупи`;
     case 'ADDITIONAL':
       return `Додаткова пара: ${partiesText(change.new)}`;
     case 'ROOM_CHANGE':

@@ -143,6 +143,10 @@
         </dependency>
     </dependencies>
 
+    <properties>
+        <test.excludedGroups>eval</test.excludedGroups>
+    </properties>
+
     <build>
         <directory>${build.dir}</directory>
         <finalName>app</finalName>
@@ -155,6 +159,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- офлайн-оцінка рекомендацій (@Tag("eval")) не входить у звичайну збірку:
+                         -Dtest.excludedGroups= -Dtest=OptionRankerReplayTest -->
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
                     <systemPropertyVariables>
                         <modulith.docs.dir>${project.build.directory}/spring-modulith-docs</modulith.docs.dir>
                     </systemPropertyVariables>

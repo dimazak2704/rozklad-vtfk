@@ -63,7 +63,9 @@ export function makeChange(
   input: ChangeInput,
   options: { at: Date; actor: string; mode: ApprovalMode; timeoutMinutes: number },
 ): ChangeRecord {
-  const swap = input.kind === 'SWAP' ? (input.swapLesson ?? null) : null;
+  // перестановка й обʼєднання беруть викладача й дисципліну з іншого заняття (переставленого чи іншої підгрупи)
+  const swap = input.kind === 'SWAP' || input.kind === 'MERGE_SUBGROUPS' ? (input.swapLesson ?? null) : null;
+  const merge = input.kind === 'MERGE_SUBGROUPS';
   const newTeacher = swap ? (swap.teacher ?? null) : (input.newTeacher ?? null);
   const status: ChangeStatus = needsConfirmation(input.kind, newTeacher, options.mode) ? 'PENDING_CONFIRMATION' : 'CONFIRMED';
   const lesson = input.lesson;
@@ -89,8 +91,8 @@ export function makeChange(
         : {
             discipline: swap ? swap.discipline : (input.newDiscipline ?? lesson?.discipline ?? null),
             teacher: newTeacher,
-            // переставлена пара йде в аудиторію звільненої пари: та вже вільна
-            room: input.newRoom ?? lesson?.room ?? null,
+            // переставлена пара йде в аудиторію звільненої пари; обʼєднана — до викладача іншої підгрупи
+            room: input.newRoom ?? (merge ? (swap?.room ?? null) : (lesson?.room ?? null)),
           },
     reasonCode: input.reasonCode,
     reasonText,
@@ -105,7 +107,7 @@ export function makeChange(
     approvalMode: options.mode === 'NOTIFY' ? changeApprovalMode(input.kind, newTeacher, options.mode) : options.mode,
     originalLessonId: lesson?.id ?? null,
     swapLessonId: swap?.id ?? null,
-    swapFromPair: swap?.pair ?? null,
+    swapFromPair: merge ? null : (swap?.pair ?? null),
     printedReason: printedReason(input.kind, input.reasonCode, reasonText),
     responseComment: null,
     remindedAt: null,

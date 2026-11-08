@@ -20,9 +20,11 @@ import type {
   AbsenceDto,
   AbsenceRequest,
   AffectedLessonDto,
+  BatchChangesRequest,
   ChangeDto,
   CreateChangeRequest,
   DashboardDto,
+  DayPlanDto,
   DocumentFormat,
   IsoDate,
   LessonOptionsDto,
@@ -32,6 +34,7 @@ import type {
   OrderStatus,
   OrderSummaryDto,
   Page,
+  TeacherAvailabilityDto,
   UpdateChangeRequest,
   Uuid,
 } from './types';
@@ -41,7 +44,7 @@ import type {
 /** Зачеплена пара з датою (відсутність може тривати кілька днів, а LessonView дати не має). */
 export type AffectedLesson = AffectedLessonDto;
 
-/** Варіант рішення (адитивні `date`/`pair` має лише відпрацювання ADDITIONAL). */
+/** Варіант рішення в порядку сервера (рекомендатор v2, CONTRACTS §2). */
 export type ChangeOption = OptionDto;
 export type LessonOptions = LessonOptionsDto;
 
@@ -128,6 +131,30 @@ export function useLessonOptions(lessonId: Uuid | null) {
     queryKey: qk.admin.lessonOptions(lessonId ?? 'none'),
     queryFn: ({ signal }) => api.get<LessonOptions>(`/admin/lessons/${lessonId ?? ''}/options`, undefined, { signal }),
     enabled: lessonId !== null,
+  });
+}
+
+/**
+ * Стан кожного активного викладача на парі заняття (ручне «Інший викладач…»): вільні першими, далі за абеткою.
+ * `q` фільтрує на сервері за прізвищем.
+ */
+export function useTeacherAvailability(lessonId: Uuid | null, q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: qk.admin.teacherAvailability(lessonId ?? 'none', query),
+    queryFn: ({ signal }) =>
+      api.get<TeacherAvailabilityDto[]>(`/admin/lessons/${lessonId ?? ''}/teacher-availability`, query ? { q: query } : undefined, { signal }),
+    enabled: lessonId !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Пропозиція на всі невирішені пари відсутності за дату. Нічого не створює. */
+export function useDayPlan(absenceId: Uuid | null, date: IsoDate) {
+  return useQuery({
+    queryKey: qk.admin.dayPlan(absenceId ?? 'none', date),
+    queryFn: ({ signal }) => api.get<DayPlanDto>(`/admin/absences/${absenceId ?? ''}/plan`, { date }, { signal }),
+    enabled: absenceId !== null,
   });
 }
 
@@ -219,6 +246,15 @@ export function useCreateChange() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateChangeRequest) => api.post<ChangeDto>('/admin/changes', body),
+    onSuccess: () => invalidateDaily(queryClient),
+  });
+}
+
+/** Кілька рішень однією транзакцією: будь-яка 400/409 — не створено нічого (`changes[i].поле`). */
+export function useCreateChangesBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BatchChangesRequest) => api.post<ChangeDto[]>('/admin/changes/batch', body),
     onSuccess: () => invalidateDaily(queryClient),
   });
 }

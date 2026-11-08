@@ -45,7 +45,8 @@ export function RadioGroup<V extends string = string>({
         </span>
       ) : null}
       <RadixRadioGroup.Root
-        value={value ?? undefined}
+        // '' — нічого не обрано, але компонент лишається керованим (без попередження React при першому виборі)
+        value={value ?? ''}
         onValueChange={(next) => onValueChange(next as V)}
         orientation={orientation}
         disabled={disabled}

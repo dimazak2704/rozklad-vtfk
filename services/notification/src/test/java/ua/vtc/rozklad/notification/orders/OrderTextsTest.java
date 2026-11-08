@@ -39,6 +39,10 @@ class OrderTextsTest {
                 null, null, null), false)).isEqualTo("↩️ <b>4 пара</b>: за розкладом");
         assertThat(OrderTexts.describe(Order35.row("1РТ1", "1", OrderRowType.ROOM_CHANGE, null, null, null, null,
                 null, "401", null), false)).isEqualTo("🚪 <b>1 пара</b>: аудиторія <b>401</b>");
+        assertThat(OrderTexts.describe(Order35.row("1КІ2", "2", OrderRowType.MERGE_SUBGROUPS, "Ін.мова",
+                "Крисак Л. (п.)", "Відп.", "Ін.мова", "Можаровська", "12", null), false))
+                .isEqualTo("👥 <b>2 пара</b>: обидві підгрупи разом — <b>Ін.мова · Можаровська</b>, ауд. 12"
+                        + "\n      замість <s>Ін.мова · Крисак Л. (п.)</s> · викладач відсутній");
     }
 
     @Test

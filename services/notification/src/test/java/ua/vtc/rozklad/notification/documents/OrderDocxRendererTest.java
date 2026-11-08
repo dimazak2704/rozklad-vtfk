@@ -148,6 +148,17 @@ class OrderDocxRendererTest {
     }
 
     @Test
+    void mergedSubgroupsSpanTheReplacementColumns() throws IOException {
+        OrderPayload order = withRows(List.of(Order35.row("1КІ2", "2", OrderRowType.MERGE_SUBGROUPS, "Ін.мова",
+                "Крисак Л. (п.)", "Відп.", "Ін.мова", "Можаровська", "12", null)), List.of());
+        try (XWPFDocument document = render(order)) {
+            XWPFTable table = document.getTables().getFirst();
+            assertThat(cellTexts(table.getRow(1))).containsExactly("1КІ2", "2", "Ін.мова", "Крисак Л. (п.)", "Відп.",
+                    "Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи", "12");
+        }
+    }
+
+    @Test
     void amendmentNamesItsMainOrderAndDraftHasNoNumber() throws IOException {
         OrderPayload amendment = new OrderPayload(UUID.randomUUID(), 36, Order35.DATE, OrderKind.AMENDMENT,
                 Order35.ORDER_ID, OrderStatus.PUBLISHED, null, null, "ЗНАМЕННИК", List.of(), List.of(), List.of(),

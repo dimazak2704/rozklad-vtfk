@@ -1,9 +1,21 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { onlineManager } from '@tanstack/react-query';
-import { http } from 'msw';
+import { http, HttpResponse } from 'msw';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OrderDto, SettingsDto } from '@/api/types';
+import type { ChangeOption } from '@/api/admin-daily';
+import type { AbsenceDto, LessonOptionsDto, OrderDto, SettingsDto, TeacherRef } from '@/api/types';
+import {
+  DAY_PLAN,
+  FIXTURE_LESSON,
+  FIXTURE_TEACHERS,
+  OPTIONS_EMPTY_POOL,
+  OPTIONS_EQUAL,
+  OPTIONS_PAST,
+  OPTIONS_RECOMMENDED,
+  TEACHER_AVAILABILITY,
+} from '@/mocks/fixtures/lesson-options';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { resetMockStores } from '@/mocks/store';
@@ -12,7 +24,8 @@ import ChangesPage from '@/pages/admin/ChangesPage';
 import DashboardPage from '@/pages/admin/DashboardPage';
 import OrdersPage from '@/pages/admin/OrdersPage';
 import { renderWithProviders } from '@/test/render';
-import { OptionRow } from './changes/OptionRow';
+import { OptionsPanel } from './changes/OptionsPanel';
+import { optionKey, type LessonEntry, type PlanChoice } from './model';
 import { OrderSheet } from './orders/OrderSheet';
 import { SettingsForm } from './settings/SettingsForm';
 
@@ -87,43 +100,209 @@ describe('аркуш розпорядження', () => {
   });
 });
 
-describe('варіант заміни', () => {
-  it('показує оцінку, причини, «Чому?» з правилами і обирається кнопкою', async () => {
-    const user = userEvent.setup();
-    const onPick = vi.fn();
-    renderWithProviders(
-      <ol>
-        <OptionRow
-          option={{
-            kind: 'REPLACE_TEACHER',
-            score: 67,
-            title: 'Михальчук',
-            reasons: ['Веде цю дисципліну', 'Закриває вікно між 2 і 5 парою', 'Вже має 5 пар цього дня', 'Ще одна'],
-            warnings: ['Буде 6 пар цього дня'],
-            teacher: { id: 't', shortName: 'Михальчук', displayName: 'Михальчук' },
-            discipline: null,
-            room: null,
-            swapLesson: null,
-            date: null,
-            pair: null,
-          }}
-          rank={1}
-          best
-          busy={false}
-          disabled={false}
-          onPick={onPick}
-        />
-      </ol>,
+describe('варіанти рішення (рекомендатор v2)', () => {
+  const absence: AbsenceDto = {
+    id: 'a-krysak',
+    teacher: FIXTURE_TEACHERS.krysak,
+    dateFrom: '2026-11-09',
+    dateTo: '2026-11-11',
+    pairs: null,
+    reasonCategory: 'SICK_LEAVE',
+    comment: null,
+    source: 'BOT',
+    status: 'ACTIVE',
+    createdBy: 'telegram-bot',
+    createdAt: '2026-11-09T04:00:00Z',
+    version: 0,
+  };
+  const entry: LessonEntry = {
+    absence,
+    item: { date: '2026-11-09', lesson: FIXTURE_LESSON, decision: null, asSubstitute: false },
+    state: 'uncovered',
+    change: null,
+  };
+
+  function serve(options: LessonOptionsDto) {
+    server.use(
+      http.get(apiPath('/admin/lessons/:id/options'), () => HttpResponse.json(options)),
+      http.get(apiPath('/admin/lessons/:id/teacher-availability'), () => HttpResponse.json(TEACHER_AVAILABILITY)),
+      http.get(apiPath('/admin/absences/:id/plan'), () => HttpResponse.json(DAY_PLAN)),
     );
-    expect(screen.getByRole('meter', { name: 'Придатність: Михальчук' })).toHaveAttribute('aria-valuenow', '67');
-    expect(screen.getByText('ще 2')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Чому Михальчук/ }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Буде 6 пар цього дня')).toBeInTheDocument();
-    expect(within(dialog).getByText('+50 — веде цю дисципліну')).toBeInTheDocument();
-    await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: 'Обрати: Михальчук' }));
-    expect(onPick).toHaveBeenCalledOnce();
+  }
+
+  /** Стан вибору, як у ChangesPage: панель лише повідомляє, що обрано. */
+  function Harness(props: {
+    onAct: (option: ChangeOption) => void;
+    onAssignManual?: (teacher: TeacherRef) => Promise<boolean>;
+    onApplyPlan?: (choices: PlanChoice[]) => Promise<boolean>;
+    approvalMode?: string;
+    planCount?: number;
+  }) {
+    const [selectedKey, setSelectedKey] = useState<string | null>(null);
+    const [expanded, setExpanded] = useState(false);
+    return (
+      <OptionsPanel
+        entry={entry}
+        approvalMode={props.approvalMode ?? 'CONFIRM'}
+        reasonCode="ABSENT"
+        reasonText=""
+        onReasonCodeChange={() => undefined}
+        onReasonTextChange={() => undefined}
+        selectedKey={selectedKey}
+        onSelect={(option) => setSelectedKey(optionKey(option))}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        pickingKey={null}
+        onAct={props.onAct}
+        onAssignManual={props.onAssignManual ?? (() => Promise.resolve(true))}
+        planCount={props.planCount ?? 1}
+        onApplyPlan={props.onApplyPlan ?? (() => Promise.resolve(true))}
+        decisionBusy={null}
+        onResend={() => undefined}
+        onConfirm={() => undefined}
+        onCancelDecision={() => undefined}
+      />
+    );
+  }
+
+  const rows = () => within(screen.getByRole('list', { name: 'Варіанти' })).getAllByRole('button', { pressed: false }).concat(
+    within(screen.getByRole('list', { name: 'Варіанти' })).queryAllByRole('button', { pressed: true }),
+  );
+
+  it('один список у порядку сервера: три рядки, «Ще варіанти», без балів і номерів', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<Harness onAct={vi.fn()} />);
+    const list = await screen.findByRole('list', { name: 'Варіанти' });
+    const titles = within(list).getAllByRole('button', { pressed: false }).map((b) => b.textContent);
+    expect(titles).toHaveLength(3);
+    expect(titles[0]).toContain('НДКС — Непийвода');
+    expect(titles[1]).toContain('Обʼєднати підгрупи — Можаровська веде обидві');
+    // жодних вкладок, шкал і «N зі 100»
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('meter')).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/зі 100|\b(100|90|80)\b/);
+
+    const more = screen.getByRole('button', { name: 'Ще варіанти (2)' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    await user.click(more);
+    expect(rows()).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Менше варіантів' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('«Рекомендовано» лише на першому й лише коли сервер так позначив; відмови й аудиторія', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    renderWithProviders(<Harness onAct={vi.fn()} />);
+    const list = await screen.findByRole('list', { name: 'Варіанти' });
+    expect(within(list).getAllByText('Рекомендовано')).toHaveLength(1);
+    expect(within(list).getAllByRole('button', { pressed: false })[0]).toHaveTextContent('Рекомендовано');
+    expect(screen.queryByText('Рівноцінні варіанти — оберіть самі')).not.toBeInTheDocument();
+    expect(screen.getByText('Відмовились: Ганза (14:05)')).toBeInTheDocument();
+    // аудиторія, куди прийде група: своя аудиторія замінника й аудиторія іншої підгрупи
+    expect(within(list).getByText('ауд. 6')).toBeInTheDocument();
+    expect(within(list).getByText('ауд. 12')).toBeInTheDocument();
+    // «⚠» видно словом і кольором; у рядку не більше трьох чипів
+    const caution = within(list).getAllByRole('listitem').find((li) => li.textContent.includes('Прогр. — Стець'));
+    expect(caution).toBeDefined();
+    expect(within(caution as HTMLElement).getByText(/Вже має пару з цією групою/)).toBeInTheDocument();
+    expect(within(caution as HTMLElement).getAllByText('Увага:')).toHaveLength(2);
+  });
+
+  it('без рекомендації — «Рівноцінні варіанти»; минула пара — свій заголовок; порожній пул — пояснення', async () => {
+    serve(OPTIONS_EQUAL);
+    const { unmount } = renderWithProviders(<Harness onAct={vi.fn()} />);
+    expect(await screen.findByText('Рівноцінні варіанти — оберіть самі')).toBeInTheDocument();
+    expect(screen.queryByText('Рекомендовано')).not.toBeInTheDocument();
+    unmount();
+
+    serve(OPTIONS_PAST);
+    const past = renderWithProviders(<Harness onAct={vi.fn()} />);
+    expect(await screen.findByText('Заняття вже минуло — позначте, що було насправді.')).toBeInTheDocument();
+    past.unmount();
+
+    serve(OPTIONS_EMPTY_POOL);
+    renderWithProviders(<Harness onAct={vi.fn()} />);
+    expect(await screen.findByText('Вільних викладачів групи на цю пару немає. Можна переставити або скасувати пару.')).toBeInTheDocument();
+  });
+
+  it('вибір ≠ дія: клік лише обирає, дія — кнопка в обраному рядку або Enter', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    const user = userEvent.setup();
+    const onAct = vi.fn();
+    renderWithProviders(<Harness onAct={onAct} />);
+    const list = await screen.findByRole('list', { name: 'Варіанти' });
+    expect(within(list).queryByRole('button', { name: 'Надіслати прохання' })).not.toBeInTheDocument();
+
+    const merge = within(list).getByRole('button', { name: /Обʼєднати підгрупи — Можаровська веде обидві/, pressed: false });
+    await user.click(merge);
+    expect(onAct).not.toHaveBeenCalled();
+    expect(merge).toHaveAttribute('aria-pressed', 'true');
+    const send = within(list).getByRole('button', { name: 'Надіслати прохання' });
+    await user.click(send);
+    expect(onAct).toHaveBeenCalledOnce();
+    expect(onAct.mock.calls[0]?.[0]).toMatchObject({ kind: 'MERGE_SUBGROUPS' });
+
+    // Enter на обраному рядку — та сама дія; на необраному — лише вибір
+    const first = within(list).getByRole('button', { name: /НДКС — Непийвода/, pressed: false });
+    first.focus();
+    await user.keyboard('{Enter}');
+    expect(first).toHaveAttribute('aria-pressed', 'true');
+    expect(onAct).toHaveBeenCalledOnce();
+    await user.keyboard('{Enter}');
+    expect(onAct).toHaveBeenCalledTimes(2);
+    expect(onAct.mock.calls[1]?.[0]).toMatchObject({ kind: 'REPLACE_DISCIPLINE', teacher: { shortName: 'Непийвода' } });
+  });
+
+  it('напис дії за режимом: не CONFIRM — «Призначити», скасування — «Застосувати»', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    const user = userEvent.setup();
+    renderWithProviders(<Harness onAct={vi.fn()} approvalMode="NOTIFY" />);
+    const list = await screen.findByRole('list', { name: 'Варіанти' });
+    await user.click(within(list).getByRole('button', { name: /НДКС — Непийвода/, pressed: false }));
+    expect(within(list).getByRole('button', { name: 'Призначити' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ще варіанти (2)' }));
+    await user.click(within(list).getByRole('button', { name: /Пари не буде/, pressed: false }));
+    expect(within(list).getByRole('button', { name: 'Застосувати' })).toBeInTheDocument();
+  });
+
+  it('«Інший викладач…»: стани словами, обрати можна лише вільного, примітка про виняток', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    const user = userEvent.setup();
+    const onAssignManual = vi.fn(() => Promise.resolve(true));
+    renderWithProviders(<Harness onAct={vi.fn()} onAssignManual={onAssignManual} />);
+    await user.click(await screen.findByRole('button', { name: 'Інший викладач…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Інший викладач на 3 пару' });
+    expect(within(dialog).getByText('Ручне призначення — лише як виняток.')).toBeInTheDocument();
+    expect(within(dialog).getByPlaceholderText('Прізвище')).toBeInTheDocument();
+    expect(within(dialog).getByText('Зайнятий(а): 3 пара, 4КІ2')).toBeInTheDocument();
+    expect(within(dialog).getByText('Відмовився(лась) о 14:05')).toBeInTheDocument();
+    expect(within(dialog).getByText('Недоступний(а) в цей час')).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'Стець' })).toBeDisabled();
+    const send = within(dialog).getByRole('button', { name: 'Надіслати прохання' });
+    expect(send).toBeDisabled();
+    await user.click(within(dialog).getByRole('radio', { name: 'Прокопчук' }));
+    await user.click(send);
+    expect(onAssignManual).toHaveBeenCalledWith(expect.objectContaining({ shortName: 'Прокопчук' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('план дня: пропозиція не надсилається сама, підсумок прізвищами, «Надіслати всі (n)»', async () => {
+    serve(OPTIONS_RECOMMENDED);
+    const user = userEvent.setup();
+    const onApplyPlan = vi.fn((_choices: PlanChoice[]) => Promise.resolve(true));
+    renderWithProviders(<Harness onAct={vi.fn()} onApplyPlan={onApplyPlan} planCount={2} />);
+    await user.click(await screen.findByRole('button', { name: 'Запропонувати план дня' }));
+    const dialog = await screen.findByRole('dialog', { name: 'План дня: Крисак Л.' });
+    expect(await within(dialog).findByText('2 прохання в Telegram: Непийвода, Балунь')).toBeInTheDocument();
+    expect(onApplyPlan).not.toHaveBeenCalled();
+
+    // другу пару лишаємо без рішення — у підсумку й на кнопці одна
+    await user.click(within(dialog).getByRole('combobox', { name: 'Рішення для 4 пари, 1М' }));
+    await user.click(await screen.findByRole('option', { name: 'Не вирішувати зараз' }));
+    expect(within(dialog).getByText('1 прохання в Telegram: Непийвода')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Надіслати всі (1)' }));
+    expect(onApplyPlan).toHaveBeenCalledOnce();
+    expect(onApplyPlan.mock.calls[0]?.[0].map((c) => c.option.title)).toEqual(['НДКС — Непийвода']);
   });
 });
 
@@ -194,18 +373,24 @@ describe('екран «Заміни»', () => {
   // сторінка робить десяток запитів до мок-API: під навантаженням (кілька прогонів поруч) даємо запас часу
   const WAIT = { timeout: 8_000 };
 
-  it('показує відсутніх і пари, обирає варіант клавішею «1», J/K перемикають пару', { timeout: 30_000 }, async () => {
+  it('показує відсутніх і пари; «1» лише обирає варіант, Enter виконує; J/K перемикають пару', { timeout: 30_000 }, async () => {
     const user = userEvent.setup();
     renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
 
     // демо-ранок: три відсутні, пара 3Ф (Крисак) — перша без рішення, її варіанти вже відкриті
     expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л.В.' }, WAIT)).toBeInTheDocument();
     // мок працює в режимі CONFIRM: вибір викладача лише просить його згоди
-    const firstPick = await screen.findAllByRole('button', { name: /^Надіслати прохання:/ }, WAIT);
-    expect(firstPick.length).toBeGreaterThan(0);
+    const list = await screen.findByRole('list', { name: 'Варіанти' }, WAIT);
     expect(screen.getByRole('button', { name: /3Ф/, current: true })).toBeInTheDocument();
 
+    // «1» лише обирає перший варіант і ставить на нього фокус — запиту ще немає
     await user.keyboard('1');
+    const chosen = await within(list).findByRole('button', { pressed: true }, WAIT);
+    await waitFor(() => expect(chosen).toHaveFocus(), WAIT);
+    expect(within(screen.getByRole('button', { name: /3Ф/ })).queryByText('Чекає відповіді')).not.toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: 'Надіслати прохання' })).toBeInTheDocument();
+
+    await user.keyboard('{Enter}');
     await waitFor(() => {
       const row = screen.getByRole('button', { name: /3Ф/ });
       expect(within(row).getByText('Чекає відповіді')).toBeInTheDocument();

@@ -7,12 +7,12 @@
 import { DEFAULT_CONFIRM_TIMEOUT_MINUTES } from '@/api/settings-limits';
 import type { AbsenceDto, AbsenceReasonCategory, AbsenceSource, IsoDate, LessonView, TeacherDto } from '@/api/types';
 import { compareIsoDates, shiftStudyDay } from '@/lib/date';
-import { ACTIVE_SEMESTER, teacherNamed, teacherRef } from '../../fixtures';
+import { ACTIVE_SEMESTER, TEACHERS, teacherNamed, teacherRef } from '../../fixtures';
 import { mockId } from '../../ids';
 import { makeChange, transition } from './factory';
 import { demoMorningDate, templateLessons } from './lessons';
 import { order35 } from './orders';
-import { affectedLessons, optionsFor } from './rules';
+import { affectedLessons, isTeacherFree, optionsFor } from './rules';
 import { ADMIN_ACTOR, emptyWorld, type ChangeRecord, type World } from './world';
 
 /** Налаштування, з якими «створювалися» демо-рішення (як типові в settings.ts). */
@@ -65,22 +65,32 @@ function addAbsence(
   return absence;
 }
 
-/** Рішення з найкращим кандидатом-викладачем (як обрав би диспетчер). */
+/**
+ * Рішення, яке обрав би диспетчер: перший варіант з викладачем (інша дисципліна групи чи обʼєднання підгруп),
+ * а коли в групи нікого вільного — ручний виняток: перший вільний викладач тієї самої дисципліни.
+ */
 function replaceWithTop(world: World, date: IsoDate, lesson: LessonView, absence: AbsenceDto, key: string, at: Date): ChangeRecord | null {
-  const top = optionsFor(world, date, lesson).find((option) => option.kind === 'REPLACE_TEACHER');
-  if (!top?.teacher) return null;
+  const top = optionsFor(world, date, lesson).options.find(
+    (option) => (option.kind === 'REPLACE_DISCIPLINE' || option.kind === 'MERGE_SUBGROUPS') && option.teacher,
+  );
+  const manual = top ? null : TEACHERS.find((t) => t.active && t.id !== lesson.teacher?.id && isTeacherFree(world, t.id, date, lesson.pair));
+  if (!top?.teacher && !manual) return null;
+  const kind = top?.kind ?? 'REPLACE_TEACHER';
   const change = makeChange(
     {
       id: mockId('change', `demo:${key}:${date}`),
-      kind: 'REPLACE_TEACHER',
+      kind,
       date,
       group: lesson.group,
       subgroup: lesson.subgroup,
       pairFrom: lesson.pair,
       pairTo: null,
       lesson,
-      newTeacher: top.teacher,
-      reasonCode: absence.reasonCategory === 'BUSINESS_TRIP' ? 'BUSINESS_TRIP' : 'ABSENT',
+      swapLesson: top?.swapLesson ?? null,
+      newTeacher: top?.teacher ?? (manual ? teacherRef(manual) : null),
+      newDiscipline: kind === 'REPLACE_DISCIPLINE' ? (top?.discipline ?? null) : null,
+      newRoom: top?.suggestedRoom ?? null,
+      reasonCode: kind === 'REPLACE_DISCIPLINE' ? 'MUTUAL' : absence.reasonCategory === 'BUSINESS_TRIP' ? 'BUSINESS_TRIP' : 'ABSENT',
       absenceId: absence.id,
     },
     { at, actor: ADMIN_ACTOR, ...SEED_APPROVAL },

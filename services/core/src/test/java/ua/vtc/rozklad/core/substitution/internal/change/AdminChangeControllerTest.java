@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -54,6 +55,14 @@ class AdminChangeControllerTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private RecommendationLog recommendations;
+
+    @BeforeEach
+    void nothingWasShown() {
+        given(recommendations.before(any())).willReturn(RecommendationLog.Shown.NONE);
+    }
 
     @Test
     void anonymousCallIsUnauthorized() throws Exception {
@@ -95,6 +104,34 @@ class AdminChangeControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("newTeacherId"))
                 .andExpect(jsonPath("$.errors[0].message").value("Вкажіть викладача, який проведе пару"));
+        verifyNoInteractions(commands);
+    }
+
+    @Test
+    void aBatchIs201WithEveryChangeAndLogsEachDecision() throws Exception {
+        given(commands.createAll(any(), eq("admin"))).willReturn(List.of(ChangeDtos.sample(ChangeStatus.CONFIRMED),
+                ChangeDtos.sample(ChangeStatus.PENDING_CONFIRMATION)));
+
+        mockMvc.perform(post("/api/admin/changes/batch").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"changes\":[" + REPLACE_TEACHER + "," + REPLACE_TEACHER + "]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[1].status").value("PENDING_CONFIRMATION"));
+        verify(recommendations, org.mockito.Mockito.times(2)).after(any(), any(), any());
+    }
+
+    @Test
+    void aBatchValidatesEveryItemAndIsNeverEmpty() throws Exception {
+        mockMvc.perform(post("/api/admin/changes/batch").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"changes\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("changes"));
+        mockMvc.perform(post("/api/admin/changes/batch").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"changes\":[" + REPLACE_TEACHER.replace("\"newTeacherId\"", "\"x\"") + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("changes[0].newTeacherId"));
         verifyNoInteractions(commands);
     }
 

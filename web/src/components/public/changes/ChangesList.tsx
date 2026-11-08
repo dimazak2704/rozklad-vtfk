@@ -16,6 +16,7 @@ const ROW_BADGE: Record<OrderRowType, { label: string; tone: BadgeTone }> = {
   FINISHED: { label: 'Вичитано', tone: 'neutral' },
   AS_SCHEDULED: { label: 'За розкладом', tone: 'neutral' },
   ROOM_CHANGE: { label: 'Інша аудиторія', tone: 'room' },
+  MERGE_SUBGROUPS: { label: 'Обʼєднання підгруп', tone: 'change' },
 };
 
 const CHANGE_FORMS = ['зміна', 'зміни', 'змін'] as const;
@@ -47,7 +48,7 @@ function Before({ item }: { item: ChangeView }) {
   if (item.rowType === 'ADDITIONAL') return <span className="font-semibold text-add">Додатково</span>;
   const text = joined(item.from.discipline, item.from.teacher);
   if (!text) return <span className="text-muted">—</span>;
-  const struck = item.rowType === 'REPLACEMENT' || item.rowType === 'CANCELLATION';
+  const struck = item.rowType === 'REPLACEMENT' || item.rowType === 'CANCELLATION' || item.rowType === 'MERGE_SUBGROUPS';
   return (
     <span className={cn(struck ? 'text-secondary line-through decoration-[var(--text-decoration-color-muted)]' : 'text-primary')}>
       {struck ? <span className="sr-only">Було: </span> : null}
@@ -66,6 +67,8 @@ function After({ item }: { item: ChangeView }) {
     <span className="font-semibold text-primary">
       <span className="sr-only">Стало: </span>
       {text}
+      {/* обидві підгрупи разом у викладача іншої підгрупи — так, як друкує розпорядження */}
+      {item.rowType === 'MERGE_SUBGROUPS' ? <span className="font-normal text-secondary"> — обидві підгрупи</span> : null}
     </span>
   );
 }

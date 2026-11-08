@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useCancelAbsence, useDailyLiveSync, useDashboard, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
+import { useSettings } from '@/api/settings';
 import type { AbsenceDto, ReasonCode, Uuid } from '@/api/types';
 import { AbsenceDialog } from '@/components/admin-daily/changes/AbsenceDialog';
 import { AbsenceList } from '@/components/admin-daily/changes/AbsenceList';
@@ -14,20 +15,20 @@ import { useChangesWorkspace, type Period } from '@/components/admin-daily/chang
 import { useDecisionActions } from '@/components/admin-daily/changes/useDecisionActions';
 import { absencePeriod } from '@/components/admin-daily/format';
 import {
-  defaultReason,
   filterFromParam,
   isOpen,
   isObjection,
-  isOptionTab,
   lessonButtonId,
   LESSON_FILTERS,
   LESSON_STATE,
   matchesFilter,
-  optionsByKind,
+  optionButtonId,
+  optionKey,
+  reasonForOption,
   teacherAnswered,
+  VISIBLE_OPTIONS,
   type LessonEntry,
   type LessonFilter,
-  type OptionTab,
 } from '@/components/admin-daily/model';
 import { useContainerWidth } from '@/components/admin-daily/useContainerWidth';
 import {
@@ -73,8 +74,6 @@ export default function ChangesPage() {
   const filter = filterFromParam(params.get('filter'));
   const absenceParam = params.get('absence');
   const lessonParam = params.get('lesson');
-  const tabParam = params.get('tab');
-  const tab: OptionTab = isOptionTab(tabParam) ? tabParam : 'REPLACE_TEACHER';
 
   const updateParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -100,13 +99,19 @@ export default function ChangesPage() {
   const workspace = useChangesWorkspace(date, period);
   const actions = useDecisionActions();
   const cancelAbsence = useCancelAbsence();
+  // напис дії залежить від режиму погодження; будь-який інший за CONFIRM — «Призначити»
+  const approvalMode = useSettings().data?.approvalMode ?? null;
   const [dialog, setDialog] = useState<{ open: boolean; absence: AbsenceDto | null; seq: number }>({ open: false, absence: null, seq: 0 });
   const [pulsing, setPulsing] = useState<ReadonlySet<Uuid>>(new Set());
-  const [reason, setReason] = useState<{ lessonId: string | null; code: ReasonCode; text: string }>({
+  // причину диспетчер може змінити сам (code), інакше вона йде за видом обраного варіанта
+  const [reason, setReason] = useState<{ lessonId: string | null; code: ReasonCode | null; text: string }>({
     lessonId: null,
-    code: 'ABSENT',
+    code: null,
     text: '',
   });
+  // обраний варіант і розгорнутий список — лише для своєї пари: інша пара починає з чистого вибору
+  const [selection, setSelection] = useState<{ lessonId: Uuid; key: string } | null>(null);
+  const [expandedFor, setExpandedFor] = useState<Uuid | null>(null);
 
   const selectedAbsenceId = workspace.absences.some((a) => a.id === absenceParam) ? absenceParam : null;
   const visible = useMemo(
@@ -134,13 +139,21 @@ export default function ChangesPage() {
   const fallback = panes > 1 ? (visible.find((e) => LESSON_STATE[e.state].needsAction) ?? visible[0] ?? null) : null;
   const selected = explicit ?? fallback;
   const selectedKey = selected ? lessonButtonId(selected) : null;
-  const reasonForSelected =
-    selected && reason.lessonId === selected.item.lesson.id
-      ? reason
-      : { lessonId: selected?.item.lesson.id ?? null, code: defaultReason(selected?.absence.reasonCategory), text: '' };
-
+  const selectedLessonId = selected?.item.lesson.id ?? null;
   const options = useLessonOptions(selected && isOpen(selected.state) ? selected.item.lesson.id : null);
-  const grouped = useMemo(() => optionsByKind(options.data?.options ?? []), [options.data]);
+  const optionList = useMemo(() => options.data?.options ?? [], [options.data]);
+  const selectedOptionKey = selection && selection.lessonId === selectedLessonId ? selection.key : null;
+  const selectedOption = selectedOptionKey ? (optionList.find((o) => optionKey(o) === selectedOptionKey) ?? null) : null;
+  const ownReason = selected && reason.lessonId === selectedLessonId ? reason : null;
+  const reasonForSelected = {
+    code: ownReason?.code ?? reasonForOption(selectedOption?.kind, selected?.absence.reasonCategory),
+    text: ownReason?.text ?? '',
+  };
+  const expanded = expandedFor !== null && expandedFor === selectedLessonId;
+  // план дня: скільки пар цього відсутнього того ж дня ще чекають рішення
+  const planCount = selected
+    ? workspace.entries.filter((e) => e.absence.id === selected.absence.id && e.item.date === selected.item.date && isOpen(e.state)).length
+    : 0;
 
   const selectEntry = useCallback(
     (entry: LessonEntry, focus = false) => {
@@ -163,17 +176,33 @@ export default function ChangesPage() {
     if (next) selectEntry(next, true);
   };
 
-  const pick = (option: ChangeOption) => {
+  const selectOption = (option: ChangeOption) => {
     if (!selected) return;
-    // закріплюємо пару в адресі: після вибору диспетчер бачить її рішення і строк, а не наступну пару
-    updateParams({ lesson: selected.item.lesson.id });
-    void actions.pick(option, selected, { code: reasonForSelected.code, text: reasonForSelected.text });
+    setSelection({ lessonId: selected.item.lesson.id, key: optionKey(option) });
   };
 
-  const pickNumber = (n: number) => {
-    if (!selected || !isOpen(selected.state) || actions.pickingKey) return;
-    const option = grouped.get(tab)?.[n - 1];
-    if (option) pick(option);
+  const act = (option: ChangeOption) => {
+    if (!selected) return;
+    // закріплюємо пару в адресі: після рішення диспетчер бачить його й строк, а не наступну пару
+    updateParams({ lesson: selected.item.lesson.id });
+    void actions.pick(option, selected, reasonForSelected).then((done) => {
+      if (done) setSelection(null);
+    });
+  };
+
+  /** 1–9 лише обирають варіант (і переводять на нього фокус); дія — Enter чи кнопка в рядку. */
+  const selectNumber = (n: number) => {
+    if (!selected || !isOpen(selected.state)) return;
+    const option = optionList[n - 1];
+    if (!option) return;
+    if (n > VISIBLE_OPTIONS) setExpandedFor(selected.item.lesson.id);
+    selectOption(option);
+    const id = optionButtonId(selected.item.lesson.id, n - 1);
+    requestAnimationFrame(() => {
+      const button = document.getElementById(id);
+      button?.focus({ preventScroll: true });
+      button?.scrollIntoView({ block: 'nearest' });
+    });
   };
 
   const openDialog = (absence: AbsenceDto | null) => setDialog((prev) => ({ open: true, absence, seq: prev.seq + 1 }));
@@ -184,8 +213,8 @@ export default function ChangesPage() {
     { keys: 'k', handler: () => move(-1), description: 'Попередня пара', group: 'Заміни' },
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
       keys: String(n),
-      handler: () => pickNumber(n),
-      description: n === 1 ? 'Обрати варіант 1–9 у відкритій вкладці' : undefined,
+      handler: () => selectNumber(n),
+      description: n === 1 ? 'Обрати варіант 1–9 (дія — Enter на обраному)' : undefined,
       group: 'Заміни',
     })),
     { keys: 'n', handler: openNewAbsence, description: 'Нова відсутність', group: 'Заміни' },
@@ -261,14 +290,23 @@ export default function ChangesPage() {
   const optionsPanel = selected ? (
     <OptionsPanel
       entry={selected}
-      tab={tab}
-      onTabChange={(next) => updateParams({ tab: next })}
+      approvalMode={approvalMode}
       reasonCode={reasonForSelected.code}
       reasonText={reasonForSelected.text}
       onReasonCodeChange={(code) => setReason({ lessonId: selected.item.lesson.id, code, text: reasonForSelected.text })}
       onReasonTextChange={(text) => setReason({ lessonId: selected.item.lesson.id, code: reasonForSelected.code, text })}
+      selectedKey={selectedOptionKey}
+      onSelect={selectOption}
+      expanded={expanded}
+      onExpandedChange={(next) => setExpandedFor(next ? selected.item.lesson.id : null)}
       pickingKey={actions.pickingKey}
-      onPick={pick}
+      onAct={act}
+      onAssignManual={(teacher) => {
+        updateParams({ lesson: selected.item.lesson.id });
+        return actions.assignManual(teacher, selected, reasonForSelected);
+      }}
+      planCount={planCount}
+      onApplyPlan={(choices) => actions.applyPlan(choices, selected.absence, selected.item.date)}
       decisionBusy={actions.busy}
       onResend={() => selected.change && actions.resend(selected.change)}
       onConfirm={() => selected.change && actions.confirm(selected.change)}
@@ -405,7 +443,7 @@ export default function ChangesPage() {
               <EmptyState
                 size="sm"
                 title="Оберіть пару"
-                description="Ліворуч — пари відсутніх. Оберіть одну, щоб побачити кандидатів, інші дисципліни, перестановки й скасування."
+                description="Ліворуч — пари відсутніх. Оберіть одну, щоб побачити варіанти: інша дисципліна групи, перестановка чи скасування."
               />
             )}
           </aside>

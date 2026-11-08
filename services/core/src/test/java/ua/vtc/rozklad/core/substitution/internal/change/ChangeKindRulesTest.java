@@ -44,6 +44,15 @@ class ChangeKindRulesTest {
     }
 
     @Test
+    void mergeNeedsTheOtherSubgroupsLessonAndTakesTeacherAndDisciplineFromIt() {
+        assertThat(ChangeKindRules.check(request(ChangeKind.MERGE_SUBGROUPS, 2, null, ID, ID, ID, null, null,
+                ReasonCode.ABSENT))).extracting(Violation::field)
+                .containsExactlyInAnyOrder("swapLessonId", "newTeacherId", "newDisciplineId");
+        assertThat(ChangeKindRules.check(request(ChangeKind.MERGE_SUBGROUPS, 2, null, ID, null, null, null, ID,
+                ReasonCode.ABSENT))).isEmpty();
+    }
+
+    @Test
     void roomChangeNeedsANewRoomOnly() {
         assertThat(ChangeKindRules.check(request(ChangeKind.ROOM_CHANGE, 3, null, ID, null, null, null, null,
                 ReasonCode.OTHER))).extracting(Violation::field).containsExactly("newRoomId");

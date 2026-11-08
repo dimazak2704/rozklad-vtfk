@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
@@ -71,7 +72,9 @@ public class ChangeNotifications {
         events.publishEvent(new SubstitutionConfirmationRequested(EventEnvelope.create(clock), change.getId(),
                 teacher.getId(), change.getDate(), change.getPairFrom(),
                 first == null ? null : first.startsAt(), last == null ? null : last.endsAt(),
-                catalog.group(change.getGroupId()).getCode(), change.getSubgroupNumber(),
+                // після об'єднання підгруп викладач веде всю групу
+                catalog.group(change.getGroupId()).getCode(),
+                change.getKind() == ChangeKind.MERGE_SUBGROUPS ? 0 : change.getSubgroupNumber(),
                 discipline == null ? null : discipline.getName(),
                 original == null ? null : original.getShortName(),
                 room == null ? null : room.getName(), change.getConfirmDeadline(), mode, change.getKind(),

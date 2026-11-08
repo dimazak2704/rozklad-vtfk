@@ -59,14 +59,18 @@ test.describe('щоденна робота диспетчера', () => {
     await expect(form).toBeHidden();
     await expect(page.getByRole('heading', { level: 3, name: 'Погосян' })).toBeVisible();
 
-    // 2. Перша пара відсутнього вже відкрита — обираємо найкращого кандидата
+    // 2. Перша пара відсутнього вже відкрита — обираємо викладача іншої дисципліни групи; вибір ще нічого не надсилає
     const lesson = page.getByRole('button', { name: /2ВЕ/ }).filter({ hasText: 'Потрібне рішення' });
     await expect(lesson).toHaveAttribute('aria-current', 'true');
-    // мок працює в режимі CONFIRM: вибір викладача надсилає йому прохання
-    const best = page.getByRole('button', { name: /^Надіслати прохання:/ }).first();
-    const candidate = ((await best.getAttribute('aria-label')) ?? '').replace('Надіслати прохання: ', '');
+    // мок працює в режимі CONFIRM: дія над обраним варіантом надсилає викладачу прохання
+    const options = page.getByRole('list', { name: 'Варіанти' });
+    const best = options.locator('button[aria-pressed]').filter({ hasText: 'Інша дисципліна групи' }).first();
+    const title = (await best.locator('span.text-ui').textContent()) ?? '';
+    const candidate = title.split(' — ')[1] ?? '';
     expect(candidate).not.toBe('');
     await best.click();
+    await expect(lesson).toContainText('Потрібне рішення');
+    await options.getByRole('button', { name: 'Надіслати прохання' }).click();
 
     // 3. Заміна чекає підтвердження в Telegram
     const decision = page.getByRole('region', { name: 'Рішення щодо пари' });
@@ -86,7 +90,8 @@ test.describe('щоденна робота диспетчера', () => {
     const row = sheet.getByRole('row').filter({ hasText: '2ВЕ' });
     // у розпорядженні — коротке імʼя, як друкує коледж («Мельник», а не «Мельник Н.М.»)
     await expect(row).toContainText(candidate.split(' ')[0] ?? candidate);
-    await expect(row).toContainText('Відп.');
+    // інша дисципліна групи друкується як взаємна заміна
+    await expect(row).toContainText('Зв.зам.');
 
     // 6. Публікація: діалог показує номер, після публікації — №36 у документі й файли
     await page.getByRole('button', { name: 'Опублікувати №36' }).click();

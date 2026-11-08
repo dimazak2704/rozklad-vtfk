@@ -561,9 +561,11 @@ function changedLesson(lesson: LessonView, change: ChangeDto): LessonView {
     case 'ADDITIONAL':
       // додаткова пара не замінює наявну — її додає additionalLesson
       return lesson;
+    // обʼєднання мок спрощує: пара підгрупи стає «заміною» з викладачем іншої підгрупи (core — одна пара групи)
     case 'REPLACE_TEACHER':
     case 'REPLACE_DISCIPLINE':
     case 'SWAP':
+    case 'MERGE_SUBGROUPS':
       return {
         ...lesson,
         id: mockId('lesson', `change:${change.id}`),
@@ -638,6 +640,7 @@ const ROW_TYPE: Record<ChangeDto['kind'], OrderRowType> = {
   ROOM_CHANGE: 'ROOM_CHANGE',
   BLOCK: 'BLOCK',
   DISCIPLINE_FINISHED: 'FINISHED',
+  MERGE_SUBGROUPS: 'MERGE_SUBGROUPS',
 };
 
 /** Рядок у форматі розпорядження: прізвища з ініціалом («Крисак Л.»), короткі назви дисциплін. */

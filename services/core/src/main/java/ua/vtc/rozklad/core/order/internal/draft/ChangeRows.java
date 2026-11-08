@@ -61,17 +61,17 @@ public class ChangeRows {
         Map<UUID, Discipline> disciplinesById = byId(disciplines.findAllById(ids(changes.stream()
                 .flatMap(change -> Stream.of(change.getOrigDisciplineId(), change.getNewDisciplineId())))),
                 Discipline::getId);
-        Map<UUID, Room> roomsById = byId(rooms.findAllById(ids(changes.stream()
-                .flatMap(change -> Stream.of(change.getOrigRoomId(), change.getNewRoomId())))), Room::getId);
         Map<UUID, Lesson> swapped = byId(lessons.findAllById(ids(changes.stream().map(Change::getSwapLessonId))),
                 Lesson::getId);
+        Map<UUID, Room> roomsById = byId(rooms.findAllById(ids(Stream.concat(changes.stream()
+                        .flatMap(change -> Stream.of(change.getOrigRoomId(), change.getNewRoomId())),
+                swapped.values().stream().map(Lesson::getRoomId)))), Room::getId);
 
         List<ChangeRow> rows = new ArrayList<>(changes.size());
         for (Change change : changes) {
             StudentGroup group = Objects.requireNonNull(groupsById.get(change.getGroupId()), "group");
-            UUID roomId = change.getKind() == ChangeKind.CANCEL ? null
-                    : change.getNewRoomId() != null ? change.getNewRoomId() : change.getOrigRoomId();
             Lesson moved = change.getSwapLessonId() == null ? null : swapped.get(change.getSwapLessonId());
+            UUID roomId = roomOf(change, moved);
             rows.add(new ChangeRow(
                     change.getId(),
                     change.getKind(),
@@ -90,6 +90,20 @@ public class ChangeRows {
                     change.getKind() == ChangeKind.BLOCK ? pairsAsScheduled(change, changes) : List.of()));
         }
         return rows;
+    }
+
+    /** Room of the resulting lesson: none for a cancel, the partner's room for merged subgroups. */
+    private static UUID roomOf(Change change, Lesson moved) {
+        if (change.getKind() == ChangeKind.CANCEL) {
+            return null;
+        }
+        if (change.getNewRoomId() != null) {
+            return change.getNewRoomId();
+        }
+        if (change.getKind() == ChangeKind.MERGE_SUBGROUPS && moved != null) {
+            return moved.getRoomId();
+        }
+        return change.getOrigRoomId();
     }
 
     /** Other SCHEDULED pairs of the group that day that no change of the order touches. */

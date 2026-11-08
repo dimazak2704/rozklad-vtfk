@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -106,6 +107,7 @@ public class DatedSlotChecker {
         }
         String teacher = context.teacherName(lesson.teacherId());
         atSlot.stream()
+                .filter(other -> !context.teacherFreed(other))
                 .filter(other -> lesson.teacherId().equals(other.getTeacherId()) && !sameStream(lesson, other))
                 .forEach(other -> conflicts.add(hard(ConflictKind.TEACHER, lesson,
                         "%s уже має %d пару: група %s (%s)".formatted(teacher, lesson.pair(),
@@ -277,6 +279,7 @@ public class DatedSlotChecker {
         private final Map<LocalDate, List<Lesson>> lessonsByDate = new HashMap<>();
         private final Map<LocalDate, List<Change>> openChangesByDate = new HashMap<>();
         private final Map<UUID, Lesson> originalsOfOpenChanges = new HashMap<>();
+        private final Set<UUID> freedByOpenChanges = new HashSet<>();
         private final Map<UUID, Teacher> teachers = new HashMap<>();
         private final Map<UUID, StudentGroup> groups = new HashMap<>();
         private final Map<UUID, Room> rooms = new HashMap<>();
@@ -302,6 +305,13 @@ public class DatedSlotChecker {
                     .toList()
                     : List.of();
             openChangesByDate.put(date, open);
+            // заняття, яке інше відкрите рішення забирає (скасування, заміна, перестановка), не тримає
+            // свого викладача: він вільний для нового рішення; група й аудиторія лишаються зайняті
+            open.stream()
+                    .filter(change -> change.getKind() != ChangeKind.ROOM_CHANGE)
+                    .flatMap(change -> Stream.of(change.getOriginalLessonId(), change.getSwapLessonId()))
+                    .filter(Objects::nonNull)
+                    .forEach(freedByOpenChanges::add);
             lessons.findAllById(open.stream().map(Change::getOriginalLessonId).filter(Objects::nonNull).toList())
                     .forEach(lesson -> originalsOfOpenChanges.put(lesson.getId(), lesson));
             rememberCatalog(day.stream().map(Lesson::getTeacherId), day.stream().map(Lesson::getGroupId),
@@ -323,6 +333,11 @@ public class DatedSlotChecker {
 
         List<Lesson> lessonsAt(LocalDate date, int pair) {
             return lessonsByDate.get(date).stream().filter(lesson -> lesson.getPairNumber() == pair).toList();
+        }
+
+        /** The lesson's teacher is released by another open change (only when open changes count). */
+        boolean teacherFreed(Lesson lesson) {
+            return freedByOpenChanges.contains(lesson.getId());
         }
 
         List<Change> openChangesAt(LocalDate date, int pair) {

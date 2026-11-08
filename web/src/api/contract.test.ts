@@ -177,6 +177,33 @@ describe('контракт мок-API ↔ core', () => {
     await expectShape(first(options.options, 'варіанти'), path, 'OptionDto');
   });
 
+  it('рекомендатор v2: відмови, «Інший викладач…», план дня й пакет рішень', async () => {
+    const options = `${CORE}substitution/internal/options/`;
+    // демо-ранок: у відрядженого перший кандидат відмовився — його видно в `declined`
+    const absences = await api.get<AbsenceDto[]>('/admin/absences', { from: DAY, to: DAY });
+    const trip = absences.find((a) => a.reasonCategory === 'BUSINESS_TRIP');
+    if (!trip) throw new Error('У демо-ранку має бути відрядження');
+    const affected = await api.get<Array<{ lesson: { id: string } }>>(`/admin/absences/${trip.id}/affected`);
+    const lessonId = first(affected, 'пари відрядженого').lesson.id;
+    const withDecline = await api.get<{ declined: unknown[] }>(`/admin/lessons/${lessonId}/options`);
+    await expectShape(first(withDecline.declined, 'відмови'), `${options}OptionDto.java`, 'Declined');
+
+    const availability = await api.get<unknown[]>(`/admin/lessons/${lessonId}/teacher-availability`);
+    await expectShape(first(availability, 'стан викладачів'), `${options}TeacherAvailability.java`, 'Item');
+
+    const plan = await api.get<{ lessons: Array<{ lesson: unknown }> }>(`/admin/absences/${trip.id}/plan`, { date: DAY });
+    await expectShape(plan, `${options}DayPlanDto.java`, 'DayPlanDto');
+    await expectShape(first(plan.lessons, 'пари плану'), `${options}DayPlanDto.java`, 'PlannedLesson');
+
+    const lesson = (first(plan.lessons, 'пари плану') as { lesson: { id: string; pair: number; group: { id: string } } }).lesson;
+    const created = await api.post<ChangeDto[]>('/admin/changes/batch', {
+      changes: [{ kind: 'CANCEL', date: DAY, pairFrom: lesson.pair, groupId: lesson.group.id, originalLessonId: lesson.id, reasonCode: 'ABSENT' }],
+    });
+    await expectShape(first(created, 'пакет'), `${CORE}substitution/internal/change/ChangeDto.java`, 'ChangeDto');
+    const request = `${CORE}substitution/internal/change/BatchChangesRequest.java`;
+    expect((await javaRecord(request, 'BatchChangesRequest')).fields).toEqual(['changes']);
+  });
+
   it('публічні: meta, дзвінки, довідники, розклад, зміни', async () => {
     const calendar = `${CORE}calendar/internal/CalendarDtos.java`;
     const meta = await api.get<{ semester: unknown; nextStudyDay: unknown }>('/public/meta');

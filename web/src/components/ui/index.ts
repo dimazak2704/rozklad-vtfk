@@ -27,7 +27,6 @@ export { Plate } from './Plate';
 export { Popover, PopoverAnchor, PopoverClose, PopoverContent, PopoverTrigger } from './Popover';
 export { RadioGroup, type RadioOption } from './RadioGroup';
 export { RowActions, type RowAction } from './RowActions';
-export { ScoreBar } from './ScoreBar';
 export { SegmentedControl, type SegmentOption } from './SegmentedControl';
 export { Select, type SelectOption } from './Select';
 export { LoadingRegion, Skeleton, SkeletonText } from './Skeleton';

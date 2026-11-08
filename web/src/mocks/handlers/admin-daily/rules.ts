@@ -1,33 +1,13 @@
 /**
  * Правила DOMAIN §7 для мок-API: зачеплені пари, зайнятість викладачів і груп з урахуванням рішень,
- * варіанти для пари з оцінкою й причинами. Чисті функції над станом (World) — їх використовують і
- * обробники, і демо-сід, і тести.
+ * варіанти для пари у формі рекомендатора v2 (без балів). Чисті функції над станом (World) — їх
+ * використовують і обробники, і демо-сід, і тести.
  */
-import type { AbsenceDto, IsoDate, LessonView, OptionDto, TeacherDto, Uuid, Weekday } from '@/api/types';
-import { addDays, compareIsoDates, formatShortWeekdayDate, isoWeekday } from '@/lib/date';
-import { countLabel } from '@/lib/labels';
-import {
-  disciplinesOfTeacher,
-  findGroup,
-  findTeacher,
-  SHIFT_WINDOWS,
-  TEACHERS,
-  TEMPLATE_LESSONS,
-  teacherRef,
-} from '../../fixtures';
+import type { AbsenceDto, ChangeKind, DeclinedDto, IsoDate, LessonView, OptionBand, OptionDto, Uuid } from '@/api/types';
+import { compareIsoDates, todayInKyiv } from '@/lib/date';
+import { TEMPLATE_LESSONS } from '../../fixtures';
 import { studyDaysBetween, templateLessons } from './lessons';
 import { LIVE_STATUSES, type ChangeRecord, type World } from './world';
-
-/** Скільки кандидатів-викладачів повертати (DOMAIN §7: «Top 10»). */
-export const TOP_TEACHERS = 10;
-const TOP_DISCIPLINES = 5;
-const ADDITIONAL_SLOTS = 3;
-const ADDITIONAL_WINDOW_DAYS = 14;
-/** Більше пар на день — мʼяке попередження (DOMAIN §5: > 4 пар). */
-const MAX_COMFORT_PAIRS = 4;
-
-const PAIR_FORMS = ['пару', 'пари', 'пар'] as const;
-const SUBSTITUTION_FORMS = ['заміна', 'заміни', 'замін'] as const;
 
 // ───────────────────────── Рішення щодо пари ─────────────────────────
 
@@ -144,18 +124,6 @@ export function groupPairs(world: World, groupId: Uuid, date: IsoDate): number[]
   return [...pairs].sort((a, b) => a - b);
 }
 
-/** Заміни викладача за календарний місяць дати (штраф −8 за кожну, DOMAIN §7). */
-export function substitutionsInMonth(world: World, teacherId: Uuid, date: IsoDate): number {
-  const month = date.slice(0, 7);
-  let count = 0;
-  for (const change of world.changes.values()) {
-    if (change.new.teacher?.id !== teacherId || change.kind === 'CANCEL') continue;
-    if (change.date.slice(0, 7) !== month) continue;
-    if (change.status === 'PENDING_CONFIRMATION' || change.status === 'CONFIRMED' || change.status === 'APPLIED') count += 1;
-  }
-  return count;
-}
-
 // ───────────────────────── Зачеплені пари ─────────────────────────
 
 export interface AffectedItem {
@@ -178,125 +146,144 @@ export function affectedLessons(world: World, absence: AbsenceDto): AffectedItem
   return items.sort((a, b) => a.date.localeCompare(b.date) || a.lesson.pair - b.lesson.pair || a.lesson.subgroup - b.lesson.subgroup);
 }
 
-// ───────────────────────── Варіанти ─────────────────────────
+// ───────────────────────── Варіанти (рекомендатор v2, DOMAIN §7) ─────────────────────────
+//
+// Мок не відтворює вартості core (навантаження, відставання від плану, справедливість): лише форму відповіді
+// й зрозумілий порядок — смуга, вид, назва. Чипи — у формулюваннях core (OptionRanker), без балів.
 
-/** Варіант — рівно OptionDto core: усі поля є завжди (null, коли не стосуються), `date`/`pair` — лише у відпрацювання. */
+/** Варіант — рівно OptionDto core: усі поля є завжди (null, коли не стосуються). */
 export type MockOption = OptionDto;
 
-interface DayFit {
-  score: number;
-  reasons: string[];
-  warnings: string[];
+export interface MockLessonOptions {
+  options: MockOption[];
+  declined: DeclinedDto[];
+  past: boolean;
 }
 
-/** Як пара вписується в день викладача: вікно, вже має пари, перевантаження, заміни цього місяця. */
-function dayFit(world: World, teacherId: Uuid, date: IsoDate, pair: number): DayFit {
+const BAND_ORDER: Record<OptionBand, number> = { CLEAN: 0, EASY_CANCEL: 1, CAUTION: 2, LAST: 3 };
+const KIND_ORDER: Partial<Record<ChangeKind, number>> = { REPLACE_DISCIPLINE: 0, MERGE_SUBGROUPS: 1, SWAP: 2, CANCEL: 3 };
+const UK = new Intl.Collator('uk');
+
+type Draft = Omit<MockOption, 'score' | 'recommended'>;
+
+function draft(input: Partial<Draft> & Pick<Draft, 'kind' | 'title' | 'band'>): Draft {
+  return {
+    reasons: [],
+    warnings: [],
+    teacher: null,
+    discipline: null,
+    room: null,
+    swapLesson: null,
+    date: null,
+    pair: null,
+    suggestedRoom: null,
+    ...input,
+  };
+}
+
+/** Хто відмовився від запиту саме на цю пару (з історії змін): core показує їх і не пропонує знову. */
+export function declinedFor(world: World, lessonId: Uuid): DeclinedDto[] {
+  const declined: DeclinedDto[] = [];
+  for (const change of world.changes.values()) {
+    if (change.originalLessonId !== lessonId || !change.new.teacher) continue;
+    const entry = change.history.find((h) => h.to === 'DECLINED');
+    if (entry) declined.push({ teacher: change.new.teacher, at: entry.at });
+  }
+  return declined.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** «Сьогодні пар немає» / «Сьогодні має 2, 4 пари»; закрите вікно — окремою причиною. */
+function dayShape(world: World, teacherId: Uuid, date: IsoDate, pair: number): string[] {
   const pairs = [...teacherSlots(world, teacherId, date).keys()].sort((a, b) => a - b);
-  const reasons: string[] = [];
-  const warnings: string[] = [];
-  let score = 0;
+  if (pairs.length === 0) return ['Сьогодні пар немає'];
   const before = pairs.filter((p) => p < pair).at(-1);
   const after = pairs.find((p) => p > pair);
-  if (before !== undefined && after !== undefined) {
-    score += 15;
-    reasons.push(`Закриває вікно між ${before} і ${after} парою`);
-  }
-  if (pairs.length > 0) {
-    score += 10;
-    reasons.push(`Вже має ${countLabel(pairs.length, PAIR_FORMS)} цього дня`);
-  }
-  if (pairs.length + 1 > MAX_COMFORT_PAIRS) warnings.push(`Буде ${pairs.length + 1} пар цього дня`);
-  const subs = substitutionsInMonth(world, teacherId, date);
-  if (subs > 0) {
-    score -= Math.min(24, subs * 8);
-    warnings.push(`${countLabel(subs, SUBSTITUTION_FORMS)} цього місяця`);
-  }
-  return { score, reasons, warnings };
+  const reasons = before !== undefined && after !== undefined ? ['Закриває вікно в розкладі викладача'] : [];
+  reasons.push(`Сьогодні має ${pairs.join(', ')} ${pairs.length === 1 ? 'пару' : 'пари'}`);
+  return reasons;
 }
 
-const clampScore = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
-
-function sameCommission(a: TeacherDto | undefined, b: TeacherDto | undefined): boolean {
-  return Boolean(a?.cycleCommission && b?.cycleCommission && a.cycleCommission.id === b.cycleCommission.id);
+/** Аудиторія вільна на парі: у шаблоні дня її не займає інше заняття. */
+function roomFree(roomId: Uuid, date: IsoDate, pair: number, except: Uuid): boolean {
+  return !templateLessons(date).some((l) => l.pair === pair && l.room?.id === roomId && l.id !== except);
 }
 
-/** 1. Заміна викладача: вільні й присутні колеги, ранжовані за DOMAIN §7. */
-function replaceTeacherOptions(world: World, date: IsoDate, lesson: LessonView): MockOption[] {
-  const absentTeacher = lesson.teacher ? findTeacher(lesson.teacher.id) : undefined;
-  const ranked = TEACHERS.filter((t) => t.active && t.id !== lesson.teacher?.id && isTeacherFree(world, t.id, date, lesson.pair))
-    .map((teacher) => {
-      const reasons: string[] = [];
-      let score = 0;
-      if (disciplinesOfTeacher(teacher.id).has(lesson.discipline.id)) {
-        score += 50;
-        reasons.push('Веде цю дисципліну');
-      }
-      if (sameCommission(teacher, absentTeacher)) {
-        score += 20;
-        reasons.push('Та сама циклова комісія');
-      }
-      const fit = dayFit(world, teacher.id, date, lesson.pair);
-      return {
-        teacher,
-        subs: substitutionsInMonth(world, teacher.id, date),
-        option: {
-          kind: 'REPLACE_TEACHER' as const,
-          score: clampScore(score + fit.score),
-          title: teacher.shortName,
-          reasons: [...reasons, ...fit.reasons],
-          teacher: teacherRef(teacher),
-          discipline: lesson.discipline,
-          room: lesson.room ?? null,
-          swapLesson: null,
-          warnings: fit.warnings,
-          date: null,
-          pair: null,
-        },
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.option.score - a.option.score || a.subs - b.subs || a.teacher.shortName.localeCompare(b.teacher.shortName, 'uk'),
-    );
-  return ranked.slice(0, TOP_TEACHERS).map((entry) => entry.option);
-}
-
-/** 2. Інша дисципліна групи, викладач якої вільний (DOMAIN §7). Відставання від плану тут невідоме. */
-function replaceDisciplineOptions(world: World, date: IsoDate, lesson: LessonView): MockOption[] {
-  const seen = new Set<string>();
-  const options: MockOption[] = [];
+/** 1. Інша дисципліна тієї самої групи й складу: її викладач вільний — один варіант на викладача. */
+function poolOptions(world: World, date: IsoDate, lesson: LessonView, declined: ReadonlySet<Uuid>): Draft[] {
+  const byTeacher = new Map<Uuid, Array<(typeof TEMPLATE_LESSONS)[number]>>();
   for (const template of TEMPLATE_LESSONS) {
-    if (template.group.id !== lesson.group.id || template.subgroup !== lesson.subgroup) continue;
-    if (template.discipline.id === lesson.discipline.id || !template.teacher) continue;
-    if (template.teacher.id === lesson.teacher?.id) continue;
-    const key = `${template.discipline.id}|${template.teacher.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (!isTeacherFree(world, template.teacher.id, date, lesson.pair)) continue;
-    const fit = dayFit(world, template.teacher.id, date, lesson.pair);
-    options.push({
-      kind: 'REPLACE_DISCIPLINE',
-      score: clampScore(40 + fit.score),
-      title: `${template.discipline.shortName} — ${template.teacher.shortName}`,
-      reasons: ['Дисципліна групи за розкладом', ...fit.reasons],
-      teacher: template.teacher,
-      discipline: template.discipline,
-      room: lesson.room ?? null,
-      swapLesson: null,
-      warnings: fit.warnings,
-      date: null,
-      pair: null,
-    });
+    if (template.group.id !== lesson.group.id || template.subgroup !== lesson.subgroup || !template.teacher) continue;
+    if (template.discipline.id === lesson.discipline.id || template.teacher.id === lesson.teacher?.id) continue;
+    const list = byTeacher.get(template.teacher.id) ?? [];
+    if (!list.some((l) => l.discipline.id === template.discipline.id)) list.push(template);
+    byTeacher.set(template.teacher.id, list);
   }
-  return options.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, 'uk')).slice(0, TOP_DISCIPLINES);
+  const options: Draft[] = [];
+  for (const [teacherId, items] of byTeacher) {
+    if (declined.has(teacherId) || !isTeacherFree(world, teacherId, date, lesson.pair)) continue;
+    const [first, ...others] = [...items].sort((a, b) => UK.compare(a.discipline.shortName, b.discipline.shortName));
+    if (!first?.teacher) continue;
+    const withGroup = [...teacherSlots(world, teacherId, date).values()]
+      .map((slot) => slot.pair)
+      .filter((pair) => templateLessons(date).some((l) => l.pair === pair && l.group.id === lesson.group.id && l.teacher?.id === teacherId));
+    const warnings = withGroup.length > 0 ? [`Вже має пару з цією групою (${withGroup[0]} пара) — краще перестановка`] : [];
+    const reasons = dayShape(world, teacherId, date, lesson.pair);
+    if (others.length > 0) reasons.push(`Також веде: ${others.map((o) => o.discipline.shortName).join(', ')}`);
+    const ownRoom = first.room && roomFree(first.room.id, date, lesson.pair, lesson.id) ? first.room : null;
+    options.push(
+      draft({
+        kind: 'REPLACE_DISCIPLINE',
+        title: `${first.discipline.shortName} — ${first.teacher.shortName}`,
+        band: warnings.length > 0 ? 'CAUTION' : 'CLEAN',
+        reasons,
+        warnings,
+        teacher: first.teacher,
+        discipline: first.discipline,
+        room: lesson.room ?? null,
+        suggestedRoom: ownRoom ?? lesson.room ?? null,
+      }),
+    );
+  }
+  return options;
 }
 
-/** 3. Перестановка: пізніша пара групи того ж дня, чий викладач вільний на цій парі. */
-function swapOptions(world: World, date: IsoDate, lesson: LessonView): MockOption[] {
+/** 2. Обʼєднати підгрупи: та сама дисципліна для іншої підгрупи на цій парі з присутнім викладачем. */
+function mergeOptions(world: World, date: IsoDate, lesson: LessonView): Draft[] {
+  if (lesson.subgroup === 0) return [];
+  return templateLessons(date)
+    .filter(
+      (other) =>
+        other.group.id === lesson.group.id &&
+        other.pair === lesson.pair &&
+        other.subgroup > 0 &&
+        other.subgroup !== lesson.subgroup &&
+        other.discipline.id === lesson.discipline.id &&
+        other.teacher != null &&
+        other.teacher.id !== lesson.teacher?.id &&
+        !isAbsent(world, other.teacher.id, date, lesson.pair) &&
+        !decisionFor(world, other.id),
+    )
+    .map((partner) =>
+      draft({
+        kind: 'MERGE_SUBGROUPS',
+        title: `Об'єднати підгрупи: ${lesson.discipline.shortName} — ${partner.teacher?.shortName ?? ''}`,
+        band: 'CLEAN',
+        reasons: [`${partner.teacher?.shortName ?? ''} уже веде ${lesson.discipline.shortName} для ${partner.subgroup} підгрупи — візьме обидві`],
+        teacher: partner.teacher ?? null,
+        discipline: partner.discipline,
+        room: partner.room ?? null,
+        swapLesson: partner,
+        suggestedRoom: partner.room ?? null,
+      }),
+    );
+}
+
+/** 3. Перестановка: пізніша пара групи того ж складу, чий викладач вільний на цій парі. */
+function swapOptions(world: World, date: IsoDate, lesson: LessonView): Draft[] {
   const groupDay = groupPairs(world, lesson.group.id, date);
   const lastPair = groupDay.at(-1);
   const sameScope = templateLessons(date).filter((l) => l.group.id === lesson.group.id && l.pair > lesson.pair);
-  const options: MockOption[] = [];
+  const options: Draft[] = [];
   for (const later of sameScope) {
     if (later.subgroup !== lesson.subgroup || !later.teacher || later.teacher.id === lesson.teacher?.id) continue;
     // на тій парі в групи має бути саме одне заняття того ж складу, інакше переставляти довелося б кілька
@@ -304,120 +291,61 @@ function swapOptions(world: World, date: IsoDate, lesson: LessonView): MockOptio
     if (decisionFor(world, later.id) || swappedAway(world, later.id)) continue;
     if (!isTeacherFree(world, later.teacher.id, date, lesson.pair)) continue;
     const isLast = later.pair === lastPair;
-    options.push({
-      kind: 'SWAP',
-      score: isLast ? 60 : 35,
-      title: `Переставити ${later.pair} пару на ${lesson.pair}`,
-      reasons: [
-        `${later.discipline.shortName} — ${later.teacher.shortName}: вільний на ${lesson.pair} парі`,
-        ...(isLast ? ['Група піде раніше'] : []),
-      ],
-      teacher: later.teacher,
-      discipline: later.discipline,
-      room: later.room ?? null,
-      swapLesson: later,
-      warnings: isLast ? [] : [`Утвориться вікно на ${later.pair} парі`],
-      date: null,
-      pair: null,
-    });
-  }
-  return options.sort((a, b) => b.score - a.score);
-}
-
-/** 4. Скасування: краще, коли пара перша чи остання в групи цього дня. */
-function cancelOption(world: World, date: IsoDate, lesson: LessonView): MockOption {
-  const others = groupPairs(world, lesson.group.id, date).filter((p) => p !== lesson.pair);
-  const reasons: string[] = [];
-  const warnings: string[] = [];
-  let score: number;
-  if (others.length === 0) {
-    score = 50;
-    reasons.push('Інших пар цього дня в групи немає');
-  } else if (lesson.pair < (others[0] ?? 0)) {
-    score = 55;
-    reasons.push('Перша пара: група прийде пізніше');
-  } else if (lesson.pair > (others.at(-1) ?? 0)) {
-    score = 55;
-    reasons.push('Остання пара: група піде раніше');
-  } else {
-    score = 20;
-    warnings.push('Утвориться вікно в розкладі групи');
-  }
-  if (lesson.subgroup > 0) reasons.push(`Лише для ${lesson.subgroup} підгрупи`);
-  return {
-    kind: 'CANCEL',
-    score,
-    title: 'Пари не буде',
-    reasons,
-    teacher: null,
-    discipline: lesson.discipline,
-    room: null,
-    swapLesson: null,
-    warnings,
-    date: null,
-    pair: null,
-  };
-}
-
-function shiftWindow(groupId: Uuid, weekday: Weekday) {
-  const group = findGroup(groupId);
-  return SHIFT_WINDOWS.find((w) => w.shift === (group?.shift ?? 1) && w.weekday === weekday);
-}
-
-/** 5. Відпрацювання: вільний слот групи й викладача протягом 14 днів, поруч з іншими парами групи. */
-function additionalOptions(world: World, date: IsoDate, lesson: LessonView): MockOption[] {
-  const teacherId = lesson.teacher?.id;
-  if (!teacherId) return [];
-  const options: MockOption[] = [];
-  for (const day of studyDaysBetween(addDays(date, 1), addDays(date, ADDITIONAL_WINDOW_DAYS))) {
-    const window = shiftWindow(lesson.group.id, isoWeekday(day) as Weekday);
-    const pairs = groupPairs(world, lesson.group.id, day);
-    const first = pairs[0];
-    const last = pairs.at(-1);
-    if (!window || first === undefined || last === undefined) continue;
-    const candidates: Array<{ pair: number; reason: string }> = [];
-    if (last + 1 <= window.lastPair) candidates.push({ pair: last + 1, reason: `Одразу після ${last} пари групи` });
-    if (first - 1 >= window.firstPair) candidates.push({ pair: first - 1, reason: `Перед ${first} парою групи` });
-    const slot = candidates.find((c) => isTeacherFree(world, teacherId, day, c.pair));
-    if (!slot) continue;
-    const teacherBusy = teacherSlots(world, teacherId, day).size > 0;
-    options.push({
-      kind: 'ADDITIONAL',
-      score: teacherBusy ? 35 : 30,
-      title: `Відпрацювання: ${formatShortWeekdayDate(day)}, ${slot.pair} пара`,
-      reasons: ['Група й викладач вільні', slot.reason, ...(teacherBusy ? ['Викладач і так буде в коледжі'] : [])],
-      teacher: lesson.teacher ?? null,
-      discipline: lesson.discipline,
-      room: lesson.room ?? null,
-      swapLesson: null,
-      warnings: [],
-      date: day,
-      pair: slot.pair,
-    });
-    if (options.length >= ADDITIONAL_SLOTS) break;
+    options.push(
+      draft({
+        kind: 'SWAP',
+        title: `Переставити ${later.pair} пару (${later.discipline.shortName}) на ${lesson.pair}`,
+        band: isLast ? 'CLEAN' : 'CAUTION',
+        reasons: isLast ? ['Група піде раніше'] : [],
+        warnings: isLast ? [] : [`У групи з'явиться вікно на ${later.pair} парі`],
+        teacher: later.teacher,
+        discipline: later.discipline,
+        room: later.room ?? null,
+        swapLesson: later,
+      }),
+    );
   }
   return options;
 }
 
-const KIND_ORDER: Record<OptionDto['kind'], number> = {
-  REPLACE_TEACHER: 0,
-  REPLACE_DISCIPLINE: 1,
-  SWAP: 2,
-  CANCEL: 3,
-  ADDITIONAL: 4,
-  ROOM_CHANGE: 5,
-  BLOCK: 6,
-  DISCIPLINE_FINISHED: 7,
-};
+/** 4. «Пари не буде»: легко, коли пара перша, остання чи єдина; посередині дня — вікно в групи. */
+function cancelOption(world: World, date: IsoDate, lesson: LessonView): Draft {
+  const others = groupPairs(world, lesson.group.id, date).filter((p) => p !== lesson.pair);
+  const reasons: string[] = [];
+  const warnings: string[] = [];
+  if (others.length === 0) reasons.push('Єдина пара групи цього дня');
+  else if (lesson.pair < (others[0] ?? 0)) reasons.push('Перша пара: група прийде пізніше');
+  else if (lesson.pair > (others.at(-1) ?? 0)) reasons.push('Остання пара: група піде раніше');
+  else warnings.push("У групи з'явиться вікно");
+  if (lesson.online) reasons.push('Заняття онлайн');
+  return draft({ kind: 'CANCEL', title: 'Пари не буде', band: warnings.length > 0 ? 'LAST' : 'EASY_CANCEL', reasons, warnings });
+}
 
-/** Усі варіанти для пари, від найкращого: оцінка, далі звичний порядок видів. */
-export function optionsFor(world: World, date: IsoDate, lesson: LessonView): MockOption[] {
-  const options = [
-    ...replaceTeacherOptions(world, date, lesson),
-    ...replaceDisciplineOptions(world, date, lesson),
+/**
+ * Варіанти для пари в порядку core: смуга → вид → назва. «Рекомендовано» — лише перший, коли він чистий,
+ * а другий гірший за смугою (core ще дивиться на різницю вартостей), і ніколи для минулої пари.
+ */
+export function optionsFor(world: World, date: IsoDate, lesson: LessonView, today: IsoDate = todayInKyiv()): MockLessonOptions {
+  const declined = declinedFor(world, lesson.id);
+  const decliners = new Set(declined.map((d) => d.teacher.id));
+  const past = compareIsoDates(date, today) < 0;
+  const drafts = [
+    ...poolOptions(world, date, lesson, decliners),
+    ...mergeOptions(world, date, lesson),
     ...swapOptions(world, date, lesson),
     cancelOption(world, date, lesson),
-    ...additionalOptions(world, date, lesson),
-  ];
-  return options.sort((a, b) => b.score - a.score || KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+  ].sort(
+    (a, b) =>
+      BAND_ORDER[a.band] - BAND_ORDER[b.band] ||
+      (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||
+      UK.compare(a.title, b.title),
+  );
+  const [first, second] = drafts;
+  const clearlyBest = !past && first?.band === 'CLEAN' && (!second || second.band !== 'CLEAN');
+  const options = drafts.map((option, index) => ({
+    ...option,
+    score: Math.max(0, 100 - 10 * index),
+    recommended: index === 0 && clearlyBest,
+  }));
+  return { options, declined, past };
 }

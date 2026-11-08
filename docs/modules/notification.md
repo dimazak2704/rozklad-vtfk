@@ -180,7 +180,7 @@ retried 3× and then dead-lettered.
 
 | Event | Effect |
 |---|---|
-| `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML) + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
+| `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
 | `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
@@ -195,7 +195,8 @@ retried 3× and then dead-lettered.
 (letter spacing, text stays searchable), title, «На 19 жовтня 2026 р.», «ПОНЕДІЛОК - ЗНАМЕННИК»; table of 8 grid
 columns with one header row and merged «За розкладом» / «По заміні»; row types: REPLACEMENT (all cells), CANCELLATION
 (merged «Пари не буде»), ADDITIONAL (merged «ДОДАТКОВО»), AS_SCHEDULED (merged «За розкладом»), FINISHED (default
-reason «Вичит.»), BLOCK/ROOM_CHANGE as given; two subgroups («Харченко О./Михальчук», «304/309») are printed one under
+reason «Вичит.»), MERGE_SUBGROUPS (merged «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи»),
+BLOCK/ROOM_CHANGE as given; two subgroups («Харченко О./Михальчук», «304/309») are printed one under
 another; then an empty row, the merged «ЗАМІНА АУДИТОРІЙ» row and room changes (one empty row if none); bold notes;
 signature «Заступник директора з НР ⇥ Микола ПОЛІЩУК». Rows are printed in core's order. Amendments print
 «ДОПОВНЕННЯ №36» + «до розпорядження №35» (when the main order is known here); drafts «№ ____».

@@ -51,6 +51,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeReplies;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
+import ua.vtc.rozklad.core.substitution.internal.options.Band;
 import ua.vtc.rozklad.core.substitution.internal.options.LessonOptions;
 import ua.vtc.rozklad.core.substitution.internal.options.OptionDto;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
@@ -137,10 +138,10 @@ class SubstitutionFlowIT {
 
         fixture.lesson(semester, MONDAY, 1, ki41, 0, opcz, hanza, room110);
         stpLesson = fixture.lesson(semester, MONDAY, 2, ki41, 0, stp, krentsin, room6);
-        fixture.lesson(semester, MONDAY, 3, ki41, 0, ndks, nepyivoda, room6);
         // потік із запитом на підтвердження (CONFIRM); типовий NOTIFY перевіряє NotifyApprovalIT
         fixture.setting("substitution.approvalMode", "CONFIRM");
         fixture.lesson(semester, MONDAY, 1, ki42, 0, ndks, nepyivoda, room6);
+        fixture.lesson(semester, MONDAY, 3, ki42, 0, ndks, nepyivoda, room6);
         fixture.competence(nepyivoda, stp);
         fixture.load(semester, ki41, stp, 44, krentsin);
         fixture.load(semester, ki41, ndks, 40, nepyivoda);
@@ -172,23 +173,39 @@ class SubstitutionFlowIT {
         });
         assertThat(overview.summarize(MONDAY).uncoveredLessons()).isEqualTo(1);
 
-        List<OptionDto> options = lessonOptions.of(stpLesson.getId()).options();
+        OptionDto.LessonOptions lessonOptions = this.lessonOptions.of(stpLesson.getId());
+        List<OptionDto> options = lessonOptions.options();
 
+        // DOMAIN §7: пару бере інша дисципліна цієї групи її власним викладачем; інший викладач тієї самої
+        // дисципліни — лише вручну, тож REPLACE_TEACHER серед варіантів немає
+        assertThat(options).extracting(OptionDto::kind).doesNotContain(ChangeKind.REPLACE_TEACHER, ChangeKind.ADDITIONAL);
         assertThat(options.getFirst()).satisfies(best -> {
-            assertThat(best.kind()).isEqualTo(ChangeKind.REPLACE_TEACHER);
+            assertThat(best.kind()).isEqualTo(ChangeKind.REPLACE_DISCIPLINE);
             assertThat(best.teacher().id()).isEqualTo(nepyivoda.getId());
-            assertThat(best.score()).isEqualTo(95);
-            assertThat(best.reasons()).containsExactly("Веде цю дисципліну", "Та сама циклова комісія",
-                    "Закриває вікно між 1 і 3 парою", "Вже має 2 пари цього дня");
+            assertThat(best.discipline().shortName()).isEqualTo("НДКС");
+            assertThat(best.title()).isEqualTo("НДКС — Непийвода М.В.");
+            assertThat(best.band()).isEqualTo(Band.CLEAN);
+            assertThat(best.reasons()).contains("НДКС відстає від плану", "Закриває вікно в розкладі викладача");
             assertThat(best.room().name()).isEqualTo("6");
+            assertThat(best.suggestedRoom().name()).isEqualTo("6");
+            assertThat(best.score()).isEqualTo(100);
+            // 19.10.2026 уже минуло: варіанти є, щоб записати, що сталося, але без «Рекомендовано»
+            assertThat(best.recommended()).isFalse();
         });
-        assertThat(options).filteredOn(option -> option.kind() == ChangeKind.REPLACE_DISCIPLINE)
-                .extracting(OptionDto::title)
-                .contains("Замінити на НДКС (Непийвода М.В.)", "Замінити на ОПЦЗ (Ганза І.П.)");
-        assertThat(options).filteredOn(option -> option.kind() == ChangeKind.SWAP).singleElement()
-                .satisfies(swap -> assertThat(swap.title()).isEqualTo("Переставити 3 пару на 2: група піде раніше"));
+        assertThat(lessonOptions.past()).isTrue();
+        assertThat(lessonOptions.declined()).isEmpty();
+        assertThat(options).filteredOn(option -> option.kind() == ChangeKind.REPLACE_DISCIPLINE
+                        && option.teacher().id().equals(hanza.getId())).singleElement()
+                .satisfies(option -> {
+                    assertThat(option.band()).isEqualTo(Band.CAUTION);
+                    assertThat(option.warnings())
+                            .containsExactly("Вже має пару з цією групою (1 пара) — краще перестановка");
+                });
         assertThat(options).filteredOn(option -> option.kind() == ChangeKind.CANCEL).singleElement()
-                .satisfies(cancel -> assertThat(cancel.warnings()).containsExactly("У групи з'явиться вікно"));
+                .satisfies(cancel -> {
+                    assertThat(cancel.reasons()).contains("Остання пара: група піде раніше");
+                    assertThat(cancel.band()).isEqualTo(Band.LAST);
+                });
     }
 
     @Test

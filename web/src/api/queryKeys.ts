@@ -45,6 +45,9 @@ export const qk = {
       affected: (absenceId: Uuid) => ['admin', 'absences', 'affected', absenceId] as const,
     },
     lessonOptions: (lessonId: Uuid) => ['admin', 'lesson-options', lessonId] as const,
+    /** Під префіксом варіантів: будь-яка дія диспетчера (invalidateDaily) оновлює і їх. */
+    teacherAvailability: (lessonId: Uuid, q: string) => ['admin', 'lesson-options', lessonId, 'availability', q] as const,
+    dayPlan: (absenceId: Uuid, date: IsoDate) => ['admin', 'lesson-options', 'plan', absenceId, date] as const,
     changes: {
       all: ['admin', 'changes'] as const,
       list: (params?: Params) => ['admin', 'changes', 'list', clean(params)] as const,

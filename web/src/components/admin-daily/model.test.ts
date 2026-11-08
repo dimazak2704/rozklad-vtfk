@@ -5,6 +5,7 @@ import type { AbsenceDto, ChangeDto, DashboardDto, OrderSummaryDto } from '@/api
 import { buildStops, reachedCount } from './dashboard/morning';
 import { pairsText } from './format';
 import {
+  actionLabel,
   buildFeed,
   defaultReason,
   filterFromParam,
@@ -13,11 +14,17 @@ import {
   LESSON_STATE,
   lessonState,
   matchesFilter,
+  manualTeacherRequest,
   noticeAnswer,
-  optionsByKind,
+  optionKey,
+  optionsHeading,
+  optionTitle,
   pendingInfo,
-  pickLabel,
-  requestsForOption,
+  planActionLabel,
+  poolIsEmpty,
+  reasonForOption,
+  requestForOption,
+  rowChips,
   teacherAnswered,
   toEntries,
 } from './model';
@@ -40,7 +47,7 @@ const lesson: AffectedLesson['lesson'] = {
 };
 
 const option = (patch: Partial<ChangeOption>): ChangeOption => ({
-  kind: 'REPLACE_TEACHER',
+  kind: 'REPLACE_DISCIPLINE',
   score: 60,
   title: 'Прокопчук',
   reasons: [],
@@ -51,6 +58,9 @@ const option = (patch: Partial<ChangeOption>): ChangeOption => ({
   swapLesson: null,
   date: null,
   pair: null,
+  band: 'CLEAN',
+  recommended: false,
+  suggestedRoom: null,
   ...patch,
 });
 
@@ -101,54 +111,112 @@ describe('стан пари', () => {
   });
 });
 
-describe('варіант → запити на сервер', () => {
-  it('заміна викладача й іншою дисципліною', () => {
-    expect(requestsForOption(option({}), ctx)).toEqual([
-      expect.objectContaining({ kind: 'REPLACE_TEACHER', originalLessonId: 'lesson-1', newTeacherId: 't-new', pairFrom: 3, subgroup: 1, absenceId: 'a-1', reasonText: null }),
-    ]);
-    const other = { id: 'd-2', shortName: 'ІКТ', name: 'ІКТ', color: null };
-    expect(requestsForOption(option({ kind: 'REPLACE_DISCIPLINE', discipline: other }), ctx)?.[0]).toMatchObject({ newDisciplineId: 'd-2' });
+describe('варіант → запит на сервер', () => {
+  const other = { id: 'd-2', shortName: 'ІКТ', name: 'ІКТ', color: null };
+  const room309 = { id: 'r-309', name: '309', type: 'COMPUTER_LAB' as const };
+
+  it('інша дисципліна групи: викладач, дисципліна й запропонована аудиторія', () => {
+    const request = requestForOption(option({ discipline: other, suggestedRoom: room309 }), ctx);
+    expect(request).toMatchObject({
+      kind: 'REPLACE_DISCIPLINE',
+      originalLessonId: 'lesson-1',
+      newTeacherId: 't-new',
+      newDisciplineId: 'd-2',
+      newRoomId: 'r-309',
+      pairFrom: 3,
+      subgroup: 1,
+      absenceId: 'a-1',
+      reasonText: null,
+    });
+    // без запропонованої аудиторії поле не надсилаємо: core лишає аудиторію пари
+    expect(requestForOption(option({ discipline: other }), ctx)).not.toHaveProperty('newRoomId');
   });
 
-  it('перестановка передає пізнішу пару, скасування — лише пару', () => {
-    const swap = requestsForOption(option({ kind: 'SWAP', swapLesson: { ...lesson, id: 'lesson-5', pair: 5 } }), ctx);
-    expect(swap?.[0]).toMatchObject({ kind: 'SWAP', swapLessonId: 'lesson-5' });
-    expect(requestsForOption(option({ kind: 'CANCEL', teacher: null }), ctx)).toEqual([expect.objectContaining({ kind: 'CANCEL' })]);
+  it('обʼєднання підгруп: пара іншої підгрупи й її аудиторія, без викладача й дисципліни', () => {
+    const partner = { ...lesson, id: 'lesson-sg2', subgroup: 2, room: room309 };
+    const request = requestForOption(option({ kind: 'MERGE_SUBGROUPS', swapLesson: partner, suggestedRoom: room309 }), ctx);
+    expect(request).toMatchObject({ kind: 'MERGE_SUBGROUPS', originalLessonId: 'lesson-1', swapLessonId: 'lesson-sg2', newRoomId: 'r-309' });
+    expect(request).not.toHaveProperty('newTeacherId');
+    expect(request).not.toHaveProperty('newDisciplineId');
   });
 
-  it('відпрацювання — скасувати сьогодні й додати пару в інший день', () => {
-    const requests = requestsForOption(option({ kind: 'ADDITIONAL', date: '2026-11-13', pair: 4, teacher: lesson.teacher }), ctx);
-    expect(requests?.map((r) => r.kind)).toEqual(['CANCEL', 'ADDITIONAL']);
-    expect(requests?.[1]).toMatchObject({ date: '2026-11-13', pairFrom: 4, newTeacherId: 't-absent', newDisciplineId: 'd-1', reasonCode: 'OTHER' });
+  it('перестановка передає переставлену пару, скасування — лише пару', () => {
+    const swap = requestForOption(option({ kind: 'SWAP', swapLesson: { ...lesson, id: 'lesson-5', pair: 5 } }), ctx);
+    expect(swap).toMatchObject({ kind: 'SWAP', swapLessonId: 'lesson-5' });
+    expect(requestForOption(option({ kind: 'CANCEL', teacher: null }), ctx)).toMatchObject({ kind: 'CANCEL', originalLessonId: 'lesson-1' });
   });
 
-  it('неповний варіант не перетворюється на запит', () => {
-    expect(requestsForOption(option({ teacher: null }), ctx)).toBeNull();
-    expect(requestsForOption(option({ kind: 'ADDITIONAL', date: null }), ctx)).toBeNull();
-    expect(requestsForOption(option({ kind: 'SWAP' }), ctx)).toBeNull();
+  it('неповний варіант і відпрацювання не стають запитом', () => {
+    expect(requestForOption(option({ teacher: null }), ctx)).toBeNull();
+    expect(requestForOption(option({ kind: 'MERGE_SUBGROUPS' }), ctx)).toBeNull();
+    expect(requestForOption(option({ kind: 'SWAP' }), ctx)).toBeNull();
+    expect(requestForOption(option({ kind: 'ADDITIONAL', date: '2026-11-13', pair: 4 }), ctx)).toBeNull();
+  });
+
+  it('ручний «Інший викладач…» — заміна викладача тієї самої дисципліни', () => {
+    expect(manualTeacherRequest('t-manual', ctx)).toMatchObject({ kind: 'REPLACE_TEACHER', newTeacherId: 't-manual', originalLessonId: 'lesson-1' });
   });
 
   it('текст причини йде лише з «Інше»', () => {
-    expect(requestsForOption(option({}), { ...ctx, reasonCode: 'MUTUAL', reasonText: 'щось' })?.[0]?.reasonText).toBeNull();
-    expect(requestsForOption(option({}), { ...ctx, reasonCode: 'OTHER', reasonText: 'Конф.' })?.[0]?.reasonText).toBe('Конф.');
+    expect(requestForOption(option({}), { ...ctx, reasonCode: 'MUTUAL', reasonText: 'щось' })?.reasonText).toBeNull();
+    expect(requestForOption(option({}), { ...ctx, reasonCode: 'OTHER', reasonText: 'Конф.' })?.reasonText).toBe('Конф.');
   });
 
-  it('кнопка вибору: «Призначити» в NOTIFY й AUTO, «Надіслати прохання» в CONFIRM, «Обрати» без викладача', () => {
-    const teacher = option({});
-    expect(pickLabel(teacher, 'NOTIFY')).toBe('Призначити');
-    expect(pickLabel(teacher, 'AUTO')).toBe('Призначити');
-    expect(pickLabel(teacher, undefined)).toBe('Призначити');
-    expect(pickLabel(teacher, 'CONFIRM')).toBe('Надіслати прохання');
-    expect(pickLabel(option({ kind: 'REPLACE_DISCIPLINE' }), 'CONFIRM')).toBe('Надіслати прохання');
-    expect(pickLabel(option({ kind: 'CANCEL', teacher: null }), 'CONFIRM')).toBe('Обрати');
-    expect(pickLabel(option({ kind: 'SWAP' }), 'NOTIFY')).toBe('Обрати');
+  it('причина за видом варіанта: інша дисципліна — «Зв.зам.», скасування — «Відп.»', () => {
+    expect(reasonForOption('REPLACE_DISCIPLINE', 'SICK_LEAVE')).toBe('MUTUAL');
+    expect(reasonForOption('CANCEL', 'BUSINESS_TRIP')).toBe('ABSENT');
+    expect(reasonForOption('MERGE_SUBGROUPS', 'BUSINESS_TRIP')).toBe('BUSINESS_TRIP');
+    expect(reasonForOption(null, 'SICK_LEAVE')).toBe('ABSENT');
+  });
+});
+
+describe('подання варіантів', () => {
+  it('чипи: перша причина, перше «⚠», ще один — не більше трьох', () => {
+    const chips = rowChips(option({ reasons: ['р1', 'р2', 'р3'], warnings: ['у1', 'у2'] }));
+    expect(chips).toEqual([
+      { text: 'р1', warning: false },
+      { text: 'у1', warning: true },
+      { text: 'р2', warning: false },
+    ]);
+    expect(rowChips(option({ reasons: [], warnings: ['у1', 'у2'] })).map((c) => c.text)).toEqual(['у1', 'у2']);
+    expect(rowChips(option({}))).toEqual([]);
   });
 
-  it('групування за видами зберігає порядок сервера', () => {
-    const grouped = optionsByKind([option({ title: 'А', score: 70 }), option({ kind: 'CANCEL', title: 'Пари не буде' }), option({ title: 'Б', score: 50 })]);
-    expect(grouped.get('REPLACE_TEACHER')?.map((o) => o.title)).toEqual(['А', 'Б']);
-    expect(grouped.get('CANCEL')).toHaveLength(1);
-    expect(grouped.get('SWAP')).toEqual([]);
+  it('напис дії: прохання лише в режимі CONFIRM, скасування — «Застосувати»', () => {
+    expect(actionLabel(option({}), 'CONFIRM')).toBe('Надіслати прохання');
+    expect(actionLabel(option({}), 'AUTO')).toBe('Призначити');
+    // режим NOTIFY (трек A) і ще не завантажені налаштування — теж «Призначити»
+    expect(actionLabel(option({}), 'NOTIFY')).toBe('Призначити');
+    expect(actionLabel(option({}), null)).toBe('Призначити');
+    expect(actionLabel(option({ kind: 'CANCEL', teacher: null }), 'CONFIRM')).toBe('Застосувати');
+    expect(planActionLabel(3, 'CONFIRM')).toBe('Надіслати всі (3)');
+    expect(planActionLabel(2, 'AUTO')).toBe('Призначити всі (2)');
+  });
+
+  it('заголовок: минула пара, рівноцінні варіанти або нічого, коли є рекомендація', () => {
+    const recommended = [option({ recommended: true }), option({ title: 'Б' })];
+    expect(optionsHeading(recommended, false)).toBeNull();
+    expect(optionsHeading([option({}), option({ title: 'Б' })], false)).toBe('Рівноцінні варіанти — оберіть самі');
+    expect(optionsHeading([option({})], false)).toBeNull();
+    expect(optionsHeading(recommended, true)).toBe('Заняття вже минуло — позначте, що було насправді.');
+  });
+
+  it('порожній пул групи — коли немає ні іншої дисципліни, ні обʼєднання', () => {
+    expect(poolIsEmpty([option({ kind: 'SWAP' }), option({ kind: 'CANCEL', teacher: null })])).toBe(true);
+    expect(poolIsEmpty([option({ kind: 'MERGE_SUBGROUPS' })])).toBe(false);
+    expect(poolIsEmpty([option({})])).toBe(false);
+  });
+
+  it('назва обʼєднання — дія викладача, решта — назва сервера', () => {
+    expect(optionTitle(option({ kind: 'MERGE_SUBGROUPS', title: "Об'єднати підгрупи: Ін.мова — Можаровська", teacher: { id: 't', shortName: 'Можаровська', displayName: 'Можаровська' } }))).toBe(
+      'Обʼєднати підгрупи — Можаровська веде обидві',
+    );
+    expect(optionTitle(option({ title: 'ІКТ — Прокопчук' }))).toBe('ІКТ — Прокопчук');
+  });
+
+  it('ключ варіанта стабільний і не залежить від позиції', () => {
+    expect(optionKey(option({ score: 100 }))).toBe(optionKey(option({ score: 50 })));
+    expect(optionKey(option({}))).not.toBe(optionKey(option({ kind: 'CANCEL', teacher: null })));
   });
 });
 

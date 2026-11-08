@@ -1,9 +1,11 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -18,6 +20,7 @@ import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
+import ua.vtc.rozklad.core.shared.error.FieldErrorDto;
 import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Absence;
@@ -63,11 +66,13 @@ public class ChangeCommands {
     private final ChangeViews views;
     private final AbsentSubstitutes absentSubstitutes;
     private final SubstituteRooms substituteRooms;
+    private final Clock clock;
 
     public ChangeCommands(ChangeRepository changes, AbsenceRepository absences, LessonRepository lessons,
                           CatalogLookup catalog, SubstitutionCalendar calendar, ChangeEffectPlanner planner,
                           DatedSlotChecker checker, ChangeWorkflow workflow, ChangeNotifications notifications,
-                          ChangeViews views, AbsentSubstitutes absentSubstitutes, SubstituteRooms substituteRooms) {
+                          ChangeViews views, AbsentSubstitutes absentSubstitutes, SubstituteRooms substituteRooms,
+                          Clock clock) {
         this.changes = changes;
         this.absences = absences;
         this.lessons = lessons;
@@ -80,6 +85,30 @@ public class ChangeCommands {
         this.views = views;
         this.absentSubstitutes = absentSubstitutes;
         this.substituteRooms = substituteRooms;
+        this.clock = clock;
+    }
+
+    /**
+     * {@code POST /api/admin/changes/batch}: creates the changes in the given order in one
+     * transaction (e.g. a cancel and its make-up pair, or every proposal of a day plan). Any 400 or
+     * 409 rolls back the whole batch; field errors name the item ({@code changes[1].newTeacherId}).
+     * The dates are locked in ascending order first, so two batches cannot deadlock.
+     */
+    public List<ChangeDto> createAll(List<CreateChangeRequest> requests, String actor) {
+        requests.stream().map(CreateChangeRequest::date).filter(Objects::nonNull).distinct().sorted()
+                .forEach(changes::lockDecisionsOf);
+        List<ChangeDto> created = new ArrayList<>(requests.size());
+        for (int index = 0; index < requests.size(); index++) {
+            try {
+                created.add(create(requests.get(index), actor));
+            } catch (FieldValidationException error) {
+                String prefix = "changes[" + index + "].";
+                throw new FieldValidationException(error.getErrors().stream()
+                        .map(field -> new FieldErrorDto(prefix + field.field(), field.message()))
+                        .toList());
+            }
+        }
+        return created;
     }
 
     public ChangeDto create(CreateChangeRequest request, String actor) {
@@ -338,25 +367,62 @@ public class ChangeCommands {
                 change.setSwapLessonId(moved.getId());
                 change.setReplacement(moved.getDisciplineId(), moved.getTeacherId(), room);
             }
+            case MERGE_SUBGROUPS -> {
+                Lesson partner = mergePartner(request, change, groupDay);
+                change.setSwapLessonId(partner.getId());
+                // група приходить до викладача іншої підгрупи: його аудиторія, якщо не вказано іншу
+                change.setReplacement(partner.getDisciplineId(), partner.getTeacherId(),
+                        room != null ? room : partner.getRoomId());
+            }
             case ADDITIONAL, BLOCK -> change.setReplacement(catalog.discipline(request.newDisciplineId(), "newDisciplineId").getId(),
                     request.newTeacherId() == null ? null : catalog.teacher(request.newTeacherId(), "newTeacherId").getId(), room);
         }
     }
 
-    /** SWAP moves a later lesson of the same cohort into the slot; its teacher must not be the absent one. */
+    /**
+     * SWAP moves another lesson of the same cohort into the slot: a later one, or for a future day
+     * also an earlier one (DOMAIN §7); its teacher must not be the absent one.
+     */
     private Lesson swappedLesson(CreateChangeRequest request, Change change, List<Lesson> groupDay) {
         Lesson moved = groupDay.stream().filter(lesson -> lesson.getId().equals(request.swapLessonId())).findFirst()
                 .orElseThrow(() -> new BusinessRuleException("SWAP_INVALID",
                         "Переставити можна лише пару тієї самої групи в той самий день."));
-        if (!moved.isScheduled() || moved.getPairNumber() <= change.getPairFrom()
-                || moved.getSubgroupNumber() != change.getSubgroupNumber()) {
-            throw new BusinessRuleException("SWAP_INVALID",
-                    "Переставити можна лише одну з наступних пар тієї самої (під)групи.");
+        boolean futureDay = change.getDate().isAfter(LocalDate.now(clock));
+        boolean allowedPair = moved.getPairNumber() > change.getPairFrom()
+                || (futureDay && moved.getPairNumber() < change.getPairFrom());
+        if (!moved.isScheduled() || !allowedPair || moved.getSubgroupNumber() != change.getSubgroupNumber()) {
+            throw new BusinessRuleException("SWAP_INVALID", futureDay
+                    ? "Переставити можна лише іншу пару тієї самої (під)групи."
+                    : "Переставити можна лише одну з наступних пар тієї самої (під)групи.");
         }
         if (moved.getTeacherId() == null || moved.getTeacherId().equals(change.getOrigTeacherId())) {
             throw new BusinessRuleException("SWAP_INVALID", "Цю пару веде той самий відсутній викладач.");
         }
         return moved;
+    }
+
+    /**
+     * MERGE_SUBGROUPS: the lesson of the same discipline for another subgroup at the same pair,
+     * taught by someone else than the absent teacher; together they become one whole-group lesson.
+     */
+    private Lesson mergePartner(CreateChangeRequest request, Change change, List<Lesson> groupDay) {
+        Lesson partner = groupDay.stream().filter(lesson -> lesson.getId().equals(request.swapLessonId()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessRuleException("MERGE_INVALID",
+                        "Об'єднати можна лише з парою іншої підгрупи тієї самої групи в той самий день."));
+        if (change.getSubgroupNumber() == 0) {
+            throw new BusinessRuleException("MERGE_INVALID", "Ця пара вже для всієї групи, об'єднувати нічого.");
+        }
+        if (!partner.isScheduled() || partner.getPairNumber() != change.getPairFrom()
+                || partner.getSubgroupNumber() == 0 || partner.getSubgroupNumber() == change.getSubgroupNumber()
+                || !partner.getDisciplineId().equals(change.getOrigDisciplineId())) {
+            throw new BusinessRuleException("MERGE_INVALID",
+                    "Об'єднати можна лише з тією самою дисципліною іншої підгрупи на цій самій парі.");
+        }
+        if (partner.getTeacherId() == null || partner.getTeacherId().equals(change.getOrigTeacherId())) {
+            throw new BusinessRuleException("MERGE_INVALID", "Пару іншої підгрупи веде той самий відсутній викладач.");
+        }
+        return partner;
     }
 
     private Absence activeAbsenceFor(UUID absenceId, Change change) {
@@ -413,6 +479,7 @@ public class ChangeCommands {
             case ROOM_CHANGE -> "заміна аудиторії";
             case BLOCK -> "блок";
             case DISCIPLINE_FINISHED -> "вичитано";
+            case MERGE_SUBGROUPS -> "об'єднання підгруп";
         };
     }
 
