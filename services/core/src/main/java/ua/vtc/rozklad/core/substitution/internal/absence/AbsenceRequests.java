@@ -16,7 +16,7 @@ public final class AbsenceRequests {
     private AbsenceRequests() {
     }
 
-    /** {@code POST/PUT /api/admin/absences}; {@code version} turns on optimistic locking in PUT. */
+    /** {@code POST/PUT /api/admin/absences}; PUT requires {@code version} (400 without it, 409 when stale). */
     @ValidDateRange
     public record Admin(
             @NotNull UUID teacherId,

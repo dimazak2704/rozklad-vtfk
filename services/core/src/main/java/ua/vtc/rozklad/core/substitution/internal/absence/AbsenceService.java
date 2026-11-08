@@ -16,6 +16,7 @@ import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
+import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
@@ -82,8 +83,15 @@ public class AbsenceService {
 
     public AbsenceDto report(UUID teacherId, AbsenceData data, AbsenceSource source, String actor) {
         Teacher teacher = catalog.teacher(teacherId, "teacherId");
-        if (source != AbsenceSource.ADMIN && data.dateTo().isBefore(LocalDate.now(clock))) {
+        LocalDate today = LocalDate.now(clock);
+        // викладач (кабінет, бот) повідомляє лише про сьогодні й майбутнє: минуле — справа диспетчера,
+        // інакше відсутність лягла б на вже опубліковані розпорядження і її не можна було б скасувати
+        if (source != AbsenceSource.ADMIN && data.dateTo().isBefore(today)) {
             throw new BusinessRuleException("ABSENCE_IN_PAST", "Не можна повідомити про відсутність, яка вже минула.");
+        }
+        if (source != AbsenceSource.ADMIN && data.dateFrom().isBefore(today)) {
+            throw new BusinessRuleException("ABSENCE_IN_PAST", ("Відсутність можна повідомити лише з сьогодні (%s). "
+                    + "Про минулі дні повідомте диспетчера.").formatted(today.format(SubstitutionCalendar.DATE)));
         }
         Absence absence = new Absence(teacher.getId(), data.dateFrom(), data.dateTo(), data.reasonCategory(), source,
                 actor);
@@ -101,9 +109,13 @@ public class AbsenceService {
         return dto;
     }
 
+    /** {@code version} is required: without it a stale form would silently overwrite a newer edit. */
     public AbsenceDto update(UUID id, UUID teacherId, AbsenceData data, Long version, String actor) {
+        if (version == null) {
+            throw FieldValidationException.of("version", "Вкажіть версію відсутності (поле version з відповіді).");
+        }
         Absence absence = find(id);
-        if (version != null && version != absence.getVersion()) {
+        if (version != absence.getVersion()) {
             throw new ObjectOptimisticLockingFailureException(Absence.class, id);
         }
         if (!absence.getTeacherId().equals(teacherId)) {

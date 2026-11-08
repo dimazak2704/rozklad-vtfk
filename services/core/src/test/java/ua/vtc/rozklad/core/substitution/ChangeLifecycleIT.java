@@ -406,6 +406,43 @@ class ChangeLifecycleIT {
     }
 
     @Test
+    void teacherReportsOnlyFromTodayOnTheDispatcherAlsoThePast() {
+        LocalDate today = LocalDate.now(clock);
+        AbsenceRequests.AbsenceData backdated = new AbsenceRequests.AbsenceData(today.minusDays(20), today, null,
+                AbsenceReasonCategory.SICK_LEAVE, null);
+
+        for (AbsenceSource teacherSource : List.of(AbsenceSource.WEB, AbsenceSource.BOT)) {
+            assertThatThrownBy(() -> absences.report(nepyivoda.getId(), backdated, teacherSource, "nepyivoda"))
+                    .isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                        assertThat(error.getCode()).isEqualTo("ABSENCE_IN_PAST");
+                        assertThat(error.getMessage()).contains("лише з сьогодні");
+                    });
+        }
+        assertThat(absences.report(nepyivoda.getId(), new AbsenceRequests.AbsenceData(today, today.plusDays(2), null,
+                AbsenceReasonCategory.SICK_LEAVE, null), AbsenceSource.WEB, "nepyivoda").dateFrom()).isEqualTo(today);
+        assertThat(absences.report(krentsin.getId(), backdated, AbsenceSource.ADMIN, "admin").dateFrom())
+                .isEqualTo(today.minusDays(20));
+    }
+
+    @Test
+    void absenceEditNeedsTheVersionItWasMadeFrom() {
+        AbsenceRequests.AbsenceData data = new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(3),
+                AbsenceReasonCategory.OTHER, "R3");
+        AbsenceDto created = absences.report(nepyivoda.getId(), data, AbsenceSource.ADMIN, "admin");
+        AbsenceRequests.AbsenceData edited = new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(3),
+                AbsenceReasonCategory.PERSONAL, null);
+
+        assertThatThrownBy(() -> absences.update(created.id(), nepyivoda.getId(), edited, null, "admin"))
+                .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
+                        .extracting(FieldErrorDto::field).containsExactly("version"));
+        assertThatThrownBy(() -> absences.update(created.id(), nepyivoda.getId(), edited, created.version() + 1,
+                "admin")).isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThat(absences.get(created.id()).comment()).isEqualTo("R3");
+        assertThat(absences.update(created.id(), nepyivoda.getId(), edited, created.version(), "admin")
+                .reasonCategory()).isEqualTo(AbsenceReasonCategory.PERSONAL);
+    }
+
+    @Test
     void lessonOfAnotherDayIsAMismatch() {
         assertThatThrownBy(() -> commands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY.plusDays(1),
                 2, null, group.getId(), null, lesson.getId(), null, nepyivoda.getId(), null, null, ReasonCode.ABSENT,
