@@ -8,6 +8,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalTime;
 import java.util.Objects;
+import org.hibernate.annotations.JdbcType;
+import org.hibernate.type.descriptor.jdbc.LocalTimeJdbcType;
 import ua.vtc.rozklad.core.shared.domain.IdentifiableEntity;
 
 /** Time of a pair on a weekday (1 = Monday … 5 = Friday) within a bell profile. */
@@ -25,10 +27,14 @@ public class BellSlot extends IdentifiableEntity {
     @Column(name = "pair_number", nullable = false)
     private int pairNumber;
 
+    // Пряме JDBC-зв'язування LocalTime: через java.sql.Time з jdbc.time_zone=UTC час зсувався
+    // на зміщення поясу JVM (в Europe/Kyiv 08:30 ставало 11:30)
     @Column(name = "starts_at", nullable = false)
+    @JdbcType(LocalTimeJdbcType.class)
     private LocalTime startsAt;
 
     @Column(name = "ends_at", nullable = false)
+    @JdbcType(LocalTimeJdbcType.class)
     private LocalTime endsAt;
 
     protected BellSlot() {

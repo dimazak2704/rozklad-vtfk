@@ -114,3 +114,8 @@ logging:
     root: INFO
     ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}
     org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+
+# identity: запрошення викладачів (демо-дані вмикає профіль Spring «demo», див. DemoSeedConfig)
+app.identity:
+  # термін дії посилання-запрошення (DOMAIN: 7 днів)
+  invite-ttl: ${INVITE_TTL:7d}

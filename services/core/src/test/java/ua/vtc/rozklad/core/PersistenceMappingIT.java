@@ -231,7 +231,8 @@ class PersistenceMappingIT {
 
     @Test
     void childCollectionsCascadeAndOrphansAreRemoved() {
-        BellProfile profile = new BellProfile("2 зміни, 60 хв");
+        // «2 зміни, 60 хв» уже є в довідкових даних (V1_201)
+        BellProfile profile = new BellProfile("Тест: мапінг дзвінків");
         profile.addSlot(1, 1, LocalTime.of(8, 30), LocalTime.of(9, 30));
         profile.addSlot(1, 2, LocalTime.of(9, 40), LocalTime.of(10, 40));
         bellProfiles.save(profile);

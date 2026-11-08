@@ -13,6 +13,11 @@ public interface SemesterRepository extends JpaRepository<Semester, UUID> {
 
     List<Semester> findAllByOrderByStartsOnDesc();
 
+    /** Semesters never overlap (checked when they are saved), so at most one contains a date. */
     @Query("select s from Semester s where s.startsOn <= :date and s.endsOn >= :date")
     Optional<Semester> findContaining(LocalDate date);
+
+    Optional<Semester> findByAcademicYearIdAndNumber(UUID academicYearId, int number);
+
+    boolean existsByBellProfileId(UUID bellProfileId);
 }

@@ -10,6 +10,8 @@ public interface CalendarPeriodRepository extends JpaRepository<CalendarPeriod, 
 
     List<CalendarPeriod> findAllBySemesterIdOrderByStartsOn(UUID semesterId);
 
+    List<CalendarPeriod> findAllByOrderByStartsOn();
+
     /** Periods of the semester that overlap {@code [from, to]}. */
     @Query("""
             select p from CalendarPeriod p

@@ -62,6 +62,10 @@ public class Semester extends BaseEntity {
         return academicYearId;
     }
 
+    public void setAcademicYearId(UUID academicYearId) {
+        this.academicYearId = Objects.requireNonNull(academicYearId, "academicYearId");
+    }
+
     public int getNumber() {
         return number;
     }
