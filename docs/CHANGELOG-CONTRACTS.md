@@ -111,22 +111,46 @@ No endpoint was changed. These are the readings the SPA and its mock API use whe
 | `ChangeView` for `ROOM_CHANGE` | `from` = the lesson, `to` empty, `room` = the new room, `reasonText` null. | The «Заміна аудиторій» section prints only group, pair and room. |
 | `GET /api/public/bells?date=` on a weekend | `slots: []`, `weekday` = ISO weekday (6/7). | No bells on weekends; the SPA never asks (weekend → Monday). |
 | `PUT /api/me/preferences?semesterId` | Body is the full list `[{weekday,pair,kind,note}]` replacing the previous one; response = saved list. | The grid is saved as a whole in one action. |
-| `POST /api/me/absences` | Past `dateFrom` → 422 (`ABSENCE_IN_PAST`); overlap with an existing absence → 409. `DELETE` of a non-future absence → 422 (`ABSENCE_NOT_FUTURE`). | «Own only, future only» (CONTRACTS §3); 422 for business rules as in the foundation. |
-| `POST /api/notify/bindings/codes` by a teacher | Only `{type: TEACHER, teacherId: <own>}`; another `teacherId` → 403. `deepLink` = `https://t.me/<bot>?start=<code>`. | CONTRACTS §6: «TEACHER may create own TEACHER code». |
+| `POST /api/me/absences` | *Superseded by «Web: wiring to the backend contracts».* As core: an absence that already ended (`dateTo` < today) → 422 `ABSENCE_IN_PAST`; overlap → 409. `DELETE` of a started absence → 422 `ABSENCE_STARTED` (the record stays with status `CANCELLED`). | Core is the source of truth. |
+| `POST /api/notify/bindings/codes` by a teacher | Only `{type: TEACHER, teacherId: <own>}`; another `teacherId` → 403; an account without a linked teacher → 422 `teacher-not-linked`. `deepLink` = `https://t.me/<bot>?start=<code without dash>`. | CONTRACTS §6: «TEACHER may create own TEACHER code». |
 
 ## admin-daily (SPA: dashboard, changes, orders, Telegram, settings)
 
 | Area | Decision | Why |
 |---|---|---|
-| `GET /api/admin/absences/{id}/affected` | Each item also has `date` (ISO): `{date, lesson, decision}`. | An absence can span several days and `LessonView` has no date; the UI groups by date and sends it in `POST /changes`. Additive. |
-| `GET /api/admin/lessons/{id}/options` | The response also has `date`; an `ADDITIONAL` option carries `date` and `pair` of the proposed make-up slot. | Without them a make-up option cannot become `POST /changes {date, pairFrom}`. Additive; the UI disables such an option when they are missing. |
-| `ChangeDto.pairTo` for `SWAP` | The pair the later lesson was moved from. | The order prints two rows for a swap; `pairFrom` is the freed slot. |
-| `GET /api/admin/changes?date` · `GET /api/admin/absences?from&to` | Plain arrays (not `Page`); `absences` lists `ACTIVE` ones overlapping the range. | The contract gives no shape; daily lists are small. |
-| `DELETE /api/admin/absences/{id}` | Sets `CANCELLED`; its not-yet-applied changes become `CANCELLED`. | DOMAIN §3 has `absence.status`; a cancelled absence frees its lessons. |
-| `GET /api/notify/deliveries` | Array of `DeliveryDto`, newest first (at most 200). | The contract says only «delivery log». |
-| `DashboardAlert.kind` | `UNCOVERED_SOON`, `UNCOVERED`, `DECLINED`, `PENDING_OVERDUE`, `ORDER_NOT_PUBLISHED`, `DISCIPLINE_FINISHED`, `WILL_UNDERRUN`, `WILL_OVERRUN`; unknown kinds are shown by severity. | The contract does not list kinds. |
-| Order heading | `title` = «По коледжу про деякі зміни в розкладі занять»; the UI builds «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ №N до розпорядження №M» from `kind`, `number` and the parent's number. | DOMAIN §8 layout. |
+| `GET /api/admin/absences/{id}/affected` | **Still requested from core:** each item also has `date` (ISO): `{date, lesson, decision}`. Core does not send it yet; the client derives the date only for a one-day absence and otherwise shows an explicit error (`withLessonDates`). | An absence can span several days and `LessonView` has no date; the UI groups by date and sends it in `POST /changes`. |
+| `GET /api/admin/lessons/{id}/options` | As core: `{lesson, options}` without a top-level `date`; an `ADDITIONAL` option carries `date` and `pair` of the make-up slot (`null` for other kinds). | Core shape. |
+| `ChangeDto` for `SWAP` | As core: `pairTo` = `pairFrom` (range end, not the source pair); the source pair is `swapFromPair`. | Core shape. |
+| `GET /api/admin/changes?date` · `GET /api/admin/absences?from&to` | Plain arrays (not `Page`); `absences` lists `ACTIVE` ones overlapping the range. | Same in core. |
+| `DELETE /api/admin/absences/{id}` | Sets `CANCELLED` (repeating is a no-op); its not-yet-applied changes become `CANCELLED`; SSE `absence.updated`. | Same in core. |
+| `GET /api/notify/deliveries` | *Superseded:* page `{items,page,size,total}` as in notification. | Notification is the source of truth. |
+| `DashboardAlert.kind` | *Superseded:* exactly the core kinds `NO_SEMESTER`, `DECLINED`, `UNCOVERED_LESSONS`, `PENDING_OVERDUE`, `ORDER_NOT_PUBLISHED`; unknown future kinds are shown by severity. | Core shape. |
+| Order heading | The sheet prints «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ №N до розпорядження №M» from `kind`, `number` and the parent's number, then core's `subtitle` and `dateLabel`. Core's `title` («РОЗПОРЯДЖЕННЯ №35», «ДОПОВНЕННЯ до розпорядження №35») is kept as is in the mock. | DOMAIN §8 layout; the amendment's own number is not in core's title. |
 
+
+## Web: wiring to the backend contracts (08.11.2026)
+
+The SPA types (`web/src/api/types.ts`), screens and the mock API now follow the backend DTOs; the open
+mismatches of `docs/modules/integration.md` §5 are closed on the web side. `web/src/api/contract.test.ts`
+reads the Java records in `services/*` and fails when a mock response has a field the DTO does not have or
+misses one it has (`@JsonInclude(NON_NULL)` fields may be absent).
+
+| Area | Client behaviour | Why |
+|---|---|---|
+| Pages | `GET /api/notify/deliveries` and `GET /api/import/jobs` are read as `Page<T>`; both tables page on the server (deliveries 12 per page, jobs 20). The order delivery summary asks for one page of 200 and says when it counted only part of the log. | Backend shape; no unbounded lists. |
+| `POST /api/import/jobs` `options` | Only `sheet`, `versionName`, `semesterNumber`, `groupCodes`, `hoursPerWeek`; the upload form sends group codes, a required plan semester for CURRICULUM, an optional draft name (timetable) and weekly hours (program). | Unknown keys are 400 in the importer. |
+| `ImportJobDto` | `NON_NULL` fields are optional in the type; `canApply` decides the apply button; `result` is shown per core step (`catalog`, `timetable`, `load`, `changes`; `{skipped:true}` hidden). Apply errors are 422 `IMPORT_NEEDS_REVIEW`, `IMPORT_FAILED`, `SEMESTER_REQUIRED`, `GROUPS_REQUIRED`; repeating apply is idempotent. | Importer shape. |
+| Binding codes | 200; the dialog uses `label`, `groupLink` (group chats) and `command`; the code is shown as `XXXX-XXXX`. The teacher cabinet shows 422 `teacher-not-linked` inside the card instead of a link. | Notification shape. |
+| `ChangeDto` | All additive fields typed; `swapFromPair` for SWAP; `printedReason` shown on the decision card. «Змінити причину» sends `PUT {newRoomId (current), reasonCode, reasonText, version}`; 409 `stale-data` → «Дані вже змінив хтось інший…» and the day is refetched. A DECLINED change offers «Надіслати запит ще раз» (core answers 422 `CHANGE_DECLINED` to a dispatcher confirmation). | Optimistic locking and core transitions. |
+| `AbsenceDto` | `comment`, `createdBy`, `createdAt`, `version` typed; the dispatcher's `PUT` sends `version` (409 `stale-data` handled like changes). The teacher cabinet hides `CANCELLED` absences (core lists them). Comments up to 1000 characters. | Core shape. |
+| Business-rule codes | `ApiError.code`; Ukrainian texts for `ABSENCE_STARTED`, `ABSENCE_IN_PAST`, `ABSENCE_TEACHER_FIXED`, `ABSENCE_CANCELLED`, `ABSENCE_MISMATCH`, `teacher-not-linked` (`PROBLEM_CODE_MESSAGES`); other codes keep the server `detail`. `ApiError.isStaleData` tells optimistic-lock 409 from overlap 409. | One wording in the cabinet and the panel. |
+| Settings | `confirmTimeoutMinutes` 5..1440 (default 120), signatory position ≤ 200, name ≤ 100, college name 1..200 (`api/settings-limits.ts`, shared by the form and the mock). | `SystemSettings` limits. |
+| Generation | The panel reads `timeLimitSeconds` from the job (no `params`); cancel returns the job (202). | Core shape. |
+| Timetable versions | Version items carry `semesterId`, `publishedBy`, `generationJobId`, `notes`, `createdAt`; publish shows `keptLessons` and warns when core reports `conflicts` of kept changes. | Core shape. |
+| Public nulls | `PublicMetaDto.semester/weekNumber/parity/bellProfile`, `DayDto.parity`, `DashboardDto.parity`, `PublicChangesDto.parity`, `LessonView.startsAt/endsAt`, `PublicGroupDto.department` may be `null`: no parity badge, «Навчального семестру зараз немає», no lesson time, no department — never the text «null». A public change row may have `group.id = null`. `PublicTeacherDto.fullName` is shown on the teacher page when present. | Core never invents parity or times. |
+| `weekdayLabel` | Day headers are formatted from `date`; the upper-case `DayDto.weekdayLabel` («ПОНЕДІЛОК») is not printed as is. | Core casing. |
+| SSE | `absence.updated` (and `absence.created`) payload is the summary without reason/comment; both refresh absences, the dashboard, options and the cabinet. `order.published` is the order summary. | Core events. |
+| `GET /api/public/bells` | Without `date` core answers for today (ISO weekday, empty slots on weekends) plus active `profiles`; the client only reads `profiles` from it. | Core shape. |
 
 ## Scheduler (copied from docs/modules/scheduler.md §9; no change to `libs/contracts`)
 

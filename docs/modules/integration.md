@@ -123,6 +123,16 @@ Paths of every SPA call exist in the backend. Shapes and codes that differ:
 16. Streams: `ProblemSnapshot` has no stream id, so the scheduler plans stream units separately; web and mock
     move lessons of one `streamId` together, core moves a single lesson.
 
+### Status after the web wiring (08.11.2026)
+
+Items 1–14 are closed on the web side: types, screens and the mock API follow the backend shapes and codes,
+and `web/src/api/contract.test.ts` checks every mocked response against the Java records (details:
+CHANGELOG-CONTRACTS, «Web: wiring to the backend contracts»). Still open, backend side:
+- `GET /api/admin/absences/{id}/affected` has no `date` per item; the changes screen needs it for absences
+  longer than one day (the client fails loudly instead of guessing).
+- Item 15 (teacher's own binding status, `maxParallel` in public rooms, unlinking/deleting invites, historic
+  order import in core) and item 16 (streams in the solver) are unchanged.
+
 ## 6. How to verify
 
 ```bash

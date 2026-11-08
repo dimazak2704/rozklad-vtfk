@@ -46,8 +46,11 @@
 
 ## Рішення
 
-- **Додаткові поля до контракту** (записано в `docs/CHANGELOG-CONTRACTS.md`): `date` у зачеплених парах і
-  варіантах; `date`/`pair` у варіанта ADDITIONAL; `pairTo` у SWAP — звідки переставлено пару.
+- **Поля, узгоджені з core** (`docs/CHANGELOG-CONTRACTS.md`, «Web: wiring to the backend contracts»):
+  `date`/`pair` у варіанта ADDITIONAL; у SWAP пара, звідки переставлено, — `swapFromPair` (`pairTo` = `pairFrom`).
+  `date` у зачеплених парах клієнт ще чекає від core: без нього дата виводиться лише для одноденної відсутності,
+  інакше екран показує помилку. Причину рішення можна змінити (`PUT` з `version`, 409 `stale-data` → перечитати);
+  відхилену заміну не підтверджують, а питають ще раз (core: 422 `CHANGE_DECLINED`).
 - **Відпрацювання** (варіант ADDITIONAL) — два запити: скасувати сьогоднішню пару (CANCEL) і додати пару в
   інший день (ADDITIONAL, причина «Відпрацювання»).
 - **Номер у діалозі публікації** рахується з `GET /api/admin/orders?status=PUBLISHED&sort=number,desc&size=1`
