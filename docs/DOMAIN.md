@@ -142,11 +142,16 @@ Emits `timetable.version.published` and `schedule.changed`.
 Dated lessons keep following the calendar after publication: a calendar edit (holiday, practice, study mode,
 parity override, semester dates) re-materializes the affected dates and groups from today on with the version
 that governs each date (the one published last among those effective by then); lessons that still match keep
-their rows (an ONLINE period only flips `online` and frees the room), lessons of live changes are not touched,
-past days stay as history. Because of that, an edit that would leave a lesson of a live change on a day its group has
-no classes, or could not put a template lesson back because a changed lesson holds its teacher or room, is refused
-(409 with `conflicts[]`): the dispatcher cancels the decision or publishes an amendment first. Publication refuses a
-change that would put a lesson on such a day.
+their rows (an ONLINE period only flips `online` and frees the room), lessons of live changes keep their rows but
+follow the study mode of their day too (online when the template lesson they stand for is online or the group studies
+online that day), past days stay as history. Within one version a kept lesson speaks only for its own template
+lesson: after a parity override a lesson an order cancelled in the other week does not hold the slot, and the lesson
+of this week takes place. Because of that, an edit that would leave a lesson of a live change on a day its group has
+no classes (holiday, practice, outside the semester) or in a week its template lesson does not fall on, could not put
+a template lesson back because a changed lesson holds its teacher or room, or would make a changed lesson occupy a
+room that is taken, is refused (409 with `conflicts[]`): the dispatcher cancels the decision or publishes an amendment
+first. Only what the edit changes counts: a lesson that was already missing or out of place before the edit (with
+the calendar as it was) does not block it. Publication refuses a change that would put a lesson on such a day.
 
 ## 7. Absences, options, changes
 
@@ -174,7 +179,8 @@ absent at (date, pair): checked when the change is created, confirmed and publis
 → CONFIRMED | DECLINED (declined returns the lesson to «needs decision»). Kinds without a new teacher or
 mode AUTO go DRAFT → CONFIRMED. Pending longer than `substitution.confirmTimeoutMinutes` ⇒ reminder
 (SSE + admin chat). On order publication CONFIRMED changes of that date become APPLIED: original lesson →
-CANCELLED, new lesson (origin CHANGE/ADDITIONAL/BLOCK) created, conflicts re-checked. Every status change is
+CANCELLED, new lesson (origin CHANGE/ADDITIONAL/BLOCK) created, conflicts re-checked; the lessons a BLOCK replaces
+are recorded with it (`change_replaced_lesson`), because a block has no single original. Every status change is
 written to `change_history` and pushed via SSE (`change.updated`).
 
 **Reason codes** (short text in the order): `ABSENT` «Відп.», `MUTUAL` «Зв.зам.», `FINISHED` «Вичит.»,

@@ -69,7 +69,8 @@ Timetable:
 | `GET /api/admin/timetable/versions/{id}/metrics` | `MetricsDto {groupWindows, teacherWindows, brokenDays, latePairs, maxPairsPerDay, perGroup:[...]}` |
 | `GET /api/admin/timetable/versions/{a}/diff/{b}` | `{added:[..], removed:[..], moved:[{from,to}]}` |
 | `POST /api/admin/timetable/versions/{id}/publish` `{effectiveFrom}` | 200 `{materializedLessons, keptLessons, coveredByChanges, conflicts, pendingDecisions}` / 409 conflicts |
-`TemplateLessonDto {id, weekday, pair, parity, group:GroupRef, subgroup, discipline, teacher?, room?, lessonKind, loadItemId?, pinned, online, streamId?}`
+`TemplateLessonDto {id, weekday, pair, parity, group:GroupRef, subgroup, discipline, teacher?, room?, lessonKind, loadItemId?, pinned, online, streamId?, version}`;
+`PUT …/lessons/{lessonId}` and `POST …/move` accept `version` (the lesson's version the edit is based on): an older one → 409 `stale-data`.
 
 Generation:
 | `POST /api/admin/generation/jobs` `{semesterId, scope:{groupIds?:[], courses?:[]}, baseVersionId?, timeLimitSeconds (10..600), weights?:{windows,brokenDays,latePairs,preferences,homeRoom}}` | 202 `{jobId}` |
@@ -90,7 +91,7 @@ Substitutions:
 Orders:
 | `GET /api/admin/orders?from&to&q&status` | page of `{id, number, date, kind, status, itemCount, publishedAt}` |
 | `GET /api/admin/orders/draft?date=` | builds/refreshes the draft for the date → `OrderDto` |
-| `DELETE /api/admin/orders/{id}` | discards a draft → 204 (the changes stay confirmed); a published order → 422 `ORDER_ALREADY_PUBLISHED` |
+| `DELETE /api/admin/orders/{id}` | discards a draft → 204 (the changes stay confirmed); deletes an **imported** paper order (`imported: true`) → 204, 409 while it has amendments; an order the system published → 422 `ORDER_ALREADY_PUBLISHED` |
 | `GET /api/admin/orders/{id}` | `OrderDto {id, number?, date, kind, parentId?, status, title, weekdayLabel, parityLabel, items:[OrderItemDto], roomChanges:[OrderItemDto], notes:[string], signatoryPosition, signatoryName}` |
 | `PUT /api/admin/orders/{id}/notes` `{notes:[string], version}` | edit notes of a draft (stale `version` → 409) |
 | `POST /api/admin/orders/{id}/publish` | 200 `OrderDto` (number assigned, changes APPLIED, event `order.published`) |
