@@ -326,3 +326,19 @@ test('importer зупинено: імпорт показує помилку се
   await page.getByRole('table', { name: 'Завдання імпорту' }).getByRole('button', { name: /Спробувати ще раз/ }).click();
   await expect(page.getByRole('table', { name: 'Завдання імпорту' }).getByRole('row').filter({ hasText: 'schedule-2025-26.xlsx' }).first()).toBeVisible();
 });
+
+test('без мережі: «Заміни» диспетчера на новий день — стан «немає звʼязку» і без чужої парності', async ({ page, context }) => {
+  await login(page, 'ADMIN', '/admin/changes?date=2026-11-09');
+  await expect(page.getByRole('heading', { level: 1, name: 'Заміни' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Чисельник').or(page.getByText('Знаменник')).first()).toBeVisible({ timeout: 30_000 });
+
+  await context.setOffline(true);
+  try {
+    await page.getByRole('button', { name: 'Наступний день' }).first().click();
+    await expect(page.getByText('Немає звʼязку з сервером')).toBeVisible({ timeout: 30_000 });
+    // парність понеділка 09.11 не підписує вівторок 10.11, доки панель цього дня не завантажилась
+    await expect(page.getByRole('main').getByText(/^(Чисельник|Знаменник)$/)).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+  }
+});

@@ -50,3 +50,19 @@ test('без мережі: переглянутий тиждень зі збер
   await page.getByRole('button', { name: 'Оновити сторінку' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Дзвінки', { timeout: 30_000 });
 });
+
+test('без мережі: заміни на ще не переглянутий день — пояснення, а не вічне завантаження', async ({ page, context }) => {
+  await page.goto('/changes?date=2026-11-09');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Заміни', { timeout: 30_000 });
+  await expect(page.getByText('Завантажуємо заміни…')).toHaveCount(0, { timeout: 30_000 });
+
+  await context.setOffline(true);
+  try {
+    await page.getByRole('button', { name: 'Наступний день' }).first().click();
+    await expect(page.getByText('Заміни на цю дату не збережено на пристрої')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: /^Заміни на / })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  } finally {
+    await context.setOffline(false);
+  }
+});
