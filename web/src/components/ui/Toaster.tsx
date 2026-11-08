@@ -2,10 +2,12 @@ import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { Toaster as Sonner } from 'sonner';
 import { useResolvedTheme } from '@/hooks/useResolvedTheme';
 import { Spinner } from './Spinner';
+import { TOAST_CLEARANCE_VAR } from './toastClearance';
 
 /**
  * Сповіщення (sonner) у кольорах системи. Один екземпляр у корені застосунку.
- * Показувати через `notify` з `@/components/ui/toast`.
+ * Показувати через `notify` з `@/components/ui/toast`. Над липкою панеллю дій унизу сторінки
+ * (`toastClearanceRef`) сповіщення піднімаються, щоб не накривати її кнопки.
  */
 export function Toaster() {
   const theme = useResolvedTheme();
@@ -13,8 +15,8 @@ export function Toaster() {
     <Sonner
       theme={theme}
       position="bottom-right"
-      offset={16}
-      mobileOffset={{ bottom: 'calc(var(--tabbar-height) + 12px)', left: 12, right: 12 }}
+      offset={{ bottom: `calc(var(${TOAST_CLEARANCE_VAR}, 0px) + 16px)`, right: 16, left: 16, top: 16 }}
+      mobileOffset={{ bottom: `calc(var(--tabbar-height) + var(${TOAST_CLEARANCE_VAR}, 0px) + 12px)`, left: 12, right: 12 }}
       visibleToasts={4}
       closeButton={false}
       containerAriaLabel="Сповіщення"

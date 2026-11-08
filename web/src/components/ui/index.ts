@@ -39,5 +39,6 @@ export { Switch } from './Switch';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 export { Textarea } from './Textarea';
 export { notify } from './toast';
+export { toastClearanceRef } from './toastClearance';
 export { Toaster } from './Toaster';
 export { Tooltip, TooltipProvider } from './Tooltip';

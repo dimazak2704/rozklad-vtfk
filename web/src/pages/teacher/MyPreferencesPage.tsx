@@ -8,7 +8,7 @@ import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { studyWeek } from '@/components/public/schedule/schedule-params';
 import { PreferenceGrid } from '@/components/teacher/PreferenceGrid';
 import { cellKey, changedCells, countKinds, KIND_CELL, KIND_TEXT, toList, toMap, type CellKey } from '@/components/teacher/preferences';
-import { Button, EmptyState, ErrorState, LoadingRegion, PageHeader, Skeleton, notify } from '@/components/ui';
+import { Button, EmptyState, ErrorState, LoadingRegion, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, nearestStudyDay, todayInKyiv } from '@/lib/date';
 import { countLabel, PARITY_LABEL } from '@/lib/labels';
@@ -159,6 +159,7 @@ export default function MyPreferencesPage() {
           </p>
 
           <div
+            ref={toastClearanceRef}
             className={cn(
               'sticky bottom-[calc(var(--tabbar-height)+0.75rem)] z-20 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-default bg-raised px-4 py-3 shadow-popover md:bottom-4',
               changed === 0 && 'hidden',

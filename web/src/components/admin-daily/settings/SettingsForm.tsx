@@ -7,7 +7,7 @@ import { isApiError } from '@/api/errors';
 import { useBellProfiles } from '@/api/public';
 import { useUpdateSettings } from '@/api/settings';
 import type { BellProfileDto, SettingsDto } from '@/api/types';
-import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, Select, Switch } from '@/components/ui';
+import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, Select, Switch, toastClearanceRef } from '@/components/ui';
 import { LIMITS, settingsSchema, type SettingsFormValues } from './schema';
 
 const SERIF = '"Times New Roman", "Liberation Serif", Tinos, "Noto Serif", Times, serif';
@@ -265,7 +265,9 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
       </SettingsSection>
 
       {formState.isDirty ? (
-        <div className="sticky bottom-0 z-20 -mx-3 mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-default bg-surface px-3 py-3 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8">
+        <div
+          ref={toastClearanceRef}
+          className="sticky bottom-0 z-20 -mx-3 mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-default bg-surface px-3 py-3 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8">
           <p className="me-auto flex items-center gap-2 text-ui text-secondary">
             <CircleExclamationPoint aria-hidden="true" className="size-4 text-change" />
             Є незбережені зміни
