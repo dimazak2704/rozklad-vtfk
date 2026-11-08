@@ -2,11 +2,10 @@ package ua.vtc.rozklad.importer.job;
 
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,6 +25,7 @@ import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
 import ua.vtc.rozklad.importer.catalog.CatalogUnavailableException;
 import ua.vtc.rozklad.importer.config.Ids;
 import ua.vtc.rozklad.importer.config.ImportProperties;
+import ua.vtc.rozklad.importer.normalize.EntityCandidate;
 import ua.vtc.rozklad.importer.normalize.MappingDecision;
 import ua.vtc.rozklad.importer.report.Severity;
 import ua.vtc.rozklad.importer.storage.FileStorage;
@@ -137,23 +137,23 @@ public class ImportJobService {
         }
         JobOptions options = JobOptions.from(job.options());
         ImportHandler handler = handlers.get(job.kind());
-        Set<String> known = new HashSet<>();
-        normalizer.entities(job.kind(), job.draft(), options).forEach(entity -> known.add(entity.key()));
+        Map<String, EntityCandidate> known = new HashMap<>();
+        normalizer.entities(job.kind(), job.draft(), options).forEach(entity -> known.put(entity.key(), entity));
         CatalogSnapshot snapshot = fetchCatalog();
         List<Map.Entry<String, String>> errors = new ArrayList<>();
         for (MappingChange change : changes) {
             MappingDecision decision = change.decision();
             String prefix = "mappings[" + change.index() + "]";
-            if (!known.contains(decision.key())) {
+            if (!known.containsKey(decision.key())) {
                 errors.add(Map.entry(prefix + ".raw", "Значення «" + decision.raw() + "» (" + decision.type().label()
                         + ") відсутнє в цьому імпорті."));
             }
             if (decision.mapsToExisting() && !exists(snapshot, decision)) {
                 errors.add(Map.entry(prefix + ".targetId", "Обраного запису немає в каталозі."));
             }
-            if (decision.createNew() != null && !change.reset() && !handler.creates(decision.type())) {
-                errors.add(Map.entry(prefix + ".createNew", "Цей імпорт не створює нових "
-                        + decision.type().genitivePlural() + " — зіставте значення з наявним записом каталогу."));
+            if (decision.createNew() != null && !change.reset() && known.containsKey(decision.key())) {
+                handler.cannotCreate(known.get(decision.key())).ifPresent(reason -> errors.add(Map.entry(
+                        prefix + ".createNew", reason + " Зіставте значення з наявним записом каталогу.")));
             }
         }
         if (!errors.isEmpty()) {

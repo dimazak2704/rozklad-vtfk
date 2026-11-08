@@ -20,7 +20,9 @@ public enum RowType {
     /** Catalog snapshot from core (availability). */
     CATALOG,
     /** The uploaded file as a whole. */
-    FILE;
+    FILE,
+    /** The import parameters applying needs (groups, weekly hours); corrected with PUT …/options. */
+    OPTIONS;
 
     public static final Set<RowType> ENTITIES = EnumSet.of(TEACHER, DISCIPLINE, GROUP, ROOM);
 

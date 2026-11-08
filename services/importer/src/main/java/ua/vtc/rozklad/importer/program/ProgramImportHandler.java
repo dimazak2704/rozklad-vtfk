@@ -3,6 +3,7 @@ package ua.vtc.rozklad.importer.program;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -129,9 +130,19 @@ public class ProgramImportHandler implements ImportHandler {
         return type == EntityType.DISCIPLINE;
     }
 
+    /** A discipline is created only under the name of the title page, never under the file name. */
+    @Override
+    public Optional<String> cannotCreate(EntityCandidate entity) {
+        if (entity.type() == EntityType.DISCIPLINE && entity.fullName() == null) {
+            return Optional.of("Назви дисципліни в програмі не знайдено — «" + entity.raw() + "» узято з назви файлу, "
+                    + "тож нової дисципліни з неї не створюємо.");
+        }
+        return ImportHandler.super.cannotCreate(entity);
+    }
+
     /**
      * Everything apply needs, as blocking rows: groups, hours on classes, hours per week (from the
-     * program or the import parameters) and a discipline when the title page names none.
+     * program or the import parameters).
      */
     @Override
     public List<ReportRow> readiness(JsonNode draftJson, JobOptions options, NormalizationResult normalization) {
@@ -142,16 +153,8 @@ public class ProgramImportHandler implements ImportHandler {
             rows.add(ReportRow.of(Severity.ERROR, RowType.HOURS, null, draft.location(), CLASSROOM_REQUIRED));
         }
         if (hoursPerWeek(draft, options) == null) {
-            rows.add(ReportRow.of(Severity.ERROR, RowType.HOURS, null, LoadApplier.OPTIONS_LOCATION,
+            rows.add(ReportRow.of(Severity.ERROR, RowType.OPTIONS, null, LoadApplier.OPTIONS_LOCATION,
                     HOURS_PER_WEEK_REQUIRED));
-        }
-        if (draft.disciplineName() == null) {
-            normalization.find(EntityType.DISCIPLINE, draft.disciplineRaw())
-                    .filter(resolution -> resolution.createsNew() && resolution.decision() == null)
-                    .ifPresent(resolution -> rows.add(ReportRow.of(Severity.ERROR, RowType.DISCIPLINE,
-                            draft.disciplineRaw(), "титульна сторінка", "Назви дисципліни в програмі не знайдено — "
-                                    + "«" + draft.disciplineRaw() + "» узято з назви файлу. Оберіть дисципліну з "
-                                    + "каталогу на вкладці «Рішення».")));
         }
         return rows;
     }

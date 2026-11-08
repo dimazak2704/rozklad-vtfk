@@ -49,7 +49,7 @@ public final class LoadApplier {
      */
     public static List<ReportRow> readiness(JobOptions options) {
         return options.groupCodes().isEmpty()
-                ? List.of(ReportRow.of(Severity.ERROR, RowType.GROUP, null, OPTIONS_LOCATION, GROUPS_REQUIRED))
+                ? List.of(ReportRow.of(Severity.ERROR, RowType.OPTIONS, null, OPTIONS_LOCATION, GROUPS_REQUIRED))
                 : List.of();
     }
 

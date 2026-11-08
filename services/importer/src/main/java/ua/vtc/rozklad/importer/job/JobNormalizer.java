@@ -52,10 +52,10 @@ class JobNormalizer {
             if (row.needsDecision() && !handler.entitiesBlockApply()) {
                 row = new ReportRow(Severity.INFO, row.type(), row.raw(), null, row.suggestions(), row.location(),
                         "У каталозі є схожі записи (для інформації: розпорядження імпортується як текст).");
-            } else if (resolution.createsNew() && !handler.creates(type)) {
+            } else if (resolution.createsNew() && handler.cannotCreate(resolution.entity()).isPresent()) {
                 row = handler.entitiesBlockApply()
                         ? new ReportRow(Severity.ERROR, row.type(), row.raw(), null, row.suggestions(), row.location(),
-                                "Немає в каталозі, а цей імпорт не створює нових " + type.genitivePlural() + ". "
+                                "Немає в каталозі. " + handler.cannotCreate(resolution.entity()).get() + " "
                                         + missingHint(type))
                         : new ReportRow(Severity.INFO, row.type(), row.raw(), null, row.suggestions(), row.location(),
                                 "Немає в каталозі (для інформації: розпорядження зберігається як текст, каталог не "

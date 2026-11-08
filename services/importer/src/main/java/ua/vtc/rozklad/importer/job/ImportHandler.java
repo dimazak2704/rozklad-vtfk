@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.importer.job;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
@@ -50,6 +51,15 @@ public interface ImportHandler {
      */
     default boolean creates(EntityType type) {
         return true;
+    }
+
+    /**
+     * Why applying cannot create a catalog entry for this value, or empty when it can (or when the
+     * value is matched anyway). By default: the kind does not create {@code type} at all.
+     */
+    default Optional<String> cannotCreate(EntityCandidate entity) {
+        return creates(entity.type()) ? Optional.empty()
+                : Optional.of("Цей імпорт не створює нових " + entity.type().genitivePlural() + ".");
     }
 
     /**

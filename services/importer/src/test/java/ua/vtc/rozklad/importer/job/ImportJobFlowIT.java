@@ -442,7 +442,7 @@ class ImportJobFlowIT {
         assertThat(parsed.get("canApply").asBoolean()).isFalse();
         assertThat(errorMessages(parsed))
                 .contains("У програмі не вказано годин на тиждень — задайте «Годин на тиждень» у параметрах імпорту.")
-                .anyMatch(message -> message.startsWith("Немає в каталозі, а цей імпорт не створює нових груп."));
+                .anyMatch(message -> message.startsWith("Немає в каталозі. Цей імпорт не створює нових груп."));
         assertThat(messages(parsed)).noneMatch(message -> message.contains("буде створено (група)"));
         mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
                 .andExpect(status().isUnprocessableContent())
