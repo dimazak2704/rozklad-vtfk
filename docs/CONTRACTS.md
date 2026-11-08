@@ -29,10 +29,10 @@ Page<T>       {items:[T], page, size, total}
 | `GET /api/public/rooms` | `[{id, name, type, capacity, building, maxParallel}]` |
 | `GET /api/public/bells?date=` | `{profile:{id,name}, weekday, slots:[{pair, startsAt, endsAt}]}` (+ `profiles` list when no date) |
 | `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
-| `GET /api/public/changes?date=` | `{date, parity, weekdayLabel, order:{id,number,publishedAt}?, groups:[{group:GroupRef, items:[ChangeView]}]}` |
+| `GET /api/public/changes?date=` | `{date, parity, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}` |
 | `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` for the semester (published lessons) |
 | `GET /api/public/invites/{token}` | `{valid, teacherName, expiresAt}` |
-| `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired |
+| `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired/used/revoked (`inviteStatus`) |
 
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
@@ -40,7 +40,7 @@ DayDto      { date, weekday (1..5), weekdayLabel, parity, studyDay, note?, lesso
 LessonView  { id, pair, startsAt, endsAt, discipline:DisciplineRef, teacher:TeacherRef?, room:RoomRef?,
               group:GroupRef, subgroup (0..n), kind: REGULAR|SUBSTITUTED|CANCELLED|ADDITIONAL|MOVED|ROOM_CHANGED|BLOCK,
               online:bool, original:{discipline?,teacher?,room?,pair?}?, reasonText?, changeId? }
-ChangeView  { pairLabel, rowType, from:{discipline?,teacher?}, reasonText?, to:{discipline?,teacher?}, room?, subgroupNote? }
+ChangeView  { pairLabel, rowType, from:{discipline?,teacher?}, reasonText?, to:{discipline?,teacher?}, room?, subgroupNote?, orderNumber? }
 ```
 
 ## 2. Core — admin (role ADMIN)
@@ -92,7 +92,7 @@ Orders:
 | `GET /api/admin/orders/draft?date=` | builds/refreshes the draft for the date → `OrderDto` |
 | `DELETE /api/admin/orders/{id}` | discards a draft → 204 (the changes stay confirmed); a published order → 422 `ORDER_ALREADY_PUBLISHED` |
 | `GET /api/admin/orders/{id}` | `OrderDto {id, number?, date, kind, parentId?, status, title, weekdayLabel, parityLabel, items:[OrderItemDto], roomChanges:[OrderItemDto], notes:[string], signatoryPosition, signatoryName}` |
-| `PUT /api/admin/orders/{id}/notes` `{notes:[string]}` | edit notes of a draft |
+| `PUT /api/admin/orders/{id}/notes` `{notes:[string], version}` | edit notes of a draft (stale `version` → 409) |
 | `POST /api/admin/orders/{id}/publish` | 200 `OrderDto` (number assigned, changes APPLIED, event `order.published`) |
 | `GET /api/admin/orders/numbering?semesterId` · `PUT {semesterId, firstNumber}` | `{semesterId, firstNumber, lastNumber?, nextNumber}`; next = max(last + 1, first); 422 `ORDER_NUMBER_USED` when `firstNumber ≤ last` |
 `OrderItemDto {id, groupCode, pairLabel, rowType, fromDiscipline, fromTeacher, reasonText, toDiscipline, toTeacher, roomText, changeId?}`

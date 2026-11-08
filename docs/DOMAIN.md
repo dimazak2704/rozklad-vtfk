@@ -143,7 +143,10 @@ Dated lessons keep following the calendar after publication: a calendar edit (ho
 parity override, semester dates) re-materializes the affected dates and groups from today on with the version
 that governs each date (the one published last among those effective by then); lessons that still match keep
 their rows (an ONLINE period only flips `online` and frees the room), lessons of live changes are not touched,
-past days stay as history.
+past days stay as history. Because of that, an edit that would leave a lesson of a live change on a day its group has
+no classes, or could not put a template lesson back because a changed lesson holds its teacher or room, is refused
+(409 with `conflicts[]`): the dispatcher cancels the decision or publishes an amendment first. Publication refuses a
+change that would put a lesson on such a day.
 
 ## 7. Absences, options, changes
 
