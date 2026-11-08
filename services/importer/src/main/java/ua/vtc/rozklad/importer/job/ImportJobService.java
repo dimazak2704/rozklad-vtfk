@@ -27,6 +27,7 @@ import ua.vtc.rozklad.importer.config.Ids;
 import ua.vtc.rozklad.importer.config.ImportProperties;
 import ua.vtc.rozklad.importer.normalize.EntityCandidate;
 import ua.vtc.rozklad.importer.normalize.MappingDecision;
+import ua.vtc.rozklad.importer.report.ReportRow;
 import ua.vtc.rozklad.importer.report.Severity;
 import ua.vtc.rozklad.importer.storage.FileStorage;
 import ua.vtc.rozklad.importer.web.BusinessRuleException;
@@ -296,7 +297,7 @@ public class ImportJobService {
 
     /** Why a job in review cannot be applied, in the words of the report. */
     private static String reviewReason(ImportJob job) {
-        if (job.summary().conflicts() > 0) {
+        if (job.report().stream().anyMatch(ReportRow::needsDecision)) {
             return "Спершу розв'яжіть позначені розбіжності: оберіть відповідники або підтвердіть створення нових записів.";
         }
         return job.report().stream().filter(row -> row.severity() == Severity.ERROR)

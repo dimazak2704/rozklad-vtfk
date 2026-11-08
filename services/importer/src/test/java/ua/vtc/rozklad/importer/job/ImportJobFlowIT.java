@@ -446,7 +446,8 @@ class ImportJobFlowIT {
         assertThat(messages(parsed)).noneMatch(message -> message.contains("буде створено (група)"));
         mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
                 .andExpect(status().isUnprocessableContent())
-                .andExpect(jsonPath("$.code").value("IMPORT_NEEDS_REVIEW"));
+                .andExpect(jsonPath("$.code").value("IMPORT_NEEDS_REVIEW"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.startsWith("Імпорт потребує перевірки: ")));
         // групу цей імпорт не створює — і за рішенням адміністратора теж
         mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
                         .contentType(MediaType.APPLICATION_JSON)
