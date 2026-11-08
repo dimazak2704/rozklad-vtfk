@@ -176,8 +176,10 @@ class GenerationResultHandler {
         TemplateLesson lesson = new TemplateLesson(versionId, placement.weekday(), placement.pair(), placement.parity(),
                 unit.groupId(), unit.subgroup(), unit.disciplineId());
         lesson.setTeacherId(unit.teacherId());
-        lesson.setRoomId(placement.roomId() != null && knownRooms.contains(placement.roomId()) ? placement.roomId()
-                : null);
+        // учасник потоку надсилався без аудиторії (PlanUnit.toStreamFollowerUnit): аудиторія потоку з бази
+        UUID room = placement.roomId() == null && unit.streamId() != null && unit.pinned() != null
+                ? unit.pinned().roomId() : placement.roomId();
+        lesson.setRoomId(room != null && knownRooms.contains(room) ? room : null);
         lesson.setLoadItemId(unit.loadItemId());
         lesson.setLessonKind(unit.lessonKind());
         lesson.setStreamId(unit.streamId());

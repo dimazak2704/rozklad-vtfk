@@ -104,8 +104,10 @@ class ProblemSnapshotBuilder {
         List<TemplateLesson> baseLessons = base == null ? List.of() : templateLessons.findAllByVersionId(base.getId());
         Map<UUID, RoomType> requiredTypes = loads.requiredRoomTypes(baseLessons.stream()
                 .map(TemplateLesson::getLoadItemId).filter(Objects::nonNull).collect(Collectors.toSet()));
+        // потоки зберігаються як у базовій версії: планувальник їх не моделює (див. PlanUnit.toStreamFollowerUnit)
         units = pinInScope(units, baseLessons.stream()
-                .filter(lesson -> scopeIds.contains(lesson.getGroupId()) && lesson.isPinned())
+                .filter(lesson -> scopeIds.contains(lesson.getGroupId())
+                        && (lesson.isPinned() || lesson.getStreamId() != null))
                 .sorted(LESSON_ORDER)
                 .toList(), requiredTypes);
         baseLessons.stream()
@@ -119,10 +121,16 @@ class ProblemSnapshotBuilder {
         groups.findAllById(outsideGroupIds).forEach(group -> groupsById.put(group.getId(), group));
         storedSubgroups.putAll(storedSubgroups(outsideGroupIds));
         ShiftWindows windows = calendar.shiftWindowTable();
+        Set<PlanUnit.StreamSlot> streamLeaders = new HashSet<>();
         ProblemSnapshot snapshot = new ProblemSnapshot(timeslots(windows), shiftWindowsOf(windows),
                 snapshotGroups(groupsById.values(), storedSubgroups, units), snapshotRooms(units),
                 snapshotTeachers(units, preferences.forSemester(semesterId)),
-                units.stream().map(unit -> unit.toSnapshotUnit(homeRoom(groupsById.get(unit.groupId())))).toList());
+                units.stream().map(unit -> {
+                    UUID homeRoom = homeRoom(groupsById.get(unit.groupId()));
+                    PlanUnit.StreamSlot stream = unit.streamSlot();
+                    return stream == null || streamLeaders.add(stream) ? unit.toSnapshotUnit(homeRoom)
+                            : unit.toStreamFollowerUnit(homeRoom);
+                }).toList());
         return new Built(snapshot, new GenerationPlan(units));
     }
 
@@ -159,7 +167,7 @@ class ProblemSnapshotBuilder {
                 }
             }
             if (index >= 0) {
-                result.set(index, result.get(index).pinnedAt(slot, lesson.getId()));
+                result.set(index, result.get(index).pinnedAt(slot, lesson.getId(), lesson.getStreamId()));
             } else {
                 result.add(pinnedUnit(lesson, requiredTypeOf(lesson, requiredTypes)));
             }

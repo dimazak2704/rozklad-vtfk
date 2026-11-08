@@ -37,13 +37,36 @@ public record PlanUnit(
         Objects.requireNonNull(lessonKind, "lessonKind");
     }
 
-    PlanUnit pinnedAt(ProblemSnapshot.PinnedSlot slot, UUID lessonId) {
+    /** Pinned at the slot of a base lesson; the unit joins the lesson's stream if it has none of its own. */
+    PlanUnit pinnedAt(ProblemSnapshot.PinnedSlot slot, UUID lessonId, UUID lessonStreamId) {
         return new PlanUnit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, lessonKind,
-                requiredRoomType, preferredRoomId, streamId, online, slot, lessonId);
+                requiredRoomType, preferredRoomId, streamId != null ? streamId : lessonStreamId, online, slot,
+                lessonId);
     }
 
     ProblemSnapshot.Unit toSnapshotUnit(UUID homeRoomId) {
         return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight,
                 requiredRoomType, preferredRoomId, homeRoomId, pinned);
+    }
+
+    /**
+     * The scheduler has no streams: a stream is one lesson of one teacher in one room for several
+     * groups. Every unit of a pinned stream but the first is sent without teacher and room, so the
+     * solver sees no clash; core gives the generated lesson the real teacher and room back.
+     */
+    ProblemSnapshot.Unit toStreamFollowerUnit(UUID homeRoomId) {
+        ProblemSnapshot.PinnedSlot slot = new ProblemSnapshot.PinnedSlot(pinned.weekday(), pinned.pair(),
+                pinned.parity(), null);
+        return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, null, weight, null, null,
+                homeRoomId, slot);
+    }
+
+    /** Key of one stream occurrence: the stream and its pinned slot. */
+    StreamSlot streamSlot() {
+        return streamId == null || pinned == null ? null
+                : new StreamSlot(streamId, pinned.weekday(), pinned.pair(), pinned.parity());
+    }
+
+    record StreamSlot(UUID streamId, int weekday, int pair, ua.vtc.rozklad.contracts.Parity parity) {
     }
 }

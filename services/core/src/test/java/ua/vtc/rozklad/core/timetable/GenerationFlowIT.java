@@ -207,6 +207,53 @@ class GenerationFlowIT {
                 .filteredOn(version -> version.getSource() == VersionSource.GENERATED).hasSize(1);
     }
 
+    /** The scheduler has no streams: the stream of the base version stays one lesson of one teacher. */
+    @Test
+    void streamOfTheBaseVersionStaysTogether() {
+        UUID stream = UUID.randomUUID();
+        transaction.executeWithoutResult(status -> {
+            TemplateLesson secondGroup = new TemplateLesson(baseVersionId, 4, 2, Parity.BOTH, data.group4ki2.getId(), 0,
+                    data.km.getId());
+            secondGroup.setTeacherId(data.nepyivoda.getId());
+            secondGroup.setRoomId(data.lab6.getId());
+            em.persist(secondGroup);
+        });
+        jdbc.update("UPDATE template_lesson SET stream_id = ? WHERE version_id = ? AND discipline_id = ?", stream,
+                baseVersionId, data.km.getId());
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+
+        GenerationJobDto job = generation.start(new GenerationRequestCommand(data.semester.getId(),
+                List.of(data.group4ki1.getId(), data.group4ki2.getId()), null, baseVersionId, 30, null), "admin");
+
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        List<ProblemSnapshot.Unit> streamUnits = request.problem().units().stream()
+                .filter(unit -> unit.disciplineId().equals(data.km.getId())).toList();
+        assertThat(streamUnits).hasSize(2).allSatisfy(unit -> assertThat(unit.pinned()).isNotNull()
+                .extracting(ProblemSnapshot.PinnedSlot::weekday, ProblemSnapshot.PinnedSlot::pair)
+                .containsExactly(4, 2));
+        // для планувальника викладач і аудиторія потоку зайняті лише одним заняттям
+        assertThat(streamUnits).filteredOn(unit -> data.nepyivoda.getId().equals(unit.teacherId())).hasSize(1);
+        assertThat(streamUnits).filteredOn(unit -> unit.pinned().roomId() != null).hasSize(1);
+
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.SOLVED, 0, -3, assignments(request.problem()), List.of(), null));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.SOLVED));
+
+        List<TemplateLesson> generated = templateLessons.findAllByVersionId(generation.get(job.id()).resultVersionId());
+        assertThat(generated).filteredOn(lesson -> lesson.getDisciplineId().equals(data.km.getId()))
+                .hasSize(2)
+                .allSatisfy(lesson -> {
+                    assertThat(lesson.getStreamId()).isEqualTo(stream);
+                    assertThat(lesson.getTeacherId()).isEqualTo(data.nepyivoda.getId());
+                    assertThat(lesson.getRoomId()).isEqualTo(data.lab6.getId());
+                    assertThat(lesson.getWeekday()).isEqualTo(4);
+                    assertThat(lesson.getPairNumber()).isEqualTo(2);
+                });
+    }
+
     @Test
     void cancelledJobIgnoresALateResultAndTellsTheScheduler() {
         Queue cancels = probe(RozkladEvents.GENERATION_CANCEL);
