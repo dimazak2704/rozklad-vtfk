@@ -890,9 +890,19 @@ function upsertLoad(job: StoredJob, entries: readonly LoadFromImport[]): { creat
         pattern: loadPattern(entry.hoursPerWeek),
         note: entry.note,
       };
-      const existing = loadItems
+      // рядок плану чи програми не знає про поділ на підгрупи: оновлює той запис, що є (як core)
+      const candidates = loadItems
         .all()
-        .find((i) => i.semesterId === semester.id && i.group.id === groupId && i.discipline.id === discipline.id && !i.splitSubgroups);
+        .filter((i) => i.semesterId === semester.id && i.group.id === groupId && i.discipline.id === discipline.id && i.lessonKind === 'MIXED');
+      if (candidates.length > 1) {
+        throw problem({
+          status: 422,
+          slug: 'business-rule',
+          code: 'IMPORT_LOAD_AMBIGUOUS',
+          detail: `Група ${group.code} має з «${discipline.shortName}» два рядки навантаження: для всієї групи й по підгрупах. Уточніть, який оновити.`,
+        });
+      }
+      const existing = candidates[0];
       if (existing) {
         loadItems.update(existing.id, (current) => ({ ...current, ...fields, version: current.version + 1 }));
         updated += 1;
