@@ -226,6 +226,11 @@ Numbering: per semester, sequential from 1, assigned on publication (evidence: �
 school day since 01.09). Changes after publication ⇒ AMENDMENT («ДОПОВНЕННЯ до розпорядження №N»), next number,
 only new rows, distributed as a diff.
 
+Delivery to group chats (round 7, owner's decision): a bound group chat always receives its group's rows when an
+order or amendment is PUBLISHED — there is no switch for that. The morning schedule at 07:30 is extra and opt-in for
+group chats: a new GROUP_CHAT binding starts without it; chat administrators switch it with `/rozklad_on` /
+`/rozklad_off` (the dispatcher can do it on the Telegram page). A private SUBSCRIBER keeps it on by default.
+
 ## 9. Accounting
 
 For semester S, group G, discipline D: `plan = Σ planned_hours(load items)`, `fact = (#SCHEDULED lessons that

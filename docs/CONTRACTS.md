@@ -144,7 +144,8 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 ## 6. Notification (role ADMIN unless stated)
 
 | `GET /api/notify/bot` | `{username, link, mode: POLLING|WEBHOOK, connected}` |
-| `GET /api/notify/bindings` · `DELETE /api/notify/bindings/{id}` | `[{id, type: GROUP_CHAT|TEACHER|ADMIN_CHAT|SUBSCRIBER, chatId(masked), title, groupId?, teacherId?, createdAt}]` |
+| `GET /api/notify/bindings` · `DELETE /api/notify/bindings/{id}` | `[{id, type: GROUP_CHAT|TEACHER|ADMIN_CHAT|SUBSCRIBER, chatId(masked), title, groupId?, teacherId?, createdAt}]` (+ `groupCode`, `digestEnabled`) |
+| `PATCH /api/notify/bindings/{id}` `{digestEnabled}` (round 7) | 200 `BindingDto`; morning schedule at 07:30 for GROUP_CHAT/SUBSCRIBER only, else 422 `digest-not-supported`; 404 unknown; 400 `errors[digestEnabled]` |
 | `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` (ADMIN; TEACHER may create own TEACHER code) | `{code, deepLink, expiresAt}` |
 | `GET /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | `{teacherId, teacherName, bound, binding?: BindingDto, botUsername, botLink}`; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status` | delivery log |

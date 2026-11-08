@@ -107,7 +107,10 @@ Language Ukrainian, concise, buttons first, commands as shortcuts. Never show te
   «Чисельник?». (Emoji are acceptable inside Telegram messages/buttons — this is the platform convention.)
 - `/start <code>` deep link: binds a teacher (private) or confirms subscription; reply with who was bound.
 - Group chat: `/bind <code>` from the web panel binds the chat to a group; after each published order the
-  chat receives only its rows (compact text) + PNG of the order; `/today`, `/tomorrow` in the chat answer for that group.
+  chat receives only its rows (compact text) + PNG of the order (always, no switch); `/today`, `/tomorrow` in the chat
+  answer for that group; `/status` says what the chat receives. The morning schedule at 07:30 is opt-in for group
+  chats: `/rozklad_on` / `/rozklad_off`, only chat administrators («Змінити це може лише адміністратор чату.»);
+  the admin's Telegram page has the same switch «Ранковий розклад о 7:30».
 - Public private-chat flow: «Моя група» → choose course (inline 1–4) → choose group → saved subscription;
   then «Сьогодні»/«Завтра» answer immediately; optional morning digest at 07:30 on study days.
 - Teacher private flow: «Мої пари завтра», «Повідомити про відсутність» → dates (today/tomorrow/calendar

@@ -10,8 +10,8 @@ internal REST, schedules are read from core's public REST.
 | Package | What is there |
 |---|---|
 | `telegram` | `TelegramApi` port (the only Bot API surface the code uses), `OkHttpTelegramApi` adapter over telegrambots-client 10.3 (Jackson 2 lives only here), `UpdateMapper` (library `Update` → `BotUpdate`), `TelegramBotRunner` (start/stop, long polling or webhook, command menus), `PerChatExecutor`, `TelegramWebhookController`, `BotStatus`, `web/BotController` |
-| `bot` | conversation: `UpdateDispatcher` → `PrivateChats` / `GroupChats` / `CallbackRouter` / `InlineQueries`; flows `ScheduleViews`, `MyGroupFlow`, `SearchFlow`, `AbsenceFlow`, `SubstitutionReplyFlow`, `BindingFlow`; `BotReplies` (immediate answers), `DialogStore` (Redis), `ScheduleCards` (day card HTML), `ChatAccess` (who the bot talks to) |
-| `binding` | `ChatBinding`, `BindingCode` (one-time codes, SHA-256 only), `ChatBindings`, `BindingCodes`, `BindingCodeRequests`, `web/BindingController` |
+| `bot` | conversation: `UpdateDispatcher` → `PrivateChats` / `GroupChats` / `CallbackRouter` / `InlineQueries`; flows `ScheduleViews`, `MyGroupFlow`, `SearchFlow`, `AbsenceFlow`, `SubstitutionReplyFlow`, `BindingFlow`; `BotReplies` (immediate answers), `DialogStore` (Redis), `ScheduleCards` (day card HTML), `ChatAccess` (who the bot talks to), `ChatAdmins` (is the author a chat admin, `getChatMember` cached 1 min in Redis) |
+| `binding` | `ChatBinding`, `BindingCode` (one-time codes, SHA-256 only), `ChatBindings`, `BindingCodes`, `BindingAttempts` (limit on wrong codes, Redis), `BindingCodeRequests`, `web/BindingController` |
 | `delivery` | persistent queue `OutboundMessage` (= delivery log), `Outbox` (enqueue, idempotent), `DeliveryWorker` (claim → limit → send → record), `RetryPolicy`, `RedisRateLimiter` (Lua token buckets), `MessageSender`, `TestMessages`, `web/DeliveryController` |
 | `events` | `EventsListener` (`notification.q.events`), `EventHandlers` (exactly-once via `processed_event`), `AdminNotices` |
 | `orders` | `OrderDistribution` (order.published), `OrderRows` (rows per group/teacher), `OrderTexts` (compact HTML) |
@@ -33,6 +33,7 @@ from `V1`).
 | `GET /api/notify/bot` | ADMIN | `{username, link, mode, connected}` **+ `problem`** (Ukrainian reason when not connected). `getMe` is cached for 1 min. |
 | `GET /api/notify/bindings` | ADMIN | `[{id, type, chatId (masked «-•••7890»), title, groupId, teacherId, createdAt}]` **+ `groupCode`, `digestEnabled`** |
 | `DELETE /api/notify/bindings/{id}` | ADMIN | 204 / 404 |
+| `PATCH /api/notify/bindings/{id}` `{digestEnabled}` | ADMIN | **round 7.** 200 `BindingDto`; morning schedule of a GROUP_CHAT or SUBSCRIBER; 422 `digest-not-supported` (TEACHER, ADMIN_CHAT), 404, 400 `errors[digestEnabled]`. The web Telegram page shows it as the switch «Ранковий розклад о 7:30». |
 | `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` | ADMIN; TEACHER only `TEACHER` for himself | 200 `{code, deepLink, expiresAt}` **+ `type`, `label`, `groupLink`, `command`**. Code `K7QX-M2PA` (8 chars, no 0/O/1/I), deep link `https://t.me/scheduler_vtfk_bot?start=K7QXM2PA`; for GROUP_CHAT/ADMIN_CHAT also `?startgroup=` and `/bind K7QX-M2PA`. Errors: 400 `errors[groupId|teacherId|type]`, 404 unknown group/teacher, 403 teacher for someone else, 422 `teacher-not-linked`, 503 core down. A teacher is resolved from his own token (`GET /api/me` on core), never from the body. |
 | `GET /api/notify/bindings/me` | TEACHER, ADMIN with a linked teacher | `{teacherId, teacherName, bound, binding?, botUsername, botLink}`: the caller's own TEACHER binding; teacher from `GET /api/me` on core; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status&page&size` | ADMIN | page `{items,page,size,total}` of `{id, orderId, chatId (masked), chatTitle, bindingType, purpose, kind, status QUEUED/RETRYING/SENT/FAILED, attempts, error, createdAt, sentAt, nextAttemptAt}`; newest first; size ≤ 200 |
@@ -122,13 +123,26 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   core's reminders and further changes of that date add nothing; past dates are skipped silently. A seeded or
   quickly confirmed/published order (CONFIRMED/APPLIED within the delay) causes no message. The pending changes
   are in the web panel (link in the message); the order summary still lists «Без Telegram: …».
-* **Group chat**: `/bind CODE` (or `/start CODE` after `?startgroup=`), `/today`, `/tomorrow`, `/help`;
-  chatter and `/cmd@other_bot` are ignored. Bot removed/blocked (`my_chat_member`) → the chat's bindings are
+* **Group chat**: `/bind CODE` (or `/start CODE` after `?startgroup=`), `/today`, `/tomorrow`, `/status`,
+  `/rozklad_on`, `/rozklad_off`, `/help` (the same commands are in the group command menu: «Що отримує цей чат»,
+  «Щоранку надсилати розклад групи», «Не надсилати ранковий розклад»); chatter and `/cmd@other_bot` are ignored.
+  Changes after a published order always come (no command to switch them off). The morning schedule is
+  **opt-in** (round 7): a new GROUP_CHAT binding starts with `digestEnabled = false`; re-binding the chat to another
+  group keeps its choice. `/status` (anyone): «ℹ️ Чат прив’язано до групи 4КІ1. / Цей чат отримує: / • заміни після
+  публікації розпорядження ✅ / • ранковий розклад о 7:30 — вимкнено. Увімкнути: /rozklad_on». `/rozklad_on|off`:
+  only chat administrators — `getChatMember` status `creator`/`administrator`, or an anonymous admin (message sent
+  as the group itself, `sender_chat` = chat); the answer is cached 1 min in Redis (yes and no), a failed check is
+  not cached and changes nothing («Не вдалося перевірити, чи ви адміністратор чату. Спробуйте за хвилину.»);
+  others get «Змінити це може лише адміністратор чату.». The bind confirmation and `/help` explain this in two
+  lines. A chat that is bound but not to a group (ADMIN_CHAT in a group) gets «Цей чат ще не прив’язаний до групи…»
+  and Telegram is not asked. Bot removed/blocked (`my_chat_member`) → the chat's bindings are
   deleted; group → supergroup migration moves bindings.
 * **Inline mode**: `@scheduler_vtfk_bot 4КІ1` → cards of the nearest study day and the next one (up to two
   owners), `cache_time` 60 s. Needs inline mode switched on in @BotFather (`/setinline`).
 * **Morning digest**: 07:30 Mon–Fri (`app.bot.digest-cron`), only when core says `studyDay`, only groups with
-  lessons, once per (date, chat).
+  lessons, once per (date, chat); recipients = SUBSCRIBER and GROUP_CHAT bindings with `digestEnabled` (one query).
+  Before round 7 group chats never got it; existing GROUP_CHAT bindings keep their stored flag (it was always
+  `false`, no data migration), so nothing changes for them until an admin sends `/rozklad_on`.
 
 ### Who the bot talks to (owner's rule)
 
@@ -208,12 +222,45 @@ is rendered once per order no matter how many chats receive it.
 | `DELIVERY_WORKER_ENABLED`, `DELIVERY_GLOBAL_PER_SECOND`, `DELIVERY_GROUP_CHAT_PER_MINUTE` | `true`, 25, 18 | queue |
 | `BOT_DIGEST_ENABLED` | `true` | morning digest |
 | `app.bot.no-telegram-notice-delay` (property) | `2m` | how long a request of a teacher without Telegram may stay pending before admins are told |
+| `app.bot.admin-check-ttl` (property) | `1m` | how long a `getChatMember` answer is reused |
+| `app.bot.bind-attempts`, `app.bot.bind-attempts-window` (properties) | `5`, `15m` | wrong binding codes per chat and per user, then codes are not looked up until the window ends |
 | `EVENTS_LISTENER_ENABLED` | `true` | `false` = do not consume the shared queue (manual runs) |
 | `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them) |
 
 Only ONE instance may long-poll a token (Telegram answers 409 to a second one); use WEBHOOK for replicas.
 
-## 8. Decisions
+## 8. Ризики прив’язки чатів
+
+Що захищає прив’язку і що буде, якщо код потрапить не туди. Кожен пункт перевірено в коді й тестах.
+
+* **Код одноразовий, 8 символів** з 32 (без 0/O/1/I), тобто 2⁴⁰ варіантів (`BindingCodes`). Використаний код
+  позначається; два чати з тим самим кодом одночасно не прив’яжуться обидва (рядок блокується).
+* **Діє 24 години** (`app.bot.code-ttl`); прострочений код відхиляється, через 7 днів рядок видаляється.
+* **У базі лише SHA-256 коду.** Сам код бачить тільки той, хто створив його у веб-панелі (`BindingCodesTest`).
+* **Коди для чатів груп і службових чатів створює лише ADMIN.** Викладач може створити тільки код свого
+  особистого чату; викладача визначає токен, а не тіло запиту (`NotifyApiIT.teacherCreatesOnlyHisOwnCode`).
+* **Підбір коду обмежено** (`BindingAttempts`, раунд 7): 5 хибних кодів за 15 хвилин на чат і окремо на
+  користувача Telegram (анонімного адміністратора рахуємо лише за чатом). Далі коди не перевіряються до кінця
+  вікна. Відомому чату бот пише «Забагато невдалих спроб. Спробуйте ще раз через 15 хв.», незнайомому нічого не
+  пише, як і на вигаданий код. Лічильники в Redis; без Redis код не перевіряється взагалі (fail closed), у лозі
+  помилка. До раунду 7 обмеження не було: при 2⁴⁰ варіантів підбір був нереальним, тепер він ще й обмежений
+  (`BindingAttemptsIT`).
+* **Що дає код групи, який потрапив не туди:** ще один чат отримуватиме зміни цієї групи після публікації
+  розпорядження і зможе дивитися її розклад (`/today`, `/tomorrow`, ранковий розклад, якщо там його ввімкнуть).
+  Це ті самі дані, що й так відкриті на сайті. Код спрацьовує один раз: справжній чат групи побачить «Цей код уже
+  використано» і попросить новий, а диспетчер видалить зайву прив’язку. Код викладача, надісланий у груповий чат,
+  анулюється одразу. Код викладача в чужих руках дав би прохання про заміни цього викладача, тому такий код
+  створює лише сам викладач або диспетчер, а нова прив’язка переносить викладача в новий чат.
+* **Диспетчер бачить і видаляє прив’язки** (`GET`/`DELETE /api/notify/bindings`, лише ADMIN; id чатів
+  замасковано). Якщо бота вилучили з чату, прив’язки цього чату видаляються самі.
+* **Бот ігнорує неприв’язані чати** (`TELEGRAM_ACCESS=BOUND_ONLY`, типово): відповідає лише чату власника і
+  прив’язаним чатам; незнайомий чат отримає відповідь, лише якщо надішле справжній код. Розсилки йдуть тільки в
+  прив’язані чати, і перед кожним надсиланням прив’язку перевіряють ще раз.
+* **Хто перемикає ранковий розклад чату групи:** лише адміністратор цього чату (`getChatMember`, кеш 1 хв, тож
+  розжалуваний адміністратор зберігає право щонайбільше хвилину) або диспетчер на сторінці Telegram. Заміни після
+  публікації вимкнути не можна; їх зупиняє лише диспетчер, коли видаляє прив’язку.
+
+## 9. Decisions
 
 * Own `TelegramApi` port instead of the library's 50-method `TelegramClient`: tests use `FakeTelegramClient`,
   failures are one typed `TelegramApiFailure` (429 `retry_after`, migration, «not modified»), the bot token is
@@ -232,7 +279,7 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 * `GET /api/notify/bot.connected` is true only if `getMe` works **and** updates are received.
 * Links to the SPA are added only for public hosts (Telegram does not accept `localhost` links).
 
-## 9. Contract clarifications (to copy into docs/CHANGELOG-CONTRACTS.md)
+## 10. Contract clarifications (to copy into docs/CHANGELOG-CONTRACTS.md)
 
 | Area | Decision | Why |
 |---|---|---|
@@ -246,12 +293,14 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 | Webhook | `POST /api/notify/telegram/webhook` 404 unless WEBHOOK mode | Reserved path from the foundation. |
 | `GET …/{id}.png` | cropped to the content, not an A4 page (08.11.2026) | Readable on a phone; PDF/DOCX stay A4. |
 | core `GET /api/public/meta` | reads the additive `nextStudyDay` (08.11.2026); an older core without it only loses the «Завтра — …» line | Parity of the next study day comes from core. |
+| `PATCH /api/notify/bindings/{id}` (round 7) | `{digestEnabled}` → 200 `BindingDto`; 422 `digest-not-supported` for TEACHER/ADMIN_CHAT | The dispatcher switches the morning schedule of a chat without Telegram rights. |
+| Group chats (round 7) | new GROUP_CHAT bindings start with `digestEnabled = false`; `/rozklad_on`, `/rozklad_off` (chat admins), `/status`; the digest includes GROUP_CHAT | Owner: changes after publication always, the morning schedule only if the group wants it. |
 
-## 10. How to run and test
+## 11. How to run and test
 
 ```bash
 source scripts/env.sh
-mvn -q -pl services/notification -am verify          # 66 unit tests + 84 Testcontainers ITs (all green)
+mvn -q -pl services/notification -am verify          # 83 unit tests + 108 Testcontainers ITs (all green, 08.11.2026)
 ```
 
 * Unit (`*Test`): DOCX of order №35 (header, merged cells, every row type, subgroups, notes, signature —
@@ -286,7 +335,7 @@ Order №35 was rendered by `OrderDocxRendererTest`, converted by LibreOffice 24
 image and rasterized by `PdfPngRenderer`; the PNG matches the layout of `seed/orders/order-035-2026-10-19.jpg`
 (header, merged cells, «ЗАМІНА АУДИТОРІЙ», bold notes, signature) on one A4 page.
 
-## 11. Known gaps
+## 12. Known gaps
 
 * Not tested end-to-end against a running core/importer (their endpoints were being built in parallel);
   DTOs follow CONTRACTS §1/§3/§4/§5 and ignore unknown fields. `LessonView.original` members are read both
