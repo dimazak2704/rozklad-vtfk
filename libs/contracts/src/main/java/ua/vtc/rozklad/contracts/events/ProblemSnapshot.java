@@ -62,9 +62,13 @@ public record ProblemSnapshot(
     /**
      * One weekly lesson to place. {@code unitId} is opaque and unique within the snapshot;
      * {@code subgroup} 0 means the whole group. Nullable: teacherId, requiredRoomType,
-     * preferredRoomId, homeRoomId, pinned, initial. {@code initial} (additive) is where the unit
-     * stands in the base version: a warm start the solver may change, so a feasible base is never
-     * returned worse; {@code pinned} fixes the unit.
+     * preferredRoomId, homeRoomId, pinned, initial, teacherRoomId. {@code initial} (additive) is where
+     * the unit stands in the base version: a warm start the solver may change, so a feasible base is
+     * never returned worse; {@code pinned} fixes the unit. {@code teacherRoomId} (additive, round 7)
+     * is the teacher's usual room for the discipline (else for any discipline) in the published
+     * timetable: the room belongs to the teacher and groups come to it. The solver prefers
+     * {@code preferredRoomId} (load item), then {@code teacherRoomId}, then {@code homeRoomId}; core
+     * sends {@code homeRoomId} as {@code null} since round 7 (kept for older snapshots).
      */
     public record Unit(
             String unitId,
@@ -78,7 +82,8 @@ public record ProblemSnapshot(
             UUID preferredRoomId,
             UUID homeRoomId,
             PinnedSlot pinned,
-            PinnedSlot initial) {
+            PinnedSlot initial,
+            UUID teacherRoomId) {
 
         public Unit {
             Objects.requireNonNull(unitId, "unitId");
@@ -87,12 +92,20 @@ public record ProblemSnapshot(
             Objects.requireNonNull(weight, "weight");
         }
 
+        /** A unit without a teacher room (snapshots before round 7). */
+        public Unit(String unitId, UUID loadItemId, UUID groupId, int subgroup, UUID disciplineId, UUID teacherId,
+                    UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
+                    PinnedSlot pinned, PinnedSlot initial) {
+            this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
+                    preferredRoomId, homeRoomId, pinned, initial, null);
+        }
+
         /** A unit without a warm start. */
         public Unit(String unitId, UUID loadItemId, UUID groupId, int subgroup, UUID disciplineId, UUID teacherId,
                     UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
                     PinnedSlot pinned) {
             this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
-                    preferredRoomId, homeRoomId, pinned, null);
+                    preferredRoomId, homeRoomId, pinned, null, null);
         }
     }
 

@@ -81,7 +81,8 @@ final class EventSamples {
                 List.of(new ProblemSnapshot.Teacher(TEACHER_KRENTSIN, "Кренцін М.Д.", List.of(slot), List.of())),
                 List.of(
                         new ProblemSnapshot.Unit("u-1", UUID.randomUUID(), GROUP_4KI1, 0, DISCIPLINE_STP,
-                                TEACHER_KRENTSIN, UnitWeight.WHOLE, RoomType.COMPUTER_LAB, ROOM_6, ROOM_6, null),
+                                TEACHER_KRENTSIN, UnitWeight.WHOLE, RoomType.COMPUTER_LAB, ROOM_6, null, null,
+                                new ProblemSnapshot.PinnedSlot(1, 1, Parity.BOTH, ROOM_6), ROOM_6),
                         new ProblemSnapshot.Unit("u-2", UUID.randomUUID(), GROUP_4KI1, 1, DISCIPLINE_STP, null,
                                 UnitWeight.HALF, null, null, null,
                                 new ProblemSnapshot.PinnedSlot(3, 2, Parity.NUMERATOR, null))));

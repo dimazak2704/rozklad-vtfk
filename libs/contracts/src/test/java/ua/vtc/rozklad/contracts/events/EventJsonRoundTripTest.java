@@ -92,6 +92,22 @@ class EventJsonRoundTripTest {
         assertThat(request.reasonCode()).isNull();
     }
 
+    /** Round 7: {@code teacherRoomId} is additive; a unit of an older snapshot reads without it. */
+    @Test
+    void snapshotUnitWithoutTeacherRoomReadsAsNull() {
+        String json = """
+                {"unitId":"u-1","groupId":"3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f",
+                 "disciplineId":"7a8b9c0d-1e2f-4a7b-8c8d-9e0f1a2b3c4d","subgroup":0,"weight":"WHOLE",
+                 "homeRoomId":"8b9c0d1e-2f3a-4b8c-9d0e-1f2a3b4c5d6e"}
+                """;
+
+        ProblemSnapshot.Unit unit = mapper.readValue(json, ProblemSnapshot.Unit.class);
+
+        assertThat(unit.teacherRoomId()).isNull();
+        assertThat(unit.homeRoomId()).hasToString("8b9c0d1e-2f3a-4b8c-9d0e-1f2a3b4c5d6e");
+        assertThat(unit.initial()).isNull();
+    }
+
     @Test
     void objectionIsADeclineOfAnAppliedChange() {
         SubstitutionTeacherReplied objection = (SubstitutionTeacherReplied) EventSamples.all().get(9);
