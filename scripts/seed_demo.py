@@ -444,10 +444,8 @@ def step_accounts(admin: Client) -> None:
 # ---------------------------------------------------------------- 7. order №35 of 19.10.2026
 # Каталог з Excel не має кількох людей і дисциплін з розпорядження: їх додає диспетчер.
 MISSING_TEACHERS = [{"lastName": "Ємельяненко", "shortName": "Ємельяненко", "displayName": "Ємельяненко"},
-                    {"lastName": "Ящуба", "shortName": "Ящуба", "displayName": "Ящуба"}]
+                    {"lastName": "Яцуба", "shortName": "Яцуба", "displayName": "Яцуба"}]
 MISSING_DISCIPLINES = [{"shortName": "ЗУ", "name": "Захист України"}]
-# «Балунь» у розпорядженні є опискою: Вс.іст. за розкладом веде Бадунь
-TEACHER_ALIASES = {"Бадунь": "Балунь"}
 
 # (group, pairs, kind, original subgroup, new discipline, new teacher, room, reason): рядки оригіналу
 ORDER_35 = [
@@ -458,7 +456,7 @@ ORDER_35 = [
     ("1М", (3, 3), "REPLACE_TEACHER", 1, None, "Прокопчук", "110", "ABSENT"),
     ("1ЕА2", (3, 3), "REPLACE_DISCIPLINE", 0, "Культ.", "Шароварська С.П.", "405", "MUTUAL"),
     ("2ОД", (4, 4), "ADDITIONAL", 0, "ІКТ", "Вернигора", "309", "OTHER"),
-    ("2ОД", (6, 6), "REPLACE_DISCIPLINE", 0, "ОД", "Ящуба", "308", "MUTUAL"),
+    ("2ОД", (6, 6), "REPLACE_DISCIPLINE", 0, "ОД", "Яцуба", "308", "MUTUAL"),
     ("2ОБ", (7, 7), "REPLACE_DISCIPLINE", 0, "ІКТ", "Вернигора", "304", "MUTUAL"),
     ("2ОБ", (8, 8), "REPLACE_DISCIPLINE", 0, "ТБО", "Фабіянська", "409", "MUTUAL"),
     ("2М", (8, 8), "REPLACE_DISCIPLINE", 0, "Укр.літ.", "Кучинська О.Г.", "303", "MUTUAL"),
@@ -489,11 +487,6 @@ def ensure_catalog_for_order(admin: Client) -> None:
         if discipline["shortName"] not in disciplines:
             admin.post("/api/admin/disciplines", discipline)
             log(f"  discipline added: {discipline['shortName']}")
-    for short_name, alias in TEACHER_ALIASES.items():
-        teacher = teacher_id(admin, short_name)
-        if alias not in {a["alias"] for a in admin.get(f"/api/admin/teachers/{teacher}/aliases")}:
-            admin.post(f"/api/admin/teachers/{teacher}/aliases", {"alias": alias})
-            log(f"  alias «{alias}» -> {short_name}")
 
 
 def step_order35(admin: Client) -> None:
