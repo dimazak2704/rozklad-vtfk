@@ -60,6 +60,13 @@ for pair in "rozklad-core-admin:$core_secret" "rozklad-notification:$notificatio
   kc update "clients/$(client_uuid "$name")" -r rozklad -s "secret=\"${pair#*:}\""
   echo "$name: secret from .env"
 done
+
+# Keycloak 26.8 accepts admin REST calls only with the audience of the scope kc-admin-api: without it
+# the invites of core get 401 from /admin/realms/rozklad/users. Realms imported earlier lack it.
+admin_scope=$(kc get client-scopes -r rozklad --fields id,name --format csv --noquotes | sed -n "s/^\([^,]*\),kc-admin-api$/\1/p")
+[[ -n $admin_scope ]] || { echo "client scope kc-admin-api not found in the realm rozklad" >&2; exit 1; }
+kc update "clients/$(client_uuid rozklad-core-admin)/default-client-scopes/$admin_scope" -r rozklad
+echo "rozklad-core-admin: default client scope kc-admin-api"
 '
 
 log "Keycloak: syncing clients with $(basename "$ROZKLAD_ENV_FILE")"
