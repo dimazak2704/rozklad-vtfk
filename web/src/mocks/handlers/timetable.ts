@@ -850,6 +850,7 @@ export const handlers = [
       materializedLessons: materializedCount(version.lessons, effectiveFrom, semester.endsOn),
       keptLessons: 0,
       coveredByChanges: 0,
+      pendingDecisions: [],
       conflicts: [],
     };
     emitServerEvent('schedule.changed', {

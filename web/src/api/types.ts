@@ -646,7 +646,9 @@ export interface PublishVersionRequest {
 
 /**
  * POST …/publish → 200. `keptLessons` — заняття з чинних змін, що лишились; `coveredByChanges` — заняття шаблону,
- * яких не створено, бо їх закриває зміна; `conflicts` — HARD-конфлікти лишених змін з новою версією.
+ * яких не створено, бо їх закриває зміна; `conflicts` — HARD-конфлікти лишених змін з новою версією;
+ * `pendingDecisions` — SOFT: заняття попередньої версії, які лишились, бо про них є відкрите рішення
+ * (після скасування чи відмови їх замінить нова версія).
  */
 export interface PublishVersionResponse {
   versionId: Uuid;
@@ -655,6 +657,7 @@ export interface PublishVersionResponse {
   keptLessons: number;
   coveredByChanges: number;
   conflicts: Conflict[];
+  pendingDecisions: Conflict[];
 }
 
 // ───────────────────────── 2. Admin: генерація ─────────────────────────

@@ -74,10 +74,16 @@ function PublishForm({
       const result = await publish.mutateAsync({ versionId: version.id, effectiveFrom });
       const kept = result.keptLessons > 0 ? ` Лишилось занять із чинних замін: ${result.keptLessons.toLocaleString('uk-UA')}.` : '';
       const description = `Діє з ${formatLongDate(effectiveFrom)}. Перебудовано занять на дати: ${result.materializedLessons.toLocaleString('uk-UA')}.${kept}`;
+      const pending = result.pendingDecisions ?? [];
       if (result.conflicts.length > 0) {
         // core публікує, але повідомляє про конфлікти лишених замін з новою версією — диспетчер має їх побачити
         notify.warning(`Версію «${version.name}» опубліковано, але ${result.conflicts.length} замін конфліктують з новим розкладом`, {
           description: `${description} ${result.conflicts.map((c) => c.message).join('; ')}`,
+        });
+      } else if (pending.length > 0) {
+        // заняття старої версії лишились через відкриті рішення: диспетчер вирішує, скасувати їх чи ні
+        notify.warning(`Версію «${version.name}» опубліковано; ${pending.length} пар лишились зі старого розкладу через відкриті рішення`, {
+          description: `${description} ${pending.map((c) => c.message).join('; ')}`,
         });
       } else {
         notify.success(`Версію «${version.name}» опубліковано`, { description });
