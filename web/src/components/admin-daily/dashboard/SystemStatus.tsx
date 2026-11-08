@@ -1,6 +1,7 @@
 import { ChevronRight, Cpu, Send, Wallet } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useAiUsage } from '@/api/import';
 import { useBotStatus } from '@/api/telegram';
 import type { DashboardDto, GenerationJobStatus } from '@/api/types';
 import { Skeleton, StatusDot, type StatusTone } from '@/components/ui';
@@ -33,6 +34,24 @@ function Row({ icon, title, children, href, label }: { icon: ReactNode; title: s
   );
 }
 
+/**
+ * Витрати ШІ сьогодні проти денного бюджету. Рахує їх importer (`GET /api/import/ai/usage`, як віджет
+ * у налаштуваннях): `DashboardDto.aiSpendToday` core завжди null, і плитка завжди казала «Немає даних».
+ */
+function AiToday() {
+  const usage = useAiUsage();
+  if (usage.isPending) return <Skeleton className="h-4 w-24" />;
+  if (usage.isError) return <StatusDot tone="cancel" label="Невідомо — сервіс імпорту не відповідає" showLabel />;
+  const { enabled, today, dailyBudgetUsd, remainingUsd } = usage.data;
+  if (!enabled) return <span className="text-secondary">Вимкнено: не налаштовано ключ API</span>;
+  return (
+    <span className="figures">
+      {usd(today.costUsd)} з {usd(dailyBudgetUsd)}
+      {remainingUsd <= 0 ? <span className="font-semibold text-danger"> · бюджет вичерпано</span> : null}
+    </span>
+  );
+}
+
 /** Довкола змін: генератор розкладу, витрати ШІ сьогодні, Telegram-бот — коротко, з переходом у розділ. */
 export function SystemStatus({ dashboard }: { dashboard: DashboardDto | undefined }) {
   const bot = useBotStatus();
@@ -51,15 +70,7 @@ export function SystemStatus({ dashboard }: { dashboard: DashboardDto | undefine
         )}
       </Row>
       <Row icon={<Wallet aria-hidden="true" />} title="ШІ сьогодні" href="/admin/settings#ai" label="Витрати ШІ: налаштування">
-        {dashboard ? (
-          dashboard.aiSpendToday === null || dashboard.aiSpendToday === undefined ? (
-            <span className="text-secondary">Немає даних</span>
-          ) : (
-            <span className="figures">{usd(dashboard.aiSpendToday)}</span>
-          )
-        ) : (
-          <Skeleton className="h-4 w-16" />
-        )}
+        <AiToday />
       </Row>
       <Row icon={<Send aria-hidden="true" />} title="Telegram-бот" href="/admin/telegram" label="Telegram-бот: відкрити">
         {bot.isPending ? (
