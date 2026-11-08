@@ -1,0 +1,143 @@
+/**
+ * Налаштування системи (CONTRACTS §2: GET/PUT /api/admin/settings) і довідкові дані сторінки налаштувань:
+ * профілі дзвінків (GET /api/public/bells без дати) та витрати ШІ (GET /api/import/ai/usage).
+ *
+ * Дзвінки й витрати ШІ належать іншим областям: тут вони лише запасні обробники. Реєстр підключає файли
+ * за алфавітом, тож обробники публічних сторінок та імпорту (ім'я файлу раніше за «settings») мають перевагу.
+ */
+import { http, HttpResponse } from 'msw';
+import type { AiUsageDto, ApprovalMode, BellsDto, FieldErrorDto, SettingsDto, Weekday } from '@/api/types';
+import { isIsoDate, isoWeekday, todayInKyiv } from '@/lib/date';
+import { ACTIVE_BELL_PROFILE, BELL_PROFILES, bellSlots } from '../fixtures';
+import { apiPath, badRequest, readJson } from '../kit';
+import { createMockStore } from '../store';
+import { COLLEGE_NAME } from './meta';
+
+/** Межі значень — ті самі, що перевіряє форма (src/components/admin-daily/settings/schema.ts). */
+export const SETTINGS_LIMITS = {
+  confirmTimeoutMinutes: { min: 5, max: 240 },
+  hoursPerPair: { min: 1, max: 4 },
+  signatoryPosition: 120,
+  signatoryName: 80,
+  collegeName: { min: 3, max: 200 },
+} as const;
+
+/** Початкові значення (DOMAIN §2, §8: «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару). */
+const seed = (): SettingsDto => ({
+  approvalMode: 'CONFIRM',
+  confirmTimeoutMinutes: 15,
+  signatoryPosition: 'Заступник директора з НР',
+  signatoryName: 'Микола ПОЛІЩУК',
+  collegeName: COLLEGE_NAME,
+  hoursPerPair: 2,
+  showTeacherFullNames: false,
+  activeBellProfileId: ACTIVE_BELL_PROFILE.id,
+});
+
+const settings = createMockStore<SettingsDto>(seed);
+
+/** Поточні налаштування — для інших областей мок-API (режим погодження замін, підписант розпорядження). */
+export function currentSettings(): SettingsDto {
+  return settings.get();
+}
+
+const APPROVAL_MODES: readonly ApprovalMode[] = ['AUTO', 'CONFIRM'];
+
+function isInteger(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function textError(value: unknown, field: string, max: number, empty: string, min = 1): FieldErrorDto | null {
+  if (typeof value !== 'string' || value.trim().length < min) return { field, message: empty };
+  if (value.trim().length > max) return { field, message: `Не довше ${max} символів` };
+  return null;
+}
+
+/** Перевірка як у core (Bean Validation): усі помилки полів одразу, українською. */
+export function validateSettings(body: Partial<Record<keyof SettingsDto, unknown>>): FieldErrorDto[] {
+  const errors: FieldErrorDto[] = [];
+  const push = (error: FieldErrorDto | null) => {
+    if (error) errors.push(error);
+  };
+  if (!APPROVAL_MODES.includes(body.approvalMode as ApprovalMode)) {
+    errors.push({ field: 'approvalMode', message: 'Оберіть режим погодження замін' });
+  }
+  const timeout = SETTINGS_LIMITS.confirmTimeoutMinutes;
+  if (!isInteger(body.confirmTimeoutMinutes, timeout.min, timeout.max)) {
+    errors.push({ field: 'confirmTimeoutMinutes', message: `Ціле число від ${timeout.min} до ${timeout.max} хвилин` });
+  }
+  push(textError(body.signatoryPosition, 'signatoryPosition', SETTINGS_LIMITS.signatoryPosition, 'Вкажіть посаду підписанта'));
+  push(textError(body.signatoryName, 'signatoryName', SETTINGS_LIMITS.signatoryName, 'Вкажіть імʼя підписанта'));
+  push(
+    textError(
+      body.collegeName,
+      'collegeName',
+      SETTINGS_LIMITS.collegeName.max,
+      `Назва коледжу — щонайменше ${SETTINGS_LIMITS.collegeName.min} символи`,
+      SETTINGS_LIMITS.collegeName.min,
+    ),
+  );
+  const hours = SETTINGS_LIMITS.hoursPerPair;
+  if (!isInteger(body.hoursPerPair, hours.min, hours.max)) {
+    errors.push({ field: 'hoursPerPair', message: `Ціле число від ${hours.min} до ${hours.max}` });
+  }
+  if (typeof body.showTeacherFullNames !== 'boolean') {
+    errors.push({ field: 'showTeacherFullNames', message: 'Має бути так або ні' });
+  }
+  if (body.activeBellProfileId !== null && !BELL_PROFILES.some((p) => p.id === body.activeBellProfileId)) {
+    errors.push({ field: 'activeBellProfileId', message: 'Такого профілю дзвінків немає' });
+  }
+  return errors;
+}
+
+/** GET /api/public/bells: на дату — дзвінки дня; без дати — ще й усі профілі (CONTRACTS §1). */
+function bells(date: string | null): BellsDto {
+  const profile = BELL_PROFILES.find((p) => p.id === settings.get().activeBellProfileId) ?? ACTIVE_BELL_PROFILE;
+  const day = date ?? todayInKyiv();
+  const weekday = Math.min(isoWeekday(day), 5) as Weekday;
+  return {
+    profile: { id: profile.id, name: profile.name },
+    weekday,
+    slots: bellSlots(weekday, profile),
+    profiles: date ? null : BELL_PROFILES.map((p) => ({ ...p, active: p.id === profile.id })),
+  };
+}
+
+// ДЕМО: витрати ШІ не рахуються в цій області; значення узгоджене з моделями й бюджетом ARCHITECTURE §7
+const aiUsage = (): AiUsageDto => ({
+  today: { calls: 1, inputTokens: 842, outputTokens: 118, costUsd: 0.0014 },
+  dailyBudgetUsd: 2,
+  model: { text: 'claude-haiku-5-5', vision: 'claude-sonnet-5-5' },
+});
+
+export const handlers = [
+  http.get(apiPath('/admin/settings'), () => HttpResponse.json(settings.get())),
+
+  http.put(apiPath('/admin/settings'), async ({ request }) => {
+    const body = await readJson<Partial<Record<keyof SettingsDto, unknown>>>(request);
+    const errors = validateSettings(body);
+    if (errors.length > 0) return badRequest('Перевірте налаштування.', errors);
+    const next: SettingsDto = {
+      approvalMode: body.approvalMode as ApprovalMode,
+      confirmTimeoutMinutes: body.confirmTimeoutMinutes as number,
+      signatoryPosition: (body.signatoryPosition as string).trim(),
+      signatoryName: (body.signatoryName as string).trim(),
+      collegeName: (body.collegeName as string).trim(),
+      hoursPerPair: body.hoursPerPair as number,
+      showTeacherFullNames: body.showTeacherFullNames as boolean,
+      activeBellProfileId: (body.activeBellProfileId as string | null) ?? null,
+    };
+    settings.set(next);
+    return HttpResponse.json(next);
+  }),
+
+  http.get(apiPath('/public/bells'), ({ request }) => {
+    const date = new URL(request.url).searchParams.get('date');
+    if (date !== null && !isIsoDate(date)) {
+      return badRequest('Дата має бути у форматі РРРР-ММ-ДД.', [{ field: 'date', message: 'Формат РРРР-ММ-ДД' }]);
+    }
+    return HttpResponse.json(bells(date));
+  }),
+
+  http.get(apiPath('/import/ai/usage'), () => HttpResponse.json(aiUsage())),
+];
