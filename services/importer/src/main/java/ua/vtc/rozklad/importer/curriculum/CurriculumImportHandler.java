@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -54,6 +56,15 @@ import ua.vtc.rozklad.importer.web.ProblemException;
 public class CurriculumImportHandler implements ImportHandler {
 
     private static final int MAX_TABLE_TEXT = 300_000;
+
+    /**
+     * A plan row that holds a place for an elective, not a discipline: «Вибірковий освітній
+     * компонент 1», «Вибіркова дисципліна 2», «ВК 3», «Дисципліна за вибором (вільного вибору)».
+     */
+    private static final Pattern ELECTIVE_PLACEHOLDER = Pattern.compile(
+            "^(?:вибірков|вк\\s*\\d)|за вибором|вільного вибору");
+    static final String CONFIRM_NEW_DISCIPLINE = "Немає в каталозі. Навчальний план пише назви повністю, а розклад — "
+            + "скорочено: зіставте з дисципліною каталогу або підтвердьте створення нової дисципліни.";
 
     private final AiExtractionService ai;
     private final CoreImportClient core;
@@ -163,6 +174,27 @@ public class CurriculumImportHandler implements ImportHandler {
     @Override
     public boolean creates(EntityType type) {
         return type == EntityType.DISCIPLINE;
+    }
+
+    /**
+     * r3-ai-imports-01: the plan's disciplines usually exist under the short names of the timetable, so
+     * a discipline that is not in the catalog is created only when the admin confirms it; an
+     * elective placeholder is never a discipline by itself (the group studies a chosen one).
+     */
+    @Override
+    public Optional<String> createNeedsConfirmation(EntityCandidate entity) {
+        if (entity.type() != EntityType.DISCIPLINE) {
+            return Optional.empty();
+        }
+        if (electivePlaceholder(entity.raw())) {
+            return Optional.of("«" + entity.raw() + "» — місце для вибіркової дисципліни, а не її назва. Зіставте його з "
+                    + "дисципліною, яку група вивчає за вибором; нову дисципліну створюйте, лише якщо вибору ще немає.");
+        }
+        return Optional.of(CONFIRM_NEW_DISCIPLINE);
+    }
+
+    static boolean electivePlaceholder(String name) {
+        return ELECTIVE_PLACEHOLDER.matcher(TextNormalizer.key(name)).find();
     }
 
     /** Groups must be given; a discipline name with characters the model could not read is not created. */

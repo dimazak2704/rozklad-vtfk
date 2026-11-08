@@ -60,6 +60,10 @@ class JobNormalizer {
                         : new ReportRow(Severity.INFO, row.type(), row.raw(), null, row.suggestions(), row.location(),
                                 "Немає в каталозі (для інформації: розпорядження зберігається як текст, каталог не "
                                         + "змінюється).");
+            } else if (resolution.createsNew() && resolution.decision() == null
+                    && handler.createNeedsConfirmation(resolution.entity()).isPresent()) {
+                row = new ReportRow(Severity.ERROR, row.type(), row.raw(), null, row.suggestions(), row.location(),
+                        handler.createNeedsConfirmation(resolution.entity()).get());
             } else if (needsShortName(resolution)) {
                 row = new ReportRow(Severity.ERROR, row.type(), row.raw(), null, row.suggestions(), row.location(),
                         "Назва довша за " + LoadApplier.SHORT_NAME_LENGTH + " символи: зіставте з наявною дисципліною або "

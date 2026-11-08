@@ -63,6 +63,15 @@ public interface ImportHandler {
     }
 
     /**
+     * Why a value that is not in the catalog must not be created silently: applying stays blocked
+     * until the admin maps it or confirms creating it ({@code createNew}). Empty (the default) when
+     * applying may create it without asking.
+     */
+    default Optional<String> createNeedsConfirmation(EntityCandidate entity) {
+        return Optional.empty();
+    }
+
+    /**
      * What applying needs beyond the matching rows, checked whenever the report is rebuilt (parse,
      * mappings, options, draft revision): a blocking ERROR row here keeps the job in review instead
      * of letting it fail at apply.

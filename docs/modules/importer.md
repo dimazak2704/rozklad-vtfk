@@ -177,6 +177,10 @@ Vision model on the scan (all pages in one PDF document block) or the text model
 tab-separated text; only `options.semesterNumber` is extracted. Checks: hours/week × weeks vs semester hours,
 lectures + practice + labs vs classroom hours, sum of hours/week vs the «Всього» row, rows without weekly hours
 skipped, no rows → ERROR. See `importer-ai-samples.md` for the live run on `seed/curriculum-ki-2023.pdf`.
+A plan names disciplines in full while the catalog holds the timetable's short forms, so a plan discipline that is not
+in the catalog is never created on its own: until the admin maps it or confirms `createNew`, its row is an ERROR
+(`createNeedsConfirmation`). Elective placeholders («Вибірковий освітній компонент 1», «ВК 2», «… за вибором») get
+their own message: map them to the elective the group actually studies.
 
 ### parse-absence
 
