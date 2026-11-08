@@ -29,6 +29,8 @@ import ua.vtc.rozklad.core.catalog.TeacherDiscipline;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.order.OrderDocument;
 import ua.vtc.rozklad.core.settings.Setting;
+import ua.vtc.rozklad.core.substitution.PreferenceKind;
+import ua.vtc.rozklad.core.substitution.TeacherPreference;
 import ua.vtc.rozklad.core.support.ReferenceData;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
@@ -154,6 +156,24 @@ public final class ScheduleFixture {
                          Teacher teacher) {
         return persist(new LoadItem(semester.getId(), group.getId(), discipline.getId(), BigDecimal.valueOf(2),
                 plannedHours), item -> item.assignTeacher(0, teacher.getId()));
+    }
+
+    /** A load item split into subgroups, one teacher per subgroup (1, 2, …). */
+    public LoadItem splitLoad(Semester semester, StudentGroup group, Discipline discipline, int plannedHours,
+                              Teacher... teachersBySubgroup) {
+        return persist(new LoadItem(semester.getId(), group.getId(), discipline.getId(), BigDecimal.valueOf(2),
+                plannedHours), item -> {
+            item.setSplitSubgroups(true);
+            for (int index = 0; index < teachersBySubgroup.length; index++) {
+                item.assignTeacher(index + 1, teachersBySubgroup[index].getId());
+            }
+        });
+    }
+
+    public void preference(Teacher teacher, Semester semester, LocalDate date, int pair, PreferenceKind kind) {
+        persist(new TeacherPreference(teacher.getId(), semester.getId(), date.getDayOfWeek().getValue(), pair, kind,
+                null), preference -> {
+        });
     }
 
     public void setting(String key, String value) {

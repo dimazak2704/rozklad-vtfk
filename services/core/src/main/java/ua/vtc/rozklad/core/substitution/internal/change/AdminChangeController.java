@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,11 +29,14 @@ class AdminChangeController {
 
     private final ChangeCommands commands;
     private final ChangeQueries queries;
+    private final RecommendationLog recommendations;
     private final Clock clock;
 
-    AdminChangeController(ChangeCommands commands, ChangeQueries queries, Clock clock) {
+    AdminChangeController(ChangeCommands commands, ChangeQueries queries, RecommendationLog recommendations,
+                          Clock clock) {
         this.commands = commands;
         this.queries = queries;
+        this.recommendations = recommendations;
         this.clock = clock;
     }
 
@@ -51,10 +55,26 @@ class AdminChangeController {
     /** 201 with the status after the approval rules; 409 with {@code conflicts[]} when the slot is busy. */
     @PostMapping
     ResponseEntity<ChangeDto> create(@Valid @RequestBody CreateChangeRequest request, CurrentUser user) {
+        RecommendationLog.Shown shown = recommendations.before(request);
         ChangeDto created = commands.create(request, user.username());
+        recommendations.after(shown, request, created);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
                 .buildAndExpand(created.id()).toUri();
         return ResponseEntity.created(location).body(created);
+    }
+
+    /**
+     * 201 with the created changes in request order. One transaction: a 400 or 409 for any of them
+     * creates none (e.g. a cancel with its make-up pair, every proposal of a day plan).
+     */
+    @PostMapping("/batch")
+    ResponseEntity<List<ChangeDto>> createAll(@Valid @RequestBody BatchChangesRequest request, CurrentUser user) {
+        List<RecommendationLog.Shown> shown = request.changes().stream().map(recommendations::before).toList();
+        List<ChangeDto> created = commands.createAll(request.changes(), user.username());
+        for (int index = 0; index < created.size(); index++) {
+            recommendations.after(shown.get(index), request.changes().get(index), created.get(index));
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/{id}")

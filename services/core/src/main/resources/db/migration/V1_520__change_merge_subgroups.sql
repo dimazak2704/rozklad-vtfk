@@ -11,9 +11,3 @@ ALTER TABLE change DROP CONSTRAINT ck_change_swap;
 -- друге заняття мають лише перестановка і об'єднання підгруп, обидві на одну пару
 ALTER TABLE change ADD CONSTRAINT ck_change_swap CHECK (swap_lesson_id IS NULL
     OR (kind IN ('SWAP', 'MERGE_SUBGROUPS') AND pair_from = pair_to));
-
-ALTER TABLE order_item DROP CONSTRAINT ck_order_item_row_type;
-ALTER TABLE order_item ADD CONSTRAINT ck_order_item_row_type CHECK (row_type IN ('REPLACEMENT', 'CANCELLATION',
-                                                                                 'ADDITIONAL', 'BLOCK', 'FINISHED',
-                                                                                 'AS_SCHEDULED', 'ROOM_CHANGE',
-                                                                                 'MERGE_SUBGROUPS'));

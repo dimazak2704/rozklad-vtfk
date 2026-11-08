@@ -12,6 +12,9 @@ public interface TeacherPreferenceRepository extends JpaRepository<TeacherPrefer
 
     List<TeacherPreference> findAllBySemesterId(UUID semesterId);
 
+    /** Preferences of all teachers for one weekday (substitute ranking for a day). */
+    List<TeacherPreference> findAllBySemesterIdAndWeekday(UUID semesterId, int weekday);
+
     /** Preferences of all teachers for one weekday × pair (candidate ranking). */
     List<TeacherPreference> findAllBySemesterIdAndWeekdayAndPairNumber(UUID semesterId, int weekday, int pairNumber);
 
