@@ -142,11 +142,27 @@ class HistoricOrderImportIT {
     /** A draft the dispatcher worked on blocks the import until it is deleted; published orders stay. */
     @Test
     void editedDraftBlocksTheImportUntilItIsDeleted() throws Exception {
-        String draftId = JsonPath.read(mvc.perform(get("/api/admin/orders/draft").param("date", "2026-10-19")
-                .with(TestJwts.admin())).andReturn().getResponse().getContentAsString(), "$.id");
+        String draft = mvc.perform(get("/api/admin/orders/draft").param("date", "2026-10-19")
+                .with(TestJwts.admin())).andReturn().getResponse().getContentAsString();
+        String draftId = JsonPath.read(draft, "$.id");
+        int version = JsonPath.read(draft, "$.version");
         mvc.perform(put("/api/admin/orders/{id}/notes", draftId).with(TestJwts.admin())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":[\"Примітка диспетчера\"]}"))
-                .andExpect(status().isOk());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"notes\":[\"Примітка диспетчера\"],\"version\":%d}".formatted(version)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(version + 1));
+        // правка з того самого (вже застарілого) вигляду чернетки не перезаписує першу мовчки
+        mvc.perform(put("/api/admin/orders/{id}/notes", draftId).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"notes\":[\"Примітка іншого диспетчера\"],\"version\":%d}".formatted(version)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:stale-data"));
+        mvc.perform(put("/api/admin/orders/{id}/notes", draftId).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":[\"Без версії\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("version"));
+        mvc.perform(get("/api/admin/orders/{id}", draftId).with(TestJwts.admin()))
+                .andExpect(jsonPath("$.notes[0]").value("Примітка диспетчера"));
 
         importOrder(ORDER_35)
                 .andExpect(status().isConflict())

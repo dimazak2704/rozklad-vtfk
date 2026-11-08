@@ -89,9 +89,10 @@ class AdminOrderController {
         drafts.discard(id);
     }
 
+    /** Notes of a draft; {@code version} of the draft the dispatcher edited (stale → 409 {@code stale-data}). */
     @PutMapping("/{id}/notes")
     OrderDto notes(@PathVariable UUID id, @Valid @RequestBody NotesRequest request) {
-        return drafts.editNotes(id, request.notes());
+        return drafts.editNotes(id, request.notes(), request.version());
     }
 
     /** Number assigned, changes applied, {@code order.published} sent; 409 for conflicts or a stale draft. */
@@ -105,6 +106,7 @@ class AdminOrderController {
                             @Max(value = 9999, message = "Номер — від 1 до 9999") Integer firstNumber) {
     }
 
-    record NotesRequest(@NotNull @Size(max = 20) List<@NotBlank @Size(max = 500) String> notes) {
+    record NotesRequest(@NotNull @Size(max = 20) List<@NotBlank @Size(max = 500) String> notes,
+                        @NotNull(message = "Вкажіть версію чернетки (поле version з відповіді).") Long version) {
     }
 }

@@ -25,6 +25,7 @@ import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.settings.SystemSettings;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
+import ua.vtc.rozklad.core.shared.persistence.EntityGuards;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
 
@@ -83,13 +84,18 @@ public class OrderDrafts {
         return save(refresh(amendment, semester, confirmed));
     }
 
-    /** {@code PUT /api/admin/orders/{id}/notes}: the dispatcher's notes replace the calendar notes. */
-    public OrderDto editNotes(UUID orderId, List<String> notes) {
+    /**
+     * {@code PUT /api/admin/orders/{id}/notes}: the dispatcher's notes replace the calendar notes.
+     * The notes are printed in bold on the official order, so an edit made from an older view of
+     * the draft (another dispatcher saved, or the draft was refreshed) is refused with 409.
+     */
+    public OrderDto editNotes(UUID orderId, List<String> notes, long version) {
         OrderDocument order = orders.findWithItemsById(orderId)
                 .orElseThrow(() -> NotFoundException.of("Розпорядження", orderId));
         if (!order.isDraft()) {
             throw new BusinessRuleException("ORDER_ALREADY_PUBLISHED", "Опубліковане розпорядження змінювати не можна.");
         }
+        EntityGuards.checkVersion(order, version);
         order.editNotes(notes.stream().map(String::strip).toList());
         orders.flush();
         return OrderViews.toDto(order);
