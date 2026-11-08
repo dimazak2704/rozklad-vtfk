@@ -8,11 +8,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AFFECTED_DATE_MISSING, withLessonDates } from '@/api/admin-daily';
 import { ApiError, errorFromResponse, STALE_DATA_MESSAGE } from '@/api/errors';
 import { invalidateFor } from '@/api/live';
 import { qk } from '@/api/queryKeys';
-import type { AffectedLessonDto, ChangeDto, PublicGroupDto, PublicMetaDto } from '@/api/types';
+import type { ChangeDto, PublicGroupDto, PublicMetaDto } from '@/api/types';
 import { DecisionCard } from '@/components/admin-daily/changes/DecisionCard';
 import { BindingCodeDialog } from '@/components/admin-daily/telegram/BindingCodeDialog';
 import { NowPanel } from '@/components/public/home/NowPanel';
@@ -48,19 +47,6 @@ describe('ProblemDetail: коди правил і застарілі дані', 
     const overlap = await errorFromResponse(problemResponse(409, { type: 'urn:rozklad:problem:conflict', detail: 'Перетин' }));
     expect(overlap.isStaleData).toBe(false);
     expect(overlap.message).toBe('Перетин');
-  });
-});
-
-describe('дати зачеплених пар (core поки не надсилає `date`)', () => {
-  const item = { lesson: { id: 'l' }, decision: null } as unknown as AffectedLessonDto;
-
-  it('бере дату з відповіді, а без неї — лише для одноденної відсутності', () => {
-    expect(withLessonDates({ dateFrom: '2026-11-09', dateTo: '2026-11-11' }, [{ ...item, date: '2026-11-10' }])[0]?.date).toBe('2026-11-10');
-    expect(withLessonDates({ dateFrom: '2026-11-09', dateTo: '2026-11-09' }, [item])[0]?.date).toBe('2026-11-09');
-  });
-
-  it('для відсутності на кілька днів без `date` — явна помилка, а не вгадана дата', () => {
-    expect(() => withLessonDates({ dateFrom: '2026-11-09', dateTo: '2026-11-11' }, [item])).toThrow(AFFECTED_DATE_MISSING);
   });
 });
 

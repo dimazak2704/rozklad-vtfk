@@ -156,6 +156,7 @@ class SubstitutionFlowIT {
                     assertThat(event.source()).isEqualTo(AbsenceSource.ADMIN);
                 });
         assertThat(affectedLessons.of(absence.id())).singleElement().satisfies(affected -> {
+            assertThat(affected.date()).isEqualTo(MONDAY);
             assertThat(affected.lesson().id()).isEqualTo(stpLesson.getId());
             assertThat(affected.lesson().startsAt()).hasToString("09:40");
             assertThat(affected.decision()).isNull();

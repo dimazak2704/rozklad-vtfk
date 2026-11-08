@@ -36,33 +36,8 @@ import type {
 
 // ───────────────────────── Типи області (доповнення до types.ts) ─────────────────────────
 
-/**
- * Зачеплена пара з датою: відсутність може тривати кілька днів, а LessonView дати не має.
- * Клієнт потребує `date` (групування за днями й `POST /changes {date}`), але core його поки не надсилає
- * (docs/modules/integration.md §5) — див. `withLessonDates`.
- */
-export interface AffectedLesson extends AffectedLessonDto {
-  date: IsoDate;
-}
-
-/** Як приходить з сервера: `date` — запитане адитивне поле, якого core може ще не мати. */
-type AffectedLessonWire = AffectedLessonDto & { date?: IsoDate | null };
-
-/** Пояснення для диспетчера, коли сервер не дав дат пар відсутності на кілька днів. */
-export const AFFECTED_DATE_MISSING =
-  'Сервер не надіслав дати зачеплених пар (поле date). Для відсутності на кілька днів пари не можна розкласти за датами — потрібне оновлення core.';
-
-/**
- * Дата кожної зачепленої пари. Без поля `date` її можна вивести напевно лише для одноденної відсутності;
- * для довшої вгадувати не можна (пара з понеділка опинилась би у вівторку), тому — явна помилка, а не тиша.
- */
-export function withLessonDates(absence: Pick<AbsenceDto, 'dateFrom' | 'dateTo'>, items: readonly AffectedLessonWire[]): AffectedLesson[] {
-  return items.map((item) => {
-    if (item.date) return { ...item, date: item.date };
-    if (absence.dateFrom === absence.dateTo) return { ...item, date: absence.dateFrom };
-    throw new Error(AFFECTED_DATE_MISSING);
-  });
-}
+/** Зачеплена пара з датою (відсутність може тривати кілька днів, а LessonView дати не має). */
+export type AffectedLesson = AffectedLessonDto;
 
 /** Варіант рішення (адитивні `date`/`pair` має лише відпрацювання ADDITIONAL). */
 export type ChangeOption = OptionDto;
@@ -104,8 +79,7 @@ export function useAbsences(from: IsoDate, to: IsoDate) {
 export function affectedLessonsQuery(absence: Pick<AbsenceDto, 'id' | 'dateFrom' | 'dateTo'>) {
   return queryOptions({
     queryKey: qk.admin.absences.affected(absence.id),
-    queryFn: async ({ signal }) =>
-      withLessonDates(absence, await api.get<AffectedLessonWire[]>(`/admin/absences/${absence.id}/affected`, undefined, { signal })),
+    queryFn: ({ signal }) => api.get<AffectedLesson[]>(`/admin/absences/${absence.id}/affected`, undefined, { signal }),
   });
 }
 

@@ -764,6 +764,8 @@ export interface AbsenceRequest {
 
 /** GET /api/admin/absences/{id}/affected */
 export interface AffectedLessonDto {
+  /** Дата пари: відсутність може тривати кілька днів. */
+  date: IsoDate;
   lesson: LessonView;
   /** null або DECLINED — пара ще потребує рішення. */
   decision: Nullable<{ changeId: Uuid; status: ChangeStatus; kind: ChangeKind }>;

@@ -51,8 +51,9 @@ public class AffectedLessons {
         List<LessonView> lessonViews = views.of(shown);
         List<AffectedLessonDto> result = new ArrayList<>(shown.size());
         for (int index = 0; index < shown.size(); index++) {
-            Change decision = decided.get(shown.get(index).getId());
-            result.add(new AffectedLessonDto(lessonViews.get(index), decision == null ? null
+            Lesson lesson = shown.get(index);
+            Change decision = decided.get(lesson.getId());
+            result.add(new AffectedLessonDto(lesson.getDate(), lessonViews.get(index), decision == null ? null
                     : new AffectedLessonDto.Decision(decision.getId(), decision.getStatus(), decision.getKind())));
         }
         return result;

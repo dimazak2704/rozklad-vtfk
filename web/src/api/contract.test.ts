@@ -166,11 +166,9 @@ describe('контракт мок-API ↔ core', () => {
   it('відсутності, зачеплені пари, LessonView і варіанти', async () => {
     const absence = first(await api.get<AbsenceDto[]>('/admin/absences', { from: DAY, to: DAY }), 'відсутності');
     await expectShape(absence, `${CORE}substitution/internal/absence/AbsenceDto.java`, 'AbsenceDto');
-    const affected = await api.get<Array<{ lesson: { id: string }; date?: string }>>(`/admin/absences/${absence.id}/affected`);
+    const affected = await api.get<Array<{ lesson: { id: string }; date: string }>>(`/admin/absences/${absence.id}/affected`);
     const item = first(affected, 'зачеплені пари');
-    // `date` клієнт потребує, але core його ще не надсилає (integration.md §5) — це єдина дозволена різниця
-    const { date: _requestedByWeb, ...coreFields } = item;
-    await expectShape(coreFields, `${CORE}substitution/internal/absence/AffectedLessonDto.java`, 'AffectedLessonDto');
+    await expectShape(item, `${CORE}substitution/internal/absence/AffectedLessonDto.java`, 'AffectedLessonDto');
     await expectShape(item.lesson, `${CORE}timetable/LessonView.java`, 'LessonView');
     const options = await api.get<{ options: unknown[] }>(`/admin/lessons/${item.lesson.id}/options`);
     const path = `${CORE}substitution/internal/options/OptionDto.java`;
