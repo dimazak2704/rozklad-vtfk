@@ -70,8 +70,10 @@ public final class Order35 {
     }
 
     public static OrderPayload payload(OrderStatus status, Integer number) {
+        // title — як його надсилає core: заголовок, а не рядок під ним (той друкує рендерер)
         return new OrderPayload(ORDER_ID, number, DATE, OrderKind.ORDER, null, status,
-                "По коледжу про деякі зміни в розкладі занять", "ПОНЕДІЛОК", "ЗНАМЕННИК", items(), List.of(), NOTES,
+                number == null ? "РОЗПОРЯДЖЕННЯ" : "РОЗПОРЯДЖЕННЯ №" + number, "ПОНЕДІЛОК", "ЗНАМЕННИК", items(),
+                List.of(), NOTES,
                 "Заступник директора з НР", "Микола ПОЛІЩУК", "I семестр 2026/2027",
                 List.of(new AffectedGroup(GROUP_4KI1, "4КІ1"), new AffectedGroup(GROUP_4KI2, "4КІ2"),
                         new AffectedGroup(GROUP_1TK1, "1ТК1")),

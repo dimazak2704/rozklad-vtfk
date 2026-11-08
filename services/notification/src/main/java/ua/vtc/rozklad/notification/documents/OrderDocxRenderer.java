@@ -55,7 +55,8 @@ import ua.vtc.rozklad.notification.text.UaDates;
 public class OrderDocxRenderer {
 
     static final String FONT = "Liberation Serif";
-    static final String DEFAULT_TITLE = "По коледжу про деякі зміни в розкладі занять";
+    /** Line under the heading (DOMAIN §8); core's {@code title} is the heading itself («РОЗПОРЯДЖЕННЯ №35»). */
+    static final String SUBTITLE = "По коледжу про деякі зміни в розкладі занять";
     static final String ROOM_CHANGES_TITLE = "ЗАМІНА АУДИТОРІЙ";
     static final String NO_PAIR = "Пари не буде";
     static final String ADDITIONAL = "ДОДАТКОВО";
@@ -134,8 +135,7 @@ public class OrderDocxRenderer {
             letterSpaced(first, "РОЗПОРЯДЖЕННЯ");
             run(first, " " + number, TITLE_FONT, true);
         }
-        String title = order.title() == null || order.title().isBlank() ? DEFAULT_TITLE : order.title();
-        run(centered(document), title, TEXT_FONT, true);
+        run(centered(document), SUBTITLE, TEXT_FONT, true);
         run(centered(document), "На " + UaDates.dayMonthYear(order.date()), TEXT_FONT, true);
         run(centered(document), weekdayLine(order), 13, true);
         XWPFParagraph spacer = document.createParagraph();
