@@ -147,7 +147,7 @@ npx playwright test -c playwright.real.config.ts --project=desktop dispatcher   
 
 It checks the public pages against the API answers (week grid and day list of 4КІ1, parity of 19.10.2026,
 teacher, room, bells, changes of order №35 with PDF/PNG), error and offline states, and on desktop the
-dispatcher and teacher workflows. It changes data: the substitution test creates an absence of Кренцін on one
+dispatcher and teacher workflows, and the import review of a program without weekly hours (parameters fixed on the page, nothing applied; the job is left with empty parameters). It changes data: the substitution test creates an absence of Кренцін on one
 pair, Непийвода confirms it in her cabinet and the order of that date is published (the next number, №36 on a
 fresh seed). The date is the first school day a week ahead without an absence of Кренцін and without an order,
 so the suite can run again; a two-day absence of Стець is created and cancelled. For clean demo data afterwards:
