@@ -44,6 +44,8 @@ import ua.vtc.rozklad.importer.web.ProblemException;
 public class OrderImportHandler implements ImportHandler {
 
     static final String STEP_CHANGES = "changes";
+    static final String REVIEW_REQUIRED = "Рядки розпорядження прочитав ШІ з фото/скану: звірте кожен рядок з оригіналом, "
+            + "виправте помилки й збережіть рядки — лише після цього розпорядження можна застосувати.";
     private static final List<String> NOT_A_DISCIPLINE = List.of("додатково", "пари не буде", "за розкладом");
 
     private final OrderDocxParser docxParser;
@@ -92,8 +94,8 @@ public class OrderImportHandler implements ImportHandler {
             OrderExtraction extraction = ai.extractOrder(List.of(new AiDocument(input.type().mediaType(), input.content())),
                     input.jobId()).value();
             draft = fromAi(extraction, issues);
-            issues.info(RowType.ORDER, null, null, "Розпорядження розпізнано за допомогою ШІ з фото/скану — звірте рядки "
-                    + "з оригіналом перед застосуванням.");
+            // перевірка людиною обов'язкова: блокує застосування, доки рядки не збережено (revise)
+            issues.error(RowType.ORDER, null, null, REVIEW_REQUIRED);
         }
         if (draft.rows().isEmpty()) {
             issues.warn(RowType.ORDER, null, null, "У розпорядженні не знайдено жодного рядка змін.");
@@ -132,7 +134,17 @@ public class OrderImportHandler implements ImportHandler {
             return OrderRowType.ROOM_CHANGE;
         }
         try {
-            return OrderRowType.valueOf(row.rowType());
+            OrderRowType answered = OrderRowType.valueOf(row.rowType());
+            // «Вичит.» без заміни — завжди FINISHED, і FINISHED — лише так (правило DOCX-розбору, DOMAIN §8)
+            boolean finishedByText = OrderTexts.finished(row.reasonText(), row.toDiscipline(), row.toTeacher());
+            if (finishedByText != (answered == OrderRowType.FINISHED)) {
+                OrderRowType derived = OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(),
+                        row.reasonText(), row.toDiscipline(), row.toTeacher());
+                issues.warn(RowType.ORDER, row.rowType(), location, "ШІ позначив рядок як " + answered
+                        + ", але за текстом це " + derived + " — взято " + derived + ".");
+                return derived;
+            }
+            return answered;
         } catch (IllegalArgumentException | NullPointerException e) {
             OrderRowType derived = OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(),
                     row.reasonText(), row.toDiscipline(), row.toTeacher());
@@ -206,6 +218,38 @@ public class OrderImportHandler implements ImportHandler {
         return text == null ? "" : text;
     }
 
+    /**
+     * The admin's corrected rows ({@code PUT /api/import/jobs/{id}/draft}): texts are cleaned, group
+     * codes canonicalized, a missing row type is derived from the texts; the result is reviewed.
+     */
+    public ParseOutcome revise(JsonNode current, OrderDraftEdit edit) {
+        OrderDraft before = jsonMapper.treeToValue(current, OrderDraft.class);
+        Issues issues = new Issues();
+        List<Row> rows = new ArrayList<>();
+        for (int index = 0; index < edit.rows().size(); index++) {
+            OrderDraftEdit.Row row = edit.rows().get(index);
+            String location = "рядок " + (index + 1);
+            Section section = row.section() == null ? Section.CHANGES : row.section();
+            OrderRowType type = section == Section.ROOM_CHANGES ? OrderRowType.ROOM_CHANGE
+                    : row.rowType() != null ? row.rowType()
+                    : OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(), row.reasonText(),
+                    row.toDiscipline(), row.toTeacher());
+            rows.add(new Row(section, groupCode(row.groupCode(), issues, location), clean(row.pairLabel()), type,
+                    clean(row.fromDiscipline()), clean(row.fromTeacher()), clean(row.reasonText()),
+                    clean(row.toDiscipline()), clean(row.toTeacher()), clean(row.roomText()), location));
+        }
+        if (rows.isEmpty()) {
+            issues.warn(RowType.ORDER, null, null, "У розпорядженні не залишилося жодного рядка змін.");
+        }
+        issues.info(RowType.ORDER, null, null, "Рядки звірено з оригіналом і збережено вручну.");
+        OrderDraft revised = new OrderDraft(edit.number(), edit.kind() == null ? OrderKind.ORDER : edit.kind(),
+                edit.parentNumber(), edit.date(), clean(edit.weekdayLabel()), clean(edit.parityLabel()), rows,
+                edit.notes() == null ? List.of()
+                        : edit.notes().stream().map(TextNormalizer::clean).filter(note -> !note.isEmpty()).toList(),
+                clean(edit.signatoryPosition()), clean(edit.signatoryName()), before.source(), true);
+        return new ParseOutcome(revised, issues.rows());
+    }
+
     @Override
     public JsonNode apply(ApplyInput input) {
         OrderDraft draft = jsonMapper.treeToValue(input.draft(), OrderDraft.class);
@@ -220,7 +264,8 @@ public class OrderImportHandler implements ImportHandler {
                     .toList();
             JsonNode result = core.importChanges(new CoreImportPayloads.ChangesRequest(draft.date(), draft.number(),
                     draft.kind(), draft.parentNumber(), draft.weekdayLabel(), draft.parityLabel(), items, draft.notes(),
-                    draft.signatoryPosition(), draft.signatoryName()), input.steps().idempotencyKey(STEP_CHANGES));
+                    draft.signatoryPosition(), draft.signatoryName(), draft.isReviewed() ? Boolean.TRUE : null),
+                    input.steps().idempotencyKey(STEP_CHANGES));
             input.steps().finished(STEP_CHANGES, result);
         }
         return input.steps().all();

@@ -85,14 +85,18 @@ public final class OrderTexts {
     }
 
     /**
-     * Row type from the texts of a CHANGES row (DOMAIN §8): a pair range is a block, «ДОДАТКОВО» or
-     * an empty left side an additional lesson, «За розкладом» as scheduled, «Пари не буде» a
-     * cancellation, «Вичит.» without a replacement a finished discipline.
+     * Row type from the texts of a CHANGES row (DOMAIN §8): «Вичит.» without a replacement is a
+     * finished discipline (also over a pair range, «1-3 | … | Вичит.»), a pair range a block,
+     * «ДОДАТКОВО» or an empty left side an additional lesson, «За розкладом» as scheduled,
+     * «Пари не буде» a cancellation.
      */
     public static OrderRowType rowType(String pairLabel, String fromDiscipline, String fromTeacher, String reason,
                                        String toDiscipline, String toTeacher) {
         String left = TextNormalizer.key(join(fromDiscipline, fromTeacher));
         String right = TextNormalizer.key(join(toDiscipline, toTeacher));
+        if (finished(reason, toDiscipline, toTeacher)) {
+            return OrderRowType.FINISHED;
+        }
         if (PAIR_RANGE.matcher(TextNormalizer.clean(pairLabel)).matches()) {
             return OrderRowType.BLOCK;
         }
@@ -105,10 +109,13 @@ public final class OrderTexts {
         if (right.contains("пари не буде")) {
             return OrderRowType.CANCELLATION;
         }
-        if (right.isEmpty() && TextNormalizer.key(reason).startsWith("вичит")) {
-            return OrderRowType.FINISHED;
-        }
         return OrderRowType.REPLACEMENT;
+    }
+
+    /** «Вичит.» in the reason and nothing on the right side: the discipline's hours are done. */
+    public static boolean finished(String reason, String toDiscipline, String toTeacher) {
+        return TextNormalizer.key(join(toDiscipline, toTeacher)).isEmpty()
+                && TextNormalizer.key(reason).startsWith("вичит");
     }
 
     static String join(String a, String b) {

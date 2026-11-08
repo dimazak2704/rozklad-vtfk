@@ -52,6 +52,25 @@ class CurriculumAndOrderMappingTest {
         assertThat(issues.rows()).anyMatch(row -> row.severity() == Severity.ERROR);
     }
 
+    /** FINISHED is «Вичит.» without a replacement, as in the DOCX rules, whatever the model answered. */
+    @Test
+    void finishedRowTypeFollowsTheText() {
+        OrderExtraction extraction = new OrderExtraction(105, "ORDER", null, "04.06.2026", "ЧЕТВЕР", "ЗНАМЕННИК", List.of(
+                new OrderRow("CHANGES", "1КІ1", "1", "FINISHED", "ФК", "Бурбела", "Зв.зам.", null, null, null),
+                new OrderRow("CHANGES", "3КІ1", "1-3", "BLOCK", "ФК", "Бурбела", "Вичит.", null, null, null),
+                new OrderRow("CHANGES", "3КІ2", "2", "FINISHED", "Матем.", "Іванова", "Вичит.", null, null, null)),
+                List.of(), null, null, List.of());
+        Issues issues = new Issues();
+
+        OrderDraft draft = OrderTestAccess.fromAi(extraction, issues);
+
+        assertThat(draft.rows()).extracting(OrderDraft.Row::rowType).containsExactly(OrderRowType.REPLACEMENT,
+                OrderRowType.FINISHED, OrderRowType.FINISHED);
+        assertThat(issues.rows()).extracting(ReportRow::message)
+                .anyMatch(message -> message.contains("ШІ позначив рядок як FINISHED, але за текстом це REPLACEMENT"))
+                .anyMatch(message -> message.contains("ШІ позначив рядок як BLOCK, але за текстом це FINISHED"));
+    }
+
     @Test
     void orderAnswerIsValidatedAndCanonicalized() {
         OrderExtraction extraction = new OrderExtraction(35, "ORDER", null, "19.10.2026", "ПОНЕДІЛОК", "ЗНАМЕННИК", List.of(

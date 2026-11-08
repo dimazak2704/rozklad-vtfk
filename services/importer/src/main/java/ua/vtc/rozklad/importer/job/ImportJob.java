@@ -181,6 +181,19 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
+    /** The admin replaced the draft with a corrected one: new parse remarks and matching rows. */
+    public void revised(JsonNode draft, List<ReportRow> parseIssues, List<ReportRow> entityRows, Instant now) {
+        require(acceptsMappings(), "revise the draft");
+        this.draft = draft;
+        this.issues = List.copyOf(parseIssues);
+        updateReport(entityRows);
+        status = summary.blocking() ? ImportJobStatus.NEEDS_REVIEW : ImportJobStatus.READY;
+        if (status == ImportJobStatus.READY) {
+            error = null;
+        }
+        updatedAt = now;
+    }
+
     public void startApplying(UUID semesterId, Instant now) {
         require(canApply(), "apply");
         if (semesterId != null) {

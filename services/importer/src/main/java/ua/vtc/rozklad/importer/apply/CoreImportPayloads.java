@@ -82,11 +82,14 @@ public final class CoreImportPayloads {
                            int plannedHours, String controlForm, String source, String note) {
     }
 
-    /** {@code POST /api/admin/import/changes} — a historic order as text snapshots. */
+    /**
+     * {@code POST /api/admin/import/changes} — a historic order as text snapshots. {@code replace}: rows the
+     * admin reviewed replace an earlier import of the same order (a corrected misreading).
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ChangesRequest(LocalDate date, Integer number, OrderKind kind, Integer parentNumber,
                                  String weekdayLabel, String parityLabel, List<ChangeItem> items, List<String> notes,
-                                 String signatoryPosition, String signatoryName) {
+                                 String signatoryPosition, String signatoryName, Boolean replace) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

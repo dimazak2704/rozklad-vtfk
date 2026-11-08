@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -170,6 +171,39 @@ public class ImportJobService {
                 throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
             }
             fresh.remapped(decisions, normalized.rows(), clock.instant());
+            return fresh;
+        });
+    }
+
+    /**
+     * Replaces the draft of a job waiting for review with the admin's corrected one (only kinds whose
+     * drafts are editable, {@code kind}) and re-matches it against a fresh catalog; the job's
+     * mappings are kept. {@code expectedVersion} is the version the admin edited (409 otherwise).
+     */
+    public ImportJob reviseDraft(UUID id, ImportKind kind, long expectedVersion,
+                                 Function<JsonNode, ImportHandler.ParseOutcome> revise) {
+        ImportJob job = get(id);
+        if (job.kind() != kind) {
+            throw new BusinessRuleException("DRAFT_NOT_EDITABLE", "Рядки можна редагувати лише в імпорті розпорядження.");
+        }
+        if (!job.acceptsMappings()) {
+            throw ProblemException.conflict("Чернетку можна змінювати, лише коли завдання очікує перевірки "
+                    + "(NEEDS_REVIEW або READY); зараз — " + job.status() + ".");
+        }
+        if (job.version() != expectedVersion) {
+            throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
+        }
+        ImportHandler.ParseOutcome outcome = revise.apply(job.draft());
+        JsonNode draft = jsonMapper.valueToTree(outcome.draft());
+        JobOptions options = JobOptions.from(job.options());
+        JobNormalizer.Normalized normalized = normalizer.normalize(job.kind(), draft, options, job.mappings(),
+                fetchCatalog());
+        return transaction.execute(status -> {
+            ImportJob fresh = jobs.findById(id).orElseThrow(() -> new NotFoundException("Завдання імпорту не знайдено."));
+            if (fresh.version() != expectedVersion) {
+                throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
+            }
+            fresh.revised(draft, outcome.issues(), normalized.rows(), clock.instant());
             return fresh;
         });
     }

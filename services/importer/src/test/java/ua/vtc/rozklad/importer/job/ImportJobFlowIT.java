@@ -238,7 +238,9 @@ class ImportJobFlowIT {
                 .get("id").asString());
 
         JsonNode parsed = job(id);
-        assertThat(parsed.get("status").asString()).isEqualTo("READY");
+        // рядки, прочитані ШІ, без звірки людиною застосувати не можна
+        assertThat(parsed.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(parsed.get("canApply").asBoolean()).isFalse();
         assertThat(parsed.at("/draft/number").asInt()).isEqualTo(35);
         assertThat(parsed.at("/draft/date").asString()).isEqualTo("2026-10-19");
         assertThat(parsed.at("/draft/rows/1/rowType").asString()).isEqualTo("CANCELLATION");
@@ -255,13 +257,43 @@ class ImportJobFlowIT {
                 .andExpect(jsonPath("$.dailyBudgetUsd").value(1.0))
                 .andExpect(jsonPath("$.model.vision").value("claude-sonnet-5-5"));
 
-        when(core.importChanges(any(), anyString())).thenReturn(jsonMapper.readTree("{\"items\":2}"));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("IMPORT_NEEDS_REVIEW"));
+
+        // адміністратор виправляє другий рядок (кабінет «С.з.» ШІ не прочитав) і зберігає звірені рядки
+        String reviewed = """
+                {"version":%d,"number":35,"kind":"ORDER","date":"2026-10-19","weekdayLabel":"ПОНЕДІЛОК",
+                 "parityLabel":"ЗНАМЕННИК","rows":[
+                   {"section":"CHANGES","groupCode":"4КІ1","pairLabel":"2","rowType":"REPLACEMENT","fromDiscipline":"СТП",
+                    "fromTeacher":"Кренцін","reasonText":"Зв.зам.","toDiscipline":"НДКС","toTeacher":"Непийвода","roomText":"6"},
+                   {"section":"CHANGES","groupCode":"1ТК1","pairLabel":"1","fromDiscipline":"Ін. мова",
+                    "fromTeacher":"Крисак Л. (п.)","reasonText":"Відп.","toDiscipline":"Пари не буде","roomText":null},
+                   {"section":"CHANGES","groupCode":"3КІ1","pairLabel":"1-3","fromDiscipline":"ФК","fromTeacher":"Бурбела",
+                    "reasonText":"Вичит."}],
+                 "notes":["Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно."],
+                 "signatoryPosition":"Заступник директора з НР","signatoryName":"Микола ПОЛІЩУК"}
+                """.formatted(parsed.get("version").asLong());
+        mockMvc.perform(put("/api/import/jobs/{id}/draft", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(reviewed))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.draft.reviewed").value(true))
+                .andExpect(jsonPath("$.draft.rows[1].rowType").value("CANCELLATION"))
+                .andExpect(jsonPath("$.draft.rows[2].rowType").value("FINISHED"));
+        mockMvc.perform(put("/api/import/jobs/{id}/draft", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(reviewed))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:stale-data"));
+
+        when(core.importChanges(any(), anyString())).thenReturn(jsonMapper.readTree("{\"items\":3}"));
         mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin())).andExpect(status().isAccepted());
         assertThat(job(id).get("status").asString()).isEqualTo("APPLIED");
         ArgumentCaptor<CoreImportPayloads.ChangesRequest> changes = ArgumentCaptor.forClass(CoreImportPayloads.ChangesRequest.class);
         verify(core).importChanges(changes.capture(), anyString());
         assertThat(changes.getValue().date()).isEqualTo(LocalDate.of(2026, 10, 19));
-        assertThat(changes.getValue().items()).hasSize(2);
+        assertThat(changes.getValue().items()).hasSize(3);
+        assertThat(changes.getValue().replace()).isTrue();
     }
 
     @Test
