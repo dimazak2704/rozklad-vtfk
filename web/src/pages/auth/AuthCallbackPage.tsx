@@ -13,7 +13,7 @@ import { Spinner } from '@/components/ui/Spinner';
  * Пояснення українською замість тексту бібліотеки (`No matching state found in storage` тощо).
  * Технічну причину не показуємо: людині вона нічого не каже.
  */
-export function callbackErrorText(error: Error): string {
+function callbackErrorText(error: Error): string {
   const message = error.message.toLowerCase();
   if (message.includes('state') || message.includes('code') || message.includes('expired')) {
     return 'Посилання входу застаріло або вже використане (наприклад, після кнопки «Назад» у браузері).';

@@ -92,4 +92,37 @@ describe('повернення фокуса після закриття вікн
 
     await waitFor(() => expect(trigger).toHaveFocus());
   });
+
+  it('дія прибрала кнопку, з якої відкрили вікно: фокус іде на картку, а не на <body>', async () => {
+    const user = userEvent.setup();
+    function RemovedOnConfirm() {
+      const [open, setOpen] = useState(false);
+      const [cancelled, setCancelled] = useState(false);
+      return (
+        <section aria-label="Рішення щодо пари">
+          <p>{cancelled ? 'Рішення скасовано' : 'Чекає відповіді'}</p>
+          {cancelled ? null : <Button onClick={() => setOpen(true)}>Скасувати рішення</Button>}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent
+              title="Скасувати рішення?"
+              footer={
+                <DialogClose asChild>
+                  <Button onClick={() => setTimeout(() => setCancelled(true), 20)}>Так, скасувати</Button>
+                </DialogClose>
+              }
+            >
+              <p>Пару знову треба буде вирішити.</p>
+            </DialogContent>
+          </Dialog>
+        </section>
+      );
+    }
+    renderWithProviders(<RemovedOnConfirm />);
+    await user.click(screen.getByRole('button', { name: 'Скасувати рішення' }));
+    await user.click(await screen.findByRole('button', { name: 'Так, скасувати' }));
+
+    await waitFor(() => expect(screen.getByText('Рішення скасовано')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Рішення щодо пари' })).toHaveFocus());
+    expect(document.activeElement).not.toBe(document.body);
+  });
 });
