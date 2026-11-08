@@ -57,8 +57,27 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     if (view !== 'day') setView('day');
   };
 
+  // без мережі запит цього тижня стоїть на паузі: дані на екрані (якщо є) — від іншого тижня, їх не показуємо
+  const unavailableOffline = query.fetchStatus === 'paused' && (!schedule || placeholder);
+
   let content;
-  if (!schedule) {
+  if (unavailableOffline) {
+    content = (
+      <EmptyState
+        className="rounded-panel border border-default bg-surface"
+        icon={<WifiOff aria-hidden="true" className="size-5" />}
+        title={view === 'day' ? 'Цей день не збережено на пристрої' : 'Цей тиждень не збережено на пристрої'}
+        description="Без інтернету відкриваються лише ті тижні, які ви вже переглядали. Підключіться до мережі — розклад завантажиться сам."
+        action={
+          homeDate < week.from || homeDate > week.to ? (
+            <Button variant="secondary" onClick={() => setDate(homeDate)}>
+              До поточного тижня
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  } else if (!schedule) {
     if (query.isError) {
       const missing = isApiError(query.error) && query.error.isNotFound;
       content = (
@@ -172,7 +191,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
         />
       ) : null}
 
-      {!online ? (
+      {!online && !unavailableOffline ? (
         <p className="flex items-start gap-2 rounded-control border border-default bg-sunken px-3 py-2 text-caption text-secondary">
           <WifiOff aria-hidden="true" className="mt-px size-4 shrink-0 text-muted" />
           Немає інтернету. Показано збережений розклад — заміни могли змінитися.
@@ -193,7 +212,10 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
         </p>
       ) : null}
 
-      <div aria-busy={placeholder || undefined} className={cn('transition-opacity duration-150', placeholder && 'opacity-60')}>
+      <div
+        aria-busy={(placeholder && !unavailableOffline) || undefined}
+        className={cn('transition-opacity duration-150', placeholder && !unavailableOffline && 'opacity-60')}
+      >
         {content}
       </div>
     </section>

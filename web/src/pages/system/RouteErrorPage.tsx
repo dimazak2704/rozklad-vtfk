@@ -20,7 +20,11 @@ export function RouteErrorPage() {
 
   let title = 'На сторінці сталася помилка';
   let description = 'Спробуйте оновити сторінку. Якщо помилка повторюється, напишіть диспетчеру, що саме ви робили.';
-  if (isChunkLoadError(error)) {
+  if (isChunkLoadError(error) && !navigator.onLine) {
+    // частина коду сторінки ще не потрапила в кеш пристрою, а мережі немає
+    title = 'Немає інтернету';
+    description = 'Ця сторінка ще не збережена на пристрої. Підключіться до мережі й оновіть сторінку.';
+  } else if (isChunkLoadError(error)) {
     title = 'Вийшла нова версія сайту';
     description = 'Оновіть сторінку, щоб завантажити її.';
   } else if (isRouteErrorResponse(error)) {

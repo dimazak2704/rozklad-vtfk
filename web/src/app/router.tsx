@@ -23,6 +23,15 @@ const notFound: RouteObject = {
 };
 
 /**
+ * Межа помилок сторінок усередині макета: помилка сторінки (зокрема частина коду, що не завантажилась
+ * без мережі) показується на місці сторінки, а шапка й навігація макета лишаються. errorElement самого
+ * макета ловить лише помилки макета.
+ */
+function withinLayout(children: RouteObject[]): RouteObject {
+  return { errorElement: <RouteErrorPage />, children };
+}
+
+/**
  * Дерево маршрутів. Публічний макет вантажиться одразу (студент має побачити розклад якнайшвидше),
  * кабінет і панель диспетчера — окремими частинами коду лише після входу.
  */
@@ -36,7 +45,7 @@ export const routeTree: RouteObject[] = [
       {
         element: <PublicLayout />,
         errorElement: <RouteErrorPage />,
-        children: [...routesFor('public').map(toRouteObject), notFound],
+        children: [withinLayout([...routesFor('public').map(toRouteObject), notFound])],
       },
       {
         element: (
@@ -48,7 +57,7 @@ export const routeTree: RouteObject[] = [
           {
             lazy: async () => ({ Component: (await import('@/layouts/TeacherLayout')).TeacherLayout }),
             errorElement: <RouteErrorPage />,
-            children: routesFor('teacher').map(toRouteObject),
+            children: [withinLayout(routesFor('teacher').map(toRouteObject))],
           },
         ],
       },
@@ -63,8 +72,10 @@ export const routeTree: RouteObject[] = [
             lazy: async () => ({ Component: (await import('@/layouts/AdminLayout')).AdminLayout }),
             errorElement: <RouteErrorPage />,
             children: [
-              ...routesFor('admin').map(toRouteObject),
-              { path: '/admin/catalog', element: <Navigate to="/admin/catalog/groups" replace /> },
+              withinLayout([
+                ...routesFor('admin').map(toRouteObject),
+                { path: '/admin/catalog', element: <Navigate to="/admin/catalog/groups" replace /> },
+              ]),
             ],
           },
         ],
