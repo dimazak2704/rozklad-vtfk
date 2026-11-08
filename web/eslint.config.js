@@ -51,7 +51,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['*.config.{js,ts}', 'scripts/**/*.mjs', 'e2e/**/*.ts'],
+    files: ['*.config.{js,ts}', 'scripts/**/*.mjs', 'e2e/**/*.ts', 'e2e-real/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 2023,
