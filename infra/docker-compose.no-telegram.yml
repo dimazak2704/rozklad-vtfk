@@ -1,0 +1,10 @@
+# Накладка для локального стенду без Telegram: порожній токен вимикає бота в notification
+# (TelegramProperties.enabled), тож стенд не опитує Telegram і нічого туди не надсилає.
+# environment перекриває значення з ../.env (env_file).
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.no-telegram.yml --profile app up -d
+# scripts/dev-stack.sh додає цей файл, коли TELEGRAM=off.
+services:
+  notification:
+    environment:
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_OWNER_CHAT_ID: ""
