@@ -20,7 +20,7 @@ export function DeliveriesTable() {
   const [status, setStatus] = useState<DeliveryStatus | null>(null);
   const [page, setPage] = useState(0);
   // сторінки рахує сервер: журнал може бути довгим, тож не тягнемо його весь
-  const deliveries = useDeliveries({ status: status ?? undefined, page, size: PAGE_SIZE });
+  const deliveries = useDeliveries({ status: status ?? undefined, page, size: PAGE_SIZE }, { keepPrevious: true });
   const orders = useOrders({ status: 'PUBLISHED', size: 100 });
   const numberOf = useMemo(() => new Map((orders.data?.items ?? []).map((o) => [o.id, o.number])), [orders.data]);
   const data = deliveries.data;

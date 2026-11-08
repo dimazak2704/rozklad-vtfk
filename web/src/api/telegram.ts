@@ -41,12 +41,15 @@ export function useBindings() {
   });
 }
 
-/** Журнал доставок — сторінка `{items,page,size,total}`; поки є повідомлення в черзі — оновлюємо частіше. */
-export function useDeliveries(query: DeliveriesQuery) {
+/**
+ * Журнал доставок — сторінка `{items,page,size,total}`; поки є повідомлення в черзі — оновлюємо частіше.
+ * `keepPrevious` — лише для гортання сторінок однієї таблиці: для іншого розпорядження старі дані були б неправдою.
+ */
+export function useDeliveries(query: DeliveriesQuery, { keepPrevious = false }: { keepPrevious?: boolean } = {}) {
   return useQuery({
     queryKey: qk.notify.deliveries({ ...query }),
     queryFn: ({ signal }) => api.get<Page<DeliveryDto>>('/notify/deliveries', { ...query }, { signal }),
-    placeholderData: keepPreviousData,
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
     refetchInterval: (state) =>
       state.state.data?.items.some((d) => d.status === 'QUEUED' || d.status === 'RETRYING') ? 3_000 : 30_000,
   });

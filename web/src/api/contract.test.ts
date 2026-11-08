@@ -223,6 +223,48 @@ describe('контракт мок-API ↔ core', () => {
   });
 });
 
+describe('контракт мок-API ↔ core: каталог, календар, навантаження, облік', () => {
+  it('каталог — DTO з version і посиланнями', async () => {
+    const catalog = `${CORE}catalog/internal/`;
+    const page = <T,>(path: string) => api.get<Page<T>>(path);
+    await expectShape(first((await page('/admin/teachers')).items, 'викладачі'), `${catalog}TeacherDtos.java`, 'TeacherDto');
+    await expectShape(first((await page('/admin/rooms')).items, 'аудиторії'), `${catalog}RoomDtos.java`, 'RoomDto');
+    const group = first((await page<{ subgroups: unknown[] }>('/admin/groups')).items, 'групи');
+    await expectShape(group, `${catalog}GroupDtos.java`, 'GroupDto');
+    await expectShape(first((await page('/admin/disciplines')).items, 'дисципліни'), `${catalog}DisciplineDtos.java`, 'DisciplineDto');
+    await expectShape(first((await page('/admin/departments')).items, 'відділення'), `${catalog}StructureDtos.java`, 'DepartmentDto');
+    await expectShape(first((await page('/admin/specialties')).items, 'спеціальності'), `${catalog}StructureDtos.java`, 'SpecialtyDto');
+    // у демо-каталозі комісій і корпусів може не бути — тоді перевіряти нічого
+    const commission = (await page('/admin/cycle-commissions')).items[0];
+    if (commission) await expectShape(commission, `${catalog}StructureDtos.java`, 'CycleCommissionDto');
+    const building = (await page('/admin/buildings')).items[0];
+    if (building) await expectShape(building, `${catalog}StructureDtos.java`, 'BuildingDto');
+  });
+
+  it('календар — семестри, тижні, профілі дзвінків, періоди', async () => {
+    const calendar = `${CORE}calendar/internal/CalendarDtos.java`;
+    const semester = first(await api.get<Array<{ id: string }>>('/admin/semesters'), 'семестри');
+    await expectShape(semester, calendar, 'SemesterDto');
+    await expectShape(first(await api.get<unknown[]>(`/admin/semesters/${semester.id}/weeks`), 'тижні'), calendar, 'SemesterWeekDto');
+    const profile = first(await api.get<Array<{ slots: unknown[] }>>('/admin/bell-profiles'), 'профілі');
+    await expectShape(profile, calendar, 'BellProfileDto');
+    await expectShape(first(profile.slots, 'слоти'), calendar, 'BellSlotDto');
+    await expectShape(first(await api.get<unknown[]>('/admin/calendar-periods', { semesterId: semester.id }), 'періоди'), calendar, 'CalendarPeriodDto');
+    await expectShape(first(await api.get<unknown[]>('/admin/shift-windows'), 'вікна змін'), calendar, 'ShiftWindowDto');
+  });
+
+  it('навантаження й облік годин', async () => {
+    const item = first(await api.get<Array<{ teachers: unknown[] }>>('/admin/load', { semesterId: ACTIVE_SEMESTER.id }), 'навантаження');
+    await expectShape(item, `${CORE}load/internal/LoadDtos.java`, 'LoadItemDto');
+    const rows = await api.get<Array<{ suggestion: unknown }>>('/admin/accounting', { semesterId: ACTIVE_SEMESTER.id });
+    await expectShape(first(rows, 'облік'), `${CORE}accounting/internal/web/AccountingRowDto.java`, 'AccountingRowDto');
+    const suggested = rows.find((row) => row.suggestion);
+    if (suggested) await expectShape(suggested.suggestion, `${CORE}accounting/internal/web/AccountingRowDto.java`, 'SuggestionDto');
+    const stats = await api.get<unknown[]>('/admin/accounting/teachers', { month: '2026-10' });
+    if (stats.length > 0) await expectShape(stats[0], `${CORE}accounting/internal/web/TeacherStatsDto.java`, 'TeacherStatsDto');
+  });
+});
+
 describe('контракт мок-API ↔ notification', () => {
   it('журнал доставок — сторінка DeliveryDto', async () => {
     const page = await api.get<Page<DeliveryDto>>('/notify/deliveries');
