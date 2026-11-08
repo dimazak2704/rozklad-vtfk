@@ -127,7 +127,7 @@ PDF; SSE events `absence.created`, `change.updated`, `order.published`, `schedul
 readable. `ai`: the curriculum PDF through the importer's vision model, review, apply → load items. The
 smoke run leaves data behind; reset and seed again for a clean demo.
 
-To keep AI cheap while testing, start the importer with `AI_MODEL_VISION=claude-haiku-5-5` (shell or `.env`):
+To keep AI cheap while testing, put `AI_MODEL_VISION=claude-haiku-5-5` into `.env` and run `scripts/dev-stack.sh up --no-build`:
 the curriculum costs ~$0.003 with Haiku 5.5 instead of ~$0.05 with Sonnet 5.5, but Haiku returned only 2 of the
 12 rows Sonnet reads for semester 7 (`docs/modules/importer-ai-samples.md` §6) — use the default vision model
 for real imports.
