@@ -1,9 +1,10 @@
 package ua.vtc.rozklad.importer.apply;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
-import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -22,6 +23,7 @@ public class CoreImportClient {
     public static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
 
     private static final Logger log = LoggerFactory.getLogger(CoreImportClient.class);
+    private static final int MAX_FIELD_ERRORS = 5;
 
     private final RestClient coreRestClient;
 
@@ -66,12 +68,34 @@ public class CoreImportClient {
         }
     }
 
-    private static String detailOf(RestClientResponseException e) {
+    /** {@code detail} of core's ProblemDetail plus its field errors, so the admin sees what was rejected. */
+    static String detailOf(RestClientResponseException e) {
+        JsonNode problem;
         try {
-            ProblemDetail problem = e.getResponseBodyAs(ProblemDetail.class);
-            return problem == null ? null : problem.getDetail();
-        } catch (RuntimeException ignored) {
+            problem = e.getResponseBodyAs(JsonNode.class);
+        } catch (RuntimeException unreadable) {
             return null;
         }
+        if (problem == null || !problem.isObject()) {
+            return null;
+        }
+        StringBuilder text = new StringBuilder();
+        JsonNode detail = problem.get("detail");
+        if (detail != null && detail.isString()) {
+            text.append(detail.asString());
+        }
+        JsonNode errors = problem.get("errors");
+        if (errors != null && errors.isArray() && !errors.isEmpty()) {
+            List<String> fields = new ArrayList<>();
+            for (JsonNode error : errors) {
+                if (fields.size() == MAX_FIELD_ERRORS) {
+                    fields.add("ще " + (errors.size() - MAX_FIELD_ERRORS));
+                    break;
+                }
+                fields.add(error.path("field").asString("?") + " — " + error.path("message").asString(""));
+            }
+            text.append(text.isEmpty() ? "" : " ").append('(').append(String.join("; ", fields)).append(')');
+        }
+        return text.isEmpty() ? null : text.toString();
     }
 }

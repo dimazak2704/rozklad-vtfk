@@ -57,8 +57,11 @@ public final class CoreImportPayloads {
                         String curatorShortName, String homeRoomName) {
     }
 
-    /** {@code type} TEACHER or DISCIPLINE; {@code targetShortName} — short name of the existing/new entity. */
-    public record Alias(String type, String alias, String targetShortName) {
+    /**
+     * {@code type} TEACHER or DISCIPLINE; {@code target} — short name of the existing/new entity
+     * (core {@code CatalogImportDtos.AliasItem}).
+     */
+    public record Alias(String type, String alias, String target) {
     }
 
     /** {@code POST /api/admin/import/timetable} → a DRAFT version. */
