@@ -21,8 +21,9 @@ internal REST, schedules are read from core's public REST.
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
 | `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
 
-Tables (Flyway `V2`–`V6`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
-`substitution_request` (`V6`: `no_telegram_at`, `admin_warned_at`), `substitution_message` (+ `processed_event`
+Tables (Flyway `V2`–`V7`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
+`substitution_request` (`V6`: `no_telegram_at`, `admin_warned_at`; `V7`: `mode`, `teacher_answer`, `change_kind`,
+`original_discipline_name`, `reason_code`, purpose `SUBSTITUTION_NOTICE`), `substitution_message` (+ `processed_event`
 from `V1`).
 
 ## 2. REST (CONTRACTS §6)
@@ -77,8 +78,22 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   any text inside the wizard goes to importer `POST /api/import/ai/parse-absence`; the result is echoed
   («Я зрозумів так: …» [✅ Так, надіслати] [✏️ Змінити]); the teacher's words are passed as the private comment.
   Unclear/low confidence (< 0.6)/past/far dates/importer down → explanation + date buttons.
-* **Substitution request**: date, pair + time, group (+ subgroup), discipline, room, whom to replace, deadline,
-  [✅ Підтверджую] [❌ Не можу] → core `POST /api/internal/changes/{id}/reply` → the message is edited to the
+* **Substitution notice (NOTIFY, default — DOMAIN §7)**: «📌 Вам поставили заміну», the same details without a
+  deadline, «Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.», [👍 Добре] [❌ Не можу]
+  (same callbacks `sr:c:`/`sr:d:` as a request; core knows the change's mode). Purpose `SUBSTITUTION_NOTICE`;
+  the local copy starts CONFIRMED with `mode = NOTIFY` and keeps `teacher_answer`. Not sent for a lesson that is
+  already over. «Добре» → «👍 Добре, заміну прийнято. Дякуємо!»; «Не можу» before the order → core declines the
+  change → «❌ Ви відмовилися від заміни. Диспетчер обере інший варіант.» and `status-changed DECLINED` tells
+  admins «❌ Відмова від заміни / {викладач} не може взяти {N} пару {група} у {день}. Оберіть інший варіант на
+  сторінці змін.»; «Не можу» after the order → «❗ Ви повідомили, що не можете. … диспетчера повідомлено: він
+  внесе доповнення.» and `substitution.teacher-replied` tells admins «❗ Потрібне доповнення до розпорядження …».
+  An unanswered notice of a change that became APPLIED is edited to «📄 Заміну внесено до розпорядження.» and keeps
+  its buttons, so the teacher can still object. No deadline, no reminders. The race of the button with core's
+  event for the same answer is handled like the request (locked row, the answer is recorded once, the second
+  writer sees it and does nothing): `SubstitutionFlowIT.*Racing*` covers «Добре», «Не можу» before and after
+  publication.
+* **Substitution request (CONFIRM)**: date, pair + time, group (+ subgroup), discipline, room, whom to replace,
+  deadline, [✅ Підтверджую] [❌ Не можу] → core `POST /api/internal/changes/{id}/reply` → the message is edited to the
   final state (no buttons). 409 → «Цей запит уже неактуальний» (the message keeps a known final state; a
   repeated tap of the answer core already holds gets the same success reply), 403 → «адресовано іншому
   викладачу», core down → alert, buttons stay. A repeated `confirmation-requested` for a pending change is sent
@@ -96,8 +111,13 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   another in one scheduled method (the scheduler uses virtual threads, separate methods would run side by side),
   lock their rows in one order (`order by change_id`, also across instances) and look teacher names up in core
   before locking, so no HTTP call holds a row the button or an event waits for.
+* **REPLACE_DISCIPLINE** (request and notice): the line «🔁 Замість «{дисципліна за розкладом}» ({викладач})», plus
+  «(взаємна заміна)» when the reason is MUTUAL, replaces «👤 Замість: …»; «📘» names the discipline the teacher
+  will teach (the event's `disciplineName`).
 * **Teacher without Telegram**: the request cannot be sent; instead of one admin message per change, the
-  every-minute job tells admin chats about requests still PENDING after `app.bot.no-telegram-notice-delay`
+  every-minute job tells admin chats about requests still PENDING (CONFIRM) or notices still unanswered and in
+  force (NOTIFY: CONFIRMED or APPLIED, worded «⚠️ {викладач} не підключив Telegram — повідомте про заміну самі»)
+  after `app.bot.no-telegram-notice-delay`
   (2 min) — one message per teacher and lesson date listing the pairs (dedup key per teacher, date and chat), so
   core's reminders and further changes of that date add nothing; past dates are skipped silently. A seeded or
   quickly confirmed/published order (CONFIRMED/APPLIED within the delay) causes no message. The pending changes
@@ -148,7 +168,8 @@ retried 3× and then dead-lettered.
 |---|---|
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML) + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
-| `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages; DECLINED → admin chats |
+| `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
+| `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
 | `generation.completed` | admin chats: SOLVED (hard/soft, top penalties) / FAILED (error) / CANCELLED |
 | `schedule.changed`, `timetable.version.published` | cache invalidation (generation counter in Redis) |

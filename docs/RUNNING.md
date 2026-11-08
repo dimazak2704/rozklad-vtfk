@@ -103,8 +103,9 @@ Every step is a call to the running system (no SQL); a repeated run skips what e
 7. **order35** — order №35 of 19.10.2026 rebuilt from `seed/orders/order-035-2026-10-19.jpg`: numbering of the
    semester starts at 35 (`PUT /api/admin/orders/numbering`), teachers Ємельяненко and Яцуба and the
    discipline ЗУ «Захист України» added, absence of Крисак Л. (4 affected lessons), 16 changes (BLOCK 1ТК1 1-4,
-   2 × ADDITIONAL, 2 × CANCEL of a subgroup, 2 × REPLACE_TEACHER, 9 × REPLACE_DISCIPLINE «Зв.зам.»), Непийвода
-   confirms hers in the cabinet, the dispatcher confirms the rest, the 5 notes of the original, publication →
+   2 × ADDITIONAL, 2 × CANCEL of a subgroup, 2 × REPLACE_TEACHER, 9 × REPLACE_DISCIPLINE «Зв.зам.»; in the default
+   approval mode NOTIFY they are confirmed at once — in mode CONFIRM Непийвода confirms hers in the cabinet and the
+   dispatcher confirms the rest), the 5 notes of the original, publication →
    №35. Printed sheet: `GET /api/documents/orders/{id}.pdf|png|docx`.
 
 Differences from the paper original that the data does not allow to avoid: rows are sorted by course and
@@ -120,8 +121,8 @@ python scripts/smoke_workflows.py substitution generation # creates data on 12.1
 python scripts/smoke_workflows.py ai                      # ONE paid Anthropic call (curriculum scan)
 ```
 
-`substitution`: absence of Непийвода → affected lessons → ranked options → change for Кренцін → he declines in
-the cabinet → asked again → confirms → the rest cancelled → dashboard → order №36 → teacher's own schedule →
+`substitution`: absence of Непийвода → affected lessons → ranked options → change for Кренцін (NOTIFY:
+confirmed at once; CONFIRM: pending) → he declines in the cabinet → asked again → confirms → the rest cancelled → dashboard → order №36 → teacher's own schedule →
 PDF; SSE events `absence.created`, `change.updated`, `order.published`, `schedule.changed` are checked on
 `/api/events/stream` through the gateway. `generation`: 10-second Timefold run for 4КІ1/4КІ2, result version
 readable. `ai`: the curriculum PDF through the importer's vision model, review, apply → load items. The

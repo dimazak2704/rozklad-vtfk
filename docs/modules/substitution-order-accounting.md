@@ -71,19 +71,31 @@ teacher gets 403 on `/api/me/*`.
   exclusive room or `maxParallel`, capacity, required room type, UNAVAILABLE; pending/confirmed
   changes count as occupying their slots. Shift windows are not enforced (real orders put extra pairs
   outside them). Decisions about one group-day are serialized by `lockGroupDay`.
-* **Approval** — a change that assigns a teacher waits for that teacher when
-  `substitution.approvalMode` is CONFIRM (default): DRAFT → PENDING_CONFIRMATION, deadline =
-  now + `substitution.confirmTimeoutMinutes` (default 60). Otherwise (AUTO, or no teacher: CANCEL,
-  ROOM_CHANGE, finished without replacement) DRAFT → CONFIRMED. The column `approval_mode` stores
-  how the change was approved.
+* **Approval** (`ChangeWorkflow.open`, DOMAIN §7) — `substitution.approvalMode` decides for a change that
+  assigns a teacher: NOTIFY (default) DRAFT → CONFIRMED, no deadline, `substitution.status-changed` plus
+  `substitution.confirmation-requested` with `mode = NOTIFY` (the teacher is informed); CONFIRM DRAFT →
+  PENDING_CONFIRMATION, deadline = now + `substitution.confirmTimeoutMinutes` (default 120), the request;
+  AUTO DRAFT → CONFIRMED without a message. Without a teacher (CANCEL, ROOM_CHANGE, finished without
+  replacement) always AUTO. The column `approval_mode` stores how the change was approved.
 * **Transitions** (`ChangeStatusMachine`, illegal → 422 `CHANGE_ILLEGAL_TRANSITION`):
   DRAFT → PENDING/CONFIRMED/CANCELLED; PENDING → CONFIRMED/DECLINED/CANCELLED; CONFIRMED →
-  APPLIED/CANCELLED; DECLINED → PENDING (ask again)/CANCELLED; APPLIED, CANCELLED final. Every
-  transition writes `change_history` (creation is one entry `null → status`), publishes
-  `substitution.status-changed` (into PENDING: `substitution.confirmation-requested` instead) and
-  pushes SSE `change.updated` (ChangeDto) to ADMIN and to the assigned teacher after commit.
-* **Teacher's answer** (cabinet and bot): only the assigned teacher (403), only while PENDING (409,
-  as CONTRACTS §4 says for the bot). Actor in the history: the username, or «Кренцін М.Д. (Telegram)».
+  APPLIED/CANCELLED; DECLINED → PENDING (ask again)/CANCELLED; APPLIED, CANCELLED final. CONFIRMED →
+  DECLINED is not in the table: only the informed teacher of a NOTIFY change takes it
+  (`ChangeWorkflow.declineAssigned`, `requireTeacherDecline`). Every transition writes `change_history`
+  (creation is one entry `null → status`), publishes `substitution.status-changed` (into PENDING:
+  `substitution.confirmation-requested` instead) and pushes SSE `change.updated` (ChangeDto) to ADMIN and to
+  the assigned teacher after commit. A declined or cancelled change refreshes its group-day lessons
+  (`DatedLessonRefresh`).
+* **Teacher's answer** (`ChangeReplies`, cabinet and bot): only the assigned teacher (403). The answer takes
+  the date lock first and only then reads the change (`findDateById`), so an answer racing with a publication
+  sees the published state. CONFIRM request: only while PENDING (409). NOTIFY change: «Добре» on CONFIRMED or
+  APPLIED → `teacher_answer = CONFIRM`, history entry with the same status on both sides, event
+  `substitution.teacher-replied`; «Не можу» on CONFIRMED → DECLINED; «Не можу» on APPLIED → objection
+  (`teacher_answer = DECLINE`, history APPLIED → APPLIED «… потрібне доповнення», `teacher-replied`), the order is
+  never undone; the same answer again → 200 without a new entry or event; another answer after a decline or an
+  objection, or on a cancelled change → 409. Actor in the history: the username, or «Кренцін М.Д. (Telegram)».
+  `NotifyApprovalIT` covers every path, the race of «Не можу» with the publication and parallel answers with a
+  cancel.
 * **Dispatcher actions** — `confirm` instead of the teacher (DRAFT/PENDING; a declined change must be
   asked again or replaced: 422 `CHANGE_DECLINED`); `request-confirmation` starts a new round;
   `PUT` edits only the room and the reason (another teacher or discipline = cancel and create a new
@@ -165,15 +177,17 @@ used one is 422 `ORDER_NUMBER_USED` (numbers never go back or repeat).
 
 | Key | Default | Meaning |
 |---|---|---|
-| setting `substitution.approvalMode` | CONFIRM | AUTO or CONFIRM |
-| setting `substitution.confirmTimeoutMinutes` | 60 | deadline of a confirmation round |
+| setting `substitution.approvalMode` | NOTIFY | NOTIFY (assign and inform), CONFIRM (ask and wait) or AUTO (assign silently) |
+| setting `substitution.confirmTimeoutMinutes` | 120 | deadline of a confirmation round (CONFIRM only) |
 | setting `order.signatoryPosition` / `order.signatoryName` | «Заступник директора з НР» / «Микола ПОЛІЩУК» | signature |
 | setting `accounting.hoursPerPair` | 2 | academic hours per pair |
 | `app.substitution.reminder-check-interval` (`SUBSTITUTION_REMINDER_INTERVAL`) | PT1M | reminder job period |
 
 A stored setting of a wrong type fails loudly (IllegalStateException), it is never silently replaced.
 Migrations: `V1_501` (`change.swap_lesson_id`, `change.reminded_at`), `V1_601`
-(`order_document.notes_edited`, one draft amendment per date).
+(`order_document.notes_edited`, one draft amendment per date), `V1_505` (`approval_mode` NOTIFY,
+`change.teacher_answer`), `V1_805` (the stored default `substitution.approvalMode` CONFIRM written by `system`
+becomes NOTIFY; a value an administrator chose stays).
 
 ## 8. How to test
 

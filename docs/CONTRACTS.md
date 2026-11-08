@@ -86,7 +86,7 @@ Substitutions:
 | `POST /api/admin/changes/{id}/request-confirmation` · `POST /{id}/confirm` (admin override) | |
 | `GET /api/admin/dashboard?date` | `{date, parity, absences:n, uncoveredLessons:n, pending:n, confirmed:n, declined:n, orderDraft:{id,itemCount}?, generation:{status}?, aiSpendToday?, alerts:[...]}` |
 `Option {kind, score (0..100), title, reasons:[string], teacher?, discipline?, room?, swapLesson?, warnings:[string]}`
-`ChangeDto {id, kind, status, date, pairFrom, pairTo, group, subgroup, original:{discipline,teacher,room}, new:{discipline?,teacher?,room?}, reasonCode, reasonText, absenceId?, confirmDeadline?, respondedAt?, orderId?, history:[{at,actor,from,to,comment}]}`
+`ChangeDto {id, kind, status, date, pairFrom, pairTo, group, subgroup, original:{discipline,teacher,room}, new:{discipline?,teacher?,room?}, reasonCode, reasonText, absenceId?, confirmDeadline?, respondedAt?, orderId?, history:[{at,actor,from,to,comment}], approvalMode: AUTO|CONFIRM|NOTIFY, …, teacherAnswer: CONFIRM|DECLINE|null}` (round 7: `teacherAnswer` is the assigned teacher's answer in the current round; NOTIFY + APPLIED + DECLINE = objection, an amendment is needed)
 
 Orders:
 | `GET /api/admin/orders?from&to&q&status` | page of `{id, number, date, kind, status, itemCount, publishedAt}` |
@@ -104,7 +104,7 @@ Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipl
 Identity & settings: `POST /api/admin/invites {teacherId}` → `{token, url, expiresAt}`; `GET /api/admin/invites`;
 `GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing Keycloak account → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
-`GET/PUT /api/admin/settings` → `{approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
+`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
 
 Import apply (role ADMIN or SERVICE): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
@@ -124,7 +124,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 
 ## 4. Core — internal (role SERVICE, client credentials)
 
-`POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch, 409 if not pending);
+`POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
 `GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...]}`;
 `GET /api/internal/teachers/{id}` → teacher with keycloak link.
@@ -164,7 +164,8 @@ Records live in `libs/contracts` (`ua.vtc.rozklad.contracts.events`).
 | `generation.cancel` | core → scheduler | `jobId` |
 | `generation.progress` | scheduler → core | `jobId, elapsedMs, hardScore, softScore` |
 | `generation.completed` | scheduler → core | `jobId, status SOLVED|FAILED|CANCELLED, hardScore, softScore, assignments:[{unitId, weekday, pair, parity, roomId}], analysis:[{constraint, matchCount, score}], error?` |
-| `substitution.confirmation-requested` | core → notification | `changeId, teacherId, date, pair, startsAt, endsAt, groupCode, subgroup, disciplineName, originalTeacherName, roomName?, deadline` |
+| `substitution.confirmation-requested` | core → notification | `changeId, teacherId, date, pair, startsAt, endsAt, groupCode, subgroup, disciplineName (what the teacher teaches: the new discipline of REPLACE_DISCIPLINE), originalTeacherName, roomName?, deadline?` + additive (round 7, nullable) `mode: CONFIRM|NOTIFY` (null = CONFIRM; NOTIFY has no deadline), `kind`, `originalDisciplineName`, `reasonCode` |
+| `substitution.teacher-replied` | core → notification | `changeId, teacherId, decision: CONFIRM|DECLINE, status, date, pair, groupCode` — a NOTIFY answer that kept the status: «Добре», or «Не можу» on an APPLIED change (objection, admin chats are told an amendment is needed) |
 | `substitution.status-changed` | core → notification | `changeId, status, teacherId, date, groupCode` (edit bot message / notify admins) |
 | `absence.reported` | core → notification | `absenceId, teacherId, teacherName, dateFrom, dateTo, pairs, source` |
 | `order.published` | core → notification | `OrderPayload` (all fields of `OrderDto` + `semesterName`, `affectedGroups:[{groupId, code}]`, `affectedTeachers:[{teacherId, name}]`) |

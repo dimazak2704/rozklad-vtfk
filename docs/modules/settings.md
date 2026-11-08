@@ -9,8 +9,9 @@ depends on nothing but `shared`).
   (`approvalMode()`, `requiresConfirmation()`, `confirmTimeoutMinutes()`, `signatoryPosition()`,
   `signatoryName()`, `collegeName()`, `hoursPerPair()`, `showTeacherFullNames()`,
   `activeBellProfileId()`). Each accessor reads the table; call `current()` once for several values.
-- `ChangeApprovalMode {AUTO, CONFIRM}` — own enum so settings does not depend on substitution; the
-  substitution module maps it to its `ApprovalMode`.
+- `ChangeApprovalMode {AUTO, CONFIRM, NOTIFY}` — own enum so settings does not depend on substitution; the
+  substitution module maps it to its `ApprovalMode` (DOMAIN §7). `requiresConfirmation()` is true for CONFIRM
+  only.
 - `SettingsConstraint` (SPI): rules that need another module's data, e.g. calendar checks that the
   default bell profile exists and is active.
 
@@ -18,7 +19,7 @@ depends on nothing but `shared`).
 
 | Key | DTO field | Default |
 |---|---|---|
-| `substitution.approvalMode` | `approvalMode` | `CONFIRM` |
+| `substitution.approvalMode` | `approvalMode` (NOTIFY, CONFIRM, AUTO) | `NOTIFY` (`V1_805` moves an untouched stored CONFIRM to NOTIFY) |
 | `substitution.confirmTimeoutMinutes` | `confirmTimeoutMinutes` (5..1440) | `120` |
 | `order.signatoryPosition` | `signatoryPosition` | «Заступник директора з НР» |
 | `order.signatoryName` | `signatoryName` | «Микола ПОЛІЩУК» |

@@ -113,8 +113,10 @@ Language Ukrainian, concise, buttons first, commands as shortcuts. Never show te
 - Teacher private flow: «Мої пари завтра», «Повідомити про відсутність» → dates (today/tomorrow/calendar
   inline) → pairs (all / pick) → reason (buttons) → confirm. Free text («4.11 не буду, лікарняний»)
   is parsed by AI and echoed back for confirmation with buttons [Так] [Змінити].
-- Substitution request to a teacher: message with date, pair+time, group, discipline, room, original teacher,
-  buttons [✅ Підтверджую] [❌ Не можу]; after reply the message is edited to the final state; reminders on timeout.
+- Substitution to a teacher (default NOTIFY, DOMAIN §7): «Вам поставили заміну» with date, pair+time, group,
+  discipline, room, original teacher (for another discipline: «🔁 Замість «…» (…)»), buttons [👍 Добре] [❌ Не можу];
+  no deadline. In mode CONFIRM a request with a deadline and [✅ Підтверджую] [❌ Не можу], reminders on timeout.
+  After a reply the message is edited to the final state.
 - Admin chat: new absences, declined/expired confirmations, import failures, order published summary.
 - Inline mode: `@scheduler_vtfk_bot 4КІ1` returns today's schedule card.
 - Rate limits respected (queue); long replies split; HTML parse mode with escaping.

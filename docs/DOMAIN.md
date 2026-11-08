@@ -84,7 +84,7 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 
 **substitution**
 - `absence(teacher_id, date_from, date_to, pairs smallint[] null (null=all day), reason_category SICK_LEAVE|VACATION|BUSINESS_TRIP|PERSONAL|OTHER, comment, source WEB|BOT|ADMIN, status ACTIVE|CANCELLED, created_by)`
-- `change(date, pair_from, pair_to, group_id, subgroup_number, kind REPLACE_TEACHER|REPLACE_DISCIPLINE|SWAP|CANCEL|ADDITIONAL|ROOM_CHANGE|BLOCK|DISCIPLINE_FINISHED, original_lesson_id null, orig_discipline_id, orig_teacher_id, orig_room_id, new_discipline_id, new_teacher_id, new_room_id, reason_code, reason_text, absence_id null, status DRAFT|PENDING_CONFIRMATION|CONFIRMED|DECLINED|CANCELLED|APPLIED, approval_mode AUTO|CONFIRM, confirm_deadline, responded_at, response_comment, order_id null, created_by)`
+- `change(date, pair_from, pair_to, group_id, subgroup_number, kind REPLACE_TEACHER|REPLACE_DISCIPLINE|SWAP|CANCEL|ADDITIONAL|ROOM_CHANGE|BLOCK|DISCIPLINE_FINISHED, original_lesson_id null, orig_discipline_id, orig_teacher_id, orig_room_id, new_discipline_id, new_teacher_id, new_room_id, reason_code, reason_text, absence_id null, status DRAFT|PENDING_CONFIRMATION|CONFIRMED|DECLINED|CANCELLED|APPLIED, approval_mode AUTO|CONFIRM|NOTIFY, confirm_deadline, responded_at, response_comment, teacher_answer CONFIRM|DECLINE null, order_id null, created_by)`
 - `change_history(change_id, at, actor, from_status, to_status, comment)`
 - `teacher_preference(teacher_id, semester_id, weekday, pair_number, kind UNWANTED|UNAVAILABLE, note)`
 
@@ -175,10 +175,28 @@ absent at (date, pair): checked when the change is created, confirmed and publis
 4. `CANCEL` — «Пари не буде»; note when it is the first/last pair («група прийде пізніше»).
 5. `ADDITIONAL` (відпрацювання) — optional: a free slot within 14 days for the group and the absent teacher.
 
-**Change lifecycle**: DRAFT → (approval mode CONFIRM and a new teacher is assigned) PENDING_CONFIRMATION
-→ CONFIRMED | DECLINED (declined returns the lesson to «needs decision»). Kinds without a new teacher or
-mode AUTO go DRAFT → CONFIRMED. Pending longer than `substitution.confirmTimeoutMinutes` ⇒ reminder
-(SSE + admin chat). On order publication CONFIRMED changes of that date become APPLIED: original lesson →
+**Approval** (`substitution.approvalMode`, college workflow 08.11.2026): one dispatcher (навчальна частина)
+picks every substitution; the substitute is **assigned first and informed afterwards**.
+- **NOTIFY** (default): a change with a new teacher is CONFIRMED at once (no deadline, no reminders) and the
+  teacher gets «Вам поставили заміну» with [👍 Добре] [❌ Не можу] (Telegram or the cabinet). «Добре» is recorded
+  (`change.teacher_answer = CONFIRM`, history entry CONFIRMED → CONFIRMED «Викладач побачив заміну»). «Не можу»
+  before the change is in a published order: CONFIRMED → DECLINED (the only way into DECLINED from CONFIRMED,
+  taken only by the informed teacher), the lessons are refreshed, the lesson needs a decision again, admin chats
+  are told «… Оберіть інший варіант на сторінці змін.». «Не можу» after the order is published never undoes it:
+  the objection is recorded (`teacher_answer = DECLINE`, history APPLIED → APPLIED, event
+  `substitution.teacher-replied`), admin chats are told that an amendment is needed and the web shows the lesson
+  as «Потрібне доповнення» — the dispatcher marks the substitute absent at that pair and picks another option,
+  which goes into the amendment. A repeated answer changes nothing; another answer once declined or objected → 409.
+  A teacher without Telegram cannot be informed: admin chats get one «{викладач} не підключив Telegram — повідомте
+  про заміну самі» per teacher and date (never for past lessons).
+- **CONFIRM**: DRAFT → PENDING_CONFIRMATION → CONFIRMED | DECLINED (declined returns the lesson to «needs
+  decision»); pending longer than `substitution.confirmTimeoutMinutes` ⇒ reminder (SSE + admin chat).
+- **AUTO**: DRAFT → CONFIRMED, the teacher learns from the published order.
+Kinds without a new teacher are confirmed at once in every mode.
+
+**Change lifecycle**: DRAFT → PENDING_CONFIRMATION (CONFIRM) or CONFIRMED (NOTIFY, AUTO, no teacher) →
+APPLIED; DECLINED from PENDING (CONFIRM) or from CONFIRMED (NOTIFY, the informed teacher only); a declined change
+can be asked again (→ PENDING) or cancelled. On order publication CONFIRMED changes of that date become APPLIED: original lesson →
 CANCELLED, new lesson (origin CHANGE/ADDITIONAL/BLOCK) created, conflicts re-checked; the lessons a BLOCK replaces
 are recorded with it (`change_replaced_lesson`), because a block has no single original. Every status change is
 written to `change_history` and pushed via SSE (`change.updated`).
