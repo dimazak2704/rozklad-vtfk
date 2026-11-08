@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useDeleteAbsence, useMyAbsences } from '@/api/me';
 import type { AbsenceDto, AbsenceSource, IsoDate } from '@/api/types';
-import { Badge, EmptyState, ErrorState, IconButton, LoadingRegion, Skeleton, notify } from '@/components/ui';
+import { Badge, EmptyState, ErrorState, IconButton, LoadingRegion, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { compareIsoDates, formatDateRange, parseIsoDate } from '@/lib/date';
 import { ABSENCE_REASON_LABEL, countLabel } from '@/lib/labels';
@@ -28,7 +28,7 @@ function AbsenceRow({ absence, today, deletable }: { absence: AbsenceDto; today:
       tone: 'danger',
     });
     if (!confirmed) return;
-    remove.mutate(absence.id, { onSuccess: () => notify.success('Відсутність видалено', { description: range }) });
+    remove.mutate(absence);
   };
 
   return (

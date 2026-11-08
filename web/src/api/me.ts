@@ -5,6 +5,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notify } from '@/components/ui';
+import { formatDateRange } from '@/lib/date';
 import { api } from './client';
 import { qk } from './queryKeys';
 import type {
@@ -115,13 +116,17 @@ export function useCreateAbsence() {
   });
 }
 
-/** DELETE /api/me/absences/{id} — лише власні й лише ті, що ще не почалися (422 `ABSENCE_STARTED`); core ставить CANCELLED. */
+/**
+ * DELETE /api/me/absences/{id} — лише власні й лише ті, що ще не почалися (422 `ABSENCE_STARTED`); core ставить CANCELLED.
+ * Сповіщення про успіх — тут, а не в `mutate(…, {onSuccess})` рядка: оптимістичне оновлення прибирає рядок
+ * одразу, і колбеки виклику, привʼязані до його спостерігача, уже не спрацьовують.
+ */
 export function useDeleteAbsence() {
   const queryClient = useQueryClient();
   const key = qk.me.absences();
   return useMutation({
-    mutationFn: (id: Uuid) => api.delete(`/me/absences/${encodeURIComponent(id)}`),
-    onMutate: async (id) => {
+    mutationFn: (absence: Pick<AbsenceDto, 'id' | 'dateFrom' | 'dateTo'>) => api.delete(`/me/absences/${encodeURIComponent(absence.id)}`),
+    onMutate: async ({ id }) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<AbsenceDto[]>(key);
       queryClient.setQueryData<AbsenceDto[]>(key, (list) => list?.filter((absence) => absence.id !== id));
@@ -131,6 +136,7 @@ export function useDeleteAbsence() {
       if (context?.previous) queryClient.setQueryData(key, context.previous);
       notify.error(error, 'Не вдалося видалити відсутність');
     },
+    onSuccess: (_result, absence) => notify.success('Відсутність видалено', { description: formatDateRange(absence.dateFrom, absence.dateTo) }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 }

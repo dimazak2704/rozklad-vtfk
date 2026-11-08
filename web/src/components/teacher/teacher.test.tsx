@@ -4,12 +4,14 @@ import { http } from 'msw';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BellSlotDto, ChangeDto, PreferenceKind, Weekday } from '@/api/types';
+import { ConfirmDialogHost, notify } from '@/components/ui';
 import { teacherNamed } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
+import { AbsenceList } from './AbsenceList';
 import { changeStatusBadge } from './change-text';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
@@ -136,6 +138,43 @@ describe('AbsenceForm: дні', () => {
 
     await user.click(day(/вівторок, 24/));
     expect(summary()).toContain('навчальних днів: 1');
+  });
+});
+
+describe('AbsenceList: видалення', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('після видалення зʼявляється сповіщення, хоч рядок зник одразу (оптимістично)', async () => {
+    const success = vi.spyOn(notify, 'success');
+    // відповідь сервера приходить після того, як рядок уже зник (як у живій мережі)
+    server.use(http.delete(apiPath('/me/absences/:id'), async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return new Response(null, { status: 204 });
+    }));
+    const user = userEvent.setup();
+    renderWithProviders(
+      <>
+        <AbsenceList today="2026-11-09" />
+        <ConfirmDialogHost />
+      </>,
+    );
+    const button = await screen.findByRole('button', { name: /^Видалити відсутність / });
+    const range = (button.getAttribute('aria-label') ?? '').replace('Видалити відсутність ', '');
+    await user.click(button);
+    await user.click(await screen.findByRole('button', { name: 'Видалити' }));
+    // рядок зник ще до відповіді сервера
+    expect(screen.queryByRole('button', { name: /^Видалити відсутність / })).not.toBeInTheDocument();
+    expect(success).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(success).toHaveBeenCalledWith('Відсутність видалено', { description: range }));
+    expect(range).not.toBe('');
   });
 });
 
