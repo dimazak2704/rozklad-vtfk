@@ -117,8 +117,13 @@ class AnthropicAiAdapterTest {
                 .hasMessageContaining("перевантажений");
         status = 400;
         responseBody = "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad schema\"}}";
+        // r3-ui-real-32: людський текст без коду HTTP
         assertThatThrownBy(() -> adapter.complete(request())).isInstanceOf(AiExtractionException.class)
-                .hasMessageContaining("HTTP 400");
+                .hasMessageContaining("налаштування розпізнавання").hasMessageNotContaining("HTTP");
+        responseBody = "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                + "\"message\":\"messages.0.content.0.image.source.base64.data: Could not process image\"}}";
+        assertThatThrownBy(() -> adapter.complete(request())).isInstanceOf(AiExtractionException.class)
+                .hasMessageContaining("не зміг прочитати цей файл").hasMessageNotContaining("HTTP");
     }
 
     private static AiRequest request() {

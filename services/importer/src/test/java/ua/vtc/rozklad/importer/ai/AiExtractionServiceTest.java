@@ -50,7 +50,7 @@ class AiExtractionServiceTest {
                 1500, 400);
 
         AiResult<AiExtractions.OrderExtraction> result = service.extractOrder(
-                List.of(new AiDocument("image/jpeg", new byte[] {1, 2, 3})), JOB);
+                List.of(new AiDocument("image/jpeg", image("jpg", 40, 30))), JOB);
 
         assertThat(result.value().number()).isEqualTo(35);
         assertThat(result.call().inputTokens()).isEqualTo(1500);
@@ -82,7 +82,7 @@ class AiExtractionServiceTest {
     void refusalIsRecordedAndReported() {
         fake.reply(AiPurpose.ORDER_DOCUMENT, new AiResponse("", "claude-sonnet-5-5", 1200, 0, AiResponse.Stop.REFUSED));
 
-        assertThatThrownBy(() -> service.extractOrder(List.of(new AiDocument("image/png", new byte[] {1})), JOB))
+        assertThatThrownBy(() -> service.extractOrder(List.of(new AiDocument("image/png", image("png", 40, 30))), JOB))
                 .isInstanceOf(AiExtractionException.class)
                 .hasMessageContaining("відмовилася");
         verify(usage).record(AiPurpose.ORDER_DOCUMENT, "claude-sonnet-5-5", 1200, 0, AiUsageRecord.Outcome.REFUSED, JOB);
@@ -93,7 +93,7 @@ class AiExtractionServiceTest {
         fake.reply(AiPurpose.CURRICULUM, new AiResponse("{\"semester\":7,\"rows\":[", "m", 9000, 16000,
                 AiResponse.Stop.TRUNCATED));
         fake.reply(AiPurpose.CURRICULUM, "це не json", 9000, 100);
-        List<AiDocument> pdf = List.of(new AiDocument(AiDocument.PDF, new byte[] {1}));
+        List<AiDocument> pdf = List.of(new AiDocument(AiDocument.PDF, pdf()));
 
         assertThatThrownBy(() -> service.extractCurriculum(pdf, null, 7, JOB)).hasMessageContaining("обрізано");
         assertThatThrownBy(() -> service.extractCurriculum(pdf, null, 7, JOB)).hasMessageContaining("неочікуваному форматі");
@@ -137,13 +137,79 @@ class AiExtractionServiceTest {
         }
         ByteArrayOutputStream png = new ByteArrayOutputStream();
         ImageIO.write(image, "png", png);
-        assertThat(png.size()).isGreaterThan(AiExtractionService.MAX_IMAGE_BYTES);
+        assertThat(png.size()).isGreaterThan(AiDocumentPreparer.MAX_IMAGE_BYTES);
 
-        AiDocument prepared = AiExtractionService.prepare(new AiDocument("image/png", png.toByteArray()));
+        AiDocument prepared = AiDocumentPreparer.prepare(new AiDocument("image/png", png.toByteArray()));
 
         assertThat(prepared.mediaType()).isEqualTo("image/jpeg");
-        assertThat(prepared.size()).isLessThanOrEqualTo(AiExtractionService.MAX_IMAGE_BYTES);
+        assertThat(prepared.size()).isLessThanOrEqualTo(AiDocumentPreparer.MAX_IMAGE_BYTES);
         BufferedImage scaled = ImageIO.read(new java.io.ByteArrayInputStream(prepared.content()));
         assertThat(Math.max(scaled.getWidth(), scaled.getHeight())).isEqualTo(2000);
+    }
+
+    /** r3-ai-imports-04: the API refuses a side over 8000 px even under 5 MB. */
+    @Test
+    void imagesOverTheApiSideLimitAreDownscaledEvenWhenSmallInBytes() throws Exception {
+        byte[] tall = image("jpg", 600, 8400);
+        assertThat(tall.length).isLessThan(AiDocumentPreparer.MAX_IMAGE_BYTES);
+
+        AiDocument prepared = AiDocumentPreparer.prepare(new AiDocument("image/jpeg", tall));
+
+        BufferedImage scaled = ImageIO.read(new java.io.ByteArrayInputStream(prepared.content()));
+        assertThat(scaled.getHeight()).isEqualTo(AiDocumentPreparer.TARGET_SIDE);
+        assertThat(scaled.getWidth()).isEqualTo(143);
+    }
+
+    @Test
+    void imagesWithinTheLimitsGoUnchanged() throws Exception {
+        byte[] photo = image("jpg", 1200, 900);
+        assertThat(AiDocumentPreparer.prepare(new AiDocument("image/jpeg", photo)).content()).isEqualTo(photo);
+    }
+
+    /** r3-ai-imports-07: a damaged file fails before the paid call, with a plain reason. */
+    @Test
+    void damagedImageOrFakePdfFailsBeforeTheCall() {
+        byte[] jpegHeader = java.util.Arrays.copyOf(image("jpg", 40, 30), 20);
+        byte[] damagedJpeg = new byte[3000];
+        new java.util.Random(3).nextBytes(damagedJpeg);
+        System.arraycopy(jpegHeader, 0, damagedJpeg, 0, jpegHeader.length);
+        byte[] fakePdf = new byte[3000];
+        new java.util.Random(4).nextBytes(fakePdf);
+        System.arraycopy("%PDF-1.4".getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, fakePdf, 0, 8);
+
+        assertThatThrownBy(() -> service.extractOrder(List.of(new AiDocument("image/jpeg", damagedJpeg)), JOB))
+                .isInstanceOf(AiExtractionException.class).hasMessage(AiDocumentPreparer.DAMAGED_IMAGE);
+        assertThatThrownBy(() -> service.extractCurriculum(List.of(new AiDocument(AiDocument.PDF, fakePdf)), null, 7, JOB))
+                .isInstanceOf(AiExtractionException.class).hasMessage(AiDocumentPreparer.DAMAGED_PDF);
+        assertThat(fake.requests()).isEmpty();
+        verify(usage, never()).record(any(), any(), anyLong(), anyLong(), any(), any());
+    }
+
+    static byte[] image(String format, int width, int height) {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D graphics = image.createGraphics();
+        graphics.setColor(java.awt.Color.WHITE);
+        graphics.fillRect(0, 0, width, height);
+        graphics.setColor(java.awt.Color.BLACK);
+        graphics.drawLine(0, 0, width - 1, height - 1);
+        graphics.dispose();
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(image, format, out);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    static byte[] pdf() {
+        try (org.apache.pdfbox.pdmodel.PDDocument document = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            document.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.save(out);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 }

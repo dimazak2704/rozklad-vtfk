@@ -122,6 +122,18 @@ public class AnthropicAiAdapter implements AiExtractionPort {
         if (status == 413) {
             return new AiExtractionException("Файл завеликий для розпізнавання ШІ — зменште його розмір.", e);
         }
-        return new AiExtractionException("Сервіс ШІ відхилив запит (HTTP " + status + ").", e);
+        if (status == 400 && aboutTheDocument(e.apiMessage().orElse(""))) {
+            return new AiExtractionException("Сервіс ШІ не зміг прочитати цей файл. Перевірте, що він відкривається і "
+                    + "читається, збережіть його ще раз (JPEG, PNG або PDF) або внесіть дані вручну.", e);
+        }
+        // інші відмови — налаштування сервісу (модель, параметри): адміністратору, подробиці в журналі
+        return new AiExtractionException("Сервіс ШІ не прийняв запит через налаштування розпізнавання. Повідомте "
+                + "адміністратора системи — подробиці записано в журнал імпорту.", e);
+    }
+
+    /** The API names the image or the PDF as the rejected part of the request. */
+    static boolean aboutTheDocument(String apiMessage) {
+        String message = apiMessage.toLowerCase(java.util.Locale.ROOT);
+        return message.contains("image") || message.contains("pdf") || message.contains("document");
     }
 }

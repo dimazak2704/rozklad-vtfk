@@ -1,16 +1,9 @@
 package ua.vtc.rozklad.importer.ai;
 
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,16 +17,13 @@ import ua.vtc.rozklad.importer.config.AiProperties;
 
 /**
  * Typed AI extractions used by the import handlers and the absence parser. Every call: checks that
- * AI is available and the daily budget is not exhausted, picks the model (vision for scans, text
+ * AI is available and the daily budget is not exhausted, checks and fits the documents
+ * ({@link AiDocumentPreparer}: a damaged file fails before the paid call), picks the model (vision for scans, text
  * otherwise), sends the JSON schema, records usage (also for refusals, cut-offs and invalid JSON —
  * those tokens are billed) and parses the answer.
  */
 @Service
 public class AiExtractionService {
-
-    /** Claude API limit for one image; larger photos are downscaled. */
-    static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-    private static final int MAX_IMAGE_SIDE = 2000;
 
     private static final Logger log = LoggerFactory.getLogger(AiExtractionService.class);
 
@@ -94,7 +84,7 @@ public class AiExtractionService {
         boolean vision = purpose.vision() && !documents.isEmpty();
         String model = vision ? properties.modelVision() : properties.modelText();
         String effort = vision ? properties.effortVision() : properties.effortText();
-        List<AiDocument> prepared = documents.stream().map(AiExtractionService::prepare).toList();
+        List<AiDocument> prepared = documents.stream().map(AiDocumentPreparer::prepare).toList();
         AiRequest request = new AiRequest(purpose, model, AiPrompts.SYSTEM, prepared, instruction, schema,
                 properties.maxTokens(), effort);
         AiResponse response = port.complete(request);
@@ -129,34 +119,5 @@ public class AiExtractionService {
         log.info("AI {} via {}: {} in / {} out tokens, ${}", purpose, answeredBy, call.inputTokens(), call.outputTokens(),
                 call.costUsd());
         return new AiResult<>(value, call);
-    }
-
-    /** Images over the API limit are downscaled to JPEG; PDFs go as they are. */
-    static AiDocument prepare(AiDocument document) {
-        if (document.pdf() || document.size() <= MAX_IMAGE_BYTES) {
-            return document;
-        }
-        try {
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(document.content()));
-            if (image == null) {
-                throw new AiExtractionException("Зображення більше 5 МБ і його не вдалося зменшити — збережіть його як JPEG меншого розміру.");
-            }
-            double scale = Math.min(1.0, (double) MAX_IMAGE_SIDE / Math.max(image.getWidth(), image.getHeight()));
-            int width = Math.max(1, (int) Math.round(image.getWidth() * scale));
-            int height = Math.max(1, (int) Math.round(image.getHeight() * scale));
-            BufferedImage scaled = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-            Graphics2D graphics = scaled.createGraphics();
-            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-            graphics.drawImage(image, 0, 0, width, height, java.awt.Color.WHITE, null);
-            graphics.dispose();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            ImageIO.write(scaled, "jpg", out);
-            if (out.size() > MAX_IMAGE_BYTES) {
-                throw new AiExtractionException("Зображення завелике навіть після зменшення — збережіть його меншим.");
-            }
-            return new AiDocument("image/jpeg", out.toByteArray());
-        } catch (IOException e) {
-            throw new AiExtractionException("Не вдалося прочитати зображення.", e);
-        }
     }
 }
