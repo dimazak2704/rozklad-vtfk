@@ -146,6 +146,26 @@ export default function ChangesPage() {
         className="rounded-panel border border-default bg-surface"
       />
     );
+  } else if (groups.length === 0 && !order && !changes.data.studyDay) {
+    // свято, канікули чи день поза семестром: «діє звичайний розклад» тут неправда
+    content = (
+      <EmptyState
+        className="rounded-panel border border-default bg-surface"
+        title={past ? 'Цього дня занять не було' : 'Цього дня занять немає'}
+        description={
+          changes.data.parity === null
+            ? 'Дата поза семестром — канікули. Розклад цього дня не діє, замін немає.'
+            : 'Свято або день без занять для всього коледжу. Розклад цього дня не діє, замін немає.'
+        }
+        action={
+          date !== home ? (
+            <Button variant="secondary" onClick={() => setDate(home)}>
+              {home === today ? 'Заміни на сьогодні' : `Заміни на ${quickDay(home).toLocaleLowerCase('uk')}`}
+            </Button>
+          ) : undefined
+        }
+      />
+    );
   } else if (groups.length === 0) {
     content = (
       <EmptyState

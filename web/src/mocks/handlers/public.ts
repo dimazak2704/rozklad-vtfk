@@ -650,6 +650,7 @@ export function publicChanges(date: IsoDate, now: Date): PublicChangesDto {
   return {
     date,
     parity: parityOn(date),
+    studyDay: isStudyDay(date),
     weekdayLabel: weekdayLabel(date),
     order:
       visible.length > 0 ? { id: orderIdFor(date), number: orderNumberFor(date), publishedAt: publishedAtFor(date), imported: false } : null,

@@ -17,6 +17,7 @@ export function useHomeDay(): HomeDay {
   const meta = usePublicMeta();
   const today = meta.data?.today ?? todayInKyiv();
   const studyDay = meta.data ? meta.data.studyDay : !isWeekend(today);
-  const date = studyDay ? today : shiftStudyDay(today, 1);
+  // наступний навчальний день знає сервер (свята, канікули); без нього — лише вихідні
+  const date = studyDay ? today : (meta.data?.nextStudyDay?.date ?? shiftStudyDay(today, 1));
   return { date, today, isToday: date === today };
 }

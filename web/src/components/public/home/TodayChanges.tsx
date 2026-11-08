@@ -42,7 +42,9 @@ export function TodayChanges({ className }: { className?: string }) {
       <p className="text-ui text-secondary">
         {changes.data.order
           ? 'У розпорядженні змін для груп немає — заняття за розкладом.'
-          : 'Розпорядження ще не опубліковано. Поки що діє звичайний розклад.'}
+          : changes.data.studyDay
+            ? 'Розпорядження ще не опубліковано. Поки що діє звичайний розклад.'
+            : 'Цього дня занять немає.'}
       </p>
     );
   } else {
