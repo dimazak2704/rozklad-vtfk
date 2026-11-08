@@ -82,6 +82,45 @@ class LessonViewAssemblerTest {
         });
     }
 
+    /**
+     * №43 replaced Кренцін by Непийвода, amendment №49 cancelled Непийвода's pair: the group sees the
+     * pair once, cancelled with the amendment's reason (was: two CANCELLED rows for one pair).
+     */
+    @Test
+    void substitutionCancelledByAnAmendmentIsOneCancelledPair() {
+        LessonRow.Change replacement = change("REPLACE_TEACHER", "ABSENT", null, 3, 3, STP, KRENTSIN, ROOM_6, 3);
+        LessonRow.Change cancellation = change("CANCEL", "OTHER", "Скасування заміни", 3, 3, STP, NEPYIVODA, ROOM_6, 3);
+        LessonRow original = row(3, LessonStatus.CANCELLED, LessonOrigin.TEMPLATE, STP, KRENTSIN, ROOM_6, replacement);
+        LessonRow substitute = row(3, LessonStatus.CANCELLED, LessonOrigin.CHANGE, STP, NEPYIVODA, ROOM_6,
+                cancellation, replacement.id());
+
+        List<LessonView> group = LessonViewAssembler.assemble(List.of(original, substitute), bells, true);
+
+        assertThat(group).singleElement().satisfies(view -> {
+            assertThat(view.id()).isEqualTo(substitute.id());
+            assertThat(view.kind()).isEqualTo(LessonViewKind.CANCELLED);
+            assertThat(view.reasonText()).isEqualTo("Скасування заміни");
+            assertThat(view.changeId()).isEqualTo(cancellation.id());
+        });
+    }
+
+    /** An amendment gave the substitute's pair to a third teacher: only that lesson is shown. */
+    @Test
+    void substitutionReassignedByAnAmendmentShowsOnlyTheLastSubstitute() {
+        LessonRow.Change first = change("REPLACE_TEACHER", "ABSENT", null, 3, 3, STP, KRENTSIN, ROOM_6, 3);
+        LessonRow.Change second = change("REPLACE_TEACHER", "MUTUAL", null, 3, 3, STP, NEPYIVODA, ROOM_6, 3);
+        LessonRow original = row(3, LessonStatus.CANCELLED, LessonOrigin.TEMPLATE, STP, KRENTSIN, ROOM_6, first);
+        LessonRow substitute = row(3, LessonStatus.CANCELLED, LessonOrigin.CHANGE, STP, NEPYIVODA, ROOM_6, second,
+                first.id());
+        LessonRow last = row(3, LessonStatus.SCHEDULED, LessonOrigin.CHANGE, STP, KRENTSIN, ROOM_6, second);
+
+        assertThat(LessonViewAssembler.assemble(List.of(original, substitute, last), bells, true))
+                .singleElement().satisfies(view -> {
+                    assertThat(view.id()).isEqualTo(last.id());
+                    assertThat(view.kind()).isEqualTo(LessonViewKind.SUBSTITUTED);
+                });
+    }
+
     @Test
     void cancelledPairKeepsItsReason() {
         LessonRow.Change change = change("CANCEL", "OTHER", "Хвороба групи", 1, 1, STP, KRENTSIN, null, 1);
@@ -157,10 +196,17 @@ class LessonViewAssemblerTest {
         assertThat(view.teacher()).isNull();
     }
 
+    /** A lesson the change created (origin other than TEMPLATE) or one it cancelled (TEMPLATE). */
     private static LessonRow row(int pair, LessonStatus status, LessonOrigin origin, DisciplineRef discipline,
                                  TeacherRef teacher, RoomRef room, LessonRow.Change change) {
+        UUID createdBy = origin == LessonOrigin.TEMPLATE || change == null ? null : change.id();
+        return row(pair, status, origin, discipline, teacher, room, change, createdBy);
+    }
+
+    private static LessonRow row(int pair, LessonStatus status, LessonOrigin origin, DisciplineRef discipline,
+                                 TeacherRef teacher, RoomRef room, LessonRow.Change change, UUID createdBy) {
         return new LessonRow(UUID.randomUUID(), MONDAY, pair, 0, status, origin, false,
-                Instant.parse("2026-10-16T12:00:00Z"), GROUP, discipline, teacher, room, change);
+                Instant.parse("2026-10-16T12:00:00Z"), GROUP, discipline, teacher, room, change, createdBy);
     }
 
     private static LessonRow.Change change(String kind, String reasonCode, String reasonText, int pairFrom,

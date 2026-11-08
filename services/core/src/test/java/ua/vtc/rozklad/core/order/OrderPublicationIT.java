@@ -44,6 +44,7 @@ import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
+import ua.vtc.rozklad.core.substitution.internal.change.ChangeViews;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -73,6 +74,9 @@ class OrderPublicationIT {
 
     @Autowired
     private ChangeRepository changes;
+
+    @Autowired
+    private ChangeViews changeViews;
 
     @Autowired
     private LessonRepository lessons;
@@ -329,6 +333,63 @@ class OrderPublicationIT {
         assertThat(lessons.findById(ki12English.getId()).orElseThrow().isScheduled()).isTrue();
         assertThat(lessons.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(ki12.getId(), MONDAY, MONDAY))
                 .noneMatch(lesson -> lesson.getOrigin() == LessonOrigin.CHANGE);
+    }
+
+    /**
+     * A practice of the group was entered after the change was confirmed (directly, as the calendar
+     * would now refuse it): the order would both send the group to practice and replace its pair.
+     * A cancellation of the same day stays publishable, it only takes a lesson off.
+     */
+    @Test
+    void changeOnADayTheGroupHasNoClassesIsNotPublished() {
+        ChangeDto replacement = replaceTeacher(ki12English, prokopchuk);
+        ChangeDto cancellation = cancel(m1English);
+        fixture.period(semester, CalendarPeriodKind.PRACTICE, "Практика 1КІ2 і 1М", MONDAY, MONDAY,
+                "1КІ2, 1М – практика 19.10.26", List.of(ki12.getId(), m1.getId()));
+        OrderDto draft = drafts.draftFor(MONDAY);
+
+        assertThatThrownBy(() -> publication.publish(draft.id(), "admin"))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .singleElement().satisfies(found -> {
+                            assertThat(found.kind()).isEqualTo(ConflictKind.GROUP);
+                            assertThat(found.lessonIds()).containsExactly(ki12English.getId());
+                            assertThat(found.message()).startsWith("У групи 1КІ2 19.10.2026 занять немає (Практика 1КІ2 і 1М)");
+                        }));
+        assertThat(orders.findById(draft.id()).orElseThrow().getNumber()).isNull();
+        assertThat(changes.findAllById(List.of(replacement.id(), cancellation.id())))
+                .allSatisfy(change -> assertThat(change.getStatus()).isEqualTo(ChangeStatus.CONFIRMED));
+
+        changeCommands.cancel(replacement.id(), "admin");
+        assertThat(publication.publish(drafts.draftFor(MONDAY).id(), "admin").number()).isEqualTo(35);
+        assertThat(lessons.findById(m1English.getId()).orElseThrow().isScheduled()).isFalse();
+    }
+
+    /**
+     * №35 gives 1КІ2's pair to Прокопчук, amendment №36 cancels that pair. The substitution stays
+     * APPLIED (history) but names the amendment that undid it, and the group sees the pair once,
+     * cancelled by the amendment (was: «У розпорядженні» in the cabinet and two CANCELLED rows).
+     */
+    @Test
+    void amendmentCancellingASubstitutionIsNamedOnItAndTheGroupSeesOnePair() {
+        ChangeDto replacement = replaceTeacher(ki12English, prokopchuk);
+        publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+        Lesson substituted = lessons.findAllByChangeIdIn(List.of(replacement.id())).getFirst();
+        ChangeDto cancellation = cancel(substituted);
+        OrderDto amendment = publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+
+        ChangeDto after = changeViews.toDto(changes.findById(replacement.id()).orElseThrow());
+        assertThat(after.status()).isEqualTo(ChangeStatus.APPLIED);
+        assertThat(after.supersededBy())
+                .isEqualTo(new ChangeDto.Successor(cancellation.id(), ChangeKind.CANCEL, amendment.id()));
+        assertThat(changeViews.toDto(changes.findById(cancellation.id()).orElseThrow()).supersededBy()).isNull();
+        client.get().uri("/api/public/schedule/group/{id}?from={day}&to={day}", ki12.getId(), MONDAY, MONDAY)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.days[0].lessons.length()").isEqualTo(1)
+                .jsonPath("$.days[0].lessons[0].kind").isEqualTo("CANCELLED")
+                .jsonPath("$.days[0].lessons[0].teacher.shortName").isEqualTo("Прокопчук О.В.")
+                .jsonPath("$.days[0].lessons[0].changeId").isEqualTo(cancellation.id().toString());
     }
 
     @Test

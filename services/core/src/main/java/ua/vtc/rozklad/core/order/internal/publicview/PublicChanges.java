@@ -57,14 +57,26 @@ class PublicChanges {
         PublicChangesDto.PublishedOrder main = published.stream()
                 .filter(order -> order.getKind() == OrderKind.ORDER)
                 .findFirst()
-                .map(order -> new PublicChangesDto.PublishedOrder(order.getId(), order.getNumber(),
-                        order.getPublishedAt(), order.isImported()))
+                .map(PublicChanges::summary)
                 .orElse(null);
-        List<OrderItem> items = published.stream().flatMap(order -> order.getItems().stream()).toList();
-        return new PublicChangesDto(date, parity, UkrainianText.weekday(date.getDayOfWeek()), main, grouped(items));
+        List<PublicChangesDto.PublishedOrder> amendments = published.stream()
+                .filter(order -> order.getKind() == OrderKind.AMENDMENT)
+                .map(PublicChanges::summary)
+                .toList();
+        List<PrintedRow> rows = published.stream()
+                .flatMap(order -> order.getItems().stream().map(item -> new PrintedRow(item, order.getNumber())))
+                .toList();
+        return new PublicChangesDto(date, parity, UkrainianText.weekday(date.getDayOfWeek()), main, amendments,
+                grouped(rows));
     }
 
-    private List<PublicChangesDto.GroupChanges> grouped(List<OrderItem> items) {
+    private static PublicChangesDto.PublishedOrder summary(OrderDocument order) {
+        return new PublicChangesDto.PublishedOrder(order.getId(), order.getNumber(), order.getPublishedAt(),
+                order.isImported());
+    }
+
+    private List<PublicChangesDto.GroupChanges> grouped(List<PrintedRow> rows) {
+        List<OrderItem> items = rows.stream().map(PrintedRow::item).toList();
         Map<UUID, Change> changesById = changes.findAllById(items.stream().map(OrderItem::getChangeId)
                         .filter(Objects::nonNull).distinct().toList()).stream()
                 .collect(Collectors.toMap(Change::getId, Function.identity()));
@@ -73,9 +85,11 @@ class PublicChanges {
                 .collect(Collectors.toMap(StudentGroup::getCode, Function.identity(), (first, second) -> first));
 
         Map<String, List<PublicChangesDto.ChangeView>> byGroup = new LinkedHashMap<>();
-        for (OrderItem item : items) {
+        for (PrintedRow row : rows) {
+            OrderItem item = row.item();
             Change change = item.getChangeId() == null ? null : changesById.get(item.getChangeId());
-            byGroup.computeIfAbsent(item.getGroupCode(), code -> new ArrayList<>()).add(view(item, change));
+            byGroup.computeIfAbsent(item.getGroupCode(), code -> new ArrayList<>())
+                    .add(view(item, change, row.orderNumber()));
         }
         Comparator<String> alphabetical = UkrainianText.collator();
         return byGroup.entrySet().stream()
@@ -96,11 +110,15 @@ class PublicChanges {
                 : new PublicChangesDto.ChangeGroup(null, code, Character.isDigit(code.charAt(0)) ? code.charAt(0) - '0' : 0);
     }
 
-    private static PublicChangesDto.ChangeView view(OrderItem item, Change change) {
+    private static PublicChangesDto.ChangeView view(OrderItem item, Change change, Integer orderNumber) {
         return new PublicChangesDto.ChangeView(item.getPairLabel(), item.getRowType(),
                 new PublicChangesDto.Side(item.getFromDiscipline(), item.getFromTeacher()), item.getReasonText(),
                 new PublicChangesDto.Side(item.getToDiscipline(), item.getToTeacher()), item.getRoomText(),
-                subgroupNote(item, change));
+                subgroupNote(item, change), orderNumber);
+    }
+
+    /** A row with the number of the order (or amendment) it is printed in. */
+    private record PrintedRow(OrderItem item, Integer orderNumber) {
     }
 
     /** «1 підгрупа» for a row of one subgroup; merged rows of several subgroups need no note. */

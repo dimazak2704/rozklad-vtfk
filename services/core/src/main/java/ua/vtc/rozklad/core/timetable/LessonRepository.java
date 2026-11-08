@@ -2,6 +2,7 @@ package ua.vtc.rozklad.core.timetable;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 public interface LessonRepository extends JpaRepository<Lesson, UUID> {
+
+    /** Lessons the changes created ({@code change_id}): a substitute's pair, an extra pair, a moved lesson. */
+    List<Lesson> findAllByChangeIdIn(Collection<UUID> changeIds);
 
     List<Lesson> findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(UUID groupId, LocalDate from,
                                                                             LocalDate to);

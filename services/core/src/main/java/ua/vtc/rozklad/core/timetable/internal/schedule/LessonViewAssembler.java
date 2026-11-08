@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.core.calendar.BellTimes;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
@@ -17,8 +18,9 @@ import ua.vtc.rozklad.core.timetable.LessonViewKind;
 /**
  * Turns joined lesson rows into {@link LessonView}s: the kind comes from the origin and the kind of
  * the change, {@code original} from the change row, {@code reasonText} is the public short reason
- * of the order. A cancelled lesson whose replacement (same change) is in the same view is hidden:
- * the replacement already shows it as the original.
+ * of the order. A cancelled lesson whose replacement (the lesson its change created) is in the same
+ * view is hidden: the replacement already shows it as the original, and when an amendment later
+ * cancelled the replacement, the cancelled replacement stands for the pair (one row per pair).
  */
 final class LessonViewAssembler {
 
@@ -27,15 +29,26 @@ final class LessonViewAssembler {
 
     /** Views of one date's rows in pair order; {@code hideReplaced} removes replaced cancelled originals. */
     static List<LessonView> assemble(List<LessonRow> rows, BellTimes bells, boolean hideReplaced) {
-        Set<UUID> replacingChanges = rows.stream()
+        Set<UUID> takingPlace = rows.stream()
                 .filter(LessonRow::scheduled)
-                .map(LessonRow::changeId)
+                .flatMap(row -> Stream.of(row.changeId(), row.createdBy()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<UUID> creating = rows.stream()
+                .map(LessonRow::createdBy)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         return rows.stream()
-                .filter(row -> !hideReplaced || row.scheduled() || !replacingChanges.contains(row.changeId()))
+                .filter(row -> !hideReplaced || row.scheduled() || !replaced(row, takingPlace, creating))
                 .map(row -> view(row, bells))
                 .toList();
+    }
+
+    /** The change that cancelled the row put another lesson into the view (scheduled or cancelled later). */
+    private static boolean replaced(LessonRow row, Set<UUID> takingPlace, Set<UUID> creating) {
+        UUID cancelledBy = row.changeId();
+        return cancelledBy != null && (takingPlace.contains(cancelledBy)
+                || (!cancelledBy.equals(row.createdBy()) && creating.contains(cancelledBy)));
     }
 
     static LessonView view(LessonRow row, BellTimes bells) {

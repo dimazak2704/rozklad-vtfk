@@ -10,13 +10,16 @@ import ua.vtc.rozklad.contracts.Parity;
 /**
  * {@code GET /api/public/changes?date=}: the published changes of a date grouped by group. Only
  * published orders (main + amendments) are public; {@code parity} is {@code null} outside every
- * semester. {@code from}/{@code to} are the printed text of the order row.
+ * semester. {@code from}/{@code to} are the printed text of the order row. Additive:
+ * {@code amendments} (published amendments of the date by number, each with its own documents) and
+ * {@code ChangeView.orderNumber} (the order or amendment the row is printed in).
  */
 public record PublicChangesDto(
         LocalDate date,
         Parity parity,
         String weekdayLabel,
         PublishedOrder order,
+        List<PublishedOrder> amendments,
         List<GroupChanges> groups) {
 
     /**
@@ -38,7 +41,7 @@ public record PublicChangesDto(
 
     /** {@code ChangeView} of CONTRACTS.md §1. */
     public record ChangeView(String pairLabel, OrderRowType rowType, Side from, String reasonText, Side to,
-                             String room, String subgroupNote) {
+                             String room, String subgroupNote, Integer orderNumber) {
     }
 
     public record Side(String discipline, String teacher) {

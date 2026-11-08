@@ -29,6 +29,7 @@ class ScheduleReadRepository {
 
     private static final String SELECT = """
             SELECT l.id, l.date, l.pair_number, l.subgroup_number, l.status, l.origin, l.online, l.updated_at,
+                   l.change_id AS own_change_id,
                    g.id AS group_id, g.code AS group_code, g.course AS group_course,
                    d.id AS discipline_id, d.short_name AS discipline_short_name, d.name AS discipline_name,
                    d.color AS discipline_color,
@@ -53,9 +54,10 @@ class ScheduleReadRepository {
                        ch.orig_room_id
                 FROM change ch
                 WHERE ch.id = l.change_id
-                   OR (l.change_id IS NULL AND l.status = 'CANCELLED'
+                   OR (l.status = 'CANCELLED'
                        AND (ch.original_lesson_id = l.id OR ch.swap_lesson_id = l.id) AND ch.status = 'APPLIED')
-                ORDER BY (ch.id = l.change_id) DESC NULLS LAST, ch.updated_at DESC
+                -- скасоване заняття показує зміну, що його скасувала (і для заняття, яке саме поставила зміна)
+                ORDER BY (l.status = 'CANCELLED' AND ch.id IS DISTINCT FROM l.change_id) DESC, ch.updated_at DESC
                 LIMIT 1
             ) c ON TRUE
             LEFT JOIN discipline od ON od.id = c.orig_discipline_id
@@ -119,7 +121,8 @@ class ScheduleReadRepository {
                 discipline(rs, "discipline_"),
                 teacher(rs, "teacher_"),
                 room(rs, "room_"),
-                change);
+                change,
+                rs.getObject("own_change_id", UUID.class));
     }
 
     private static DisciplineRef discipline(ResultSet rs, String prefix) throws SQLException {

@@ -12,7 +12,9 @@ import ua.vtc.rozklad.core.timetable.LessonStatus;
 
 /**
  * A dated lesson joined with its catalog references and the change that created, modified or
- * cancelled it (change columns are {@code null} for a lesson of the base timetable).
+ * cancelled it (change columns are {@code null} for a lesson of the base timetable). A cancelled
+ * lesson shows the applied change that cancelled it, a scheduled one the change that created it;
+ * {@code createdBy} is always the creating change ({@code lesson.change_id}).
  */
 record LessonRow(
         UUID id,
@@ -27,7 +29,8 @@ record LessonRow(
         DisciplineRef discipline,
         TeacherRef teacher,
         RoomRef room,
-        Change change) {
+        Change change,
+        UUID createdBy) {
 
     boolean scheduled() {
         return status == LessonStatus.SCHEDULED;
