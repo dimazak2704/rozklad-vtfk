@@ -1,7 +1,5 @@
 package ua.vtc.rozklad.core.timetable.internal.generation;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +7,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.UnitWeight;
+import ua.vtc.rozklad.core.load.LoadPattern;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository.LoadRow;
 
 /**
@@ -19,23 +18,7 @@ import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository.LoadRow
  */
 public final class LoadUnitExpander {
 
-    private static final BigDecimal HALF_FROM = new BigDecimal("0.25");
-    private static final BigDecimal WHOLE_FROM = new BigDecimal("0.75");
-
     private LoadUnitExpander() {
-    }
-
-    public static Pattern pattern(BigDecimal hoursPerWeek, BigDecimal hoursPerPair) {
-        if (hoursPerPair.signum() <= 0) {
-            throw new IllegalArgumentException("hoursPerPair must be positive");
-        }
-        BigDecimal pairs = hoursPerWeek.divide(hoursPerPair, 4, RoundingMode.HALF_UP);
-        int whole = pairs.setScale(0, RoundingMode.FLOOR).intValueExact();
-        BigDecimal rest = pairs.subtract(BigDecimal.valueOf(whole));
-        if (rest.compareTo(WHOLE_FROM) >= 0) {
-            return new Pattern(whole + 1, 0);
-        }
-        return new Pattern(whole, rest.compareTo(HALF_FROM) >= 0 ? 1 : 0);
     }
 
     /**
@@ -45,8 +28,9 @@ public final class LoadUnitExpander {
      * @throws SplitWithoutSubgroupsException when the item is split but neither the item nor the
      *                                        catalog says which subgroups exist
      */
-    public static List<PlanUnit> expand(LoadRow item, Set<Integer> storedSubgroups, BigDecimal hoursPerPair) {
-        Pattern pattern = pattern(item.hoursPerWeek(), hoursPerPair);
+    public static List<PlanUnit> expand(LoadRow item, Set<Integer> storedSubgroups, int hoursPerPair) {
+        // правило «пари = години на тиждень / години на пару» одне на систему: LoadPattern модуля load
+        LoadPattern pattern = LoadPattern.of(item.hoursPerWeek(), hoursPerPair);
         List<PlanUnit> units = new ArrayList<>();
         cohorts(item, storedSubgroups).forEach((subgroup, teacherId) -> {
             for (int index = 1; index <= pattern.whole(); index++) {
@@ -87,10 +71,6 @@ public final class LoadUnitExpander {
         return new PlanUnit(item.id() + ":" + subgroup + ":" + suffix, item.id(), item.groupId(), subgroup,
                 item.disciplineId(), teacherId, weight, item.lessonKind(), item.requiredRoomType(),
                 item.preferredRoomId(), item.streamId(), false, null, null);
-    }
-
-    /** Weekly pattern of a load item: whole pairs and half pairs (0 or 1). */
-    public record Pattern(int whole, int half) {
     }
 
     /** A split load item without subgroups. */

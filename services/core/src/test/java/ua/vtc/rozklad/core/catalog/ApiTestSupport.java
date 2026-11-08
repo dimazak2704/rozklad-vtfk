@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import ua.vtc.rozklad.core.support.ReferenceData;
 
 /**
  * Helpers for the API integration tests of catalog, calendar, load and identity. They all run in
@@ -38,6 +39,7 @@ public final class ApiTestSupport {
 
     public static void cleanDatabase(JdbcTemplate jdbc) {
         jdbc.execute(TRUNCATE);
+        ReferenceData.restore(jdbc);
     }
 
     public static String body(MvcResult result) throws Exception {

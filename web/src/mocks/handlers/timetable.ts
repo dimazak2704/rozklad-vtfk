@@ -9,7 +9,6 @@ import type { LessonMutationResult, TimetableConflict, TimetableConflictsDto } f
 import type {
   Conflict,
   CreateVersionRequest,
-  DisciplineDto,
   FieldErrorDto,
   GroupDto,
   IsoDate,
@@ -33,11 +32,9 @@ import type {
 import { addDays, compareIsoDates, formatNumericDate, isIsoDate, isoWeekday, todayInKyiv } from '@/lib/date';
 import { countLabel, PAIR_FORMS, weekdayName } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
-import { matchScore } from '@/lib/search';
 import { emitServerEvent } from '../events';
 import {
   ACTIVE_SEMESTER,
-  DISCIPLINES,
   disciplineRef,
   findDiscipline,
   findGroup,
@@ -55,14 +52,10 @@ import {
   SEMESTERS,
   SHIFT_WINDOWS,
   teacherRef,
-  TEACHERS,
   TEMPLATE_LESSONS,
-  toPublicGroup,
-  toPublicRoom,
-  toPublicTeacher,
 } from '../fixtures';
 import { mockId } from '../ids';
-import { apiPath, badRequest, businessRule, conflict, notFound, paginate, readJson } from '../kit';
+import { apiPath, badRequest, businessRule, conflict, notFound, readJson } from '../kit';
 import { createMockStore } from '../store';
 
 // ───────────────────────── Правила слотів (DOMAIN §5) ─────────────────────────
@@ -855,16 +848,4 @@ export const handlers = [
     return HttpResponse.json(response);
   }),
 
-  // ── Довідники, потрібні редактору. Запасні: файли інших областей ідуть раніше за абеткою,
-  //    тож якщо вони змокують ті самі шляхи, відповідатимуть саме вони.
-  http.get(apiPath('/public/groups'), () => HttpResponse.json(GROUPS.map(toPublicGroup))),
-  http.get(apiPath('/public/teachers'), () => HttpResponse.json(TEACHERS.map(toPublicTeacher))),
-  http.get(apiPath('/public/rooms'), () => HttpResponse.json(ROOMS.map(toPublicRoom))),
-  http.get(apiPath('/admin/shift-windows'), () => HttpResponse.json(SHIFT_WINDOWS)),
-  http.get(apiPath('/admin/disciplines'), ({ request }) => {
-    const url = new URL(request.url);
-    const q = url.searchParams.get('q')?.trim() ?? '';
-    const list: DisciplineDto[] = q ? DISCIPLINES.filter((d) => matchScore(q, d.shortName, d.name) >= 40) : [...DISCIPLINES];
-    return HttpResponse.json(paginate(list, url));
-  }),
 ];

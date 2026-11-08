@@ -17,6 +17,7 @@ import ua.vtc.rozklad.core.catalog.Specialty;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherAlias;
+import ua.vtc.rozklad.core.support.ReferenceData;
 
 /**
  * Catalog and calendar for timetable integration tests: 4КІ1/4КІ2, Кренцін/Непийвода, СТП/КМ/НДЕКСМ,
@@ -28,7 +29,7 @@ final class TimetableItData {
     static final String CLEAN_UP = """
             TRUNCATE lesson, change, template_lesson, generation_job, timetable_version, load_item_teacher, load_item,
                      teacher_preference, calendar_period_group, calendar_period, week_parity_override, semester,
-                     academic_year, bell_slot, bell_profile, subgroup, student_group, specialty, teacher_alias,
+                     academic_year, subgroup, student_group, specialty, teacher_alias,
                      teacher, discipline_alias, discipline, room, processed_event CASCADE
             """;
 
@@ -67,7 +68,7 @@ final class TimetableItData {
                     "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "НДЕКСМ"));
             lab6 = room(em, "6", RoomType.COMPUTER_LAB, 30);
             room304 = room(em, "304", RoomType.CLASSROOM, 32);
-            BellProfile bells = new BellProfile("2 зміни, 60 хв");
+            BellProfile bells = new BellProfile("Тест: 2 зміни, 60 хв");
             for (int weekday = 1; weekday <= 5; weekday++) {
                 bells.addSlot(weekday, 1, LocalTime.of(8, 30), LocalTime.of(9, 30));
                 bells.addSlot(weekday, 2, LocalTime.of(9, 40), LocalTime.of(10, 40));
@@ -107,5 +108,6 @@ final class TimetableItData {
 
     static void cleanUp(JdbcTemplate jdbc) {
         jdbc.execute(CLEAN_UP);
+        ReferenceData.restore(jdbc);
     }
 }

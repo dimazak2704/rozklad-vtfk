@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
-import ua.vtc.rozklad.core.calendar.ShiftWindow;
 
 /**
  * Pairs each shift may use per weekday (table {@code shift_window}). When the table is empty the

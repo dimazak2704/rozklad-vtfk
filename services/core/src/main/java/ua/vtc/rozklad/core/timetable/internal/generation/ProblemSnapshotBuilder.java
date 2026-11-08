@@ -1,6 +1,5 @@
 package ua.vtc.rozklad.core.timetable.internal.generation;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -19,6 +18,8 @@ import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
+import ua.vtc.rozklad.core.calendar.CalendarQueries;
+import ua.vtc.rozklad.core.calendar.ShiftWindows;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
 import ua.vtc.rozklad.core.catalog.Room;
@@ -29,16 +30,15 @@ import ua.vtc.rozklad.core.catalog.Subgroup;
 import ua.vtc.rozklad.core.catalog.SubgroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
+import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.TemplateLessonRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
-import ua.vtc.rozklad.core.timetable.internal.calendar.ShiftWindows;
-import ua.vtc.rozklad.core.timetable.internal.calendar.ShiftWindowsLoader;
 import ua.vtc.rozklad.core.timetable.internal.conflict.SlotPreference;
 import ua.vtc.rozklad.core.timetable.internal.conflict.TeacherSlotPreferences;
-import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository.LoadRow;
+import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 import ua.vtc.rozklad.core.timetable.internal.support.PreferenceReadRepository;
 
 /**
@@ -70,14 +70,14 @@ class ProblemSnapshotBuilder {
     private final TemplateLessonRepository templateLessons;
     private final LoadReadRepository loads;
     private final PreferenceReadRepository preferences;
-    private final ShiftWindowsLoader shiftWindows;
-    private final HoursPerPair hoursPerPair;
+    private final CalendarQueries calendar;
+    private final SettingsService settings;
 
     ProblemSnapshotBuilder(StudentGroupRepository groups, SubgroupRepository subgroups, RoomRepository rooms,
                            TeacherRepository teachers, DisciplineRepository disciplines,
                            TemplateLessonRepository templateLessons, LoadReadRepository loads,
-                           PreferenceReadRepository preferences, ShiftWindowsLoader shiftWindows,
-                           HoursPerPair hoursPerPair) {
+                           PreferenceReadRepository preferences, CalendarQueries calendar,
+                           SettingsService settings) {
         this.groups = groups;
         this.subgroups = subgroups;
         this.rooms = rooms;
@@ -86,8 +86,8 @@ class ProblemSnapshotBuilder {
         this.templateLessons = templateLessons;
         this.loads = loads;
         this.preferences = preferences;
-        this.shiftWindows = shiftWindows;
-        this.hoursPerPair = hoursPerPair;
+        this.calendar = calendar;
+        this.settings = settings;
     }
 
     Built build(UUID semesterId, Collection<StudentGroup> scope, TimetableVersion base) {
@@ -118,7 +118,7 @@ class ProblemSnapshotBuilder {
                 .filter(id -> !groupsById.containsKey(id)).collect(Collectors.toSet());
         groups.findAllById(outsideGroupIds).forEach(group -> groupsById.put(group.getId(), group));
         storedSubgroups.putAll(storedSubgroups(outsideGroupIds));
-        ShiftWindows windows = shiftWindows.load();
+        ShiftWindows windows = calendar.shiftWindowTable();
         ProblemSnapshot snapshot = new ProblemSnapshot(timeslots(windows), shiftWindowsOf(windows),
                 snapshotGroups(groupsById.values(), storedSubgroups, units), snapshotRooms(units),
                 snapshotTeachers(units, preferences.forSemester(semesterId)),
@@ -128,7 +128,7 @@ class ProblemSnapshotBuilder {
 
     private List<PlanUnit> loadUnits(UUID semesterId, Set<UUID> scopeIds, Map<UUID, Set<Integer>> storedSubgroups,
                                      Map<UUID, StudentGroup> groupsById) {
-        BigDecimal hours = hoursPerPair.current();
+        int hours = settings.hoursPerPair();
         List<PlanUnit> units = new ArrayList<>();
         for (LoadRow item : loads.forGroups(semesterId, scopeIds)) {
             try {

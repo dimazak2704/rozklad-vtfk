@@ -3,12 +3,12 @@ package ua.vtc.rozklad.core.substitution.internal.change;
 import java.time.Clock;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.substitution.ApprovalMode;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeHistory;
 import ua.vtc.rozklad.core.substitution.ChangeHistoryRepository;
-import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionSettings;
 
 /**
  * Status transitions of changes (DOMAIN §7): every transition is validated by
@@ -20,11 +20,11 @@ public class ChangeWorkflow {
 
     private final ChangeHistoryRepository history;
     private final ChangeNotifications notifications;
-    private final SubstitutionSettings settings;
+    private final SettingsService settings;
     private final Clock clock;
 
     public ChangeWorkflow(ChangeHistoryRepository history, ChangeNotifications notifications,
-                          SubstitutionSettings settings, Clock clock) {
+                          SettingsService settings, Clock clock) {
         this.history = history;
         this.notifications = notifications;
         this.settings = settings;
@@ -37,13 +37,13 @@ public class ChangeWorkflow {
      * (DRAFT → CONFIRMED). One history entry records the creation.
      */
     public void open(Change change, String actor) {
-        boolean askTeacher = change.getNewTeacherId() != null && settings.approvalMode() == ApprovalMode.CONFIRM;
+        boolean askTeacher = change.getNewTeacherId() != null && settings.requiresConfirmation();
         ChangeStatus target = askTeacher ? ChangeStatus.PENDING_CONFIRMATION : ChangeStatus.CONFIRMED;
         ChangeStatusMachine.requireTransition(change.getStatus(), target);
         change.setStatus(target);
         change.setApprovalMode(askTeacher ? ApprovalMode.CONFIRM : ApprovalMode.AUTO);
         if (askTeacher) {
-            change.startConfirmationRound(clock.instant().plus(settings.confirmTimeout()));
+            change.startConfirmationRound(clock.instant().plus(settings.current().confirmTimeout()));
         }
         history.save(new ChangeHistory(change.getId(), clock.instant(), actor, null, target,
                 askTeacher ? "Створено, очікує підтвердження викладача" : "Створено і підтверджено"));
@@ -80,7 +80,7 @@ public class ChangeWorkflow {
                     ChangeStatus.PENDING_CONFIRMATION, "Запит на підтвердження надіслано повторно"));
         }
         change.setApprovalMode(ApprovalMode.CONFIRM);
-        change.startConfirmationRound(clock.instant().plus(settings.confirmTimeout()));
+        change.startConfirmationRound(clock.instant().plus(settings.current().confirmTimeout()));
         notifications.confirmationRequested(change);
     }
 }

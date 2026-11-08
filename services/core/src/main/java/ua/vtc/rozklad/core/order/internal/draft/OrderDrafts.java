@@ -12,16 +12,17 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderStatus;
-import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.order.OrderDocument;
 import ua.vtc.rozklad.core.order.OrderDocumentRepository;
 import ua.vtc.rozklad.core.order.OrderItem;
 import ua.vtc.rozklad.core.order.OrderItemContent;
 import ua.vtc.rozklad.core.order.OrderSection;
 import ua.vtc.rozklad.core.order.internal.support.OrderCalendar;
-import ua.vtc.rozklad.core.order.internal.support.OrderSettings;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.order.internal.view.OrderViews;
+import ua.vtc.rozklad.core.settings.SettingsService;
+import ua.vtc.rozklad.core.settings.SystemSettings;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Change;
@@ -44,10 +45,10 @@ public class OrderDrafts {
     private final ChangeRepository changes;
     private final ChangeRows rows;
     private final OrderCalendar calendar;
-    private final OrderSettings settings;
+    private final SettingsService settings;
 
     public OrderDrafts(OrderDocumentRepository orders, ChangeRepository changes, ChangeRows rows,
-                       OrderCalendar calendar, OrderSettings settings) {
+                       OrderCalendar calendar, SettingsService settings) {
         this.orders = orders;
         this.changes = changes;
         this.rows = rows;
@@ -61,23 +62,23 @@ public class OrderDrafts {
      * the date is returned as it is (no empty amendment is created).
      */
     public OrderDto draftFor(LocalDate date) {
-        Semester semester = calendar.requireOrderDate(date);
-        orders.lockDate(semester.getId(), date);
+        SemesterInfo semester = calendar.requireOrderDate(date);
+        orders.lockDate(semester.id(), date);
         List<Change> confirmed = changes.findAllByDateAndStatusIn(date, CONFIRMED);
-        Optional<OrderDocument> existing = orders.findBySemesterIdAndDateAndKind(semester.getId(), date,
+        Optional<OrderDocument> existing = orders.findBySemesterIdAndDateAndKind(semester.id(), date,
                 OrderKind.ORDER);
         if (existing.isEmpty() || existing.get().isDraft()) {
-            OrderDocument main = existing.orElseGet(() -> OrderDocument.mainOrder(semester.getId(), date,
+            OrderDocument main = existing.orElseGet(() -> OrderDocument.mainOrder(semester.id(), date,
                     OrderTexts.mainTitle(null)));
             return save(refresh(main, semester, confirmed));
         }
         OrderDocument main = existing.get();
         Optional<OrderDocument> amendmentDraft = orders.findFirstBySemesterIdAndDateAndKindAndStatus(
-                semester.getId(), date, OrderKind.AMENDMENT, OrderStatus.DRAFT);
+                semester.id(), date, OrderKind.AMENDMENT, OrderStatus.DRAFT);
         if (amendmentDraft.isEmpty() && confirmed.isEmpty()) {
             return OrderViews.toDto(latestPublished(semester, date).orElse(main));
         }
-        OrderDocument amendment = amendmentDraft.orElseGet(() -> OrderDocument.amendment(semester.getId(), date,
+        OrderDocument amendment = amendmentDraft.orElseGet(() -> OrderDocument.amendment(semester.id(), date,
                 main.getId(), OrderTexts.amendmentTitle(main.getNumber())));
         return save(refresh(amendment, semester, confirmed));
     }
@@ -95,7 +96,7 @@ public class OrderDrafts {
     }
 
     /** Rows rebuilt from the confirmed changes (kept as they are when nothing changed). */
-    OrderDocument refresh(OrderDocument order, Semester semester, List<Change> confirmed) {
+    OrderDocument refresh(OrderDocument order, SemesterInfo semester, List<Change> confirmed) {
         OrderRowComposer.Rows composed = OrderRowComposer.compose(rows.of(confirmed));
         if (!sameRows(order, composed)) {
             order.clearItems();
@@ -103,10 +104,11 @@ public class OrderDrafts {
             composed.roomChanges().forEach(content -> order.addItem(OrderSection.ROOM_CHANGES, content));
         }
         order.setDayLabels(OrderTexts.weekdayLabel(order.getDate()),
-                OrderTexts.parityLabel(calendar.parity(semester, order.getDate())));
-        order.setSignatory(settings.signatoryPosition(), settings.signatoryName());
+                OrderTexts.parityLabel(calendar.parity(order.getDate())));
+        SystemSettings current = settings.current();
+        order.setSignatory(current.signatoryPosition(), current.signatoryName());
         if (order.getKind() == OrderKind.ORDER && !order.isNotesEdited()) {
-            order.setNotes(calendar.orderNotes(semester, order.getDate()));
+            order.setNotes(calendar.orderNotes(order.getDate()));
         }
         return order;
     }
@@ -127,9 +129,9 @@ public class OrderDrafts {
         return OrderViews.toDto(order);
     }
 
-    private Optional<OrderDocument> latestPublished(Semester semester, LocalDate date) {
+    private Optional<OrderDocument> latestPublished(SemesterInfo semester, LocalDate date) {
         return orders.findAllByDateAndStatusOrderByCreatedAt(date, OrderStatus.PUBLISHED).stream()
-                .filter(order -> order.getSemesterId().equals(semester.getId()))
+                .filter(order -> order.getSemesterId().equals(semester.id()))
                 .max(Comparator.comparing(OrderDocument::getNumber));
     }
 }

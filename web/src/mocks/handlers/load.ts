@@ -12,11 +12,10 @@ import type {
   LessonKind,
   RoomType,
   TemplateLessonDto,
-  TimetableVersionDto,
   Uuid,
 } from '@/api/types';
 import { DEFAULT_HOURS_PER_PAIR, loadPattern } from '@/components/load/pattern';
-import { PUBLISHED_VERSION_EFFECTIVE_FROM, PUBLISHED_VERSION_ID, TEMPLATE_LESSONS } from '../fixtures';
+import { PUBLISHED_VERSION_ID, TEMPLATE_LESSONS } from '../fixtures';
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, notFound, problem, readJson } from '../kit';
 import { createMockCollection } from '../store';
@@ -330,37 +329,6 @@ function derive(versionId: Uuid): DerivedLoadResult {
   };
 }
 
-// ───────────────────────── Версії розкладу (резервний мок) ─────────────────────────
-
-/**
- * GET /admin/timetable/versions належить області «Базовий розклад». Поки її мок-модуля немає, цей
- * обробник віддає опубліковану версію з fixtures, щоб «Вивести з розкладу» працювало; щойно
- * handlers/timetable.ts чи handlers/generation.ts зʼявляться, він вимикається (без двох відповідей на один шлях).
- */
-const VERSIONS_MOCKED_ELSEWHERE = Object.keys(import.meta.glob(['./timetable.ts', './generation.ts'])).length > 0;
-
-const versionsFallback = VERSIONS_MOCKED_ELSEWHERE
-  ? []
-  : [
-      http.get(apiPath('/admin/timetable/versions'), ({ request }) => {
-        const semesterId = new URL(request.url).searchParams.get('semesterId');
-        const semester = activeSemester();
-        const published: TimetableVersionDto = {
-          id: PUBLISHED_VERSION_ID,
-          name: 'Розклад з Excel 2025/26 (I семестр)',
-          status: 'PUBLISHED',
-          source: 'IMPORT',
-          effectiveFrom: PUBLISHED_VERSION_EFFECTIVE_FROM,
-          publishedAt: '2026-08-31T09:00:00Z',
-          lessonCount: TEMPLATE_LESSONS.length,
-          hardConflicts: 0,
-          softWarnings: 0,
-          metrics: null,
-        };
-        return HttpResponse.json(!semesterId || semesterId === semester.id ? [published] : []);
-      }),
-    ];
-
 // ───────────────────────── Обробники ─────────────────────────
 
 export const handlers = [
@@ -393,5 +361,4 @@ export const handlers = [
     loadItems.remove(String(params.id));
     return new HttpResponse(null, { status: 204 });
   }),
-  ...versionsFallback,
 ];

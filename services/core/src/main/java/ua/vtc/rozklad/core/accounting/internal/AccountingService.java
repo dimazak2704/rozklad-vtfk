@@ -11,9 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.core.accounting.AccountingQueries;
 import ua.vtc.rozklad.core.accounting.DisciplineProgress;
-import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
+import ua.vtc.rozklad.core.settings.SettingsService;
 
 /**
  * Plan / fact / forecast per group × discipline (DOMAIN §9). The plan is the sum of planned hours
@@ -27,10 +28,10 @@ public class AccountingService implements AccountingQueries {
     private final LoadItemRepository loadItems;
     private final AccountingLessons lessons;
     private final AccountingCalendar calendar;
-    private final AccountingSettings settings;
+    private final SettingsService settings;
 
     AccountingService(LoadItemRepository loadItems, AccountingLessons lessons, AccountingCalendar calendar,
-                      AccountingSettings settings) {
+                      SettingsService settings) {
         this.loadItems = loadItems;
         this.lessons = lessons;
         this.calendar = calendar;
@@ -53,17 +54,17 @@ public class AccountingService implements AccountingQueries {
         return settings.hoursPerPair();
     }
 
-    private List<AccountingRow> compute(Semester semester, UUID groupId) {
+    private List<AccountingRow> compute(SemesterInfo semester, UUID groupId) {
         List<LoadItem> items = groupId == null
-                ? loadItems.findAllBySemesterId(semester.getId())
-                : loadItems.findAllBySemesterIdAndGroupId(semester.getId(), groupId);
+                ? loadItems.findAllBySemesterId(semester.id())
+                : loadItems.findAllBySemesterIdAndGroupId(semester.id(), groupId);
         Map<Key, Integer> plans = new LinkedHashMap<>();
         items.forEach(item -> plans.merge(new Key(item.getGroupId(), item.getDisciplineId()), item.getPlannedHours(),
                 Integer::sum));
 
-        Map<Key, List<ScheduledLessonFact>> lessonsByKey = lessons.scheduled(semester.getId(), groupId).stream()
+        Map<Key, List<ScheduledLessonFact>> lessonsByKey = lessons.scheduled(semester.id(), groupId).stream()
                 .collect(Collectors.groupingBy(fact -> new Key(fact.groupId(), fact.disciplineId())));
-        BiPredicate<LocalDate, Integer> ended = calendar.endedLessons(semester);
+        BiPredicate<LocalDate, Integer> ended = calendar.endedLessons();
         int hoursPerPair = settings.hoursPerPair();
 
         return plans.entrySet().stream()

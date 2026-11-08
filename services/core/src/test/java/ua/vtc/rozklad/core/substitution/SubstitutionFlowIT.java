@@ -34,6 +34,7 @@ import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;

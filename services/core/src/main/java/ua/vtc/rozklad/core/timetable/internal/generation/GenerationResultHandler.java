@@ -22,7 +22,7 @@ import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
 import ua.vtc.rozklad.core.shared.messaging.ProcessedEvents;
 import ua.vtc.rozklad.core.shared.security.Roles;
-import ua.vtc.rozklad.core.shared.sse.SseBroadcaster;
+import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
 import ua.vtc.rozklad.core.shared.sse.SseEventTypes;
 import ua.vtc.rozklad.core.shared.time.TimeConfig;
 import ua.vtc.rozklad.core.timetable.GenerationJob;
@@ -33,7 +33,6 @@ import ua.vtc.rozklad.core.timetable.TimetableVersion;
 import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
 import ua.vtc.rozklad.core.timetable.VersionSource;
 import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
-import ua.vtc.rozklad.core.timetable.internal.support.AfterCommit;
 import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 
 /**
@@ -57,13 +56,13 @@ class GenerationResultHandler {
     private final RoomRepository rooms;
     private final VersionAnalysis analysis;
     private final GenerationJobMapper mapper;
-    private final SseBroadcaster sse;
+    private final SseAfterCommit sse;
     private final Clock clock;
 
     GenerationResultHandler(ProcessedEvents processedEvents, GenerationJobRepository jobs,
                             TimetableVersionRepository versions, TemplateLessonRepository templateLessons,
                             RoomRepository rooms, VersionAnalysis analysis, GenerationJobMapper mapper,
-                            SseBroadcaster sse, Clock clock) {
+                            SseAfterCommit sse, Clock clock) {
         this.processedEvents = processedEvents;
         this.jobs = jobs;
         this.versions = versions;
@@ -91,7 +90,7 @@ class GenerationResultHandler {
                 event.softScore()), GenerationJobMapper.score(event.hardScore(), event.softScore()));
         GenerationProgressNotice notice = new GenerationProgressNotice(job.getId(), event.elapsedMs(),
                 event.hardScore(), event.softScore());
-        AfterCommit.run(() -> sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_PROGRESS, notice));
+        sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_PROGRESS, notice);
     }
 
     @Transactional
@@ -115,7 +114,7 @@ class GenerationResultHandler {
             default -> throw new IllegalStateException("Not a terminal status: " + event.status());
         }
         GenerationJobDto dto = mapper.toDto(job);
-        AfterCommit.run(() -> sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto));
+        sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto);
     }
 
     /**
@@ -129,7 +128,7 @@ class GenerationResultHandler {
         found.ifPresent(job -> {
             job.finish(GenerationStatus.FAILED, now, reason);
             GenerationJobDto dto = mapper.toDto(job);
-            AfterCommit.run(() -> sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto));
+            sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto);
         });
         return found.map(mapper::toDto);
     }

@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -7,19 +7,20 @@ import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
 
 /**
- * Dates, week parity and calendar periods of one semester.
+ * Dates, week parity and calendar periods of one semester, loaded once for a {@link StudyCalendar}.
  *
+ * @param weeks         week numbering and parity (overrides included)
  * @param bellProfileId bell profile of the semester, {@code null} when not set
  */
-public record SemesterCalendar(
+public record StudySemester(
         UUID semesterId,
         LocalDate startsOn,
         LocalDate endsOn,
-        WeekParityCalculator weeks,
+        SemesterCalendar weeks,
         List<StudyPeriod> periods,
         UUID bellProfileId) {
 
-    public SemesterCalendar {
+    public StudySemester {
         Objects.requireNonNull(semesterId, "semesterId");
         Objects.requireNonNull(startsOn, "startsOn");
         Objects.requireNonNull(endsOn, "endsOn");

@@ -1,14 +1,10 @@
 /**
- * Налаштування системи (CONTRACTS §2: GET/PUT /api/admin/settings) і довідкові дані сторінки налаштувань:
- * профілі дзвінків (GET /api/public/bells без дати) та витрати ШІ (GET /api/import/ai/usage).
- *
- * Дзвінки й витрати ШІ належать іншим областям: тут вони лише запасні обробники. Реєстр підключає файли
- * за алфавітом, тож обробники публічних сторінок та імпорту (ім'я файлу раніше за «settings») мають перевагу.
+ * Налаштування системи (CONTRACTS §2: GET/PUT /api/admin/settings). Дзвінки (GET /api/public/bells) мокує
+ * область публічних сторінок (handlers/public.ts), витрати ШІ — область імпорту (handlers/import.ts).
  */
 import { http, HttpResponse } from 'msw';
-import type { AiUsageDto, ApprovalMode, BellsDto, FieldErrorDto, SettingsDto, Weekday } from '@/api/types';
-import { isIsoDate, isoWeekday, todayInKyiv } from '@/lib/date';
-import { ACTIVE_BELL_PROFILE, BELL_PROFILES, bellSlots } from '../fixtures';
+import type { ApprovalMode, FieldErrorDto, SettingsDto } from '@/api/types';
+import { ACTIVE_BELL_PROFILE, BELL_PROFILES } from '../fixtures';
 import { apiPath, badRequest, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { COLLEGE_NAME } from './meta';
@@ -90,26 +86,6 @@ export function validateSettings(body: Partial<Record<keyof SettingsDto, unknown
   return errors;
 }
 
-/** GET /api/public/bells: на дату — дзвінки дня; без дати — ще й усі профілі (CONTRACTS §1). */
-function bells(date: string | null): BellsDto {
-  const profile = BELL_PROFILES.find((p) => p.id === settings.get().activeBellProfileId) ?? ACTIVE_BELL_PROFILE;
-  const day = date ?? todayInKyiv();
-  const weekday = Math.min(isoWeekday(day), 5) as Weekday;
-  return {
-    profile: { id: profile.id, name: profile.name },
-    weekday,
-    slots: bellSlots(weekday, profile),
-    profiles: date ? null : BELL_PROFILES.map((p) => ({ ...p, active: p.id === profile.id })),
-  };
-}
-
-// ДЕМО: витрати ШІ не рахуються в цій області; значення узгоджене з моделями й бюджетом ARCHITECTURE §7
-const aiUsage = (): AiUsageDto => ({
-  today: { calls: 1, inputTokens: 842, outputTokens: 118, costUsd: 0.0014 },
-  dailyBudgetUsd: 2,
-  model: { text: 'claude-haiku-5-5', vision: 'claude-sonnet-5-5' },
-});
-
 export const handlers = [
   http.get(apiPath('/admin/settings'), () => HttpResponse.json(settings.get())),
 
@@ -131,13 +107,4 @@ export const handlers = [
     return HttpResponse.json(next);
   }),
 
-  http.get(apiPath('/public/bells'), ({ request }) => {
-    const date = new URL(request.url).searchParams.get('date');
-    if (date !== null && !isIsoDate(date)) {
-      return badRequest('Дата має бути у форматі РРРР-ММ-ДД.', [{ field: 'date', message: 'Формат РРРР-ММ-ДД' }]);
-    }
-    return HttpResponse.json(bells(date));
-  }),
-
-  http.get(apiPath('/import/ai/usage'), () => HttpResponse.json(aiUsage())),
 ];

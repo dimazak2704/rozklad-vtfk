@@ -3,7 +3,7 @@ package ua.vtc.rozklad.core.substitution.internal.change;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
 /**
  * {@code PUT /api/admin/changes/{id}}: the room and the printed reason of an open change. Another

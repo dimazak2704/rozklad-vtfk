@@ -5,7 +5,7 @@ import java.util.SortedSet;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /**
  * «Рваний день» of the template: in numerator and denominator weeks the group has a different

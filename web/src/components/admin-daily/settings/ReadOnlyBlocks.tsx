@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useNextOrderNumber } from '@/api/admin-daily';
-import { useAiUsage } from '@/api/settings';
+import { useAiUsage } from '@/api/import';
 import type { IsoDate } from '@/api/types';
 import { SkeletonText } from '@/components/ui';
 import { cn } from '@/lib/cn';

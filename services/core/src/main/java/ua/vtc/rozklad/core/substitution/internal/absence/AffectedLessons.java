@@ -10,10 +10,10 @@ import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
 import ua.vtc.rozklad.core.substitution.Change;
-import ua.vtc.rozklad.core.substitution.internal.view.LessonView;
 import ua.vtc.rozklad.core.substitution.internal.view.LessonViews;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
+import ua.vtc.rozklad.core.timetable.LessonView;
 
 /**
  * Affected lessons of an absence (DOMAIN §7): SCHEDULED lessons of the teacher on the absent dates

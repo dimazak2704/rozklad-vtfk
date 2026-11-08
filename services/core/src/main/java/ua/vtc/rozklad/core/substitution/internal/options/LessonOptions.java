@@ -21,9 +21,11 @@ import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.accounting.AccountingQueries;
 import ua.vtc.rozklad.core.accounting.DisciplineProgress;
-import ua.vtc.rozklad.core.calendar.CalendarPeriod;
+import ua.vtc.rozklad.core.calendar.GroupScope;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
+import ua.vtc.rozklad.core.calendar.ShiftWindows;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
@@ -36,7 +38,6 @@ import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.load.LoadItemTeacher;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
-import ua.vtc.rozklad.core.shared.time.StudyWeeks;
 import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
 import ua.vtc.rozklad.core.substitution.Change;
@@ -48,11 +49,11 @@ import ua.vtc.rozklad.core.substitution.internal.absence.LessonDecisions;
 import ua.vtc.rozklad.core.substitution.internal.effect.PlannedLesson;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
 import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
-import ua.vtc.rozklad.core.substitution.internal.view.LessonView;
 import ua.vtc.rozklad.core.substitution.internal.view.LessonViews;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
+import ua.vtc.rozklad.core.timetable.LessonView;
 
 /**
  * Reads everything the ranking engine needs about a lesson (a few batch queries), runs
@@ -64,6 +65,8 @@ public class LessonOptions {
 
     static final int MAKE_UP_DAYS = 14;
     static final int MAKE_UP_LIMIT = 3;
+    /** A weekday without a shift-window row is not restricted. */
+    private static final ShiftWindows.PairRange UNRESTRICTED = new ShiftWindows.PairRange(1, 8);
     private static final Set<ChangeStatus> ASSIGNING = EnumSet.of(ChangeStatus.PENDING_CONFIRMATION,
             ChangeStatus.CONFIRMED);
     private static final Set<ChangeStatus> SUBSTITUTION_LOAD = EnumSet.of(ChangeStatus.PENDING_CONFIRMATION,
@@ -257,13 +260,13 @@ public class LessonOptions {
                 teacherId, from, to).stream().filter(Lesson::isScheduled).toList();
         List<Change> open = changes.findAllByDateBetweenAndStatusIn(from, to, ASSIGNING);
         List<Absence> teacherAbsences = absences.findActiveOverlapping(from, to, teacherId);
-        List<CalendarPeriod> periods = calendar.periods(semester, from, to);
+        StudyCalendar days = calendar.range(from, to);
+        GroupScope scope = SubstitutionCalendar.scope(group);
 
-        List<MakeUpSlotFinder.Day> days = new ArrayList<>();
+        List<MakeUpSlotFinder.Day> slots = new ArrayList<>();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             LocalDate current = date;
-            if (!StudyWeeks.isWeekday(current) || !semester.contains(current)
-                    || SubstitutionCalendar.noClassesReason(periods, group, current).isPresent()) {
+            if (!days.day(current, scope).studyDay()) {
                 continue;
             }
             Set<Integer> groupPairs = new HashSet<>();
@@ -284,11 +287,11 @@ public class LessonOptions {
             IntStream.rangeClosed(1, 8)
                     .filter(pair -> teacherAbsences.stream().anyMatch(absence -> absence.covers(current, pair)))
                     .forEach(teacherBusy::add);
-            SubstitutionCalendar.PairRange window = calendar.shiftWindow(group.getShift(),
-                    current.getDayOfWeek().getValue());
-            days.add(new MakeUpSlotFinder.Day(current, window.first(), window.last(), groupPairs, teacherBusy));
+            ShiftWindows.PairRange window = calendar.shiftWindow(group.getShift(), current.getDayOfWeek().getValue())
+                    .orElse(UNRESTRICTED);
+            slots.add(new MakeUpSlotFinder.Day(current, window.first(), window.last(), groupPairs, teacherBusy));
         }
-        return MakeUpSlotFinder.find(days, MAKE_UP_LIMIT);
+        return MakeUpSlotFinder.find(slots, MAKE_UP_LIMIT);
     }
 
     private List<OptionDto> toDtos(List<RankedOption> ranked, Room lessonRoom) {

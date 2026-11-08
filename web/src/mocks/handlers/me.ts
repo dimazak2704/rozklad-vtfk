@@ -8,8 +8,6 @@ import { http, HttpResponse } from 'msw';
 import type {
   AbsenceDto,
   AbsenceReasonCategory,
-  BindingCodeDto,
-  BindingCodeRequest,
   ChangeReplyRequest,
   ChangeStatus,
   IsoDate,
@@ -34,8 +32,6 @@ export const ME: MeDto = {
   roles: ['TEACHER'],
   teacher: KRENTSIN,
 };
-
-const TELEGRAM_BOT_URL = (import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/scheduler_vtfk_bot').replace(/\/$/, '');
 
 const REASONS: readonly AbsenceReasonCategory[] = ['SICK_LEAVE', 'VACATION', 'BUSINESS_TRIP', 'PERSONAL', 'OTHER'];
 const KINDS: readonly PreferenceKind[] = ['UNWANTED', 'UNAVAILABLE'];
@@ -190,14 +186,6 @@ function validatePreferences(body: unknown): PreferenceDto[] | Response {
 
 // ───────────────────────── Telegram ─────────────────────────
 
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-/** Код для `/start <code>`: Telegram дозволяє [A-Za-z0-9_-] до 64 символів. */
-function bindingCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  return `t_${[...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('')}`;
-}
-
 // ───────────────────────── Обробники ─────────────────────────
 
 function parseStatuses(url: URL): ChangeStatus[] | null {
@@ -305,22 +293,4 @@ export const handlers = [
     return HttpResponse.json(parsed);
   }),
 
-  // Коди для чатів груп і адмінів — справа області Telegram: такі запити йдуть до наступного обробника
-  http.post(apiPath('/notify/bindings/codes'), async ({ request }) => {
-    const body = (await request
-      .clone()
-      .json()
-      .catch(() => null)) as Partial<BindingCodeRequest> | null;
-    if (body?.type !== 'TEACHER') return undefined;
-    if (body.teacherId !== KRENTSIN.id) {
-      return problem({ status: 403, detail: 'Викладач може створити код привʼязки лише для себе.' });
-    }
-    const code = bindingCode();
-    const dto: BindingCodeDto = {
-      code,
-      deepLink: `${TELEGRAM_BOT_URL}?start=${code}`,
-      expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
-    };
-    return HttpResponse.json(dto, { status: 201 });
-  }),
 ];

@@ -25,13 +25,16 @@ accounting  ← substitution ← order
   `TeacherActivityProvider`, an interface that accounting declares and substitution implements.
 * The dashboard lives in `order`: it is the only module of the daily workflow that may read both
   substitutions and orders without a cycle.
-* All three modules read catalog, calendar, load, timetable and settings only through their
-  entities and repositories (base packages). Small calendar helpers (semester of a date, parity,
-  bell times, shift windows) are private to each module until the calendar module publishes an API
-  (`SubstitutionCalendar`, `OrderCalendar`, `AccountingCalendar` — reconcile at merge).
-* New shared files: `shared.ref.{GroupRef,TeacherRef,DisciplineRef,RoomRef}` (CONTRACTS refs),
-  `shared.time.StudyWeeks` (week number and parity as pure functions), `shared.text.UkrainianText`
-  (weekday/month names, plural forms, collator), `shared.sse.SseAfterCommit` (SSE after commit).
+* Integration: the calendar is read only through `calendar.CalendarQueries`. `SubstitutionCalendar`,
+  `OrderCalendar` and `AccountingCalendar` are thin adapters that add the modules' 422 messages
+  (no repository access, no own parity or bell rules). Settings come from `settings.SettingsService`
+  (the module readers `SubstitutionSettings`, `OrderSettings`, `AccountingSettings` were removed; the
+  confirmation timeout default is the settings default, 120 min). `LessonView`s come from
+  `timetable.ScheduleQueries` (the module's own mapping was removed), refs are `catalog.*Ref`
+  (`shared.ref` and `shared.time.StudyWeeks` were removed), `ReasonCode` moved to `shared.domain`
+  with the printing rule shared with timetable.
+* Shared files: `shared.text.UkrainianText` (weekday/month names, plural forms, collator; also the
+  schedule labels merged from timetable), `shared.sse.SseAfterCommit` (SSE after commit).
 
 ## 2. Endpoints
 

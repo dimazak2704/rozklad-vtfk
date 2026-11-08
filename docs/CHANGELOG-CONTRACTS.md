@@ -126,3 +126,41 @@ No endpoint was changed. These are the readings the SPA and its mock API use whe
 | `GET /api/notify/deliveries` | Array of `DeliveryDto`, newest first (at most 200). | The contract says only «delivery log». |
 | `DashboardAlert.kind` | `UNCOVERED_SOON`, `UNCOVERED`, `DECLINED`, `PENDING_OVERDUE`, `ORDER_NOT_PUBLISHED`, `DISCIPLINE_FINISHED`, `WILL_UNDERRUN`, `WILL_OVERRUN`; unknown kinds are shown by severity. | The contract does not list kinds. |
 | Order heading | `title` = «По коледжу про деякі зміни в розкладі занять»; the UI builds «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ №N до розпорядження №M» from `kind`, `number` and the parent's number. | DOMAIN §8 layout. |
+
+
+## Scheduler (copied from docs/modules/scheduler.md §9; no change to `libs/contracts`)
+
+| Area | Decision | Why |
+|---|---|---|
+| `generation.completed.analysis` | All 15 constraints, always in the same order (hard first); `constraint` is the Ukrainian title, ids stay internal; `score` is `HardSoftScore.toString()` with weights applied (a constraint switched off by weight 0 shows its matches with `0hard/0soft`). | Stable UI table; Timefold's `ScoreAnalysis` is Enterprise-only. |
+| CANCELLED | May carry `assignments` (best timetable before the cancel); none when the job was still queued or not every unit was placed. `hardScore`/`softScore` are 0 for FAILED and for CANCELLED without assignments. | Core can offer «apply anyway». |
+| SOLVED | Can still have `hardScore < 0` (infeasible data); the analysis shows which constraints are broken. | Honest result instead of a failure. |
+| Snapshot validation | Strict: unknown group/teacher/room references, a subgroup the group does not have, a shift without `shiftWindows`, a pin outside the timeslots, duplicate ids, no rooms, `timeLimitSeconds` above `app.scheduler.max-time-limit` → FAILED with a Ukrainian list of all problems. | No silent repair of bad input. |
+| `generation.progress` | Only for complete timetables, at most every 2 s and only when the score changed; `elapsedMs` = solving time when that score was found. Best effort: may arrive after `generation.completed` (core ignores progress of finished jobs). | Fewer events, meaningful chart. |
+| Pinned units | Without a room they come back with `roomId: null` and occupy no room. | Online/external lessons. |
+| Streams | Not modelled (no stream id in `ProblemSnapshot`): two units of a stream count as a teacher conflict. | Contract gap, see Integration below. |
+
+## Importer (copied from docs/modules/importer.md)
+
+| Area | Decision | Why |
+|---|---|---|
+| `ImportJobDto` | Additive `fileType`, `fileSize`, `updatedAt`, `createdBy`, `semesterId`, `options`, `mappings`, `result` (core results per apply step), `canApply`; `ReportRow` adds a Ukrainian `message`. | The review screen needs them. |
+| `GET /api/import/jobs` | Paged `{items,page,size,total}` (ARCHITECTURE §9), newest first; list items leave out `draft`/`options`/`mappings`/`result` and have an empty `report`. | Lists stay small. |
+| `POST /api/import/jobs/{id}/apply` | Optional body `{semesterId}` overrides the semester given at upload; asynchronous 202. | Choose the semester at apply time. |
+| Upload `options` | Keys `sheet`, `versionName`, `semesterNumber`, `groupCodes`, `hoursPerWeek`; unknown key → 400 on `options.<key>`. | Explicit errors. |
+| `parse-absence` / `ai/usage` | `parse-absence` adds `source` (`RULES`\|`AI`); `ai/usage` adds `remainingUsd`, `enabled`. | Bot and settings page show where the answer came from and the budget left. |
+| Errors | ProblemDetail types `ai-budget-exceeded` (429, `spentUsd`, `dailyBudgetUsd`), `unsupported-file` (415), `payload-too-large` (413), `service-unavailable` (503); 422 codes `IMPORT_NEEDS_REVIEW`, `IMPORT_FAILED`, `SEMESTER_REQUIRED`, `GROUPS_REQUIRED`, `AI_DISABLED`. | Stable codes for the UI. |
+| Calls to core | `/api/admin/import/*` with header `Idempotency-Key: import-job:<id>:<step>`; element shapes in docs/modules/importer.md §8. | Safe retries. |
+
+## Notification (copied from docs/modules/notification.md §9)
+
+| Area | Decision | Why |
+|---|---|---|
+| `POST /api/notify/bindings/codes` | 200 (not 201): codes are not addressable resources. Adds `type`, `label`, `groupLink` (`?startgroup=`), `command` (`/bind …`). TEACHER role: teacher taken from `GET /api/me` with the caller's token; 422 `teacher-not-linked`. | Admins need the group-chat way to bind; ownership must not trust the body. |
+| `GET /api/notify/bindings` | adds `groupCode`, `digestEnabled`; `chatId` masked `-•••7890` | Readable list without exposing chat ids. |
+| `GET /api/notify/bot` | adds `problem` (Ukrainian reason when `connected=false`) | Admin sees why the bot is down. |
+| `GET /api/notify/deliveries` | paged `{items,page,size,total}`; item `{id, orderId, chatId, chatTitle, bindingType, purpose, kind, status, attempts, error, createdAt, sentAt, nextAttemptAt}`; statuses `QUEUED/RETRYING/SENT/FAILED` | The contract only says «delivery log»; matches the SPA's inferred `DeliveryDto` plus extras. |
+| `POST /api/notify/test` | 200 with the delivery; 503/422/502 | Synchronous: the admin wants to see the result. |
+| `GET /api/documents/orders/{id}.{fmt}` | only orders received via `order.published`; ETag + 5 min cache; unknown format → 404 | Drafts are never public; core offers no public order payload. |
+| `POST …/render` | `format` default `pdf`; invalid → 400 `errors[format]` | — |
+| Webhook | `POST /api/notify/telegram/webhook` 404 unless WEBHOOK mode | Reserved path from the foundation. |

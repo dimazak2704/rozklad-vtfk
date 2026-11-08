@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -6,7 +6,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 
 /**
  * Study calendar of DOMAIN.md §2 over one or more semesters: which dates have lessons for a group,
@@ -16,17 +15,17 @@ public final class StudyCalendar {
 
     private static final String NOTE_SEPARATOR = "; ";
 
-    private final List<SemesterCalendar> semesters;
+    private final List<StudySemester> semesters;
 
-    public StudyCalendar(List<SemesterCalendar> semesters) {
+    public StudyCalendar(List<StudySemester> semesters) {
         this.semesters = List.copyOf(semesters);
     }
 
-    public List<SemesterCalendar> semesters() {
+    public List<StudySemester> semesters() {
         return semesters;
     }
 
-    public Optional<SemesterCalendar> semesterOf(LocalDate date) {
+    public Optional<StudySemester> semesterOf(LocalDate date) {
         return semesters.stream().filter(semester -> semester.contains(date)).findFirst();
     }
 
@@ -36,11 +35,11 @@ public final class StudyCalendar {
      */
     public DayInfo day(LocalDate date, GroupScope group) {
         int weekday = date.getDayOfWeek().getValue();
-        Optional<SemesterCalendar> found = semesterOf(date);
+        Optional<StudySemester> found = semesterOf(date);
         if (found.isEmpty()) {
             return new DayInfo(date, weekday, null, 0, false, false, null, null);
         }
-        SemesterCalendar semester = found.get();
+        StudySemester semester = found.get();
         List<StudyPeriod> active = semester.periods().stream()
                 .filter(period -> period.covers(date) && period.appliesTo(group))
                 .toList();

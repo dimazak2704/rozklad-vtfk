@@ -9,8 +9,6 @@ import { api } from './client';
 import { qk } from './queryKeys';
 import type {
   AbsenceDto,
-  BindingCodeDto,
-  BindingCodeRequest,
   ChangeDto,
   ChangeStatus,
   IsoDate,
@@ -152,15 +150,5 @@ export function useSavePreferences(semesterId: Uuid | undefined) {
   return useMutation({
     mutationFn: (preferences: PreferenceDto[]) => api.put<PreferenceDto[]>('/me/preferences', preferences, { query: { semesterId } }),
     onSuccess: (saved) => queryClient.setQueryData(qk.me.preferences(semesterId), saved),
-  });
-}
-
-// ───────────────────────── Telegram ─────────────────────────
-
-/** POST /api/notify/bindings/codes {type: TEACHER, teacherId} → глибоке посилання на бота з кодом. */
-export function useTelegramLinkCode() {
-  return useMutation({
-    mutationFn: (teacherId: Uuid) =>
-      api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'TEACHER', teacherId } satisfies BindingCodeRequest),
   });
 }

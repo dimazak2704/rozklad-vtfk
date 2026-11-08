@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.core.calendar.CalendarQueries;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
 import ua.vtc.rozklad.core.catalog.Room;
@@ -20,7 +21,6 @@ import ua.vtc.rozklad.core.catalog.Subgroup;
 import ua.vtc.rozklad.core.catalog.SubgroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
-import ua.vtc.rozklad.core.timetable.internal.calendar.ShiftWindowsLoader;
 import ua.vtc.rozklad.core.timetable.internal.support.PreferenceReadRepository;
 
 /** Loads the {@link ConflictFacts} of the entities referenced by a set of lessons (bulk, no N+1). */
@@ -32,18 +32,18 @@ public class ConflictFactsLoader {
     private final RoomRepository rooms;
     private final TeacherRepository teachers;
     private final DisciplineRepository disciplines;
-    private final ShiftWindowsLoader shiftWindows;
+    private final CalendarQueries calendar;
     private final PreferenceReadRepository preferences;
 
     public ConflictFactsLoader(StudentGroupRepository groups, SubgroupRepository subgroups, RoomRepository rooms,
                                TeacherRepository teachers, DisciplineRepository disciplines,
-                               ShiftWindowsLoader shiftWindows, PreferenceReadRepository preferences) {
+                               CalendarQueries calendar, PreferenceReadRepository preferences) {
         this.groups = groups;
         this.subgroups = subgroups;
         this.rooms = rooms;
         this.teachers = teachers;
         this.disciplines = disciplines;
-        this.shiftWindows = shiftWindows;
+        this.calendar = calendar;
         this.preferences = preferences;
     }
 
@@ -59,7 +59,7 @@ public class ConflictFactsLoader {
                         .collect(Collectors.toMap(Teacher::getId, Teacher::getShortName)),
                 disciplines.findAllById(disciplineIds).stream()
                         .collect(Collectors.toMap(Discipline::getId, Discipline::getShortName)),
-                shiftWindows.load(),
+                calendar.shiftWindowTable(),
                 preferences.forSemester(semesterId));
     }
 

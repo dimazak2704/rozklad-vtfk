@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -6,9 +6,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
-import ua.vtc.rozklad.core.calendar.PeriodScope;
-import ua.vtc.rozklad.core.calendar.StudyMode;
 
 /** Semester «I семестр 2026/2027» (01.09–30.12.2026, first week numerator) with periods of DOMAIN.md §12. */
 public final class CalendarFixtures {
@@ -25,8 +22,8 @@ public final class CalendarFixtures {
     }
 
     public static StudyCalendar calendar(List<StudyPeriod> periods, Map<LocalDate, Parity> overrides) {
-        return new StudyCalendar(List.of(new SemesterCalendar(SEMESTER_ID, STARTS, ENDS,
-                new WeekParityCalculator(STARTS, Parity.NUMERATOR, overrides), periods, null)));
+        return new StudyCalendar(List.of(new StudySemester(SEMESTER_ID, STARTS, ENDS,
+                new SemesterCalendar(STARTS, ENDS, Parity.NUMERATOR, overrides), periods, null)));
     }
 
     public static StudyPeriod holiday(String title, LocalDate from, LocalDate to) {

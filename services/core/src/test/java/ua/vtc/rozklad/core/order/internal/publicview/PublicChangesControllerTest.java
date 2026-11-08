@@ -18,7 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
 
 @WebMvcTest(PublicChangesController.class)

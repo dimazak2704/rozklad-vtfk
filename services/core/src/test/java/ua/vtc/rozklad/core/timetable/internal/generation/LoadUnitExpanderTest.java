@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import ua.vtc.rozklad.contracts.LessonKind;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.UnitWeight;
+import ua.vtc.rozklad.core.load.LoadPattern;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository.LoadRow;
 
 /** DOMAIN.md §4: load → weekly units. */
@@ -30,19 +31,18 @@ class LoadUnitExpanderTest {
     @ParameterizedTest(name = "{0} h/week → {1} whole + {2} half")
     @CsvSource({"3, 1, 1", "4, 2, 0", "2, 1, 0", "1, 0, 1", "3.5, 2, 0", "2.5, 1, 1", "1.4, 0, 1", "0.4, 0, 0"})
     void hoursPerWeekBecomeWholeAndHalfPairs(BigDecimal hours, int whole, int half) {
-        assertThat(LoadUnitExpander.pattern(hours, TWO_HOURS)).isEqualTo(new LoadUnitExpander.Pattern(whole, half));
+        assertThat(LoadPattern.of(hours, 2)).isEqualTo(new LoadPattern(whole, half));
     }
 
     @Test
     void hoursPerPairComesFromTheSetting() {
-        assertThat(LoadUnitExpander.pattern(BigDecimal.valueOf(3), BigDecimal.ONE))
-                .isEqualTo(new LoadUnitExpander.Pattern(3, 0));
+        assertThat(LoadPattern.of(BigDecimal.valueOf(3), 1)).isEqualTo(new LoadPattern(3, 0));
     }
 
     @Test
     void unsplitItemGivesWholeGroupUnitsWithItsTeacher() {
         List<PlanUnit> units = LoadUnitExpander.expand(item(BigDecimal.valueOf(3), false, Map.of(0, TEACHER)), Set.of(),
-                TWO_HOURS);
+                2);
 
         assertThat(units).extracting(PlanUnit::unitId, PlanUnit::subgroup, PlanUnit::weight, PlanUnit::teacherId)
                 .containsExactly(
@@ -59,7 +59,7 @@ class LoadUnitExpanderTest {
     @Test
     void splitItemGivesUnitsPerSubgroupWithTheirTeachers() {
         List<PlanUnit> units = LoadUnitExpander.expand(
-                item(TWO_HOURS, true, Map.of(1, TEACHER, 2, SECOND_TEACHER)), Set.of(), TWO_HOURS);
+                item(TWO_HOURS, true, Map.of(1, TEACHER, 2, SECOND_TEACHER)), Set.of(), 2);
 
         assertThat(units).extracting(PlanUnit::subgroup, PlanUnit::teacherId)
                 .containsExactly(tuple(1, TEACHER), tuple(2, SECOND_TEACHER));
@@ -68,7 +68,7 @@ class LoadUnitExpanderTest {
     @Test
     void splitItemWithOneTeacherUsesTheSubgroupsOfTheCatalog() {
         List<PlanUnit> units = LoadUnitExpander.expand(item(TWO_HOURS, true, Map.of(0, TEACHER)), Set.of(1, 2),
-                TWO_HOURS);
+                2);
 
         assertThat(units).extracting(PlanUnit::subgroup, PlanUnit::teacherId)
                 .containsExactly(tuple(1, TEACHER), tuple(2, TEACHER));
@@ -77,12 +77,12 @@ class LoadUnitExpanderTest {
     @Test
     void splitItemWithoutSubgroupsIsRejected() {
         assertThatThrownBy(() -> LoadUnitExpander.expand(item(TWO_HOURS, true, Map.of(0, TEACHER)), Set.of(),
-                TWO_HOURS)).isInstanceOf(LoadUnitExpander.SplitWithoutSubgroupsException.class);
+                2)).isInstanceOf(LoadUnitExpander.SplitWithoutSubgroupsException.class);
     }
 
     @Test
     void itemWithoutTeacherIsAVacancyNotAnError() {
-        assertThat(LoadUnitExpander.expand(item(TWO_HOURS, false, Map.of()), Set.of(), TWO_HOURS))
+        assertThat(LoadUnitExpander.expand(item(TWO_HOURS, false, Map.of()), Set.of(), 2))
                 .singleElement().satisfies(unit -> assertThat(unit.teacherId()).isNull());
     }
 

@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { isApiError } from './errors';
+import { usePublicGroups, usePublicRooms, usePublicTeachers } from './public';
 import { qk } from './queryKeys';
 import type {
   Conflict,
@@ -18,7 +19,6 @@ import type {
   PublicRoomDto,
   PublicTeacherDto,
   PublishVersionResponse,
-  ShiftWindowDto,
   TemplateLessonDto,
   TemplateLessonRequest,
   TimetableVersionDto,
@@ -98,21 +98,9 @@ export async function fetchAllDisciplines(signal?: AbortSignal): Promise<Discipl
 }
 
 export function usePlanningCatalog() {
-  const groups = useQuery({
-    queryKey: qk.public.groups(),
-    queryFn: ({ signal }) => api.get<PublicGroupDto[]>('/public/groups', undefined, { signal, auth: false }),
-    staleTime: CATALOG_STALE_MS,
-  });
-  const teachers = useQuery({
-    queryKey: qk.public.teachers(),
-    queryFn: ({ signal }) => api.get<PublicTeacherDto[]>('/public/teachers', undefined, { signal, auth: false }),
-    staleTime: CATALOG_STALE_MS,
-  });
-  const rooms = useQuery({
-    queryKey: qk.public.rooms(),
-    queryFn: ({ signal }) => api.get<PublicRoomDto[]>('/public/rooms', undefined, { signal, auth: false }),
-    staleTime: CATALOG_STALE_MS,
-  });
+  const groups = usePublicGroups();
+  const teachers = usePublicTeachers();
+  const rooms = usePublicRooms();
   const disciplines = useQuery({
     queryKey: qk.admin.catalog.list('disciplines', { all: true }),
     queryFn: ({ signal }) => fetchAllDisciplines(signal),
@@ -131,15 +119,6 @@ export function usePlanningCatalog() {
       for (const query of queries) if (query.error) void query.refetch();
     },
   };
-}
-
-/** Вікна змін (DOMAIN §2): які пари в якої зміни — рядки сітки груп і перевірка «поза зміною». */
-export function useShiftWindows() {
-  return useQuery({
-    queryKey: qk.admin.calendar.shiftWindows(),
-    queryFn: ({ signal }) => api.get<ShiftWindowDto[]>('/admin/shift-windows', undefined, { signal }),
-    staleTime: CATALOG_STALE_MS,
-  });
 }
 
 // ───────────────────────── Запити ─────────────────────────

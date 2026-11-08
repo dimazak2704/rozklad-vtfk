@@ -36,11 +36,10 @@ import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.shared.time.StudyWeeks;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
@@ -396,7 +395,7 @@ class OrderPublicationIT {
     private static List<LocalDate> studyDays(LocalDate from, LocalDate to) {
         List<LocalDate> days = new ArrayList<>();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-            if (StudyWeeks.isWeekday(date)) {
+            if (date.getDayOfWeek().getValue() <= 5) {
                 days.add(date);
             }
         }

@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.LessonKind;
-import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
@@ -86,13 +86,12 @@ public class ChangeEffectPlanner {
     }
 
     private ChangeEffect additional(Change change) {
-        Semester semester = calendar.requireStudyDate(change.getDate());
+        SemesterInfo semester = calendar.requireStudyDate(change.getDate());
         StudentGroup group = catalog.group(change.getGroupId());
-        boolean online = SubstitutionCalendar.onlineFor(
-                calendar.periods(semester, change.getDate(), change.getDate()), group, change.getDate());
+        boolean online = calendar.onlineFor(change.getDate(), group);
         List<PlannedLesson> created = new ArrayList<>();
         for (int pair = change.getPairFrom(); pair <= change.getPairTo(); pair++) {
-            created.add(new PlannedLesson(semester.getId(), change.getDate(), pair, change.getGroupId(),
+            created.add(new PlannedLesson(semester.id(), change.getDate(), pair, change.getGroupId(),
                     change.getSubgroupNumber(), change.getNewDisciplineId(), change.getNewTeacherId(),
                     change.getNewRoomId(), LessonKind.MIXED, online, null, LessonOrigin.ADDITIONAL));
         }
@@ -101,10 +100,9 @@ public class ChangeEffectPlanner {
 
     /** A block (e.g. a training day) replaces every lesson of the cohort in its pairs. */
     private ChangeEffect block(Change change) {
-        Semester semester = calendar.requireStudyDate(change.getDate());
+        SemesterInfo semester = calendar.requireStudyDate(change.getDate());
         StudentGroup group = catalog.group(change.getGroupId());
-        boolean online = SubstitutionCalendar.onlineFor(
-                calendar.periods(semester, change.getDate(), change.getDate()), group, change.getDate());
+        boolean online = calendar.onlineFor(change.getDate(), group);
         List<Lesson> replaced = lessons.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(
                         change.getGroupId(), change.getDate(), change.getDate()).stream()
                 .filter(Lesson::isScheduled)
@@ -113,7 +111,7 @@ public class ChangeEffectPlanner {
                 .toList();
         List<PlannedLesson> created = new ArrayList<>();
         for (int pair = change.getPairFrom(); pair <= change.getPairTo(); pair++) {
-            created.add(new PlannedLesson(semester.getId(), change.getDate(), pair, change.getGroupId(),
+            created.add(new PlannedLesson(semester.id(), change.getDate(), pair, change.getGroupId(),
                     change.getSubgroupNumber(), change.getNewDisciplineId(), change.getNewTeacherId(),
                     change.getNewRoomId(), LessonKind.MIXED, online, null, LessonOrigin.BLOCK));
         }

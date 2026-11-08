@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 
 /**
  * {@code GET /api/public/changes?date=}: the published changes of a date grouped by group. Only

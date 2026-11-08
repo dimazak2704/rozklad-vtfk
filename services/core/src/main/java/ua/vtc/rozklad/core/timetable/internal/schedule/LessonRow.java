@@ -3,12 +3,12 @@ package ua.vtc.rozklad.core.timetable.internal.schedule;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-import ua.vtc.rozklad.core.timetable.DisciplineRef;
-import ua.vtc.rozklad.core.timetable.GroupRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
-import ua.vtc.rozklad.core.timetable.RoomRef;
-import ua.vtc.rozklad.core.timetable.TeacherRef;
 
 /**
  * A dated lesson joined with its catalog references and the change that created, modified or

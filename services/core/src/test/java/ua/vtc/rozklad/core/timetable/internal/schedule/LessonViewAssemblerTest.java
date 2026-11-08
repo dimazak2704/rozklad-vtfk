@@ -10,15 +10,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.BellProfile;
-import ua.vtc.rozklad.core.timetable.DisciplineRef;
-import ua.vtc.rozklad.core.timetable.GroupRef;
+import ua.vtc.rozklad.core.calendar.BellTimes;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
 import ua.vtc.rozklad.core.timetable.LessonView;
 import ua.vtc.rozklad.core.timetable.LessonViewKind;
-import ua.vtc.rozklad.core.timetable.RoomRef;
-import ua.vtc.rozklad.core.timetable.TeacherRef;
-import ua.vtc.rozklad.core.timetable.internal.calendar.BellTimes;
 
 /** LessonView kinds of CONTRACTS.md §1 with the original taken from the change row (order №35 examples). */
 class LessonViewAssemblerTest {
@@ -117,7 +117,8 @@ class LessonViewAssemblerTest {
         assertThat(roomChanged.kind()).isEqualTo(LessonViewKind.ROOM_CHANGED);
         assertThat(roomChanged.original()).isEqualTo(new LessonView.Original(null, null, ROOM_301, null));
         assertThat(additional.kind()).isEqualTo(LessonViewKind.ADDITIONAL);
-        assertThat(additional.reasonText()).isEqualTo("Відпрацювання");
+        // як у розпорядженні: додаткова пара друкується без причини
+        assertThat(additional.reasonText()).isNull();
         assertThat(additional.original()).isNull();
         assertThat(block.kind()).isEqualTo(LessonViewKind.BLOCK);
         assertThat(block.startsAt()).isEqualTo(LocalTime.of(8, 30));

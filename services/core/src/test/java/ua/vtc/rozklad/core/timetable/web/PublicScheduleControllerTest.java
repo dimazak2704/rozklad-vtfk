@@ -30,17 +30,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
-import ua.vtc.rozklad.core.timetable.DisciplineRef;
-import ua.vtc.rozklad.core.timetable.GroupRef;
 import ua.vtc.rozklad.core.timetable.LessonView;
 import ua.vtc.rozklad.core.timetable.LessonViewKind;
-import ua.vtc.rozklad.core.timetable.RoomRef;
 import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
 import ua.vtc.rozklad.core.timetable.ScheduleQueries;
 import ua.vtc.rozklad.core.timetable.ScheduleView;
-import ua.vtc.rozklad.core.timetable.TeacherRef;
 import ua.vtc.rozklad.core.timetable.internal.schedule.IcsExportService;
 
 @WebMvcTest(PublicScheduleController.class)

@@ -7,13 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.core.calendar.CalendarQueries;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.timetable.LessonConflictChecker;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyCalendarLoader;
 import ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFacts;
 
 /**
@@ -25,18 +25,18 @@ class LessonMaterializer {
 
     private final LessonMaterializationRepository repository;
     private final LessonRepository lessons;
-    private final StudyCalendarLoader calendarLoader;
+    private final CalendarQueries calendar;
     private final LessonConflictChecker datedConflicts;
     private final EntityManager entityManager;
     private final Clock clock;
     private final MaterializationPlanner planner = new MaterializationPlanner();
 
     LessonMaterializer(LessonMaterializationRepository repository, LessonRepository lessons,
-                       StudyCalendarLoader calendarLoader, LessonConflictChecker datedConflicts,
+                       CalendarQueries calendar, LessonConflictChecker datedConflicts,
                        EntityManager entityManager, Clock clock) {
         this.repository = repository;
         this.lessons = lessons;
-        this.calendarLoader = calendarLoader;
+        this.calendar = calendar;
         this.datedConflicts = datedConflicts;
         this.entityManager = entityManager;
         this.clock = clock;
@@ -49,7 +49,7 @@ class LessonMaterializer {
         repository.deleteReplaceable(semester.getId(), from);
         List<KeptLesson> kept = repository.kept(semester.getId(), from);
         MaterializationPlanner.Plan plan = planner.plan(new MaterializationPlanner.Input(semester.getId(),
-                version.getId(), template, calendarLoader.forSemester(semester), facts, kept, from,
+                version.getId(), template, calendar.studyCalendar(semester.getId()), facts, kept, from,
                 semester.getEndsOn()));
         repository.insert(plan.lessons(), clock.instant());
         // збій унікальності слотів тут, а не під час commit: план мав його виключити

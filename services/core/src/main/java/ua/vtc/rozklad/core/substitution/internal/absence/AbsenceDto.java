@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.AbsenceReasonCategory;
 import ua.vtc.rozklad.contracts.AbsenceSource;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.substitution.AbsenceStatus;
 
 /**

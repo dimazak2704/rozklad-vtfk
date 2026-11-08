@@ -4,8 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.core.accounting.AccountingStatus;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 
 /** Row of {@code GET /api/admin/accounting}; hours are academic hours. */
 public record AccountingRowDto(

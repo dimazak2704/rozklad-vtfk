@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.contracts.Parity;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.order.OrderDocument;
@@ -22,7 +23,6 @@ import ua.vtc.rozklad.core.order.OrderDocumentRepository;
 import ua.vtc.rozklad.core.order.OrderItem;
 import ua.vtc.rozklad.core.order.internal.draft.OrderTexts;
 import ua.vtc.rozklad.core.order.internal.support.OrderCalendar;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
 import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
@@ -49,7 +49,7 @@ class PublicChanges {
     }
 
     PublicChangesDto of(LocalDate date) {
-        Parity parity = calendar.findSemester(date).map(semester -> calendar.parity(semester, date)).orElse(null);
+        Parity parity = calendar.parityOrNull(date);
         List<OrderDocument> published = orders.findAllByDateAndStatusOrderByCreatedAt(date, OrderStatus.PUBLISHED)
                 .stream()
                 .sorted(Comparator.comparing((OrderDocument order) -> order.getKind() == OrderKind.AMENDMENT)

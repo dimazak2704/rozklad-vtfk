@@ -20,14 +20,13 @@ import ua.vtc.rozklad.core.calendar.SemesterRepository;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
-import ua.vtc.rozklad.core.shared.sse.SseBroadcaster;
+import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
 import ua.vtc.rozklad.core.shared.sse.SseEventTypes;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.TemplateLessonRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
 import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
-import ua.vtc.rozklad.core.timetable.internal.support.AfterCommit;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
 import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 import ua.vtc.rozklad.core.timetable.internal.version.VersionLookup;
 
@@ -50,13 +49,13 @@ public class PublicationService {
     private final VersionAnalysis analysis;
     private final LessonMaterializer materializer;
     private final ApplicationEventPublisher events;
-    private final SseBroadcaster sse;
+    private final SseAfterCommit sse;
     private final JsonMapper jsonMapper;
     private final Clock clock;
 
     public PublicationService(TimetableVersionRepository versions, TemplateLessonRepository templateLessons,
                               SemesterRepository semesters, VersionLookup lookup, VersionAnalysis analysis,
-                              LessonMaterializer materializer, ApplicationEventPublisher events, SseBroadcaster sse,
+                              LessonMaterializer materializer, ApplicationEventPublisher events, SseAfterCommit sse,
                               JsonMapper jsonMapper, Clock clock) {
         this.versions = versions;
         this.templateLessons = templateLessons;
@@ -132,6 +131,6 @@ public class PublicationService {
                 ScheduleChangeReason.VERSION_PUBLISHED);
         events.publishEvent(changed);
         ScheduleChangedNotice notice = ScheduleChangedNotice.of(changed);
-        AfterCommit.run(() -> sse.broadcast(SseEventTypes.SCHEDULE_CHANGED, notice));
+        sse.broadcast(SseEventTypes.SCHEDULE_CHANGED, notice);
     }
 }

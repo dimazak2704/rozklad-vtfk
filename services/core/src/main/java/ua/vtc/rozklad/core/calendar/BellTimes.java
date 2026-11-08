@@ -1,11 +1,9 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import ua.vtc.rozklad.core.calendar.BellProfile;
-import ua.vtc.rozklad.core.calendar.BellSlot;
 
 /** Start and end of every pair per weekday in one bell profile (Friday differs from Monday–Thursday). */
 public final class BellTimes {

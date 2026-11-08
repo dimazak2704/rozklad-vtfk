@@ -1,7 +1,7 @@
 import { Check, Copy, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useMemo, useState } from 'react';
-import { useGroupDirectory, useTeacherDirectory } from '@/api/admin-daily';
+import { usePublicGroups, usePublicTeachers } from '@/api/public';
 import { isApiError } from '@/api/errors';
 import { useCreateBindingCode } from '@/api/telegram';
 import type { BindingCodeDto, BindingType, Uuid } from '@/api/types';
@@ -111,8 +111,8 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
   const [targetId, setTargetId] = useState<Uuid | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BindingCodeDto | null>(null);
-  const groups = useGroupDirectory();
-  const teachers = useTeacherDirectory();
+  const groups = usePublicGroups();
+  const teachers = usePublicTeachers();
   const create = useCreateBindingCode();
 
   const groupOptions = useMemo(

@@ -10,7 +10,8 @@ import java.util.stream.Collectors;
 /**
  * Text normalization of DOMAIN §10, the same rules as {@code web/src/lib/search.ts}: NFC, lower
  * case, apostrophes and «ё» unified, Latin look-alikes replaced by Cyrillic letters in tokens that
- * are mostly Cyrillic, whitespace collapsed. {@link #key(String)} additionally drops dots, spaces
+ * are mostly Cyrillic (and in short tokens such as initials of a mostly Cyrillic text), whitespace
+ * collapsed. {@link #key(String)} additionally drops dots, spaces
  * and other separators: it is the natural key of aliases, teacher short names and room names
  * («Укр.мова.» and «Укр. мова» → {@code укрмова}).
  */
@@ -52,9 +53,12 @@ public final class CatalogText {
         String base = APOSTROPHES.matcher(Normalizer.normalize(raw, Normalizer.Form.NFC).toLowerCase(UKRAINIAN))
                 .replaceAll("")
                 .replace('ё', 'е');
+        boolean cyrillicText = isMostlyCyrillic(base);
         return Arrays.stream(WHITESPACE.split(base.strip()))
                 .filter(token -> !token.isEmpty())
-                .map(token -> isMostlyCyrillic(token) ? replaceLookalikes(token) : token)
+                // ініціали «M.Д.» у кириличному імені теж замінюємо: у короткому токені більшості немає
+                .map(token -> isMostlyCyrillic(token) || (cyrillicText && latinLetters(token) <= 3)
+                        ? replaceLookalikes(token) : token)
                 .collect(Collectors.joining(" "));
     }
 
@@ -91,6 +95,10 @@ public final class CatalogText {
 
     public static boolean containsCyrillic(String text) {
         return text.chars().anyMatch(ch -> isCyrillic((char) ch));
+    }
+
+    private static int latinLetters(String token) {
+        return (int) token.chars().filter(ch -> ch >= 'a' && ch <= 'z').count();
     }
 
     private static boolean isMostlyCyrillic(String token) {

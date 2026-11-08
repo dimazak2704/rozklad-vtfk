@@ -3,7 +3,7 @@ package ua.vtc.rozklad.core.timetable.internal.conflict;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import ua.vtc.rozklad.core.timetable.internal.calendar.ShiftWindows;
+import ua.vtc.rozklad.core.calendar.ShiftWindows;
 
 /**
  * Everything the conflict engine needs besides the lessons: catalog facts, shift windows and the

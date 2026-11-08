@@ -3,6 +3,7 @@ package ua.vtc.rozklad.core.calendar;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
@@ -69,6 +70,26 @@ public interface CalendarQueries {
     ShiftWindowInfo shiftWindow(int shift, int weekday);
 
     List<ShiftWindowInfo> shiftWindows();
+
+    /**
+     * The whole shift-window table for rule engines (conflicts, generation, make-up slots). When the
+     * reference table is empty the DOMAIN §2 windows are used and the result says so.
+     */
+    ShiftWindows shiftWindowTable();
+
+    /**
+     * Calendar facts (parity, study days, periods) of every semester overlapping {@code [from, to]},
+     * loaded with a constant number of queries — use it instead of per-date calls over ranges.
+     */
+    StudyCalendar studyCalendar(LocalDate from, LocalDate to);
+
+    /**
+     * @throws ua.vtc.rozklad.core.shared.error.NotFoundException when the semester does not exist
+     */
+    StudyCalendar studyCalendar(UUID semesterId);
+
+    /** Bell times of every semester of the calendar (semester id → times; none without a profile). */
+    Map<UUID, BellTimes> bellTimes(StudyCalendar calendar);
 
     /** Profile reference for DTOs. */
     record BellProfileInfo(UUID id, String name) {

@@ -10,8 +10,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.ConstraintScore;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.timetable.GenerationJob;
-import ua.vtc.rozklad.core.timetable.GroupRef;
 import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
 
 class GenerationJobMapperTest {

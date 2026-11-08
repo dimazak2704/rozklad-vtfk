@@ -18,9 +18,9 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.core.accounting.AccountingStatus;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
 

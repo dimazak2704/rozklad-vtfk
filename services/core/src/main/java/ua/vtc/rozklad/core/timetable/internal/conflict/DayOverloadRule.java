@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /** More than four pairs a day for a group cohort (the busiest subgroup counts). */
 final class DayOverloadRule implements ConflictRule {

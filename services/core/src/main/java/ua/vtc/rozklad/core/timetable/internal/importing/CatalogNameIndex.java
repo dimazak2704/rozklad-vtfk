@@ -7,8 +7,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import ua.vtc.rozklad.core.catalog.CatalogText;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.DisciplineAlias;
+import ua.vtc.rozklad.core.catalog.GroupCodes;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
@@ -38,22 +40,22 @@ final class CatalogNameIndex {
     static CatalogNameIndex build(Collection<StudentGroup> groups, Collection<Teacher> teachers,
                                   Collection<TeacherAlias> teacherAliases, Collection<Discipline> disciplines,
                                   Collection<DisciplineAlias> disciplineAliases, Collection<Room> rooms) {
-        Names groupNames = new Names(NameKeys::groupKey);
+        Names groupNames = new Names(CatalogNameIndex::groupKey);
         groups.forEach(group -> groupNames.add(group.getCode(), group.getId()));
 
-        Names teacherNames = new Names(NameKeys::key);
+        Names teacherNames = new Names(CatalogText::key);
         teachers.forEach(teacher -> teacherNames.add(teacher.getShortName(), teacher.getId()));
         teacherAliases.forEach(alias -> teacherNames.addAlias(alias.getAlias(), alias.getNormalized(),
                 alias.getTeacherId()));
 
-        Names disciplineNames = new Names(NameKeys::key);
+        Names disciplineNames = new Names(CatalogText::key);
         disciplines.forEach(discipline -> disciplineNames.add(discipline.getShortName(), discipline.getId()));
         disciplineAliases.forEach(alias -> disciplineNames.addAlias(alias.getAlias(), alias.getNormalized(),
                 alias.getDisciplineId()));
-        Names fullNames = new Names(NameKeys::key);
+        Names fullNames = new Names(CatalogText::key);
         disciplines.forEach(discipline -> fullNames.add(discipline.getName(), discipline.getId()));
 
-        Names roomNames = new Names(NameKeys::key);
+        Names roomNames = new Names(CatalogText::key);
         rooms.forEach(room -> roomNames.add(room.getName(), room.getId()));
         return new CatalogNameIndex(groupNames, teacherNames, disciplineNames, fullNames, roomNames);
     }
@@ -123,5 +125,10 @@ final class CatalogNameIndex {
             return found.size() == 1 ? new Resolution.Found(found.iterator().next())
                     : new Resolution.Ambiguous(Set.copyOf(found));
         }
+    }
+
+    /** Canonical group code of DOMAIN §10 («ІКІ1» → «1КІ1»); a non-code spelling is compared as typed. */
+    static String groupKey(String raw) {
+        return GroupCodes.canonical(raw).orElseGet(() -> CatalogText.key(raw).toUpperCase(CatalogText.UKRAINIAN));
     }
 }

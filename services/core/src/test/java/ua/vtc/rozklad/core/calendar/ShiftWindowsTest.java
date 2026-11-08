@@ -1,10 +1,9 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import ua.vtc.rozklad.core.calendar.ShiftWindow;
 
 class ShiftWindowsTest {
 

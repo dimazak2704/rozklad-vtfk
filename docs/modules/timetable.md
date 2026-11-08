@@ -56,9 +56,14 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   `load_item(_teacher)`, `teacher_preference` and `change` with SQL read models (`LoadReadRepository`,
   `PreferenceReadRepository`, `ScheduleReadRepository`, `DatedLessonReadRepository`). Catalog, calendar and settings
   are read through their repositories (they are upstream and must not depend on timetable).
-- **Small private calendar logic** (`internal.calendar`): week parity (DOMAIN §2, overrides win), study days, periods
+- **Calendar through `CalendarQueries`** (integration): week parity (DOMAIN §2, overrides win), study days, periods
   (HOLIDAY/NO_CLASSES/PRACTICE close the day for their scope, STUDY_MODE ONLINE/MIXED marks lessons online,
-  EXAM_SESSION only adds a note), bell times. Duplicates of the calendar module are reconciled at merge.
+  EXAM_SESSION only adds a note), bell times and shift windows come from the calendar module's batch API
+  (`studyCalendar`, `bellTimes`, `shiftWindowTable`). The former private `internal.calendar` package was moved
+  there. The bell profile rule is the calendar's one: the semester's profile, else `calendar.activeBellProfileId`.
+- **Reason text** of a `LessonView` is `shared.domain.ReasonCode.printed(...)`, the same rule as the order column
+  (ADDITIONAL, BLOCK and room-only changes print none). Import name matching uses `catalog.CatalogText.key` and
+  `GroupCodes.canonical`; unit expansion uses `load.LoadPattern`; `accounting.hoursPerPair` comes from `SettingsService`.
 - **Shift windows**: table `shift_window`; when it is empty the DOMAIN §2 windows are used (logged once). A weekday
   without a row is not restricted.
 - **Bell times**: the semester's profile, otherwise the first active profile by name; without any profile lesson
@@ -107,7 +112,7 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   - cancel marks the job CANCELLED at once and sends `generation.cancel`; the watchdog fails QUEUED jobs after
     time limit + grace and RUNNING jobs after grace without progress (`app.timetable.generation.timeout-grace`,
     default 10 min) and tells the scheduler to stop.
-- **SSE** is pushed after commit (`AfterCommit`), not through the outbox: `generation.progress`
+- **SSE** is pushed after commit (`shared.sse.SseAfterCommit`), not through the outbox: `generation.progress`
   `{jobId, elapsedMs, hardScore, softScore}` and `generation.completed` (job DTO) to ADMIN, `schedule.changed`
   `{dates, groupIds, teacherIds, reason}` to everybody.
 
@@ -126,7 +131,7 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
     -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
 ```
 
-- Unit: `ConflictEngineTest` (every rule, template and dated), `WeekParityCalculatorTest`, `StudyCalendarTest`,
+- Unit: `ConflictEngineTest` (every rule, template and dated), `calendar.StudyCalendarTest`,
   `MaterializationPlannerTest` (parity, overrides, holidays, practice, online, kept changes), `TimetableMetricsCalculatorTest`
   (4КІ1-like week: two halves in one slot remove both broken days), `VersionDiffCalculatorTest`, `LoadUnitExpanderTest`,
   `GeneratedLessonsBuilderTest`, `GenerationJobMapperTest`, `IcsCalendarWriterTest`, `LessonViewAssemblerTest`,
@@ -142,5 +147,7 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
 - Calendar edits (new holiday, practice) do not re-materialize published lessons yet: the calendar module should
   publish an application event that timetable listens to (no Java dependency from calendar to timetable).
 - Streams are not in the `ProblemSnapshot` contract (no field), so the solver plans stream units separately.
-- `GET /api/me/schedule` is not mapped here (owned by the teacher-cabinet area); it should call `ScheduleQueries`.
+- `GET /api/me/schedule` is mapped by `MyScheduleController` (integration): the teacher view of `ScheduleQueries`
+  for the signed-in teacher (`CurrentUserService.requireTeacherId()`, 403 without a linked teacher), same
+  `from`/`to` defaults and 31-day limit as the public schedule.
 - Version list analyzes every version of the semester on each call (fine for tens of versions; cache if it grows).

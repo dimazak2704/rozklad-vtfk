@@ -2,6 +2,10 @@ package ua.vtc.rozklad.core.timetable;
 
 import java.time.LocalTime;
 import java.util.UUID;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 
 /**
  * {@code LessonView} of CONTRACTS.md §1: a dated lesson as students and teachers see it.

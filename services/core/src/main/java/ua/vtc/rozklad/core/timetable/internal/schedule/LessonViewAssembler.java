@@ -7,10 +7,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import ua.vtc.rozklad.contracts.ChangeKind;
+import ua.vtc.rozklad.core.calendar.BellTimes;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonView;
 import ua.vtc.rozklad.core.timetable.LessonViewKind;
-import ua.vtc.rozklad.core.timetable.internal.calendar.BellTimes;
 
 /**
  * Turns joined lesson rows into {@link LessonView}s: the kind comes from the origin and the kind of
@@ -48,7 +50,7 @@ final class LessonViewAssembler {
         }
         return new LessonView(row.id(), row.pair(), startsAt, endsAt, row.discipline(), row.teacher(), row.room(),
                 row.group(), row.subgroup(), kind, row.online(), original(row, kind),
-                row.change() == null ? null : ReasonTexts.of(row.change().reasonCode(), row.change().reasonText()),
+                row.change() == null ? null : printedReason(row.change()),
                 row.changeId());
     }
 
@@ -73,6 +75,11 @@ final class LessonViewAssembler {
             case "BLOCK" -> LessonViewKind.BLOCK;
             default -> row.origin() == LessonOrigin.CHANGE ? LessonViewKind.SUBSTITUTED : LessonViewKind.REGULAR;
         };
+    }
+
+    private static String printedReason(LessonRow.Change change) {
+        return ReasonCode.printed(ChangeKind.valueOf(change.kind()),
+                change.reasonCode() == null ? null : ReasonCode.valueOf(change.reasonCode()), change.reasonText());
     }
 
     private static LessonView.Original original(LessonRow row, LessonViewKind kind) {

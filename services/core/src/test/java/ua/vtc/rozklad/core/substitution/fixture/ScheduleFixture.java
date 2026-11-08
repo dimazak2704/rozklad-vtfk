@@ -29,6 +29,7 @@ import ua.vtc.rozklad.core.catalog.TeacherDiscipline;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.order.OrderDocument;
 import ua.vtc.rozklad.core.settings.Setting;
+import ua.vtc.rozklad.core.support.ReferenceData;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 
@@ -64,7 +65,7 @@ public final class ScheduleFixture {
 
     public Semester semester() {
         return transaction.execute(status -> {
-            BellProfile bells = new BellProfile("2 зміни, 60 хв");
+            BellProfile bells = new BellProfile("Тест: 2 зміни, 60 хв");
             for (int weekday = 1; weekday <= 5; weekday++) {
                 LocalTime[][] slots = weekday == 5 ? FRIDAY : MON_THU;
                 for (int pair = 1; pair <= slots.length; pair++) {
@@ -179,10 +180,11 @@ public final class ScheduleFixture {
                 TRUNCATE order_item, order_document, change_history, change, absence, teacher_preference, lesson,
                          load_item_teacher, load_item, template_lesson, timetable_version, generation_job,
                          calendar_period_group, calendar_period, week_parity_override, semester, academic_year,
-                         bell_slot, bell_profile, shift_window, teacher_discipline, teacher_alias, teacher,
+                         teacher_discipline, teacher_alias, teacher,
                          discipline_alias, discipline, subgroup, student_group, specialty, department, room, building,
-                         cycle_commission, setting CASCADE
+                         cycle_commission CASCADE
                 """);
+        ReferenceData.restore(jdbc);
     }
 
     private <T> T persist(T entity, Consumer<T> setUp) {

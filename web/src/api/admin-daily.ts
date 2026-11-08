@@ -29,9 +29,6 @@ import type {
   OrderStatus,
   OrderSummaryDto,
   Page,
-  PublicGroupDto,
-  PublicTeacherDto,
-  ScheduleDto,
   Uuid,
 } from './types';
 
@@ -190,35 +187,6 @@ export function useNextOrderNumber(semester: { startsOn: IsoDate; endsOn: IsoDat
   );
   const last = query.data?.items[0]?.number ?? null;
   return { ...query, lastNumber: last, nextNumber: query.data ? (last ?? 0) + 1 : null };
-}
-
-/** Довідник викладачів для вибору (публічний список, CONTRACTS §1). */
-export function useTeacherDirectory() {
-  return useQuery({
-    queryKey: qk.public.teachers(),
-    queryFn: ({ signal }) => api.get<PublicTeacherDto[]>('/public/teachers', undefined, { signal, auth: false }),
-    staleTime: 10 * 60_000,
-  });
-}
-
-/** Пари викладача на проміжок (публічний розклад, не більше 31 дня) — для попереднього перегляду відсутності. */
-export function useTeacherSchedule(teacherId: Uuid | null, from: IsoDate | null, to: IsoDate | null) {
-  return useQuery({
-    queryKey: qk.public.schedule('TEACHER', teacherId ?? 'none', from ?? '', to ?? ''),
-    queryFn: ({ signal }) =>
-      api.get<ScheduleDto>(`/public/schedule/teacher/${teacherId ?? ''}`, { from, to }, { signal, auth: false }),
-    enabled: Boolean(teacherId && from && to),
-    placeholderData: keepPreviousData,
-  });
-}
-
-/** Довідник груп для вибору (публічний список, CONTRACTS §1). */
-export function useGroupDirectory() {
-  return useQuery({
-    queryKey: qk.public.groups(),
-    queryFn: ({ signal }) => api.get<PublicGroupDto[]>('/public/groups', undefined, { signal, auth: false }),
-    staleTime: 10 * 60_000,
-  });
 }
 
 // ───────────────────────── Зміни стану ─────────────────────────

@@ -4,7 +4,8 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useBlocker } from 'react-router';
 import { isApiError } from '@/api/errors';
-import { useBellProfiles, useUpdateSettings } from '@/api/settings';
+import { useBellProfiles } from '@/api/public';
+import { useUpdateSettings } from '@/api/settings';
 import type { BellProfileDto, SettingsDto } from '@/api/types';
 import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, Select, Switch } from '@/components/ui';
 import { LIMITS, settingsSchema, type SettingsFormValues } from './schema';
@@ -84,7 +85,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
   const [position, name, mode] = useWatch({ control, name: ['signatoryPosition', 'signatoryName', 'approvalMode'] });
 
   const profileOptions = useMemo(
-    () => (profiles.data ?? []).map((p) => ({ value: p.id, label: p.name, description: profileSummary(p) })),
+    () => (profiles.data?.profiles ?? []).map((p) => ({ value: p.id, label: p.name, description: profileSummary(p) })),
     [profiles.data],
   );
 

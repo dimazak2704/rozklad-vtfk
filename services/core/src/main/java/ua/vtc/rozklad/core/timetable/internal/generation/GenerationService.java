@@ -26,13 +26,12 @@ import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
-import ua.vtc.rozklad.core.shared.sse.SseBroadcaster;
+import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
 import ua.vtc.rozklad.core.shared.sse.SseEventTypes;
 import ua.vtc.rozklad.core.timetable.GenerationJob;
 import ua.vtc.rozklad.core.timetable.GenerationJobRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
 import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
-import ua.vtc.rozklad.core.timetable.internal.support.AfterCommit;
 import ua.vtc.rozklad.core.timetable.internal.version.LessonReferenceValidator;
 
 /**
@@ -54,12 +53,12 @@ public class GenerationService {
     private final ProblemSnapshotBuilder snapshotBuilder;
     private final GenerationJobMapper mapper;
     private final ApplicationEventPublisher events;
-    private final SseBroadcaster sse;
+    private final SseAfterCommit sse;
     private final Clock clock;
 
     GenerationService(GenerationJobRepository jobs, SemesterRepository semesters, StudentGroupRepository groups,
                       TimetableVersionRepository versions, ProblemSnapshotBuilder snapshotBuilder,
-                      GenerationJobMapper mapper, ApplicationEventPublisher events, SseBroadcaster sse, Clock clock) {
+                      GenerationJobMapper mapper, ApplicationEventPublisher events, SseAfterCommit sse, Clock clock) {
         this.jobs = jobs;
         this.semesters = semesters;
         this.groups = groups;
@@ -128,7 +127,7 @@ public class GenerationService {
         job.finish(GenerationStatus.CANCELLED, clock.instant(), null);
         events.publishEvent(new GenerationCancelRequested(EventEnvelope.create(clock), jobId));
         GenerationJobDto dto = mapper.toDto(job);
-        AfterCommit.run(() -> sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto));
+        sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto);
         return dto;
     }
 

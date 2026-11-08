@@ -3,12 +3,12 @@ import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   usePlanningCatalog,
-  useShiftWindows,
   useVersionConflicts,
   useVersionLessons,
   useVersionMetrics,
   type TimetableConflict,
 } from '@/api/timetable';
+import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
 import {
   Button,

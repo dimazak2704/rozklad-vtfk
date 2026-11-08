@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.ChangeKind;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeKindRules.Violation;
 
 /** Required and forbidden fields of every kind of change. */

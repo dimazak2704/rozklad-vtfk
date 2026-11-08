@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.util.Objects;
 import java.util.UUID;

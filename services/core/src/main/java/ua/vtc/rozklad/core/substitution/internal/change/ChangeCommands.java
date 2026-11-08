@@ -12,8 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
-import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
@@ -22,7 +22,6 @@ import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffect;
 import ua.vtc.rozklad.core.substitution.internal.effect.ChangeEffectPlanner;
 import ua.vtc.rozklad.core.substitution.internal.effect.DatedSlotChecker;
@@ -231,8 +230,8 @@ public class ChangeCommands {
     }
 
     private void requireClassesFor(StudentGroup group, LocalDate date) {
-        Semester semester = calendar.requireStudyDate(date);
-        SubstitutionCalendar.noClassesReason(calendar.periods(semester, date, date), group, date)
+        calendar.requireStudyDate(date);
+        calendar.noClassesReason(date, group)
                 .ifPresent(reason -> {
                     throw new BusinessRuleException("NO_CLASSES",
                             "У групи %s %s занять немає: %s.".formatted(group.getCode(),

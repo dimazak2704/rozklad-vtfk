@@ -19,19 +19,14 @@ import type {
   Uuid,
 } from '@/api/types';
 import {
-  buildSchedule,
   findGroup,
   findTeacher,
-  GROUPS,
   groupNamed,
-  scheduleRangeError,
   teacherNamed,
   TEACHERS,
-  toPublicGroup,
-  toPublicTeacher,
 } from '../fixtures';
 import { mockId } from '../ids';
-import { apiPath, badRequest, notFound, readJson } from '../kit';
+import { apiPath, badRequest, readJson } from '../kit';
 import { createMockCollection, createMockStore } from '../store';
 
 export const BOT_USERNAME = 'scheduler_vtfk_bot';
@@ -309,16 +304,4 @@ export const handlers = [
     return new HttpResponse(null, { status: 202 });
   }),
 
-  http.get(apiPath('/public/groups'), () => HttpResponse.json(GROUPS.map(toPublicGroup))),
-  http.get(apiPath('/public/teachers'), () => HttpResponse.json(TEACHERS.map(toPublicTeacher))),
-  // попередній перегляд відсутності: пари викладача за шаблоном (обробник публічних сторінок має перевагу)
-  http.get(apiPath('/public/schedule/teacher/:id'), ({ params, request }) => {
-    const url = new URL(request.url);
-    const from = url.searchParams.get('from');
-    const to = url.searchParams.get('to');
-    const rangeError = scheduleRangeError(from, to);
-    if (rangeError) return badRequest(rangeError);
-    const schedule = buildSchedule('TEACHER', String(params.id), from as string, to as string);
-    return schedule ? HttpResponse.json(schedule) : notFound('Такого викладача немає.');
-  }),
 ];

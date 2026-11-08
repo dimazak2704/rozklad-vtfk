@@ -3,7 +3,7 @@ package ua.vtc.rozklad.core.timetable.internal.conflict;
 import java.util.List;
 import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /** The load item requires a room type (e.g. a computer lab) and the lesson is in another type of room. */
 final class RoomTypeRule implements ConflictRule {

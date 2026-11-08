@@ -1,11 +1,11 @@
 /**
- * Налаштування системи (CONTRACTS §2: GET/PUT /api/admin/settings) і довідкове для сторінки налаштувань:
- * профілі дзвінків (GET /api/public/bells без дати) та витрати ШІ (GET /api/import/ai/usage, лише читання).
+ * Налаштування системи (CONTRACTS §2: GET/PUT /api/admin/settings). Профілі дзвінків для вибору беруться
+ * з useBellProfiles (api/public), витрати ШІ — з useAiUsage (api/import): один хук на ендпоінт.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { qk } from './queryKeys';
-import type { AiUsageDto, BellsDto, SettingsDto } from './types';
+import type { SettingsDto } from './types';
 
 export function useSettings() {
   return useQuery({
@@ -27,22 +27,3 @@ export function useUpdateSettings() {
   });
 }
 
-/** Усі профілі дзвінків (GET /api/public/bells без дати повертає `profiles`). */
-export function useBellProfiles() {
-  return useQuery({
-    queryKey: qk.public.bells(),
-    queryFn: ({ signal }) => api.get<BellsDto>('/public/bells', undefined, { signal, auth: false }),
-    select: (bells) => bells.profiles ?? [],
-    staleTime: 10 * 60_000,
-  });
-}
-
-/** Витрати ШІ сьогодні, модель і денний бюджет (налаштовуються змінними середовища importer). */
-export function useAiUsage() {
-  return useQuery({
-    queryKey: qk.importer.aiUsage(),
-    queryFn: ({ signal }) => api.get<AiUsageDto>('/import/ai/usage', undefined, { signal }),
-    staleTime: 60_000,
-    retry: 1,
-  });
-}

@@ -10,17 +10,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.core.calendar.BellTimes;
+import ua.vtc.rozklad.core.calendar.CalendarQueries;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.time.TimeConfig;
 import ua.vtc.rozklad.core.timetable.LessonView;
 import ua.vtc.rozklad.core.timetable.LessonViewKind;
 import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
-import ua.vtc.rozklad.core.timetable.internal.calendar.BellTimes;
-import ua.vtc.rozklad.core.timetable.internal.calendar.BellTimesLoader;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyCalendar;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyCalendarLoader;
 
 /**
  * Calendar subscription (ICS) of a group or teacher for the current semester: every scheduled
@@ -36,17 +35,15 @@ public class IcsExportService {
     private final ScheduleReadRepository reads;
     private final ScheduleOwners owners;
     private final SemesterRepository semesters;
-    private final StudyCalendarLoader calendarLoader;
-    private final BellTimesLoader bellTimesLoader;
+    private final CalendarQueries calendar;
     private final Clock clock;
 
     IcsExportService(ScheduleReadRepository reads, ScheduleOwners owners, SemesterRepository semesters,
-                     StudyCalendarLoader calendarLoader, BellTimesLoader bellTimesLoader, Clock clock) {
+                     CalendarQueries calendar, Clock clock) {
         this.reads = reads;
         this.owners = owners;
         this.semesters = semesters;
-        this.calendarLoader = calendarLoader;
-        this.bellTimesLoader = bellTimesLoader;
+        this.calendar = calendar;
         this.clock = clock;
     }
 
@@ -57,8 +54,8 @@ public class IcsExportService {
         }
         ScheduleOwners.Resolved owner = owners.resolve(type, ownerId);
         Semester semester = currentSemester();
-        StudyCalendar calendar = calendarLoader.forSemester(semester);
-        BellTimes bells = bellTimesLoader.forCalendar(calendar).getOrDefault(semester.getId(), BellTimes.none());
+        StudyCalendar semesterCalendar = calendar.studyCalendar(semester.getId());
+        BellTimes bells = calendar.bellTimes(semesterCalendar).getOrDefault(semester.getId(), BellTimes.none());
         List<IcsCalendarWriter.Event> events = new ArrayList<>();
         int withoutTimes = 0;
         for (LessonRow row : reads.forOwner(type, ownerId, semester.getStartsOn(), semester.getEndsOn())) {

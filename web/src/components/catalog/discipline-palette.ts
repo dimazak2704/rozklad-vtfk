@@ -13,18 +13,11 @@ export interface LineSwatch {
 }
 
 export const LINE_SWATCHES: readonly LineSwatch[] = [
-  { line: 0, hex: '#c5586a', name: 'вишнева' },
-  { line: 1, hex: '#c45e39', name: 'теракотова' },
-  { line: 2, hex: '#b07100', name: 'гірчична' },
-  { line: 3, hex: '#8d8300', name: 'оливкова' },
-  { line: 4, hex: '#599234', name: 'травʼяна' },
-  { line: 5, hex: '#00996b', name: 'смарагдова' },
-  { line: 6, hex: '#009693', name: 'бірюзова' },
-  { line: 7, hex: '#0092af', name: 'морська' },
-  { line: 8, hex: '#1f86cd', name: 'синя' },
-  { line: 9, hex: '#7174d1', name: 'фіалкова' },
-  { line: 10, hex: '#9a66be', name: 'бузкова' },
-  { line: 11, hex: '#b55b9a', name: 'малинова' },
+  { line: 0, hex: '#737c14', name: 'оливкова' },
+  { line: 1, hex: '#008a7f', name: 'бірюзова' },
+  { line: 2, hex: '#7466b5', name: 'фіалкова' },
+  { line: 3, hex: '#935ba0', name: 'бузкова' },
+  { line: 4, hex: '#a8547c', name: 'малинова' },
 ];
 
 if (LINE_SWATCHES.length !== LINE_COUNT) {

@@ -11,7 +11,7 @@ import java.util.SortedSet;
 import java.util.UUID;
 import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /** The same discipline three or more times a day for a group cohort. */
 final class DisciplineRepeatRule implements ConflictRule {

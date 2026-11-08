@@ -71,7 +71,13 @@ function sameOwnerKey(key: QueryKey | undefined, owner: EntityType, id: Uuid | u
  * Поки вантажиться інший тиждень того самого власника, показуємо попередній (`isPlaceholderData`),
  * а не силует — сторінка не «блимає» при гортанні тижнів.
  */
-export function usePublicSchedule(owner: EntityType, id: Uuid | undefined, from: IsoDate, to: IsoDate) {
+export function usePublicSchedule(
+  owner: EntityType,
+  id: Uuid | undefined,
+  from: IsoDate,
+  to: IsoDate,
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: qk.public.schedule(owner, id ?? '', from, to),
     queryFn: ({ signal }) =>
@@ -80,7 +86,7 @@ export function usePublicSchedule(owner: EntityType, id: Uuid | undefined, from:
         { from, to },
         { signal, auth: false },
       ),
-    enabled: Boolean(id),
+    enabled: enabled && Boolean(id && from && to),
     placeholderData: (previous, previousQuery) => (sameOwnerKey(previousQuery?.queryKey, owner, id) ? previous : undefined),
     networkMode: 'offlineFirst',
   });

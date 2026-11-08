@@ -20,6 +20,16 @@ and bells; the internal catalog snapshot for the importer.
 | `bellProfileOn(date)`, `bellSlots(date)`, `pairTime(date, pair)` | profile = the semester's, else `settings.activeBellProfileId`; weekends have no slots |
 | `currentPair(instant)`, `nextPair(instant)` | Kyiv time; only on study days; `minutesLeft` rounded up |
 | `shiftWindow(shift, weekday)`, `shiftWindows()` | shift 1 → pairs 1–4; shift 2 → 5–8 Mon–Thu, 4–6 Fri |
+| `shiftWindowTable()` | the whole table as `ShiftWindows` for rule engines; the DOMAIN §2 windows when the table is empty (logged once) |
+| `studyCalendar(from, to)`, `studyCalendar(semesterId)` | batch read model `StudyCalendar` (semesters, parity with overrides, periods) built with a constant number of queries — use it over date ranges instead of per-date calls |
+| `bellTimes(StudyCalendar)` | semester id → `BellTimes` with the same profile rule as `bellProfileOn` |
+
+Value types for bulk rules (moved here from the timetable module at integration): `StudyCalendar`
+(`day(date, GroupScope)` → `DayInfo {parity, weekNumber, studyDay, online, note, semesterId}`,
+`studyDates`), `StudySemester`, `StudyPeriod` (`closesLessons`, `marksOnline`, `appliesTo`), `GroupScope`,
+`BellTimes`, `ShiftWindows`. Every module (timetable, substitution, order, accounting) reads the
+calendar only through `CalendarQueries` and these types; their former private parity calculators and
+bell/period readers were removed.
 
 `SemesterCalendar` is the pure rule (week 1 = the Monday-based week containing `startsOn`, odd weeks
 = `firstWeekParity`, an override wins for its week only) for bulk use, e.g. materialization:

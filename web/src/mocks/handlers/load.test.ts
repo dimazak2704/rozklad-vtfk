@@ -91,7 +91,8 @@ describe('POST/PUT /api/admin/load', () => {
 describe('Вивести з розкладу', () => {
   it('є опублікована версія семестру', async () => {
     const versions = await api.get<TimetableVersionDto[]>('/admin/timetable/versions', { semesterId: (await semester()).id });
-    expect(versions).toEqual([expect.objectContaining({ id: PUBLISHED_VERSION_ID, status: 'PUBLISHED' })]);
+    // версії мокує область «Базовий розклад» (handlers/timetable.ts): опублікована одна, поруч можуть бути чернетки
+    expect(versions.filter((v) => v.status === 'PUBLISHED')).toEqual([expect.objectContaining({ id: PUBLISHED_VERSION_ID })]);
   });
 
   it('оновлює виведені записи й не чіпає внесені вручну чи з програми', async () => {

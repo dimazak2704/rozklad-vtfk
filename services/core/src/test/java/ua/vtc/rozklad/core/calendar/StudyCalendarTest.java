@@ -1,10 +1,10 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.calendar;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.holiday;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.onlineForCourses;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.practice;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.calendar;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.holiday;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.onlineForCourses;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.practice;
 
 import java.time.LocalDate;
 import java.util.List;

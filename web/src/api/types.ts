@@ -828,7 +828,10 @@ export interface OrderDto {
   kind: OrderKind;
   parentId?: Nullable<Uuid>;
   status: OrderStatus;
+  /** Core: «РОЗПОРЯДЖЕННЯ №N» / «ДОПОВНЕННЯ до розпорядження №N»; старий мок клав сюди рядок-підзаголовок. */
   title: string;
+  /** Рядок під заголовком («По коледжу про деякі зміни в розкладі занять»), адитивне поле core. */
+  subtitle?: Nullable<string>;
   weekdayLabel: string;
   parityLabel: string;
   items: OrderItemDto[];

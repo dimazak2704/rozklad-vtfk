@@ -3,10 +3,10 @@ package ua.vtc.rozklad.core.timetable.internal.version;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.LessonKind;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.timetable.DisciplineRef;
-import ua.vtc.rozklad.core.timetable.GroupRef;
-import ua.vtc.rozklad.core.timetable.RoomRef;
-import ua.vtc.rozklad.core.timetable.TeacherRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 
 /** {@code TemplateLessonDto} of CONTRACTS.md §2. */
 public record TemplateLessonDto(

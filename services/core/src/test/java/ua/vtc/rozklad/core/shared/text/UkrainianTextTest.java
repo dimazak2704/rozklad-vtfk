@@ -40,4 +40,22 @@ class UkrainianTextTest {
 
         assertThat(sorted).containsExactly("1ЕА2", "1КІ2", "1М", "1ОП2", "1ТК1");
     }
+
+    @Test
+    void pluralFormsOfPairsAndTimes() {
+        assertThat(UkrainianText.pairs(1)).isEqualTo("1 пара");
+        assertThat(UkrainianText.pairs(3)).isEqualTo("3 пари");
+        assertThat(UkrainianText.pairs(11)).isEqualTo("11 пар");
+        assertThat(UkrainianText.pairs(21)).isEqualTo("21 пара");
+        assertThat(UkrainianText.times(3)).isEqualTo("3 рази");
+        assertThat(UkrainianText.times(5)).isEqualTo("5 разів");
+    }
+
+    @Test
+    void scheduleWordsUseTheUkrainianApostrophe() {
+        assertThat(UkrainianText.weekdayLower(3)).isEqualTo("середа");
+        assertThat(UkrainianText.weekdayLabel(5)).isEqualTo("ПʼЯТНИЦЯ");
+        assertThat(UkrainianText.date(LocalDate.of(2026, 10, 19))).isEqualTo("19.10.2026");
+        assertThat(UkrainianText.parity(Parity.DENOMINATOR)).isEqualTo("знаменник");
+    }
 }

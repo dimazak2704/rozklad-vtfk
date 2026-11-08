@@ -2,6 +2,7 @@ package ua.vtc.rozklad.core.substitution.fixture;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -25,6 +26,7 @@ public final class EventProbe {
 
     private final RabbitTemplate rabbit;
     private final Queue queue;
+    private final List<Object> buffered = new ArrayList<>();
 
     private EventProbe(RabbitTemplate rabbit, Queue queue) {
         this.rabbit = rabbit;
@@ -43,16 +45,37 @@ public final class EventProbe {
         return new EventProbe(rabbit, queue);
     }
 
-    /** Waits until {@code count} matching events arrived (or the timeout passed) and returns them. */
+    /**
+     * Waits until {@code count} matching events arrived (or the timeout passed) and returns them.
+     * Events that do not match stay buffered for later calls: the outbox does not keep the order in
+     * which a transaction published its events.
+     */
     public <T> List<T> await(Class<T> type, Predicate<T> filter, int count, Duration timeout) {
-        List<T> matched = new ArrayList<>();
+        List<T> matched = new ArrayList<>(take(type, filter, count));
         long deadline = System.nanoTime() + timeout.toNanos();
         while (matched.size() < count && System.nanoTime() < deadline) {
             Object message = rabbit.receiveAndConvert(queue.getName(), POLL_MILLIS);
+            if (message == null) {
+                continue;
+            }
             if (type.isInstance(message) && filter.test(type.cast(message))) {
                 matched.add(type.cast(message));
+            } else {
+                buffered.add(message);
             }
         }
         return matched;
+    }
+
+    private <T> List<T> take(Class<T> type, Predicate<T> filter, int count) {
+        List<T> taken = new ArrayList<>();
+        for (Iterator<Object> it = buffered.iterator(); it.hasNext() && taken.size() < count; ) {
+            Object message = it.next();
+            if (type.isInstance(message) && filter.test(type.cast(message))) {
+                taken.add(type.cast(message));
+                it.remove();
+            }
+        }
+        return taken;
     }
 }

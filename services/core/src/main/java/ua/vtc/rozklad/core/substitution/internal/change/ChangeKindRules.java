@@ -2,7 +2,7 @@ package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.util.ArrayList;
 import java.util.List;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
 /**
  * Which fields each kind of change needs (DOMAIN §7–§8) as a pure check that reports field

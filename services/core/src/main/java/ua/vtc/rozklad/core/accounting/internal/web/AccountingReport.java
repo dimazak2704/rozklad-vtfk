@@ -15,14 +15,14 @@ import ua.vtc.rozklad.core.accounting.internal.AccountingRow;
 import ua.vtc.rozklad.core.accounting.internal.AccountingService;
 import ua.vtc.rozklad.core.accounting.internal.LedgerResult;
 import ua.vtc.rozklad.core.catalog.Discipline;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
 import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /** Builds the accounting responses (references resolved in batches, stable ordering). */

@@ -12,6 +12,7 @@ import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.shared.domain.BaseEntity;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
 /**
  * Зміна в розкладі на дату (заміна, скасування, додаткова пара, …) for a group cohort and pairs
@@ -211,19 +212,7 @@ public class Change extends BaseEntity {
      * text (may be empty), every other code its abbreviation («Відп.», «Зв.зам.», «Відр.»).
      */
     public String printedReason() {
-        if (kind == ChangeKind.BLOCK || kind == ChangeKind.ADDITIONAL || kind == ChangeKind.ROOM_CHANGE) {
-            return null;
-        }
-        if (kind == ChangeKind.DISCIPLINE_FINISHED) {
-            return ReasonCode.FINISHED.orderText();
-        }
-        if (reasonCode == null) {
-            return null;
-        }
-        if (reasonCode == ReasonCode.OTHER) {
-            return reasonText == null || reasonText.isBlank() ? null : reasonText.strip();
-        }
-        return reasonCode.orderText();
+        return ReasonCode.printed(kind, reasonCode, reasonText);
     }
 
     public UUID getAbsenceId() {

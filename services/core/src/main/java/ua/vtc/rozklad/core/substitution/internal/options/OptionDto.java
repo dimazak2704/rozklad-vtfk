@@ -3,10 +3,10 @@ package ua.vtc.rozklad.core.substitution.internal.options;
 import java.time.LocalDate;
 import java.util.List;
 import ua.vtc.rozklad.contracts.ChangeKind;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.RoomRef;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
-import ua.vtc.rozklad.core.substitution.internal.view.LessonView;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
+import ua.vtc.rozklad.core.timetable.LessonView;
 
 /**
  * {@code Option} of CONTRACTS.md §2. Additive: {@code date} and {@code pair} of a make-up lesson

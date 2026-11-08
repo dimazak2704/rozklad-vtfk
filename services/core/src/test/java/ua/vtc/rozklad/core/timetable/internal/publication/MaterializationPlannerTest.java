@@ -2,10 +2,10 @@ package ua.vtc.rozklad.core.timetable.internal.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.calendar;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.holiday;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.onlineForCourses;
-import static ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures.practice;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.calendar;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.holiday;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.onlineForCourses;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.practice;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_FV;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_KM;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_STP;
@@ -23,12 +23,12 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.Parity;
+import ua.vtc.rozklad.core.calendar.CalendarFixtures;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
+import ua.vtc.rozklad.core.calendar.StudyPeriod;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
-import ua.vtc.rozklad.core.timetable.internal.calendar.CalendarFixtures;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyCalendar;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyPeriod;
 
 /** Materialization of DOMAIN.md §6 on «I семестр 2026/2027» (week of 05.10 is a denominator week). */
 class MaterializationPlannerTest {

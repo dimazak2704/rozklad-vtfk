@@ -3,7 +3,7 @@ package ua.vtc.rozklad.core.substitution.internal.absence;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
-import ua.vtc.rozklad.core.substitution.internal.view.LessonView;
+import ua.vtc.rozklad.core.timetable.LessonView;
 
 /**
  * Element of {@code GET /api/admin/absences/{id}/affected}: a lesson of the absent teacher and the

@@ -6,6 +6,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import ua.vtc.rozklad.core.calendar.AcademicYear;
 import ua.vtc.rozklad.core.calendar.AcademicYearRepository;
 import ua.vtc.rozklad.core.calendar.BellProfileRepository;
 import ua.vtc.rozklad.core.calendar.BellSlotRepository;
+import ua.vtc.rozklad.core.calendar.BellTimes;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
 import ua.vtc.rozklad.core.calendar.CalendarQueries;
@@ -28,6 +30,8 @@ import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
 import ua.vtc.rozklad.core.calendar.ShiftWindowInfo;
 import ua.vtc.rozklad.core.calendar.ShiftWindowRepository;
+import ua.vtc.rozklad.core.calendar.ShiftWindows;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 import ua.vtc.rozklad.core.calendar.WeekInfo;
 import ua.vtc.rozklad.core.calendar.WeekParityOverrideRepository;
@@ -55,11 +59,16 @@ class CalendarQueryService implements CalendarQueries {
     private final ShiftWindowRepository shiftWindows;
     private final CatalogQueries catalog;
     private final SettingsService settings;
+    private final StudyCalendarLoader studyCalendars;
+    private final BellTimesLoader bellTimes;
+    private final ShiftWindowsLoader shiftWindowTable;
 
     CalendarQueryService(SemesterRepository semesters, AcademicYearRepository academicYears,
                          WeekParityOverrideRepository overrides, CalendarPeriodRepository periods,
                          BellProfileRepository bellProfiles, BellSlotRepository bellSlots,
-                         ShiftWindowRepository shiftWindows, CatalogQueries catalog, SettingsService settings) {
+                         ShiftWindowRepository shiftWindows, CatalogQueries catalog, SettingsService settings,
+                         StudyCalendarLoader studyCalendars, BellTimesLoader bellTimes,
+                         ShiftWindowsLoader shiftWindowTable) {
         this.semesters = semesters;
         this.academicYears = academicYears;
         this.overrides = overrides;
@@ -69,6 +78,9 @@ class CalendarQueryService implements CalendarQueries {
         this.shiftWindows = shiftWindows;
         this.catalog = catalog;
         this.settings = settings;
+        this.studyCalendars = studyCalendars;
+        this.bellTimes = bellTimes;
+        this.shiftWindowTable = shiftWindowTable;
     }
 
     @Override
@@ -211,6 +223,27 @@ class CalendarQueryService implements CalendarQueries {
     @Override
     public List<ShiftWindowInfo> shiftWindows() {
         return shiftWindows.findAllByOrderByShiftAscWeekdayAsc().stream().map(ShiftWindowInfo::of).toList();
+    }
+
+    @Override
+    public ShiftWindows shiftWindowTable() {
+        return shiftWindowTable.load();
+    }
+
+    @Override
+    public StudyCalendar studyCalendar(LocalDate from, LocalDate to) {
+        return studyCalendars.forRange(from, to);
+    }
+
+    @Override
+    public StudyCalendar studyCalendar(UUID semesterId) {
+        return studyCalendars.forSemester(semesters.findById(semesterId)
+                .orElseThrow(() -> NotFoundException.of("Семестр", semesterId)));
+    }
+
+    @Override
+    public Map<UUID, BellTimes> bellTimes(StudyCalendar calendar) {
+        return bellTimes.forCalendar(calendar);
     }
 
     SemesterInfo info(Semester semester) {

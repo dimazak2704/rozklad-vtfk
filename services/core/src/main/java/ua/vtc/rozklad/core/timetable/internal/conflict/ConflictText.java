@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
+import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 
 /** Ukrainian fragments of conflict messages and the {@link ConflictDto} factory of the engine. */
 final class ConflictText {
@@ -20,7 +20,7 @@ final class ConflictText {
 
     /** «понеділок» for the template, «19.10.2026» for a date. */
     static String day(LessonDay day) {
-        return day.isDated() ? UkrainianText.date(day.date()) : UkrainianText.weekday(day.weekday());
+        return day.isDated() ? UkrainianText.date(day.date()) : UkrainianText.weekdayLower(day.weekday());
     }
 
     /** «понеділок, 2 пара». */

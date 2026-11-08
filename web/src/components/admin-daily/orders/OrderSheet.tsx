@@ -141,7 +141,7 @@ export function OrderSheet({ order, parentNumber = null, changes, fresh, classNa
               </>
             )}
           </p>
-          <p>{order.title}</p>
+          <p>{order.subtitle ?? order.title}</p>
           <p>На {formatLongDate(order.date)} р.</p>
           <p className="text-[1.08em]">
             {order.weekdayLabel} - {order.parityLabel}

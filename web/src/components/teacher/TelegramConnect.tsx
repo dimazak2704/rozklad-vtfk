@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useTelegramLinkCode } from '@/api/me';
+import { useCreateBindingCode } from '@/api/telegram';
 import type { Uuid } from '@/api/types';
 import { Button, buttonClass, notify } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
@@ -12,13 +12,13 @@ import { TELEGRAM_BOT_HANDLE } from '../public/telegram';
  * на телефон, з телефона — кнопкою. Після привʼязки бот надсилає запити на заміну з кнопками відповіді.
  */
 export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
-  const link = useTelegramLinkCode();
+  const link = useCreateBindingCode();
   const { now } = useNow();
   const data = link.data;
   const msLeft = data ? new Date(data.expiresAt).getTime() - now.getTime() : 0;
   const expired = data !== undefined && msLeft <= 0;
 
-  const request = () => link.mutate(teacherId, { onError: (error) => notify.error(error, 'Не вдалося отримати посилання для Telegram') });
+  const request = () => link.mutate({ type: 'TEACHER', teacherId }, { onError: (error) => notify.error(error, 'Не вдалося отримати посилання для Telegram') });
 
   return (
     <section aria-labelledby="telegram-connect-heading" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">

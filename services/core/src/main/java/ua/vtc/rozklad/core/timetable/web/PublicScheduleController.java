@@ -3,7 +3,6 @@ package ua.vtc.rozklad.core.timetable.web;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
@@ -20,7 +19,6 @@ import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
 import ua.vtc.rozklad.core.timetable.ScheduleQueries;
 import ua.vtc.rozklad.core.timetable.ScheduleView;
-import ua.vtc.rozklad.core.timetable.internal.calendar.WeekParityCalculator;
 import ua.vtc.rozklad.core.timetable.internal.schedule.IcsExportService;
 
 /**
@@ -54,16 +52,8 @@ class PublicScheduleController {
         ScheduleOwnerType owner = ScheduleOwnerType.fromPathSegment(type)
                 .orElseThrow(() -> new NotFoundException(
                         "Невідомий тип розкладу «%s»: очікується group, teacher або room".formatted(type)));
-        LocalDate start = from != null ? from : WeekParityCalculator.mondayOf(LocalDate.now(clock));
-        LocalDate end = to != null ? to : start.plusDays(6);
-        if (end.isBefore(start)) {
-            throw new InvalidParameterException("to", "Кінцева дата не може бути раніше початкової");
-        }
-        if (ChronoUnit.DAYS.between(start, end) + 1 > ScheduleQueries.MAX_DAYS) {
-            throw new InvalidParameterException("to",
-                    "Можна запитати не більше " + ScheduleQueries.MAX_DAYS + " днів за раз");
-        }
-        return ResponseEntity.ok().cacheControl(REVALIDATE).body(schedules.schedule(owner, id, start, end));
+        ScheduleRange range = ScheduleRange.resolve(from, to, clock);
+        return ResponseEntity.ok().cacheControl(REVALIDATE).body(schedules.schedule(owner, id, range.from(), range.to()));
     }
 
     @GetMapping("/ics/{type}/{id}.ics")

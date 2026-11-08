@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
 /**
  * {@code POST /api/admin/changes}. Which of the optional ids are required depends on the kind

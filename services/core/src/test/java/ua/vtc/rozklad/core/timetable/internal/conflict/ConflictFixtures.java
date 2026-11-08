@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
-import ua.vtc.rozklad.core.timetable.internal.calendar.ShiftWindows;
+import ua.vtc.rozklad.core.calendar.ShiftWindows;
 
 /** Readable test data for the conflict engine and metrics: «4КІ1», «Кренцін М.Д.», room «304» … */
 public final class ConflictFixtures {

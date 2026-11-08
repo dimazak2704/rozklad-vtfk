@@ -1,7 +1,7 @@
 package ua.vtc.rozklad.core.timetable.internal.metrics;
 
 import java.util.List;
-import ua.vtc.rozklad.core.timetable.GroupRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 
 /**
  * {@code MetricsDto} of CONTRACTS.md §2: quality of a weekly template. Windows and late pairs are

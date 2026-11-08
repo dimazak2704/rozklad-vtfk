@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.contracts.Parity;
-import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.calendar.SemesterInfo;
 import ua.vtc.rozklad.core.order.OrderDocument;
 import ua.vtc.rozklad.core.order.OrderDocumentRepository;
 import ua.vtc.rozklad.core.order.internal.support.OrderCalendar;
@@ -43,13 +43,13 @@ class Dashboard {
     }
 
     DashboardDto of(LocalDate date) {
-        Optional<Semester> semester = calendar.findSemester(date);
-        Parity parity = semester.map(found -> calendar.parity(found, date)).orElse(null);
+        Optional<SemesterInfo> semester = calendar.findSemester(date);
+        Parity parity = calendar.parityOrNull(date);
         SubstitutionDaySummary summary = substitutions.summarize(date);
         Optional<OrderDocument> draft = orders.findAllByDateAndStatusOrderByCreatedAt(date, OrderStatus.DRAFT).stream()
                 .reduce((first, second) -> second);
         DashboardDto.Generation generation = semester
-                .flatMap(found -> generationJobs.findAllBySemesterIdOrderByCreatedAtDesc(found.getId()).stream()
+                .flatMap(found -> generationJobs.findAllBySemesterIdOrderByCreatedAtDesc(found.id()).stream()
                         .findFirst())
                 .map(job -> new DashboardDto.Generation(job.getStatus()))
                 .orElse(null);

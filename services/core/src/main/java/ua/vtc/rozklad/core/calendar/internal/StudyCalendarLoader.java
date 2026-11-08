@@ -1,4 +1,4 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar.internal;
 
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.calendar.SemesterCalendar;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
+import ua.vtc.rozklad.core.calendar.StudyPeriod;
+import ua.vtc.rozklad.core.calendar.StudySemester;
 import ua.vtc.rozklad.core.calendar.WeekParityOverride;
 
 /**
@@ -19,20 +23,20 @@ import ua.vtc.rozklad.core.calendar.WeekParityOverride;
  * Call inside a transaction.
  */
 @Component
-public class StudyCalendarLoader {
+class StudyCalendarLoader {
 
     private final EntityManager entityManager;
 
-    public StudyCalendarLoader(EntityManager entityManager) {
+    StudyCalendarLoader(EntityManager entityManager) {
         this.entityManager = entityManager;
     }
 
-    public StudyCalendar forSemester(Semester semester) {
+    StudyCalendar forSemester(Semester semester) {
         return build(List.of(semester));
     }
 
     /** Calendar of every semester that overlaps {@code [from, to]}. */
-    public StudyCalendar forRange(LocalDate from, LocalDate to) {
+    StudyCalendar forRange(LocalDate from, LocalDate to) {
         List<Semester> semesters = entityManager.createQuery("""
                         select s from Semester s
                         where s.startsOn <= :to and s.endsOn >= :from
@@ -52,8 +56,8 @@ public class StudyCalendarLoader {
         Map<UUID, List<StudyPeriod>> periods = periodsBySemester(ids);
         Map<UUID, Map<LocalDate, Parity>> overrides = overridesBySemester(ids);
         return new StudyCalendar(semesters.stream()
-                .map(semester -> new SemesterCalendar(semester.getId(), semester.getStartsOn(), semester.getEndsOn(),
-                        new WeekParityCalculator(semester.getStartsOn(), semester.getFirstWeekParity(),
+                .map(semester -> new StudySemester(semester.getId(), semester.getStartsOn(), semester.getEndsOn(),
+                        new SemesterCalendar(semester.getStartsOn(), semester.getEndsOn(), semester.getFirstWeekParity(),
                                 overrides.getOrDefault(semester.getId(), Map.of())),
                         periods.getOrDefault(semester.getId(), List.of()), semester.getBellProfileId()))
                 .toList());

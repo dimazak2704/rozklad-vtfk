@@ -9,18 +9,18 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.core.catalog.Discipline;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.Room;
+import ua.vtc.rozklad.core.catalog.RoomRef;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
-import ua.vtc.rozklad.core.shared.ref.RoomRef;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
 
 /** Catalog reads of the substitution module: single lookups with 404 and batch maps for DTOs. */
 @Component
@@ -72,22 +72,19 @@ public class CatalogLookup {
     }
 
     public static TeacherRef ref(Teacher teacher) {
-        return teacher == null ? null
-                : new TeacherRef(teacher.getId(), teacher.getShortName(), teacher.getDisplayName());
+        return teacher == null ? null : TeacherRef.of(teacher);
     }
 
     public static GroupRef ref(StudentGroup group) {
-        return group == null ? null : new GroupRef(group.getId(), group.getCode(), group.getCourse());
+        return group == null ? null : GroupRef.of(group);
     }
 
     public static DisciplineRef ref(Discipline discipline) {
-        return discipline == null ? null
-                : new DisciplineRef(discipline.getId(), discipline.getShortName(), discipline.getName(),
-                discipline.getColor());
+        return discipline == null ? null : DisciplineRef.of(discipline);
     }
 
     public static RoomRef ref(Room room) {
-        return room == null ? null : new RoomRef(room.getId(), room.getName(), room.getType());
+        return room == null ? null : RoomRef.of(room);
     }
 
     private static List<UUID> nonNull(Collection<UUID> ids) {

@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import ua.vtc.rozklad.contracts.ChangeKind;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 
 /** Reason printed in the order's «Причина заміни» column (DOMAIN §7). */
 class ChangeTest {

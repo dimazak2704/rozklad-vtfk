@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
-import ua.vtc.rozklad.core.calendar.BellSlot;
+import ua.vtc.rozklad.core.calendar.PairTime;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.Teacher;
@@ -56,14 +56,12 @@ public class ChangeNotifications {
         UUID roomId = change.getNewRoomId() != null ? change.getNewRoomId() : change.getOrigRoomId();
         Room room = roomId == null ? null : catalog.room(roomId);
         Teacher original = change.getOrigTeacherId() == null ? null : catalog.teacher(change.getOrigTeacherId());
-        Map<Integer, BellSlot> times = calendar.findSemester(change.getDate())
-                .map(semester -> calendar.pairTimes(semester, change.getDate()))
-                .orElse(Map.of());
-        BellSlot first = times.get(change.getPairFrom());
-        BellSlot last = times.get(change.getPairTo());
+        Map<Integer, PairTime> times = calendar.pairTimes(change.getDate());
+        PairTime first = times.get(change.getPairFrom());
+        PairTime last = times.get(change.getPairTo());
         events.publishEvent(new SubstitutionConfirmationRequested(EventEnvelope.create(clock), change.getId(),
                 teacher.getId(), change.getDate(), change.getPairFrom(),
-                first == null ? null : first.getStartsAt(), last == null ? null : last.getEndsAt(),
+                first == null ? null : first.startsAt(), last == null ? null : last.endsAt(),
                 catalog.group(change.getGroupId()).getCode(), change.getSubgroupNumber(),
                 discipline == null ? null : discipline.getName(),
                 original == null ? null : original.getShortName(),

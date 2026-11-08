@@ -2,6 +2,7 @@ package ua.vtc.rozklad.core.timetable.internal.schedule;
 
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.core.calendar.GroupScope;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
@@ -11,7 +12,6 @@ import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
 import ua.vtc.rozklad.core.timetable.ScheduleView;
-import ua.vtc.rozklad.core.timetable.internal.calendar.GroupScope;
 
 /** Owner of a schedule with its public label: group code, teacher short name or room name. */
 @Component

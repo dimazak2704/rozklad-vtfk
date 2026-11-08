@@ -10,17 +10,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
+import ua.vtc.rozklad.core.calendar.DayInfo;
+import ua.vtc.rozklad.core.calendar.GroupScope;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.shared.domain.Ids;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
-import ua.vtc.rozklad.core.timetable.internal.calendar.DayInfo;
-import ua.vtc.rozklad.core.timetable.internal.calendar.GroupScope;
-import ua.vtc.rozklad.core.timetable.internal.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFacts;
 import ua.vtc.rozklad.core.timetable.internal.conflict.GroupFact;
 import ua.vtc.rozklad.core.timetable.internal.conflict.RoomFact;
-import ua.vtc.rozklad.core.timetable.internal.support.UkrainianText;
 
 /**
  * Materialization of DOMAIN.md §6: for every study date of {@code [from, to]} take the template

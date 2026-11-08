@@ -7,12 +7,12 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
-import ua.vtc.rozklad.core.shared.ref.DisciplineRef;
-import ua.vtc.rozklad.core.shared.ref.GroupRef;
-import ua.vtc.rozklad.core.shared.ref.RoomRef;
-import ua.vtc.rozklad.core.shared.ref.TeacherRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.substitution.ApprovalMode;
-import ua.vtc.rozklad.core.substitution.ReasonCode;
 
 /**
  * {@code ChangeDto} of CONTRACTS.md §2. Additive fields (CHANGELOG-CONTRACTS): {@code approvalMode},

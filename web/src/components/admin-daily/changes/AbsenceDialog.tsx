@@ -3,7 +3,8 @@ import { CalendarCheck, TriangleExclamationPoint } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
-import { useCreateAbsence, useTeacherDirectory, useTeacherSchedule, useUpdateAbsence } from '@/api/admin-daily';
+import { useCreateAbsence, useUpdateAbsence } from '@/api/admin-daily';
+import { usePublicSchedule, usePublicTeachers } from '@/api/public';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
 import type { AbsenceDto, AbsenceReasonCategory, AbsenceRequest, IsoDate } from '@/api/types';
@@ -67,7 +68,7 @@ interface AbsenceDialogProps {
 export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onSaved }: AbsenceDialogProps) {
   const editing = Boolean(absence);
   const schema = useMemo(() => buildSchema(semester), [semester]);
-  const teachers = useTeacherDirectory();
+  const teachers = usePublicTeachers();
   const create = useCreateAbsence();
   const update = useUpdateAbsence();
   const [formError, setFormError] = useState<string | null>(null);
@@ -93,7 +94,9 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
   const bells = useBells(dateFrom || null);
   const previewRange =
     teacherId && dateFrom && dateTo && compareIsoDates(dateTo, dateFrom) >= 0 && diffDays(dateFrom, dateTo) < MAX_PREVIEW_DAYS;
-  const schedule = useTeacherSchedule(previewRange ? teacherId : null, previewRange ? dateFrom : null, previewRange ? dateTo : null);
+  const schedule = usePublicSchedule('TEACHER', teacherId ?? undefined, dateFrom ?? '', dateTo ?? '', {
+    enabled: Boolean(previewRange),
+  });
   const affected = (schedule.data?.days ?? []).flatMap((day) =>
     day.lessons
       .filter((lesson) => lesson.teacher?.id === teacherId && (wholeDay || pairs.includes(lesson.pair)))

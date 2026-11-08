@@ -33,6 +33,8 @@ import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.settings.SystemSettings;
+import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
@@ -131,8 +133,9 @@ class ChangeLifecycleIT {
 
         assertThat(created.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
         assertThat(created.approvalMode()).isEqualTo(ApprovalMode.CONFIRM);
-        assertThat(created.confirmDeadline()).isBetween(before.plus(Duration.ofMinutes(60)),
-                clock.instant().plus(Duration.ofMinutes(60)));
+        // термін — з налаштувань (substitution.confirmTimeoutMinutes, типово 120 хв, V1_802)
+        Duration timeout = SystemSettings.DEFAULTS.confirmTimeout();
+        assertThat(created.confirmDeadline()).isBetween(before.plus(timeout), clock.instant().plus(timeout));
         assertThat(created.history()).singleElement().satisfies(entry -> {
             assertThat(entry.from()).isNull();
             assertThat(entry.to()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);

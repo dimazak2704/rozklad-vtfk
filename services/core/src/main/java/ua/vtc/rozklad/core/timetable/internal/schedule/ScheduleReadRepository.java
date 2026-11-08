@@ -10,13 +10,13 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import ua.vtc.rozklad.contracts.RoomType;
-import ua.vtc.rozklad.core.timetable.DisciplineRef;
-import ua.vtc.rozklad.core.timetable.GroupRef;
+import ua.vtc.rozklad.core.catalog.DisciplineRef;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
-import ua.vtc.rozklad.core.timetable.RoomRef;
 import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
-import ua.vtc.rozklad.core.timetable.TeacherRef;
 
 /**
  * The hot path of the public schedule: one indexed query returns every lesson of a group, teacher

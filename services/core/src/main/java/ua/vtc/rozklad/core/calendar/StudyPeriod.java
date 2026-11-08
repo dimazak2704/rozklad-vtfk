@@ -1,13 +1,9 @@
-package ua.vtc.rozklad.core.timetable.internal.calendar;
+package ua.vtc.rozklad.core.calendar;
 
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import ua.vtc.rozklad.core.calendar.CalendarPeriod;
-import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
-import ua.vtc.rozklad.core.calendar.PeriodScope;
-import ua.vtc.rozklad.core.calendar.StudyMode;
 
 /**
  * Immutable copy of a calendar period (DOMAIN.md §2) for materialization and schedule views.

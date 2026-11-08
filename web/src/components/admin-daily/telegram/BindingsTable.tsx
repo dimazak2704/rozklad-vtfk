@@ -1,6 +1,6 @@
 import { Search, Unlink, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { useGroupDirectory, useTeacherDirectory } from '@/api/admin-daily';
+import { usePublicGroups, usePublicTeachers } from '@/api/public';
 import { useDeleteBinding } from '@/api/telegram';
 import type { BindingType, ChatBindingDto } from '@/api/types';
 import { Badge, Chip, DataTable, EmptyState, IconButton, Input, notify, Plate, RowActions, type DataTableColumn } from '@/components/ui';
@@ -23,8 +23,8 @@ interface BindingsTableProps {
 
 /** Привʼязані чати: фільтр за типом, пошук, відвʼязування з підтвердженням (назва чату в діалозі). */
 export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTableProps) {
-  const groups = useGroupDirectory();
-  const teachers = useTeacherDirectory();
+  const groups = usePublicGroups();
+  const teachers = usePublicTeachers();
   const remove = useDeleteBinding();
   const [type, setType] = useState<BindingType | null>(null);
   const [query, setQuery] = useState('');
