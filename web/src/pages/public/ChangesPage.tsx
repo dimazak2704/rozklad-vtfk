@@ -192,7 +192,10 @@ export default function ChangesPage() {
               {order ? (
                 <span>
                   Розпорядження{order.number !== null ? <span className="font-semibold text-primary figures"> №{order.number}</span> : null}
-                  {order.publishedAt ? (
+                  {/* паперове розпорядження внесене в систему пізніше: час імпорту — не час видання */}
+                  {order.imported ? (
+                    <> (паперове, внесене в систему)</>
+                  ) : order.publishedAt ? (
                     <>
                       , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
                     </>
@@ -203,7 +206,8 @@ export default function ChangesPage() {
               ) : null}
             </div>
           </div>
-          {order ? (
+          {/* файли (PNG, PDF) робить система лише для власних розпоряджень; імпортоване паперове їх не має */}
+          {order && !order.imported ? (
             <div className="flex flex-wrap gap-2">
               <Tooltip content={`Розпорядження №${order.number} як зображення`}>
                 <a href={orderDocumentUrl(order.id, 'png')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>

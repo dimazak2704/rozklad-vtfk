@@ -7,7 +7,10 @@ import type { OrderDto, SettingsDto } from '@/api/types';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { resetMockStores } from '@/mocks/store';
+import { useNavigate } from 'react-router';
 import ChangesPage from '@/pages/admin/ChangesPage';
+import DashboardPage from '@/pages/admin/DashboardPage';
+import OrdersPage from '@/pages/admin/OrdersPage';
 import { renderWithProviders } from '@/test/render';
 import { OptionRow } from './changes/OptionRow';
 import { OrderSheet } from './orders/OrderSheet';
@@ -38,6 +41,7 @@ const ORDER: OrderDto = {
   publishedAt: '2026-10-16T12:40:00Z',
   publishedBy: 'admin',
   version: 1,
+  imported: false,
   weekdayLabel: 'ПОНЕДІЛОК',
   parityLabel: 'ЗНАМЕННИК',
   items: [
@@ -133,6 +137,7 @@ describe('налаштування', () => {
     hoursPerPair: 2,
     showTeacherFullNames: false,
     activeBellProfileId: null,
+    version: 0,
   };
 
   it('перевіряє поля до відправки й показує живий підпис', async () => {
@@ -199,6 +204,47 @@ describe('екран «Заміни»', () => {
     try {
       renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
       expect(await screen.findByText('Немає звʼязку з сервером', undefined, WAIT)).toBeInTheDocument();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('панель без мережі на новій даті — «немає звʼязку», а не дані попередньої дати', { timeout: 20_000 }, async () => {
+    function GoToNextDay() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => void navigate('/admin?date=2026-11-10')}>
+          наступний день
+        </button>
+      );
+    }
+    renderWithProviders(
+      <>
+        <GoToNextDay />
+        <DashboardPage />
+      </>,
+      { route: '/admin?date=2026-11-09' },
+    );
+    await waitFor(() => expect(screen.queryByText('Завантажуємо сповіщення…')).not.toBeInTheDocument(), WAIT);
+    expect(screen.getByText('Оновлюється наживо')).toBeInTheDocument();
+
+    onlineManager.setOnline(false);
+    try {
+      await userEvent.click(screen.getByRole('button', { name: 'наступний день' }));
+      expect((await screen.findAllByText('Немає звʼязку з сервером', undefined, WAIT)).length).toBeGreaterThan(0);
+      expect(screen.queryByText('Оновлюється наживо')).not.toBeInTheDocument();
+      expect(screen.queryByText('Маршрут ранку')).not.toBeInTheDocument();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('розпорядження без мережі — пояснення замість вічного силуету аркуша', { timeout: 20_000 }, async () => {
+    onlineManager.setOnline(false);
+    try {
+      renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-11-10' });
+      expect(await screen.findByText('Немає звʼязку з сервером', undefined, WAIT)).toBeInTheDocument();
+      expect(screen.queryByText('Складаємо розпорядження…')).not.toBeInTheDocument();
     } finally {
       onlineManager.setOnline(true);
     }

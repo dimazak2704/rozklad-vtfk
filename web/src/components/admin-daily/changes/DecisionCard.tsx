@@ -95,7 +95,7 @@ function Side({ label, discipline, teacher, struck }: { label: string; disciplin
 export function DecisionCard({ change, state, busy, onResend, onConfirm, onCancel }: DecisionCardProps) {
   const { now } = useNow();
   const pending = state === 'pending' ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
-  const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled';
+  const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled' || state === 'substituteAbsent';
   const reason = change.reasonCode === 'OTHER' ? (change.reasonText ?? REASON_CODE_LABEL.OTHER) : REASON_CODE_LABEL[change.reasonCode];
   const [editingReason, setEditingReason] = useState(false);
   // core дозволяє правити відкриті й відхилені рішення; «вичитано» має лише одну причину
@@ -132,6 +132,12 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
         </p>
       )}
 
+      {state === 'substituteAbsent' ? (
+        <p role="alert" className="rounded-control border border-cancel bg-danger-subtle px-3 py-2 text-ui text-danger">
+          {change.new.teacher?.shortName ?? 'Замінник'} теж відсутній на цій парі. Зміну не можна підтвердити чи опублікувати:
+          скасуйте її і оберіть інше рішення для пари.
+        </p>
+      ) : null}
       {pending ? (
         <p
           role="status"

@@ -113,6 +113,8 @@ export const handlers = [
       date: item.date,
       lesson: item.lesson,
       decision: item.decision ? { changeId: item.decision.id, status: item.decision.status, kind: item.decision.kind } : null,
+      // мок не моделює відсутніх замінників (core: AffectedLessons.substitutions)
+      asSubstitute: false,
     }));
     return HttpResponse.json(items);
   }),

@@ -36,6 +36,14 @@ export function OrderFiles({ order }: { order: OrderDto }) {
     }
   };
 
+  if (order.imported) {
+    return (
+      <p className="text-caption text-secondary">
+        Паперове розпорядження, внесене в систему як текст: файлів DOCX, PDF і PNG для нього немає.
+      </p>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-3 gap-2">

@@ -22,3 +22,41 @@ describe('«Заміни» без мережі', () => {
     expect(screen.queryByText('Завантажуємо заміни…')).not.toBeInTheDocument();
   });
 });
+
+describe('«Заміни»: імпортоване паперове розпорядження', () => {
+  it('не пропонує PNG/PDF, яких для нього немає, і не видає час імпорту за час видання', async () => {
+    server.use(
+      http.get(apiPath('/public/changes'), () =>
+        HttpResponse.json({
+          date: '2026-06-04',
+          parity: 'DENOMINATOR',
+          weekdayLabel: 'Четвер',
+          order: { id: 'order-105', number: 105, publishedAt: '2026-11-08T07:17:00Z', imported: true },
+          groups: [
+            {
+              group: { id: null, code: '1КІ1', course: 1 },
+              items: [
+                {
+                  pairLabel: '1',
+                  rowType: 'REPLACEMENT',
+                  from: { discipline: 'ФК', teacher: 'Бурбела' },
+                  reasonText: 'Зв.зам.',
+                  to: { discipline: 'ФВ', teacher: 'Остап’юк' },
+                  room: 'С.з.',
+                  subgroupNote: null,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    renderWithProviders(<ChangesPage />, { route: '/changes?date=2026-06-04' });
+
+    expect(await screen.findByText(/паперове, внесене в систему/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /PDF/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /PNG/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/опубліковано/)).not.toBeInTheDocument();
+  });
+});

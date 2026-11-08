@@ -9,6 +9,7 @@ import { LESSON_STATE, pendingInfo, type LessonState } from './model';
 const ICONS: Record<LessonState, ReactNode> = {
   uncovered: <CircleDashed aria-hidden="true" className="size-3.5" />,
   declined: <UserX aria-hidden="true" className="size-3.5" />,
+  substituteAbsent: <UserX aria-hidden="true" className="size-3.5" />,
   pending: <Hourglass aria-hidden="true" className="size-3.5" />,
   confirmed: <CircleCheck aria-hidden="true" className="size-3.5" />,
   cancelled: <Ban aria-hidden="true" className="size-3.5" />,

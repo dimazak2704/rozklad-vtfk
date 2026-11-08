@@ -6,7 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { DEFAULT_CONFIRM_TIMEOUT_MINUTES, SETTINGS_LIMITS } from '@/api/settings-limits';
 import type { ApprovalMode, FieldErrorDto, SettingsDto } from '@/api/types';
 import { ACTIVE_BELL_PROFILE, BELL_PROFILES } from '../fixtures';
-import { apiPath, badRequest, readJson } from '../kit';
+import { apiPath, badRequest, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { COLLEGE_NAME } from './meta';
 
@@ -20,6 +20,7 @@ const seed = (): SettingsDto => ({
   hoursPerPair: 2,
   showTeacherFullNames: false,
   activeBellProfileId: ACTIVE_BELL_PROFILE.id,
+  version: 0,
 });
 
 const settings = createMockStore<SettingsDto>(seed);
@@ -84,7 +85,17 @@ export const handlers = [
   http.put(apiPath('/admin/settings'), async ({ request }) => {
     const body = await readJson<Partial<Record<keyof SettingsDto, unknown>>>(request);
     const errors = validateSettings(body);
+    if (typeof body.version !== 'number') errors.push({ field: 'version', message: 'Оновіть сторінку: бракує версії налаштувань' });
     if (errors.length > 0) return badRequest('Перевірте налаштування.', errors);
+    // як у core: зберегти можна лише ту версію, яку бачили (інакше 409 stale-data)
+    if (body.version !== settings.get().version) {
+      return problem({
+        status: 409,
+        slug: 'stale-data',
+        title: 'Дані змінилися',
+        detail: 'Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.',
+      });
+    }
     const next: SettingsDto = {
       approvalMode: body.approvalMode as ApprovalMode,
       confirmTimeoutMinutes: body.confirmTimeoutMinutes as number,
@@ -94,6 +105,7 @@ export const handlers = [
       hoursPerPair: body.hoursPerPair as number,
       showTeacherFullNames: body.showTeacherFullNames as boolean,
       activeBellProfileId: (body.activeBellProfileId as string | null) ?? null,
+      version: settings.get().version + 1,
     };
     settings.set(next);
     return HttpResponse.json(next);

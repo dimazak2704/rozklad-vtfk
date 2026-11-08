@@ -20,6 +20,12 @@ function DecisionLine({ entry }: { entry: LessonEntry }) {
           Відмова: {change?.new.teacher?.shortName ?? 'викладач'} — потрібен інший варіант
         </span>
       );
+    case 'substituteAbsent':
+      return (
+        <span className="text-danger">
+          Мав замінити: {entry.item.lesson.teacher?.shortName ?? 'викладача'} — скасуйте зміну й оберіть інше рішення
+        </span>
+      );
     case 'cancelled':
       return <span className="text-cancel">Пари не буде</span>;
     case 'pending':

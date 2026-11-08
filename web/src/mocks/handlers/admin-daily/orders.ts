@@ -305,6 +305,7 @@ export function buildDraft(world: World, date: IsoDate, settings: SettingsDto, n
     publishedAt: null,
     publishedBy: null,
     version: existing ? existing.version + 1 : 0,
+    imported: false,
     semesterId: ACTIVE_SEMESTER.id,
     createdAt: existing?.createdAt ?? now.toISOString(),
   };
@@ -321,6 +322,7 @@ export function toSummary(order: OrderRecord): OrderSummaryDto {
     status: order.status,
     itemCount: order.items.length + order.roomChanges.length,
     publishedAt: order.publishedAt,
+    imported: order.imported,
   };
 }
 
@@ -396,6 +398,7 @@ export function order35(): OrderRecord {
     publishedAt: '2026-10-16T12:40:00.000Z',
     publishedBy: 'admin',
     version: 1,
+    imported: false,
     semesterId: ACTIVE_SEMESTER.id,
     createdAt: '2026-10-16T11:05:00.000Z',
   };

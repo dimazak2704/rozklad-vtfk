@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleExclamationPoint, Save } from 'lucide-react';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useBlocker } from 'react-router';
 import { isApiError } from '@/api/errors';
@@ -80,6 +80,7 @@ interface SettingsFormProps {
 export function SettingsForm({ settings, guardNavigation = true, numbering, ai }: SettingsFormProps) {
   const profiles = useBellProfiles();
   const update = useUpdateSettings();
+  const [editedVersion, setEditedVersion] = useState(settings.version);
   const form = useForm<SettingsFormValues>({ resolver: zodResolver(settingsSchema), defaultValues: settings, mode: 'onBlur' });
   const { control, handleSubmit, reset, setError, formState } = form;
   const [position, name, mode] = useWatch({ control, name: ['signatoryPosition', 'signatoryName', 'approvalMode'] });
@@ -91,7 +92,14 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
 
   const submit = handleSubmit(async (values) => {
     try {
-      const saved = await update.mutateAsync({ ...values, activeBellProfileId: values.activeBellProfileId ?? null });
+      // версія — та, з якої почали редагувати (а не свіжіша з фонового оновлення): якщо хтось зберіг
+      // налаштування раніше, сервер відповість 409 і чужі зміни не перезапишуться мовчки
+      const saved = await update.mutateAsync({
+        ...values,
+        activeBellProfileId: values.activeBellProfileId ?? null,
+        version: editedVersion,
+      });
+      setEditedVersion(saved.version);
       reset(saved);
       notify.success('Налаштування збережено');
     } catch (error) {

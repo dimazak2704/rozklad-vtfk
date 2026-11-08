@@ -21,11 +21,12 @@ import { durationLabel } from '@/lib/labels';
 
 // ───────────────────────── Стан пари ─────────────────────────
 
-export type LessonState = 'uncovered' | 'declined' | 'pending' | 'confirmed' | 'cancelled' | 'applied';
+export type LessonState = 'uncovered' | 'declined' | 'substituteAbsent' | 'pending' | 'confirmed' | 'cancelled' | 'applied';
 
 export const LESSON_STATE: Record<LessonState, { label: string; tone: BadgeTone; needsAction: boolean }> = {
   uncovered: { label: 'Без рішення', tone: 'danger', needsAction: true },
   declined: { label: 'Відмова', tone: 'danger', needsAction: true },
+  substituteAbsent: { label: 'Замінник відсутній', tone: 'danger', needsAction: true },
   pending: { label: 'Чекає відповіді', tone: 'warning', needsAction: false },
   confirmed: { label: 'Підтверджено', tone: 'success', needsAction: false },
   cancelled: { label: 'Пари не буде', tone: 'cancel', needsAction: false },
@@ -34,9 +35,16 @@ export const LESSON_STATE: Record<LessonState, { label: string; tone: BadgeTone;
 
 type Decision = { status: ChangeStatus; kind: ChangeKind } | null | undefined;
 
-/** Що з парою зараз: скасоване рішення означає «знову без рішення», відхилене — «потрібен інший». */
-export function lessonState(decision: Decision): LessonState {
+/**
+ * Що з парою зараз: скасоване рішення означає «знову без рішення», відхилене — «потрібен інший».
+ * `asSubstitute`: відсутній викладач мав замінити на цій парі іншого — неопубліковане рішення вже не
+ * відбудеться (core не дасть його підтвердити чи опублікувати), його треба скасувати.
+ */
+export function lessonState(decision: Decision, asSubstitute = false): LessonState {
   if (!decision) return 'uncovered';
+  if (asSubstitute && (decision.status === 'DRAFT' || decision.status === 'PENDING_CONFIRMATION' || decision.status === 'CONFIRMED')) {
+    return 'substituteAbsent';
+  }
   switch (decision.status) {
     case 'CANCELLED':
       return 'uncovered';
@@ -75,7 +83,7 @@ export function toEntries(absence: AbsenceDto, items: readonly AffectedLesson[],
   return items.map((item) => ({
     absence,
     item,
-    state: lessonState(item.decision),
+    state: lessonState(item.decision, item.asSubstitute),
     change: item.decision ? (changes.get(item.decision.changeId) ?? null) : null,
   }));
 }
@@ -115,7 +123,7 @@ export function matchesFilter(state: LessonState, filter: LessonFilter): boolean
     case 'all':
       return true;
     case 'action':
-      return state === 'uncovered' || state === 'declined';
+      return state === 'uncovered' || state === 'declined' || state === 'substituteAbsent';
     case 'pending':
       return state === 'pending';
     case 'declined':

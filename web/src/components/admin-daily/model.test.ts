@@ -9,6 +9,7 @@ import {
   defaultReason,
   filterFromParam,
   isOpen,
+  LESSON_STATE,
   lessonState,
   matchesFilter,
   optionsByKind,
@@ -61,6 +62,15 @@ describe('стан пари', () => {
     expect(lessonState({ status: 'APPLIED', kind: 'REPLACE_TEACHER' })).toBe('applied');
     expect(isOpen('declined')).toBe(true);
     expect(isOpen('pending')).toBe(false);
+  });
+
+  it('відсутній замінник: неопублікована зміна потребує нового рішення, опублікована — ні', () => {
+    expect(lessonState({ status: 'CONFIRMED', kind: 'REPLACE_TEACHER' }, true)).toBe('substituteAbsent');
+    expect(lessonState({ status: 'PENDING_CONFIRMATION', kind: 'REPLACE_TEACHER' }, true)).toBe('substituteAbsent');
+    expect(lessonState({ status: 'APPLIED', kind: 'REPLACE_TEACHER' }, true)).toBe('applied');
+    expect(LESSON_STATE.substituteAbsent.needsAction).toBe(true);
+    expect(matchesFilter('substituteAbsent', 'action')).toBe(true);
+    expect(isOpen('substituteAbsent')).toBe(false);
   });
 
   it('фільтри з адреси панелі', () => {
@@ -173,7 +183,7 @@ describe('стрічка подій', () => {
     createdAt: '2026-11-09T04:30:00Z',
     version: 0,
   };
-  const order: OrderSummaryDto = { id: 'o-36', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z' };
+  const order: OrderSummaryDto = { id: 'o-36', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z', imported: false };
 
   it('найновіші події першими, відповідь з Telegram названо прямо', () => {
     const feed = buildFeed([change], [absence], [order], '2026-11-09');
@@ -210,7 +220,7 @@ describe('маршрут ранку', () => {
   it('коли все закрито й опубліковано — весь маршрут пройдено', () => {
     const done = buildStops(
       { ...dashboard, uncoveredLessons: 0, pending: 0, declined: 0, orderDraft: { id: 'd', itemCount: 0 } },
-      { id: 'o', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z' },
+      { id: 'o', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z', imported: false },
       '2026-11-09',
     );
     expect(done.every((s) => s.state === 'done')).toBe(true);

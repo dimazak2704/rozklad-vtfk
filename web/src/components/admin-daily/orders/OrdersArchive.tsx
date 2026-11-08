@@ -115,9 +115,14 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
             rowLabel={`розпорядження №${row.number ?? '—'}`}
             actions={[
               { label: 'Переглянути', icon: <Eye aria-hidden="true" />, onSelect: () => onOpen(row) },
-              { label: 'Завантажити DOCX', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'docx'), separatorBefore: true },
-              { label: 'Завантажити PDF', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'pdf') },
-              { label: 'Завантажити PNG', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'png') },
+              // імпортоване паперове розпорядження — лише текст: файлів у сервісі документів немає
+              ...(row.imported
+                ? []
+                : [
+                    { label: 'Завантажити DOCX', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'docx'), separatorBefore: true },
+                    { label: 'Завантажити PDF', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'pdf') },
+                    { label: 'Завантажити PNG', icon: <FileDown aria-hidden="true" />, onSelect: () => void download(row, 'png') },
+                  ]),
             ]}
           />
         )}

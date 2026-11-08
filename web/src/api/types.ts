@@ -339,7 +339,8 @@ export interface PublicChangesDto {
   parity: Nullable<WeekParity>;
   /** «Понеділок» (з великої літери, на відміну від DayDto). */
   weekdayLabel: string;
-  order: Nullable<{ id: Uuid; number: Nullable<number>; publishedAt: Nullable<IsoInstant> }>;
+  /** `imported` — паперове розпорядження, внесене в систему як текст: файлів (PDF/PNG) у нього немає, `publishedAt` — час імпорту. */
+  order: Nullable<{ id: Uuid; number: Nullable<number>; publishedAt: Nullable<IsoInstant>; imported: boolean }>;
   /** Рядок групи, якої немає в каталозі, має `group.id = null`. */
   groups: Array<{ group: Omit<GroupRef, 'id'> & { id: Nullable<Uuid> }; items: ChangeView[] }>;
 }
@@ -771,6 +772,11 @@ export interface AffectedLessonDto {
   lesson: LessonView;
   /** null або DECLINED — пара ще потребує рішення. */
   decision: Nullable<{ changeId: Uuid; status: ChangeStatus; kind: ChangeKind }>;
+  /**
+   * true — відсутній викладач не веде цю пару, а мав замінити на ній іншого (`decision` — ця зміна):
+   * її вже не можна підтвердити чи опублікувати, треба скасувати й обрати інше рішення.
+   */
+  asSubstitute: boolean;
 }
 
 export interface OptionDto {
@@ -918,6 +924,8 @@ export interface OrderSummaryDto {
   status: OrderStatus;
   itemCount: number;
   publishedAt: Nullable<IsoInstant>;
+  /** Імпортоване паперове розпорядження: без файлів DOCX/PDF/PNG. */
+  imported: boolean;
 }
 
 export interface OrderItemDto {
@@ -957,6 +965,8 @@ export interface OrderDto {
   publishedAt: Nullable<IsoInstant>;
   publishedBy: Nullable<string>;
   version: number;
+  /** Імпортоване паперове розпорядження (лише текст): файлів DOCX/PDF/PNG немає. */
+  imported: boolean;
 }
 
 export interface UpdateOrderNotesRequest {
@@ -1026,6 +1036,8 @@ export interface SettingsDto {
   hoursPerPair: number;
   showTeacherFullNames: boolean;
   activeBellProfileId: Nullable<Uuid>;
+  /** Версія налаштувань з GET; PUT зі старішою — 409 `stale-data` (хтось зберіг раніше). */
+  version: number;
 }
 
 // ───────────────────────── 2. Admin: імпорт у core (ADMIN або SERVICE) ─────────────────────────
@@ -1188,6 +1200,8 @@ export interface ImportJobDto {
   error?: string;
   /** Чи можна застосувати зараз (READY або FAILED з чернеткою без блокувальних рядків). */
   canApply: boolean;
+  /** Версія завдання: її повертають, зберігаючи виправлені рядки розпорядження (PUT …/draft). */
+  version?: number;
 }
 
 export interface ImportMapping {

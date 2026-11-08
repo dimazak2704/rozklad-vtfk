@@ -645,7 +645,8 @@ export function publicChanges(date: IsoDate, now: Date): PublicChangesDto {
     date,
     parity: parityOn(date),
     weekdayLabel: weekdayLabel(date),
-    order: visible.length > 0 ? { id: orderIdFor(date), number: orderNumberFor(date), publishedAt: publishedAtFor(date) } : null,
+    order:
+      visible.length > 0 ? { id: orderIdFor(date), number: orderNumberFor(date), publishedAt: publishedAtFor(date), imported: false } : null,
     groups,
   };
 }
