@@ -164,3 +164,12 @@ No endpoint was changed. These are the readings the SPA and its mock API use whe
 | `GET /api/documents/orders/{id}.{fmt}` | only orders received via `order.published`; ETag + 5 min cache; unknown format → 404 | Drafts are never public; core offers no public order payload. |
 | `POST …/render` | `format` default `pdf`; invalid → 400 `errors[format]` | — |
 | Webhook | `POST /api/notify/telegram/webhook` 404 unless WEBHOOK mode | Reserved path from the foundation. |
+
+## Integration (reconciled behaviour, see docs/modules/integration.md)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/me/schedule?from&to` | Implemented: the signed-in teacher's `ScheduleDto`; same defaults (current week) and 31-day limit as the public schedule; 403 without a linked teacher. | CONTRACTS §3; was unmapped after the parallel work. |
+| `LessonView.reasonText` | The order's printed reason (`ReasonCode.printed`): none for ADDITIONAL, BLOCK and room-only changes, «Вичит.» for a finished discipline, free text for OTHER. | One rule for orders and schedules. |
+| Bell profile in effect | Everywhere: the semester's profile, else setting `calendar.activeBellProfileId`. | Timetable, substitution and accounting each had another fallback. |
+| Confirmation deadline | `substitution.confirmTimeoutMinutes` from the settings (default 120 min, V1_802); the substitution module's own default of 60 min is gone. | One settings source. |

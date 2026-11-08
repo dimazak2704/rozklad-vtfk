@@ -46,7 +46,8 @@ test.describe('публічний розклад', () => {
     else await lesson.hover();
     const details = page.getByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
     await expect(details).toBeVisible();
-    await expect(details).toContainText('Причина: Зв.зам.');
+    // публічна картка показує причину словами, не скороченням із розпорядження
+    await expect(details).toContainText('Причина: взаємна заміна');
     await expect(details).toContainText('СТП, Кренцін');
   });
 

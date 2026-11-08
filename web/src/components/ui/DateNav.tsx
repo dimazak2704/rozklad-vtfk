@@ -82,7 +82,7 @@ export function DateNav({
   const iconVariant = onShell ? 'shell' : 'ghost';
 
   return (
-    <div className={cn('inline-flex items-center gap-0.5', className)} role="group" aria-label="Вибір дня">
+    <div className={cn('inline-flex min-w-0 items-center gap-0.5', className)} role="group" aria-label="Вибір дня">
       <IconButton
         label="Попередній день"
         shortcut={hotkeys ? 'arrowleft' : undefined}
@@ -99,7 +99,8 @@ export function DateNav({
             size={size}
             static
             aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}
-            className={cn('min-w-[8.25rem] px-2', !onShell && 'text-primary')}
+            // на вузькій панелі мітка скорочується (truncate), а не виштовхує сусідів за край екрана
+            className={cn('min-w-0 shrink px-2 sm:min-w-[8.25rem]', !onShell && 'text-primary')}
           >
             <span className="truncate font-semibold figures">
               {relative ? <span>{relative} · </span> : null}

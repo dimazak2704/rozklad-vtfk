@@ -15,7 +15,9 @@ between the web client and the backend. Module details live in the other files o
 | notification | Telegram bot, delivery queue, events and order documents · tests · docs |
 | web | public site and teacher cabinet · dispatcher pages · timetable editor and generator · catalog, calendar, load, accounting and import pages |
 
-Conflicts were only in append-only files (`application.yml` blocks of identity, timetable and
+The integration ran on branch `integration` in its own worktree (main was being edited by the design
+pass at the same time) and was rebased onto main after `web: second/third design pass` landed; main was
+then fast-forwarded. Conflicts were only in append-only files (`application.yml` blocks of identity, timetable and
 substitution; sections of `docs/CHANGELOG-CONTRACTS.md`); both sides were kept. Commit trailers of the
 cherry-picked commits were removed as the integration task asked.
 
@@ -74,6 +76,11 @@ in which one transaction published `order.published` and `schedule.changed`.
   stays as the dated variant of `/public/bells`.
 - The catalog colour palette follows the redesigned five discipline lines of `styles/lines.css`.
 - `OrderDto.subtitle` (core) is shown under the heading when present.
+- Design-system fixes found by the merged e2e suite: the radio circle and the checkbox box sit above the
+  label overlay (`after:inset-0` made the whole row clickable but covered the control itself), and the
+  admin date navigator label truncates on a 360 px screen instead of pushing the header 16 px wide.
+- e2e expectations updated to the redesign: the public lesson card prints the reason in words
+  («Причина: взаємна заміна»); the load mock test no longer assumes a single version in the list.
 
 ## 5. Open mismatches between web and backend (for the wiring phase)
 

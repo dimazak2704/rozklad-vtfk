@@ -9,7 +9,7 @@ import java.util.Set;
 
 /**
  * Study calendar of DOMAIN.md §2 over one or more semesters: which dates have lessons for a group,
- * their week parity and whether lessons are online. Pure logic, built by {@link StudyCalendarLoader}.
+ * their week parity and whether lessons are online. Pure logic; get it from {@link CalendarQueries#studyCalendar}.
  */
 public final class StudyCalendar {
 

@@ -65,7 +65,8 @@ export function RadioGroup<V extends string = string>({
                 disabled={option.disabled}
                 aria-describedby={descriptionId}
                 className={cn(
-                  'mt-px flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-control bg-surface',
+                  // над підписом-накладкою (after:inset-0): сам кружок теж отримує клік
+                  'relative z-10 mt-px flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-control bg-surface',
                   'transition-[border-color] duration-100 ease-out hover:border-strong',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                   'data-[state=checked]:border-accent',

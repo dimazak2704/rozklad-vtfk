@@ -45,7 +45,8 @@ export function Checkbox({ label, description, className, id, disabled, ...props
 
   return (
     <div className={cn('relative flex min-h-11 items-start gap-3 py-2.5 sm:min-h-9 sm:py-1.5', className)}>
-      <span className="flex h-5 items-center">{box}</span>
+      {/* над підписом-накладкою (after:inset-0): сам прапорець теж отримує клік */}
+      <span className="relative z-10 flex h-5 items-center">{box}</span>
       <div className="flex flex-col gap-0.5">
         <label
           htmlFor={controlId}
