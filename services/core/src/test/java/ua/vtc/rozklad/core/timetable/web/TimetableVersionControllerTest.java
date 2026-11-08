@@ -120,7 +120,7 @@ class TimetableVersionControllerTest {
     @Test
     void publicationReportsMaterializedLessonsAndTheAuthor() throws Exception {
         given(publication.publish(VERSION, LocalDate.of(2026, 11, 9), "admin"))
-                .willReturn(new PublicationResult(VERSION, LocalDate.of(2026, 11, 9), 9_412, 3, 2, List.of()));
+                .willReturn(new PublicationResult(VERSION, LocalDate.of(2026, 11, 9), 9_412, 3, 2, List.of(), List.of()));
 
         mockMvc.perform(post("/api/admin/timetable/versions/{v}/publish", VERSION).with(TestJwts.admin())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,6 +129,7 @@ class TimetableVersionControllerTest {
                 .andExpect(jsonPath("$.materializedLessons").value(9412))
                 .andExpect(jsonPath("$.keptLessons").value(3))
                 .andExpect(jsonPath("$.coveredByChanges").value(2))
+                .andExpect(jsonPath("$.pendingDecisions").isEmpty())
                 .andExpect(jsonPath("$.effectiveFrom").value("2026-11-09"));
         verify(publication).publish(VERSION, LocalDate.of(2026, 11, 9), "admin");
     }

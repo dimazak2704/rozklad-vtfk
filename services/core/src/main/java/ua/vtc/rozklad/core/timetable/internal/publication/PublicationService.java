@@ -100,7 +100,7 @@ public class PublicationService {
         version.setMetrics(jsonMapper.valueToTree(result.metrics()));
         announce(version, effectiveFrom, outcome.dates(), template, previousLessons);
         return new PublicationResult(version.getId(), effectiveFrom, outcome.materialized(), outcome.kept(),
-                outcome.coveredByChanges(), outcome.conflicts());
+                outcome.coveredByChanges(), outcome.conflicts(), outcome.pendingDecisions());
     }
 
     private void validateEffectiveFrom(Semester semester, LocalDate effectiveFrom, boolean replacesPublished) {

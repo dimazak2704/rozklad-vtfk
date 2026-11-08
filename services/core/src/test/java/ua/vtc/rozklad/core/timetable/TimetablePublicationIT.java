@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.ScheduleChangeReason;
@@ -33,14 +34,22 @@ import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.contracts.events.TimetableVersionPublished;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodScope;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 import ua.vtc.rozklad.core.calendar.WeekParityOverride;
+import ua.vtc.rozklad.core.calendar.internal.CalendarDtos;
+import ua.vtc.rozklad.core.calendar.internal.CalendarPeriodService;
+import ua.vtc.rozklad.core.calendar.internal.SemesterService;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.substitution.Change;
+import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
+import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
+import ua.vtc.rozklad.core.substitution.internal.change.ChangeReplies;
+import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.internal.importing.ImportTimetableCommand;
 import ua.vtc.rozklad.core.timetable.internal.importing.ImportTimetableResult;
@@ -48,6 +57,7 @@ import ua.vtc.rozklad.core.timetable.internal.importing.TimetableImportService;
 import ua.vtc.rozklad.core.timetable.internal.publication.PublicationResult;
 import ua.vtc.rozklad.core.timetable.internal.publication.PublicationService;
 import ua.vtc.rozklad.core.timetable.internal.version.MoveCommand;
+import ua.vtc.rozklad.core.timetable.internal.version.TemplateLessonCommand;
 import ua.vtc.rozklad.core.timetable.internal.version.TemplateLessonService;
 import ua.vtc.rozklad.core.timetable.internal.version.TimetableVersionService;
 
@@ -97,6 +107,18 @@ class TimetablePublicationIT {
 
     @Autowired
     private LessonConflictChecker conflictChecker;
+
+    @Autowired
+    private CalendarPeriodService periods;
+
+    @Autowired
+    private SemesterService semesters;
+
+    @Autowired
+    private ChangeCommands changeCommands;
+
+    @Autowired
+    private ChangeReplies changeReplies;
 
     private TimetableItData data;
 
@@ -342,6 +364,106 @@ class TimetablePublicationIT {
     }
 
     @Test
+    void holidayAddedAfterPublicationRemovesFutureLessonsAndDeletingItBringsThemBack() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate future = data.monday(4);
+        LocalDate past = data.monday(2);
+        UUID group = data.group4ki1.getId();
+        assertThat(lessonsOf(group, future)).isEqualTo(2);
+        assertThat(lessonsOf(group, past)).isEqualTo(2);
+
+        UUID holiday = periods.create(period(CalendarPeriodKind.HOLIDAY, future, null, PeriodScope.ALL, null)).id();
+        UUID pastHoliday = periods.create(period(CalendarPeriodKind.HOLIDAY, past, null, PeriodScope.ALL, null)).id();
+
+        assertThat(lessonsOf(group, future)).isZero();
+        assertThat(lessonsOf(data.group4ki2.getId(), future)).isZero();
+        assertThat(lessonsOf(group, past)).as("past days are history").isEqualTo(2);
+        assertThat(lessonsOf(group, future.plusWeeks(1))).isEqualTo(2);
+
+        periods.delete(holiday);
+        periods.delete(pastHoliday);
+
+        assertThat(lessonsOf(group, future)).isEqualTo(2);
+        assertThat(lessonsOf(data.group4ki2.getId(), future)).isOne();
+    }
+
+    @Test
+    void onlinePeriodAddedAfterPublicationMarksLessonsOnlineAndKeepsThem() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate day = data.monday(4);
+        UUID group = data.group4ki1.getId();
+        List<UUID> before = jdbc.queryForList("SELECT id FROM lesson WHERE group_id = ? AND date = ? ORDER BY id",
+                UUID.class, group, day);
+
+        periods.create(period(CalendarPeriodKind.STUDY_MODE, day, StudyMode.ONLINE, PeriodScope.GROUPS,
+                List.of(group)));
+
+        assertThat(jdbc.queryForList("SELECT id FROM lesson WHERE group_id = ? AND date = ? ORDER BY id", UUID.class,
+                group, day)).as("the same lessons, only their mode changes").isEqualTo(before);
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND online AND NOT room_exclusive",
+                group, day)).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND online",
+                data.group4ki2.getId(), day)).isZero();
+    }
+
+    @Test
+    void parityOverrideAfterPublicationSwitchesTheWeeksLessons() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate wednesday = data.monday(4).plusDays(2);
+        UUID group = data.group4ki1.getId();
+        assertThat(lessonsOf(group, wednesday)).as("week 4 is a denominator week").isZero();
+
+        semesters.overrideWeek(data.semester.getId(), data.monday(4), Parity.NUMERATOR);
+
+        assertThat(lessonsOf(group, wednesday)).as("the numerator-only lesson").isOne();
+    }
+
+    @Test
+    void republicationReportsLessonsKeptForOpenDecisionsAndReplacesThemOnceAbandoned() {
+        UUID firstVersion = imports.importTimetable(importCommand()).versionId();
+        publication.publish(firstVersion, data.semester.getStartsOn(), "admin");
+        UUID group = data.group4ki1.getId();
+        LocalDate pendingDay = data.monday(4);
+        LocalDate declinedDay = data.monday(5);
+        Lesson pendingLesson = lessonAt(group, pendingDay, 2);
+        ChangeDto pending = changeCommands.create(replaceTeacher(pendingLesson), "admin");
+        ChangeDto declined = changeCommands.create(replaceTeacher(lessonAt(group, declinedDay, 2)), "admin");
+        changeReplies.replyFromBot(declined.id(), data.nepyivoda.getId(), ConfirmationDecision.DECLINE, null);
+        assertThat(pending.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+
+        UUID secondVersion = versions.create(data.semester.getId(), "Без викладача СТП", firstVersion).id();
+        TemplateLesson stp = transaction.execute(status -> em.createQuery("""
+                        select t from TemplateLesson t where t.versionId = :v and t.groupId = :g and t.pairNumber = 2
+                        """, TemplateLesson.class)
+                .setParameter("v", secondVersion).setParameter("g", group).getSingleResult());
+        templateLessons.update(secondVersion, stp.getId(), new TemplateLessonCommand(1, 2, Parity.BOTH, group, 0,
+                data.stp.getId(), null, data.lab6.getId(), stp.getLessonKind(), null, false, false, null));
+
+        PublicationResult result = publication.publish(secondVersion, pendingDay, "admin");
+
+        assertThat(result.conflicts()).isEmpty();
+        assertThat(result.pendingDecisions()).singleElement().satisfies(kept -> {
+            assertThat(kept.severity()).isEqualTo(ConflictDto.Severity.SOFT);
+            assertThat(kept.date()).isEqualTo(pendingDay);
+            assertThat(kept.lessonIds()).containsExactly(pendingLesson.getId());
+            assertThat(kept.message()).startsWith("4КІ1, ").contains("СТП Кренцін М.Д.").contains("відкрите рішення");
+        });
+        assertThat(teacherAt(group, declinedDay, 2)).as("a declined change keeps nothing").isNull();
+        assertThat(count("SELECT count(*) FROM change WHERE id = ? AND original_lesson_id IS NULL", declined.id()))
+                .isOne();
+        assertThat(teacherAt(group, pendingDay, 2)).isEqualTo(data.krentsin.getId());
+
+        changeCommands.cancel(pending.id(), "admin");
+
+        assertThat(teacherAt(group, pendingDay, 2)).as("the new version once the decision is gone").isNull();
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND version_id = ?", group,
+                pendingDay, firstVersion)).isZero();
+        assertThatThrownBy(() -> changeCommands.requestConfirmation(declined.id(), "admin"))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("вже немає в розкладі");
+    }
+
+    @Test
     void draftWithHardConflictsIsNotPublished() {
         List<ImportTimetableCommand.Lesson> lessons = new ArrayList<>(importCommand().lessons());
         lessons.add(new ImportTimetableCommand.Lesson(1, 2, Parity.BOTH, "4КІ2", 0, "КМ", "Кренцін М.Д.", "304",
@@ -437,6 +559,24 @@ class TimetablePublicationIT {
             em.persist(change);
             return change.getId();
         });
+    }
+
+    private CalendarDtos.CalendarPeriodRequest period(CalendarPeriodKind kind, LocalDate day, StudyMode mode,
+                                                      PeriodScope scope, List<UUID> groupIds) {
+        return new CalendarDtos.CalendarPeriodRequest(data.semester.getId(), kind, "Тест: " + kind, day, day, mode,
+                null, scope, null, groupIds, null);
+    }
+
+    private CreateChangeRequest replaceTeacher(Lesson lesson) {
+        return new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, lesson.getDate(), lesson.getPairNumber(), null,
+                lesson.getGroupId(), null, lesson.getId(), null, data.nepyivoda.getId(), null, null, ReasonCode.ABSENT,
+                null, null);
+    }
+
+    /** Teacher of the scheduled lesson in the slot ({@code null} for a lesson without a teacher). */
+    private UUID teacherAt(UUID groupId, LocalDate date, int pair) {
+        return jdbc.queryForObject("SELECT teacher_id FROM lesson WHERE group_id = ? AND date = ? AND pair_number = ? "
+                + "AND status = 'SCHEDULED'", UUID.class, groupId, date, pair);
     }
 
     private Lesson lessonAt(UUID groupId, LocalDate date, int pair) {

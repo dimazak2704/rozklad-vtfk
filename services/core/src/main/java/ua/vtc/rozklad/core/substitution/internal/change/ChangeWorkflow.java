@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
+import java.util.List;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.core.settings.SettingsService;
@@ -9,6 +10,7 @@ import ua.vtc.rozklad.core.substitution.ApprovalMode;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeHistory;
 import ua.vtc.rozklad.core.substitution.ChangeHistoryRepository;
+import ua.vtc.rozklad.core.timetable.DatedLessonRefresh;
 
 /**
  * Status transitions of changes (DOMAIN §7): every transition is validated by
@@ -21,13 +23,15 @@ public class ChangeWorkflow {
     private final ChangeHistoryRepository history;
     private final ChangeNotifications notifications;
     private final SettingsService settings;
+    private final DatedLessonRefresh lessonRefresh;
     private final Clock clock;
 
     public ChangeWorkflow(ChangeHistoryRepository history, ChangeNotifications notifications,
-                          SettingsService settings, Clock clock) {
+                          SettingsService settings, DatedLessonRefresh lessonRefresh, Clock clock) {
         this.history = history;
         this.notifications = notifications;
         this.settings = settings;
+        this.lessonRefresh = lessonRefresh;
         this.clock = clock;
     }
 
@@ -54,13 +58,24 @@ public class ChangeWorkflow {
         }
     }
 
-    /** Validated transition with history and {@code substitution.status-changed}. */
+    /**
+     * Validated transition with history and {@code substitution.status-changed}. A cancelled or
+     * declined change no longer keeps its lessons, so their group-day is brought back in line with
+     * the timetable and the calendar (e.g. a lesson of an archived version kept for this decision
+     * is replaced by the current version's lesson).
+     */
     public void moveTo(Change change, ChangeStatus target, String actor, String comment) {
         ChangeStatus from = change.getStatus();
         ChangeStatusMachine.requireTransition(from, target);
         change.setStatus(target);
         history.save(new ChangeHistory(change.getId(), clock.instant(), actor, from, target, comment));
         notifications.statusChanged(change);
+        if ((target == ChangeStatus.CANCELLED || target == ChangeStatus.DECLINED)
+                && (change.getOriginalLessonId() != null || change.getSwapLessonId() != null)) {
+            DatedLessonRefresh.Result refreshed = lessonRefresh.refresh(List.of(change.getDate()),
+                    List.of(change.getGroupId()));
+            change.forgetLessons(refreshed.removedLessonIds());
+        }
     }
 
     /**

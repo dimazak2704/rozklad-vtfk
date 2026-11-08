@@ -102,8 +102,11 @@ public class CalendarPeriodService {
     public void delete(UUID id) {
         CalendarPeriod period = find(id);
         Semester semester = semester(period.getSemesterId());
-        changes.periodsChanged(List.of(PeriodSnapshot.of(period)), semester.getStartsOn(), semester.getEndsOn());
+        PeriodSnapshot removed = PeriodSnapshot.of(period);
         periods.delete(period);
+        // слухачі (матеріалізація занять) читають календар уже без цього періоду
+        periods.flush();
+        changes.periodsChanged(List.of(removed), semester.getStartsOn(), semester.getEndsOn());
     }
 
     private CalendarPeriod find(UUID id) {

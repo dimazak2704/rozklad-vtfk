@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.core.calendar.CalendarQueries;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
+import ua.vtc.rozklad.core.shared.error.ConflictKind;
+import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.timetable.LessonConflictChecker;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
@@ -60,10 +62,29 @@ class LessonMaterializer {
         datedConflicts.conflictsOf(keptScheduled).stream()
                 .filter(ConflictDto::isHard)
                 .forEach(conflicts::add);
-        return new Outcome(plan.lessons().size(), kept.size(), plan.coveredByChanges(), conflicts, plan.dates());
+        List<ConflictDto> pending = repository.pinnedByOpenDecisions(semester.getId(), from).stream()
+                .filter(lesson -> !version.getId().equals(lesson.versionId()))
+                .map(LessonMaterializer::pendingDecision)
+                .toList();
+        return new Outcome(plan.lessons().size(), kept.size(), plan.coveredByChanges(), conflicts, pending,
+                plan.dates());
+    }
+
+    /**
+     * A lesson of the previous version stays while an open decision is about it; once the decision
+     * is cancelled or declined, the slot is refreshed with the new version ({@link LessonRefresher}).
+     */
+    private static ConflictDto pendingDecision(PinnedLesson lesson) {
+        String what = "%s%s, %s, %d пара: %s%s".formatted(lesson.groupCode(),
+                lesson.subgroup() > 0 ? " (підгр. " + lesson.subgroup() + ")" : "", UkrainianText.date(lesson.date()),
+                lesson.pair(), lesson.disciplineName(), lesson.teacherName() == null ? "" : " " + lesson.teacherName());
+        return new ConflictDto(ConflictKind.GROUP, ConflictDto.Severity.SOFT,
+                what + " — лишилося з попереднього розкладу, бо про нього є відкрите рішення. Після скасування "
+                        + "або відмови пару буде замінено новим розкладом.",
+                List.of(lesson.id()), lesson.date(), null, lesson.pair());
     }
 
     record Outcome(int materialized, int kept, int coveredByChanges, List<ConflictDto> conflicts,
-                   List<LocalDate> dates) {
+                   List<ConflictDto> pendingDecisions, List<LocalDate> dates) {
     }
 }

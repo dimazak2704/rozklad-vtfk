@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Collection;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
@@ -276,6 +277,19 @@ public class Change extends BaseEntity {
 
     public void setSwapLessonId(UUID swapLessonId) {
         this.swapLessonId = swapLessonId;
+    }
+
+    /**
+     * The lessons were deleted (the timetable was refreshed after this decision was abandoned):
+     * the database cleared the links (V1_502), the entity follows so a later flush keeps them null.
+     */
+    public void forgetLessons(Collection<UUID> removedLessonIds) {
+        if (originalLessonId != null && removedLessonIds.contains(originalLessonId)) {
+            originalLessonId = null;
+        }
+        if (swapLessonId != null && removedLessonIds.contains(swapLessonId)) {
+            swapLessonId = null;
+        }
     }
 
     /** When the overdue-confirmation reminder was sent for the current confirmation round. */

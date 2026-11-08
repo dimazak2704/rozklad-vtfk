@@ -68,6 +68,9 @@ public class ChangeEffectPlanner {
     }
 
     private ChangeEffect cancel(Change change) {
+        if (change.getOriginalLessonId() == null) {
+            throw lessonGone();
+        }
         Lesson original = lessons.findById(change.getOriginalLessonId())
                 .orElseThrow(() -> NotFoundException.of("Заняття", change.getOriginalLessonId()));
         return new ChangeEffect(original.isScheduled() ? List.of(original) : List.of(), List.of());
@@ -118,11 +121,23 @@ public class ChangeEffectPlanner {
         return new ChangeEffect(replaced, created);
     }
 
+    /**
+     * The lesson of an abandoned (declined) decision was replaced when the timetable or the
+     * calendar changed: the decision has nothing to apply to any more.
+     */
+    private static ConflictException lessonGone() {
+        return new ConflictException("Заняття цієї зміни вже немає в розкладі: розклад або календар змінилися "
+                + "після відмови. Створіть нове рішення для заняття.");
+    }
+
     private Lesson scheduledOriginal(Change change) {
         return scheduled(change.getOriginalLessonId(), change);
     }
 
     private Lesson scheduled(UUID lessonId, Change change) {
+        if (lessonId == null) {
+            throw lessonGone();
+        }
         Lesson lesson = lessons.findById(lessonId).orElseThrow(() -> NotFoundException.of("Заняття", lessonId));
         if (!lesson.isScheduled()) {
             String group = catalog.group(lesson.getGroupId()).getCode();
