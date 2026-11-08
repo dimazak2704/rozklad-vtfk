@@ -1244,6 +1244,16 @@ export interface BotStatusDto {
 }
 
 /** GET /api/notify/bindings. Адитивно до контракту: `groupCode`, `digestEnabled`. */
+/** GET /api/notify/bindings/me — чи привʼязав викладач (власник облікового запису) свій Telegram. */
+export interface MyBindingDto {
+  teacherId: Uuid;
+  teacherName: string;
+  bound: boolean;
+  binding: Nullable<ChatBindingDto>;
+  botUsername: Nullable<string>;
+  botLink: Nullable<string>;
+}
+
 export interface ChatBindingDto {
   id: Uuid;
   type: BindingType;

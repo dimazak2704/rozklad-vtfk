@@ -11,6 +11,7 @@ import type {
   ChatBindingDto,
   DeliveryDto,
   DeliveryStatus,
+  MyBindingDto,
   Page,
   Uuid,
 } from './types';
@@ -52,6 +53,18 @@ export function useDeliveries(query: DeliveriesQuery, { keepPrevious = false }: 
     placeholderData: keepPrevious ? keepPreviousData : undefined,
     refetchInterval: (state) =>
       state.state.data?.items.some((d) => d.status === 'QUEUED' || d.status === 'RETRYING') ? 3_000 : 30_000,
+  });
+}
+
+/**
+ * Привʼязка Telegram самого викладача. Поки відкрито посилання для підключення (`waiting`), стан
+ * перевіряється частіше: людина підключає бота на телефоні, а кабінет має це побачити сам.
+ */
+export function useMyBinding({ waiting = false }: { waiting?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.notify.myBinding(),
+    queryFn: ({ signal }) => api.get<MyBindingDto>('/notify/bindings/me', undefined, { signal }),
+    refetchInterval: (query) => (waiting && !query.state.data?.bound ? 5_000 : false),
   });
 }
 

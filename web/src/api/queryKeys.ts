@@ -101,6 +101,7 @@ export const qk = {
     all: ['notify'] as const,
     bot: () => ['notify', 'bot'] as const,
     bindings: () => ['notify', 'bindings'] as const,
+    myBinding: () => ['notify', 'bindings', 'me'] as const,
     deliveries: (params?: Params) => ['notify', 'deliveries', clean(params)] as const,
   },
 } as const;

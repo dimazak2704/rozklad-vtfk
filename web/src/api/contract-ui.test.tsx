@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, errorFromResponse, STALE_DATA_MESSAGE } from '@/api/errors';
 import { invalidateFor } from '@/api/live';
 import { qk } from '@/api/queryKeys';
-import type { ChangeDto, PublicGroupDto, PublicMetaDto } from '@/api/types';
+import type { ChangeDto, MyBindingDto, PublicGroupDto, PublicMetaDto } from '@/api/types';
 import { DecisionCard } from '@/components/admin-daily/changes/DecisionCard';
 import { BindingCodeDialog } from '@/components/admin-daily/telegram/BindingCodeDialog';
 import { NowPanel } from '@/components/public/home/NowPanel';
@@ -106,18 +106,51 @@ describe('null-поля публічних DTO', () => {
   });
 });
 
-describe('Telegram у кабінеті: обліковий запис без викладача', () => {
+describe('Telegram у кабінеті: стан власної привʼязки', () => {
+  const notLinked = () =>
+    problem({ status: 422, slug: 'business-rule', code: 'teacher-not-linked', detail: 'Ваш обліковий запис не повʼязаний з викладачем.' });
+  const status = (bound: boolean): MyBindingDto => ({
+    teacherId: teacherNamed('Кренцін').id,
+    teacherName: 'Кренцін',
+    bound,
+    binding: bound
+      ? {
+          id: 'b-1',
+          type: 'TEACHER',
+          chatId: '•••7890',
+          title: 'Микола Кренцін',
+          groupId: null,
+          groupCode: null,
+          teacherId: teacherNamed('Кренцін').id,
+          digestEnabled: false,
+          createdAt: '2026-09-02T07:15:00Z',
+        }
+      : null,
+    botUsername: 'scheduler_vtfk_bot',
+    botLink: 'https://t.me/scheduler_vtfk_bot',
+  });
+
   it('422 teacher-not-linked показує пояснення в картці замість посилання', async () => {
-    server.use(
-      http.post(apiPath('/notify/bindings/codes'), () =>
-        problem({ status: 422, slug: 'business-rule', code: 'teacher-not-linked', detail: 'Ваш обліковий запис не повʼязаний з викладачем.' }),
-      ),
-    );
+    server.use(http.get(apiPath('/notify/bindings/me'), notLinked), http.post(apiPath('/notify/bindings/codes'), notLinked));
+    renderWithProviders(<TelegramConnect teacherId={teacherNamed('Кренцін').id} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ваш обліковий запис ще не повʼязаний з викладачем. Зверніться до диспетчера.');
+    expect(screen.queryByRole('button', { name: 'Підключити Telegram' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Відкрити Telegram/ })).not.toBeInTheDocument();
+  });
+
+  it('уже підключений бот — стан замість нового посилання', async () => {
+    server.use(http.get(apiPath('/notify/bindings/me'), () => HttpResponse.json(status(true))));
+    renderWithProviders(<TelegramConnect teacherId={teacherNamed('Кренцін').id} />);
+    expect(await screen.findByRole('status')).toHaveTextContent(/Telegram підключено: Микола Кренцін, з 02\.09\.2026/);
+    expect(screen.queryByRole('button', { name: 'Підключити Telegram' })).not.toBeInTheDocument();
+  });
+
+  it('не підключений — посилання з QR-кодом', async () => {
+    server.use(http.get(apiPath('/notify/bindings/me'), () => HttpResponse.json(status(false))));
     const user = userEvent.setup();
     renderWithProviders(<TelegramConnect teacherId={teacherNamed('Кренцін').id} />);
-    await user.click(screen.getByRole('button', { name: 'Підключити Telegram' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Ваш обліковий запис ще не повʼязаний з викладачем. Зверніться до диспетчера.');
-    expect(screen.queryByRole('link', { name: /Відкрити Telegram/ })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Підключити Telegram' }));
+    expect(await screen.findByRole('link', { name: /Відкрити Telegram/ })).toBeInTheDocument();
   });
 });
 

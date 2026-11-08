@@ -17,6 +17,7 @@ import type {
   DeliveryDto,
   GenerationJobCreated,
   ImportJobDto,
+  MyBindingDto,
   Page,
   PublicChangesDto,
   ScheduleDto,
@@ -273,6 +274,9 @@ describe('контракт мок-API ↔ notification', () => {
   it('привʼязки, код привʼязки й стан бота', async () => {
     const path = `${NOTIFY}binding/web/BindingController.java`;
     await expectShape(first(await api.get<ChatBindingDto[]>('/notify/bindings'), 'привʼязки'), path, 'BindingDto');
+    const mine = await api.get<MyBindingDto>('/notify/bindings/me');
+    await expectShape(mine, path, 'MyBindingDto');
+    await expectShape(mine.binding, path, 'BindingDto');
     const code = await api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'ADMIN_CHAT' });
     await expectShape(code, path, 'BindingCodeDto');
     await expectShape(await api.get('/notify/bot'), `${NOTIFY}telegram/BotStatus.java`, 'Status');

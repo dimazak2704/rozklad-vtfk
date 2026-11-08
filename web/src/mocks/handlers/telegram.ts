@@ -18,6 +18,7 @@ import type {
   DeliveryPurpose,
   DeliveryStatus,
   IsoInstant,
+  MyBindingDto,
   Uuid,
 } from '@/api/types';
 import {
@@ -289,6 +290,21 @@ export const handlers = [
   http.get(apiPath('/notify/bot'), () => {
     // як BotStatus.Status: `problem` є завжди (null, коли бот на звʼязку)
     const status: BotStatusDto = { username: BOT_USERNAME, link: BOT_LINK, mode: 'POLLING', connected: true, problem: null };
+    return HttpResponse.json(status);
+  }),
+
+  // мок-користувач кабінету — Кренцін (як /api/me у me.ts)
+  http.get(apiPath('/notify/bindings/me'), () => {
+    const teacher = teacherNamed('Кренцін');
+    const binding = bindings.all().find((b) => b.type === 'TEACHER' && b.teacherId === teacher.id) ?? null;
+    const status: MyBindingDto = {
+      teacherId: teacher.id,
+      teacherName: teacher.displayName,
+      bound: binding !== null,
+      binding,
+      botUsername: BOT_USERNAME,
+      botLink: BOT_LINK,
+    };
     return HttpResponse.json(status);
   }),
 

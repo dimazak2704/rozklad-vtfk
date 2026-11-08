@@ -1,9 +1,10 @@
-import { Send } from 'lucide-react';
+import { CircleCheck, Send } from 'lucide-react';
 import { isApiError } from '@/api/errors';
-import { useCreateBindingCode } from '@/api/telegram';
+import { useCreateBindingCode, useMyBinding } from '@/api/telegram';
 import type { Uuid } from '@/api/types';
-import { Button, buttonClass, notify } from '@/components/ui';
+import { Button, buttonClass, ErrorState, notify, Skeleton } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
+import { formatInstant } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
 import { QrPlate } from '../public/QrPlate';
 import { TELEGRAM_BOT_HANDLE } from '../public/telegram';
@@ -14,8 +15,9 @@ function isNotLinked(error: unknown): boolean {
 }
 
 /**
- * Привʼязка Telegram: одноразове глибоке посилання на бота з кодом (CONTRACTS §6). З компʼютера — QR-кодом
- * на телефон, з телефона — кнопкою. Після привʼязки бот надсилає запити на заміну з кнопками відповіді.
+ * Привʼязка Telegram: спершу стан власної привʼязки (`GET /api/notify/bindings/me`); якщо бота ще не підключено —
+ * одноразове глибоке посилання на бота з кодом (CONTRACTS §6). З компʼютера — QR-кодом на телефон, з телефона —
+ * кнопкою. Після привʼязки бот надсилає запити на заміну з кнопками відповіді.
  */
 export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
   const link = useCreateBindingCode();
@@ -23,6 +25,7 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
   const data = link.data;
   const msLeft = data ? new Date(data.expiresAt).getTime() - now.getTime() : 0;
   const expired = data !== undefined && msLeft <= 0;
+  const mine = useMyBinding({ waiting: data !== undefined && !expired });
 
   const request = () =>
     link.mutate(
@@ -34,7 +37,8 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
         },
       },
     );
-  const notLinked = link.isError && isNotLinked(link.error);
+  const notLinkedError = mine.isError && isNotLinked(mine.error) ? mine.error : link.isError && isNotLinked(link.error) ? link.error : null;
+  const binding = mine.data?.bound ? mine.data.binding : null;
 
   return (
     <section aria-labelledby="telegram-connect-heading" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
@@ -44,9 +48,21 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
       <p className="text-ui text-secondary">
         Підключіть бота {TELEGRAM_BOT_HANDLE}: запити на заміну приходитимуть у Telegram, а відповісти можна однією кнопкою.
       </p>
-      {notLinked ? (
+      {mine.isPending ? (
+        <Skeleton className="h-9 w-48" />
+      ) : notLinkedError ? (
         <p role="alert" className="text-ui font-medium text-danger">
-          {link.error.message}
+          {notLinkedError.message}
+        </p>
+      ) : mine.isError ? (
+        <ErrorState error={mine.error} onRetry={() => void mine.refetch()} size="sm" title="Не вдалося перевірити привʼязку Telegram" />
+      ) : mine.data.bound ? (
+        <p role="status" className="flex items-start gap-2 text-ui text-primary">
+          <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-add" />
+          <span>
+            Telegram підключено{binding ? <>: {binding.title}, з {formatInstant(binding.createdAt)}</> : null}. Запити на заміну
+            приходять у бот.
+          </span>
         </p>
       ) : !data || expired ? (
         <div className="flex flex-col gap-2">
