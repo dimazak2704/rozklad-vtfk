@@ -16,6 +16,8 @@ import { usePublicMeta } from '@/api/meta';
 import { qk } from '@/api/queryKeys';
 import type { ChangeDto, IsoDate, OrderDto, Uuid } from '@/api/types';
 import { useFreshSources } from '@/components/admin-daily/dashboard/useFreshSources';
+import { waitsForNetwork } from '@/components/admin-daily/network';
+import { OfflineState } from '@/components/admin-daily/OfflineState';
 import { DeliverySummary } from '@/components/admin-daily/orders/DeliverySummary';
 import { NotesEditor } from '@/components/admin-daily/orders/NotesEditor';
 import { OrderFiles } from '@/components/admin-daily/orders/OrderFiles';
@@ -81,9 +83,11 @@ export default function OrdersPage() {
     if (draftSignature) void queryClient.invalidateQueries({ queryKey: [...qk.admin.orders.all, 'list'] });
   }, [draftSignature, queryClient]);
   const dayOrders = useOrders({ from: date, to: date, status: 'PUBLISHED' });
+  // список попередньої дати (keepPreviousData) — не документи цієї дати
+  const dayOrdersData = dayOrders.isPlaceholderData ? undefined : dayOrders.data;
   const publishedOfDay = useMemo(
-    () => [...(dayOrders.data?.items ?? [])].sort((a, b) => (a.number ?? 0) - (b.number ?? 0)),
-    [dayOrders.data],
+    () => [...(dayOrdersData?.items ?? [])].sort((a, b) => (a.number ?? 0) - (b.number ?? 0)),
+    [dayOrdersData],
   );
   // документ з архіву (чи щойно опублікований), відкритий на цій робочій даті
   const [viewed, setViewed] = useState<{ id: Uuid; forDate: IsoDate } | null>(null);
@@ -154,9 +158,14 @@ export default function OrdersPage() {
     );
   } else if (!order) {
     const error = detailId ? detail.error : draft.error;
+    const offline = detailId ? waitsForNetwork(detail) : waitsForNetwork(draft) || waitsForNetwork(dayOrders);
     main = error ? (
       <Panel>
         <ErrorState error={error} onRetry={() => void (detailId ? detail.refetch() : draft.refetch())} />
+      </Panel>
+    ) : offline ? (
+      <Panel>
+        <OfflineState />
       </Panel>
     ) : (
       <SheetSkeleton />

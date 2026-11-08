@@ -2,6 +2,8 @@ import { ArrowLeftRight, FileText } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { useDailyLiveSync, useDashboard, useOrders } from '@/api/admin-daily';
+import { OfflineState } from '@/components/admin-daily/OfflineState';
+import { waitsForNetwork } from '@/components/admin-daily/network';
 import { usePublicMeta } from '@/api/meta';
 import { useChangesWorkspace } from '@/components/admin-daily/changes/useChangesWorkspace';
 import { ActivityFeed } from '@/components/admin-daily/dashboard/ActivityFeed';
@@ -38,17 +40,23 @@ export default function DashboardPage() {
   const dashboard = useDashboard(date);
   const workspace = useChangesWorkspace(date, 'day');
   const orders = useOrders({ from: date, to: date });
+  // keepPreviousData тримає дані попередньої дати, поки нові не прийшли; без мережі вони не прийдуть,
+  // тож показуємо лише дані саме цієї дати, а замість решти — «немає звʼязку»
+  const summary = dashboard.isPlaceholderData ? undefined : dashboard.data;
+  const dayOrders = orders.isPlaceholderData ? undefined : orders.data;
+  const offline = waitsForNetwork(dashboard) || waitsForNetwork(orders) || workspace.offline;
   const published = useMemo(
     () =>
-      (orders.data?.items ?? [])
+      (dayOrders?.items ?? [])
         .filter((o) => o.status === 'PUBLISHED')
         .sort((a, b) => (b.number ?? 0) - (a.number ?? 0))[0] ?? null,
-    [orders.data],
+    [dayOrders],
   );
 
   const feed = useMemo(
-    () => buildFeed([...workspace.changesById.values()], workspace.absences, orders.data?.items ?? [], date),
-    [workspace.changesById, workspace.absences, orders.data, date],
+    () =>
+      workspace.offline ? [] : buildFeed([...workspace.changesById.values()], workspace.absences, dayOrders?.items ?? [], date),
+    [workspace.offline, workspace.changesById, workspace.absences, dayOrders, date],
   );
 
   // події, що прийшли наживо після відкриття сторінки, коротко підсвічуються
@@ -58,7 +66,7 @@ export default function DashboardPage() {
   const nextStudyDay = shiftStudyDay(date, 1);
   const relative = relativeDayLabel(date, today);
   const needsAction = workspace.entries.filter((e) => LESSON_STATE[e.state].needsAction).length;
-  const alerts = dashboard.data?.alerts ?? [];
+  const alerts = summary?.alerts ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,7 +79,7 @@ export default function DashboardPage() {
               {relative ? `${relative}, ` : ''}
               {formatWeekdayDate(date).toLocaleLowerCase('uk')}
             </span>
-            {dashboard.data && !weekend ? <ParityBadge parity={dashboard.data.parity} weekNumber={meta.data?.today === date ? meta.data.weekNumber : undefined} size="sm" /> : null}
+            {summary && !weekend ? <ParityBadge parity={summary.parity} weekNumber={meta.data?.today === date ? meta.data.weekNumber : undefined} size="sm" /> : null}
           </>
         }
         actions={
@@ -101,13 +109,17 @@ export default function DashboardPage() {
             }
           />
         </Panel>
-      ) : dashboard.isError && !dashboard.data ? (
+      ) : offline && !summary ? (
+        <Panel>
+          <OfflineState />
+        </Panel>
+      ) : dashboard.isError && !summary ? (
         <Panel>
           <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />
         </Panel>
       ) : (
         <Panel title="Маршрут ранку" description="Від відсутностей до опублікованого розпорядження. Натисніть зупинку, щоб перейти до роботи." flush>
-          <MorningRoute dashboard={dashboard.data} published={published} date={date} />
+          <MorningRoute dashboard={summary} published={published} date={date} />
         </Panel>
       )}
 
@@ -120,7 +132,11 @@ export default function DashboardPage() {
               description={alerts.length > 0 ? 'Від термінового до довідкового' : undefined}
               flush
             >
-              {dashboard.isPending ? (
+              {!summary && offline ? (
+                <OfflineState size="sm" />
+              ) : !summary && dashboard.isError ? (
+                <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} size="sm" />
+              ) : !summary ? (
                 <LoadingRegion label="Завантажуємо сповіщення…" className="flex flex-col gap-3 p-4">
                   <SkeletonText lines={2} />
                   <SkeletonText lines={2} />
@@ -140,10 +156,18 @@ export default function DashboardPage() {
               className="order-3"
               title="Стрічка подій"
               description="Відсутності, запити й відповіді в Telegram, публікації — наживо"
-              actions={<StatusDot tone="live" pulse label="Оновлюється наживо" showLabel />}
+              actions={
+                offline ? (
+                  <StatusDot tone="neutral" label="Немає звʼязку" showLabel />
+                ) : (
+                  <StatusDot tone="live" pulse label="Оновлюється наживо" showLabel />
+                )
+              }
               flush
             >
-              {workspace.loading && feed.length === 0 ? (
+              {workspace.offline ? (
+                <OfflineState size="sm" />
+              ) : workspace.loading && feed.length === 0 ? (
                 <LoadingRegion label="Завантажуємо події…" className="flex flex-col gap-3 p-4">
                   {[0, 1, 2, 3].map((key) => (
                     <Skeleton key={key} className="h-5 w-full" />
@@ -173,7 +197,9 @@ export default function DashboardPage() {
                 ) : null
               }
             >
-              {workspace.loading && workspace.entries.length === 0 ? (
+              {workspace.offline ? (
+                <OfflineState size="sm" />
+              ) : workspace.loading && workspace.entries.length === 0 ? (
                 <LoadingRegion label="Завантажуємо пари…" className="flex flex-col gap-3 p-4">
                   {[0, 1, 2].map((key) => (
                     <Skeleton key={key} className="h-10 w-full" />
@@ -195,7 +221,7 @@ export default function DashboardPage() {
             </Panel>
 
             <Panel title="Сервіси" flush className="order-4">
-              <SystemStatus dashboard={dashboard.data} />
+              <SystemStatus dashboard={summary} />
             </Panel>
           </div>
         </div>
