@@ -287,7 +287,8 @@ const DELIVERY_STATUSES: readonly DeliveryStatus[] = ['QUEUED', 'SENT', 'FAILED'
 
 export const handlers = [
   http.get(apiPath('/notify/bot'), () => {
-    const status: BotStatusDto = { username: BOT_USERNAME, link: BOT_LINK, mode: 'POLLING', connected: true };
+    // як BotStatus.Status: `problem` є завжди (null, коли бот на звʼязку)
+    const status: BotStatusDto = { username: BOT_USERNAME, link: BOT_LINK, mode: 'POLLING', connected: true, problem: null };
     return HttpResponse.json(status);
   }),
 

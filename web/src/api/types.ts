@@ -551,14 +551,19 @@ export interface MetricsDto {
   }>;
 }
 
-/** GET /api/admin/timetable/versions?semesterId */
+/** GET /api/admin/timetable/versions?semesterId (адитивно: semesterId, publishedBy, generationJobId, notes, createdAt). */
 export interface TimetableVersionDto {
   id: Uuid;
+  semesterId: Uuid;
   name: string;
   status: TimetableVersionStatus;
   source: TimetableVersionSource;
   effectiveFrom: Nullable<IsoDate>;
   publishedAt: Nullable<IsoInstant>;
+  publishedBy: Nullable<string>;
+  generationJobId: Nullable<Uuid>;
+  notes: Nullable<string>;
+  createdAt: IsoInstant;
   lessonCount: number;
   hardConflicts: number;
   softWarnings: number;
@@ -636,8 +641,17 @@ export interface PublishVersionRequest {
   effectiveFrom: IsoDate;
 }
 
+/**
+ * POST …/publish → 200. `keptLessons` — заняття з чинних змін, що лишились; `coveredByChanges` — заняття шаблону,
+ * яких не створено, бо їх закриває зміна; `conflicts` — HARD-конфлікти лишених змін з новою версією.
+ */
 export interface PublishVersionResponse {
+  versionId: Uuid;
+  effectiveFrom: IsoDate;
   materializedLessons: number;
+  keptLessons: number;
+  coveredByChanges: number;
+  conflicts: Conflict[];
 }
 
 // ───────────────────────── 2. Admin: генерація ─────────────────────────

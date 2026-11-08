@@ -236,11 +236,16 @@ describe('історія правок', () => {
 describe('версії', () => {
   const version = (id: string, status: TimetableVersionDto['status']): TimetableVersionDto => ({
     id,
+    semesterId: 'sem',
     name: id,
     status,
     source: 'COPY',
     effectiveFrom: null,
     publishedAt: null,
+    publishedBy: null,
+    generationJobId: null,
+    notes: null,
+    createdAt: '2026-11-01T08:00:00Z',
     lessonCount: 0,
     hardConflicts: 0,
     softWarnings: 0,

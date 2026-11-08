@@ -72,9 +72,16 @@ function PublishForm({
     setFieldError(null);
     try {
       const result = await publish.mutateAsync({ versionId: version.id, effectiveFrom });
-      notify.success(`Версію «${version.name}» опубліковано`, {
-        description: `Діє з ${formatLongDate(effectiveFrom)}. Перебудовано занять на дати: ${result.materializedLessons.toLocaleString('uk-UA')}.`,
-      });
+      const kept = result.keptLessons > 0 ? ` Лишилось занять із чинних замін: ${result.keptLessons.toLocaleString('uk-UA')}.` : '';
+      const description = `Діє з ${formatLongDate(effectiveFrom)}. Перебудовано занять на дати: ${result.materializedLessons.toLocaleString('uk-UA')}.${kept}`;
+      if (result.conflicts.length > 0) {
+        // core публікує, але повідомляє про конфлікти лишених замін з новою версією — диспетчер має їх побачити
+        notify.warning(`Версію «${version.name}» опубліковано, але ${result.conflicts.length} замін конфліктують з новим розкладом`, {
+          description: `${description} ${result.conflicts.map((c) => c.message).join('; ')}`,
+        });
+      } else {
+        notify.success(`Версію «${version.name}» опубліковано`, { description });
+      }
       onDone();
     } catch (error) {
       if (isApiError(error) && error.isConflict && error.conflicts.length > 0) {

@@ -550,11 +550,16 @@ function toVersionDto(version: VersionRecord): TimetableVersionDto {
   const analysis = analyzeLessons(version.lessons);
   return {
     id: version.id,
+    semesterId: version.semesterId,
     name: version.name,
     status: version.status,
     source: version.source,
     effectiveFrom: version.effectiveFrom,
     publishedAt: version.publishedAt,
+    publishedBy: version.publishedAt ? 'admin' : null,
+    generationJobId: null,
+    notes: null,
+    createdAt: version.createdAt,
     lessonCount: version.lessons.length,
     hardConflicts: analysis.hard.length,
     softWarnings: analysis.soft.length,
@@ -838,7 +843,15 @@ export const handlers = [
         return v;
       }),
     );
-    const response: PublishVersionResponse = { materializedLessons: materializedCount(version.lessons, effectiveFrom, semester.endsOn) };
+    // як PublicationResult core; мок не тримає датованих змін, тож лишених занять і конфліктів з ними немає
+    const response: PublishVersionResponse = {
+      versionId: version.id,
+      effectiveFrom,
+      materializedLessons: materializedCount(version.lessons, effectiveFrom, semester.endsOn),
+      keptLessons: 0,
+      coveredByChanges: 0,
+      conflicts: [],
+    };
     emitServerEvent('schedule.changed', {
       dates: studyDates(effectiveFrom, semester.endsOn),
       groupIds: [...new Set(version.lessons.map((l) => l.group.id))],
