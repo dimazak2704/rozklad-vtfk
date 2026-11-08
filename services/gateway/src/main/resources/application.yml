@@ -18,6 +18,8 @@ spring:
             - PreserveHostHeader
             # якщо сервіс колись додасть власні CORS-заголовки, браузер не отримає дублікатів
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_UNIQUE
+            # сервіси повертають X-Request-Id, який шлюз уже поставив: лишаємо одне значення шлюзу
+            - DedupeResponseHeader=X-Request-Id, RETAIN_FIRST
           globalcors:
             add-to-simple-url-handler-mapping: true
             cors-configurations:

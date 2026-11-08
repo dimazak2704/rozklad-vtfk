@@ -95,6 +95,8 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
             case 404 -> new Problem(HttpStatus.NOT_FOUND, "not-found", "Не знайдено", "Такого ресурсу не існує.");
             case 429 -> new Problem(HttpStatus.TOO_MANY_REQUESTS, "too-many-requests", "Забагато запитів",
                     "Зачекайте секунду й повторіть запит.");
+            case 403 -> new Problem(HttpStatus.FORBIDDEN, "forbidden", "Доступ заборонено",
+                    "Запит з цього джерела (Origin) не дозволено.");
             case 405 -> new Problem(HttpStatus.METHOD_NOT_ALLOWED, "method-not-allowed", "Метод не підтримується",
                     "Цей метод не підтримується для ресурсу.");
             case 503 -> new Problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable",

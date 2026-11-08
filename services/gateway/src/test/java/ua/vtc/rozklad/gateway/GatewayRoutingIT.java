@@ -2,6 +2,7 @@ package ua.vtc.rozklad.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -31,6 +33,9 @@ class GatewayRoutingIT {
 
     @Autowired
     private WebTestClient client;
+
+    @LocalServerPort
+    private int port;
 
     @DynamicPropertySource
     static void services(DynamicPropertyRegistry registry) {
@@ -68,6 +73,8 @@ class GatewayRoutingIT {
 
         String requestId = result.getResponseHeaders().getFirst(RequestIdWebFilter.HEADER);
         assertThat(UUID.fromString(requestId)).isNotNull();
+        assertThat(result.getResponseHeaders().get(RequestIdWebFilter.HEADER)).as("the service echoes it, once")
+                .containsExactly(requestId);
         assertThat(result.getResponseBody())
                 .contains("\"requestId\":\"" + requestId + "\"")
                 .contains("\"authorization\":\"Bearer token-123\"")
@@ -103,7 +110,33 @@ class GatewayRoutingIT {
                 .header(HttpHeaders.ORIGIN, "https://evil.example")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE")
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.type").isEqualTo("urn:rozklad:problem:forbidden")
+                .jsonPath("$.requestId").exists();
+        client.get().uri("/api/public/meta")
+                .header(HttpHeaders.ORIGIN, "http://evil.example")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody().jsonPath("$.status").isEqualTo(403);
+    }
+
+    /** A path routes only in normal form: {@code /api//public} would miss the rate-limited route. */
+    @Test
+    void pathNotInNormalFormIsRejectedBeforeRouting() {
+        for (String path : List.of("/api//public/meta", "/api/public//meta", "/api/./public/meta",
+                "/api/public/%2e%2e/admin", "/api/public%2Fmeta", "/api/public;x=1/meta")) {
+            client.get().uri(URI.create("http://localhost:" + port + path))
+                    .exchange()
+                    .expectStatus().isBadRequest()
+                    .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                    .expectBody()
+                    .jsonPath("$.type").isEqualTo("urn:rozklad:problem:bad-request")
+                    .jsonPath("$.requestId").exists();
+        }
+        assertRoutedTo("/api/public/meta", "core");
     }
 
     @Test

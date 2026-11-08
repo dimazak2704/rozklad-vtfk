@@ -51,6 +51,8 @@ final class FakeService implements AutoCloseable {
                             header(exchange, "Host"), header(exchange, "Authorization"));
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
+            // як справжні сервіси: повертають отриманий X-Request-Id
+            exchange.getResponseHeaders().set("X-Request-Id", header(exchange, "X-Request-Id"));
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);
         }

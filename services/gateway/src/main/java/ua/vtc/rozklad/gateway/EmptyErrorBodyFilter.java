@@ -16,8 +16,10 @@ import reactor.core.publisher.Mono;
 /**
  * A gateway filter that rejects a request by status only (the Redis rate limiter answers 429 and
  * completes the response) would send an empty body. Such a response gets the gateway's
- * ProblemDetail instead, and a 429 also tells when to retry ({@code Retry-After}). Proxied
- * responses are written by the routing filter and pass through unchanged.
+ * ProblemDetail instead, and a 429 also tells when to retry ({@code Retry-After}). The CORS check
+ * of the handler mapping only sets 403 and leaves completing the response to the server, so after
+ * the chain an error status without a body gets the ProblemDetail too. Proxied responses are
+ * written by the routing filter (committed) and pass through unchanged.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
@@ -48,6 +50,13 @@ public class EmptyErrorBodyFilter implements WebFilter {
                 return errors.write(exchange, getDelegate(), GatewayErrorHandler.fromStatus(status));
             }
         };
-        return chain.filter(exchange.mutate().response(withProblem).build());
+        return chain.filter(exchange.mutate().response(withProblem).build())
+                .then(Mono.defer(() -> {
+                    HttpStatusCode status = response.getStatusCode();
+                    if (status == null || !status.isError() || response.isCommitted()) {
+                        return Mono.empty();
+                    }
+                    return errors.write(exchange, response, GatewayErrorHandler.fromStatus(status));
+                }));
     }
 }
