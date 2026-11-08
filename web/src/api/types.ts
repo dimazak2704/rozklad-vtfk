@@ -969,6 +969,14 @@ export interface OrderDto {
   imported: boolean;
 }
 
+/** GET /api/admin/orders/numbering?semesterId — наступний номер = max(останній + 1, перший). */
+export interface OrderNumberingDto {
+  semesterId: Uuid;
+  firstNumber: number;
+  lastNumber: Nullable<number>;
+  nextNumber: number;
+}
+
 export interface UpdateOrderNotesRequest {
   notes: string[];
 }

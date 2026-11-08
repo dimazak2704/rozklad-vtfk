@@ -54,6 +54,7 @@ export const qk = {
       list: (params?: Params) => ['admin', 'orders', 'list', clean(params)] as const,
       detail: (id: Uuid) => ['admin', 'orders', 'detail', id] as const,
       draft: (date: IsoDate) => ['admin', 'orders', 'draft', date] as const,
+      numbering: (semesterId: Uuid) => ['admin', 'orders', 'numbering', semesterId] as const,
     },
     timetable: {
       all: ['admin', 'timetable'] as const,

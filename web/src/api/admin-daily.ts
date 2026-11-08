@@ -28,6 +28,7 @@ import type {
   LessonOptionsDto,
   OptionDto,
   OrderDto,
+  OrderNumberingDto,
   OrderStatus,
   OrderSummaryDto,
   Page,
@@ -165,13 +166,16 @@ export function useOrders(query: OrdersQuery, enabled = true) {
  * Номер, який отримає розпорядження: останній опублікований у межах семестру + 1 (DOMAIN §8).
  * Остаточний номер присвоює сервер під час публікації — це лише попередження в діалозі.
  */
-export function useNextOrderNumber(semester: { startsOn: IsoDate; endsOn: IsoDate } | undefined) {
-  const query = useOrders(
-    { from: semester?.startsOn, to: semester?.endsOn, status: 'PUBLISHED', sort: 'number,desc', size: 1 },
-    semester !== undefined,
-  );
-  const last = query.data?.items[0]?.number ?? null;
-  return { ...query, lastNumber: last, nextNumber: query.data ? (last ?? 0) + 1 : null };
+export function useNextOrderNumber(semester: { id: Uuid } | undefined) {
+  // номер дає сервер (GET /admin/orders/numbering): max(останній + 1, перший номер семестру); список
+  // розпоряджень відсортовано за датою, тож «перше в списку» — не обовʼязково з найбільшим номером
+  const query = useQuery({
+    queryKey: qk.admin.orders.numbering(semester?.id ?? ''),
+    queryFn: ({ signal }) =>
+      api.get<OrderNumberingDto>('/admin/orders/numbering', { semesterId: semester?.id }, { signal }),
+    enabled: semester !== undefined,
+  });
+  return { ...query, lastNumber: query.data?.lastNumber ?? null, nextNumber: query.data?.nextNumber ?? null };
 }
 
 // ───────────────────────── Зміни стану ─────────────────────────

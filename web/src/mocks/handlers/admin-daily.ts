@@ -33,6 +33,7 @@ import { dashboardFor } from './admin-daily/dashboard';
 import { orderDocx, orderPdf, orderPng } from './admin-daily/documents';
 import { findTemplateLesson } from './admin-daily/lessons';
 import { draftFor, listOrders, publishOrder, updateNotes } from './admin-daily/order-commands';
+import { nextOrderNumber } from './admin-daily/orders';
 import { affectedLessons, optionsFor } from './admin-daily/rules';
 import { getOrder, world } from './admin-daily/state';
 import { changesOn, toChangeDto, toOrderDto } from './admin-daily/world';
@@ -172,6 +173,12 @@ export const handlers = [
 
   // ── Розпорядження ──
   http.get(apiPath('/admin/orders'), ({ request }) => HttpResponse.json(listOrders(new URL(request.url)))),
+  // як OrderNumberingService: наступний = max(останній + 1, перший); мок починає з 1
+  http.get(apiPath('/admin/orders/numbering'), ({ request }) => {
+    const semesterId = new URL(request.url).searchParams.get('semesterId') ?? '';
+    const next = nextOrderNumber(world(), semesterId);
+    return HttpResponse.json({ semesterId, firstNumber: 1, lastNumber: next > 1 ? next - 1 : null, nextNumber: next });
+  }),
 
   http.get(apiPath('/admin/orders/draft'), ({ request }) => {
     const draft = draftFor(new URL(request.url).searchParams.get('date'), new Date());

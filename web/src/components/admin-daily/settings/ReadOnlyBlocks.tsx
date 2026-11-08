@@ -2,10 +2,9 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useNextOrderNumber } from '@/api/admin-daily';
 import { useAiUsage } from '@/api/import';
-import type { IsoDate } from '@/api/types';
+import type { Uuid } from '@/api/types';
 import { SkeletonText } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatNumericDate } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { usd } from '../format';
 
@@ -21,17 +20,17 @@ function Item({ term, children }: { term: string; children: ReactNode }) {
 }
 
 /** Нумерація розпоряджень: останній опублікований номер семестру і який буде наступним. */
-export function NumberingInfo({ semester }: { semester: { startsOn: IsoDate; endsOn: IsoDate } | undefined }) {
+export function NumberingInfo({ semester }: { semester: { id: Uuid } | undefined }) {
   const next = useNextOrderNumber(semester);
-  const last = next.data?.items[0];
+  const last = next.lastNumber;
   return (
     <dl className="grid gap-4 rounded-control border border-separator bg-sunken px-4 py-3 sm:grid-cols-2">
       <Item term="Останній у семестрі">
         {next.isPending ? (
           <SkeletonText lines={1} />
-        ) : last ? (
-          <Link to={`/admin/orders?date=${last.date}`} className="font-semibold text-accent underline-offset-4 hover:underline">
-            №{last.number} від {formatNumericDate(last.date)}
+        ) : last !== null ? (
+          <Link to="/admin/orders" className="font-semibold text-accent underline-offset-4 hover:underline">
+            №{last}
           </Link>
         ) : (
           'Ще не публікували'
