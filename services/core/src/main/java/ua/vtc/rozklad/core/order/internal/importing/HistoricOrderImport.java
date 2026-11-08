@@ -125,7 +125,18 @@ public class HistoricOrderImport {
                 blankToNull(item.toDiscipline()), blankToNull(item.toTeacher()), blankToNull(item.roomText()), null);
     }
 
+    /**
+     * A draft nobody worked on (no rows, calendar notes only) is just the view of an empty date,
+     * left behind when the dispatcher opened the date: the paper order replaces it. A draft with
+     * rows or edited notes blocks the import until it is published or deleted.
+     */
     private OrderDocument mainOrder(SemesterInfo semester, HistoricOrderRequest request) {
+        orders.findBySemesterIdAndDateAndKind(semester.id(), request.date(), OrderKind.ORDER)
+                .filter(existing -> existing.isDraft() && existing.getItems().isEmpty() && !existing.isNotesEdited())
+                .ifPresent(untouched -> {
+                    orders.delete(untouched);
+                    orders.flush();
+                });
         orders.findBySemesterIdAndDateAndKind(semester.id(), request.date(), OrderKind.ORDER).ifPresent(existing -> {
             throw new ConflictException(existing.getStatus() == OrderStatus.PUBLISHED
                     ? "На %s уже є розпорядження №%d.".formatted(request.date().format(DATE), existing.getNumber())

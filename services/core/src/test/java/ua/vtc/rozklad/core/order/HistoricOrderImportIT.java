@@ -1,11 +1,14 @@
 package ua.vtc.rozklad.core.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -121,6 +124,46 @@ class HistoricOrderImportIT {
                 .andExpect(jsonPath("$.groups[0].items[0].to.teacher").value("Прокопчук О."));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_document", Integer.class)).isOne();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_item", Integer.class)).isEqualTo(2);
+    }
+
+    /** Opening the orders page for the date leaves an empty draft: it does not block the paper order. */
+    @Test
+    void untouchedEmptyDraftGivesWayToThePaperOrder() throws Exception {
+        mvc.perform(get("/api/admin/orders/draft").param("date", "2026-10-19").with(TestJwts.admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.items").isEmpty());
+
+        importOrder(ORDER_35).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(true));
+
+        assertThat(jdbc.queryForList("SELECT status FROM order_document", String.class)).containsExactly("PUBLISHED");
+    }
+
+    /** A draft the dispatcher worked on blocks the import until it is deleted; published orders stay. */
+    @Test
+    void editedDraftBlocksTheImportUntilItIsDeleted() throws Exception {
+        String draftId = JsonPath.read(mvc.perform(get("/api/admin/orders/draft").param("date", "2026-10-19")
+                .with(TestJwts.admin())).andReturn().getResponse().getContentAsString(), "$.id");
+        mvc.perform(put("/api/admin/orders/{id}/notes", draftId).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":[\"Примітка диспетчера\"]}"))
+                .andExpect(status().isOk());
+
+        importOrder(ORDER_35)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("На 19.10.2026 уже є чернетка розпорядження: опублікуйте її "
+                        + "або видаліть, щоб імпортувати паперове."));
+        mvc.perform(delete("/api/admin/orders/{id}", draftId).with(TestJwts.teacher()))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/admin/orders/{id}", draftId).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+        importOrder(ORDER_35).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(true));
+
+        String publishedId = jdbc.queryForObject("SELECT id::text FROM order_document", String.class);
+        mvc.perform(delete("/api/admin/orders/{id}", publishedId).with(TestJwts.admin()))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("ORDER_ALREADY_PUBLISHED"));
+        mvc.perform(delete("/api/admin/orders/{id}", draftId).with(TestJwts.admin()))
+                .andExpect(status().isNotFound());
     }
 
     @Test

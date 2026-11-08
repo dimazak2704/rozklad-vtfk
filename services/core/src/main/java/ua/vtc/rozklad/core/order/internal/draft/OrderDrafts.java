@@ -95,6 +95,22 @@ public class OrderDrafts {
         return OrderViews.toDto(order);
     }
 
+    /**
+     * {@code DELETE /api/admin/orders/{id}}: discards a draft. A draft is only a view of the
+     * confirmed changes and calendar notes of its date, so nothing is lost: the changes stay
+     * confirmed and the next {@link #draftFor} builds the draft again. Published orders stay.
+     */
+    public void discard(UUID orderId) {
+        OrderDocument order = orders.findById(orderId)
+                .orElseThrow(() -> NotFoundException.of("Розпорядження", orderId));
+        if (!order.isDraft()) {
+            throw new BusinessRuleException("ORDER_ALREADY_PUBLISHED", "Опубліковане розпорядження видаляти не можна.");
+        }
+        orders.lockDate(order.getSemesterId(), order.getDate());
+        orders.delete(order);
+        orders.flush();
+    }
+
     /** Rows rebuilt from the confirmed changes (kept as they are when nothing changed). */
     OrderDocument refresh(OrderDocument order, SemesterInfo semester, List<Change> confirmed) {
         OrderRowComposer.Rows composed = OrderRowComposer.compose(rows.of(confirmed));
