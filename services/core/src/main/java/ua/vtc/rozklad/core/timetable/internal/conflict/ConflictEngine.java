@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 /**
  * The one conflict engine of DOMAIN.md §5 for both the weekly template (weekday × pair × parity)
  * and dated lessons (date × pair). Hard: teacher, cohort and room clashes (streams, maxParallel),
- * capacity, room type, shift window, teacher UNAVAILABLE. Soft: windows of groups and teachers,
+ * capacity, room type, shift window (template only), teacher UNAVAILABLE. Soft: windows of groups and teachers,
  * «рваний день», more than four pairs a day, a discipline three times a day, UNWANTED slots.
  * Stateless and thread-safe.
  */

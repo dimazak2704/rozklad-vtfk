@@ -42,6 +42,7 @@ import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
+import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
@@ -53,6 +54,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeViews;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.Lesson;
+import ua.vtc.rozklad.core.timetable.LessonConflictChecker;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
@@ -109,6 +111,9 @@ class OrderPublicationIT {
 
     @Autowired
     private TeacherActivityProvider teacherActivity;
+
+    @Autowired
+    private LessonConflictChecker datedConflicts;
 
     private ScheduleFixture fixture;
     private Semester semester;
@@ -482,6 +487,44 @@ class OrderPublicationIT {
                     assertThat(lesson.getRoomId()).isEqualTo(room204.getId());
                     assertThat(lesson.getStreamId()).isEqualTo(stream);
                 });
+    }
+
+    /**
+     * Owner's rule (round 7): changes may use any pair 1–8 whatever the group's shift. 1ОП2 and 1М
+     * study in the 1st shift (pairs 1–4); the order puts an extra pair on 5–6 and a block on 7–8.
+     * The lessons it creates are not shift-window conflicts later either (the check a timetable
+     * republication runs on lessons kept from changes).
+     */
+    @Test
+    void pairsOutsideTheGroupsShiftArePublished() {
+        assertThat(op12.getShift()).isEqualTo(1);
+        assertThat(m1.getShift()).isEqualTo(1);
+        List<UUID> ids = List.of(
+                changeCommands.create(new CreateChangeRequest(ChangeKind.ADDITIONAL, MONDAY, 5, 6, op12.getId(), 0,
+                        null, bzh.getId(), pohosian.getId(), room403.getId(), null, ReasonCode.OTHER, null, null),
+                        "admin").id(),
+                changeCommands.create(new CreateChangeRequest(ChangeKind.BLOCK, MONDAY, 7, 8, m1.getId(), 0, null,
+                        zu.getId(), yemelianenko.getId(), room204.getId(), null, ReasonCode.OTHER, "Навчальні збори",
+                        null), "admin").id());
+
+        OrderDto draft = drafts.draftFor(MONDAY);
+        assertThat(draft.items()).extracting(OrderPublicationIT::printed).containsExactly(
+                "1М | 3 | AS_SCHEDULED | За розкладом |  |  |  |  | ",
+                "1М | 7-8 | BLOCK | ЗУ | Ємельяненко |  |  |  | 204",
+                "1ОП2 | 5-6 | ADDITIONAL | ДОДАТКОВО |  |  | БЖ | Погосян | 403");
+        OrderDto published = publication.publish(draft.id(), "admin");
+
+        assertThat(published.number()).isEqualTo(35);
+        assertThat(changes.findAllById(ids))
+                .allSatisfy(change -> assertThat(change.getStatus()).isEqualTo(ChangeStatus.APPLIED));
+        List<Lesson> created = lessons.findAllByDateAndStatus(MONDAY, LessonStatus.SCHEDULED).stream()
+                .filter(lesson -> lesson.getPairNumber() >= 5
+                        && (lesson.getGroupId().equals(op12.getId()) || lesson.getGroupId().equals(m1.getId())))
+                .toList();
+        assertThat(created).extracting(Lesson::getPairNumber).containsExactlyInAnyOrder(5, 6, 7, 8);
+        // республікація розкладу перевіряє збережені заняття змін лише на жорсткі конфлікти
+        assertThat(datedConflicts.conflictsOf(created.stream().map(Lesson::getId).toList()))
+                .filteredOn(ConflictDto::isHard).isEmpty();
     }
 
     @Test

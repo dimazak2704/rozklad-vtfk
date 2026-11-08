@@ -386,10 +386,20 @@ class ConflictEngineTest {
             ConflictReport report = check(on(MONDAY, 1).build(), on(MONDAY, 3).discipline(D_KM).build(),
                     on(MONDAY, 5).discipline(D_NDEKSM).build());
 
-            assertThat(report.hard()).extracting(ConflictDto::kind).containsExactly(ConflictKind.SHIFT);
+            assertThat(report.hard()).isEmpty();
             assertThat(report.soft()).extracting(ConflictDto::kind)
                     .containsExactlyInAnyOrder(ConflictKind.WINDOW, ConflictKind.WINDOW)
                     .doesNotContain(ConflictKind.BROKEN_DAY);
+        }
+
+        /** Owner's rule (round 7): a substitution or an extra pair may be on any pair 1–8, whatever the shift. */
+        @Test
+        void shiftWindowDoesNotApplyToDatedLessons() {
+            assertThat(check(on(MONDAY, 5).build()).hard()).isEmpty();
+            assertThat(check(on(MONDAY, 8).build()).hard()).isEmpty();
+            assertThat(check(on(MONDAY, 1).group(G_2KI1).build()).hard()).isEmpty();
+            // правило шаблону лишається: той самий слот у тижневому розкладі — жорсткий конфлікт
+            assertThat(ofKind(check(at(1, 5).build()).hard(), ConflictKind.SHIFT)).hasSize(1);
         }
 
         @Test

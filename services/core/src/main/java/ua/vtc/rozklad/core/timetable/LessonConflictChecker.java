@@ -7,8 +7,9 @@ import ua.vtc.rozklad.core.shared.error.ConflictDto;
 
 /**
  * The conflict engine of DOMAIN.md §5 applied to dated lessons (the same rules as for the weekly
- * template): teacher, cohort and room clashes, capacity, room type, shift window, teacher
- * availability — and the soft warnings (windows, overload, repeated discipline, unwanted slots).
+ * template): teacher, cohort and room clashes, capacity, room type, teacher availability — and the
+ * soft warnings (windows, overload, repeated discipline, unwanted slots). The shift window is a rule
+ * of the weekly template only: a dated lesson may be on any pair 1–8 (changes, orders).
  * Only SCHEDULED lessons take part. Conflicts carry {@code date} and Ukrainian messages.
  */
 public interface LessonConflictChecker {
