@@ -36,12 +36,13 @@ export function creates(kind: ImportKind, type: MappingType): boolean {
 
 /**
  * Початковий стан: збережене раніше рішення, «створити» для нового без кандидатів (якщо цей імпорт
- * взагалі створює такі записи), інакше — не вирішено.
+ * взагалі створює такі записи), інакше — не вирішено. Рядок-помилка (новий запис, створення якого
+ * треба свідомо підтвердити, як дисципліна навчального плану) теж лишається не вирішеним.
  */
 export function initialDecision(row: EntityReportRow, mapping: ImportMapping | undefined, creatable = true): Decision {
   if (mapping?.targetId) return { action: mapping.addAlias ? 'alias' : 'existing', targetId: mapping.targetId };
   if (mapping?.createNew && creatable) return { action: 'create', targetId: null };
-  if (needsDecision(row) || !creatable) return { action: null, targetId: null };
+  if (needsDecision(row) || row.severity === 'ERROR' || !creatable) return { action: null, targetId: null };
   return { action: 'create', targetId: null };
 }
 

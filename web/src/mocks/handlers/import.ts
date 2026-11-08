@@ -560,7 +560,8 @@ function curriculumReport(): ImportReportRow[] {
       const discipline = disciplineNamed(shortName);
       report.push(row(shortName === 'Укр.мов.' ? 'WARN' : 'OK', 'DISCIPLINE', name, 'Сторінка 3', shortName === 'Укр.мов.' ? 'Збіг за повною назвою; у каталозі це «Укр.мов.» — перевірте.' : null, scored(discipline.id, shortName, shortName === 'Укр.мов.' ? 0.88 : 0.97)));
     } else {
-      report.push(row('INFO', 'DISCIPLINE', name, 'Сторінка 3', 'У каталозі немає: буде створено нову дисципліну.'));
+      // як importer: нову дисципліну навчального плану створюють лише за явним рішенням адміністратора
+      report.push(row('ERROR', 'DISCIPLINE', name, 'Сторінка 3', 'Немає в каталозі. Навчальний план пише назви повністю, а розклад — скорочено: зіставте з дисципліною каталогу або підтвердьте створення нової дисципліни.'));
     }
   }
   return report;

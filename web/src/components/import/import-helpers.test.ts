@@ -76,6 +76,20 @@ describe('рішення щодо назв', () => {
     expect(initialDecision(fresh as EntityReportRow, undefined)).toEqual({ action: 'create', targetId: null });
   });
 
+  it('нову дисципліну навчального плану (рядок-помилку) не створюємо без явного вибору', () => {
+    const elective = row({
+      type: 'DISCIPLINE',
+      raw: 'Вибірковий освітній компонент 1',
+      severity: 'ERROR',
+      message: '«Вибірковий освітній компонент 1» — місце для вибіркової дисципліни, а не її назва.',
+    });
+    expect(decisionRows({ report: [elective], mappings: [] }).map((r) => r.raw)).toEqual(['Вибірковий освітній компонент 1']);
+    expect(initialDecision(elective as EntityReportRow, undefined)).toEqual({ action: null, targetId: null });
+    expect(
+      initialDecision(elective as EntityReportRow, { type: 'DISCIPLINE', raw: elective.raw, targetId: null, createNew: {}, addAlias: false }),
+    ).toEqual({ action: 'create', targetId: null });
+  });
+
   it('рішення → mappings[] за контрактом', () => {
     const entity = typo as EntityReportRow;
     expect(toMapping(entity, { action: 'alias', targetId: 't1' })).toEqual({

@@ -206,7 +206,7 @@ function MappingRow({ row, decision, onChange, missing, disabled, creatable }: M
     <li className={cn('grid gap-3 px-4 py-3.5 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]', missing && 'bg-danger-subtle')}>
       <div className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-2">
-          <Badge size="sm" tone={needsDecision(row) ? 'warning' : 'neutral'}>
+          <Badge size="sm" tone={needsDecision(row) || row.severity === 'ERROR' ? 'warning' : 'neutral'}>
             {ROW_TYPE_LABEL[row.type]}
           </Badge>
           <span className="font-condensed text-heading font-bold break-words text-primary">«{row.raw}»</span>
