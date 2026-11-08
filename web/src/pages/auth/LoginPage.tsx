@@ -1,7 +1,7 @@
 import { KeyRound, LogIn } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
-import { errorMessage } from '@/api/errors';
+import { loginErrorText } from '@/auth/authErrors';
 import { isSafeReturnPath, postLoginPath } from '@/auth/postLogin';
 import { clearRejectedToken } from '@/auth/rejectedToken';
 import { useCurrentUser } from '@/auth/useCurrentUser';
@@ -26,7 +26,7 @@ export default function LoginPage() {
   const started = useRef(rejected ? 0 : -1);
 
   const begin = useEffectEvent(() => {
-    signIn(safeReturn).catch((cause: unknown) => setFailure(errorMessage(cause)));
+    signIn(safeReturn).catch((cause: unknown) => setFailure(loginErrorText(cause)));
   });
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function LoginPage() {
 
   if (status === 'authenticated') return <Navigate to={postLoginPath(roles, safeReturn)} replace />;
 
-  const problem = failure ?? (error ? error.message : null);
+  const problem = failure ?? (error ? loginErrorText(error) : null);
   const waiting = !problem;
 
   return (

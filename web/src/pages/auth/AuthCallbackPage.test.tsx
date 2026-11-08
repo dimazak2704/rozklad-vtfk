@@ -32,9 +32,9 @@ function Location() {
   return <p data-testid="location">{`${location.pathname}${location.search}`}</p>;
 }
 
-function renderCallback() {
+function renderCallback(url = '/auth/callback?code=x&state=y') {
   render(
-    <MemoryRouter initialEntries={['/auth/callback?code=x&state=y']}>
+    <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<Location />} />
@@ -76,6 +76,17 @@ describe('AuthCallbackPage', () => {
     renderCallback();
     expect(await screen.findByRole('alert')).toHaveTextContent('Посилання входу застаріло');
     expect(screen.getByRole('alert')).not.toHaveTextContent('No matching state');
+    auth.status = 'authenticated';
+    auth.error = null;
+  });
+
+  it('вхід скасовано на сторінці Keycloak (error=access_denied): так і пише, хоч бібліотека скаржиться на state', async () => {
+    auth.status = 'anonymous';
+    // так react-oidc-context передає помилку: копія з innerError
+    auth.error = Object.assign(new Error('No matching state found in storage'), { innerError: new Error('No matching state found in storage') });
+    renderCallback('/auth/callback?error=access_denied&error_description=User%20denied&state=abc');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Вхід скасовано на сторінці входу коледжу.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/state|denied|застаріло/);
     auth.status = 'authenticated';
     auth.error = null;
   });
