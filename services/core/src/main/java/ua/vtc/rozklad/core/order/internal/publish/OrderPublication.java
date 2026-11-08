@@ -26,6 +26,7 @@ import ua.vtc.rozklad.core.order.internal.draft.ChangeRows;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
 import ua.vtc.rozklad.core.order.internal.draft.OrderRowComposer;
 import ua.vtc.rozklad.core.order.internal.draft.OrderTexts;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.order.internal.view.OrderViews;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
@@ -40,8 +41,8 @@ import ua.vtc.rozklad.core.substitution.ChangePublication;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
 
 /**
- * Publication of an order (DOMAIN §7–§8) in one transaction: the next number of the semester is
- * taken under an advisory lock (no gaps, no duplicates under concurrent publications), the
+ * Publication of an order (DOMAIN §7–§8) in one transaction: the next number of the semester (not
+ * below its first number, {@link OrderNumberingService}) is taken under an advisory lock (no gaps, no duplicates under concurrent publications), the
  * confirmed changes of the draft are applied to the dated lessons (conflicts → 409, nothing is
  * published), and {@code order.published} with the full payload plus {@code schedule.changed}
  * go to the outbox. A draft whose rows no longer match the confirmed changes is stale (409):
@@ -59,6 +60,7 @@ public class OrderPublication {
     private final ChangeRepository changes;
     private final ChangeRows rows;
     private final ChangePublication changePublication;
+    private final OrderNumberingService numbering;
     private final StudentGroupRepository groups;
     private final TeacherRepository teachers;
     private final ApplicationEventPublisher events;
@@ -66,7 +68,8 @@ public class OrderPublication {
     private final Clock clock;
 
     public OrderPublication(OrderDocumentRepository orders, SemesterRepository semesters, ChangeRepository changes,
-                            ChangeRows rows, ChangePublication changePublication, StudentGroupRepository groups,
+                            ChangeRows rows, ChangePublication changePublication, OrderNumberingService numbering,
+                            StudentGroupRepository groups,
                             TeacherRepository teachers, ApplicationEventPublisher events, SseAfterCommit sse,
                             Clock clock) {
         this.orders = orders;
@@ -74,6 +77,7 @@ public class OrderPublication {
         this.changes = changes;
         this.rows = rows;
         this.changePublication = changePublication;
+        this.numbering = numbering;
         this.groups = groups;
         this.teachers = teachers;
         this.events = events;
@@ -103,7 +107,7 @@ public class OrderPublication {
                 ? new AppliedChanges(List.of(), Set.of(), Set.of(), Set.of())
                 : changePublication.apply(confirmed.stream().map(Change::getId).toList(), order.getId(), actor);
 
-        int number = orders.findMaxNumber(semesterId) + 1;
+        int number = numbering.nextNumber(semesterId);
         if (order.getKind() == OrderKind.ORDER) {
             order.setTitle(OrderTexts.mainTitle(number));
         }

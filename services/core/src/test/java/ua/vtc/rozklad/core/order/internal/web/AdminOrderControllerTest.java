@@ -26,6 +26,8 @@ import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService.OrderNumberingDto;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
@@ -54,7 +56,36 @@ class AdminOrderControllerTest {
     private OrderPublication publication;
 
     @MockitoBean
+    private OrderNumberingService numbering;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @Test
+    void firstNumberOfTheSemesterIsSet() throws Exception {
+        UUID semesterId = UUID.randomUUID();
+        given(numbering.setFirstNumber(semesterId, 35, "admin"))
+                .willReturn(new OrderNumberingDto(semesterId, 35, null, 35));
+
+        mockMvc.perform(put("/api/admin/orders/numbering").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"semesterId\":\"" + semesterId + "\",\"firstNumber\":35}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstNumber").value(35))
+                .andExpect(jsonPath("$.lastNumber").doesNotExist())
+                .andExpect(jsonPath("$.nextNumber").value(35));
+    }
+
+    @Test
+    void firstNumberMustBePositive() throws Exception {
+        mockMvc.perform(put("/api/admin/orders/numbering").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"semesterId\":\"" + UUID.randomUUID() + "\",\"firstNumber\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("firstNumber"))
+                .andExpect(jsonPath("$.errors[0].message").value("Номер — від 1 до 9999"));
+        verifyNoInteractions(numbering);
+    }
 
     @Test
     void draftOfADateWithTheCollegeHeader() throws Exception {

@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService.OrderNumberingDto;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
@@ -33,11 +35,14 @@ class AdminOrderController {
     private final OrderQueries queries;
     private final OrderDrafts drafts;
     private final OrderPublication publication;
+    private final OrderNumberingService numbering;
 
-    AdminOrderController(OrderQueries queries, OrderDrafts drafts, OrderPublication publication) {
+    AdminOrderController(OrderQueries queries, OrderDrafts drafts, OrderPublication publication,
+                         OrderNumberingService numbering) {
         this.queries = queries;
         this.drafts = drafts;
         this.publication = publication;
+        this.numbering = numbering;
     }
 
     @GetMapping
@@ -57,6 +62,18 @@ class AdminOrderController {
         return drafts.draftFor(date);
     }
 
+    /** First, last and next number of the semester's orders. */
+    @GetMapping("/numbering")
+    OrderNumberingDto numbering(@RequestParam UUID semesterId) {
+        return numbering.get(semesterId);
+    }
+
+    /** The system continues paper numbering (e.g. from №35); 422 when the number is already passed. */
+    @PutMapping("/numbering")
+    OrderNumberingDto setNumbering(@Valid @RequestBody NumberingRequest request, CurrentUser user) {
+        return numbering.setFirstNumber(request.semesterId(), request.firstNumber(), user.username());
+    }
+
     @GetMapping("/{id}")
     OrderDto get(@PathVariable UUID id) {
         return queries.get(id);
@@ -71,6 +88,11 @@ class AdminOrderController {
     @PostMapping("/{id}/publish")
     OrderDto publish(@PathVariable UUID id, CurrentUser user) {
         return publication.publish(id, user.username());
+    }
+
+    record NumberingRequest(@NotNull UUID semesterId,
+                            @NotNull @Min(value = 1, message = "Номер — від 1 до 9999")
+                            @Max(value = 9999, message = "Номер — від 1 до 9999") Integer firstNumber) {
     }
 
     record NotesRequest(@NotNull @Size(max = 20) List<@NotBlank @Size(max = 500) String> notes) {

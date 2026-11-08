@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -21,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.core.order.internal.draft.OrderDrafts;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService;
+import ua.vtc.rozklad.core.order.internal.numbering.OrderNumberingService.OrderNumberingDto;
 import ua.vtc.rozklad.core.order.internal.publish.OrderPublication;
 import ua.vtc.rozklad.core.order.internal.view.OrderDto;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
@@ -38,6 +41,9 @@ class OrderNumberingIT {
     private OrderPublication publication;
 
     @Autowired
+    private OrderNumberingService numbering;
+
+    @Autowired
     private TransactionTemplate transaction;
 
     @Autowired
@@ -48,11 +54,12 @@ class OrderNumberingIT {
 
     private ScheduleFixture fixture;
     private ExecutorService executor;
+    private UUID semesterId;
 
     @BeforeEach
     void semester() {
         fixture = new ScheduleFixture(transaction, entityManager, jdbc);
-        fixture.semester();
+        semesterId = fixture.semester().getId();
         executor = Executors.newFixedThreadPool(4);
     }
 
@@ -106,6 +113,27 @@ class OrderNumberingIT {
         // відхилена спроба не «з'їла» номер: наступне розпорядження — №2
         assertThat(publication.publish(drafts.draftFor(LocalDate.of(2026, 10, 21)).id(), "admin").number())
                 .isEqualTo(2);
+    }
+
+    @Test
+    void systemContinuesThePaperNumberingFromTheFirstNumber() {
+        assertThat(numbering.get(semesterId)).isEqualTo(new OrderNumberingDto(semesterId, 1, null, 1));
+
+        // №1–34 були паперові: перше розпорядження в системі — №35 (як розпорядження на 19.10.2026)
+        assertThat(numbering.setFirstNumber(semesterId, 35, "admin").nextNumber()).isEqualTo(35);
+        assertThat(publication.publish(drafts.draftFor(LocalDate.of(2026, 10, 19)).id(), "admin").number())
+                .isEqualTo(35);
+        assertThat(publication.publish(drafts.draftFor(LocalDate.of(2026, 10, 20)).id(), "admin").number())
+                .isEqualTo(36);
+
+        assertThat(numbering.get(semesterId)).isEqualTo(new OrderNumberingDto(semesterId, 35, 36, 37));
+        assertThatThrownBy(() -> numbering.setFirstNumber(semesterId, 36, "admin"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("ORDER_NUMBER_USED"));
+        // номер можна лише пропустити вперед: наступне — №50
+        numbering.setFirstNumber(semesterId, 50, "admin");
+        assertThat(publication.publish(drafts.draftFor(LocalDate.of(2026, 10, 21)).id(), "admin").number())
+                .isEqualTo(50);
     }
 
     /** Runs the tasks in parallel threads released by one latch. */
