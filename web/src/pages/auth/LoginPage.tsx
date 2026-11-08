@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { errorMessage } from '@/api/errors';
 import { isSafeReturnPath, postLoginPath } from '@/auth/postLogin';
+import { clearRejectedToken } from '@/auth/rejectedToken';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { Button } from '@/components/ui/Button';
 
@@ -16,9 +17,13 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   const returnTo = params.get('returnTo');
   const safeReturn = isSafeReturnPath(returnTo) ? returnTo : undefined;
-  const [failure, setFailure] = useState<string | null>(null);
+  // сервер двічі поспіль не прийняв вхід: не відкриваємо Keycloak по колу, а пояснюємо і чекаємо кнопки
+  const rejected = params.get('rejected') === '1';
+  const [failure, setFailure] = useState<string | null>(
+    rejected ? 'Сервер не прийняв ваш вхід навіть після повторного входу. Можливо, змінилися налаштування входу коледжу.' : null,
+  );
   const [attempt, setAttempt] = useState(0);
-  const started = useRef(-1);
+  const started = useRef(rejected ? 0 : -1);
 
   const begin = useEffectEvent(() => {
     signIn(safeReturn).catch((cause: unknown) => setFailure(errorMessage(cause)));
@@ -68,6 +73,7 @@ export default function LoginPage() {
           loadingLabel="Відкриваємо сторінку входу"
           iconStart={<LogIn aria-hidden="true" className="size-4" />}
           onClick={() => {
+            clearRejectedToken();
             setFailure(null);
             setAttempt((value) => value + 1);
           }}

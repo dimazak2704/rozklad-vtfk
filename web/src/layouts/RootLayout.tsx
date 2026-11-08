@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Outlet, ScrollRestoration, useLocation, useMatches, useNavigate } from 'react-router';
 import { onUnauthorized } from '@/api/client';
 import { paths } from '@/app/routes';
+import { loginAfterRejection, noteRejectedToken } from '@/auth/rejectedToken';
+import { userManager } from '@/auth/userManager';
 import { CommandPaletteHost } from '@/components/shell/CommandPaletteHost';
 import { NavigationProgress } from '@/components/shell/NavigationProgress';
 import { ShortcutsDialog } from '@/components/shell/ShortcutsDialog';
@@ -25,17 +27,29 @@ function DocumentTitle() {
   return null;
 }
 
-/** 401 на захищеній сторінці — сесія скінчилася: ведемо на вхід і повертаємо сюди ж. */
-function UnauthorizedRedirect() {
+/**
+ * 401 на захищеній сторінці — сервер не прийняв токен: забуваємо його (інакше сторінка входу побачить
+ * «увійшов» і поверне сюди ж — нескінченне коло), ведемо на вхід і повертаємо сюди ж. Кілька запитів
+ * сторінки отримують 401 одночасно — реагуємо один раз.
+ */
+export function UnauthorizedRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
+  const handling = useRef(false);
   useEffect(
     () =>
       onUnauthorized(() => {
         const path = location.pathname;
-        if (path.startsWith('/admin') || path.startsWith('/me')) {
-          void navigate(paths.login(path + location.search), { replace: true });
-        }
+        if (!(path.startsWith('/admin') || path.startsWith('/me')) || handling.current) return;
+        handling.current = true;
+        const repeated = noteRejectedToken();
+        void userManager
+          .removeUser()
+          .catch(() => undefined)
+          .finally(() => {
+            handling.current = false;
+            void navigate(loginAfterRejection(paths.login(path + location.search), repeated), { replace: true });
+          });
       }),
     [navigate, location.pathname, location.search],
   );
