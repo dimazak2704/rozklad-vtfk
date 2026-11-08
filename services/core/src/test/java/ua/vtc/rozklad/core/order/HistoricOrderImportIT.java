@@ -90,6 +90,7 @@ class HistoricOrderImportIT {
         mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.order.number").value(35))
+                .andExpect(jsonPath("$.order.imported").value(true))
                 .andExpect(jsonPath("$.groups[0].group.code").value("1КІ2"))
                 .andExpect(jsonPath("$.groups[0].group.id").doesNotExist())
                 .andExpect(jsonPath("$.groups[0].items[0].to.teacher").value("Прокопчук"));
@@ -101,6 +102,25 @@ class HistoricOrderImportIT {
 
         importOrder(ORDER_35).andExpect(status().isOk()).andExpect(jsonPath("$.created").value(false));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_document", Integer.class)).isOne();
+    }
+
+    /** A misreading fixed after apply: reviewed rows replace the earlier import of the same paper order. */
+    @Test
+    void reviewedRowsReplaceAnEarlierImportOfTheSameOrder() throws Exception {
+        importOrder(ORDER_35).andExpect(status().isOk());
+        String corrected = ORDER_35.replace("\"toTeacher\":\"Прокопчук\"", "\"toTeacher\":\"Прокопчук О.\"")
+                .replace("\"signatoryName\":\"Микола ПОЛІЩУК\"}", "\"signatoryName\":\"Микола ПОЛІЩУК\",\"replace\":true}");
+
+        importOrder(corrected)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(false))
+                .andExpect(jsonPath("$.replaced").value(true))
+                .andExpect(jsonPath("$.itemCount").value(2));
+
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+                .andExpect(jsonPath("$.groups[0].items[0].to.teacher").value("Прокопчук О."));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM order_document", Integer.class)).isOne();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM order_item", Integer.class)).isEqualTo(2);
     }
 
     @Test

@@ -16,7 +16,9 @@ import ua.vtc.rozklad.core.order.OrderSection;
 /**
  * {@code POST /api/admin/import/changes}: a paper order that was already issued (recognized by the
  * importer from a photo, scan or DOCX), stored as its printed text. Field limits follow the
- * {@code order_document} and {@code order_item} columns.
+ * {@code order_document} and {@code order_item} columns. {@code replace = true}: the rows correct an
+ * earlier import of the same order (same number, date and kind), which is then replaced; an order
+ * the system published itself is never replaced.
  */
 public record HistoricOrderRequest(
         @NotNull(message = "Вкажіть дату розпорядження") LocalDate date,
@@ -28,7 +30,8 @@ public record HistoricOrderRequest(
         @NotNull @Size(max = 300) List<@Valid @NotNull Item> items,
         @Size(max = 30) List<@NotBlank @Size(max = 1000) String> notes,
         @Size(max = 200) String signatoryPosition,
-        @Size(max = 200) String signatoryName) {
+        @Size(max = 200) String signatoryName,
+        Boolean replace) {
 
     /** One printed row; {@code section} is the main table unless it is a room change. */
     public record Item(
@@ -44,8 +47,11 @@ public record HistoricOrderRequest(
             @Size(max = 100) String roomText) {
     }
 
-    /** {@code orderId} of the stored order; {@code created == false} when the same order was imported before. */
+    /**
+     * {@code orderId} of the stored order; {@code created == false} when the same order was imported before,
+     * {@code replaced == true} when its rows were replaced by this request ({@code replace}).
+     */
     public record Result(UUID orderId, int number, LocalDate date, OrderKind kind, int itemCount,
-                         boolean created) {
+                         boolean created, boolean replaced) {
     }
 }

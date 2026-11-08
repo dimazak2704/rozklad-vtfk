@@ -120,7 +120,8 @@ public class OrderPublication {
         events.publishEvent(new OrderPublished(EventEnvelope.create(clock), payload));
         OrderDto dto = OrderViews.toDto(order);
         sse.broadcast(SseEventTypes.ORDER_PUBLISHED, new OrderDto.Summary(order.getId(), order.getNumber(),
-                order.getDate(), order.getKind(), order.getStatus(), order.getItems().size(), order.getPublishedAt()));
+                order.getDate(), order.getKind(), order.getStatus(), order.getItems().size(), order.getPublishedAt(),
+                false));
         if (!applied.changeIds().isEmpty()) {
             ScheduleChanged scheduleChanged = new ScheduleChanged(EventEnvelope.create(clock),
                     applied.dates().stream().sorted().toList(), List.copyOf(applied.groupIds()),

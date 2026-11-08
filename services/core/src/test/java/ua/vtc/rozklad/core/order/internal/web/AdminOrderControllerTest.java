@@ -163,7 +163,7 @@ class AdminOrderControllerTest {
     void listReturnsAPage() throws Exception {
         given(queries.list(any(), any(), any(), any(), anyInt(), anyInt())).willReturn(new PageResponse<>(
                 List.of(new OrderDto.Summary(ORDER_ID, 35, LocalDate.of(2026, 10, 19), OrderKind.ORDER,
-                        OrderStatus.PUBLISHED, 8, Instant.parse("2026-10-18T14:00:00Z"))), 0, 20, 1));
+                        OrderStatus.PUBLISHED, 8, Instant.parse("2026-10-18T14:00:00Z"), false)), 0, 20, 1));
 
         mockMvc.perform(get("/api/admin/orders").param("q", "35").with(TestJwts.admin()))
                 .andExpect(status().isOk())
@@ -179,6 +179,6 @@ class AdminOrderControllerTest {
                 "ПОНЕДІЛОК", "ЗНАМЕННИК", List.of(row), List.of(), List.of(), "Заступник директора з НР",
                 "Микола ПОЛІЩУК", "По коледжу про деякі зміни в розкладі занять", "На 19 жовтня 2026 р.",
                 status == OrderStatus.PUBLISHED ? Instant.parse("2026-10-18T14:00:00Z") : null,
-                status == OrderStatus.PUBLISHED ? "admin" : null, 1);
+                status == OrderStatus.PUBLISHED ? "admin" : null, 1, false);
     }
 }

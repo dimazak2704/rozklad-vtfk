@@ -31,7 +31,9 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * because the rows are text the dispatcher has not matched to lessons. Its number counts in the
  * semester's numbering, so the next published order continues after it. Importing the same order
  * again (same number, date and rows) answers with the stored one; the same number with other rows
- * — for example an order the system already published for that date — is a 409.
+ * is a 409 — unless the request says {@code replace} and the stored order was imported too: then the
+ * corrected rows, notes, labels and signature replace the earlier import (a misreading fixed by the
+ * admin). An order the system published itself is never replaced.
  */
 @Service
 @Transactional
@@ -66,8 +68,15 @@ public class HistoricOrderImport {
             OrderDocument existing = sameNumber.get();
             if (existing.getDate().equals(date) && existing.getKind() == kind) {
                 // повтор того самого імпорту нічого не змінює; інший текст під тим самим номером — не повтор
-                if (contents(existing).equals(contents(request))) {
-                    return result(existing, false);
+                if (contents(existing).equals(contents(request)) && !Boolean.TRUE.equals(request.replace())) {
+                    return result(existing, false, false);
+                }
+                if (Boolean.TRUE.equals(request.replace()) && existing.isImported()) {
+                    existing.replaceImportedItems();
+                    orders.flush();
+                    fill(existing, request);
+                    orders.saveAndFlush(existing);
+                    return result(existing, false, true);
                 }
                 throw new ConflictException(("На %s уже є розпорядження №%d, і його рядки відрізняються від "
                         + "імпортованих. Звірте розпорядження в системі з паперовим.").formatted(date.format(DATE),
@@ -77,16 +86,22 @@ public class HistoricOrderImport {
                     semester.name(), existing.getDate().format(DATE)));
         }
         OrderDocument order = kind == OrderKind.ORDER ? mainOrder(semester, request) : amendment(semester, request);
-        order.setDayLabels(label(request.weekdayLabel(), OrderTexts.weekdayLabel(date)),
-                label(request.parityLabel(), parityLabel(date)));
+        order.markImported();
+        fill(order, request);
+        order.markPublished(request.number(), clock.instant(), actor);
+        orders.saveAndFlush(order);
+        return result(order, true, false);
+    }
+
+    /** Printed labels, signature, notes and rows of the request. */
+    private void fill(OrderDocument order, HistoricOrderRequest request) {
+        order.setDayLabels(label(request.weekdayLabel(), OrderTexts.weekdayLabel(request.date())),
+                label(request.parityLabel(), parityLabel(request.date())));
         order.setSignatory(blankToNull(request.signatoryPosition()), blankToNull(request.signatoryName()));
         order.setNotes(request.notes() == null ? List.of() : request.notes().stream().map(String::strip).toList());
         for (HistoricOrderRequest.Item item : request.items()) {
             order.addItem(item.section() == null ? OrderSection.CHANGES : item.section(), content(item));
         }
-        order.markPublished(request.number(), clock.instant(), actor);
-        orders.saveAndFlush(order);
-        return result(order, true);
     }
 
     /** Rows as stored: the main table first, then room changes, each in printed order. */
@@ -147,8 +162,8 @@ public class HistoricOrderImport {
         return text == null || text.isBlank() ? null : text.strip();
     }
 
-    private static HistoricOrderRequest.Result result(OrderDocument order, boolean created) {
+    private static HistoricOrderRequest.Result result(OrderDocument order, boolean created, boolean replaced) {
         return new HistoricOrderRequest.Result(order.getId(), Objects.requireNonNull(order.getNumber()), order.getDate(),
-                order.getKind(), order.getItems().size(), created);
+                order.getKind(), order.getItems().size(), created, replaced);
     }
 }

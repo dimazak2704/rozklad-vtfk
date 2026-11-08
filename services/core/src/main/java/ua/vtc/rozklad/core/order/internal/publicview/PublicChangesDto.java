@@ -19,7 +19,11 @@ public record PublicChangesDto(
         PublishedOrder order,
         List<GroupChanges> groups) {
 
-    public record PublishedOrder(UUID id, Integer number, Instant publishedAt) {
+    /**
+     * {@code imported} (additive): a paper order imported as text; it has no DOCX/PDF/PNG and
+     * {@code publishedAt} is when it was imported, not when the college issued it.
+     */
+    public record PublishedOrder(UUID id, Integer number, Instant publishedAt, boolean imported) {
     }
 
     public record GroupChanges(ChangeGroup group, List<ChangeView> items) {

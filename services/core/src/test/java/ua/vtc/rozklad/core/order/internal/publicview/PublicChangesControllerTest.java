@@ -37,7 +37,7 @@ class PublicChangesControllerTest {
     void anyoneSeesThePublishedChangesOfADate() throws Exception {
         LocalDate date = LocalDate.of(2026, 10, 19);
         given(changes.of(date)).willReturn(new PublicChangesDto(date, Parity.DENOMINATOR, "Понеділок",
-                new PublicChangesDto.PublishedOrder(UUID.randomUUID(), 35, Instant.parse("2026-10-18T14:00:00Z")),
+                new PublicChangesDto.PublishedOrder(UUID.randomUUID(), 35, Instant.parse("2026-10-18T14:00:00Z"), false),
                 List.of(new PublicChangesDto.GroupChanges(new PublicChangesDto.ChangeGroup(UUID.randomUUID(), "1ТК1", 1),
                         List.of(new PublicChangesDto.ChangeView("1", OrderRowType.CANCELLATION,
                                 new PublicChangesDto.Side("Ін. мова", "Крисак Л. (п.)"), "Відп.",

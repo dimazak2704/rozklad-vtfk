@@ -78,6 +78,9 @@ public class OrderDocument extends BaseEntity {
     @Column(name = "published_by", length = 100)
     private String publishedBy;
 
+    @Column(name = "imported", nullable = false)
+    private boolean imported;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("section ASC, position ASC")
     private List<OrderItem> items = new ArrayList<>();
@@ -227,6 +230,26 @@ public class OrderDocument extends BaseEntity {
     public void clearItems() {
         if (!isDraft()) {
             throw new IllegalStateException("Items of a published order cannot be changed");
+        }
+        items.clear();
+    }
+
+    /**
+     * {@code true} for an order imported from paper: history text only, never rendered or distributed
+     * by the system (no documents), {@code publishedAt} is the time of the import.
+     */
+    public boolean isImported() {
+        return imported;
+    }
+
+    public void markImported() {
+        this.imported = true;
+    }
+
+    /** A corrected re-import of a paper order replaces its rows (the order is text, nothing else refers to it). */
+    public void replaceImportedItems() {
+        if (!imported) {
+            throw new IllegalStateException("Only rows of an imported order can be replaced");
         }
         items.clear();
     }

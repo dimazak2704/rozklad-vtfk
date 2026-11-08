@@ -58,7 +58,7 @@ class PublicChanges {
                 .filter(order -> order.getKind() == OrderKind.ORDER)
                 .findFirst()
                 .map(order -> new PublicChangesDto.PublishedOrder(order.getId(), order.getNumber(),
-                        order.getPublishedAt()))
+                        order.getPublishedAt(), order.isImported()))
                 .orElse(null);
         List<OrderItem> items = published.stream().flatMap(order -> order.getItems().stream()).toList();
         return new PublicChangesDto(date, parity, UkrainianText.weekday(date.getDayOfWeek()), main, grouped(items));

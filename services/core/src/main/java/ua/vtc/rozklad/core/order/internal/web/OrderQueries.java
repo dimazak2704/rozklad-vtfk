@@ -62,7 +62,7 @@ class OrderQueries {
                 .collect(Collectors.toMap(OrderItemCount::orderId, OrderItemCount::items));
         return PageResponse.of(found, order -> new OrderDto.Summary(order.getId(), order.getNumber(),
                 order.getDate(), order.getKind(), order.getStatus(), counts.getOrDefault(order.getId(), 0L),
-                order.getPublishedAt()));
+                order.getPublishedAt(), order.isImported()));
     }
 
     OrderDto get(UUID id) {

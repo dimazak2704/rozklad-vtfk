@@ -19,7 +19,7 @@ public final class OrderViews {
                 items(order, OrderSection.CHANGES), items(order, OrderSection.ROOM_CHANGES), order.getNotes(),
                 order.getSignatoryPosition(), order.getSignatoryName(), OrderTexts.SUBTITLE,
                 OrderTexts.dateLine(order.getDate()), order.getPublishedAt(), order.getPublishedBy(),
-                order.getVersion());
+                order.getVersion(), order.isImported());
     }
 
     /** {@code OrderPayload} of {@code order.published} without the distribution lists. */
