@@ -1,4 +1,4 @@
-import { Search, Unlink, X } from 'lucide-react';
+import { Search, Sunrise, Unlink, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { usePublicGroups, usePublicTeachers } from '@/api/public';
 import { useDeleteBinding, useSetBindingDigest } from '@/api/telegram';
@@ -124,6 +124,8 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
     {
       id: 'digest',
       header: DIGEST_LABEL,
+      // на вузькому екрані колонка ховається, а перемикач лишається в меню рядка
+      hideBelow: 'sm',
       cell: (row) =>
         canGetDigest(row.type) ? (
           <Switch
@@ -197,7 +199,18 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
         rowActions={(row) => (
           <RowActions
             rowLabel={row.title}
-            actions={[{ label: 'Відвʼязати від бота', icon: <Unlink aria-hidden="true" />, onSelect: () => void unlink(row), tone: 'danger' }]}
+            actions={[
+              ...(canGetDigest(row.type)
+                ? [
+                    {
+                      label: row.digestEnabled ? 'Вимкнути ранковий розклад' : 'Увімкнути ранковий розклад о 7:30',
+                      icon: <Sunrise aria-hidden="true" />,
+                      onSelect: () => void switchDigest(row, !row.digestEnabled),
+                    },
+                  ]
+                : []),
+              { label: 'Відвʼязати від бота', icon: <Unlink aria-hidden="true" />, onSelect: () => void unlink(row), tone: 'danger' as const },
+            ]}
           />
         )}
         empty={

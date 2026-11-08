@@ -62,4 +62,19 @@ describe('BindingsTable: ранковий розклад', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Ранковий розклад о 7:30: Чат 4КІ1' }));
     await waitFor(() => expect(sent).toEqual([{ id: 'b-group', digestEnabled: true }]));
   });
+
+  it('на вузькому екрані той самий перемикач є в меню рядка', async () => {
+    const sent: unknown[] = [];
+    server.use(
+      http.patch(apiPath('/notify/bindings/:id'), async ({ params, request }) => {
+        const body = (await request.json()) as { digestEnabled: boolean };
+        sent.push({ id: params.id, ...body });
+        return HttpResponse.json({ ...GROUP_CHAT, digestEnabled: body.digestEnabled });
+      }),
+    );
+    renderTable();
+    await userEvent.click(screen.getByRole('button', { name: 'Дії: Чат 4КІ1' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Увімкнути ранковий розклад о 7:30' }));
+    await waitFor(() => expect(sent).toEqual([{ id: 'b-group', digestEnabled: true }]));
+  });
 });
