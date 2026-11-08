@@ -70,7 +70,16 @@ teacher gets 403 on `/api/me/*`.
   the lessons the change would create (409 `conflicts[]`, `DatedSlotChecker`): teacher, cohort,
   exclusive room or `maxParallel`, capacity, required room type, UNAVAILABLE; pending/confirmed
   changes count as occupying their slots. Shift windows are not enforced (real orders put extra pairs
-  outside them). Decisions about one group-day are serialized by `lockGroupDay`.
+  outside them): any pair 1–8, also at publication and when a later timetable republication re-checks the
+  lessons kept from changes (`ShiftWindowRule` skips dated lessons, round 7). Decisions about one group-day
+  are serialized by `lockGroupDay`.
+* **Substitute's room** (round 7, DOMAIN §5/§7) — REPLACE_DISCIPLINE without `newRoomId`: `ChangeCommands.create`
+  asks `effect.SubstituteRooms.usualFreeRoom(lesson, teacherId, disciplineId, ownChangeId)`: the substitute's usual
+  room for the discipline in the group (`TeacherRoomQueries.published` → `TeacherRooms.forGroup`) when it differs
+  from the lesson's room and `DatedSlotChecker.roomConflicts` finds it free (occupancy with open changes, capacity,
+  room type); then it becomes `newRoomId`. Otherwise `newRoomId` stays null and the lesson keeps its room — there is
+  no warning field on `ChangeDto`, `new.room` shows the result. Online lessons keep their room. A given `newRoomId`
+  wins. The recommender can call the same `SubstituteRooms` for its suggested room. Test: `SubstituteRoomIT`.
 * **Approval** (`ChangeWorkflow.open`, DOMAIN §7) — `substitution.approvalMode` decides for a change that
   assigns a teacher: NOTIFY (default) DRAFT → CONFIRMED, no deadline, `substitution.status-changed` plus
   `substitution.confirmation-requested` with `mode = NOTIFY` (the teacher is informed); CONFIRM DRAFT →

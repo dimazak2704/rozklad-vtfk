@@ -35,7 +35,7 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
     (if that leaves nothing, the whole window — the hard constraint then reports it);
   * rooms: rooms of the required type; whole-group lessons only in rooms with capacity ≥ group size
     (unknown capacity/size = fits); the sports hall and sports ground (`GYM`, `SPORTS_GROUND`) only for
-    units that require them or name them as preferred/home room; if nothing fits, every room (reported
+    units that require them or name them as preferred, teacher's or home room; if nothing fits, every room (reported
     by the hard constraint);
   * parity: `BOTH` for WHOLE units, `NUMERATOR`/`DENOMINATOR` for HALF units.
   Timefold 2.8 validates assigned values against these ranges, so swaps that would break a range are
@@ -47,7 +47,8 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
 * **Week arithmetic**: BOTH meets in both week types, a half in one. Penalties count week
   occurrences (two BOTH lessons in one slot = 2, BOTH vs a half = 1, numerator vs denominator = 0).
 * **Room warm start**: before solving, every unit gets its desired room (preferred room of the load
-  item, else the group's home room, if compatible) or the least loaded compatible room. The
+  item, else the teacher's usual room `teacherRoomId`, else the home room of an older snapshot — the first
+  compatible one) or the least loaded compatible room. The
   construction heuristic then places only timeslot × parity (≈20–40 moves per unit instead of
   ≈2000 with rooms in the cartesian product); local search changes rooms freely.
 
@@ -71,11 +72,12 @@ in `generation.completed` uses the Ukrainian titles.
 | Late pair | Пізні пари в межах зміни | soft | unit on the 4th pair of its shift costs 1, the 5th 2, …, × week occurrences | `latePairs` |
 | Discipline repeated | Дисципліна три й більше разів на день | soft | group-day-discipline: distinct pairs above 2 per week type | config (5) |
 | Unwanted slot | Небажаний для викладача час | soft | unit, week occurrences | `preferences` |
-| Room preference | Заняття не у своїй аудиторії | soft | unit outside its desired room, week occurrences | `homeRoom` |
+| Room preference | Заняття не в аудиторії викладача | soft | unit outside its desired room (load item's preferred room, else the teacher's usual room), week occurrences | `homeRoom` |
 | Halves paired | Чисельник і знаменник в одному слоті (бонус) | soft **reward** | two halves of one cohort in one slot with different parities | `brokenDays` |
 
 Weights: `GenerationWeights.DEFAULT` = windows 10, brokenDays 10, latePairs 3, preferences 5,
-homeRoom 1; `0` switches a constraint off (`ConstraintWeightOverrides`). Hard constraints are not
+homeRoom 1 (the request keeps the name `homeRoom`; since round 7 it weights the teacher's room); `0` switches a
+constraint off (`ConstraintWeightOverrides`). Hard constraints are not
 weighted. Windows, broken days and discipline repeats use custom incremental collectors over
 «lanes» (cohort × week type) — `TimetableSolverTest` runs the solver in `FULL_ASSERT` to prove the
 incremental score equals a full recalculation.
@@ -160,7 +162,7 @@ constraint shows its matches with score `0hard/0soft`.
 | `groups` | active groups in scope: `size` (0 if unknown), `shift`, stored subgroup numbers |
 | `rooms` | active rooms: `capacity` (0 if unknown), `max_parallel`, `type` |
 | `teachers` | every teacher referenced by a unit, with `teacher_preference` UNAVAILABLE / UNWANTED of the semester |
-| `units` | load items split by DOMAIN §4 (whole pairs + at most one HALF), one unit per subgroup for split items with that subgroup's teacher; `requiredRoomType`/`preferredRoomId` from the load item, `homeRoomId` from the group |
+| `units` | load items split by DOMAIN §4 (whole pairs + at most one HALF), one unit per subgroup for split items with that subgroup's teacher; `requiredRoomType`/`preferredRoomId` from the load item; `teacherRoomId` (round 7) = the teacher's usual room for the discipline in the published version (DOMAIN §5); `homeRoomId` null since round 7 |
 | `units[].pinned` | pinned template lessons of `baseVersionId`, and lessons of groups outside the scope that must stay as they are |
 
 ## 9. Contract notes (no change to `libs/contracts`)
@@ -173,6 +175,10 @@ constraint shows its matches with score `0hard/0soft`.
   respected (out of scope of a partial generation) should be sent as pinned units.
 * `ProblemSnapshot` has no stream id, so «one lesson for several groups» is not modelled: two units of
   a stream would be treated as a teacher conflict.
+* Round 7 (additive in `libs/contracts`): `units[].teacherRoomId` — the teacher's usual room. The desired room
+  is the first compatible of `preferredRoomId`, `teacherRoomId`, `homeRoomId`; a GYM/SPORTS_GROUND named there
+  joins the unit's room range. Older snapshots without the field read it as null. Measured on the real data
+  (2КІ1, 2КІ2, 3КІ1, 3КІ2, 45 s, published base): see CHANGELOG-CONTRACTS «Round 7».
 * Snapshot validation is strict: unknown group/teacher/room references, subgroups the group does not
   have, a shift without windows, pins outside the timeslots, duplicate ids, no rooms → FAILED with the
   list of problems.

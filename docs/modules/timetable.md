@@ -10,7 +10,8 @@ CONTRACTS §1, §2 (timetable, generation, import apply), §7 (events). Deviatio
   CRUD on drafts, drag & drop move with `?dryRun=true`, copy, delete drafts, diff of two versions.
 - **One conflict engine** (`internal.conflict.ConflictEngine`) for the template (weekday × pair × parity) and for
   dated lessons (date × pair). Hard: teacher, cohort (whole group vs subgroup), room (`maxParallel`, streams
-  count once), capacity, room type, shift window, teacher UNAVAILABLE. Soft: windows of groups (per subgroup) and
+  count once), capacity, room type, shift window (weekly template only — dated lessons of changes and orders may be
+  on any pair 1–8, DOMAIN §2), teacher UNAVAILABLE. Soft: windows of groups (per subgroup) and
   teachers, «рваний день», more than 4 pairs a day, a discipline 3+ times a day, UNWANTED slots. Every conflict is a
   `ConflictDto` with a Ukrainian message; template conflicts carry `weekday`, dated ones `date`.
 - **Metrics** of a template (`MetricsDto`) and **diff** by (group, subgroup, weekday, pair, parity, discipline,
@@ -27,6 +28,10 @@ CONTRACTS §1, §2 (timetable, generation, import apply), §7 (events). Deviatio
   `generation.progress` / `generation.completed` from `core.q.scheduler-results` idempotently, stores progress points,
   turns a SOLVED result into a DRAFT (source GENERATED) with metrics «було / стало», pushes SSE; cancel and a watchdog
   for silent schedulers.
+- **Usual rooms of teachers** (round 7, DOMAIN §5): public `TeacherRoomQueries.published(semesterId, teacherIds)` →
+  `TeacherRooms` (`forTeacher`, `forDiscipline`, `forGroup`), implemented by `internal.support.TeacherRoomReader`
+  (one aggregate SQL over `template_lesson` per call; `ofVersion(versionId)` for the generator). Used by the
+  snapshot builder (`units[].teacherRoomId`) and by substitution (`SubstituteRooms`).
 
 ## 2. Endpoints
 
@@ -65,7 +70,8 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   (ADDITIONAL, BLOCK and room-only changes print none). Import name matching uses `catalog.CatalogText.key` and
   `GroupCodes.canonical`; unit expansion uses `load.LoadPattern`; `accounting.hoursPerPair` comes from `SettingsService`.
 - **Shift windows**: table `shift_window`; when it is empty the DOMAIN §2 windows are used (logged once). A weekday
-  without a row is not restricted.
+  without a row is not restricted. `ShiftWindowRule` skips dated lessons (round 7): a republication no longer
+  reports a SHIFT conflict for a lesson a published order put on a 5th pair of a 1st-shift group.
 - **Bell times**: the semester's profile, otherwise the first active profile by name; without any profile lesson
   times are `null` (logged).
 - **Cohorts**: a split group is evaluated per subgroup (whole-group lessons + its own); a window every cohort has is
@@ -104,6 +110,9 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
     of in-scope groups pin the matching unit (by load item, else by discipline and teacher) or stay as their own unit;
   - unknown group size → 0, unknown room capacity → `Integer.MAX_VALUE` in the snapshot (no invented violations);
     timeslots = union of the shift windows;
+  - every free unit carries `teacherRoomId` = `TeacherRooms.forDiscipline(teacher, discipline)` over the published
+    version of the semester (the base version when nothing is published; null for a teacher without lessons and for
+    pinned units); `homeRoomId` is sent as null since round 7 (rooms belong to teachers, DOMAIN §5);
   - one active job per semester (check + partial unique index); results are idempotent (`processed_event`), events
     of finished/unknown jobs are ignored; the payload type is chosen by routing key; malformed messages go to the DLQ;
   - SOLVED → DRAFT «Згенеровано dd.MM.yyyy HH:mm» (WHOLE → BOTH, HALF → returned parity; a pinned unit left out stays
@@ -139,8 +148,9 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
 - Web slices: version, lesson (409 payloads, dryRun), public schedule (ETag/304, ranges, ICS), generation, import (SERVICE, 422).
 - Integration (Testcontainers): `TimetablePublicationIT` (import → publish → materialization, REST schedule and ICS,
   applied substitution kept on republication with a reported conflict, events on RabbitMQ, 409/422 rules),
-  `GenerationFlowIT` (snapshot on RabbitMQ, progress/completed consumption, generated draft, redelivery ignored,
-  cancel, invalid and failed results).
+  `GenerationFlowIT` (snapshot on RabbitMQ, teacher rooms in the units, progress/completed consumption, generated
+  draft, redelivery ignored, cancel, invalid and failed results). `TeacherRoomsTest` (weights, ties by room number,
+  fallbacks).
 
 ## 6. Known gaps
 

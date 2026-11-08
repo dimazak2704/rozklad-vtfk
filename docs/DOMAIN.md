@@ -8,7 +8,7 @@ discipline programs) and the college site (bells, curriculum).
 
 | UA | Code | Meaning |
 |---|---|---|
-| група | `StudentGroup` | e.g. `4КІ1` = course 4 + specialty letters `КІ` + number 1. Has `shift`, `size`, curator, home room |
+| група | `StudentGroup` | e.g. `4КІ1` = course 4 + specialty letters `КІ` + number 1. Has `shift`, `size`, curator, home room (reference only: rooms belong to teachers, §5) |
 | підгрупа | `Subgroup` | split of a group for labs / foreign language. `subgroupNumber` 1..n; **0 = whole group** |
 | потік | `Stream` | one lesson for several groups (optional, same teacher/room/slot) |
 | викладач | `Teacher` | short form `Кренцін М.Д.`, display `Кренцін`; cycle commission; STAFF or PART_TIME |
@@ -40,7 +40,9 @@ discipline programs) and the college site (bells, curriculum).
   - «2 зміни, 50 хв» Mon–Thu: 08:30-09:20, 09:30-10:20, 10:40-11:30, 11:40-12:30, 12:50-13:40, 13:50-14:40, 15:00-15:50, 16:00-16:50; Fri: 08:30-09:20, 09:30-10:20, 10:40-11:30, 11:50-12:40, 12:50-13:40, 14:00-14:50
   - «1 зміна, 80 хв»: 08:30-09:50, 10:00-11:20, 12:00-13:20, 13:30-14:50
 - Shift windows (table `shift_window`): shift 1 → pairs 1–4 Mon–Fri; shift 2 → pairs 5–8 Mon–Thu, 4–6 Fri.
-  In the real schedule the 2nd course is shift 2, other courses shift 1.
+  In the real schedule the 2nd course is shift 2, other courses shift 1. The windows bind the **regular weekly
+  timetable** only (editor, generator, version publication). A change or an order may put a pair on any pair
+  1–8 whatever the group's shift (owner's rule, round 7); its times come from the same bell profile of the date.
 - Hours per pair: setting `accounting.hoursPerPair` (default 2 academic hours, even though pairs are 60 min now).
 
 ## 3. Core schema (PostgreSQL, Flyway, module ranges in ARCHITECTURE §8)
@@ -120,7 +122,19 @@ An **online** lesson (template flag, or a dated lesson on a STUDY_MODE ONLINE da
 reference but does not occupy it: room occupancy, capacity and room type are not checked for it, and its
 dated lesson is not room-exclusive (order №35 gives room 403 to 1ОП2 while 3ОБ studies online there).
 Hard violations (block publication, 409 with `conflicts[]`): the above, capacity < group size (whole-group
-lesson), required room type mismatch, lesson outside the group's shift window, teacher UNAVAILABLE slot.
+lesson), required room type mismatch, lesson outside the group's shift window (weekly template only; dated
+lessons — copies of the template or made by changes — may be on any pair 1–8, §2), teacher UNAVAILABLE slot.
+
+**Rooms belong to teachers** (owner's rule, round 7): a teacher teaches his discipline in his room and the
+groups come to it (real data: Кучинська 22 of 22 pairs in 303, Вітюк 12 of 12 in 406; only 62 of the 1011
+lessons with a room are in the group's home room). The **usual room** of a teacher = the room with the most week occurrences of
+his lessons in the published weekly timetable (BOTH counts 2, NUM/DEN 1; online lessons and lessons without a
+room do not count); a tie goes to the lowest room number (numbered rooms before named ones). It is looked up
+from the most specific key: teacher + discipline + group, teacher + discipline, teacher; a teacher without
+lessons has none (`TeacherRooms`, `TeacherRoomQueries`). The generator prefers the load item's preferred room,
+then the teacher's usual room for the discipline (soft «Заняття не в аудиторії викладача», weight `homeRoom`);
+a cover of another discipline goes to the substitute's usual room when it is free (§7). The group's home room
+is reference data only.
 Soft warnings (shown, not blocking): cohort/teacher **windows** (gap inside a day for a given parity),
 **«рваний день»** (for a group-day the NUM and DEN lesson counts or first pair differ), > 4 pairs/day,
 same discipline ≥ 3 times/day, UNWANTED preference.
@@ -193,6 +207,14 @@ picks every substitution; the substitute is **assigned first and informed afterw
   decision»); pending longer than `substitution.confirmTimeoutMinutes` ⇒ reminder (SSE + admin chat).
 - **AUTO**: DRAFT → CONFIRMED, the teacher learns from the published order.
 Kinds without a new teacher are confirmed at once in every mode.
+
+**Pairs and rooms of changes.** A change may be on any pair 1–8 (§2): shift windows are never checked for
+changes, orders or the lessons they create (creation, publication, a later timetable republication).
+`REPLACE_DISCIPLINE` without `newRoomId` takes the group to the substitute's usual room for the new discipline
+in the group (§5) when that room is free at the date and pair (no lesson or open change there beyond its
+`max_parallel`, fits the group, has the required room type); otherwise `newRoomId` stays empty and the lesson
+keeps its room. There is no warning field on `ChangeDto`: the dispatcher sees the chosen room in `new.room`
+(empty = the lesson's room) and may change it with `PUT`. A room given by the dispatcher is kept as given.
 
 **Change lifecycle**: DRAFT → PENDING_CONFIRMATION (CONFIRM) or CONFIRMED (NOTIFY, AUTO, no teacher) →
 APPLIED; DECLINED from PENDING (CONFIRM) or from CONFIRMED (NOTIFY, the informed teacher only); a declined change
