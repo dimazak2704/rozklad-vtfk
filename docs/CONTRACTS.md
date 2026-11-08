@@ -93,12 +93,15 @@ Orders:
 | `GET /api/admin/orders/{id}` | `OrderDto {id, number?, date, kind, parentId?, status, title, weekdayLabel, parityLabel, items:[OrderItemDto], roomChanges:[OrderItemDto], notes:[string], signatoryPosition, signatoryName}` |
 | `PUT /api/admin/orders/{id}/notes` `{notes:[string]}` | edit notes of a draft |
 | `POST /api/admin/orders/{id}/publish` | 200 `OrderDto` (number assigned, changes APPLIED, event `order.published`) |
+| `GET /api/admin/orders/numbering?semesterId` · `PUT {semesterId, firstNumber}` | `{semesterId, firstNumber, lastNumber?, nextNumber}`; next = max(last + 1, first); 422 `ORDER_NUMBER_USED` when `firstNumber ≤ last` |
 `OrderItemDto {id, groupCode, pairLabel, rowType, fromDiscipline, fromTeacher, reasonText, toDiscipline, toTeacher, roomText, changeId?}`
 
 Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipline, plan, fact, remaining, forecast, status, forecastFinishDate?, suggestion?}]`;
 `GET /api/admin/accounting/teachers?month=2026-10` → `[{teacher, substitutionsCount, substitutionsHours, missedCount}]`.
 
 Identity & settings: `POST /api/admin/invites {teacherId}` → `{token, url, expiresAt}`; `GET /api/admin/invites`;
+`GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing Keycloak account → `{teacherId,
+teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
 `GET/PUT /api/admin/settings` → `{approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId}`.
 
 Import apply (role ADMIN or SERVICE): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
@@ -138,6 +141,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 | `GET /api/notify/bot` | `{username, link, mode: POLLING|WEBHOOK, connected}` |
 | `GET /api/notify/bindings` · `DELETE /api/notify/bindings/{id}` | `[{id, type: GROUP_CHAT|TEACHER|ADMIN_CHAT|SUBSCRIBER, chatId(masked), title, groupId?, teacherId?, createdAt}]` |
 | `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` (ADMIN; TEACHER may create own TEACHER code) | `{code, deepLink, expiresAt}` |
+| `GET /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | `{teacherId, teacherName, bound, binding?: BindingDto, botUsername, botLink}`; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status` | delivery log |
 | `POST /api/notify/test` | sends a test message to `TELEGRAM_OWNER_CHAT_ID` |
 | `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` (public for PUBLISHED orders) | file |

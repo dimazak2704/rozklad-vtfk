@@ -156,6 +156,11 @@ finish lesson (ids listed); WILL_UNDERRUN → ADDITIONAL with the number of pair
 finished with replacement), hours = pairs × hours per pair; missed = own pairs taken over, moved away
 (SWAP) or cancelled. Only teachers with activity are listed.
 
+Numbering: `GET/PUT /api/admin/orders/numbering` (`OrderNumberingService`, table `order_numbering`, V1_602).
+Without a row the semester starts at №1; `firstNumber` = 35 makes the first published order №35 (the
+college's paper orders №1–34). The next number is max(last + 1, first); a first number at or below the last
+used one is 422 `ORDER_NUMBER_USED` (numbers never go back or repeat).
+
 ## 7. Configuration
 
 | Key | Default | Meaning |
@@ -188,7 +193,8 @@ Manual run: own database on the shared PostgreSQL, port 38081.
 
 * REST security is tested with `@WebMvcTest` slices; the integration tests call services directly
   (a real JWT would need Keycloak or a second test context).
-* `aiSpendToday` of the dashboard is always `null` (the importer accounts AI usage).
+* `aiSpendToday` of the dashboard is always `null` (the importer accounts AI usage; core has no client for
+  `GET /api/import/ai/usage`, the SPA can read it directly).
 * Streams: a replacement keeps the stream of a same-discipline lesson; pending changes of other
   groups of the stream are exempt from the teacher check only through their original lesson.
 * `POST /api/admin/import/changes` (historic orders) is not implemented.

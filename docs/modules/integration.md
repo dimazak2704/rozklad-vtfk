@@ -115,10 +115,11 @@ Paths of every SPA call exist in the backend. Shapes and codes that differ:
     web reads the time limit from an optional `params` that core does not send.
 13. `LessonView.reasonText` is now null for ADDITIONAL/BLOCK/ROOM_CHANGE lessons (same as the order).
     `startsAt/endsAt` are null without a bell profile; `weekdayLabel` is upper case («ПОНЕДІЛОК»).
-14. SSE — core also sends `absence.updated` (substitution); web listens to `absence.created` only.
-15. Not available in the backend for web features: teacher's own Telegram binding status
-    (`GET /api/notify/bindings` is ADMIN-only), `maxParallel` in `/public/rooms`, unlinking a teacher
-    account or deleting invites, `POST /api/admin/import/changes` (historic orders).
+14. SSE — core also sends `absence.updated` (substitution); web listens to `absence.created` only (web side).
+15. Not available in the backend for web features: `maxParallel` in `/public/rooms`, deleting invites,
+    `POST /api/admin/import/changes` (historic orders). Added on 08.11: own Telegram binding status
+    `GET /api/notify/bindings/me`, linking/unlinking a teacher account `PUT/DELETE /api/admin/teachers/{id}/account`,
+    order numbering `GET/PUT /api/admin/orders/numbering` (see `docs/RUNNING.md`).
 16. Streams: `ProblemSnapshot` has no stream id, so the scheduler plans stream units separately; web and mock
     move lessons of one `streamId` together, core moves a single lesson.
 

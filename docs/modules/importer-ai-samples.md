@@ -126,3 +126,12 @@ the rules too (the date is still unknown, so the model is still asked for the cl
   itself, surfaced as warnings.
 * Cost: ~4–6 cents per photo or scan with Sonnet 5.5 at medium effort; a text fallback with Haiku 5.5 costs a
   fraction of a cent. The default daily budget of $2 covers ~40 photos.
+
+## 6. Live stack run with Haiku as the vision model (08.11.2026)
+
+Full stack in Docker, `AI_MODEL_VISION=claude-haiku-5-5`, `AI_EFFORT_VISION=low`, through the gateway with a real
+Keycloak token (`scripts/smoke_workflows.py ai`): `seed/curriculum-ki-2023.pdf`, semester 7, groups 4КІ1–4КІ3 →
+READY → apply → core created the load items. 9 657 input / 3 618 output tokens, **$0.0028**, one call. The pipeline
+works end-to-end, but Haiku returned only 2 rows (Іноземна мова, Українська мова) of the 12 Sonnet reads — the
+vision default stays Sonnet 5.5.
+

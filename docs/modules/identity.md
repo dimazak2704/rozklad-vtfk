@@ -18,6 +18,13 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
 | `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt}`; 404 for an unknown token |
 | `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation; 404; 409 username taken; 410 used/expired/revoked (`status` in the body); 503 Keycloak unavailable |
 | `GET /api/internal/teachers/{id}` (SERVICE) | teacher with `keycloakUserId`, `linked`, cycle commission |
+| `GET /api/admin/teachers/{id}/account` | `{teacherId, teacherName, linked, userId, username, enabled}` (`username` null when Keycloak lost the user) |
+| `PUT /api/admin/teachers/{id}/account {username}` | links an **existing** Keycloak account (`TeacherAccountService`): grants TEACHER, revokes open invites; 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher already has a live account, 503 Keycloak down. `scripts/seed_demo.py` links `krentsin`/`nepyivoda` this way |
+| `DELETE /api/admin/teachers/{id}/account` | 204, idempotent; the Keycloak user stays |
+
+Keycloak 26.8 accepts admin REST calls only with the audience of the client scope `kc-admin-api`; the realm
+files give it to `rozklad-core-admin` (realms imported earlier: `scripts/dev-stack.sh up` and
+`infra/deploy/scripts/keycloak-sync.sh` add it). Without it every invite and link failed with 503.
 
 ## Invite flow
 

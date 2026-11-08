@@ -173,3 +173,16 @@ No endpoint was changed. These are the readings the SPA and its mock API use whe
 | `LessonView.reasonText` | The order's printed reason (`ReasonCode.printed`): none for ADDITIONAL, BLOCK and room-only changes, «Вичит.» for a finished discipline, free text for OTHER. | One rule for orders and schedules. |
 | Bell profile in effect | Everywhere: the semester's profile, else setting `calendar.activeBellProfileId`. | Timetable, substitution and accounting each had another fallback. |
 | Confirmation deadline | `substitution.confirmTimeoutMinutes` from the settings (default 120 min, V1_802); the substitution module's own default of 60 min is gone. | One settings source. |
+
+## Running stack and real data (08.11.2026, see docs/RUNNING.md)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET/PUT/DELETE /api/admin/teachers/{id}/account` | New (identity): link a teacher to an account that already exists in Keycloak by `username`, or remove the link. Grants TEACHER, revokes open invites; never creates or deletes users. 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher has another live account, 503 Keycloak down. | The demo accounts of the realm (and accounts made in the admin console) could only be linked by the `demo` profile; invites create new users only. |
+| `GET/PUT /api/admin/orders/numbering` | New (order, table `order_numbering`, V1_602): first order number of a semester; next number = max(last + 1, first). Setting it at or below the last used number is 422 `ORDER_NUMBER_USED`. | The college starts the system mid-semester (orders №1–34 on paper, №35 on 19.10.2026 in the system). |
+| `GET /api/notify/bindings/me` | New (notification): own Telegram binding of the signed-in teacher; teacher resolved via core `GET /api/me` with the caller's token. | The teacher cabinet showed the status without an endpoint (integration §5 item 15). |
+| Online lessons | A lesson that is online (template flag or STUDY_MODE ONLINE day) does not occupy its room: no room/capacity/room-type conflicts, dated lesson `room_exclusive = false`. | Order №35 gives room 403 to 1ОП2 while 3ОБ studies online there. |
+| Import alias payload | importer sends catalog aliases as `{type, alias, target}` (core `AliasItem`), was `targetShortName` → core 400. | Contract mismatch found on the first live import. |
+| Order document header | notification prints «По коледжу про деякі зміни в розкладі занять» under the heading; `OrderPayload.title` (= «РОЗПОРЯДЖЕННЯ №35») is not printed again. | The printed sheet repeated the heading instead of the college subtitle. |
+| Keycloak client `rozklad-core-admin` | default client scope `kc-admin-api` (realm files + `keycloak-sync.sh`). | Keycloak 26.8 answers 401 to admin REST calls whose token lacks the admin API audience: invites and account links failed with 503. |
+

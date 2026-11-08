@@ -101,7 +101,9 @@ pages are Ukrainian by default (`uk`, `en` supported). Roles: `ADMIN`, `TEACHER`
 | service-account-rozklad-notification | — | SERVICE | `a0000000-0000-4000-8000-000000000011` |
 | service-account-rozklad-importer | — | SERVICE | `a0000000-0000-4000-8000-000000000012` |
 
-The core seed links teachers «Кренцін» and «Непийвода» by `teacher.keycloak_user_id` = the ids above.
+`scripts/seed_demo.py` links the teachers «Кренцін» and «Непийвода» to these accounts through
+`PUT /api/admin/teachers/{id}/account` (the `demo` profile's `DemoAccountLinks` does the same by id).
+Test credentials for scripts: `infra/keycloak/demo-users.env`; how to run everything: `docs/RUNNING.md`.
 
 | Client | Type | Secret (dev, also in `.env.example`) |
 |---|---|---|
