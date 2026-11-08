@@ -44,10 +44,14 @@ public record PlanUnit(
                 lessonId);
     }
 
-    /** @param initial where the unit stands in the base version (a warm start), or {@code null} */
-    ProblemSnapshot.Unit toSnapshotUnit(UUID homeRoomId, ProblemSnapshot.PinnedSlot initial) {
+    /**
+     * @param teacherRoomId the teacher's usual room for the discipline, or {@code null}
+     * @param initial       where the unit stands in the base version (a warm start), or {@code null}
+     */
+    ProblemSnapshot.Unit toSnapshotUnit(UUID teacherRoomId, ProblemSnapshot.PinnedSlot initial) {
         return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight,
-                requiredRoomType, preferredRoomId, homeRoomId, pinned, pinned == null ? initial : null);
+                requiredRoomType, preferredRoomId, null, pinned, pinned == null ? initial : null,
+                pinned == null ? teacherRoomId : null);
     }
 
     /**
@@ -55,11 +59,11 @@ public record PlanUnit(
      * groups. Every unit of a pinned stream but the first is sent without teacher and room, so the
      * solver sees no clash; core gives the generated lesson the real teacher and room back.
      */
-    ProblemSnapshot.Unit toStreamFollowerUnit(UUID homeRoomId) {
+    ProblemSnapshot.Unit toStreamFollowerUnit() {
         ProblemSnapshot.PinnedSlot slot = new ProblemSnapshot.PinnedSlot(pinned.weekday(), pinned.pair(),
                 pinned.parity(), null);
         return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, null, weight, null, null,
-                homeRoomId, slot);
+                null, slot);
     }
 
     /**

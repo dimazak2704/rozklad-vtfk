@@ -207,6 +207,45 @@ class GenerationFlowIT {
                 .filteredOn(version -> version.getSource() == VersionSource.GENERATED).hasSize(1);
     }
 
+    /**
+     * Round 7: the room belongs to the teacher. A free unit names its teacher's usual room for the
+     * discipline (Непийвода teaches НДЕКСМ in 304 in the base, so 4КІ1's НДЕКСМ goes there, although
+     * her room over all lessons is 6 by the lower number); a teacher without lessons has none; the
+     * group's home room is not sent any more.
+     */
+    @Test
+    void freeUnitsNameTheTeachersUsualRoom() {
+        transaction.executeWithoutResult(status -> {
+            LoadItem ndeksm = new LoadItem(data.semester.getId(), data.group4ki1.getId(), data.ndeksm.getId(),
+                    BigDecimal.valueOf(2), 44);
+            ndeksm.assignTeacher(0, data.nepyivoda.getId());
+            em.persist(ndeksm);
+        });
+        jdbc.update("UPDATE student_group SET home_room_id = ? WHERE id = ?", data.room304.getId(),
+                data.group4ki1.getId());
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+
+        generation.start(command(), "admin");
+
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        List<ProblemSnapshot.Unit> units = request.problem().units();
+        assertThat(units).allSatisfy(unit -> assertThat(unit.homeRoomId()).isNull());
+        assertThat(units).filteredOn(unit -> unit.disciplineId().equals(data.ndeksm.getId())
+                        && unit.groupId().equals(data.group4ki1.getId()))
+                .singleElement()
+                .satisfies(unit -> {
+                    assertThat(unit.pinned()).isNull();
+                    assertThat(unit.teacherRoomId()).isEqualTo(data.room304.getId());
+                });
+        assertThat(units).filteredOn(unit -> unit.disciplineId().equals(data.stp.getId()))
+                .isNotEmpty()
+                .allSatisfy(unit -> assertThat(unit.teacherRoomId()).as("Кренцін has no lessons yet").isNull());
+        assertThat(units).filteredOn(unit -> unit.pinned() != null)
+                .allSatisfy(unit -> assertThat(unit.teacherRoomId()).isNull());
+    }
+
     /** The scheduler has no streams: the stream of the base version stays one lesson of one teacher. */
     @Test
     void streamOfTheBaseVersionStaysTogether() {

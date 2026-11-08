@@ -32,14 +32,17 @@ import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
+import ua.vtc.rozklad.core.timetable.TeacherRooms;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.TemplateLessonRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
+import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
 import ua.vtc.rozklad.core.timetable.internal.conflict.SlotPreference;
 import ua.vtc.rozklad.core.timetable.internal.conflict.TeacherSlotPreferences;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository.LoadRow;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 import ua.vtc.rozklad.core.timetable.internal.support.PreferenceReadRepository;
+import ua.vtc.rozklad.core.timetable.internal.support.TeacherRoomReader;
 
 /**
  * Builds the {@link ProblemSnapshot} of CONTRACTS.md §7 for the groups in scope: units from their
@@ -49,7 +52,10 @@ import ua.vtc.rozklad.core.timetable.internal.support.PreferenceReadRepository;
  * sent as 0 and {@link Integer#MAX_VALUE}, so the solver never invents a capacity violation.
  * Free units of the scope start where the matching base lesson stands ({@code initial}): the
  * solver improves the base instead of rebuilding a nearly full shift from scratch, and its best
- * result is never worse than a feasible base.
+ * result is never worse than a feasible base. Each free unit names its teacher's usual room
+ * ({@code teacherRoomId}, {@link TeacherRooms#forDiscipline}) in the published version of the
+ * semester, or in the base version when nothing is published: the room belongs to the teacher, so
+ * the solver prefers it (round 7; the group's home room is no longer sent).
  */
 @Component
 class ProblemSnapshotBuilder {
@@ -75,12 +81,15 @@ class ProblemSnapshotBuilder {
     private final PreferenceReadRepository preferences;
     private final CalendarQueries calendar;
     private final SettingsService settings;
+    private final TimetableVersionRepository versions;
+    private final TeacherRoomReader teacherRooms;
 
     ProblemSnapshotBuilder(StudentGroupRepository groups, SubgroupRepository subgroups, RoomRepository rooms,
                            TeacherRepository teachers, DisciplineRepository disciplines,
                            TemplateLessonRepository templateLessons, LoadReadRepository loads,
                            PreferenceReadRepository preferences, CalendarQueries calendar,
-                           SettingsService settings) {
+                           SettingsService settings, TimetableVersionRepository versions,
+                           TeacherRoomReader teacherRooms) {
         this.groups = groups;
         this.subgroups = subgroups;
         this.rooms = rooms;
@@ -91,6 +100,8 @@ class ProblemSnapshotBuilder {
         this.preferences = preferences;
         this.calendar = calendar;
         this.settings = settings;
+        this.versions = versions;
+        this.teacherRooms = teacherRooms;
     }
 
     Built build(UUID semesterId, Collection<StudentGroup> scope, TimetableVersion base) {
@@ -130,16 +141,21 @@ class ProblemSnapshotBuilder {
         groups.findAllById(outsideGroupIds).forEach(group -> groupsById.put(group.getId(), group));
         storedSubgroups.putAll(storedSubgroups(outsideGroupIds));
         ShiftWindows windows = calendar.shiftWindowTable();
+        TeacherRooms usualRooms = teacherRooms.ofVersion(versions.findPublished(semesterId)
+                .map(TimetableVersion::getId).orElse(base == null ? null : base.getId()));
+        List<ProblemSnapshot.Room> snapshotRooms = snapshotRooms(units);
+        // неактивна аудиторія не потрапляє в знімок: на неї не посилаємося
+        Set<UUID> sentRooms = snapshotRooms.stream().map(ProblemSnapshot.Room::id).collect(Collectors.toSet());
         Set<PlanUnit.StreamSlot> streamLeaders = new HashSet<>();
         ProblemSnapshot snapshot = new ProblemSnapshot(timeslots(windows), shiftWindowsOf(windows),
-                snapshotGroups(groupsById.values(), storedSubgroups, units), snapshotRooms(units),
+                snapshotGroups(groupsById.values(), storedSubgroups, units), snapshotRooms,
                 snapshotTeachers(units, preferences.forSemester(semesterId)),
                 units.stream().map(unit -> {
-                    UUID homeRoom = homeRoom(groupsById.get(unit.groupId()));
                     PlanUnit.StreamSlot stream = unit.streamSlot();
                     return stream == null || streamLeaders.add(stream)
-                            ? unit.toSnapshotUnit(homeRoom, starts.get(unit.unitId()))
-                            : unit.toStreamFollowerUnit(homeRoom);
+                            ? unit.toSnapshotUnit(usualRooms.forDiscipline(unit.teacherId(), unit.disciplineId())
+                                    .filter(sentRooms::contains).orElse(null), starts.get(unit.unitId()))
+                            : unit.toStreamFollowerUnit();
                 }).toList());
         return new Built(snapshot, new GenerationPlan(units));
     }
@@ -300,10 +316,6 @@ class ProblemSnapshotBuilder {
                 .map(row -> new ProblemSnapshot.ShiftWindow(row.shift(), row.weekday(), row.firstPair(),
                         row.lastPair()))
                 .toList();
-    }
-
-    private static UUID homeRoom(StudentGroup group) {
-        return group == null ? null : group.getHomeRoomId();
     }
 
     record Built(ProblemSnapshot snapshot, GenerationPlan plan) {
