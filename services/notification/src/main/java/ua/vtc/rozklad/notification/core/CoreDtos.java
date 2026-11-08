@@ -18,11 +18,19 @@ public final class CoreDtos {
     private CoreDtos() {
     }
 
-    /** {@code GET /api/public/meta}. Nullable: semester, weekNumber, parity (outside a semester), pairs. */
+    /**
+     * {@code GET /api/public/meta}. Nullable: semester, weekNumber, parity (outside a semester), pairs,
+     * nextStudyDay (none known ahead, or an older core).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record PublicMeta(String collegeName, SemesterInfo semester, LocalDate today, Integer weekNumber,
                              Parity parity, boolean studyDay, PairNow currentPair, PairNow nextPair,
-                             NamedRef bellProfile) {
+                             NamedRef bellProfile, StudyDay nextStudyDay) {
+    }
+
+    /** The first study day after today with its week (core skips weekends and holidays). */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StudyDay(LocalDate date, Integer weekday, Integer weekNumber, Parity parity) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

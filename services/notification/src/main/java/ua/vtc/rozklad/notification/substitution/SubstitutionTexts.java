@@ -115,9 +115,32 @@ public final class SubstitutionTexts {
                 + (groupCode == null ? "" : " у групі " + escape(groupCode)) + ".\nПідберіть іншого викладача." + link;
     }
 
-    public static String adminNoTelegram(String teacherName, SubstitutionRequest request, String link) {
-        return "⚠️ " + b(teacherName + " не підключив Telegram") + "\nЗапит на заміну не надіслано: "
-                + shortDetails(request) + ".\nПідтвердьте заміну в панелі або зв’яжіться з викладачем." + link;
+    /** One warning for all unanswered requests of a teacher without Telegram on one date. */
+    public static String adminNoTelegram(String teacherName, List<SubstitutionRequest> requests, String link) {
+        String title = "⚠️ " + b(teacherName + " не підключив Telegram");
+        if (requests.size() == 1) {
+            return title + "\nЗапит на заміну не надіслано: " + shortDetails(requests.getFirst())
+                    + ".\nПідтвердьте заміну в панелі або зв’яжіться з викладачем." + link;
+        }
+        StringBuilder text = new StringBuilder(title)
+                .append("\nЗапити на заміну не надіслано, ")
+                .append(escape(UaDates.weekdayDayMonth(requests.getFirst().getLessonDate()))).append(':');
+        for (SubstitutionRequest request : requests) {
+            text.append("\n• ").append(pairDetails(request));
+        }
+        return text.append("\nПідтвердьте заміни в панелі або зв’яжіться з викладачем.").append(link).toString();
+    }
+
+    /** {@code 2 пара · 4КІ1 · Дисципліна} (the date is said once above). */
+    private static String pairDetails(SubstitutionRequest request) {
+        StringBuilder text = new StringBuilder().append(request.getPair()).append(" пара");
+        if (request.getGroupCode() != null) {
+            text.append(" · ").append(request.getGroupCode());
+        }
+        if (notBlank(request.getDisciplineName())) {
+            text.append(" · ").append(request.getDisciplineName());
+        }
+        return escape(text.toString());
     }
 
     public static String adminOverdue(String teacherName, SubstitutionRequest request, String link) {

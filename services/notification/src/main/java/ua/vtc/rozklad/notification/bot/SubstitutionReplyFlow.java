@@ -43,7 +43,11 @@ public class SubstitutionReplyFlow {
                         : "Відмову передано диспетчеру");
             }
             case ReplyOutcome.NotPending notPending -> {
-                replies.edit(chatId, messageId, SubstitutionTexts.outdated(notPending.request()), null);
+                // відомий фінальний стан («Ви підтвердили», «Заміну скасовано») не затираємо «неактуальним»
+                String finalText = notPending.request() == null ? null
+                        : SubstitutionTexts.finalState(notPending.request(), notPending.request().getStatus());
+                replies.edit(chatId, messageId,
+                        finalText != null ? finalText : SubstitutionTexts.outdated(notPending.request()), null);
                 replies.answer(action.callbackId(), "Цей запит уже неактуальний");
             }
             case ReplyOutcome.NotFound notFound -> {

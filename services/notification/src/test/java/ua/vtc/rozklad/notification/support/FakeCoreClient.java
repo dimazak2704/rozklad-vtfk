@@ -31,6 +31,7 @@ public class FakeCoreClient implements CoreClient {
     private final List<Reply> replies = new CopyOnWriteArrayList<>();
     private final List<AbsenceReport> absences = new CopyOnWriteArrayList<>();
     private final AtomicInteger scheduleCalls = new AtomicInteger();
+    private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile boolean unavailable;
     private volatile RuntimeException replyFailure;
     private volatile RuntimeException absenceFailure;
@@ -40,6 +41,7 @@ public class FakeCoreClient implements CoreClient {
         replies.clear();
         absences.clear();
         scheduleCalls.set(0);
+        holidays.clear();
         unavailable = false;
         replyFailure = null;
         absenceFailure = null;
@@ -113,31 +115,39 @@ public class FakeCoreClient implements CoreClient {
         return CoreFixtures.bells(date.getDayOfWeek().getValue());
     }
 
+    /** Holidays (no lessons, not a study day) for every owner. */
+    public void addHoliday(LocalDate date) {
+        holidays.add(date);
+    }
+
+    /** Every date of the range; Monday–Friday outside {@link #addHoliday holidays} are study days. */
     @Override
     public Schedule schedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
         available();
         scheduleCalls.incrementAndGet();
-        boolean weekday = from.getDayOfWeek().getValue() <= 5;
-        return switch (type) {
-            case GROUP -> {
-                String code = CoreFixtures.groups().stream().filter(group -> group.id().equals(ownerId))
-                        .map(PublicGroup::code).findFirst().orElse("?");
-                ScheduleDay day = ownerId.equals(CoreFixtures.GROUP_4KI1) && weekday
-                        ? CoreFixtures.day4ki1(from)
-                        : new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of());
-                yield new Schedule(new ScheduleOwner("GROUP", ownerId, code), from, to, List.of(day));
-            }
-            case TEACHER -> {
-                String name = CoreFixtures.teachers().stream().filter(teacher -> teacher.id().equals(ownerId))
-                        .map(PublicTeacher::label).findFirst().orElse("?");
-                ScheduleDay day = ownerId.equals(CoreFixtures.TEACHER_NEPYIVODA) && weekday
-                        ? CoreFixtures.teacherDay(from)
-                        : new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of());
-                yield new Schedule(new ScheduleOwner("TEACHER", ownerId, name), from, to, List.of(day));
-            }
-            case ROOM -> new Schedule(new ScheduleOwner("ROOM", ownerId, "ауд. 6"), from, to, List.of(
-                    new ScheduleDay(from, from.getDayOfWeek().getValue(), null, null, weekday, null, List.of())));
+        List<ScheduleDay> days = new java.util.ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            days.add(day(type, ownerId, date));
+        }
+        String label = switch (type) {
+            case GROUP -> CoreFixtures.groups().stream().filter(group -> group.id().equals(ownerId))
+                    .map(PublicGroup::code).findFirst().orElse("?");
+            case TEACHER -> CoreFixtures.teachers().stream().filter(teacher -> teacher.id().equals(ownerId))
+                    .map(PublicTeacher::label).findFirst().orElse("?");
+            case ROOM -> "ауд. 6";
         };
+        return new Schedule(new ScheduleOwner(type.name(), ownerId, label), from, to, days);
+    }
+
+    private ScheduleDay day(OwnerType type, UUID ownerId, LocalDate date) {
+        boolean studyDay = date.getDayOfWeek().getValue() <= 5 && !holidays.contains(date);
+        if (studyDay && type == OwnerType.GROUP && ownerId.equals(CoreFixtures.GROUP_4KI1)) {
+            return CoreFixtures.day4ki1(date);
+        }
+        if (studyDay && type == OwnerType.TEACHER && ownerId.equals(CoreFixtures.TEACHER_NEPYIVODA)) {
+            return CoreFixtures.teacherDay(date);
+        }
+        return new ScheduleDay(date, date.getDayOfWeek().getValue(), null, null, studyDay, null, List.of());
     }
 
     @Override

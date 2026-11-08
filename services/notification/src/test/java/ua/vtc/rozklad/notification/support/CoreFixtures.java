@@ -20,6 +20,7 @@ import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
 import ua.vtc.rozklad.notification.core.CoreDtos.RoomRef;
 import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreDtos.SemesterInfo;
+import ua.vtc.rozklad.notification.core.CoreDtos.StudyDay;
 import ua.vtc.rozklad.notification.core.CoreDtos.TeacherRef;
 
 /** Core read models modelled on the real 4КІ1 schedule and order №35 (19.10.2026, знаменник). */
@@ -58,7 +59,18 @@ public final class CoreFixtures {
                 LocalDate.of(2026, 12, 30)), today, 8, Parity.DENOMINATOR, today.getDayOfWeek().getValue() <= 5,
                 new PairNow(2, LocalTime.of(9, 40), LocalTime.of(10, 40), 23),
                 new PairNow(3, LocalTime.of(11, 0), LocalTime.of(12, 0), null),
-                new NamedRef(UUID.randomUUID(), "2 зміни, 60 хв"));
+                new NamedRef(UUID.randomUUID(), "2 зміни, 60 хв"), nextStudyDay(today));
+    }
+
+    /** The next Monday–Friday; «today» is always in week 8 (знаменник), so the next week is 9 (чисельник). */
+    private static StudyDay nextStudyDay(LocalDate today) {
+        LocalDate next = today.plusDays(1);
+        while (next.getDayOfWeek().getValue() > 5) {
+            next = next.plusDays(1);
+        }
+        boolean sameWeek = next.getDayOfWeek().getValue() > today.getDayOfWeek().getValue();
+        return new StudyDay(next, next.getDayOfWeek().getValue(), sameWeek ? 8 : 9,
+                sameWeek ? Parity.DENOMINATOR : Parity.NUMERATOR);
     }
 
     public static BellSchedule bells(int weekday) {

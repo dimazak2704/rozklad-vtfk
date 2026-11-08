@@ -19,6 +19,7 @@ import ua.vtc.rozklad.notification.core.CoreDtos.BellSchedule;
 import ua.vtc.rozklad.notification.core.CoreDtos.BellSlot;
 import ua.vtc.rozklad.notification.core.CoreDtos.PairNow;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicMeta;
+import ua.vtc.rozklad.notification.core.CoreDtos.StudyDay;
 import ua.vtc.rozklad.notification.core.CoreQueries;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
@@ -26,6 +27,7 @@ import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineButton;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
+import ua.vtc.rozklad.notification.text.Plurals;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /** «Сьогодні», «Завтра», day navigation, teacher's tomorrow, bells and parity. */
@@ -103,8 +105,9 @@ public class ScheduleViews {
         InlineKeyboard keyboard;
         try {
             DaySchedule schedule = queries.day(type, ownerId, date);
-            text = ScheduleCards.day(schedule);
-            keyboard = navigation(chatId, type, ownerId, date, privateChat);
+            LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date);
+            text = ScheduleCards.day(schedule, nextStudyDay);
+            keyboard = navigation(chatId, type, ownerId, date, nextStudyDay, privateChat);
         } catch (UpstreamUnavailableException e) {
             text = BotTexts.CORE_DOWN;
             keyboard = InlineKeyboard.rows(List.of(InlineButton.callback("🔄 Спробувати ще раз",
@@ -120,10 +123,20 @@ public class ScheduleViews {
         }
     }
 
+    /** Hint for a day without lessons; a failed lookup only loses the hint, not the card. */
+    private LocalDate nextStudyDay(OwnerType type, UUID ownerId, LocalDate date) {
+        try {
+            return queries.nextStudyDay(type, ownerId, date).orElse(null);
+        } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
+            return null;
+        }
+    }
+
+    /** ◀️ ▶️ to the previous/next weekday; on a day without lessons ▶️ jumps to the next study day. */
     private InlineKeyboard navigation(long chatId, OwnerType type, UUID ownerId, LocalDate date,
-                                      boolean privateChat) {
+                                      LocalDate nextStudyDay, boolean privateChat) {
         LocalDate previous = StudyDays.previous(date);
-        LocalDate next = StudyDays.next(date);
+        LocalDate next = nextStudyDay != null ? nextStudyDay : StudyDays.next(date);
         List<List<InlineButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 InlineButton.callback("◀️ " + dayLabel(previous), CallbackData.day(type, ownerId, previous)),
@@ -176,40 +189,63 @@ public class ScheduleViews {
         } else if (isToday && meta.studyDay()) {
             text.append("\nПари на сьогодні закінчилися 🎉");
         }
-        text.append("\n\n<pre>");
+        // звичайний текст, а не <pre>: номер пари й час однакової ширини (цифри в шрифтах Telegram
+        // табличні), тож стовпчик рівний і без моноширинного блоку з кнопкою «копіювати»
+        text.append('\n');
         for (BellSlot slot : bells.slots()) {
-            text.append(slot.pair()).append("  ").append(UaDates.timeRange(slot.startsAt(), slot.endsAt()));
-            if (current != null && current.number() == slot.pair()) {
-                text.append("  ◀ зараз");
-            }
+            String line = slot.pair() + " · " + UaDates.timeRange(slot.startsAt(), slot.endsAt());
             text.append('\n');
+            if (current != null && current.number() == slot.pair()) {
+                text.append(b(line)).append(" ◀ зараз");
+            } else {
+                text.append(escape(line));
+            }
         }
-        text.setLength(text.length() - 1);
-        text.append("</pre>");
         if (bells.profile() != null && bells.profile().name() != null) {
-            text.append('\n').append(i(bells.profile().name()));
+            text.append("\n\n").append(i(Plurals.agreeShifts(bells.profile().name())));
         }
         return text.toString();
     }
 
     public void parity(long chatId) {
         try {
-            replies.send(chatId, parityText(queries.meta()), null);
+            replies.send(chatId, parityText(queries.meta(), today()), null);
         } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
             replies.send(chatId, BotTexts.CORE_DOWN, null);
         }
     }
 
-    static String parityText(PublicMeta meta) {
-        if (meta.parity() == null || meta.parity() == Parity.BOTH || meta.semester() == null) {
+    /**
+     * This week's parity; on a weekend or a holiday also the week of the next study day (from core's
+     * meta, which knows holidays and parity overrides), because that is the week people ask about.
+     */
+    static String parityText(PublicMeta meta, LocalDate today) {
+        StudyDay next = meta.nextStudyDay();
+        boolean nextKnown = !meta.studyDay() && next != null && next.date() != null && next.parity() != null
+                && next.parity() != Parity.BOTH;
+        boolean weekKnown = meta.parity() != null && meta.parity() != Parity.BOTH && meta.semester() != null;
+        if (!weekKnown && !nextKnown) {
             return "🔢 Зараз немає навчального тижня — ні чисельника, ні знаменника 🙂";
         }
-        StringBuilder text = new StringBuilder("🔢 Цього тижня — ")
-                .append(b(UaDates.parity(meta.parity()).toUpperCase(UK)));
-        if (meta.weekNumber() != null) {
-            text.append(" (").append(meta.weekNumber()).append("-й тиждень)");
+        StringBuilder text = new StringBuilder("🔢 ");
+        if (weekKnown) {
+            text.append("Цього тижня — ").append(b(UaDates.parity(meta.parity()).toUpperCase(UK)));
+            if (meta.weekNumber() != null) {
+                text.append(" (").append(meta.weekNumber()).append("-й тиждень)");
+            }
+        } else {
+            text.append("Зараз немає навчального тижня.");
         }
-        if (meta.semester().name() != null) {
+        if (nextKnown) {
+            LocalDate base = meta.today() != null ? meta.today() : today;
+            String when = next.date().equals(base.plusDays(1)) ? "Завтра" : "Наступний навчальний день";
+            text.append('\n').append(when).append(" (").append(escape(ScheduleCards.dayName(next.date())))
+                    .append(") — ").append(b(UaDates.parity(next.parity())));
+            if (next.weekNumber() != null) {
+                text.append(", ").append(next.weekNumber()).append("-й тиждень");
+            }
+        }
+        if (meta.semester() != null && meta.semester().name() != null) {
             text.append('\n').append(i(meta.semester().name()));
         }
         return text.toString();

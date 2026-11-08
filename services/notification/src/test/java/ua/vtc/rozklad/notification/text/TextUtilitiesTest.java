@@ -82,6 +82,27 @@ class TextUtilitiesTest {
     }
 
     @Test
+    void shiftCountsInHandTypedLabelsAgree() {
+        assertThat(Plurals.agreeShifts("2 змін, 60 хв")).isEqualTo("2 зміни, 60 хв");
+        assertThat(Plurals.agreeShifts("1 змін, 80 хв")).isEqualTo("1 зміна, 80 хв");
+        assertThat(Plurals.agreeShifts("5 зміни")).isEqualTo("5 змін");
+        assertThat(Plurals.agreeShifts("2 зміни, 60 хв")).isEqualTo("2 зміни, 60 хв");
+        assertThat(Plurals.agreeShifts("Скорочені пари (змінений розклад)")).isEqualTo("Скорочені пари (змінений розклад)");
+        assertThat(Plurals.agreeShifts("2 змінні графіки")).as("other words stay").isEqualTo("2 змінні графіки");
+        assertThat(Plurals.agreeShifts(null)).isNull();
+    }
+
+    @Test
+    void reasonCodesAreSaidInPlainWords() {
+        assertThat(Reasons.inWords("Відп.")).isEqualTo("викладач відсутній");
+        assertThat(Reasons.inWords(" зв.зам. ")).isEqualTo("взаємна заміна");
+        assertThat(Reasons.inWords("Вичит.")).isEqualTo("години дисципліни вичитано");
+        assertThat(Reasons.inWords("Відр.")).isEqualTo("відрядження");
+        assertThat(Reasons.inWords("за станом здоров’я")).isEqualTo("за станом здоров’я");
+        assertThat(Reasons.inWords(null)).isNull();
+    }
+
+    @Test
     void linksOnlyForPublicHosts() {
         WebLinks local = new WebLinks(urls("http://localhost:5180"));
         assertThat(local.changes(LocalDate.of(2026, 10, 19))).isEmpty();

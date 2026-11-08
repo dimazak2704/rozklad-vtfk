@@ -61,7 +61,10 @@ class SubstitutionTextsTest {
                 .isEqualTo("❌ <b>Відмова від заміни</b>\nНепийвода М.В. не може провести пару: понеділок, 19 жовтня"
                         + " · 2 пара · 4КІ1 · Надійність, діагностика та експлуатація комп'ютерних систем і мереж\n"
                         + "Підберіть іншого викладача.");
-        assertThat(SubstitutionTexts.adminNoTelegram("Ганза", request, "")).startsWith("⚠️ <b>Ганза не підключив Telegram</b>");
+        assertThat(SubstitutionTexts.adminNoTelegram("Ганза", java.util.List.of(request), ""))
+                .isEqualTo("⚠️ <b>Ганза не підключив Telegram</b>\nЗапит на заміну не надіслано: понеділок, 19 жовтня"
+                        + " · 2 пара · 4КІ1 · Надійність, діагностика та експлуатація комп'ютерних систем і мереж.\n"
+                        + "Підтвердьте заміну в панелі або зв’яжіться з викладачем.");
         assertThat(SubstitutionTexts.adminOverdue("Ганза", request, "")).contains("не відповів до 18.10 о 20:00");
     }
 

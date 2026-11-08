@@ -12,6 +12,7 @@ import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.events.OrderPayload;
 import ua.vtc.rozklad.contracts.events.OrderPayload.Item;
 import ua.vtc.rozklad.notification.text.Plurals;
+import ua.vtc.rozklad.notification.text.Reasons;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /** Compact Telegram HTML for order rows: what changed for a group or a teacher, and the admin summary. */
@@ -55,7 +56,7 @@ public final class OrderTexts {
                 .append("\nЗмін: ").append(order.items().size())
                 .append(" · заміна аудиторій: ").append(order.roomChanges().size())
                 .append(" · приміток: ").append(order.notes().size())
-                .append("\nНадіслано: ").append(groupChats).append(' ').append(plural(groupChats, "чату груп",
+                .append("\nНадіслано: ").append(groupChats).append(' ').append(plural(groupChats, "чату групи",
                         "чатам груп", "чатам груп"))
                 .append(", ").append(teachers).append(' ').append(plural(teachers, "викладачу", "викладачам",
                         "викладачам"));
@@ -91,7 +92,8 @@ public final class OrderTexts {
         String from = lesson(row.fromDiscipline(), row.fromTeacher());
         String to = lesson(row.toDiscipline(), row.toTeacher());
         String room = notBlank(row.roomText()) ? ", ауд. " + escape(row.roomText()) : "";
-        String reason = notBlank(row.reasonText()) ? " · " + escape(row.reasonText()) : "";
+        // коди причин («Відп.», «Зв.зам.») лишаються в документі розпорядження, у чатах — словами
+        String reason = notBlank(row.reasonText()) ? " · " + escape(Reasons.inWords(row.reasonText())) : "";
         return switch (row.rowType()) {
             case REPLACEMENT -> "🔁 " + head + ": " + boldLesson(to) + room
                     + (from.isEmpty() ? "" : "\n      замість " + s(from)) + reason;

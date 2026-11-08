@@ -116,6 +116,14 @@ public abstract class IntegrationTest {
         clock.reset();
     }
 
+    /** Drops the Redis read-through cache (meta, schedules) after a fixture of the fake core changed. */
+    protected void flushCaches() {
+        redis.execute((RedisCallback<Void>) connection -> {
+            connection.serverCommands().flushAll();
+            return null;
+        });
+    }
+
     protected static ChatRef privateChat(long chatId) {
         return new ChatRef(chatId, ChatKind.PRIVATE, null);
     }

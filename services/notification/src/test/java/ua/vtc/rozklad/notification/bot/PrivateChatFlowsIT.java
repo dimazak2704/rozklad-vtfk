@@ -2,6 +2,8 @@ package ua.vtc.rozklad.notification.bot;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.notification.binding.BindingTarget;
@@ -162,12 +164,52 @@ class PrivateChatFlowsIT extends IntegrationTest {
         say(OWNER_CHAT, "🔔 Дзвінки");
         assertThat(telegram.lastSentTo(OWNER_CHAT).text())
                 .startsWith("🔔 <b>Дзвінки</b> · понеділок\nЗараз <b>2 пара</b> — до кінця 23 хв")
-                .contains("<pre>1  08:30–09:30\n2  09:40–10:40  ◀ зараз\n3  11:00–12:00\n4  12:10–13:10</pre>")
+                .contains("\n\n1 · 08:30–09:30\n<b>2 · 09:40–10:40</b> ◀ зараз\n3 · 11:00–12:00\n4 · 12:10–13:10\n\n")
+                .doesNotContain("<pre>")
                 .endsWith("<i>2 зміни, 60 хв</i>");
 
         say(OWNER_CHAT, "🔢 Чисельник?");
         assertThat(telegram.lastSentTo(OWNER_CHAT).text())
                 .isEqualTo("🔢 Цього тижня — <b>ЗНАМЕННИК</b> (8-й тиждень)\n<i>I семестр 2026/2027</i>");
+    }
+
+    @Test
+    void parityOnAWeekendAlsoNamesTheWeekOfTheNextStudyDay() {
+        owner();
+        core.setToday(LocalDate.of(2026, 10, 25));
+        say(OWNER_CHAT, "🔢 Чисельник?");
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text())
+                .isEqualTo("🔢 Цього тижня — <b>ЗНАМЕННИК</b> (8-й тиждень)\n"
+                        + "Завтра (пн, 26 жовтня) — <b>чисельник</b>, 9-й тиждень\n<i>I семестр 2026/2027</i>");
+
+        flushCaches();
+        core.setToday(LocalDate.of(2026, 10, 24));
+        say(OWNER_CHAT, "/parity");
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text())
+                .contains("\nНаступний навчальний день (пн, 26 жовтня) — <b>чисельник</b>, 9-й тиждень\n");
+    }
+
+    @Test
+    void dayWithoutLessonsPointsToTheNextStudyDay() {
+        owner();
+        subscriber(OWNER_CHAT, CoreFixtures.GROUP_4KI1, "4КІ1");
+        clock.set(Instant.parse("2026-10-25T07:00:00Z"));
+        say(OWNER_CHAT, "📅 Сьогодні");
+        Sent sunday = telegram.lastSentTo(OWNER_CHAT);
+        assertThat(sunday.text()).startsWith("👥 <b>4КІ1</b> · неділя, 25 жовтня")
+                .endsWith("🌿 Навчання немає\nНаступний навчальний день: <b>пн, 26 жовтня</b>");
+        assertThat(sunday.buttons()).containsExactly("◀️ Пт 23.10", "Пн 26.10 ▶️");
+
+        // свято в понеділок: підказка й кнопка ведуть одразу у вівторок
+        flushCaches();
+        core.addHoliday(LocalDate.of(2026, 10, 26));
+        say(OWNER_CHAT, "📅 Сьогодні");
+        Sent beforeHoliday = telegram.lastSentTo(OWNER_CHAT);
+        assertThat(beforeHoliday.text()).endsWith("Наступний навчальний день: <b>вт, 27 жовтня</b>");
+        assertThat(beforeHoliday.buttons()).containsExactly("◀️ Пт 23.10", "Вт 27.10 ▶️");
+        press(OWNER_CHAT, beforeHoliday.messageId(), beforeHoliday.callbackOf("Вт 27.10 ▶️").orElseThrow());
+        assertThat(telegram.lastEditIn(OWNER_CHAT).text()).startsWith("👥 <b>4КІ1</b> · вівторок, 27 жовтня")
+                .doesNotContain("Навчання немає");
     }
 
     @Test

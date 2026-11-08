@@ -31,6 +31,8 @@ public class CoreQueries {
     static final Duration SEARCH_TTL = Duration.ofMinutes(10);
     static final String SCHEDULE_GENERATION = "schedule-generation";
     static final int SEARCH_LIMIT = 8;
+    /** core serves at most 31 days per schedule request. */
+    static final int NEXT_STUDY_DAY_LOOKAHEAD_DAYS = 30;
 
     private final CoreClient core;
     private final RedisJsonCache cache;
@@ -96,6 +98,24 @@ public class CoreQueries {
                 ? schedule.owner().label()
                 : "";
         return new DaySchedule(type, ownerId, label, day);
+    }
+
+    /**
+     * The first study day of the owner after {@code date} within {@value #NEXT_STUDY_DAY_LOOKAHEAD_DAYS}
+     * days (core's {@code studyDay}: weekends, holidays and the owner's practice skipped); one schedule
+     * read for the whole range.
+     */
+    public Optional<LocalDate> nextStudyDay(OwnerType type, UUID ownerId, LocalDate date) {
+        LocalDate from = date.plusDays(1);
+        LocalDate to = date.plusDays(NEXT_STUDY_DAY_LOOKAHEAD_DAYS);
+        long generation = cache.counter(SCHEDULE_GENERATION);
+        String key = "schedule:" + generation + ":" + type.code() + ":" + ownerId + ":" + from + ".." + to;
+        Schedule schedule = cache.get(key, new TypeReference<>() {
+        }, SCHEDULE_TTL, () -> core.schedule(type, ownerId, from, to));
+        return schedule.days().stream()
+                .filter(day -> day.studyDay() && day.date() != null && day.date().isAfter(date))
+                .map(ScheduleDay::date)
+                .min(Comparator.naturalOrder());
     }
 
     /** {@code schedule.changed}: every cached schedule becomes stale at once. */

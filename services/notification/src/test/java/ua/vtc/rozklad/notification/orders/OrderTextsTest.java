@@ -18,7 +18,7 @@ class OrderTextsTest {
                 Розпорядження №35 · знаменник
 
                 🔁 <b>2 пара</b>: <b>НДКС · Непийвода</b>, ауд. 6
-                      замість <s>СТП · Кренцін</s> · Зв.зам.
+                      замість <s>СТП · Кренцін</s> · взаємна заміна
 
                 <i>Повний текст розпорядження — на зображенні.</i>""");
     }
@@ -29,7 +29,7 @@ class OrderTextsTest {
                 null, null, "204", null), false)).isEqualTo("📌 <b>1–4 пари</b>: <b>ЗУ · Ємельяненко</b>, ауд. 204");
         assertThat(OrderTexts.describe(Order35.row("1ТК1", "1", OrderRowType.CANCELLATION, "Ін. мова",
                 "Крисак Л. (п.)", "Відп.", null, null, null, null), false))
-                .isEqualTo("❌ <b>1 пара</b>: пари не буде\n      <s>Ін. мова · Крисак Л. (п.)</s> · Відп.");
+                .isEqualTo("❌ <b>1 пара</b>: пари не буде\n      <s>Ін. мова · Крисак Л. (п.)</s> · викладач відсутній");
         assertThat(OrderTexts.describe(Order35.row("1ОП2", "4", OrderRowType.ADDITIONAL, null, null, null, "БЖ",
                 "Погосян", "403", null), true)).isEqualTo("➕ <b>1ОП2, 4 пара</b>: додатково <b>БЖ · Погосян</b>, ауд. 403");
         assertThat(OrderTexts.describe(Order35.row("2КІ1", "6", OrderRowType.FINISHED, "Іст.Укр.", "Романюк",
@@ -56,7 +56,11 @@ class OrderTextsTest {
                 .contains("⚠️ Без Telegram: Ганза")
                 .doesNotContain("конвертер");
         assertThat(OrderTexts.adminSummary(Order35.payload(), 1, 1, List.of(), false, ""))
-                .contains("1 чату груп, 1 викладачу")
+                .contains("1 чату групи, 1 викладачу")
                 .contains("Зображення не надсилалося");
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 5, 21, List.of(), true, ""))
+                .contains("Надіслано: 5 чатам груп, 21 викладачу");
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 21, 0, List.of(), true, ""))
+                .contains("Надіслано: 21 чату групи, 0 викладачам");
     }
 }

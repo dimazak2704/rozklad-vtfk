@@ -67,6 +67,14 @@ public class SubstitutionRequest implements Persistable<UUID> {
     @Column(name = "reminded_at")
     private Instant remindedAt;
 
+    /** The request could not be sent: the teacher had no Telegram (null once it was sent). */
+    @Column(name = "no_telegram_at")
+    private Instant noTelegramAt;
+
+    /** Admins were told (or deliberately not told) about the missing Telegram. */
+    @Column(name = "admin_warned_at")
+    private Instant adminWarnedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -93,6 +101,11 @@ public class SubstitutionRequest implements Persistable<UUID> {
 
     /** A new request for the same change (re-sent or reassigned): take the latest details. */
     void refresh(SubstitutionConfirmationRequested event, Instant now) {
+        if (!event.teacherId().equals(teacherId)) {
+            // інший викладач — попередження про Telegram стосувалося попереднього
+            this.noTelegramAt = null;
+            this.adminWarnedAt = null;
+        }
         this.teacherId = event.teacherId();
         this.lessonDate = event.date();
         this.pair = event.pair();
@@ -122,6 +135,31 @@ public class SubstitutionRequest implements Persistable<UUID> {
     void markReminded(Instant now) {
         this.remindedAt = now;
         this.updatedAt = now;
+    }
+
+    /** The request was not sent because the teacher has no Telegram; the first moment counts. */
+    void markNoTelegram(Instant now) {
+        if (noTelegramAt == null) {
+            this.noTelegramAt = now;
+            this.updatedAt = now;
+        }
+    }
+
+    /** The request reached the teacher's chat after all (he connected Telegram in the meantime). */
+    void markSent(Instant now) {
+        if (noTelegramAt != null) {
+            this.noTelegramAt = null;
+            this.updatedAt = now;
+        }
+    }
+
+    void markAdminWarned(Instant now) {
+        this.adminWarnedAt = now;
+        this.updatedAt = now;
+    }
+
+    public boolean isWithoutTelegram() {
+        return noTelegramAt != null;
     }
 
     public boolean isPending() {

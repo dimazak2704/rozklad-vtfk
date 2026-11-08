@@ -18,7 +18,10 @@ import ua.vtc.rozklad.notification.delivery.OutboundStatus;
 import ua.vtc.rozklad.notification.events.ProcessedEvents;
 import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 
-/** Periodic jobs: confirmation deadlines (every minute) and nightly cleanup of old rows. */
+/**
+ * Periodic jobs: confirmation deadlines and warnings about teachers without Telegram (every minute),
+ * nightly cleanup of old rows.
+ */
 @Component
 public class ScheduledJobs {
 
@@ -52,6 +55,13 @@ public class ScheduledJobs {
     public void confirmationDeadlines() {
         if (telegram.enabled()) {
             substitutions.remindOverdue();
+        }
+    }
+
+    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
+    public void teachersWithoutTelegram() {
+        if (telegram.enabled()) {
+            substitutions.reportTeachersWithoutTelegram();
         }
     }
 

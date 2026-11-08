@@ -5,6 +5,7 @@ import static ua.vtc.rozklad.notification.text.Html.escape;
 import static ua.vtc.rozklad.notification.text.Html.i;
 import static ua.vtc.rozklad.notification.text.Html.s;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -16,6 +17,7 @@ import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.text.Plurals;
+import ua.vtc.rozklad.notification.text.Reasons;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /**
@@ -30,6 +32,14 @@ public final class ScheduleCards {
     }
 
     public static String day(DaySchedule schedule) {
+        return day(schedule, null);
+    }
+
+    /**
+     * {@code nextStudyDay} (may be {@code null}) is named under «Навчання немає», so a weekend or a
+     * holiday card says where the lessons continue.
+     */
+    public static String day(DaySchedule schedule, LocalDate nextStudyDay) {
         ScheduleDay day = schedule.day();
         StringBuilder text = new StringBuilder()
                 .append(icon(schedule.ownerType())).append(' ')
@@ -42,6 +52,9 @@ public final class ScheduleCards {
         text.append("\n\n");
         if (day.lessons().isEmpty()) {
             text.append(day.studyDay() ? "Пар немає 🙂" : "🌿 Навчання немає");
+            if (!day.studyDay() && nextStudyDay != null) {
+                text.append("\nНаступний навчальний день: ").append(b(dayName(nextStudyDay)));
+            }
         } else {
             text.append(day.lessons().stream()
                     .sorted(Comparator.comparingInt(LessonItem::pair).thenComparingInt(LessonItem::subgroup))
@@ -52,6 +65,11 @@ public final class ScheduleCards {
             text.append("\n\nℹ️ ").append(escape(day.note()));
         }
         return text.toString();
+    }
+
+    /** {@code пн, 9 листопада}. */
+    static String dayName(LocalDate date) {
+        return UaDates.weekdayShort(date).toLowerCase(UK) + ", " + UaDates.dayMonth(date);
     }
 
     /** Short summary for inline results: «5 пар · 1 заміна». */
@@ -84,7 +102,7 @@ public final class ScheduleCards {
             text.append('\n').append(original);
         }
         if (lesson.reasonText() != null && !lesson.reasonText().isBlank()) {
-            text.append('\n').append(i(lesson.reasonText()));
+            text.append('\n').append(i(UaDates.capitalize(Reasons.inWords(lesson.reasonText()))));
         }
         return text.toString();
     }

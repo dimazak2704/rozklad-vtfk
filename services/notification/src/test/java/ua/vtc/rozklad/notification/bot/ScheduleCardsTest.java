@@ -29,7 +29,7 @@ class ScheduleCardsTest {
                 <b>2</b> · 09:40–10:40 · 🔁 заміна
                 НДКС · Непийвода М.В. · ауд. 6
                 замість <s>СТП · Кренцін М.Д.</s>
-                <i>Зв.зам.</i>
+                <i>Взаємна заміна</i>
 
                 <b>3</b> · 11:00–12:00 · ❌ пари не буде
                 <s>Ін.мова (1 підгр.) · Крисак Л. · ауд. 110</s>
@@ -52,9 +52,15 @@ class ScheduleCardsTest {
         ScheduleDay weekend = new ScheduleDay(LocalDate.of(2026, 10, 24), 6, null, null, false, null, List.of());
         assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1", weekend)))
                 .endsWith("🌿 Навчання немає");
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1", weekend),
+                LocalDate.of(2026, 10, 26)))
+                .endsWith("🌿 Навчання немає\nНаступний навчальний день: <b>пн, 26 жовтня</b>");
         ScheduleDay free = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of());
         assertThat(ScheduleCards.day(new DaySchedule(OwnerType.ROOM, CoreFixtures.ROOM_6, "", free)))
                 .startsWith("🚪 <b>Аудиторія</b>").endsWith("Пар немає 🙂");
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.ROOM, CoreFixtures.ROOM_6, "", free),
+                LocalDate.of(2026, 10, 20))).as("a study day without lessons needs no hint")
+                .doesNotContain("Наступний");
         assertThat(ScheduleCards.summary(free)).isEqualTo("Пар немає");
         assertThat(ScheduleCards.summary(CoreFixtures.day4ki1(MONDAY))).isEqualTo("2 пари · змін: 2");
     }
