@@ -79,23 +79,19 @@ interface MetricsBarProps {
   hardConflicts: number | undefined;
   softWarnings: number | undefined;
   loading: boolean;
+  /** Чернетка: речення каже, чи конфлікти заважають публікації. */
+  publishable?: boolean;
   onShowConflicts: () => void;
 }
 
-const FORMS = {
-  hard: ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'],
-  teacherWindows: ['вікно викладачів', 'вікна викладачів', 'вікон викладачів'],
-  groupWindows: ['вікно груп', 'вікна груп', 'вікон груп'],
-  brokenDays: ['рваний день', 'рвані дні', 'рваних днів'],
-  latePairs: ['пізня пара', 'пізні пари', 'пізніх пар'],
-} as const;
+const CONFLICT_FORMS = ['конфлікт', 'конфлікти', 'конфліктів'] as const;
 
 /**
- * Якість версії одним реченням замість шести плиток: «75 жорстких конфліктів, 180 вікон викладачів…».
- * Нулі не називаємо. Конфлікти — посилання на список; пояснення кожної метрики й різниця з
- * опублікованою — у розгортці «Подробиці». Одразу після правки речення каже, що змінилось.
+ * Якість версії одним реченням з одним числом: «75 конфліктів не дають опублікувати — показати».
+ * Вікна, рвані дні й пізні пари — у розгортці «Подробиці», і лише ненульові. Одразу після правки
+ * речення каже, що змінилось. На телефоні — один рядок без подробиць.
  */
-export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWarnings, loading, onShowConflicts }: MetricsBarProps) {
+export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWarnings, loading, publishable = false, onShowConflicts }: MetricsBarProps) {
   const recent = useRecentDeltas(versionId);
   const recentKeys = METRICS.filter(({ key }) => recent[key] !== undefined);
 
@@ -107,26 +103,30 @@ export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWa
     );
   }
 
-  const rest = (['teacherWindows', 'groupWindows', 'brokenDays', 'latePairs'] as const)
-    .filter((key) => metrics[key] > 0)
-    .map((key) => countLabel(metrics[key], FORMS[key]));
+  // нулі не показуємо: «Вікна груп 0» — шум, а не інформація
+  const details = METRICS.filter(({ key }) => metrics[key] > 0);
 
   return (
     <section aria-label="Якість версії" className="flex flex-col gap-1">
       <p className="text-body text-secondary">
         {hardConflicts > 0 ? (
-          <button
-            type="button"
-            onClick={onShowConflicts}
-            aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
-            className="rounded-tag font-[650] text-danger underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-          >
-            {countLabel(hardConflicts, FORMS.hard)}
-          </button>
+          <>
+            <span className="font-[650] text-primary">{countLabel(hardConflicts, CONFLICT_FORMS)}</span>
+            <span className="max-md:hidden">{publishable ? ' не дають опублікувати' : ' у цій версії'}</span>
+            {' — '}
+            <button
+              type="button"
+              onClick={onShowConflicts}
+              aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
+              className="rounded-tag font-[650] text-primary underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+            >
+              показати
+            </button>
+            .
+          </>
         ) : (
-          <span className="font-[650] text-add">Конфліктів немає</span>
+          <span>{publishable ? 'Конфліктів немає — версію можна публікувати.' : 'Конфліктів немає.'}</span>
         )}
-        {rest.length > 0 ? `, ${rest.join(', ')}.` : '.'}
         {recentKeys.length > 0 ? (
           <span key={JSON.stringify(recent)} className="ms-2 inline-flex flex-wrap items-center gap-2 text-caption motion-safe:animate-[fade-in_200ms_var(--ease-out)]">
             <span className="text-muted">Після правки:</span>
@@ -139,25 +139,27 @@ export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWa
           </span>
         ) : null}
       </p>
-      <Disclosure summary="Подробиці">
-        <dl className="grid max-w-3xl grid-cols-1 gap-x-8 gap-y-2 ps-5.5 sm:grid-cols-2">
-          {METRICS.map(({ key, label, hint }) => {
-            const value = metrics[key];
-            const vsBaseline = baseline && key !== 'maxPairsPerDay' ? value - baseline[key] : 0;
-            return (
-              <div key={key} role="group" data-metric={key} aria-label={`${label}: ${value}`} className="flex flex-col gap-0.5">
-                <dt className="flex items-baseline gap-2 text-ui text-primary">
-                  {label}
-                  <span className="figures font-semibold">{value}</span>
-                  {vsBaseline !== 0 ? <Delta value={vsBaseline} context="Порівняно з опублікованою" /> : null}
-                </dt>
-                <dd className="text-caption text-muted">{hint}</dd>
-              </div>
-            );
-          })}
-        </dl>
-        {baseline ? <p className="mt-2 ps-5.5 text-caption text-muted">Стрілки — різниця з опублікованою версією.</p> : null}
-      </Disclosure>
+      {details.length > 0 ? (
+        <Disclosure summary="Подробиці" className="max-md:hidden">
+          <dl className="grid max-w-3xl grid-cols-1 gap-x-8 gap-y-2 ps-5.5 sm:grid-cols-2">
+            {details.map(({ key, label, hint }) => {
+              const value = metrics[key];
+              const vsBaseline = baseline && key !== 'maxPairsPerDay' ? value - baseline[key] : 0;
+              return (
+                <div key={key} role="group" data-metric={key} aria-label={`${label}: ${value}`} className="flex flex-col gap-0.5">
+                  <dt className="flex items-baseline gap-2 text-ui text-primary">
+                    {label}
+                    <span className="figures font-semibold">{value}</span>
+                    {vsBaseline !== 0 ? <Delta value={vsBaseline} context="Порівняно з опублікованою" /> : null}
+                  </dt>
+                  <dd className="text-caption text-muted">{hint}</dd>
+                </div>
+              );
+            })}
+          </dl>
+          {baseline ? <p className="mt-2 ps-5.5 text-caption text-muted">Стрілки — різниця з опублікованою версією.</p> : null}
+        </Disclosure>
+      ) : null}
     </section>
   );
 }

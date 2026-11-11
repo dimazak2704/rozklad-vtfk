@@ -31,6 +31,24 @@ describe('Базовий розклад', () => {
     expect(within(grid).getAllByRole('button', { name: /Сучасні технології проєктування/ })).toHaveLength(2);
   });
 
+  it('поки є жорсткі конфлікти, головна дія — показати їх, а не опублікувати (без глухого кута)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TimetablePage />, { route: '/admin/timetable?q=4КІ3' });
+    const show = await screen.findByRole('button', { name: 'Показати конфлікти' }, LONG);
+    expect(screen.queryByRole('button', { name: 'Опублікувати' })).not.toBeInTheDocument();
+    // одне число в реченні; вікна й рвані дні — лише в «Подробицях»
+    expect(await screen.findByText(/не дають опублікувати/, undefined, LONG)).toBeInTheDocument();
+    expect(screen.queryByText(/вікон викладачів/)).not.toBeInTheDocument();
+    // «Опублікувати» не зникла — вона в «⋯», вимкнена, з причиною в підписі
+    await user.click(screen.getByRole('button', { name: 'Ще дії' }));
+    expect(await screen.findByRole('menuitem', { name: /Опублікувати \(є конфлікти\)/ })).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('{Escape}');
+    // показ конфліктів скидає пошук і лишає в сітці лише групи з конфліктами
+    await user.click(show);
+    await waitFor(() => expect(screen.getByRole('searchbox', { name: 'Пошук у сітці' })).toHaveValue(''), LONG);
+    expect(screen.getByText(/Показано \d+ з \d+/)).toBeInTheDocument();
+  });
+
   it('«Перемістити» з клавіатури: сервер пояснює конфлікт, кнопка неактивна', async () => {
     const user = userEvent.setup();
     renderWithProviders(<TimetablePage />, { route: '/admin/timetable?q=4КІ3' });

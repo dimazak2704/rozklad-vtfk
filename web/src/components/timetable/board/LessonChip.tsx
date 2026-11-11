@@ -113,7 +113,7 @@ export const LessonChip = memo(function LessonChip({
           style={style}
           {...lineAttr(lesson.discipline)}
           className={cn(
-            'group/chip relative flex min-h-0 min-w-0 flex-col justify-center gap-0.5 overflow-hidden rounded-tag border px-1.5 text-start',
+            'group/chip @container relative flex min-h-0 min-w-0 flex-col justify-center gap-0.5 overflow-hidden rounded-tag border px-1.5 text-start',
             'transition-[background-color,border-color,opacity] duration-100 ease-out',
             'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-focus',
             oneLine ? 'py-0.5' : 'py-1',
@@ -127,13 +127,21 @@ export const LessonChip = memo(function LessonChip({
           )}
         >
           <span className="flex min-w-0 items-center gap-1">
-            <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--line-dot)]" />
+            {/* у вузькій половинці підгрупи крапку дисципліни ховаємо: місце — назві («Ін.мов.», а не «Ін.мо…») */}
+            <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full bg-[var(--line-dot)]', narrow && 'hidden @[5.5rem]:block')} />
             {/* у половинці назва стискається останньою: спершу ховається викладач/аудиторія */}
-            <span className="min-w-[1.75rem] shrink-[0.15] truncate text-[0.875rem] leading-tight font-[650] text-primary">
+            <span
+              className={cn(
+                'min-w-[1.75rem] shrink-[0.15] truncate leading-tight font-[650] text-primary',
+                narrow ? 'text-[0.8125rem] tracking-[-0.01em]' : 'text-[0.875rem]',
+              )}
+            >
               {title}
             </span>
+            {/* у половинці (чисельник/знаменник) викладач поруч — лише коли є місце; інакше назва
+                лишається цілою, а викладач — у картці й панелі «Вибрана пара» */}
             {oneLine && !narrow && detail ? (
-              <span className="min-w-0 shrink truncate text-meta font-normal text-secondary">{detail}</span>
+              <span className="hidden min-w-0 shrink truncate text-meta font-normal text-secondary @[11rem]:block">{detail}</span>
             ) : null}
             <span className="ms-auto flex shrink-0 items-center gap-0.5 text-muted">
               {lesson.pinned ? <Pin aria-hidden="true" className="size-3" /> : null}

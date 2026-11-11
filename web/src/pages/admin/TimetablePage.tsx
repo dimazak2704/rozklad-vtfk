@@ -1,4 +1,4 @@
-import { CopyPlus, Cpu, FilePlus, Send, Upload } from 'lucide-react';
+import { CopyPlus, Cpu, FileDiff, FilePlus, Send, TriangleAlert, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { usePublicMeta } from '@/api/meta';
@@ -13,6 +13,7 @@ import { pickVersion, publishedVersion, versionSentence } from '@/components/tim
 import { TimetableEditor } from '@/components/timetable/TimetableEditor';
 import { useEditorUrlState } from '@/components/timetable/useEditorUrlState';
 import { ModeSwitch, VersionSelect } from '@/components/timetable/VersionBar';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { todayInKyiv } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -33,7 +34,12 @@ export default function TimetablePage() {
   const list = versions.data ?? [];
   const selected = pickVersion(list, url.versionId);
   const published = publishedVersion(list);
-  const conflicts = useVersionConflicts(publishOpen ? selected?.id : undefined);
+  // той самий запит, що й у редакторі (кеш спільний): від жорстких конфліктів залежить головна дія
+  const conflicts = useVersionConflicts(selected?.id);
+  const hardCount = conflicts.data?.hard.length ?? selected?.hardConflicts ?? 0;
+  const blocked = selected?.status === 'DRAFT' && hardCount > 0;
+  // на телефоні редактор — для перегляду: дії версії переходять у єдине «⋯» біля пошуку
+  const phone = useMediaQuery('(max-width: 767.98px)');
 
   useRegisterCommands(
     selected
@@ -63,12 +69,21 @@ export default function TimetablePage() {
     setUrl({ mode: 'grid', view: 'group', filters: { ...EMPTY_FILTERS, query: lesson.group.code } });
   };
 
-  // головна дія одна: для чернетки — опублікувати, для опублікованої чи архівної — почати чернетку з неї
+  const showConflicts = () => setUrl({ mode: 'grid', filters: { ...EMPTY_FILTERS, conflictsOnly: true } });
+
+  // головна дія одна: для чернетки — опублікувати (а поки є жорсткі конфлікти — показати їх, бо публікація
+  // однаково неможлива), для опублікованої чи архівної — почати чернетку з неї
   const primaryAction = selected ? (
     selected.status === 'DRAFT' ? (
-      <Button variant="primary" onClick={() => setPublishOpen(true)} iconStart={<Send aria-hidden="true" className="size-4" />}>
-        Опублікувати
-      </Button>
+      blocked ? (
+        <Button variant="primary" onClick={showConflicts} iconStart={<TriangleAlert aria-hidden="true" className="size-4" />}>
+          Показати конфлікти
+        </Button>
+      ) : (
+        <Button variant="primary" onClick={() => setPublishOpen(true)} iconStart={<Send aria-hidden="true" className="size-4" />}>
+          Опублікувати
+        </Button>
+      )
     ) : (
       <Button variant="primary" onClick={() => setCreateRequest({ copyFromId: selected.id })} iconStart={<CopyPlus aria-hidden="true" className="size-4" />}>
         Створити чернетку
@@ -78,29 +93,67 @@ export default function TimetablePage() {
 
   const more: MoreMenuItem[] = selected
     ? [
-        ...(selected.status === 'DRAFT'
-          ? [{ label: 'Нова версія (копія цієї)', icon: <CopyPlus aria-hidden="true" className="size-4" />, onSelect: () => setCreateRequest({ copyFromId: selected.id }) }]
+        ...(blocked
+          ? [
+              {
+                label: 'Опублікувати (є конфлікти)',
+                icon: <Send aria-hidden="true" className="size-4" />,
+                disabled: true,
+              },
+            ]
           : []),
-        { label: 'Порожня версія', icon: <FilePlus aria-hidden="true" className="size-4" />, onSelect: () => setCreateRequest({ copyFromId: null }) },
+        ...(url.mode === 'grid'
+          ? [{ label: 'Порівняти з іншою версією', icon: <FileDiff aria-hidden="true" className="size-4" />, onSelect: () => setUrl({ mode: 'diff' }) }]
+          : []),
+        ...(selected.status === 'DRAFT'
+          ? [
+              {
+                label: 'Нова версія (копія цієї)',
+                icon: <CopyPlus aria-hidden="true" className="size-4" />,
+                onSelect: () => setCreateRequest({ copyFromId: selected.id }),
+                separatorBefore: true,
+              },
+            ]
+          : []),
+        {
+          label: 'Порожня версія',
+          icon: <FilePlus aria-hidden="true" className="size-4" />,
+          onSelect: () => setCreateRequest({ copyFromId: null }),
+          separatorBefore: selected.status !== 'DRAFT',
+        },
         { label: 'Імпорт з Excel', icon: <Upload aria-hidden="true" className="size-4" />, to: '/admin/import', separatorBefore: true },
         { label: 'Генератор', icon: <Cpu aria-hidden="true" className="size-4" />, to: '/admin/generation' },
+      ]
+    : [];
+
+  // телефон у сітці: головна дія й «⋯» — у меню біля пошуку, а тут лише назва й версія
+  const phoneGrid = phone && url.mode === 'grid' && Boolean(selected);
+  const phoneMenu: MoreMenuItem[] = phoneGrid && selected
+    ? [
+        ...(selected.status === 'DRAFT'
+          ? blocked
+            ? [{ label: 'Показати конфлікти', icon: <TriangleAlert aria-hidden="true" className="size-4" />, onSelect: showConflicts }]
+            : [{ label: 'Опублікувати', icon: <Send aria-hidden="true" className="size-4" />, onSelect: () => setPublishOpen(true) }]
+          : [{ label: 'Створити чернетку', icon: <CopyPlus aria-hidden="true" className="size-4" />, onSelect: () => setCreateRequest({ copyFromId: selected.id }) }]),
+        ...more,
       ]
     : [];
 
   const header = (
     <PageHeader
       title="Базовий розклад"
-      meta={selected ? versionSentence(selected) : undefined}
+      meta={selected && !phone ? versionSentence(selected) : undefined}
       controls={
         selected ? (
           <>
             <VersionSelect versions={list} selected={selected} onSelect={(versionId) => setUrl({ versionId, mode: url.mode })} />
-            <ModeSwitch mode={url.mode} onModeChange={(mode) => setUrl({ mode })} />
+            {/* «Порівняння» живе в «⋯»; перемикач видно лише в самому порівнянні — щоб було як повернутись до сітки */}
+            {url.mode === 'diff' ? <ModeSwitch mode={url.mode} onModeChange={(mode) => setUrl({ mode })} /> : null}
           </>
         ) : undefined
       }
-      primaryAction={primaryAction}
-      more={more}
+      primaryAction={phoneGrid ? undefined : primaryAction}
+      more={phoneGrid ? undefined : more}
     />
   );
 
@@ -189,6 +242,7 @@ export default function TimetablePage() {
           filters={url.filters}
           onFiltersChange={(filters) => setUrl({ filters })}
           initialFocusLessonId={focusLessonId}
+          phoneMenu={phoneMenu}
         />
       )}
 
@@ -205,7 +259,7 @@ export default function TimetablePage() {
         semester={semester}
         today={meta.data?.today ?? todayInKyiv()}
         hardConflicts={conflicts.data?.hard}
-        onShowConflicts={() => setUrl({ mode: 'grid', filters: { ...EMPTY_FILTERS, conflictsOnly: true } })}
+        onShowConflicts={showConflicts}
       />
     </div>
   );

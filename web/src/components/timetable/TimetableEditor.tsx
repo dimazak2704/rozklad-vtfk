@@ -10,7 +10,7 @@ import {
 } from '@/api/timetable';
 import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
-import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, Skeleton } from '@/components/ui';
+import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, Skeleton, type MoreMenuItem } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import { useRegisterCommands } from '@/stores/commands';
@@ -38,6 +38,8 @@ interface TimetableEditorProps {
   onFiltersChange: (filters: BoardFilters) => void;
   /** Запит «показати пару» ззовні (з порівняння версій). */
   initialFocusLessonId: Uuid | null;
+  /** Телефон: дії версії зі сторінки — в одному «⋯» поруч із пошуком (заголовок тоді без кнопок). */
+  phoneMenu?: readonly MoreMenuItem[];
 }
 
 const NO_CONFLICTS: TimetableConflict[] = [];
@@ -54,6 +56,7 @@ export function TimetableEditor({
   filters,
   onFiltersChange,
   initialFocusLessonId,
+  phoneMenu = [],
 }: TimetableEditorProps) {
   const editable = version.status === 'DRAFT';
   const wide = useMediaQuery('(min-width: 1440px)');
@@ -246,6 +249,7 @@ export function TimetableEditor({
         hardConflicts={conflictsQuery.data?.hard.length ?? version.hardConflicts}
         softWarnings={conflictsQuery.data?.soft.length ?? version.softWarnings}
         loading={metricsQuery.isPending}
+        publishable={editable}
         onShowConflicts={() => {
           setConflictTab('HARD');
           if (!wide) setPanelOpen(true);
@@ -289,6 +293,8 @@ export function TimetableEditor({
               onAdd={() => openAdd()}
               day={phone ? day : null}
               onDayChange={setDay}
+              compact={phone}
+              extraMenu={phoneMenu}
             />
           </div>
 

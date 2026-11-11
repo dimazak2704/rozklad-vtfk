@@ -1,11 +1,14 @@
 import { CircleCheck, Crosshair } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TimetableConflict, TimetableConflictKind } from '@/api/timetable';
-import { Button, Chip, ErrorState, SegmentedControl, Skeleton } from '@/components/ui';
+import { Button, ErrorState, SegmentedControl, Select, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { CONFLICT_KIND_LABEL } from '../model/labels';
 
 export type ConflictSeverityTab = 'HARD' | 'SOFT';
+
+const ALL_KINDS = 'all';
+type KindFilter = TimetableConflictKind | typeof ALL_KINDS;
 
 interface ConflictsPanelProps {
   hard: readonly TimetableConflict[] | undefined;
@@ -22,7 +25,7 @@ interface ConflictsPanelProps {
 const PAGE = 40;
 
 /**
- * Конфлікти версії: жорсткі (блокують публікацію) і попередження. Фільтр за видом, клік — до клітинки
+ * Конфлікти версії: жорсткі (блокують публікацію) і попередження. Вибір виду, клік — до клітинки
  * в сітці. Довгий список показуємо порціями, щоб панель лишалась швидкою.
  */
 export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTabChange, onFocusConflict, className }: ConflictsPanelProps) {
@@ -60,23 +63,18 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
             { value: 'SOFT', label: `Попередження · ${soft?.length ?? '…'}` },
           ]}
         />
+        {/* вид — один тихий вибір без лічильників: числа вже є у вкладках вище */}
         {kinds.length > 1 ? (
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Фільтр за видом">
-            {kinds.map(([value, count]) => (
-              <Chip
-                key={value}
-                selected={activeKind === value}
-                onToggle={() => {
-                  setKind(activeKind === value ? null : value);
-                  setLimit(PAGE);
-                }}
-                count={count}
-                className="h-7 text-caption"
-              >
-                {CONFLICT_KIND_LABEL[value]}
-              </Chip>
-            ))}
-          </div>
+          <Select<KindFilter>
+            aria-label="Вид конфлікту"
+            size="sm"
+            value={activeKind ?? ALL_KINDS}
+            onValueChange={(value) => {
+              setKind(value === ALL_KINDS ? null : value);
+              setLimit(PAGE);
+            }}
+            options={[{ value: ALL_KINDS, label: 'Усі види' }, ...kinds.map(([value]) => ({ value, label: CONFLICT_KIND_LABEL[value] }))]}
+          />
         ) : null}
       </header>
 

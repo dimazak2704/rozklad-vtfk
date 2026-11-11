@@ -6,12 +6,14 @@ import {
   Chip,
   IconButton,
   Input,
+  MoreMenu,
   Popover,
   PopoverContent,
   PopoverTrigger,
   SegmentedControl,
   Select,
   Switch,
+  type MoreMenuItem,
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
@@ -51,8 +53,20 @@ interface EditorToolbarProps {
   /** Телефон: сітка показує один день, а тут — перемикач днів. */
   day?: Weekday | null;
   onDayChange?: (day: Weekday) => void;
+  /**
+   * Телефон: на виду лише пошук і дні, а подання, «лише з конфліктами», скасування й «Додати пару» —
+   * в одному «⋯» разом із діями версії (`extraMenu`).
+   */
+  compact?: boolean;
+  extraMenu?: readonly MoreMenuItem[];
   className?: string;
 }
+
+const VIEW_MENU_LABEL: Record<BoardView, string> = {
+  group: 'Сітка за групами',
+  teacher: 'Сітка за викладачами',
+  room: 'Сітка за аудиторіями',
+};
 
 /**
  * Що й кого показати: подання і пошук на виду; курси, відділення й «лише з конфліктами» — за кнопкою
@@ -77,6 +91,8 @@ export function EditorToolbar({
   onAdd,
   day = null,
   onDayChange,
+  compact = false,
+  extraMenu = [],
   className,
 }: EditorToolbarProps) {
   const toggleCourse = (course: number) =>
@@ -87,21 +103,88 @@ export function EditorToolbar({
   const activeFilters = filters.courses.length + (filters.department !== null ? 1 : 0) + (filters.conflictsOnly ? 1 : 0);
   const filtered = activeFilters > 0 || filters.query !== '';
 
+  const search = (
+    <Input
+      ref={searchRef}
+      type="search"
+      size="md"
+      value={filters.query}
+      onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
+      placeholder={SEARCH_PLACEHOLDER[view]}
+      aria-label="Пошук у сітці"
+      iconStart={<Search aria-hidden="true" className="size-4" />}
+      wrapperClassName="min-w-0 flex-1 sm:w-56 sm:flex-none"
+    />
+  );
+
+  const dayTabs =
+    day !== null && onDayChange ? (
+      <SegmentedControl
+        aria-label="День тижня"
+        stretch
+        value={String(day)}
+        onValueChange={(value) => onDayChange(Number(value) as Weekday)}
+        options={WEEKDAYS.map((weekday) => ({ value: String(weekday), label: capitalize(weekdayShort(weekday)), ariaLabel: weekdayName(weekday) }))}
+      />
+    ) : null;
+
+  const shownLine = filtered ? (
+    <p className="flex flex-wrap items-center gap-x-3 text-caption text-muted" aria-live="polite">
+      <span className="figures">
+        Показано {shown} з {total}
+      </span>
+      <button
+        type="button"
+        onClick={() => onFiltersChange(EMPTY_FILTERS)}
+        className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+      >
+        Показати всіх
+      </button>
+    </p>
+  ) : null;
+
+  if (compact) {
+    // перший пункт сторінки — її головна дія («Показати конфлікти» / «Опублікувати»): він і в меню перший
+    const [lead, ...restExtra] = extraMenu;
+    const menu: MoreMenuItem[] = [
+      ...(lead ? [lead] : []),
+      ...VIEW_OPTIONS.filter((option) => option.value !== view).map((option, index) => ({
+        label: VIEW_MENU_LABEL[option.value],
+        icon: option.icon,
+        onSelect: () => onViewChange(option.value),
+        separatorBefore: Boolean(lead) && index === 0,
+      })),
+      {
+        label: filters.conflictsOnly ? 'Показати всі пари' : 'Лише з конфліктами',
+        icon: <ListFilter aria-hidden="true" className="size-4" />,
+        onSelect: () => onFiltersChange({ ...filters, conflictsOnly: !filters.conflictsOnly }),
+      },
+      ...(editable
+        ? [
+            { label: 'Додати пару', icon: <Plus aria-hidden="true" className="size-4" />, onSelect: onAdd, separatorBefore: true },
+            { label: undoLabel ? `Скасувати: ${undoLabel}` : 'Скасувати', icon: <Undo2 aria-hidden="true" className="size-4" />, onSelect: onUndo, disabled: !canUndo },
+            { label: redoLabel ? `Повторити: ${redoLabel}` : 'Повторити', icon: <Redo2 aria-hidden="true" className="size-4" />, onSelect: onRedo, disabled: !canRedo },
+          ]
+        : []),
+      ...restExtra.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item)),
+    ];
+    return (
+      <div className={cn('flex flex-col gap-2.5', className)}>
+        <div className="flex items-center gap-2">
+          {search}
+          <MoreMenu items={menu} label="Дії з розкладом" />
+        </div>
+        {dayTabs}
+        {shownLine}
+      </div>
+    );
+  }
+
   return (
     <div className={cn('flex flex-col gap-2.5', className)}>
       <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl<BoardView> aria-label="Подання сітки" value={view} onValueChange={onViewChange} options={VIEW_OPTIONS} />
-        <Input
-          ref={searchRef}
-          type="search"
-          size="md"
-          value={filters.query}
-          onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
-          placeholder={SEARCH_PLACEHOLDER[view]}
-          aria-label="Пошук у сітці"
-          iconStart={<Search aria-hidden="true" className="size-4" />}
-          wrapperClassName="min-w-0 flex-1 sm:w-56 sm:flex-none"
-        />
+        {search}
         <Popover>
           <PopoverTrigger asChild>
             <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />} aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}>
@@ -174,30 +257,9 @@ export function EditorToolbar({
         ) : null}
       </div>
 
-      {day !== null && onDayChange ? (
-        <SegmentedControl
-          aria-label="День тижня"
-          stretch
-          value={String(day)}
-          onValueChange={(value) => onDayChange(Number(value) as Weekday)}
-          options={WEEKDAYS.map((weekday) => ({ value: String(weekday), label: capitalize(weekdayShort(weekday)), ariaLabel: weekdayName(weekday) }))}
-        />
-      ) : null}
+      {dayTabs}
 
-      {filtered ? (
-        <p className="flex flex-wrap items-center gap-x-3 text-caption text-muted" aria-live="polite">
-          <span className="figures">
-            Показано {shown} з {total}
-          </span>
-          <button
-            type="button"
-            onClick={() => onFiltersChange(EMPTY_FILTERS)}
-            className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
-          >
-            Показати всіх
-          </button>
-        </p>
-      ) : null}
+      {shownLine}
     </div>
   );
 }

@@ -83,7 +83,9 @@ export interface TimetableBoardProps {
   onRejected: (lesson: TemplateLessonDto, target: DropTarget, conflicts: readonly TimetableConflict[]) => void;
 }
 
-const MIN_GRID_WIDTH = 600;
+// сітка з пʼятьма днями по ≥ 160 px і стовпцем пар: друга сітка в ряду — лише на справді широкій дошці,
+// інакше клітинки ріжуться до «Вс.і…» (зайва ширина — поле, а не більше стовпців)
+const MIN_GRID_WIDTH = 860;
 const ROW_GAP = 16;
 const PREVIEW_DEBOUNCE_MS = 120;
 
