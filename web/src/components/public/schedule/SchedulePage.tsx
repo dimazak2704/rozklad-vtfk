@@ -1,5 +1,4 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
@@ -9,6 +8,7 @@ import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
 import { SchedulePrint } from '../print/SchedulePrint';
 import { usePrintMode } from '../print/usePrintMode';
 import { useDocumentTitle } from '../useDocumentTitle';
+import { CalendarDialog } from './CalendarDialog';
 import { ChangesNote } from './ChangesNote';
 import { QrDoorDialog } from './QrDoorDialog';
 import type { IcsTarget } from './ScheduleActions';
@@ -58,6 +58,7 @@ export function SchedulePage({
   const meta = usePublicMeta();
   const { mode, print } = usePrintMode();
   const [qrOpen, setQrOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const url = `${window.location.origin}${target.url}`;
   const visible = useMemo(() => (query.data ? filterBySubgroup(query.data, params.subgroup) : undefined), [query.data, params.subgroup]);
   const placeholder = query.isPlaceholderData;
@@ -79,12 +80,9 @@ export function SchedulePage({
       text: () => dayShareText(target.label, dayOf(visible, params.date), perspective),
       url,
     },
-    ics,
+    onCalendar: ics ? () => setCalendarOpen(true) : null,
     onPrintWeek: () => print('week'),
     onQr: doorSign ? () => setQrOpen(true) : null,
-    subgroups,
-    subgroup: params.subgroup,
-    onSubgroup: params.setSubgroup,
   });
 
   const openDay = (date: string) => {
@@ -95,20 +93,6 @@ export function SchedulePage({
   const headerMeta = (
     <>
       {parity ? <ParityBadge parity={parity} size="sm" /> : null}
-      {params.subgroup ? (
-        <span className="inline-flex items-center gap-1">
-          <span aria-hidden="true">·</span>
-          Лише {params.subgroup} підгрупа
-          <button
-            type="button"
-            onClick={() => params.setSubgroup(null)}
-            aria-label="Показати всю групу"
-            className="inline-flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:size-11"
-          >
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </span>
-      ) : null}
       {status}
       <ChangesNote items={changes} view={params.view} onOpenDay={openDay} />
     </>
@@ -128,7 +112,7 @@ export function SchedulePage({
           </>
         }
         meta={headerMeta}
-        controls={<ScheduleControls params={params} />}
+        controls={<ScheduleControls params={params} subgroups={subgroups} />}
         more={more}
       />
       <ScheduleExplorer
@@ -148,6 +132,7 @@ export function SchedulePage({
         url={url}
         weekNumber={weekNumber}
       />
+      {ics ? <CalendarDialog ics={ics} label={target.label} open={calendarOpen} onOpenChange={setCalendarOpen} /> : null}
       {doorSign ? (
         <QrDoorDialog
           open={qrOpen}

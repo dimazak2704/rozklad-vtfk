@@ -35,7 +35,16 @@ interface ScheduleExplorerProps {
 }
 
 /** «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки. */
-export function ScheduleControls({ params, hotkeys = true }: { params: ScheduleParams; hotkeys?: boolean }) {
+export function ScheduleControls({
+  params,
+  hotkeys = true,
+  subgroups = [],
+}: {
+  params: ScheduleParams;
+  hotkeys?: boolean;
+  /** Підгрупи групи: перемикач «Уся група / 1 п/г / 2 п/г» стоїть поруч із тижнем, лише якщо вони є. */
+  subgroups?: readonly number[];
+}) {
   const { date, today, view, setView, setDate } = params;
   useHotkeys([
     { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys },
@@ -45,7 +54,33 @@ export function ScheduleControls({ params, hotkeys = true }: { params: ScheduleP
     <>
       <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
       <WeekNav value={date} onChange={setDate} today={today} hotkeys={hotkeys} />
+      <SubgroupSwitch subgroups={subgroups} value={params.subgroup} onChange={params.setSubgroup} />
     </>
+  );
+}
+
+/** «Уся група / 1 п/г / 2 п/г» — той самий сегментований перемикач, що й «День / Тиждень». Без підгруп — нічого. */
+function SubgroupSwitch({
+  subgroups,
+  value,
+  onChange,
+}: {
+  subgroups: readonly number[];
+  value: number | null;
+  onChange: (subgroup: number | null) => void;
+}) {
+  if (subgroups.length === 0) return null;
+  return (
+    <SegmentedControl
+      size="sm"
+      aria-label="Підгрупа"
+      value={value === null ? 'all' : String(value)}
+      onValueChange={(next) => onChange(next === 'all' ? null : Number(next))}
+      options={[
+        { value: 'all', label: 'Уся група' },
+        ...subgroups.map((n) => ({ value: String(n), label: `${n} п/г`, ariaLabel: `${n} підгрупа` })),
+      ]}
+    />
   );
 }
 
@@ -59,7 +94,7 @@ const VIEW_OPTIONS = [
  * «зараз», зміни тижня. Стан — в адресі (useScheduleParams), дані — з переданого запиту.
  */
 export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [], toolbar = true }: ScheduleExplorerProps) {
-  const { date, today, homeDate, view, subgroup, week, setDate, setView, setSubgroup } = params;
+  const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
   const online = useOnline();
   const bells = useBells(date);
   const schedule = useMemo(() => (query.data ? filterBySubgroup(query.data, subgroup) : undefined), [query.data, subgroup]);
@@ -190,18 +225,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     <section aria-label={`Розклад: ${ownerLabel}`} className="flex flex-col gap-4">
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <ScheduleControls params={params} />
-          {subgroups.length > 0 ? (
-            <SegmentedControl
-              aria-label="Підгрупа"
-              value={subgroup === null ? 'all' : String(subgroup)}
-              onValueChange={(value) => setSubgroup(value === 'all' ? null : Number(value))}
-              options={[
-                { value: 'all', label: 'Уся група' },
-                ...subgroups.map((n) => ({ value: String(n), label: `${n} п/г`, ariaLabel: `${n} підгрупа` })),
-              ]}
-            />
-          ) : null}
+          <ScheduleControls params={params} subgroups={subgroups} />
           <ChangesNote items={changes} view={view} onOpenDay={openDay} className="lg:ms-auto" />
         </div>
       ) : null}

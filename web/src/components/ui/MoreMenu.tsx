@@ -2,6 +2,7 @@ import { Ellipsis } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
 
@@ -37,6 +38,8 @@ const ITEM = cn(
  */
 export function MoreMenu({ items, label = 'Ще дії', align = 'end', className }: MoreMenuProps) {
   const visible = items.filter(Boolean);
+  // вужче 1024 внизу нижня панель вкладок: меню не заходить під неї, а прокручується всередині
+  const tabBar = useMediaQuery('(max-width: 1023.98px)');
   if (visible.length === 0) return null;
   return (
     <DropdownMenu.Root>
@@ -47,8 +50,11 @@ export function MoreMenu({ items, label = 'Ще дії', align = 'end', classNam
         <DropdownMenu.Content
           align={align}
           sideOffset={6}
-          collisionPadding={8}
-          className="anim-pop z-50 min-w-56 rounded-popover border border-default bg-raised p-1.5 text-primary shadow-popover"
+          collisionPadding={{ top: 8, right: 8, left: 8, bottom: tabBar ? 76 : 8 }}
+          className={cn(
+            'anim-pop z-50 min-w-56 rounded-popover border border-default bg-raised p-1.5 text-primary shadow-popover',
+            'max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto overscroll-contain',
+          )}
         >
           {visible.map((item) => {
             const content = (

@@ -1,9 +1,7 @@
-import { CalendarArrowDown, CalendarPlus, Check, Link2, Printer, QrCode, Share2, Smartphone, Star } from 'lucide-react';
-import { downloadIcs, icsUrls } from '@/api/public';
+import { CalendarPlus, Link2, Printer, QrCode, Share2, Star } from 'lucide-react';
 import { notify, type MoreMenuItem } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
-import type { IcsTarget } from './ScheduleActions';
 
 interface ShareOptions {
   title: string;
@@ -38,45 +36,24 @@ ${url}`);
   }
 }
 
-async function downloadCalendar(ics: IcsTarget) {
-  try {
-    await downloadIcs(ics.owner, ics.id, ics.fileName);
-    notify.success(`Файл ${ics.fileName} завантажено — відкрийте його, і календар запропонує додати пари`);
-  } catch (error) {
-    notify.error(error, 'Не вдалося завантажити календар');
-  }
-}
-
 interface ScheduleMenuOptions {
   target: ScheduleTarget;
   share: ShareOptions;
-  /** Календар є лише для груп і викладачів (CONTRACTS §1). */
-  ics?: IcsTarget | null;
+  /** «Додати в календар…» — вікно з вибором (телефон, Google, файл). Календар є лише для груп і викладачів (CONTRACTS §1). */
+  onCalendar?: (() => void) | null;
   onPrintWeek: () => void;
   /** Табличка з QR на двері (групи й аудиторії). */
   onQr?: (() => void) | null;
-  /** Підгрупи групи: фільтр «Лише 1 підгрупа» живе в меню, а не окремим перемикачем. */
-  subgroups?: readonly number[];
-  subgroup?: number | null;
-  onSubgroup?: (subgroup: number | null) => void;
 }
 
 const ICON = 'size-4';
 
 /**
- * Усе другорядне сторінки розкладу — в одному меню «⋯»: поділитися, обране, календар, друк, QR, підгрупа.
+ * Усе другорядне сторінки розкладу — в одному меню «⋯», не більше шести пунктів: поділитися, посилання,
+ * обране, «Додати в календар…», друк, QR. Підгрупа — не тут, а перемикачем поруч із тижнем.
  * У першу секунду людині потрібен розклад, а не вісім кнопок над ним.
  */
-export function useScheduleMenuItems({
-  target,
-  share,
-  ics,
-  onPrintWeek,
-  onQr,
-  subgroups = [],
-  subgroup = null,
-  onSubgroup,
-}: ScheduleMenuOptions): MoreMenuItem[] {
+export function useScheduleMenuItems({ target, share, onCalendar, onPrintWeek, onQr }: ScheduleMenuOptions): MoreMenuItem[] {
   const favorite = useFavoritesStore((state) => state.favorites.some((f) => f.type === target.type && f.id === target.id));
   const toggle = useFavoritesStore((state) => state.toggleFavorite);
   const items: MoreMenuItem[] = [
@@ -101,26 +78,10 @@ export function useScheduleMenuItems({
       },
     },
   ];
-  if (ics) {
-    const urls = icsUrls(ics.owner, ics.id);
-    items.push(
-      { label: 'Підписатися в календарі телефону', icon: <Smartphone aria-hidden="true" className={ICON} />, href: urls.webcal, separatorBefore: true },
-      {
-        label: 'Додати в Google Календар',
-        icon: <CalendarPlus aria-hidden="true" className={ICON} />,
-        href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(urls.webcal)}`,
-      },
-      { label: 'Завантажити файл .ics', icon: <CalendarArrowDown aria-hidden="true" className={ICON} />, onSelect: () => void downloadCalendar(ics) },
-    );
+  if (onCalendar) {
+    items.push({ label: 'Додати в календар…', icon: <CalendarPlus aria-hidden="true" className={ICON} />, onSelect: onCalendar, separatorBefore: true });
   }
-  items.push({ label: 'Друкувати тиждень', icon: <Printer aria-hidden="true" className={ICON} />, onSelect: onPrintWeek, separatorBefore: true });
+  items.push({ label: 'Друкувати тиждень', icon: <Printer aria-hidden="true" className={ICON} />, onSelect: onPrintWeek, separatorBefore: !onCalendar });
   if (onQr) items.push({ label: 'QR-код для дверей', icon: <QrCode aria-hidden="true" className={ICON} />, onSelect: onQr });
-  if (subgroups.length > 0 && onSubgroup) {
-    const mark = (on: boolean) => (on ? <Check aria-hidden="true" className={ICON} /> : <span aria-hidden="true" className="inline-block size-4" />);
-    items.push(
-      { label: 'Уся група', icon: mark(subgroup === null), onSelect: () => onSubgroup(null), separatorBefore: true },
-      ...subgroups.map((n) => ({ label: `Лише ${n} підгрупа`, icon: mark(subgroup === n), onSelect: () => onSubgroup(n) })),
-    );
-  }
   return items;
 }
