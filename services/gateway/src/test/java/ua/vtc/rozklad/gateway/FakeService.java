@@ -45,6 +45,9 @@ final class FakeService implements AutoCloseable {
                 stream(exchange);
                 return;
             }
+            // як справжній сервіс: спершу дочитує тіло, інакше закриття з'єднання обриває ще не надісланий
+            // великий запит і gateway бачить IOException (нестабільний 500 у oversizedBodyIs413BeforeRouting)
+            exchange.getRequestBody().transferTo(OutputStream.nullOutputStream());
             String body = """
                     {"service":"%s","path":"%s","requestId":"%s","host":"%s","authorization":"%s"}"""
                     .formatted(name, exchange.getRequestURI().getPath(), header(exchange, "X-Request-Id"),
