@@ -1,4 +1,4 @@
-import { CornerDownLeft, DoorOpen, Search, Star, UserRound, Users, X, type LucideIcon } from 'lucide-react';
+import { CornerDownLeft, DoorOpen, Search, UserRound, Users, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { usePublicSearch } from '@/api/meta';
@@ -14,25 +14,34 @@ import { findItems, fromSearchResult, groupItems, roomItems, teacherItems, type 
 const TYPE_ICON: Record<EntityType, LucideIcon> = { GROUP: Users, TEACHER: UserRound, ROOM: DoorOpen };
 const TYPE_LABEL: Record<EntityType, string> = { GROUP: 'група', TEACHER: 'викладач', ROOM: 'аудиторія' };
 
-function TargetChip({ target, favorite = false }: { target: ScheduleTarget; favorite?: boolean }) {
-  const Icon = TYPE_ICON[target.type];
+/** «4КІ1» чи «Кренцін» — тихе текстове посилання в рядку «Нещодавно: …»; ціль 44 px на дотику. */
+function TargetLink({ target }: { target: ScheduleTarget }) {
   return (
     <Link
       to={target.url}
       className={cn(
-        'inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border bg-surface ps-2.5 pe-3 text-ui font-semibold',
-        'transition-[border-color,color] duration-100 hover:border-strong hover:text-primary',
+        'inline-flex min-h-6 items-center rounded-tag font-[650] text-accent underline-offset-4 hover:underline pointer-coarse:min-h-11',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        favorite ? 'border-accent-subtle text-primary' : 'border-default text-secondary',
+        target.type !== 'TEACHER' && 'figures',
       )}
     >
-      {favorite ? (
-        <Star aria-hidden="true" className="size-3.5 fill-current text-accent" />
-      ) : (
-        <Icon aria-hidden="true" className="size-3.5 text-muted" />
-      )}
-      <span className={cn('truncate', target.type !== 'TEACHER' && 'font-condensed')}>{target.label}</span>
+      {target.label}
     </Link>
+  );
+}
+
+/** «Обране: 4КІ1, Кренцін» — підпис і посилання через кому. */
+function TargetLine({ label, targets }: { label: string; targets: readonly ScheduleTarget[] }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-1 text-caption text-secondary">
+      <span>{label}:</span>
+      {targets.map((target, index) => (
+        <span key={`${target.type}-${target.id}`} className="inline-flex items-center">
+          <TargetLink target={target} />
+          {index < targets.length - 1 ? <span aria-hidden="true">,</span> : null}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -47,7 +56,6 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
   const rooms = usePublicRooms();
   const favorites = useFavoritesStore((state) => state.favorites);
   const recent = useFavoritesStore((state) => state.recent);
-  const forgetRecent = useFavoritesStore((state) => state.forgetRecent);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -123,7 +131,7 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
           onKeyDown={onKeyDown}
           placeholder="Група, викладач або аудиторія"
           className={cn(
-            'h-13 w-full rounded-panel border border-control bg-surface ps-12 pe-12 text-body text-primary sm:h-14 sm:text-heading',
+            'h-13 w-full rounded-popover border border-control bg-surface ps-12 pe-12 text-body text-primary',
             'transition-[border-color] duration-100 placeholder:text-muted hover:border-strong',
             'focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
             '[&::-webkit-search-cancel-button]:hidden',
@@ -142,7 +150,7 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
           />
         ) : null}
       </div>
-      <p id={hintId} className="text-caption text-muted">
+      <p id={hintId} className="sr-only">
         Код групи можна писати латиницею (4ki1), викладача — за початком прізвища, аудиторію — за номером.
       </p>
 
@@ -151,7 +159,7 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
         role="listbox"
         aria-label="Результати пошуку"
         hidden={!open || results.length === 0}
-        className="flex flex-col overflow-hidden rounded-panel border border-default bg-surface"
+        className="flex flex-col overflow-hidden rounded-popover border border-default bg-surface"
       >
         {results.map((item, index) => {
           const Icon = TYPE_ICON[item.type];
@@ -188,7 +196,7 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
       </ul>
 
       {open && results.length === 0 ? (
-        <p className="flex items-center gap-2 rounded-panel border border-default bg-surface px-3.5 py-3 text-ui text-secondary">
+        <p className="flex items-center gap-2 px-1 py-1 text-ui text-secondary">
           {catalogLoading || (catalogFailed && server.isFetching) ? (
             <>
               <Spinner size="sm" label="Шукаємо" /> Шукаємо…
@@ -205,30 +213,9 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
       </p>
 
       {!open && (favorites.length > 0 || shortcuts.length > 0) ? (
-        <div className="flex flex-col gap-2.5">
-          {favorites.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="me-1 text-caption font-semibold text-muted">Обране</span>
-              {favorites.map((target) => (
-                <TargetChip key={`${target.type}-${target.id}`} target={target} favorite />
-              ))}
-            </div>
-          ) : null}
-          {shortcuts.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="me-1 text-caption font-semibold text-muted">Нещодавні</span>
-              {shortcuts.slice(0, 6).map((target) => (
-                <TargetChip key={`${target.type}-${target.id}`} target={target} />
-              ))}
-              <button
-                type="button"
-                onClick={forgetRecent}
-                className="rounded-control px-2 py-1 text-caption text-muted underline-offset-4 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
-              >
-                Очистити
-              </button>
-            </div>
-          ) : null}
+        <div className="flex flex-col gap-1">
+          {favorites.length > 0 ? <TargetLine label="Обране" targets={favorites} /> : null}
+          {shortcuts.length > 0 ? <TargetLine label="Нещодавно" targets={shortcuts.slice(0, 4)} /> : null}
         </div>
       ) : null}
     </div>

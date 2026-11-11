@@ -1,38 +1,73 @@
-import { useId } from 'react';
+import { Link } from 'react-router';
 import { useBells, usePublicMeta } from '@/api/meta';
-import { usePublicChanges } from '@/api/public';
+import { usePublicSchedule } from '@/api/public';
+import type { DayDto, IsoDate, LessonView } from '@/api/types';
 import { NowIndicator } from '@/components/schedule';
 import { ErrorState, ParityBadge, Skeleton } from '@/components/ui';
+import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { compareIsoDates, formatLongDate, formatWeekdayDate, isoWeekday, isWeekend } from '@/lib/date';
-import { capitalize, weekdayName } from '@/lib/labels';
-import { useHomeDay } from './useHomeDay';
+import { compareIsoDates, formatLongDate, formatWeekdayDate, formatWeekdayDateAfterNa, relativeDayLabel } from '@/lib/date';
+import { capitalize } from '@/lib/labels';
+import { roomLabel } from '@/lib/schedule';
+import type { ScheduleTarget } from '@/stores/favorites';
+import { useRememberedGroup } from './useRememberedGroup';
+
+/** Тонований блок героя — і для завантаження, і для спокійних станів без доріжки. */
+const HERO = 'flex flex-col gap-2 rounded-[20px] bg-today-wash p-5 md:rounded-hero md:px-10 md:py-8';
+const DISPLAY = 'font-display text-[2.125rem] leading-[2.375rem] font-semibold tracking-[-0.025em] text-primary md:text-display';
+
+/** «Прогр., ауд. 301, Стець» — заняття одним рядком, без зайвих розділювачів. */
+function lessonLine(lesson: LessonView): string {
+  return [lesson.discipline.shortName, roomLabel(lesson.room?.name), lesson.teacher?.shortName].filter(Boolean).join(', ');
+}
+
+function firstLesson(day: DayDto | undefined): LessonView | undefined {
+  return day?.lessons.filter((l) => l.kind !== 'CANCELLED').sort((a, b) => a.pair - b.pair)[0];
+}
+
+/** Група одним посиланням у реченні героя. */
+function GroupLink({ group }: { group: ScheduleTarget }) {
+  return (
+    <Link
+      to={group.url}
+      className="rounded-tag font-[650] text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+    >
+      {group.label}
+    </Link>
+  );
+}
 
 /**
- * «Зараз»: яка пара йде й скільки до кінця, чисельник чи знаменник, номер тижня. У вихідні — який
- * наступний навчальний день і його парність (з сервера: враховує перевизначення тижнів).
+ * Герой головної: «4 пара · 38 хв до дзвінка», речення «що далі» й доріжка дня. Якщо людина вже
+ * відкривала свою групу, тут же одним рядком — що в неї зараз, а після пар — коли завтра перша.
  */
 export function NowPanel({ className }: { className?: string }) {
-  const headingId = useId();
   const meta = usePublicMeta();
-  const home = useHomeDay();
-  const bells = useBells(meta.data?.studyDay ? meta.data.today : null);
-  const next = usePublicChanges(home.date);
-
-  const frame = cn('flex flex-col gap-4 rounded-panel border border-default bg-surface p-4', className);
+  const group = useRememberedGroup();
+  const today = meta.data?.today ?? null;
+  const studyToday = Boolean(meta.data?.studyDay);
+  const nextDay: IsoDate | null = meta.data?.nextStudyDay?.date ?? null;
+  const bells = useBells(studyToday ? today : null);
+  const slots = bells.data?.slots ?? null;
+  const live = useNow(studyToday ? slots : null, { date: today });
+  // сьогодні й наступний навчальний день групи одним запитом (≤ 31 дня)
+  const range = today ? { from: today, to: nextDay && compareIsoDates(nextDay, today) > 0 ? nextDay : today } : null;
+  const groupSchedule = usePublicSchedule('GROUP', group?.id, range?.from ?? '', range?.to ?? '', {
+    enabled: Boolean(group && range),
+  });
 
   if (meta.isPending) {
     return (
-      <section aria-label="Зараз" className={frame}>
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-4 w-56" />
-        <Skeleton className="h-10 w-full" />
+      <section aria-label="Стан навчального дня" aria-busy="true" className={cn(HERO, 'gap-4', className)}>
+        <Skeleton className="h-5 w-56" />
+        <Skeleton className="h-12 w-72 max-w-full" />
+        <Skeleton className="mt-4 hidden h-2 w-full md:block" />
       </section>
     );
   }
   if (meta.isError) {
     return (
-      <section aria-label="Зараз" className={frame}>
+      <section aria-label="Стан навчального дня" className={cn(HERO, className)}>
         <ErrorState error={meta.error} size="sm" align="start" onRetry={() => void meta.refetch()} retrying={meta.isFetching} />
       </section>
     );
@@ -40,59 +75,110 @@ export function NowPanel({ className }: { className?: string }) {
 
   const data = meta.data;
   const semester = data.semester;
-  if (!semester) {
-    // core: семестру немає або сьогодні між семестрами — тоді немає ні парності, ні номера тижня
+  const dateLine = (
+    <span className="inline-flex flex-wrap items-center gap-x-2">
+      <span>{formatWeekdayDate(data.today)}</span>
+      {data.studyDay && data.parity ? (
+        <>
+          <span aria-hidden="true">·</span>
+          <ParityBadge parity={data.parity} size="sm" />
+        </>
+      ) : null}
+    </span>
+  );
+
+  // core: семестру немає або сьогодні між семестрами — тоді немає ні парності, ні номера тижня
+  if (!semester || compareIsoDates(data.today, semester.endsOn) > 0) {
     return (
-      <section aria-labelledby={headingId} className={frame}>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 id={headingId} className="text-heading font-semibold text-primary">
-            Зараз
-          </h2>
-          <p className="text-caption text-secondary">{formatWeekdayDate(data.today)}</p>
-        </div>
-        <p className="text-ui text-secondary">Навчального семестру зараз немає — пар не заплановано.</p>
+      <section aria-label="Стан навчального дня" className={cn(HERO, className)}>
+        <p className="text-body text-secondary">{formatWeekdayDate(data.today)}</p>
+        <p className={DISPLAY}>Пар немає</p>
+        <p className="text-body text-secondary">
+          {semester
+            ? `${capitalize(semester.name)} завершився ${formatLongDate(semester.endsOn)}.`
+            : 'Навчального семестру зараз немає — пар не заплановано.'}
+        </p>
       </section>
     );
   }
-  const semesterOver = compareIsoDates(data.today, semester.endsOn) > 0;
-  const semesterAhead = compareIsoDates(data.today, semester.startsOn) < 0;
+
+  if (compareIsoDates(data.today, semester.startsOn) < 0) {
+    return (
+      <section aria-label="Стан навчального дня" className={cn(HERO, className)}>
+        <p className="text-body text-secondary">{formatWeekdayDate(data.today)}</p>
+        <p className={DISPLAY}>Заняття ще не почалися</p>
+        <p className="text-body text-secondary">
+          {capitalize(semester.name)} починається {formatLongDate(semester.startsOn)}.
+        </p>
+      </section>
+    );
+  }
+
+  if (studyToday && !bells.data && !bells.isError) {
+    return (
+      <section aria-label="Стан навчального дня" aria-busy="true" className={cn(HERO, 'gap-4', className)}>
+        <p className="text-body text-secondary">{dateLine}</p>
+        <Skeleton className="h-12 w-72 max-w-full" />
+      </section>
+    );
+  }
+
+  if (studyToday && bells.isError) {
+    return (
+      <section aria-label="Стан навчального дня" className={cn(HERO, className)}>
+        <p className="text-body text-secondary">{dateLine}</p>
+        <ErrorState
+          error={bells.error}
+          size="sm"
+          align="start"
+          title="Дзвінки на сьогодні не завантажилися"
+          onRetry={() => void bells.refetch()}
+          retrying={bells.isFetching}
+        />
+      </section>
+    );
+  }
+
+  const days = groupSchedule.data?.days ?? [];
+  const groupToday = days.find((d) => d.date === data.today);
+  const groupNextDay = nextDay ? days.find((d) => d.date === nextDay) : undefined;
+
+  // «У 4КІ1 зараз Прогр., ауд. 301, Стець» — лише коли в групи справді є пара зараз чи наступна
+  let aside = null;
+  const status = live.status;
+  if (group && groupToday && status && (status.kind === 'in-pair' || status.kind === 'break' || status.kind === 'before-day')) {
+    const pair = status.kind === 'in-pair' ? status.current.pair : status.next.pair;
+    const lesson = groupToday.lessons.find((l) => l.pair === pair && l.kind !== 'CANCELLED');
+    if (lesson) {
+      aside = (
+        <>
+          У <GroupLink group={group} /> {status.kind === 'in-pair' ? 'зараз' : 'далі'} {lessonLine(lesson)}
+        </>
+      );
+    }
+  }
+
+  // після пар чи у вихідний — коли наступного разу: «Завтра перша о 09:40 — ЕУ, ауд. 22»
+  let afterDay: string | undefined;
+  if (nextDay) {
+    const when = relativeDayLabel(nextDay, data.today) ?? capitalize(formatWeekdayDateAfterNa(nextDay).replace(/,.*$/, ''));
+    const first = firstLesson(groupNextDay);
+    if (group && first?.startsAt) {
+      afterDay = `${when === 'Завтра' ? 'Завтра' : `У ${when.toLocaleLowerCase('uk')}`} у ${group.label} перша о ${first.startsAt} — ${lessonLine(first)}.`;
+    } else {
+      afterDay = `Наступний навчальний день — ${formatWeekdayDate(nextDay).toLocaleLowerCase('uk')}.`;
+    }
+  }
 
   return (
-    <section aria-labelledby={headingId} className={frame}>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 id={headingId} className="text-heading font-semibold text-primary">
-            Зараз
-          </h2>
-          <p className="text-caption text-secondary">
-            {formatWeekdayDate(data.today)} · {semester.name}
-          </p>
-        </div>
-        {data.studyDay ? <ParityBadge parity={data.parity} weekNumber={data.weekNumber} size="sm" /> : null}
-      </div>
-
-      {data.studyDay ? (
-        bells.data && bells.data.slots.length > 0 ? (
-          <NowIndicator bells={bells.data.slots} date={data.today} className="pb-2" />
-        ) : bells.isError ? (
-          <p className="text-ui text-secondary">Дзвінки на сьогодні не завантажилися — «зараз» показати не можемо.</p>
-        ) : (
-          <Skeleton className="h-16 w-full" />
-        )
-      ) : semesterOver ? (
-        <p className="text-ui text-secondary">{capitalize(semester.name)} завершився {formatLongDate(semester.endsOn)}.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <p className="text-body font-semibold text-primary">
-            {isWeekend(data.today) ? `Сьогодні ${weekdayName(isoWeekday(data.today))} — пар немає` : 'Сьогодні занять немає'}
-          </p>
-          <p className="flex flex-wrap items-center gap-2 text-ui text-secondary">
-            {semesterAhead ? 'Заняття починаються' : 'Наступний навчальний день —'}{' '}
-            <span className="font-semibold text-primary">{formatWeekdayDate(semesterAhead ? semester.startsOn : home.date)}</span>
-            {!semesterAhead && next.data ? <ParityBadge parity={next.data.parity} size="sm" /> : null}
-          </p>
-        </div>
-      )}
-    </section>
+    <NowIndicator
+      variant="hero"
+      bells={studyToday ? (slots ?? []) : []}
+      date={data.today}
+      dateLine={dateLine}
+      aside={aside}
+      afterDay={afterDay}
+      className={className}
+    />
   );
 }

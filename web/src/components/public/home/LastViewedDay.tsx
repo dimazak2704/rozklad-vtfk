@@ -1,57 +1,56 @@
-import { ArrowRight } from 'lucide-react';
-import { Link } from 'react-router';
 import { useBells } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
-import type { EntityType } from '@/api/types';
 import { DayList } from '@/components/schedule';
-import { ErrorState, Plate, buttonClass } from '@/components/ui';
-import { formatWeekdayDate } from '@/lib/date';
-import type { Perspective } from '@/lib/schedule';
-import { useFavoritesStore } from '@/stores/favorites';
+import { EmptyState, ErrorState } from '@/components/ui';
+import { formatWeekdayDateAfterNa } from '@/lib/date';
+import { MoreLink } from '../MoreLink';
 import { ScheduleSkeleton } from '../schedule/ScheduleSkeleton';
 import { useHomeDay } from './useHomeDay';
+import { useRememberedGroup } from './useRememberedGroup';
 
-const PERSPECTIVE: Record<EntityType, Perspective> = { GROUP: 'group', TEACHER: 'teacher', ROOM: 'room' };
-
-/** Розклад останньої переглянутої групи (викладача, аудиторії) на сьогодні — одразу на головній. */
+/**
+ * «4КІ1 сьогодні» — розклад групи, яку людина відкривала останньою, одразу на головній. Без рамки:
+ * рядки лежать на тлі сторінки (одна панель на екран — і на головній її немає взагалі).
+ */
 export function LastViewedDay() {
-  const last = useFavoritesStore((state) => state.lastViewed);
+  const group = useRememberedGroup();
   const home = useHomeDay();
-  const query = usePublicSchedule(last?.type ?? 'GROUP', last?.id, home.date, home.date);
-  const bells = useBells(last ? home.date : null);
+  const query = usePublicSchedule('GROUP', group?.id, home.date, home.date, { enabled: Boolean(group) });
+  const bells = useBells(group ? home.date : null);
 
-  if (!last) return null;
+  if (!group) return null;
   const day = query.data?.days[0];
-  const when = home.isToday ? 'сьогодні' : formatWeekdayDate(home.date).toLocaleLowerCase('uk');
+  const when = home.isToday ? 'сьогодні' : `на ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
+
+  let body;
+  if (day && day.lessons.length > 0) {
+    body = <DayList day={day} bells={bells.data?.slots} perspective="group" today={home.today} showHeader={false} />;
+  } else if (day) {
+    body = <EmptyState size="sm" title={`У ${group.label} ${when} пар немає.`} className="py-2" />;
+  } else if (query.isError) {
+    body = (
+      <ErrorState
+        error={query.error}
+        size="sm"
+        align="start"
+        description={`Розклад ${group.label} зараз не відкривається.`}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
+    );
+  } else {
+    body = <ScheduleSkeleton view="day" />;
+  }
 
   return (
-    <section aria-labelledby="last-viewed-heading" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <h2 id="last-viewed-heading" className="flex flex-wrap items-center gap-2.5 text-title font-semibold text-primary">
-          {last.type === 'TEACHER' ? <span>{last.label}</span> : <Plate size="lg">{last.label}</Plate>}
-          <span>{when}</span>
+    <section aria-labelledby="last-viewed-heading" className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="last-viewed-heading" className="text-heading font-bold text-primary">
+          <span className="font-display font-semibold figures">{group.label}</span> {when}
         </h2>
-        <Link to={`${last.url}?view=week`} className={buttonClass({ variant: 'link', className: 'gap-1.5' })}>
-          Розклад на тиждень
-          <ArrowRight aria-hidden="true" className="size-4 rtl:rotate-180" />
-        </Link>
+        <MoreLink to={`${group.url}?view=week`}>Тиждень</MoreLink>
       </div>
-      <div className="rounded-panel border border-default bg-surface p-4">
-        {day ? (
-          <DayList day={day} bells={bells.data?.slots} perspective={PERSPECTIVE[last.type]} today={home.today} showHeader={false} />
-        ) : query.isError ? (
-          <ErrorState
-            error={query.error}
-            size="sm"
-            align="start"
-            description={`Розклад «${last.label}» зараз не відкривається.`}
-            onRetry={() => void query.refetch()}
-            retrying={query.isFetching}
-          />
-        ) : (
-          <ScheduleSkeleton view="day" />
-        )}
-      </div>
+      {body}
     </section>
   );
 }
