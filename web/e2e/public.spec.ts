@@ -43,15 +43,15 @@ test.describe('публічний розклад', () => {
     // тиждень розпорядження №35: СТП Кренціна замінено на НДЕКСМ Непийводи («Зв.зам.»)
     await page.goto('/g/4%D0%9A%D0%861?view=week&date=2026-10-19');
     // зміни тижня — одним рядком у заголовку, самі зміни видно в клітинках
-    await expect(page.getByRole('button', { name: /заміни? цього тижня|замін цього тижня/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /(заміна|заміни|замін) цього тижня/ })).toBeVisible();
     const lesson = page.getByRole('button', { name: /^2 пара, 09:40–10:40\. Надійність/ });
     if (isMobile) await lesson.click();
     else await lesson.hover();
     const details = page.getByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
     await expect(details).toBeVisible();
     // публічна картка показує причину словами, не скороченням із розпорядження
-    await expect(details).toContainText('Причина: взаємна заміна');
-    await expect(details).toContainText('СТП, Кренцін');
+    await expect(details).toContainText(/Причина\s*взаємна заміна/);
+    await expect(details).toContainText('СТП · Кренцін');
   });
 
   test('невідома група пропонує схожі коди', async ({ page }) => {
