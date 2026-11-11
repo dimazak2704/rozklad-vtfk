@@ -3,8 +3,10 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { qk } from '@/api/queryKeys';
 import type { MetricsDto, Uuid } from '@/api/types';
-import { Skeleton, Tooltip } from '@/components/ui';
+import { Disclosure } from '@/components/generation/Disclosure';
+import { Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { countLabel } from '@/lib/labels';
 import { METRICS, type MetricKey } from '../model/labels';
 
 type Deltas = Partial<Record<MetricKey, number>>;
@@ -69,70 +71,93 @@ function Delta({ value, context }: { value: number; context: string }) {
   );
 }
 
-const CELL =
-  'flex min-w-0 flex-col gap-0.5 bg-surface px-4 py-2.5 text-start focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus';
-
 interface MetricsBarProps {
   versionId: Uuid;
   metrics: MetricsDto | undefined;
   /** Метрики опублікованої версії — для порівняння. */
   baseline: MetricsDto | null;
   hardConflicts: number | undefined;
+  softWarnings: number | undefined;
   loading: boolean;
   onShowConflicts: () => void;
 }
 
+const FORMS = {
+  hard: ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'],
+  teacherWindows: ['вікно викладачів', 'вікна викладачів', 'вікон викладачів'],
+  groupWindows: ['вікно груп', 'вікна груп', 'вікон груп'],
+  brokenDays: ['рваний день', 'рвані дні', 'рваних днів'],
+  latePairs: ['пізня пара', 'пізні пари', 'пізніх пар'],
+} as const;
+
 /**
- * Табло якості версії: жорсткі конфлікти, вікна, рвані дні, пізні пари. Підказка пояснює кожну метрику;
- * поруч — різниця з опублікованою версією, а одразу після правки — що саме змінилось.
+ * Якість версії одним реченням замість шести плиток: «75 жорстких конфліктів, 180 вікон викладачів…».
+ * Нулі не називаємо. Конфлікти — посилання на список; пояснення кожної метрики й різниця з
+ * опублікованою — у розгортці «Подробиці». Одразу після правки речення каже, що змінилось.
  */
-export function MetricsBar({ versionId, metrics, baseline, hardConflicts, loading, onShowConflicts }: MetricsBarProps) {
+export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWarnings, loading, onShowConflicts }: MetricsBarProps) {
   const recent = useRecentDeltas(versionId);
+  const recentKeys = METRICS.filter(({ key }) => recent[key] !== undefined);
+
+  if (loading || hardConflicts === undefined || !metrics) {
+    return (
+      <div aria-label="Якість версії" className="flex flex-col gap-2">
+        <Skeleton className="h-5 w-3/4 max-w-xl" />
+      </div>
+    );
+  }
+
+  const rest = (['teacherWindows', 'groupWindows', 'brokenDays', 'latePairs'] as const)
+    .filter((key) => metrics[key] > 0)
+    .map((key) => countLabel(metrics[key], FORMS[key]));
 
   return (
-    <section
-      aria-label="Якість версії"
-      className="grid grid-cols-2 gap-px overflow-hidden rounded-panel border border-default bg-[var(--border-color-separator)] sm:grid-cols-3 xl:grid-cols-6"
-    >
-      <Tooltip content="Накладки викладачів, груп і аудиторій, пари поза зміною. Поки вони є, версію не опублікувати. Натисніть, щоб побачити список.">
-        <button type="button" onClick={onShowConflicts} className={cn(CELL, 'transition-colors duration-100 hover:bg-hover')}>
-          {loading || hardConflicts === undefined ? (
-            <Skeleton className="h-7 w-10" />
-          ) : (
-            <span className={cn('font-condensed text-headline leading-none font-bold figures', hardConflicts > 0 ? 'text-danger' : 'text-add')}>
-              {hardConflicts}
-            </span>
-          )}
-          <span className="truncate text-caption text-secondary">Жорсткі конфлікти</span>
-        </button>
-      </Tooltip>
-
-      {METRICS.map(({ key, label, hint }) => {
-        const value = metrics?.[key];
-        const vsBaseline = baseline && metrics && key !== 'maxPairsPerDay' ? metrics[key] - baseline[key] : 0;
-        const changed = recent[key];
-        return (
-          <Tooltip key={key} content={hint} side="bottom">
-            <div tabIndex={0} role="group" data-metric={key} aria-label={value === undefined ? `${label}: завантажуємо` : `${label}: ${value}`} className={CELL}>
-              <span className="flex items-baseline gap-2">
-                {loading || value === undefined ? (
-                  <Skeleton className="h-7 w-10" />
-                ) : (
-                  <span className="font-condensed text-headline leading-none font-bold text-primary figures">{value}</span>
-                )}
-                {changed ? (
-                  <span key={`${key}-${changed}`} className="motion-safe:animate-[fade-in_200ms_var(--ease-out)]">
-                    <Delta value={changed} context="Після правки" />
-                  </span>
-                ) : vsBaseline !== 0 ? (
-                  <Delta value={vsBaseline} context="Порівняно з опублікованою" />
-                ) : null}
+    <section aria-label="Якість версії" className="flex flex-col gap-1">
+      <p className="text-body text-secondary">
+        {hardConflicts > 0 ? (
+          <button
+            type="button"
+            onClick={onShowConflicts}
+            aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
+            className="rounded-tag font-[650] text-danger underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            {countLabel(hardConflicts, FORMS.hard)}
+          </button>
+        ) : (
+          <span className="font-[650] text-add">Конфліктів немає</span>
+        )}
+        {rest.length > 0 ? `, ${rest.join(', ')}.` : '.'}
+        {recentKeys.length > 0 ? (
+          <span key={JSON.stringify(recent)} className="ms-2 inline-flex flex-wrap items-center gap-2 text-caption motion-safe:animate-[fade-in_200ms_var(--ease-out)]">
+            <span className="text-muted">Після правки:</span>
+            {recentKeys.map(({ key, label }) => (
+              <span key={key} className="inline-flex items-center gap-1">
+                {label.toLocaleLowerCase('uk')}
+                <Delta value={recent[key] ?? 0} context={label} />
               </span>
-              <span className="truncate text-caption text-secondary">{label}</span>
-            </div>
-          </Tooltip>
-        );
-      })}
+            ))}
+          </span>
+        ) : null}
+      </p>
+      <Disclosure summary="Подробиці">
+        <dl className="grid max-w-3xl grid-cols-1 gap-x-8 gap-y-2 ps-5.5 sm:grid-cols-2">
+          {METRICS.map(({ key, label, hint }) => {
+            const value = metrics[key];
+            const vsBaseline = baseline && key !== 'maxPairsPerDay' ? value - baseline[key] : 0;
+            return (
+              <div key={key} role="group" data-metric={key} aria-label={`${label}: ${value}`} className="flex flex-col gap-0.5">
+                <dt className="flex items-baseline gap-2 text-ui text-primary">
+                  {label}
+                  <span className="figures font-semibold">{value}</span>
+                  {vsBaseline !== 0 ? <Delta value={vsBaseline} context="Порівняно з опублікованою" /> : null}
+                </dt>
+                <dd className="text-caption text-muted">{hint}</dd>
+              </div>
+            );
+          })}
+        </dl>
+        {baseline ? <p className="mt-2 ps-5.5 text-caption text-muted">Стрілки — різниця з опублікованою версією.</p> : null}
+      </Disclosure>
     </section>
   );
 }

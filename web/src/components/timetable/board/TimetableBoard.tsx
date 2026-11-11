@@ -75,6 +75,8 @@ export interface TimetableBoardProps {
   onSelect: (lesson: TemplateLessonDto) => void;
   onOpen: (lesson: TemplateLessonDto) => void;
   onAdd: (entity: BoardEntity, weekday: Weekday, pair: number, parity: Parity) => void;
+  /** Дні-стовпці; на телефоні — один вибраний день. */
+  days?: readonly Weekday[];
   /** Переміщення після кидка: сторінка робить оптимістичну правку й історію. */
   onMove: (lesson: TemplateLessonDto, target: MoveLessonRequest, room: PublicRoomDto | null) => void;
   /** Кидок на ціль, яку сервер уже назвав конфліктною: нічого не надсилаємо, лише пояснюємо. */
@@ -116,6 +118,7 @@ export function TimetableBoard({
   onSelect,
   onOpen,
   onAdd,
+  days,
   onMove,
   onRejected,
 }: TimetableBoardProps) {
@@ -404,6 +407,7 @@ export function TimetableBoard({
                     onSelect={onSelect}
                     onOpen={onOpen}
                     onAdd={onAdd}
+                    days={days}
                   />
                 ))}
               </div>

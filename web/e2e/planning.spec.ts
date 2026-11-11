@@ -77,17 +77,17 @@ test.describe('редактор базового розкладу', () => {
 });
 
 test.describe('генератор', () => {
-  test('запуск доходить до кінця: графік, «Було / Стало» і нова чернетка', async ({ page }) => {
+  test('запуск доходить до кінця: графік, «Було і стало» і нова чернетка', async ({ page }) => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin/generation');
-    await page.getByRole('spinbutton').fill('10');
-    await page.getByRole('spinbutton').press('Enter');
+    // ліміт — одним перемикачем (без окремого поля з плюсом і мінусом)
+    await page.getByRole('radio', { name: /^30/ }).click();
     await page.getByRole('button', { name: 'Запустити генерацію' }).click();
 
     await expect(page.getByText('Розвʼязується').first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('figure', { name: 'Хід розвʼязання' })).toBeVisible();
 
-    const table = page.getByRole('table', { name: 'Було / Стало' });
+    const table = page.getByRole('table', { name: 'Було і стало' });
     await expect(table).toBeVisible({ timeout: 30_000 });
     await expect(table.getByRole('row', { name: /Жорсткі конфлікти\s*75\s*0/ })).toBeVisible();
     await expect(table.getByRole('row', { name: /Рвані дні/ })).toBeVisible();

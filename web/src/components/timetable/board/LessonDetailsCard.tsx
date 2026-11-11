@@ -21,7 +21,7 @@ export function LessonDetailsCard({ lesson, conflicts }: LessonDetailsCardProps)
       <div className="flex items-start gap-2">
         <span aria-hidden="true" className="mt-1.5 size-2.5 shrink-0 rounded-full bg-[var(--line-dot)]" />
         <div className="flex min-w-0 flex-col">
-          <p className="font-condensed text-heading leading-tight font-bold text-primary">{lesson.discipline.shortName}</p>
+          <p className="text-heading leading-tight font-bold text-primary">{lesson.discipline.shortName}</p>
           {lesson.discipline.name !== lesson.discipline.shortName ? (
             <p className="text-caption text-secondary">{lesson.discipline.name}</p>
           ) : null}

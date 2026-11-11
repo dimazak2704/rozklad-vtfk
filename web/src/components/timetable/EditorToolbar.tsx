@@ -1,8 +1,21 @@
-import { DoorOpen, ListFilter, Plus, Redo2, Search, Undo2, UserRound, Users, X } from 'lucide-react';
+import { DoorOpen, ListFilter, Plus, Redo2, Search, Undo2, UserRound, Users } from 'lucide-react';
 import type { RefObject } from 'react';
-import { Button, Chip, IconButton, Input, SegmentedControl, Select, Switch } from '@/components/ui';
+import type { Weekday } from '@/api/types';
+import {
+  Button,
+  Chip,
+  IconButton,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  SegmentedControl,
+  Select,
+  Switch,
+} from '@/components/ui';
 import { cn } from '@/lib/cn';
-import type { BoardFilters, BoardView } from './model/grid';
+import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
+import { EMPTY_FILTERS, WEEKDAYS, type BoardFilters, type BoardView } from './model/grid';
 
 const VIEW_OPTIONS = [
   { value: 'group' as const, label: 'Групи', icon: <Users aria-hidden="true" className="size-3.5" /> },
@@ -35,10 +48,16 @@ interface EditorToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onAdd: () => void;
+  /** Телефон: сітка показує один день, а тут — перемикач днів. */
+  day?: Weekday | null;
+  onDayChange?: (day: Weekday) => void;
   className?: string;
 }
 
-/** Що й кого показати: подання, курси, відділення, пошук; праворуч — скасування й додавання пари. */
+/**
+ * Що й кого показати: подання і пошук на виду; курси, відділення й «лише з конфліктами» — за кнопкою
+ * «Фільтр». Праворуч — скасування й додавання пари, лише коли версію можна правити.
+ */
 export function EditorToolbar({
   view,
   onViewChange,
@@ -56,6 +75,8 @@ export function EditorToolbar({
   onUndo,
   onRedo,
   onAdd,
+  day = null,
+  onDayChange,
   className,
 }: EditorToolbarProps) {
   const toggleCourse = (course: number) =>
@@ -63,7 +84,8 @@ export function EditorToolbar({
       ...filters,
       courses: filters.courses.includes(course) ? filters.courses.filter((c) => c !== course) : [...filters.courses, course].sort(),
     });
-  const filtered = filters.courses.length > 0 || filters.department !== null || filters.query !== '' || filters.conflictsOnly;
+  const activeFilters = filters.courses.length + (filters.department !== null ? 1 : 0) + (filters.conflictsOnly ? 1 : 0);
+  const filtered = activeFilters > 0 || filters.query !== '';
 
   return (
     <div className={cn('flex flex-col gap-2.5', className)}>
@@ -78,67 +100,104 @@ export function EditorToolbar({
           placeholder={SEARCH_PLACEHOLDER[view]}
           aria-label="Пошук у сітці"
           iconStart={<Search aria-hidden="true" className="size-4" />}
-          wrapperClassName="w-full sm:w-56"
+          wrapperClassName="min-w-0 flex-1 sm:w-56 sm:flex-none"
         />
-        <div className="ms-auto flex items-center gap-1">
-          <IconButton
-            label={undoLabel ? `Скасувати: ${undoLabel}` : 'Скасувати — правок ще немає'}
-            shortcut="mod+z"
-            icon={<Undo2 aria-hidden="true" className="size-4" />}
-            onClick={onUndo}
-            disabled={!editable || !canUndo}
-          />
-          <IconButton
-            label={redoLabel ? `Повторити: ${redoLabel}` : 'Повторити — нічого скасованого'}
-            shortcut="mod+shift+z"
-            icon={<Redo2 aria-hidden="true" className="size-4" />}
-            onClick={onRedo}
-            disabled={!editable || !canRedo}
-          />
-          <Button onClick={onAdd} disabled={!editable} iconStart={<Plus aria-hidden="true" className="size-4" />} className="ms-1">
-            Додати пару
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Фільтри">
-        <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-muted">
-          <ListFilter aria-hidden="true" className="size-3.5" />
-          Курс
-        </span>
-        {[1, 2, 3, 4].map((course) => (
-          <Chip key={course} selected={filters.courses.includes(course)} onToggle={() => toggleCourse(course)} className="h-7 text-caption">
-            {course}
-          </Chip>
-        ))}
-        <Select
-          aria-label="Відділення"
-          size="sm"
-          className="w-56"
-          value={filters.department ?? ALL_DEPARTMENTS}
-          onValueChange={(value) => onFiltersChange({ ...filters, department: value === ALL_DEPARTMENTS ? null : value })}
-          options={[{ value: ALL_DEPARTMENTS, label: 'Усі відділення' }, ...departments.map((name) => ({ value: name, label: name }))]}
-        />
-        <Switch
-          label="Лише з конфліктами"
-          checked={filters.conflictsOnly}
-          onCheckedChange={(checked) => onFiltersChange({ ...filters, conflictsOnly: checked })}
-          className="ms-1"
-        />
-        <span className="ms-auto text-caption text-muted figures" aria-live="polite">
-          Показано {shown} з {total}
-        </span>
-        {filtered ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            iconStart={<X aria-hidden="true" className="size-3.5" />}
-            onClick={() => onFiltersChange({ courses: [], department: null, query: '', conflictsOnly: false })}
-          >
-            Скинути
-          </Button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />} aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}>
+              Фільтр
+              {activeFilters > 0 ? (
+                <span aria-hidden="true" className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures">
+                  {activeFilters}
+                </span>
+              ) : null}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent title="Що показати" width="md">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5" role="group" aria-label="Курс">
+                <span aria-hidden="true" className="text-caption font-[650] text-primary">
+                  Курс
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4].map((course) => (
+                    <Chip key={course} selected={filters.courses.includes(course)} onToggle={() => toggleCourse(course)}>
+                      {course} курс
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+              <Select
+                aria-label="Відділення"
+                value={filters.department ?? ALL_DEPARTMENTS}
+                onValueChange={(value) => onFiltersChange({ ...filters, department: value === ALL_DEPARTMENTS ? null : value })}
+                options={[{ value: ALL_DEPARTMENTS, label: 'Усі відділення' }, ...departments.map((name) => ({ value: name, label: name }))]}
+              />
+              <Switch
+                label="Лише з конфліктами"
+                checked={filters.conflictsOnly}
+                onCheckedChange={(checked) => onFiltersChange({ ...filters, conflictsOnly: checked })}
+              />
+              {activeFilters > 0 ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="self-start"
+                  onClick={() => onFiltersChange({ ...EMPTY_FILTERS, query: filters.query })}
+                >
+                  Скинути фільтр
+                </Button>
+              ) : null}
+            </div>
+          </PopoverContent>
+        </Popover>
+        {editable ? (
+          <div className="ms-auto flex items-center gap-1">
+            <IconButton
+              label={undoLabel ? `Скасувати: ${undoLabel}` : 'Скасувати — правок ще немає'}
+              shortcut="mod+z"
+              icon={<Undo2 aria-hidden="true" className="size-4" />}
+              onClick={onUndo}
+              disabled={!canUndo}
+            />
+            <IconButton
+              label={redoLabel ? `Повторити: ${redoLabel}` : 'Повторити — нічого скасованого'}
+              shortcut="mod+shift+z"
+              icon={<Redo2 aria-hidden="true" className="size-4" />}
+              onClick={onRedo}
+              disabled={!canRedo}
+            />
+            <Button onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />} className="ms-1">
+              Додати пару
+            </Button>
+          </div>
         ) : null}
       </div>
+
+      {day !== null && onDayChange ? (
+        <SegmentedControl
+          aria-label="День тижня"
+          stretch
+          value={String(day)}
+          onValueChange={(value) => onDayChange(Number(value) as Weekday)}
+          options={WEEKDAYS.map((weekday) => ({ value: String(weekday), label: capitalize(weekdayShort(weekday)), ariaLabel: weekdayName(weekday) }))}
+        />
+      ) : null}
+
+      {filtered ? (
+        <p className="flex flex-wrap items-center gap-x-3 text-caption text-muted" aria-live="polite">
+          <span className="figures">
+            Показано {shown} з {total}
+          </span>
+          <button
+            type="button"
+            onClick={() => onFiltersChange(EMPTY_FILTERS)}
+            className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+          >
+            Показати всіх
+          </button>
+        </p>
+      ) : null}
     </div>
   );
 }

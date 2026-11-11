@@ -50,14 +50,36 @@ describe('Базовий розклад', () => {
     renderWithProviders(<TimetablePage />, { route: `/admin/timetable?q=4КІ3&version=${PUBLISHED_VERSION_ID}` });
     expect(await screen.findByText(/Ця версія опублікована й діє/, undefined, LONG)).toBeInTheDocument();
     await screen.findByRole('grid', { name: /4КІ3/ }, LONG);
-    expect(screen.getByRole('button', { name: 'Додати пару' })).toBeDisabled();
+    // правок немає зовсім (не сірі кнопки): головна дія — почати чернетку з цієї версії
+    expect(screen.queryByRole('button', { name: 'Додати пару' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Опублікувати' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Створити чернетку' })).toBeInTheDocument();
+    // пару можна вибрати й роздивитись, вона не «вимкнена»
+    const grid = screen.getByRole('grid', { name: /4КІ3/ });
+    expect(within(grid).getAllByRole('button', { name: /Сучасні технології проєктування/ })[0]).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('на телефоні сітка показує один день з перемикачем днів, а не пʼять стиснутих стовпців', async () => {
+    const user = userEvent.setup();
+    const original = window.matchMedia;
+    window.matchMedia = (query: string) => ({ ...original(query), matches: query === '(max-width: 767px)' });
+    try {
+      renderWithProviders(<TimetablePage />, { route: '/admin/timetable?q=4КІ3' });
+      const grid = await screen.findByRole('grid', { name: /4КІ3/ }, LONG);
+      await user.click(screen.getByRole('radio', { name: 'вівторок' }));
+      const headers = within(grid).getAllByRole('columnheader');
+      expect(headers).toHaveLength(2);
+      expect(headers[1]).toHaveTextContent('Вівторок');
+      expect(within(grid).getAllByRole('button', { name: /Сучасні технології проєктування.*вівторок, 4 пара/ })).toHaveLength(1);
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it('збій сервера — пояснення і «Спробувати ще раз», а не порожня сторінка', async () => {
     server.use(http.get(apiPath('/admin/timetable/versions'), () => problem({ status: 503 })));
     renderWithProviders(<TimetablePage />, { route: '/admin/timetable' });
-    expect(await screen.findByText('Версії розкладу не завантажено', undefined, LONG)).toBeInTheDocument();
+    expect(await screen.findByText(/Версії розкладу не завантажено/, undefined, LONG)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Спробувати ще раз' })).toBeInTheDocument();
   });
 });

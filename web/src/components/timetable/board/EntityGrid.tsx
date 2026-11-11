@@ -2,7 +2,6 @@ import { Plus, TriangleExclamationPoint } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { TimetableConflict } from '@/api/timetable';
 import type { Parity, ShiftWindowDto, TemplateLessonDto, Uuid, Weekday } from '@/api/types';
-import { Plate } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { capitalize, countLabel, PAIR_FORMS, weekdayName, weekdayShort } from '@/lib/labels';
 import {
@@ -41,6 +40,8 @@ export interface EntityGridProps {
   onSelect: (lesson: TemplateLessonDto) => void;
   onOpen: (lesson: TemplateLessonDto) => void;
   onAdd: (entity: BoardEntity, weekday: Weekday, pair: number, parity: Parity) => void;
+  /** Які дні показати стовпцями. На телефоні — один день, щоб клітинки не стискались до «Вст.с…». */
+  days?: readonly Weekday[];
 }
 
 const NO_CONFLICTS: TimetableConflict[] = [];
@@ -62,6 +63,7 @@ export const EntityGrid = memo(function EntityGrid({
   onSelect,
   onOpen,
   onAdd,
+  days = WEEKDAYS,
 }: EntityGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -84,14 +86,14 @@ export const EntityGrid = memo(function EntityGrid({
   // перший елемент для Tab, якщо фокус у сітці ще не бував
   const firstKey = useMemo(() => {
     for (const pair of rows) {
-      for (const weekday of WEEKDAYS) {
+      for (const weekday of days) {
         const lessons = byCell.get(`${weekday}|${pair}`);
         if (lessons?.[0]) return `lesson:${layoutCell(lessons, entity.view, entity.lanes).items[0]?.lesson.id ?? lessons[0].id}`;
         if (editable && inShiftWindow(entity, windows, weekday, pair)) return `add:${weekday}:${pair}:BOTH`;
       }
     }
     return null;
-  }, [rows, byCell, entity, editable, windows]);
+  }, [rows, byCell, entity, editable, windows, days]);
   const tabKey = activeKey ?? firstKey;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -103,21 +105,22 @@ export const EntityGrid = memo(function EntityGrid({
 
   const titleId = `grid-${entity.view}-${entity.id}`;
   const lessonCount = entity.lessons.length;
+  const single = days.length === 1;
 
   return (
-    <section aria-labelledby={titleId} className="min-w-0 rounded-panel border border-default bg-surface">
+    <section aria-labelledby={titleId} className="min-w-0 overflow-clip rounded-panel border border-default bg-surface">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-separator px-3 py-2">
         <h3 id={titleId} className="flex min-w-0 items-center gap-2">
           <span className="sr-only">Розклад {ENTITY_KIND[entity.view]} </span>
-          <Plate size="md">{entity.label}</Plate>
+          <span className="figures text-heading font-bold text-primary">{entity.label}</span>
           {entity.sublabel ? <span className="truncate text-caption font-normal text-secondary">{entity.sublabel}</span> : null}
         </h3>
-        <span className="ms-auto flex shrink-0 items-center gap-3 text-meta text-muted figures">
-          <span>{countLabel(lessonCount, PAIR_FORMS)} у шаблоні</span>
+        {/* кількість пар — у підказці; на виду лише те, що вимагає дії */}
+        <span className="ms-auto flex shrink-0 items-center gap-3 text-caption text-muted" title={`${countLabel(lessonCount, PAIR_FORMS)} у шаблоні`}>
           {hardCount > 0 ? (
             <span className="inline-flex items-center gap-1 font-semibold text-danger">
               <TriangleExclamationPoint aria-hidden="true" className="size-3.5" />
-              {hardCount} з конфліктом
+              {countLabel(hardCount, ['конфлікт', 'конфлікти', 'конфліктів'])}
             </span>
           ) : null}
         </span>
@@ -129,22 +132,25 @@ export const EntityGrid = memo(function EntityGrid({
         aria-labelledby={titleId}
         aria-rowcount={rows.length + 1}
         onKeyDown={onKeyDown}
-        className="grid grid-cols-[2.75rem_repeat(5,minmax(0,1fr))]"
+        className="grid"
+        style={{ gridTemplateColumns: `2.75rem repeat(${days.length}, minmax(0, 1fr))` }}
       >
         <div role="row" className="contents">
           <div role="columnheader" className="border-e border-b border-separator bg-sunken px-1 py-1.5 text-center text-meta font-semibold text-muted">
             Пара
           </div>
-          {WEEKDAYS.map((weekday) => (
+          {days.map((weekday) => (
             <div
               key={weekday}
               role="columnheader"
               className="border-b border-separator bg-sunken px-2 py-1.5 text-caption font-semibold text-secondary not-last:border-e"
             >
-              <span className="hidden 2xl:inline">{capitalize(weekdayName(weekday))}</span>
-              <span className="2xl:hidden" aria-label={weekdayName(weekday)}>
-                {weekdayShort(weekday)}
-              </span>
+              <span className={single ? undefined : 'hidden 2xl:inline'}>{capitalize(weekdayName(weekday))}</span>
+              {single ? null : (
+                <span className="2xl:hidden" aria-label={weekdayName(weekday)}>
+                  {weekdayShort(weekday)}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -158,24 +164,24 @@ export const EntityGrid = memo(function EntityGrid({
                 rowIndex < rows.length - 1 && 'border-b',
               )}
             >
-              <span className="font-condensed text-title leading-none font-bold text-primary figures">{pair}</span>
+              <span className="text-title leading-none font-semibold text-primary figures">{pair}</span>
               <span className="sr-only"> пара</span>
-              {/* верхня половина клітинки — чисельник, нижня — знаменник, як у друкованому розкладі */}
-              <span aria-hidden="true" className="absolute end-1 top-1/4 -translate-y-1/2 text-[0.625rem] leading-none font-semibold text-muted">
+              {/* верхня половина клітинки — чисельник, нижня — знаменник, як у друкованому розкладі; 12 px — найменший текст */}
+              <span aria-hidden="true" title="чисельник" className="absolute end-1 top-1/4 -translate-y-1/2 text-meta leading-none text-muted">
                 ч
               </span>
-              <span aria-hidden="true" className="absolute end-1 top-3/4 -translate-y-1/2 text-[0.625rem] leading-none font-semibold text-muted">
+              <span aria-hidden="true" title="знаменник" className="absolute end-1 top-3/4 -translate-y-1/2 text-meta leading-none text-muted">
                 з
               </span>
             </div>
-            {WEEKDAYS.map((weekday) => (
+            {days.map((weekday, dayIndex) => (
               <SlotCell
                 key={weekday}
                 entity={entity}
                 weekday={weekday}
                 pair={pair}
                 lastRow={rowIndex === rows.length - 1}
-                lastColumn={weekday === 5}
+                lastColumn={dayIndex === days.length - 1}
                 lessons={byCell.get(`${weekday}|${pair}`) ?? []}
                 inWindow={inShiftWindow(entity, windows, weekday, pair)}
                 editable={editable}
@@ -277,7 +283,7 @@ const SlotCell = memo(function SlotCell({
         <span
           key={flash}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 rounded-plate bg-selected-hover/70 outline-2 outline-offset-[-2px] outline-[var(--border-color-accent)] motion-safe:animate-[fade-out_2.2s_var(--ease-in)_forwards]"
+          className="pointer-events-none absolute inset-0 z-10 rounded-tag bg-selected-hover/70 outline-2 outline-offset-[-2px] outline-[var(--border-color-accent)] motion-safe:animate-[fade-out_2.2s_var(--ease-in)_forwards]"
         />
       ) : null}
       {layout.items.map((item) => (
@@ -315,7 +321,7 @@ const SlotCell = memo(function SlotCell({
             onClick={() => onAdd(entity, weekday, pair, parity)}
             style={{ gridRow: parity === 'BOTH' ? '1 / span 2' : parity === 'NUMERATOR' ? '1' : '2', gridColumn: '1 / -1' }}
             className={cn(
-              'group/add relative z-[1] flex min-h-0 items-center justify-center rounded-plate text-transparent',
+              'group/add relative z-[1] flex min-h-0 items-center justify-center rounded-tag text-transparent',
               'transition-[background-color,color] duration-100 ease-out hover:bg-hover hover:text-muted',
               'focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
             )}

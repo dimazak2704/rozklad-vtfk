@@ -54,7 +54,7 @@ export const LessonChip = memo(function LessonChip({
     id: lesson.id,
     data: { lesson },
     disabled: !editable,
-    attributes: { roleDescription: 'пара, яку можна перенести' },
+    attributes: { roleDescription: editable ? 'пара, яку можна перенести' : 'пара' },
   });
   const travelling = useDragState(store, (state) => state.activeIds.has(lesson.id));
   const dragging = useDragState(store, (state) => state.active !== null);
@@ -89,6 +89,8 @@ export const LessonChip = memo(function LessonChip({
           ref={setNodeRef}
           type="button"
           {...attributes}
+          // у версії лише для перегляду пару все одно можна вибрати й роздивитись — вона не «вимкнена»
+          aria-disabled={undefined}
           {...listeners}
           onPointerEnter={(event) => {
             if (event.pointerType === 'mouse') pointerInside.current = true;
@@ -111,7 +113,7 @@ export const LessonChip = memo(function LessonChip({
           style={style}
           {...lineAttr(lesson.discipline)}
           className={cn(
-            'group/chip relative flex min-h-0 min-w-0 flex-col justify-center gap-0.5 overflow-hidden rounded-plate border px-1.5 text-start',
+            'group/chip relative flex min-h-0 min-w-0 flex-col justify-center gap-0.5 overflow-hidden rounded-tag border px-1.5 text-start',
             'transition-[background-color,border-color,opacity] duration-100 ease-out',
             'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-focus',
             oneLine ? 'py-0.5' : 'py-1',
@@ -127,7 +129,7 @@ export const LessonChip = memo(function LessonChip({
           <span className="flex min-w-0 items-center gap-1">
             <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--line-dot)]" />
             {/* у половинці назва стискається останньою: спершу ховається викладач/аудиторія */}
-            <span className="min-w-[1.75rem] shrink-[0.15] truncate font-condensed text-[0.875rem] leading-tight font-bold text-primary">
+            <span className="min-w-[1.75rem] shrink-[0.15] truncate text-[0.875rem] leading-tight font-[650] text-primary">
               {title}
             </span>
             {oneLine && !narrow && detail ? (
@@ -156,11 +158,11 @@ export function LessonChipOverlay({ lesson, view }: { lesson: TemplateLessonDto;
   return (
     <div
       {...lineAttr(lesson.discipline)}
-      className="flex w-40 cursor-grabbing flex-col gap-0.5 rounded-plate border border-[var(--border-color-accent)] bg-raised px-2 py-1.5 shadow-lift"
+      className="flex w-40 cursor-grabbing flex-col gap-0.5 rounded-tag border border-[var(--border-color-accent)] bg-raised px-2 py-1.5 shadow-popover"
     >
       <span className="flex min-w-0 items-center gap-1">
         <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
-        <span className="truncate font-condensed text-ui leading-tight font-bold text-primary">{title}</span>
+        <span className="truncate text-ui leading-tight font-[650] text-primary">{title}</span>
       </span>
       {detail ? <span className="truncate text-meta text-secondary">{detail}</span> : null}
       <span className="text-meta text-muted">

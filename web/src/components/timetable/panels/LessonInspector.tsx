@@ -1,7 +1,7 @@
-import { MousePointerClick, Move, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Move, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { TimetableConflict } from '@/api/timetable';
 import type { TemplateLessonDto } from '@/api/types';
-import { Button, Kbd, KbdCombo } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { LessonDetailsCard } from '../board/LessonDetailsCard';
 
@@ -17,11 +17,14 @@ interface LessonInspectorProps {
   className?: string;
 }
 
-/** Вибрана пара: повні відомості й дії з клавішами — для тих, хто працює з клавіатури. */
+/**
+ * Вибрана пара: повні відомості й дії. Гарячі клавіші (E, M, Delete, Ctrl+Z) — у довідці «?», а не тут:
+ * інструкції з клавішами в інтерфейсі лише заважають.
+ */
 export function LessonInspector({ lesson, conflicts, editable, busy, onEdit, onMove, onTogglePin, onDelete, className }: LessonInspectorProps) {
   return (
     <section aria-labelledby="inspector-title" aria-live="polite" className={cn('rounded-panel border border-default bg-surface', className)}>
-      <h2 id="inspector-title" className="border-b border-separator px-3 py-2.5 text-heading font-semibold text-primary">
+      <h2 id="inspector-title" className="border-b border-separator px-3 py-2.5 text-heading font-bold text-primary">
         Вибрана пара
       </h2>
       {lesson ? (
@@ -30,10 +33,10 @@ export function LessonInspector({ lesson, conflicts, editable, busy, onEdit, onM
           {editable ? (
             <div className="grid grid-cols-2 gap-2">
               <Button size="sm" onClick={() => onEdit(lesson)} disabled={busy} iconStart={<Pencil aria-hidden="true" className="size-3.5" />}>
-                Змінити <Kbd className="ms-auto">E</Kbd>
+                Змінити
               </Button>
               <Button size="sm" onClick={() => onMove(lesson)} disabled={busy} iconStart={<Move aria-hidden="true" className="size-3.5" />}>
-                Перемістити <Kbd className="ms-auto">M</Kbd>
+                Перемістити
               </Button>
               <Button
                 size="sm"
@@ -54,26 +57,14 @@ export function LessonInspector({ lesson, conflicts, editable, busy, onEdit, onM
                 Видалити
               </Button>
             </div>
-          ) : (
-            <p className="text-caption text-muted">Ця версія лише для перегляду: змінювати можна чернетку.</p>
-          )}
+          ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-2 p-3 text-caption text-secondary">
-          <p className="flex items-center gap-2 text-ui text-primary">
-            <MousePointerClick aria-hidden="true" className="size-4 text-muted" />
-            Клацніть пару в сітці
-          </p>
-          <ul className="flex list-disc flex-col gap-1 ps-5 marker:text-muted">
-            <li>Перетягніть пару в інший слот — зелена рамка означає «вільно», червона — конфлікт.</li>
-            <li>
-              З клавіатури: фокус на пару, <Kbd>Enter</Kbd> — підхопити, стрілки — слот, <Kbd>Enter</Kbd> — поставити.
-            </li>
-            <li>
-              Порожня клітинка — додати пару; <KbdCombo keys="mod+z" /> — скасувати правку.
-            </li>
-          </ul>
-        </div>
+        <p className="p-3 text-ui text-secondary">
+          {editable
+            ? 'Клацніть пару, щоб побачити подробиці, або перетягніть її в інший слот.'
+            : 'Клацніть пару, щоб побачити подробиці.'}
+        </p>
       )}
     </section>
   );

@@ -10,20 +10,10 @@ import {
 } from '@/api/timetable';
 import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
-import {
-  Button,
-  buttonClass,
-  Drawer,
-  DrawerContent,
-  EmptyState,
-  ErrorState,
-  LoadingRegion,
-  Skeleton,
-} from '@/components/ui';
+import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, Skeleton } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import { useRegisterCommands } from '@/stores/commands';
-import { confirm } from '@/stores/confirm';
 import { TimetableBoard, type BoardFocus } from './board/TimetableBoard';
 import { LessonDialog } from './dialogs/LessonDialog';
 import { MoveDialog } from './dialogs/MoveDialog';
@@ -46,8 +36,6 @@ interface TimetableEditorProps {
   onViewChange: (view: BoardView) => void;
   filters: BoardFilters;
   onFiltersChange: (filters: BoardFilters) => void;
-  /** Створити чернетку-копію з поточної (для опублікованої чи архівної версії). */
-  onCreateDraft: () => void;
   /** Запит «показати пару» ззовні (з порівняння версій). */
   initialFocusLessonId: Uuid | null;
 }
@@ -65,11 +53,16 @@ export function TimetableEditor({
   onViewChange,
   filters,
   onFiltersChange,
-  onCreateDraft,
   initialFocusLessonId,
 }: TimetableEditorProps) {
   const editable = version.status === 'DRAFT';
   const wide = useMediaQuery('(min-width: 1440px)');
+  // на телефоні пʼять днів у 350 px — це «Вст.с…»; там сітка показує один день з перемикачем
+  const phone = useMediaQuery('(max-width: 767px)');
+  const [day, setDay] = useState<Weekday>(() => {
+    const today = new Date().getDay();
+    return (today >= 1 && today <= 5 ? today : 1) as Weekday;
+  });
   const catalog = usePlanningCatalog();
   const windowsQuery = useShiftWindows();
   const lessonsQuery = useVersionLessons(version.id);
@@ -132,15 +125,9 @@ export function TimetableEditor({
     if (editable) setLessonDialog({ lesson, initial: formValuesOf(lesson) });
   };
 
+  // без «Ви впевнені?»: видалення з чернетки скасовується зі сповіщення або Ctrl+Z
   const removeLesson = async (lesson: TemplateLessonDto) => {
-    const confirmed = await confirm({
-      title: 'Видалити пару з чернетки?',
-      description: 'Скасувати можна одразу в сповіщенні або через Ctrl+Z.',
-      objectName: lessonTitle(lesson),
-      tone: 'danger',
-      confirmLabel: 'Видалити',
-    });
-    if (confirmed && (await editing.deleteLesson(lesson))) setSelectedId(null);
+    if (await editing.deleteLesson(lesson)) setSelectedId(null);
   };
 
   const togglePin = (lesson: TemplateLessonDto) =>
@@ -257,6 +244,7 @@ export function TimetableEditor({
         metrics={metricsQuery.data}
         baseline={baseline}
         hardConflicts={conflictsQuery.data?.hard.length ?? version.hardConflicts}
+        softWarnings={conflictsQuery.data?.soft.length ?? version.softWarnings}
         loading={metricsQuery.isPending}
         onShowConflicts={() => {
           setConflictTab('HARD');
@@ -265,15 +253,15 @@ export function TimetableEditor({
       />
 
       {!editable ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-panel border border-default bg-sunken px-4 py-3">
-          <p className="flex min-w-0 flex-1 items-start gap-2 text-ui text-secondary">
-            <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
+        // дія «Створити чернетку» — головна кнопка в заголовку; тут лише пояснення, чому сітка не тягається
+        <p className="flex max-w-prose items-start gap-2 text-ui text-secondary">
+          <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
+          <span>
             {version.status === 'PUBLISHED'
-              ? 'Ця версія опублікована й діє — напряму її не змінюють. Створіть чернетку-копію, правте її і опублікуйте.'
-              : 'Архівна версія — лише для перегляду й порівняння. Її можна скопіювати в нову чернетку.'}
-          </p>
-          <Button onClick={onCreateDraft}>Створити чернетку з цієї версії</Button>
-        </div>
+              ? 'Ця версія опублікована й діє, тому лише для перегляду. Щоб змінити розклад, створіть чернетку.'
+              : 'Архівна версія — лише для перегляду й порівняння.'}
+          </span>
+        </p>
       ) : null}
 
       <div className="grid items-start gap-4 min-[1440px]:grid-cols-[minmax(0,1fr)_20rem]">
@@ -299,30 +287,21 @@ export function TimetableEditor({
               onUndo={() => void editing.undo()}
               onRedo={() => void editing.redo()}
               onAdd={() => openAdd()}
+              day={phone ? day : null}
+              onDayChange={setDay}
             />
-            {!wide ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="mt-2"
-                onClick={() => setPanelOpen(true)}
-                iconStart={<PanelRightOpen aria-hidden="true" className="size-4" />}
-              >
-                Конфлікти: {conflictsQuery.data?.hard.length ?? version.hardConflicts} жорстких · {conflictsQuery.data?.soft.length ?? version.softWarnings} попереджень
-              </Button>
-            ) : null}
           </div>
 
           {loadError ? (
-            <ErrorState
+            <PageErrorBanner
               error={loadError}
               title="Сітку не завантажено"
+              retrying={lessonsQuery.isFetching || windowsQuery.isFetching}
               onRetry={() => {
                 catalog.refetch();
                 if (lessonsQuery.error) void lessonsQuery.refetch();
                 if (windowsQuery.error) void windowsQuery.refetch();
               }}
-              className="rounded-panel border border-default bg-surface"
             />
           ) : loading ? (
             <BoardSkeleton />
@@ -332,38 +311,30 @@ export function TimetableEditor({
                 <EmptyState
                   align="start"
                   size="sm"
-                  title="У версії ще немає жодної пари"
-                  description="Клацніть порожню клітинку групи, щоб додати пару, або згенеруйте розклад з навантаження."
+                  title="У версії ще немає жодної пари."
+                  description={editable ? 'Клацніть порожню клітинку групи, щоб додати пару.' : undefined}
                   action={
-                    editable ? (
-                      <Button size="sm" variant="primary" onClick={() => openAdd()} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-                        Додати пару
-                      </Button>
-                    ) : undefined
-                  }
-                  secondaryAction={
-                    <Link to="/admin/generation" className={buttonClass({ size: 'sm' })}>
+                    <Link to="/admin/generation" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
                       <Cpu aria-hidden="true" className="size-3.5" />
-                      До генератора
+                      Згенерувати з навантаження
                     </Link>
                   }
-                  className="rounded-panel border border-default bg-surface"
                 />
               ) : null}
               {visible.length === 0 ? (
                 <EmptyState
-                  title="За фільтрами нікого не знайдено"
+                  size="sm"
+                  title={filters.query ? `«${filters.query}» не знайдено.` : 'За фільтром нікого немає.'}
                   description={
                     view === 'group'
-                      ? 'Перевірте код групи або курс. Пошук розуміє і латиницю: 4ki1.'
+                      ? 'Пошук розуміє і латиницю: 4ki1.'
                       : 'Викладачі й аудиторії зʼявляються тут, лише якщо мають пари в цій версії.'
                   }
                   action={
-                    <Button size="sm" onClick={() => onFiltersChange(EMPTY_FILTERS)}>
-                      Скинути фільтри
+                    <Button size="sm" variant="ghost" onClick={() => onFiltersChange(EMPTY_FILTERS)}>
+                      Показати всіх
                     </Button>
                   }
-                  className="rounded-panel border border-default bg-surface"
                 />
               ) : (
                 <TimetableBoard
@@ -381,6 +352,7 @@ export function TimetableEditor({
                   onSelect={(lesson) => setSelectedId(lesson.id)}
                   onOpen={openEdit}
                   onAdd={openAdd}
+                  days={phone ? [day] : undefined}
                   onMove={(lesson, target, room) => void editing.moveLesson(lesson, target, room)}
                   onRejected={(_lesson, _target, conflicts) => editing.reportRejected(conflicts)}
                 />
@@ -416,7 +388,11 @@ export function TimetableEditor({
                 Перемістити
               </Button>
             </>
-          ) : null}
+          ) : (
+            <Button size="sm" onClick={() => setPanelOpen(true)} iconStart={<PanelRightOpen aria-hidden="true" className="size-4" />}>
+              Подробиці
+            </Button>
+          )}
         </div>
       ) : null}
 

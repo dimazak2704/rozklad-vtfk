@@ -143,7 +143,7 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
           {(['added', 'removed', 'moved'] as const).map((kind) => (
             <div key={kind} className="flex min-w-24 flex-col bg-surface px-4 py-2">
               <dt className="order-2 text-caption text-secondary">{KIND_META[kind].label}</dt>
-              <dd className={cn('order-1 font-condensed text-headline leading-none font-bold figures', KIND_META[kind].tone)}>
+              <dd className={cn('order-1 text-headline leading-none font-bold figures', KIND_META[kind].tone)}>
                 {diff.isPending ? <Skeleton className="mx-auto h-7 w-8" /> : `${counts[kind] > 0 && kind === 'added' ? '+' : counts[kind] > 0 && kind === 'removed' ? '−' : ''}${counts[kind]}`}
               </dd>
             </div>

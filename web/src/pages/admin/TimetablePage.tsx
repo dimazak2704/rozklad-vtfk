@@ -1,18 +1,18 @@
-import { Cpu, Upload } from 'lucide-react';
+import { CopyPlus, Cpu, FilePlus, Send, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { usePublicMeta } from '@/api/meta';
 import { useTimetableVersions, useVersionConflicts } from '@/api/timetable';
 import type { TemplateLessonDto, Uuid } from '@/api/types';
-import { buttonClass, EmptyState, ErrorState, LoadingRegion, PageHeader, Skeleton } from '@/components/ui';
+import { Button, buttonClass, EmptyState, LoadingRegion, PageErrorBanner, PageHeader, Skeleton, type MoreMenuItem } from '@/components/ui';
 import { CreateVersionDialog } from '@/components/timetable/dialogs/CreateVersionDialog';
 import { PublishDialog } from '@/components/timetable/dialogs/PublishDialog';
 import { DiffView } from '@/components/timetable/DiffView';
 import { EMPTY_FILTERS } from '@/components/timetable/model/grid';
-import { pickVersion, publishedVersion } from '@/components/timetable/model/versions';
+import { pickVersion, publishedVersion, versionSentence } from '@/components/timetable/model/versions';
 import { TimetableEditor } from '@/components/timetable/TimetableEditor';
 import { useEditorUrlState } from '@/components/timetable/useEditorUrlState';
-import { VersionBar } from '@/components/timetable/VersionBar';
+import { ModeSwitch, VersionSelect } from '@/components/timetable/VersionBar';
 import { todayInKyiv } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -63,10 +63,44 @@ export default function TimetablePage() {
     setUrl({ mode: 'grid', view: 'group', filters: { ...EMPTY_FILTERS, query: lesson.group.code } });
   };
 
+  // головна дія одна: для чернетки — опублікувати, для опублікованої чи архівної — почати чернетку з неї
+  const primaryAction = selected ? (
+    selected.status === 'DRAFT' ? (
+      <Button variant="primary" onClick={() => setPublishOpen(true)} iconStart={<Send aria-hidden="true" className="size-4" />}>
+        Опублікувати
+      </Button>
+    ) : (
+      <Button variant="primary" onClick={() => setCreateRequest({ copyFromId: selected.id })} iconStart={<CopyPlus aria-hidden="true" className="size-4" />}>
+        Створити чернетку
+      </Button>
+    )
+  ) : undefined;
+
+  const more: MoreMenuItem[] = selected
+    ? [
+        ...(selected.status === 'DRAFT'
+          ? [{ label: 'Нова версія (копія цієї)', icon: <CopyPlus aria-hidden="true" className="size-4" />, onSelect: () => setCreateRequest({ copyFromId: selected.id }) }]
+          : []),
+        { label: 'Порожня версія', icon: <FilePlus aria-hidden="true" className="size-4" />, onSelect: () => setCreateRequest({ copyFromId: null }) },
+        { label: 'Імпорт з Excel', icon: <Upload aria-hidden="true" className="size-4" />, to: '/admin/import', separatorBefore: true },
+        { label: 'Генератор', icon: <Cpu aria-hidden="true" className="size-4" />, to: '/admin/generation' },
+      ]
+    : [];
+
   const header = (
     <PageHeader
       title="Базовий розклад"
-      description="Тижневий шаблон чисельника й знаменника для всіх груп: перетягуйте пари, стежте за конфліктами, порівнюйте версії й публікуйте з потрібної дати."
+      meta={selected ? versionSentence(selected) : undefined}
+      controls={
+        selected ? (
+          <>
+            <VersionSelect versions={list} selected={selected} onSelect={(versionId) => setUrl({ versionId, mode: url.mode })} />
+            <ModeSwitch mode={url.mode} onModeChange={(mode) => setUrl({ mode })} />
+          </>
+        ) : undefined
+      }
+      primaryAction={primaryAction}
+      more={more}
     />
   );
 
@@ -74,11 +108,11 @@ export default function TimetablePage() {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ErrorState
+        <PageErrorBanner
           error={meta.error ?? versions.error}
           title="Версії розкладу не завантажено"
+          retrying={meta.isFetching || versions.isFetching}
           onRetry={() => void (meta.error ? meta.refetch() : versions.refetch())}
-          className="rounded-panel border border-default bg-surface"
         />
       </div>
     );
@@ -89,8 +123,8 @@ export default function TimetablePage() {
       <div className="flex flex-col gap-6">
         {header}
         <LoadingRegion label="Завантажуємо версії розкладу…" className="flex flex-col gap-4">
-          <Skeleton className="h-14 w-full rounded-panel" />
-          <Skeleton className="h-16 w-full rounded-panel" />
+          <Skeleton className="h-5 w-2/3 max-w-xl" />
+          <Skeleton className="h-11 w-full max-w-2xl rounded-control" />
           <Skeleton className="h-96 w-full rounded-panel" />
         </LoadingRegion>
       </div>
@@ -102,26 +136,25 @@ export default function TimetablePage() {
       <div className="flex flex-col gap-6">
         {header}
         <EmptyState
-          title={`Для «${semester.name}» ще немає жодної версії розкладу`}
-          description="Імпортуйте розклад з Excel коледжу, створіть порожню версію й заповніть її вручну або згенеруйте з навантаження."
+          title={`Для «${semester.name}» ще немає розкладу.`}
+          description="Найшвидше — імпортувати розклад коледжу з Excel. Можна й створити порожню версію або згенерувати з навантаження."
           action={
-            <button type="button" className={buttonClass({ variant: 'primary' })} onClick={() => setCreateRequest({ copyFromId: null })}>
-              Створити версію
-            </button>
+            <Link to="/admin/import" className={buttonClass({ variant: 'primary' })}>
+              <Upload aria-hidden="true" className="size-4" />
+              Імпорт з Excel
+            </Link>
           }
           secondaryAction={
             <span className="flex flex-wrap gap-2">
-              <Link to="/admin/import" className={buttonClass()}>
-                <Upload aria-hidden="true" className="size-4" />
-                Імпорт з Excel
-              </Link>
-              <Link to="/admin/generation" className={buttonClass()}>
+              <button type="button" className={buttonClass()} onClick={() => setCreateRequest({ copyFromId: null })}>
+                Порожня версія
+              </button>
+              <Link to="/admin/generation" className={buttonClass({ variant: 'ghost' })}>
                 <Cpu aria-hidden="true" className="size-4" />
                 Генератор
               </Link>
             </span>
           }
-          className="rounded-panel border border-default bg-surface"
         />
         <CreateVersionDialog
           request={createRequest}
@@ -137,15 +170,6 @@ export default function TimetablePage() {
   return (
     <div className="flex flex-col gap-4">
       {header}
-      <VersionBar
-        versions={list}
-        selected={selected}
-        onSelect={(versionId) => setUrl({ versionId, mode: url.mode })}
-        mode={url.mode}
-        onModeChange={(mode) => setUrl({ mode })}
-        onCreate={() => setCreateRequest({ copyFromId: selected.id })}
-        onPublish={() => setPublishOpen(true)}
-      />
 
       {url.mode === 'diff' ? (
         <DiffView
@@ -164,7 +188,6 @@ export default function TimetablePage() {
           onViewChange={(view) => setUrl({ view })}
           filters={url.filters}
           onFiltersChange={(filters) => setUrl({ filters })}
-          onCreateDraft={() => setCreateRequest({ copyFromId: selected.id })}
           initialFocusLessonId={focusLessonId}
         />
       )}

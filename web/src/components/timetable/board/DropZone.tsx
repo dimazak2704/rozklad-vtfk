@@ -54,7 +54,7 @@ export function DropZone({ target, isOrigin, occupied, store }: DropZoneProps) {
       ref={setNodeRef}
       aria-hidden="true"
       className={cn(
-        'pointer-events-none absolute inset-x-0.5 z-20 flex items-center justify-center rounded-plate transition-[background-color,border-color] duration-100',
+        'pointer-events-none absolute inset-x-0.5 z-20 flex items-center justify-center rounded-tag transition-[background-color,border-color] duration-100',
         target.parity === 'BOTH' && 'inset-y-0.5',
         target.parity === 'NUMERATOR' && 'top-0.5 h-[calc(50%-0.1875rem)]',
         target.parity === 'DENOMINATOR' && 'bottom-0.5 h-[calc(50%-0.1875rem)]',
