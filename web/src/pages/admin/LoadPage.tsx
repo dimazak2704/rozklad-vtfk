@@ -1,4 +1,4 @@
-import { GitMerge, Pencil, Plus, Search, Trash } from 'lucide-react';
+import { GitMerge, ListFilter, Pencil, Plus, Search, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSemesters, activeSemesterOf, useShiftWindows } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
@@ -7,21 +7,24 @@ import type { LoadSource } from '@/api/types';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { DeriveDialog } from '@/components/load/DeriveDialog';
-import { CONTROL_FORM_LABEL, LOAD_SOURCE_HINT, LOAD_SOURCE_LABEL, LOAD_SOURCE_TONE } from '@/components/load/labels';
+import { CONTROL_FORM_LABEL, LOAD_SOURCE_HINT, LOAD_SOURCE_LABEL } from '@/components/load/labels';
 import { LoadFormDialog } from '@/components/load/LoadForm';
 import { formatHours, pairsPerWeek } from '@/components/load/pattern';
 import { WeeklyPatternView } from '@/components/load/WeeklyPatternView';
+import { Link } from 'react-router';
 import {
-  Badge,
   Button,
+  buttonClass,
   Combobox,
   DataTable,
   EmptyState,
-  ErrorState,
   Input,
+  PageErrorBanner,
   PageHeader,
   Panel,
-  Plate,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   RowActions,
   Select,
   Skeleton,
@@ -81,7 +84,7 @@ export default function LoadPage() {
               header: 'Група',
               width: '6rem',
               sortValue: (item: LoadItem) => item.group.code,
-              cell: (item: LoadItem) => <Plate size="sm">{item.group.code}</Plate>,
+              cell: (item: LoadItem) => <span className="figures font-semibold">{item.group.code}</span>,
             } satisfies DataTableColumn<LoadItem>,
           ]),
       {
@@ -94,26 +97,12 @@ export default function LoadPage() {
           <span className="flex min-w-0 flex-col">
             <span className="flex items-center gap-2">
               <span data-line={disciplineLine(item.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
-              <span className="font-condensed text-body font-bold">{item.discipline.shortName}</span>
-              {item.splitSubgroups ? (
-                <Badge size="sm" tone="neutral">
-                  за підгрупами
-                </Badge>
-              ) : null}
-              {item.lessonKind !== 'MIXED' ? (
-                <Badge size="sm" tone="neutral">
-                  {LESSON_KIND_LABEL[item.lessonKind]}
-                </Badge>
-              ) : null}
-              {item.controlForm !== 'NONE' ? (
-                <Badge size="sm" tone="accent">
-                  {CONTROL_FORM_LABEL[item.controlForm].toLocaleLowerCase('uk')}
-                </Badge>
-              ) : null}
+              <span className="text-cell font-[650]">{item.discipline.shortName}</span>
             </span>
-            {item.discipline.name !== item.discipline.shortName ? (
-              <span className="line-clamp-1 text-caption font-normal text-muted" title={item.discipline.name}>
-                {item.discipline.name}
+            {/* повна назва й особливості одним тихим рядком, а не трьома «табличками» */}
+            {disciplineNote(item) ? (
+              <span className="line-clamp-1 ps-4 text-caption font-normal text-muted" title={disciplineNote(item)}>
+                {disciplineNote(item)}
               </span>
             ) : null}
           </span>
@@ -139,7 +128,8 @@ export default function LoadPage() {
         header: 'За семестр',
         numeric: true,
         width: '7rem',
-        hideBelow: 'sm',
+        hideBelow: 'md',
+        className: 'max-md:hidden!',
         sortValue: (item) => item.plannedHours,
         cell: (item) => `${item.plannedHours} год`,
       },
@@ -167,13 +157,12 @@ export default function LoadPage() {
         header: 'Джерело',
         // на планшеті джерело видно у фільтрі «Джерело», а ширина потрібна викладачам
         hideBelow: 'lg',
+        className: 'max-md:hidden!',
         sortValue: (item) => LOAD_SOURCE_LABEL[item.source],
         cell: (item) => (
           <Tooltip content={item.note ? `${LOAD_SOURCE_HINT[item.source]} ${item.note}` : LOAD_SOURCE_HINT[item.source]}>
-            <span tabIndex={0} className="inline-flex rounded-plate">
-              <Badge size="sm" tone={LOAD_SOURCE_TONE[item.source]}>
-                {LOAD_SOURCE_LABEL[item.source]}
-              </Badge>
+            <span tabIndex={0} className="inline-flex rounded-tag text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+              {LOAD_SOURCE_LABEL[item.source]}
             </span>
           </Tooltip>
         ),
@@ -200,52 +189,52 @@ export default function LoadPage() {
       </div>
     );
   }
-  if (semesters.isError) return <ErrorState error={semesters.error} onRetry={() => void semesters.refetch()} />;
+  if (semesters.isError) {
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Навантаження" />
+        <PageErrorBanner error={semesters.error} title="Семестри не завантажено" retrying={semesters.isFetching} onRetry={() => void semesters.refetch()} />
+      </div>
+    );
+  }
   if (!semester) {
     return (
       <div className="flex flex-col gap-5">
         <PageHeader title="Навантаження" />
-        <EmptyState title="Семестрів ще немає" description="Створіть семестр у календарі — навантаження рахується в межах семестру." />
+        <EmptyState
+          title="Семестрів ще немає."
+          description="Навантаження рахується в межах семестру."
+          action={
+            <Link to="/admin/calendar" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
+              Створити семестр у календарі
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   const summary = groupId && items.data ? groupSummary(items.data) : null;
+  const extraFilters = (source ? 1 : 0) + (semester.id !== activeSemesterOf(semesters.data)?.id ? 1 : 0);
   const capacity = group ? weeklyCapacity(shiftWindows.data ?? [], group.shift) : null;
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Навантаження"
-        description="Скільки годин на тиждень кожна група має з кожної дисципліни і хто їх веде. Генератор розкладу будує сітку саме з цього."
-        actions={
-          <>
-            <Button variant="secondary" iconStart={<GitMerge aria-hidden="true" className="size-4" />} onClick={() => setDeriving(true)}>
-              Вивести з розкладу
-            </Button>
-            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-              Додати навантаження
-            </Button>
-          </>
+        primaryAction={
+          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+            Додати навантаження
+          </Button>
         }
+        more={[{ label: 'Вивести з розкладу', icon: <GitMerge aria-hidden="true" className="size-4" />, onSelect: () => setDeriving(true) }]}
       />
 
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-caption font-semibold text-secondary">
-          Семестр
-          <Select<string>
-            size="sm"
-            className="w-60"
-            value={semester.id}
-            onValueChange={(value) => table.set({ semester: value === activeSemesterOf(semesters.data)?.id ? null : value })}
-            options={semesters.data.map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-caption font-semibold text-secondary">
+        <label className={FILTER_LABEL}>
           Група
           <Combobox
-            size="sm"
-            className="w-44"
+            className="w-full sm:w-44"
             value={groupId}
             onValueChange={(value) => table.set({ group: value })}
             options={(groups.items ?? []).map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс` }))}
@@ -255,19 +244,8 @@ export default function LoadPage() {
             clearable
           />
         </label>
-        <label className="flex flex-col gap-1 text-caption font-semibold text-secondary">
-          Джерело
-          <Select<string>
-            size="sm"
-            className="w-48"
-            value={source ?? ALL}
-            onValueChange={(value) => table.set({ source: value === ALL ? null : value })}
-            options={[{ value: ALL, label: 'Будь-яке' }, ...SOURCES.map((s) => ({ value: s, label: LOAD_SOURCE_LABEL[s] }))]}
-          />
-        </label>
         <Input
           type="search"
-          size="sm"
           value={table.q}
           onChange={(event) => table.set({ q: event.target.value })}
           placeholder="Дисципліна або викладач"
@@ -275,57 +253,72 @@ export default function LoadPage() {
           aria-label="Пошук у навантаженні"
           wrapperClassName="w-full sm:w-64"
         />
+        {/* семестр і джерело змінюють рідко — вони за кнопкою «Фільтр», а не чотирма полями в ряд */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />}>
+              Фільтр
+              {extraFilters > 0 ? (
+                <span aria-hidden="true" className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures">
+                  {extraFilters}
+                </span>
+              ) : null}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent title="Що показати" width="md">
+            <div className="flex flex-col gap-4">
+              <label className={FILTER_LABEL}>
+                Семестр
+                <Select<string>
+                  className="w-full"
+                  value={semester.id}
+                  onValueChange={(value) => table.set({ semester: value === activeSemesterOf(semesters.data)?.id ? null : value })}
+                  options={semesters.data.map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
+                />
+              </label>
+              <label className={FILTER_LABEL}>
+                Джерело годин
+                <Select<string>
+                  className="w-full"
+                  value={source ?? ALL}
+                  onValueChange={(value) => table.set({ source: value === ALL ? null : value })}
+                  options={[{ value: ALL, label: 'Будь-яке' }, ...SOURCES.map((s) => ({ value: s, label: LOAD_SOURCE_LABEL[s] }))]}
+                />
+              </label>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
+      {semester.id !== activeSemesterOf(semesters.data)?.id ? <p className="-mt-2 text-caption text-secondary">Показано {semester.name}.</p> : null}
 
       {summary && group ? (
-        <Panel flush>
-          <dl className="flex flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Plate size="lg">{group.code}</Plate>
-              <span className="text-caption text-muted">{group.shift} зміна</span>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-caption text-muted">Годин на тиждень</dt>
-              <dd className="font-condensed text-title font-bold figures text-primary">{formatHours(summary.hours)}</dd>
-            </div>
-            <div className="flex min-w-56 flex-col gap-1">
-              <dt className="text-caption text-muted">Пар на тиждень у середньому</dt>
-              <dd className="flex items-center gap-3">
-                <span className="font-condensed text-title font-bold figures text-primary">{formatHours(summary.pairs)}</span>
-                {capacity ? (
-                  <span className="flex flex-1 flex-col gap-1">
-                    <span
-                      role="meter"
-                      aria-label="Заповнення тижня групи"
-                      aria-valuemin={0}
-                      aria-valuemax={capacity}
-                      aria-valuenow={summary.pairs}
-                      className="relative h-2 overflow-hidden rounded-full bg-sunken"
-                    >
-                      <span
-                        className={`absolute inset-y-0 start-0 rounded-full ${summary.pairs > capacity ? 'bg-[var(--fill-cancel)]' : 'bg-accent'}`}
-                        style={{ width: `${Math.min(100, (summary.pairs / capacity) * 100)}%` }}
-                      />
-                    </span>
-                    <span className="text-meta text-muted figures">з {capacity} місць у сітці зміни</span>
-                  </span>
-                ) : null}
-              </dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-caption text-muted">За семестр</dt>
-              <dd className="font-condensed text-title font-bold figures text-primary">{summary.planned} год</dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-caption text-muted">Без викладача</dt>
-              <dd className={`font-condensed text-title font-bold figures ${summary.unassigned > 0 ? 'text-change' : 'text-primary'}`}>
-                {summary.unassigned}
-              </dd>
-            </div>
-          </dl>
-        </Panel>
+        <section aria-label={`Тиждень групи ${group.code}`} className="flex max-w-3xl flex-col gap-2">
+          <p className="text-body text-secondary">
+            <span className="font-[650] text-primary">{group.code}</span>, {group.shift} зміна: {formatHours(summary.hours)} год на тиждень, у середньому{' '}
+            {formatHours(summary.pairs)} {capacity ? `пар із ${capacity} місць у сітці` : 'пар'}; за семестр {summary.planned} год.
+            {summary.unassigned > 0 ? (
+              <span className="text-change"> {countLabel(summary.unassigned, ['дисципліна', 'дисципліни', 'дисциплін'])} без викладача.</span>
+            ) : null}
+          </p>
+          {capacity ? (
+            <span
+              role="meter"
+              aria-label="Заповнення тижня групи"
+              aria-valuemin={0}
+              aria-valuemax={capacity}
+              aria-valuenow={summary.pairs}
+              className="relative h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-[var(--fill-track-future)]"
+            >
+              <span
+                className={`absolute inset-y-0 start-0 rounded-full ${summary.pairs > capacity ? 'bg-[var(--fill-cancel)]' : 'bg-accent'}`}
+                style={{ width: `${Math.min(100, (summary.pairs / capacity) * 100)}%` }}
+              />
+            </span>
+          ) : null}
+        </section>
       ) : null}
 
+      <Panel flush>
       <DataTable
         caption={group ? `Навантаження групи ${group.code}` : `Навантаження: ${semester.name}`}
         columns={columns}
@@ -356,38 +349,30 @@ export default function LoadPage() {
           table.filtered ? (
             <EmptyState
               size="sm"
-              title="Нічого не знайдено"
-              description="Змініть пошук чи джерело, або подивіться всі групи."
+              title={table.q ? `«${table.q}» не знайдено.` : 'За цими умовами нічого немає.'}
               action={
-                <Button size="sm" variant="secondary" onClick={table.reset}>
-                  Скинути фільтри
+                <Button size="sm" variant="ghost" onClick={table.reset}>
+                  Показати все навантаження
                 </Button>
               }
             />
           ) : (
             <EmptyState
               size="sm"
-              title={group ? `У ${group.code} ще немає навантаження` : 'Навантаження ще немає'}
-              description="Виведіть його з опублікованого розкладу одним кліком або додайте дисципліни вручну."
+              title={group ? `У ${group.code} ще немає навантаження.` : 'Навантаження ще немає.'}
+              description="Найшвидше — вивести його з опублікованого розкладу."
               action={
-                <Button size="sm" variant="primary" iconStart={<GitMerge aria-hidden="true" className="size-4" />} onClick={() => setDeriving(true)}>
+                <Button size="sm" variant="secondary" iconStart={<GitMerge aria-hidden="true" className="size-4" />} onClick={() => setDeriving(true)}>
                   Вивести з розкладу
-                </Button>
-              }
-              secondaryAction={
-                <Button size="sm" variant="secondary" onClick={openNew}>
-                  Додати вручну
                 </Button>
               }
             />
           )
         }
       />
-      {items.data && !groupId ? (
-        <p className="text-caption text-muted">
-          {countLabel(filtered.length, ['запис', 'записи', 'записів'])} у{' '}
-          {countLabel(new Set(filtered.map((i) => i.group.id)).size, ['групі', 'групах', 'групах'])}. Оберіть групу, щоб побачити підсумок тижня.
-        </p>
+      </Panel>
+      {items.data && !groupId && filtered.length > 0 ? (
+        <p className="text-caption text-muted">Оберіть групу, щоб побачити, як заповнено її тиждень.</p>
       ) : null}
 
       {editing ? (
@@ -413,6 +398,18 @@ export default function LoadPage() {
       />
     </div>
   );
+}
+
+const FILTER_LABEL = 'flex w-full flex-col gap-1 text-caption font-[650] text-primary sm:w-auto';
+
+/** Другий рядок дисципліни: повна назва, вид занять, форма контролю, поділ на підгрупи. */
+function disciplineNote(item: LoadItem): string {
+  const parts: string[] = [];
+  if (item.discipline.name !== item.discipline.shortName) parts.push(item.discipline.name);
+  if (item.lessonKind !== 'MIXED') parts.push(LESSON_KIND_LABEL[item.lessonKind]);
+  if (item.controlForm !== 'NONE') parts.push(CONTROL_FORM_LABEL[item.controlForm].toLocaleLowerCase('uk'));
+  if (item.splitSubgroups) parts.push('за підгрупами');
+  return parts.join(' · ');
 }
 
 function groupSummary(items: readonly LoadItem[]) {

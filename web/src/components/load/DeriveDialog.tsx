@@ -72,7 +72,7 @@ export function DeriveDialog({ semester, open, onOpenChange }: DeriveDialogProps
               ].map((stat) => (
                 <div key={stat.label} className="flex flex-col gap-0.5 rounded-panel border border-default px-3 py-2">
                   <dt className="text-caption text-muted">{stat.label}</dt>
-                  <dd className="font-condensed text-headline font-bold figures text-primary">{stat.value}</dd>
+                  <dd className="text-headline font-bold figures text-primary">{stat.value}</dd>
                 </div>
               ))}
             </dl>

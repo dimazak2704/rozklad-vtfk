@@ -4,7 +4,7 @@ import { patternDescription, patternLabel, type WeeklyPattern } from './pattern'
 
 interface WeeklyPatternViewProps {
   pattern: WeeklyPattern;
-  /** Колір лінії дисципліни (data-line) для клітинок. */
+  /** Лінія дисципліни (data-line) — лишається для сумісності; клітинки нейтральні. */
   line?: number;
   size?: 'sm' | 'md';
   className?: string;
@@ -36,7 +36,7 @@ export function WeeklyPatternView({ pattern, line, size = 'sm', className }: Wee
         role="img"
         aria-label={`Шаблон тижня ${label}: ${patternDescription(pattern)}`}
         data-line={line}
-        className={cn('inline-flex items-center gap-2 rounded-plate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus', className)}
+        className={cn('inline-flex items-center gap-2 rounded-tag focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus', className)}
       >
         <span aria-hidden="true" className="flex flex-col gap-0.5">
           {rows.map((row) => (
@@ -51,12 +51,8 @@ export function WeeklyPatternView({ pattern, line, size = 'sm', className }: Wee
                     className={cn(
                       cell,
                       'rounded-[2px]',
-                      filled
-                        ? line !== undefined
-                          ? 'bg-[var(--line-dot)]'
-                          : 'bg-[var(--fill-accent)]'
-                        : 'border border-dashed border-[var(--border-color-strong)]',
-                      isHalf && filled && 'opacity-80',
+                      // колір дисципліни — лише крапка біля назви, не заливка (DESIGN §3.4): клітинки нейтральні
+                      filled ? 'bg-[var(--fill-muted)]' : 'border border-dashed border-[var(--border-color-control)]',
                     )}
                   />
                 );
@@ -64,7 +60,7 @@ export function WeeklyPatternView({ pattern, line, size = 'sm', className }: Wee
             </span>
           ))}
         </span>
-        <span className="font-condensed text-ui font-bold whitespace-nowrap figures text-primary">{label}</span>
+        <span className="text-ui font-bold whitespace-nowrap figures text-primary">{label}</span>
       </span>
     </Tooltip>
   );
