@@ -1,4 +1,4 @@
-import { Cpu } from 'lucide-react';
+import { Cpu, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { isApiError } from '@/api/errors';
@@ -18,9 +18,9 @@ import { BaselinePanel } from '@/components/generation/BaselinePanel';
 import { GenerationForm } from '@/components/generation/GenerationForm';
 import { JobHistory } from '@/components/generation/JobHistory';
 import { JobPanel } from '@/components/generation/JobPanel';
-import { initialForm, toJobRequest, type GenerationFormState } from '@/components/generation/model';
+import { initialForm, toJobRequest, validateForm, type GenerationFormState } from '@/components/generation/model';
 import { publishedVersion } from '@/components/timetable/model/versions';
-import { EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
+import { Button, EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
 
 /**
@@ -39,6 +39,7 @@ export default function GenerationPage() {
   const start = useStartGeneration();
   const cancel = useCancelGeneration();
   const [draft, setDraft] = useState<GenerationFormState | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   useGenerationLiveUpdates(selectedJobId);
 
   const published = publishedVersion(versions.data ?? []);
@@ -66,6 +67,9 @@ export default function GenerationPage() {
 
   const launch = async () => {
     if (!semesterId) return;
+    // помилки полів показуємо лише після спроби запуску; невалідну форму не відправляємо
+    setSubmitted(true);
+    if (Object.keys(validateForm(form)).length > 0) return;
     try {
       const created = await start.mutateAsync(toJobRequest(form, semesterId));
       selectJob(created.jobId);
@@ -97,7 +101,24 @@ export default function GenerationPage() {
     },
   ]);
 
-  const header = <PageHeader title="Генератор розкладу" />;
+  const formReady = !(meta.isPending || versions.isPending || catalog.isPending);
+  // головна дія — у заголовку, а не під довгою формою: її видно одразу на будь-якому екрані
+  const header = (
+    <PageHeader
+      title="Генератор розкладу"
+      primaryAction={
+        <Button
+          variant="primary"
+          onClick={() => void launch()}
+          disabled={busy || !formReady || !semesterId}
+          loading={start.isPending}
+          iconStart={<Play aria-hidden="true" className="size-4" />}
+        >
+          Запустити генерацію
+        </Button>
+      }
+    />
+  );
 
   const loadError = meta.error ?? versions.error ?? catalog.error;
   if (loadError) {
@@ -122,7 +143,7 @@ export default function GenerationPage() {
     <div className="flex flex-col gap-6">
       {header}
       <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
-        {meta.isPending || versions.isPending || catalog.isPending ? (
+        {!formReady ? (
           <LoadingRegion label="Завантажуємо параметри…" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
             {Array.from({ length: 7 }, (_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
@@ -135,8 +156,7 @@ export default function GenerationPage() {
             groups={catalog.data?.groups ?? []}
             versions={versions.data ?? []}
             busy={busy}
-            starting={start.isPending}
-            onStart={() => void launch()}
+            submitted={submitted}
           />
         )}
 
@@ -161,12 +181,13 @@ export default function GenerationPage() {
             />
           ) : (
             <div className="flex flex-col gap-6 lg:pt-2">
+              {baseVersion ? <BaselinePanel version={baseVersion} /> : null}
               <EmptyState
+                align="start"
                 title="Генератор у цьому семестрі ще не запускали."
-                description="Натисніть «Запустити генерацію» — хід розвʼязання зʼявиться тут наживо. Результат стане новою чернеткою, опублікований розклад не зміниться."
+                description="Хід розвʼязання зʼявиться тут наживо. Результат стане новою чернеткою, опублікований розклад не зміниться."
                 className="py-0"
               />
-              {baseVersion ? <BaselinePanel version={baseVersion} /> : null}
             </div>
           )}
           {jobs.data && jobs.data.length > 0 ? <JobHistory jobs={jobs.data} selectedId={selectedJobId} onSelect={selectJob} /> : null}

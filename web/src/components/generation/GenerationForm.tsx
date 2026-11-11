@@ -1,5 +1,5 @@
-import { Play, RotateCcw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { useMemo } from 'react';
 import { DEFAULT_WEIGHTS } from '@/api/generation';
 import type { PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
 import { Button, Chip, Combobox, Field, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
@@ -19,16 +19,15 @@ interface GenerationFormProps {
   versions: readonly TimetableVersionDto[];
   /** Задача вже йде — нову не запускаємо, форму блокуємо. */
   busy: boolean;
-  starting: boolean;
-  onStart: () => void;
+  /** Після спроби запуску — показати помилки полів (кнопка запуску в заголовку сторінки). */
+  submitted: boolean;
 }
 
 /**
  * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
  * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
  */
-export function GenerationForm({ form, onChange, groups, versions, busy, starting, onStart }: GenerationFormProps) {
-  const [submitted, setSubmitted] = useState(false);
+export function GenerationForm({ form, onChange, groups, versions, busy, submitted }: GenerationFormProps) {
   const errors = submitted ? validateForm(form) : {};
   const groupOptions = useMemo(
     () =>
@@ -44,28 +43,8 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
         ? `Груп у вибраних курсах: ${groups.filter((g) => form.courses.includes(g.course)).length}. Пари інших груп лишаються як у базовій версії.`
         : 'Пари інших груп лишаються як у базовій версії.';
 
-  const start = () => {
-    setSubmitted(true);
-    if (Object.keys(validateForm(form)).length === 0) onStart();
-  };
-
   return (
-    <Panel
-      title="Параметри"
-      footer={
-        <Button
-          variant="primary"
-          size="lg"
-          className="w-full"
-          onClick={start}
-          disabled={busy}
-          loading={starting}
-          iconStart={<Play aria-hidden="true" className="size-4" />}
-        >
-          Запустити генерацію
-        </Button>
-      }
-    >
+    <Panel title="Параметри">
       <fieldset disabled={busy} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <RadioGroup<ScopeMode>

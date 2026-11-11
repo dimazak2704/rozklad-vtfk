@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { GenerationJobDto, MetricsDto } from '@/api/types';
-import { comparisonRows, timeTicks, usableMetrics } from './model';
+import type { GenerationJobDto, MetricsDto, TimetableVersionDto } from '@/api/types';
+import { baselineSentence, comparisonRows, timeTicks, usableMetrics } from './model';
 
 const metrics = (values: Partial<MetricsDto>): MetricsDto => ({
   groupWindows: 0,
@@ -70,5 +70,15 @@ describe('генератор: «Було / Стало»', () => {
     const long = timeTicks(600);
     expect(new Set(long).size).toBe(long.length);
     expect(long.at(-1)).toBeLessThanOrEqual(600);
+  });
+});
+
+describe('стан базової версії', () => {
+  const version = (hardConflicts: number, values: Partial<MetricsDto>) => ({ hardConflicts, metrics: metrics(values) }) as unknown as TimetableVersionDto;
+
+  it('одне число, що вирішує, — конфлікти; решта метрик не перелічується', () => {
+    expect(baselineSentence(version(75, { teacherWindows: 180, brokenDays: 34 }))).toBe('75\u00a0жорстких конфліктів.');
+    expect(baselineSentence(version(0, { teacherWindows: 3 }))).toBe('Конфліктів немає, лишились вікна чи рвані дні.');
+    expect(baselineSentence(version(0, {}))).toBe('Конфліктів і вікон немає.');
   });
 });

@@ -168,10 +168,6 @@ export const WEIGHT_MAX = 30;
 
 const BASELINE_FORMS = {
   hard: ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'],
-  teacherWindows: ['вікно викладачів', 'вікна викладачів', 'вікон викладачів'],
-  groupWindows: ['вікно груп', 'вікна груп', 'вікон груп'],
-  brokenDays: ['рваний день', 'рвані дні', 'рваних днів'],
-  latePairs: ['пізня пара', 'пізні пари', 'пізніх пар'],
 } as const;
 
 /**
@@ -179,13 +175,9 @@ const BASELINE_FORMS = {
  * плитки з числами не потрібні — після запуску з'явиться таблиця «Було і стало».
  */
 export function baselineSentence(version: TimetableVersionDto): string {
+  // одне число, що вирішує: конфлікти; вікна й рвані дні — у «Подробицях» редактора розкладу
+  if (version.hardConflicts > 0) return `${countLabel(version.hardConflicts, BASELINE_FORMS.hard)}.`;
   const m = version.metrics;
-  const parts: string[] = [];
-  if (version.hardConflicts > 0) parts.push(countLabel(version.hardConflicts, BASELINE_FORMS.hard));
-  if (m) {
-    for (const key of ['teacherWindows', 'groupWindows', 'brokenDays', 'latePairs'] as const) {
-      if (m[key] > 0) parts.push(countLabel(m[key], BASELINE_FORMS[key]));
-    }
-  }
-  return parts.length > 0 ? `${parts.join(', ')}.` : 'Конфліктів і вікон немає.';
+  const soft = m ? m.teacherWindows + m.groupWindows + m.brokenDays + m.latePairs : 0;
+  return soft > 0 ? 'Конфліктів немає, лишились вікна чи рвані дні.' : 'Конфліктів і вікон немає.';
 }
