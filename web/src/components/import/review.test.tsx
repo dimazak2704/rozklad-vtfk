@@ -98,8 +98,38 @@ describe('рішення щодо назв', () => {
     });
     renderWithProviders(<MappingPanel job={program} />);
 
-    expect(screen.getByRole('radio', { name: 'Зіставити з наявним' })).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: 'Створити групу' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Обрати групу' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Створити групу' })).not.toBeInTheDocument();
+  });
+
+  it('схожий запис — одна відповідь «Так», решта варіантів у «⋯»', async () => {
+    const user = userEvent.setup();
+    const timetable = job({
+      kind: 'TIMETABLE_XLSX',
+      report: [
+        row({
+          severity: 'WARN',
+          type: 'TEACHER',
+          raw: 'Граболінська',
+          location: 'Розклад · 1ТК2 · понеділок, 2 пара',
+          message: 'Схоже на одруківку.',
+          suggestions: [{ id: 't-1', label: 'Гарболінська', score: 0.93 }],
+        }),
+      ],
+    });
+    renderWithProviders(<MappingPanel job={timetable} />);
+
+    // у спокої — лише пропозиція й «Так», без трьох перемикачів і пояснення на кожному рядку
+    expect(screen.getByText('Схоже на «Гарболінська»')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByText('Схоже на одруківку.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Так, це «Гарболінська»' }));
+    expect(screen.getByText(/Це «Гарболінська»/)).toHaveTextContent('написання запамʼятаємо');
+
+    await user.click(screen.getByRole('button', { name: 'Дії: «Граболінська»' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Створити викладача' }));
+    expect(screen.getByText('Створимо нового викладача')).toBeInTheDocument();
   });
 });
 

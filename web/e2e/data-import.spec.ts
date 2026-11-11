@@ -46,7 +46,9 @@ test.describe('імпорт', () => {
       await page.getByRole('button', { name: `Так, це «${target}»` }).click();
     }
     const truncated = page.getByRole('listitem').filter({ hasText: '«Вс.»' });
-    await truncated.getByRole('radio', { name: 'Створити дисципліну' }).click();
+    // у «Вс.» є схожі записи, тож «Створити» — у «⋯» рядка
+    await truncated.getByRole('button', { name: 'Дії: «Вс.»' }).click();
+    await page.getByRole('menuitem', { name: 'Створити дисципліну' }).click();
     await page.getByRole('button', { name: 'Зберегти рішення' }).click();
     await expect(applyPanel).toContainText('Готово до застосування');
 

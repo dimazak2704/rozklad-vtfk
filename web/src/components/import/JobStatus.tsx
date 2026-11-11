@@ -36,7 +36,8 @@ export function JobStatusBadge({ status }: { status: ImportJobStatus }) {
 export function JobSummary({ job }: { job: Pick<ImportJob, 'status' | 'summary' | 'error'> }) {
   if (job.status === 'FAILED') {
     return (
-      <span className="line-clamp-1 text-caption text-danger" title={job.error ?? undefined}>
+      // причину збою треба прочитати повністю: переносимо, а не обрізаємо
+      <span className="text-caption text-pretty text-danger">
         {job.error ?? 'Файл не вдалося розібрати.'}
       </span>
     );

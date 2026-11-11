@@ -250,9 +250,19 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
             )}
           >
             <Upload aria-hidden="true" className={cn('size-6 text-muted transition-transform duration-150', dragging && 'text-accent motion-safe:-translate-y-0.5')} />
-            <span className="text-body font-semibold text-primary">{dragging ? 'Відпустіть, щоб додати файл' : 'Перетягніть файл сюди або виберіть'}</span>
+            <span className="text-body font-semibold text-primary">
+              {dragging ? (
+                'Відпустіть, щоб додати файл'
+              ) : (
+                <>
+                  {/* на дотику перетягувати нічого — там уся зона просто кнопка вибору */}
+                  <span className="pointer-coarse:hidden">Перетягніть файл сюди або виберіть</span>
+                  <span className="hidden pointer-coarse:inline">Виберіть файл</span>
+                </>
+              )}
+            </span>
             <span id={`${inputId}-formats`} className="text-caption text-muted">
-              Розклад XLSX · програми DOCX, DOC, PDF · навчальний план і фото розпоряджень JPG, PNG, PDF · до 20 МБ
+              XLSX, DOCX, DOC, PDF, JPG або PNG, до 20 МБ
             </span>
           </button>
           <FormAlert message={problem} />

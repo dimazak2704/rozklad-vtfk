@@ -1,11 +1,12 @@
 import { Check } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useCatalogOptions, type CatalogEntity } from '@/api/catalog';
-import { needsDecision, supportsAlias, useSaveMappings, type ImportJob } from '@/api/import';
+import { supportsAlias, useSaveMappings, type ImportJob } from '@/api/import';
 import type { MappingType } from '@/api/types';
 import { applyServerErrors } from '@/components/catalog/forms';
 import { FormAlert } from '@/components/catalog/FormParts';
-import { Badge, Button, Combobox, EmptyState, RadioGroup, notify, type ComboboxOption } from '@/components/ui';
+import { Disclosure } from '@/components/generation/Disclosure';
+import { Badge, Button, Combobox, EmptyState, RowActions, notify, type ComboboxOption, type RowAction } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { creates, decisionKey, decisionRows, initialDecision, isComplete, toMapping, type Decision, type EntityReportRow, type MappingAction } from './decisions';
@@ -134,10 +135,12 @@ function MappingForm({ job }: { job: ImportJob }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-prose text-ui text-secondary">
-        Назви з файлу, яких немає в каталозі. Для одруківок оберіть «Зіставити й запамʼятати» — написання стане псевдонімом, і
-        наступного разу його розпізнають самі.
-      </p>
+      <Disclosure summary="Як це працює?">
+        <p className="max-w-prose ps-5.5 text-ui text-secondary">
+          Тут назви з файлу, яких немає в каталозі. «Так» зіставляє назву зі схожим записом і запамʼятовує написання —
+          наступного разу його розпізнають самі. Інший запис чи новий — у «⋯» рядка.
+        </p>
+      </Disclosure>
       <ol className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
         {rows.map((row) => (
           <MappingRow
@@ -182,10 +185,18 @@ interface MappingRowProps {
   creatable: boolean;
 }
 
+/**
+ * Один рядок — одна відповідь: «Схоже на «Гарболінська»» і «Так». Решта варіантів (інший запис,
+ * новий запис, без псевдоніма) — у «⋯», що зʼявляється при наведенні чи фокусі (на дотику — завжди).
+ */
 function MappingRow({ row, decision, onChange, missing, disabled, creatable }: MappingRowProps) {
-  const catalog = useCatalogOptions(CATALOG_OF[row.type], {}, { enabled: decision.action === 'existing' || decision.action === 'alias' });
+  const [picking, setPicking] = useState(false);
+  const matching = decision.action === 'existing' || decision.action === 'alias';
+  const catalog = useCatalogOptions(CATALOG_OF[row.type], {}, { enabled: matching });
   const top = row.suggestions[0];
   const aliasable = supportsAlias(row.type);
+  const matchAction: MappingAction = aliasable ? 'alias' : 'existing';
+  const accusative = ENTITY_ACCUSATIVE[row.type];
 
   const options = useMemo<ComboboxOption[]>(() => {
     const suggested = new Set(row.suggestions.map((s) => s.id));
@@ -195,72 +206,131 @@ function MappingRow({ row, decision, onChange, missing, disabled, creatable }: M
       .map((item) => ({ value: item.id, label: catalogLabel(item) }));
     return [...fromSuggestions, ...rest];
   }, [row.suggestions, catalog.items]);
+  const targetLabel = decision.targetId ? options.find((o) => o.value === decision.targetId)?.label : undefined;
+  const showPicker = matching && (picking || !decision.targetId);
 
-  const actions = [
-    { value: 'existing' as const, label: 'Зіставити з наявним' },
-    ...(aliasable ? [{ value: 'alias' as const, label: 'Зіставити й запамʼятати написання' }] : []),
-    ...(creatable ? [{ value: 'create' as const, label: `Створити ${ENTITY_ACCUSATIVE[row.type]}` }] : []),
+  const pickOther = () => {
+    onChange({ action: matchAction, targetId: decision.targetId });
+    setPicking(true);
+  };
+  const create = () => {
+    onChange({ action: 'create', targetId: null });
+    setPicking(false);
+  };
+  const reset = () => {
+    onChange({ action: null, targetId: null });
+    setPicking(false);
+  };
+
+  const menu: RowAction[] = [
+    ...(showPicker ? [] : [{ label: 'Інший запис каталогу…', onSelect: pickOther }]),
+    ...(aliasable && decision.action === 'alias' && decision.targetId
+      ? [{ label: 'Не запамʼятовувати написання', onSelect: () => onChange({ action: 'existing' }) }]
+      : []),
+    ...(aliasable && decision.action === 'existing' && decision.targetId
+      ? [{ label: 'Запамʼятати написання', onSelect: () => onChange({ action: 'alias' }) }]
+      : []),
+    ...(creatable && decision.action !== 'create' ? [{ label: `Створити ${accusative}`, onSelect: create }] : []),
+    ...(decision.action !== null ? [{ label: 'Скасувати рішення', separatorBefore: true, onSelect: reset }] : []),
   ];
 
-  return (
-    <li className={cn('grid gap-3 px-4 py-3.5 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]', missing && 'bg-danger-subtle')}>
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <Badge size="sm" tone={needsDecision(row) || row.severity === 'ERROR' ? 'warning' : 'neutral'}>
-            {ROW_TYPE_LABEL[row.type]}
-          </Badge>
-          <span className="text-heading font-bold break-words text-primary">«{row.raw}»</span>
+  let answer: ReactNode;
+  if (showPicker) {
+    answer = (
+      <Combobox
+        value={decision.targetId}
+        onValueChange={(targetId) => {
+          onChange({ targetId });
+          if (targetId) setPicking(false);
+        }}
+        options={options}
+        placeholder={`Оберіть ${accusative}`}
+        searchPlaceholder="Пошук у каталозі"
+        loading={catalog.isPending}
+        disabled={disabled}
+        aria-label={`Запис каталогу для «${row.raw}»`}
+        aria-invalid={missing && !decision.targetId ? true : undefined}
+        className="w-full sm:w-64"
+      />
+    );
+  } else if (matching) {
+    answer = (
+      <span className="flex items-center gap-1.5 text-ui text-primary">
+        <Check aria-hidden="true" className="size-4 shrink-0 text-add" />
+        <span>
+          Це «{targetLabel ?? top?.label ?? '…'}»
+          {decision.action === 'alias' ? <span className="text-secondary">, написання запамʼятаємо</span> : null}
         </span>
-        {row.message ? <span className="text-caption text-secondary">{row.message}</span> : null}
-        <span className="text-meta font-normal text-muted">{row.location}</span>
-      </div>
-      <div className="flex min-w-0 flex-col gap-2.5">
-        {/* '' — «ще не вирішено»: група лишається керованою, без перемикання в некеровану */}
-        <RadioGroup<MappingAction | ''>
-          aria-label={`Що зробити з «${row.raw}»`}
-          orientation="horizontal"
-          value={decision.action ?? ''}
+      </span>
+    );
+  } else if (decision.action === 'create') {
+    answer = (
+      <span className="flex items-center gap-1.5 text-ui text-primary">
+        <Check aria-hidden="true" className="size-4 shrink-0 text-add" />
+        Створимо {NEW_ENTITY[row.type]}
+      </span>
+    );
+  } else if (top) {
+    answer = (
+      <>
+        <span className="text-ui text-secondary">Схоже на «{top.label}»</span>
+        <Button
+          size="sm"
+          variant="secondary"
           disabled={disabled}
-          onValueChange={(action) => {
-            if (action) onChange({ action, targetId: action === 'create' ? null : (decision.targetId ?? top?.id ?? null) });
-          }}
-          options={actions}
-        />
-        {decision.action === 'existing' || decision.action === 'alias' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Combobox
-              value={decision.targetId}
-              onValueChange={(targetId) => onChange({ targetId })}
-              options={options}
-              placeholder={`Оберіть ${ENTITY_ACCUSATIVE[row.type]}`}
-              searchPlaceholder="Пошук у каталозі"
-              loading={catalog.isPending}
-              disabled={disabled}
-              aria-label={`Запис каталогу для «${row.raw}»`}
-              aria-invalid={missing && !decision.targetId ? true : undefined}
-              className="w-full sm:w-72"
-            />
-            {decision.action === 'alias' ? (
-              <span className="text-caption text-muted">«{row.raw}» стане псевдонімом</span>
-            ) : null}
-          </div>
-        ) : decision.action === null && top ? (
-          <div>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={disabled}
-              onClick={() => onChange({ action: aliasable ? 'alias' : 'existing', targetId: top.id })}
-            >
-              Так, це «{top.label}»
-            </Button>
-          </div>
-        ) : null}
-        {missing ? <p className="text-caption font-medium text-danger">Оберіть дію{decision.action && decision.action !== 'create' ? ' і запис каталогу' : ''}.</p> : null}
+          aria-label={`Так, це «${top.label}»`}
+          onClick={() => onChange({ action: matchAction, targetId: top.id })}
+        >
+          Так
+        </Button>
+      </>
+    );
+  } else {
+    answer = (
+      <>
+        <span className="text-ui text-secondary">Немає в каталозі</span>
+        {creatable ? (
+          <Button size="sm" variant="secondary" disabled={disabled} onClick={create}>
+            Створити {accusative}
+          </Button>
+        ) : (
+          <Button size="sm" variant="secondary" disabled={disabled} onClick={pickOther}>
+            Обрати {accusative}
+          </Button>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <li className={cn('group flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3', missing && 'bg-danger-subtle')}>
+      <div className="flex min-w-0 flex-[1_1_14rem] flex-col">
+        {/* де трапилось написання — у підказці над ним; тип — тихим словом, не табличкою */}
+        <span className="text-cell font-[650] break-words text-primary" title={row.location || undefined}>
+          «{row.raw}»
+        </span>
+        <span className="text-caption text-muted">{ROW_TYPE_LABEL[row.type]}</span>
       </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {answer}
+        {!disabled && menu.length > 0 ? <RowActions rowLabel={`«${row.raw}»`} actions={menu} /> : null}
+      </div>
+      {missing ? (
+        <p className="basis-full text-caption font-medium text-danger">
+          Оберіть дію{decision.action && decision.action !== 'create' ? ' і запис каталогу' : ''}.
+        </p>
+      ) : null}
     </li>
   );
 }
+
+/** «Створимо нового викладача». */
+const NEW_ENTITY: Record<MappingType, string> = {
+  TEACHER: 'нового викладача',
+  DISCIPLINE: 'нову дисципліну',
+  GROUP: 'нову групу',
+  ROOM: 'нову аудиторію',
+};
 
 function catalogLabel(item: object): string {
   if ('shortName' in item && typeof item.shortName === 'string') return item.shortName;

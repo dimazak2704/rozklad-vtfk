@@ -113,7 +113,10 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
             ) : null}
           </p>
         </div>
-        <JobStatusBadge status={data.status} />
+        {/* на телефоні стан — окремим рядком під назвою, щоб назва файлу не ламалась на три рядки */}
+        <span className="max-sm:order-last max-sm:basis-full max-sm:ps-10">
+          <JobStatusBadge status={data.status} />
+        </span>
       </header>
 
       {parsing ? (
