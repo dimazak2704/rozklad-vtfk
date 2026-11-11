@@ -429,7 +429,7 @@ export function NowIndicator({
         {dateLine ? <p className="text-body text-secondary">{dateLine}</p> : null}
         <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
           <Headline status={shown} afterDay={afterDay} compact={false} />
-          {hasSentence ? <p className="hidden max-w-60 text-end text-body text-secondary md:block">{sentence}</p> : null}
+          {hasSentence ? <p className="hidden text-body text-secondary md:block lg:max-w-60 lg:text-end">{sentence}</p> : null}
         </div>
         {aside ? <p className="text-caption text-secondary">{aside}</p> : null}
       </div>
