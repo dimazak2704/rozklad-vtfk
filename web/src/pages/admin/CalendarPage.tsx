@@ -27,10 +27,12 @@ import {
   EmptyState,
   ErrorState,
   LoadingRegion,
+  PageErrorBanner,
   PageHeader,
   Panel,
-  ParityMark,
   Section,
+  Select,
+  type MoreMenuItem,
   Skeleton,
   Tabs,
   TabsContent,
@@ -40,7 +42,7 @@ import {
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { confirm } from '@/stores/confirm';
-import { formatNumericDate, todayInKyiv } from '@/lib/date';
+import { formatNumericDate, startOfWeek, todayInKyiv } from '@/lib/date';
 import { countLabel, PARITY_LABEL } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -85,16 +87,39 @@ export default function CalendarPage() {
     if (ok) notify.success(`Активний семестр: ${semester.name}`);
   };
 
+  // семестр обирають у заголовку; усе, що з ним роблять рідко, — у «⋯»
+  const more: MoreMenuItem[] = [
+    ...(selected ? [{ label: 'Змінити семестр', icon: <Pencil aria-hidden="true" className="size-4" />, onSelect: () => setSemesterDialog({ semester: selected }) }] : []),
+    { label: 'Новий семестр', icon: <Plus aria-hidden="true" className="size-4" />, onSelect: () => setSemesterDialog({ semester: null }) },
+    ...(selected && !selected.active
+      ? [{ label: 'Видалити семестр', icon: <Trash aria-hidden="true" className="size-4" />, tone: 'danger' as const, separatorBefore: true, onSelect: () => setDeletingSemester(selected) }]
+      : []),
+  ];
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Календар"
-        description="Семестри, чисельник і знаменник по тижнях, канікули, практика, режими навчання й дзвінки."
-        actions={
-          <Button variant="secondary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={() => setSemesterDialog({ semester: null })}>
-            Новий семестр
-          </Button>
+        meta={selected ? semesterSentence(selected) : undefined}
+        controls={
+          semesters.data && semesters.data.length > 1 && selected ? (
+            <Select<string>
+              aria-label="Семестр"
+              className="w-full sm:w-64"
+              value={selected.id}
+              onValueChange={(id) => setParam('semester', semesters.data.find((s) => s.id === id)?.active ? null : id)}
+              options={semesters.data.map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
+            />
+          ) : undefined
         }
+        primaryAction={
+          selected && !selected.active ? (
+            <Button variant="primary" iconStart={<CalendarCheck aria-hidden="true" className="size-4" />} onClick={() => void makeActive(selected)}>
+              Зробити активним
+            </Button>
+          ) : undefined
+        }
+        more={more}
       />
 
       {semesters.isPending ? (
@@ -105,11 +130,11 @@ export default function CalendarPage() {
           </div>
         </LoadingRegion>
       ) : semesters.isError ? (
-        <ErrorState error={semesters.error} onRetry={() => void semesters.refetch()} />
+        <PageErrorBanner error={semesters.error} title="Семестри не завантажено" retrying={semesters.isFetching} onRetry={() => void semesters.refetch()} />
       ) : !selected ? (
         <EmptyState
-          title="Семестрів ще немає"
-          description="Створіть семестр: від дати початку й парності першого тижня система порахує чисельник і знаменник."
+          title="Семестрів ще немає."
+          description="Від дати початку й парності першого тижня система сама порахує чисельник і знаменник."
           action={
             <Button variant="primary" onClick={() => setSemesterDialog({ semester: null })}>
               Створити семестр
@@ -118,46 +143,6 @@ export default function CalendarPage() {
         />
       ) : (
         <>
-          <div role="group" aria-label="Семестри" className="flex flex-wrap gap-2">
-            {semesters.data.map((semester) => {
-              const isSelected = semester.id === selected.id;
-              return (
-                <button
-                  key={semester.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => setParam('semester', semester.active ? null : semester.id)}
-                  className={cn(
-                    'flex min-w-56 flex-col items-start gap-1 rounded-panel border px-4 py-3 text-start',
-                    'transition-[background-color,border-color] duration-150 ease-out',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                    isSelected ? 'border-accent bg-selected' : 'border-default bg-surface hover:border-strong hover:bg-hover',
-                  )}
-                >
-                  <span className="flex w-full items-center justify-between gap-3">
-                    <span className="text-ui font-semibold text-primary">{semester.name}</span>
-                    {semester.active ? (
-                      <Badge tone="accent" size="sm">
-                        Активний
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <span className="text-caption text-secondary figures">
-                    {formatNumericDate(semester.startsOn)} – {formatNumericDate(semester.endsOn)} ·{' '}
-                    {countLabel(semester.teachingWeeks, ['тиждень', 'тижні', 'тижнів'])}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <SemesterSummary
-            semester={selected}
-            onEdit={() => setSemesterDialog({ semester: selected })}
-            onActivate={() => void makeActive(selected)}
-            onDelete={() => setDeletingSemester(selected)}
-          />
-
           <Tabs value={tab} onValueChange={(value) => setParam('tab', value === 'weeks' ? null : value)}>
             <TabsList aria-label="Розділи календаря">
               <TabsTrigger value="weeks">Тижні й періоди</TabsTrigger>
@@ -200,62 +185,14 @@ export default function CalendarPage() {
   );
 }
 
-function SemesterSummary({
-  semester,
-  onEdit,
-  onActivate,
-  onDelete,
-}: {
-  semester: CalendarSemester;
-  onEdit: () => void;
-  onActivate: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <Panel flush>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-4 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-caption text-muted">Дати</dt>
-          <dd className="text-ui font-semibold text-primary figures">
-            {formatNumericDate(semester.startsOn)} – {formatNumericDate(semester.endsOn)}
-          </dd>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-caption text-muted">Навчальних тижнів</dt>
-          <dd className="text-ui font-semibold text-primary figures">
-            {semester.teachingWeeks}
-            {semester.weeksCount === null ? <span className="font-normal text-muted"> (за датами)</span> : null}
-          </dd>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-caption text-muted">Перший тиждень</dt>
-          <dd className="flex items-center gap-1.5 text-ui font-semibold text-primary">
-            <ParityMark parity={semester.firstWeekParity} className="text-accent" />
-            {PARITY_LABEL[semester.firstWeekParity]}
-          </dd>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <dt className="text-caption text-muted">Дзвінки</dt>
-          <dd className="text-ui font-semibold text-primary">{semester.bellProfile?.label ?? 'Типовий профіль'}</dd>
-        </div>
-        <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-4 lg:col-span-1 lg:justify-end">
-          <Button size="sm" variant="secondary" iconStart={<Pencil aria-hidden="true" className="size-4" />} onClick={onEdit}>
-            Редагувати
-          </Button>
-          {!semester.active ? (
-            <>
-              <Button size="sm" variant="primary" iconStart={<CalendarCheck aria-hidden="true" className="size-4" />} onClick={onActivate}>
-                Зробити активним
-              </Button>
-              <Button size="sm" variant="danger-ghost" iconStart={<Trash aria-hidden="true" className="size-4" />} onClick={onDelete}>
-                Видалити
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </dl>
-    </Panel>
-  );
+/**
+ * Семестр одним рядком замість таблички з чотирьох полів:
+ * «01.09.2026 – 31.12.2026, 18 навчальних тижнів; перший — чисельник; дзвінки: типові».
+ */
+function semesterSentence(semester: CalendarSemester): string {
+  const weeks = countLabel(semester.teachingWeeks, ['навчальний тиждень', 'навчальні тижні', 'навчальних тижнів']);
+  const bells = semester.bellProfile?.label ? `дзвінки: ${semester.bellProfile.label}` : 'дзвінки типові';
+  return `${formatNumericDate(semester.startsOn)} – ${formatNumericDate(semester.endsOn)}, ${weeks}; перший — ${PARITY_LABEL[semester.firstWeekParity]}; ${bells}${semester.active ? '' : '. Не активний'}`;
 }
 
 function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; onOpenPeriod: (period: CalendarPeriod) => void }) {
@@ -264,6 +201,7 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
   const override = useOverrideWeek(semester.id);
   const today = todayInKyiv();
   const overridden = weeks.data?.filter((w) => w.overridden).length ?? 0;
+  const current = weeks.data?.find((w) => w.weekStart === startOfWeek(today));
 
   const toggle = (week: CalendarWeek) => {
     const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
@@ -293,13 +231,12 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
     <Section
       title="Тижні семестру"
       headingLevel={3}
-      description="Чисельник і знаменник чергуються від першого тижня. Натисніть тиждень, щоб поміняти парність вручну, наприклад після перенесених днів."
-      actions={
-        overridden > 0 ? (
-          <Badge tone="accent" size="sm">
-            Змінено вручну: {overridden}
-          </Badge>
-        ) : null
+      description={
+        <>
+          {current ? `Зараз ${current.weekNumber}-й тиждень, ${PARITY_LABEL[current.parity]}. ` : null}
+          Натисніть тиждень, щоб поміняти парність вручну
+          {overridden > 0 ? ` (уже змінено: ${overridden})` : ''}.
+        </>
       }
     >
       {weeks.isPending ? (
@@ -307,7 +244,7 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
           <Skeleton className="h-28 w-full" />
         </LoadingRegion>
       ) : weeks.isError ? (
-        <ErrorState error={weeks.error} onRetry={() => void weeks.refetch()} size="sm" />
+        <ErrorState error={weeks.error} onRetry={() => void weeks.refetch()} size="sm" title="Тижні не завантажено" />
       ) : (
         <SemesterTimeline
           weeks={weeks.data}

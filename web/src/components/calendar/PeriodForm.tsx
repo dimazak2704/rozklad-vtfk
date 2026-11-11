@@ -151,8 +151,9 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
                 )}
               />
             </Field>
-            <Field label="Назва" required error={errors.title?.message}>
-              <Input {...form.register('title')} autoComplete="off" autoFocus={!period} placeholder="Електрорадіомонтажна практика" />
+            {/* без прикладу в полі: зразок з автофокусом читали як уже введену назву */}
+            <Field label="Назва" required error={errors.title?.message} hint={period ? undefined : 'Як у розпорядженні, напр. «Електрорадіомонтажна практика»'}>
+              <Input {...form.register('title')} autoComplete="off" autoFocus={!period} />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -266,9 +267,9 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
           <Field
             label="Примітка в розпорядженні"
             error={errors.orderNote?.message}
-            hint="Друкується жирним унизу кожного розпорядження на дати періоду. Порожньо — без примітки."
+            hint="Друкується жирним унизу розпоряджень на дати періоду."
           >
-            <Textarea {...form.register('orderNote')} rows={3} placeholder={draftNote || '2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р.'} />
+            <Textarea {...form.register('orderNote')} rows={3} />
           </Field>
           <Button
             size="sm"
@@ -282,7 +283,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
           </Button>
           <figure className="flex flex-col gap-1.5">
             <figcaption className="text-caption text-muted">Так виглядатиме під таблицею розпорядження</figcaption>
-            <div data-theme="light" className="rounded-plate border border-default bg-surface px-4 py-3 text-primary">
+            <div data-theme="light" className="rounded-tag border border-default bg-surface px-4 py-3 text-primary">
               {/* нижній край таблиці розпорядження, під яким друкується примітка */}
               <div aria-hidden="true" className="mb-2.5 h-px bg-[var(--border-color-strong)]" />
               <p className="text-ui font-bold">

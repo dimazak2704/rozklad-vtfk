@@ -155,7 +155,7 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
                   return (
                     <li key={index} className="flex flex-col">
                       <div className="flex items-center gap-2 py-1">
-                        <span className="w-6 font-condensed text-heading font-bold figures text-primary">{index + 1}</span>
+                        <span className="w-6 text-heading font-bold figures text-primary">{index + 1}</span>
                         <Input
                           type="time"
                           size="sm"

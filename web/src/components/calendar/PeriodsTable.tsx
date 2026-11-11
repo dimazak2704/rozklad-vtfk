@@ -3,11 +3,21 @@ import { useMemo, useState } from 'react';
 import { useCalendarPeriods, useDeleteCalendarPeriod, type CalendarPeriod, type CalendarSemester } from '@/api/calendar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
-import { Badge, Button, DataTable, EmptyState, RowActions, Section, Tooltip, type DataTableColumn } from '@/components/ui';
+import { Button, DataTable, EmptyState, RowActions, Section, Tooltip, type DataTableColumn } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { formatNumericDate } from '@/lib/date';
-import { PERIOD_KIND_LABEL, PERIOD_KIND_TONE, STUDY_MODE_LABEL } from './labels';
+import type { CalendarPeriodKind } from '@/api/types';
+import { PERIOD_KIND_LABEL, STUDY_MODE_LABEL } from './labels';
 import { PeriodFormDialog } from './PeriodForm';
 import { periodAudience } from './periods';
+
+const KIND_DOT: Record<CalendarPeriodKind, string> = {
+  HOLIDAY: 'bg-[var(--fill-cancel)]',
+  NO_CLASSES: 'bg-[var(--fill-cancel)]',
+  PRACTICE: 'bg-[var(--fill-change)]',
+  STUDY_MODE: 'bg-[var(--fill-room)]',
+  EXAM_SESSION: 'bg-accent',
+};
 
 interface PeriodsTableProps {
   semester: CalendarSemester;
@@ -29,11 +39,15 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         header: 'Вид',
         width: '10rem',
         sortValue: (p) => PERIOD_KIND_LABEL[p.kind],
+        // вид словом; колір — лише крапка, як на смузі семестру
         cell: (p) => (
-          <Badge tone={PERIOD_KIND_TONE[p.kind]} size="sm">
-            {PERIOD_KIND_LABEL[p.kind]}
-            {p.studyMode ? ` · ${STUDY_MODE_LABEL[p.studyMode].toLocaleLowerCase('uk')}` : ''}
-          </Badge>
+          <span className="inline-flex items-baseline gap-2">
+            <span aria-hidden="true" className={cn('size-2 shrink-0 translate-y-[-1px] rounded-full', KIND_DOT[p.kind])} />
+            <span>
+              {PERIOD_KIND_LABEL[p.kind]}
+              {p.studyMode ? <span className="text-secondary">, {STUDY_MODE_LABEL[p.studyMode].toLocaleLowerCase('uk')}</span> : null}
+            </span>
+          </span>
         ),
       },
       { id: 'title', header: 'Назва', rowHeader: true, sortValue: (p) => p.title, cell: (p) => p.title },
@@ -50,6 +64,7 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         id: 'note',
         header: 'Примітка в розпорядженні',
         hideBelow: 'lg',
+        className: 'max-md:hidden!',
         cell: (p) =>
           p.orderNote ? (
             <Tooltip content={p.orderNote}>
@@ -69,7 +84,6 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
     <Section
       title="Періоди"
       headingLevel={3}
-      description="Канікули, практика й режими навчання. Вони змінюють заняття на свої дати й додають примітки в розпорядження."
       actions={
         <Button size="sm" variant="secondary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={() => onOpen('new')}>
           Додати період
@@ -98,10 +112,10 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         empty={
           <EmptyState
             size="sm"
-            title="Періодів немає"
-            description="Додайте канікули, практику груп або дистанційне навчання — розклад і розпорядження врахують їх автоматично."
+            title="Періодів немає."
+            description="Канікули, практика чи дистанційне навчання змінюють заняття на свої дати й додають примітку в розпорядження."
             action={
-              <Button size="sm" variant="primary" onClick={() => onOpen('new')}>
+              <Button size="sm" variant="ghost" onClick={() => onOpen('new')}>
                 Додати період
               </Button>
             }
