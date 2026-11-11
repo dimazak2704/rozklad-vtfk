@@ -38,7 +38,7 @@ Docker Postgres is published on **5433** and the Vite dev server runs on **5180*
 
 | Area | Choice |
 |---|---|
-| JDK | Temurin **25** (`/c/Users/Dell/.jdks/jdk-25.0.5+8`, see `scripts/env.sh`) |
+| JDK | Temurin **25** (`scripts/env.sh` finds it; `ROZKLAD_JAVA_HOME` overrides) |
 | Backend | Spring Boot **4.1.2**, Spring Framework 7, Spring Security 7, Hibernate 7, **Jackson 3** (`tools.jackson.*`, `JsonMapper`) |
 | Gateway | Spring Cloud **2025.1.4** (`spring-cloud-starter-gateway-server-webflux`) |
 | Modular core | Spring Modulith **2.1.2** (JPA event publication registry + AMQP externalization) |

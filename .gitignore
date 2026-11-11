@@ -27,3 +27,10 @@ test-results/
 blob-report/
 /data/
 /tmp/
+
+# Локальні налаштування агентів і дизайн-інструментів (спільні CLAUDE.md/AGENTS.md комітимо)
+.claude/settings.local.json
+CLAUDE.local.md
+web/.impeccable/hook.cache.json
+web/.impeccable/hook.pending.json
+web/.impeccable/config.local.json
