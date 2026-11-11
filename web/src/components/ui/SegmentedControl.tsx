@@ -80,8 +80,10 @@ export function SegmentedControl<V extends string = string>({
       aria-label={ariaLabel}
       className={cn(
         'scrollbar-none relative isolate inline-flex max-w-full items-stretch overflow-x-auto rounded-control p-1',
-        // 36 / 32 px; на дотику — 44, щоб сегмент був повноцінною ціллю натискання
+        // 36 / 32 px; на дотику — 44 без вертикального відступу: сегмент сам 44 px заввишки (ціль натискання),
+        // а бігунок лишається з відступом 4 px, бо він позиціонується від краю доріжки
         size === 'sm' ? 'h-8 pointer-coarse:h-11' : 'h-9 pointer-coarse:h-11',
+        'pointer-coarse:py-0',
         'bg-sunken shadow-[inset_0_0_0_1px_var(--border-color-separator)]',
         stretch ? 'flex w-full' : 'w-fit self-start',
         className,

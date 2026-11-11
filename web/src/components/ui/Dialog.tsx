@@ -64,7 +64,9 @@ export function DialogContent({
           {...props}
           {...returnFocus}
         >
-          <div className="flex items-start gap-3 px-5 pt-5 pb-4 sm:px-6 sm:pt-6">
+          {/* на телефоні вікно — шторка знизу: «ручка» 36×4 px, як у всіх шторок застосунку */}
+          <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--border-color-control)] sm:hidden" />
+          <div className="flex items-start gap-3 px-5 pt-3 pb-4 sm:px-6 sm:pt-6">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <RadixDialog.Title className="text-title font-semibold text-primary">{title}</RadixDialog.Title>
               {description ? (

@@ -1,11 +1,32 @@
 import { X } from 'lucide-react';
-import type { ComponentProps, ReactNode } from 'react';
-import { Drawer as Vaul } from 'vaul';
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
+import { Drawer as Vaul, type DialogProps } from 'vaul';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
 import { useReturnFocus } from './returnFocus';
 
-export const Drawer = Vaul.Root;
+type Side = 'bottom' | 'right' | 'left';
+
+/** Сторона, з якої шторка виїжджає насправді (на телефоні — завжди знизу). */
+const SideContext = createContext<Side | null>(null);
+
+/** Вужче 768 px бічна шторка лишала б смужку сторінки збоку — там усе виїжджає знизу на всю ширину. */
+const PHONE = '(max-width: 767.98px)';
+
+/**
+ * Корінь шторки. `direction="right"` на планшеті й десктопі — панель 400 px праворуч; на телефоні та сама
+ * шторка виїжджає знизу на всю ширину, з «ручкою» і свайпом.
+ */
+export function Drawer({ direction = 'bottom', ...props }: DialogProps) {
+  const phone = useMediaQuery(PHONE);
+  const side: Side = phone || direction === 'top' ? 'bottom' : direction;
+  return (
+    <SideContext.Provider value={side}>
+      <Vaul.Root {...props} direction={side} />
+    </SideContext.Provider>
+  );
+}
 export const DrawerTrigger = Vaul.Trigger;
 export const DrawerClose = Vaul.Close;
 
@@ -13,8 +34,8 @@ export interface DrawerContentProps extends Omit<ComponentProps<typeof Vaul.Cont
   title: ReactNode;
   description?: ReactNode;
   footer?: ReactNode;
-  /** Сторона, з якої виїжджає (має збігатися з `direction` у <Drawer>). */
-  side?: 'bottom' | 'right' | 'left';
+  /** Сторона на ширших екранах (як `direction` у <Drawer>); на телефоні шторка завжди знизу. */
+  side?: Side;
   /** Клас заголовка: `sr-only`, коли вміст має власний видимий заголовок. */
   titleClassName?: string;
   /** Сховати кнопку «Закрити». За замовчуванням вона є завжди: свайп і Esc знає не кожен. */
@@ -30,7 +51,7 @@ export function DrawerContent({
   title,
   description,
   footer,
-  side = 'bottom',
+  side: requestedSide = 'bottom',
   titleClassName,
   hideClose = false,
   className,
@@ -40,10 +61,13 @@ export function DrawerContent({
   ...props
 }: DrawerContentProps) {
   const returnFocus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
+  const rootSide = useContext(SideContext);
+  const side: Side = rootSide === 'bottom' ? 'bottom' : requestedSide;
   return (
     <Vaul.Portal>
       <Vaul.Overlay className="fixed inset-0 z-50 bg-scrim" />
       <Vaul.Content
+        data-side={side}
         className={cn(
           'fixed z-50 flex flex-col border-default bg-raised text-primary shadow-dialog focus-visible:outline-none',
           side === 'bottom' && 'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-dialog border-t pb-[env(safe-area-inset-bottom)]',
@@ -55,7 +79,7 @@ export function DrawerContent({
         {...returnFocus}
       >
         {side === 'bottom' ? (
-          <div aria-hidden="true" className="mx-auto mt-2 h-1 w-8 shrink-0 rounded-full bg-[var(--border-color-control)]" />
+          <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--border-color-control)]" />
         ) : null}
         <div className="flex items-start gap-3 px-4 pt-3 pb-3 sm:px-5 sm:pt-4">
           <div className="flex min-w-0 flex-1 flex-col gap-1">

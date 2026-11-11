@@ -57,17 +57,26 @@ export function RadioGroup<V extends string = string>({
       >
         {options.map((option) => {
           const itemId = `${groupId}-${option.value}`;
+          const labelId = `${itemId}-label`;
           const descriptionId = option.description ? `${itemId}-description` : undefined;
           return (
-            <div key={option.value} className="relative flex min-h-11 items-start gap-3 py-2.5 sm:min-h-9 sm:py-1.5">
+            // увесь рядок — <label>: на дотику ціль 44 px, а не 18-піксельний кружок із підписом
+            <label
+              key={option.value}
+              htmlFor={itemId}
+              className={cn(
+                'flex min-h-11 items-start gap-3 py-2.5 select-none sm:min-h-9 sm:py-1.5 pointer-coarse:min-h-11 pointer-coarse:py-2.5',
+                option.disabled || disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+              )}
+            >
               <RadixRadioGroup.Item
                 id={itemId}
                 value={option.value}
                 disabled={option.disabled}
+                aria-labelledby={labelId}
                 aria-describedby={descriptionId}
                 className={cn(
-                  // над підписом-накладкою (after:inset-0): сам кружок теж отримує клік
-                  'relative z-10 mt-px flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-control bg-surface',
+                  'mt-px flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-control bg-surface',
                   'transition-[border-color] duration-100 ease-out hover:border-strong',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                   'data-[state=checked]:border-accent',
@@ -76,17 +85,17 @@ export function RadioGroup<V extends string = string>({
               >
                 <RadixRadioGroup.Indicator className="block size-2.5 rounded-full bg-accent" />
               </RadixRadioGroup.Item>
-              <div className="flex flex-col gap-0.5">
-                <label htmlFor={itemId} className="cursor-pointer text-ui text-primary select-none after:absolute after:inset-0">
+              <span className="flex flex-col gap-0.5">
+                <span id={labelId} className="text-ui text-primary">
                   {option.label}
-                </label>
+                </span>
                 {option.description ? (
-                  <p id={descriptionId} className="text-caption text-muted">
+                  <span id={descriptionId} className="text-caption text-muted">
                     {option.description}
-                  </p>
+                  </span>
                 ) : null}
-              </div>
-            </div>
+              </span>
+            </label>
           );
         })}
       </RadixRadioGroup.Root>

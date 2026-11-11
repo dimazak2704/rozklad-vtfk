@@ -358,7 +358,7 @@ describe('налаштування', () => {
     const group = screen.getByRole('radiogroup', { name: 'Як призначати заміну' });
     const names = within(group)
       .getAllByRole('radio')
-      .map((radio) => document.querySelector(`label[for="${radio.id}"]`)?.textContent);
+      .map((radio) => document.getElementById(radio.getAttribute('aria-labelledby') ?? '')?.textContent);
     expect(names).toEqual(['Призначити й повідомити', 'Чекати згоди викладача', 'Призначити без повідомлення']);
     const timeout = screen.getByRole('spinbutton', { name: /Скільки чекати відповіді/ });
     expect(timeout).toBeEnabled();
