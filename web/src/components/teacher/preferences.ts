@@ -47,10 +47,10 @@ export function countKinds(map: PreferenceMap): Record<PreferenceKind, number> {
 export const KIND_TEXT: Record<PreferenceKind, string> = { UNWANTED: 'небажано', UNAVAILABLE: 'неможливо' };
 
 /**
- * Вигляд стану не тримається лише на кольорі: небажано — бурштиновий тон і пунктир (як «Заміна»),
- * неможливо — штрихування й суцільна рамка (як «Пари не буде»). Слово й значок — у самій клітинці.
+ * Вигляд стану не тримається лише на кольорі: у клітинці завжди є значок (палець униз / заборона) і слово.
+ * Тло — суцільний тон без штрихування й рамок: небажано — бурштиновий (як «Заміна»), неможливо — червоний.
  */
 export const KIND_CELL: Record<PreferenceKind, string> = {
-  UNWANTED: 'border-dashed border-change bg-change-subtle text-change',
-  UNAVAILABLE: 'hatch border-cancel bg-cancel-subtle text-cancel [--hatch-color:var(--border-color-cancel)]',
+  UNWANTED: 'bg-change-subtle text-change',
+  UNAVAILABLE: 'bg-cancel-subtle text-cancel',
 };

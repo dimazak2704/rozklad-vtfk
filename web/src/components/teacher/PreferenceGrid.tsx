@@ -8,7 +8,7 @@ import { cellKey, KIND_CELL, KIND_TEXT, nextKind, type CellKey, type PreferenceM
 const WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5];
 
 /** Значок стану: на телефоні замість слова, ширше — поруч зі словом. */
-export function KindIcon({ kind, className }: { kind: PreferenceKind; className?: string }) {
+function KindIcon({ kind, className }: { kind: PreferenceKind; className?: string }) {
   const Icon = kind === 'UNWANTED' ? ThumbsDown : Ban;
   return <Icon aria-hidden="true" className={cn('size-4 shrink-0', className)} />;
 }
@@ -81,7 +81,7 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
 
   return (
     <div className="overflow-x-auto rounded-panel border border-default bg-surface">
-      <table className="w-full min-w-[18rem] table-fixed border-collapse sm:min-w-[34rem]">
+      <table className="w-full min-w-[18rem] table-fixed border-separate border-spacing-0 sm:min-w-[34rem]">
         <caption className="sr-only">Побажання: дні тижня й пари</caption>
         <colgroup>
           <col className="w-11 sm:w-[5.5rem]" />
@@ -91,11 +91,11 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
         </colgroup>
         <thead>
           <tr>
-            <th scope="col" className="border-b border-separator px-2 py-2.5 text-start text-caption font-[650] text-secondary">
+            <th scope="col" className="h-12 border-b border-separator px-2 sm:px-4">
               <span className="sr-only">Пара</span>
             </th>
             {WEEKDAYS.map((weekday) => (
-              <th key={weekday} scope="col" className="border-b border-separator px-2 py-2.5 text-start text-ui font-[650] text-primary">
+              <th key={weekday} scope="col" className="h-12 border-b border-separator px-2 text-start text-ui font-[600] text-primary sm:px-3">
                 <span className="lg:hidden">{weekdayShort(weekday)}</span>
                 <span className="hidden lg:inline">{capitalize(weekdayName(weekday))}</span>
               </th>
@@ -103,21 +103,22 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
           </tr>
         </thead>
         <tbody>
-          {pairs.map((pair) => {
+          {pairs.map((pair, index) => {
             const rowTime = slotsByWeekday.get(1)?.find((s) => s.pair === pair);
+            // як у сітці тижня: лише лінії між рядками, без рамки довкола кожної клітинки
+            const line = index < pairs.length - 1 ? 'border-b border-separator' : '';
             return (
-              <tr key={pair} className="border-b border-separator last:border-b-0">
-                <th scope="row" className="px-2 py-1.5 text-start align-top">
-                  <span className="block text-title text-primary figures">{pair}</span>
-                  {rowTime ? <span className="text-meta font-normal text-muted figures">{rowTime.startsAt}</span> : null}
+              <tr key={pair}>
+                <th scope="row" className={cn('px-2 py-2 text-start align-top sm:px-4', line)}>
+                  <span className="block text-title leading-7 font-semibold text-primary figures">{pair}</span>
+                  {rowTime ? <span className="text-caption font-normal text-secondary figures">{rowTime.startsAt}</span> : null}
                 </th>
                 {WEEKDAYS.map((weekday) => {
                   if (!exists(weekday, pair)) {
                     return (
-                      <td key={weekday} className="p-1">
-                        {/* у цей день пар стільки немає: тихе місце без рамки, щоб не плутати з порожньою клітинкою */}
-                        <span className="block h-14 rounded-cell bg-sunken" />
-                        <span className="sr-only">пари немає</span>
+                      <td key={weekday} className={cn('p-1', line)}>
+                        {/* у цей день стільки пар за дзвінками немає — так і пишемо, щоб сіре місце не було загадкою */}
+                        <span className="flex h-14 items-center px-1.5 text-meta font-[500] text-muted sm:px-2">пари немає</span>
                       </td>
                     );
                   }
@@ -127,7 +128,7 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                   const mine = lessons?.get(key) ?? [];
                   const state = kind ? KIND_TEXT[kind] : 'без побажань';
                   return (
-                    <td key={weekday} className="p-1">
+                    <td key={weekday} className={cn('p-1', line)}>
                       <button
                         ref={(element) => {
                           if (element) buttons.current.set(key, element);
@@ -137,32 +138,26 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                         tabIndex={key === active ? 0 : -1}
                         aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Зараз тут: ${mine.join('; ')}` : ''}`}
                         aria-describedby={describedBy}
-                        title={mine.length > 0 ? `Зараз тут: ${mine.join('; ')}` : undefined}
+                        // код групи в клітинці пояснює підказка, а не окрема примітка під сіткою
+                        title={mine.length > 0 ? `Ваша пара тут за поточним розкладом: ${mine.join('; ')}` : undefined}
                         onFocus={() => setActive(key)}
                         onClick={() => onCellChange(key, nextKind(kind))}
                         onKeyDown={(event) => onKeyDown(event, weekday, pair)}
                         className={cn(
-                          'flex h-14 w-full flex-col items-start justify-between rounded-cell border px-1.5 py-1.5 text-start sm:px-2',
-                          'transition-[background-color,border-color] duration-100 ease-out',
-                          'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
-                          kind ? KIND_CELL[kind] : 'border-default bg-surface hover:border-control hover:bg-hover',
+                          'flex h-14 w-full flex-col items-start justify-start gap-0.5 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
+                          'transition-[background-color] duration-100 ease-out',
+                          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+                          kind ? KIND_CELL[kind] : 'hover:bg-hover active:bg-active',
                         )}
                       >
                         {kind ? (
-                          <span
-                            className={cn(
-                              'inline-flex max-w-full items-center gap-1 rounded-tag text-caption font-[650]',
-                              kind === 'UNAVAILABLE' && 'bg-cancel-subtle sm:pe-1',
-                            )}
-                          >
+                          <span className="inline-flex max-w-full items-center gap-1 text-caption font-[650]">
                             <KindIcon kind={kind} />
                             <span className="hidden truncate sm:inline">{KIND_TEXT[kind]}</span>
                           </span>
-                        ) : (
-                          <span aria-hidden="true" />
-                        )}
+                        ) : null}
                         {mine.length > 0 ? (
-                          <span className="max-w-full truncate text-meta font-[500] text-secondary">
+                          <span className="max-w-full truncate text-caption font-[500] text-secondary figures">
                             {mine.map((label) => label.split(' · ')[0]).join(', ')}
                           </span>
                         ) : null}

@@ -6,8 +6,8 @@ import { useMe, useMyPreferences, useMySchedule, useSavePreferences } from '@/ap
 import { useBellProfiles } from '@/api/public';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { studyWeek } from '@/components/public/schedule/schedule-params';
-import { KindIcon, PreferenceGrid } from '@/components/teacher/PreferenceGrid';
-import { cellKey, changedCells, KIND_CELL, toList, toMap, type CellKey } from '@/components/teacher/preferences';
+import { PreferenceGrid } from '@/components/teacher/PreferenceGrid';
+import { cellKey, changedCells, toList, toMap, type CellKey } from '@/components/teacher/preferences';
 import { Button, EmptyState, LoadingRegion, PageErrorScope, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, nearestStudyDay, todayInKyiv } from '@/lib/date';
@@ -15,11 +15,6 @@ import { countLabel, PARITY_LABEL } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 
 const CELL_FORMS = ['клітинка', 'клітинки', 'клітинок'] as const;
-
-const LEGEND = [
-  { kind: 'UNWANTED', title: 'Небажано', text: 'генератор уникатиме цієї пари, якщо зможе' },
-  { kind: 'UNAVAILABLE', title: 'Неможливо', text: 'пару сюди не поставлять зовсім — позначайте, лише коли справді не можете' },
-] as const;
 
 /** Побажання до розкладу: сітка «день × пара» з небажаними й неможливими парами для генератора. */
 export default function MyPreferencesPage() {
@@ -134,26 +129,12 @@ export default function MyPreferencesPage() {
           </LoadingRegion>
         ) : (
           <div className="flex flex-col gap-5">
-            <div id="preferences-legend" className="flex flex-col gap-3">
-              <p className="max-w-prose text-body text-primary">
-                Натисніть пару, яка вам незручна. Натисніть ще раз, якщо прийти тоді не можете зовсім.
-              </p>
-              <ul className="flex flex-col gap-1.5 text-ui text-secondary md:flex-row md:gap-6">
-                {LEGEND.map(({ kind, title, text }) => (
-                  <li key={kind} className="flex items-start gap-2">
-                    <span aria-hidden="true" className={cn('mt-0.5 inline-flex h-5 w-7 shrink-0 items-center justify-center rounded-tag border', KIND_CELL[kind])}>
-                      <KindIcon kind={kind} className="size-3.5" />
-                    </span>
-                    <span>
-                      <span className="font-[650] text-primary">{title}</span> — {text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* одне речення замість легенди: слова «небажано» й «неможливо» в клітинках пояснюють себе самі */}
+            <p id="preferences-hint" className="max-w-prose text-body text-secondary">
+              Натисніть пару, яка вам незручна, а ще раз — якщо прийти тоді не можете зовсім.
+            </p>
 
-            <PreferenceGrid value={current} onCellChange={onCellChange} slotsByWeekday={slotsByWeekday} lessons={lessons} describedBy="preferences-legend" />
-            {lessons.size > 0 ? <p className="text-caption text-muted">Код групи в клітинці — ваша пара там за поточним розкладом.</p> : null}
+            <PreferenceGrid value={current} onCellChange={onCellChange} slotsByWeekday={slotsByWeekday} lessons={lessons} describedBy="preferences-hint" />
 
             <div
               ref={toastClearanceRef}
