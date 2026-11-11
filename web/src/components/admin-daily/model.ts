@@ -363,6 +363,23 @@ export function optionsHeading(options: readonly ChangeOption[], past: boolean):
   return null;
 }
 
+/**
+ * Який варіант обрано: явний вибір диспетчера, а без нього — рекомендований сервером перший (його блок
+ * розгорнутий одразу, з єдиною головною дією). Без рекомендації нічого не обрано: варіанти рівноцінні.
+ */
+export function effectiveOptionKey(options: readonly ChangeOption[], selectedKey: string | null): string | null {
+  if (selectedKey && options.some((option) => optionKey(option) === selectedKey)) return selectedKey;
+  const first = options[0];
+  return first?.recommended ? optionKey(first) : null;
+}
+
+/** Підзаголовок групи варіантів за смугою сервера (DOMAIN §7), реченням і без номерів. */
+export function bandHeading(band: ChangeOption['band']): string {
+  if (band === 'CAUTION') return 'З нюансами';
+  if (band === 'LAST') return 'Крайній випадок';
+  return 'Теж підходить';
+}
+
 /** У групи немає вільного викладача іншої дисципліни й нікого, хто взяв би обидві підгрупи. */
 export function poolIsEmpty(options: readonly ChangeOption[]): boolean {
   return !options.some((option) => option.kind === 'REPLACE_DISCIPLINE' || option.kind === 'MERGE_SUBGROUPS');

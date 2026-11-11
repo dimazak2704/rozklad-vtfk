@@ -1,59 +1,74 @@
-import { ArrowRight, Pencil, UserRoundCheck } from 'lucide-react';
-import type { AbsenceDto, Uuid } from '@/api/types';
-import { HoverCard, HoverCardContent, HoverCardTrigger, Plate, RowActions } from '@/components/ui';
+import { Pencil, UserRoundCheck } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { AbsenceDto, ChangeDto, Uuid } from '@/api/types';
+import { HoverCard, HoverCardContent, HoverCardTrigger, MoreMenu } from '@/components/ui';
 import { LessonDetails } from '@/components/schedule';
 import { cn } from '@/lib/cn';
 import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { absencePeriod, decisionSummary } from '../format';
-import { LESSON_STATE, lessonButtonId, noticeAnswer, type LessonEntry, type TeacherGroup } from '../model';
-import { PendingCountdown, StateBadge } from '../StateBadge';
+import { ABSENCE_REASON_LABEL } from '@/lib/labels';
+import { ABSENCE_SOURCE_TEXT, absencePeriod, decisionSummary } from '../format';
+import { lessonButtonId, noticeAnswer, type LessonEntry, type TeacherGroup } from '../model';
+import { PendingCountdown, StateText } from '../StateBadge';
 
-function DecisionLine({ entry }: { entry: LessonEntry }) {
+/** Хто відмовився і коли — тихий рядок аудиту під станом пари. */
+function declinedLine(change: ChangeDto | null): string | null {
+  if (!change) return null;
+  const last = [...change.history].reverse().find((step) => step.to === 'DECLINED');
+  if (!last) return null;
+  return `${change.new.teacher?.shortName ?? 'Викладач'} відмовився о ${formatInstantTime(last.at)}`;
+}
+
+/** Стан пари одним рядком: слово стану, далі — що саме вирішено. */
+function StatusLine({ entry }: { entry: LessonEntry }) {
   const change = entry.change;
+  const summary = change ? decisionSummary(change) : null;
+  const rest = (content: ReactNode) => <span className="font-normal text-secondary"> · {content}</span>;
   switch (entry.state) {
     case 'uncovered':
-      return <span className="text-danger">Потрібне рішення</span>;
+      return <StateText state="uncovered">Потрібне рішення</StateText>;
     case 'declined':
       return (
-        <span className="text-danger">
-          Відмова: {change?.new.teacher?.shortName ?? 'викладач'} — потрібен інший варіант
-        </span>
+        <StateText state="declined">
+          <span>Відмова</span>
+          {rest('потрібен інший варіант')}
+        </StateText>
       );
     case 'substituteAbsent':
       return (
-        <span className="text-danger">
-          Мав замінити: {entry.item.lesson.teacher?.shortName ?? 'викладача'} — скасуйте зміну й оберіть інше рішення
-        </span>
+        <StateText state="substituteAbsent">
+          <span>Замінник відсутній</span>
+          {rest('скасуйте рішення')}
+        </StateText>
       );
     case 'objected':
       return (
-        <span className="text-danger">
-          {change?.new.teacher?.shortName ?? 'Викладач'} не може, а заміна вже в розпорядженні — потрібне доповнення
-        </span>
+        <StateText state="objected">
+          <span>Потрібне доповнення</span>
+          {rest(`${change?.new.teacher?.shortName ?? 'викладач'} не може`)}
+        </StateText>
       );
     case 'cancelled':
-      return <span className="text-cancel">Пари не буде</span>;
+      return <StateText state="cancelled">Пари не буде</StateText>;
     case 'pending':
-    case 'confirmed':
-    case 'applied':
       return (
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
-          <ArrowRight aria-label="заміна" className="size-3.5 shrink-0 text-change rtl:rotate-180" />
-          <span className="truncate font-semibold text-primary">{change ? decisionSummary(change) : 'Рішення ухвалено'}</span>
-          {entry.state === 'pending' ? <PendingCountdown deadline={change?.confirmDeadline} className="text-caption" /> : null}
-          {noticeAnswer(change) === 'ok' ? (
-            <span className="inline-flex items-center gap-1 text-add">
-              <UserRoundCheck aria-hidden="true" className="size-3.5" />
-              <span className="sr-only">Відповідь викладача:</span>
-              «Добре»
-              {change?.respondedAt ? <span className="text-muted figures">о {formatInstantTime(change.respondedAt)}</span> : null}
-            </span>
-          ) : entry.state === 'confirmed' && change?.respondedAt ? (
-            <span className="text-muted figures">о {formatInstantTime(change.respondedAt)}</span>
-          ) : null}
-        </span>
+        <StateText state="pending">
+          <span>Чекає відповіді</span>
+          {summary ? rest(summary) : null}
+          {change?.confirmDeadline ? rest(<PendingCountdown deadline={change.confirmDeadline} />) : null}
+        </StateText>
       );
+    case 'confirmed':
+    case 'applied': {
+      const ok = noticeAnswer(change) === 'ok';
+      return (
+        <StateText state={entry.state}>
+          <span>{entry.state === 'applied' ? 'У розпорядженні' : 'Підтверджено'}</span>
+          {summary ? rest(summary) : null}
+          {ok ? rest('«Добре»') : null}
+        </StateText>
+      );
+    }
   }
 }
 
@@ -66,10 +81,11 @@ interface LessonRowProps {
 
 function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
   const { lesson, date } = entry.item;
-  const needsAction = LESSON_STATE[entry.state].needsAction;
+  const subgroup = lesson.subgroup > 0 ? `${lesson.subgroup} п/г` : null;
+  const audit = entry.state === 'declined' ? declinedLine(entry.change) : null;
   return (
     <li>
-      <HoverCard openDelay={350} closeDelay={120}>
+      <HoverCard openDelay={400} closeDelay={120}>
         <HoverCardTrigger asChild>
           <button
             type="button"
@@ -79,34 +95,33 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
             // картка деталей — лише для миші: з клавіатури ті самі відомості є в панелі варіантів
             onFocus={(event) => event.preventDefault()}
             className={cn(
-              'grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-x-3 rounded-control border px-2.5 py-2 text-start',
-              'transition-[background-color,border-color,box-shadow] duration-150 ease-out',
+              'grid w-full grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-x-3 rounded-popover px-3 py-2.5 text-start',
+              'transition-[background-color,box-shadow] duration-150 ease-out',
               'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-              selected ? 'border-accent bg-selected' : 'border-transparent hover:bg-hover',
-              pulsing && 'motion-safe:animate-[live-flash_1.8s_var(--ease-out)] ring-2 ring-[var(--border-color-accent-subtle)]',
+              selected ? 'bg-selected' : 'hover:bg-hover',
+              pulsing && 'ring-2 ring-[var(--border-color-accent-subtle)] motion-safe:animate-[live-flash_1.8s_var(--ease-out)]',
             )}
           >
-            <span className="flex flex-col items-center leading-none">
-              <span className={cn('font-condensed text-title font-bold figures', needsAction ? 'text-primary' : 'text-secondary')}>
-                {lesson.pair}
-              </span>
-              {lesson.startsAt ? <span className="mt-1 text-meta font-normal text-muted figures">{lesson.startsAt}</span> : null}
+            <span className="flex flex-col">
+              <span className="text-ui font-semibold text-primary figures">{lesson.startsAt ?? `${lesson.pair}`}</span>
+              <span className="text-meta text-muted">{lesson.pair} пара</span>
             </span>
             <span className="flex min-w-0 flex-col gap-1">
-              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <Plate size="sm">{lesson.group.code}</Plate>
-                {lesson.subgroup > 0 ? <span className="text-meta text-secondary">{lesson.subgroup} підгр.</span> : null}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span {...lineAttr(lesson.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
-                  <span className="truncate font-condensed text-ui font-bold text-primary">{lesson.discipline.shortName}</span>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-ui font-[650] text-primary">
+                <span className="figures">{lesson.group.code}</span>
+                {subgroup ? <span className="font-normal text-secondary">{subgroup}</span> : null}
+                <span aria-hidden="true" className="text-muted">
+                  ·
                 </span>
-                {lesson.room ? <span className="text-caption text-muted">ауд. {lesson.room.name}</span> : null}
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span {...lineAttr(lesson.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
+                  <span className="truncate">{lesson.discipline.shortName}</span>
+                </span>
+                {lesson.room ? <span className="font-normal text-secondary">· ауд. {lesson.room.name}</span> : null}
               </span>
-              <span className="text-caption">
-                <DecisionLine entry={entry} />
-              </span>
+              <StatusLine entry={entry} />
+              {audit ? <span className="text-caption text-muted">{audit}</span> : null}
             </span>
-            <StateBadge state={entry.state} className="mt-0.5" />
           </button>
         </HoverCardTrigger>
         <HoverCardContent side="left" align="start" className="hidden lg:block">
@@ -118,7 +133,7 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
 }
 
 interface LessonListProps {
-  groups: readonly TeacherGroup[];
+  group: TeacherGroup;
   /** Чи показувати дату над парами (тиждень або багатоденна відсутність). */
   showDates: boolean;
   selectedKey: string | null;
@@ -126,63 +141,61 @@ interface LessonListProps {
   onSelect: (entry: LessonEntry) => void;
   onEditAbsence: (absence: AbsenceDto) => void;
   onCancelAbsence: (absence: AbsenceDto) => void;
+  /** Рядок над заголовком: «‹ Усі відсутні» на телефоні. */
+  before?: ReactNode;
 }
 
-/** Середня колонка: пари відсутніх, згруповані за викладачем і датою, зі станом рішення. */
-export function LessonList({ groups, showDates, selectedKey, pulsing, onSelect, onEditAbsence, onCancelAbsence }: LessonListProps) {
+/** Середня колонка: пари обраного відсутнього (за датою), кожна зі станом рішення одним рядком. */
+export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, onEditAbsence, onCancelAbsence, before }: LessonListProps) {
+  const { absence } = group;
+  const headingId = `absence-${absence.id}`;
   return (
-    <div className="flex flex-col gap-5">
-      {groups.map((group) => {
-        const total = group.days.reduce((sum, day) => sum + day.entries.length, 0);
-        const open = group.days.reduce((sum, day) => sum + day.entries.filter((e) => LESSON_STATE[e.state].needsAction).length, 0);
-        const headingId = `absence-${group.absence.id}`;
-        return (
-          <section key={group.absence.id} aria-labelledby={headingId} className="flex flex-col gap-1.5">
-            <header className="flex items-start justify-between gap-2 px-1">
-              <div className="flex min-w-0 flex-col">
-                <h3 id={headingId} className="text-ui font-semibold text-primary">
-                  {group.absence.teacher.shortName}
-                </h3>
-                <p className="text-caption text-muted">
-                  {absencePeriod(group.absence)}
-                  {open > 0 ? <span className="text-danger"> · {open} з {total} без рішення</span> : <span> · усі {total} вирішено</span>}
-                </p>
-              </div>
-              <RowActions
-                rowLabel={group.absence.teacher.shortName}
-                actions={[
-                  { label: 'Змінити дати чи пари', icon: <Pencil aria-hidden="true" />, onSelect: () => onEditAbsence(group.absence) },
-                  {
-                    label: 'Викладач на місці — скасувати',
-                    icon: <UserRoundCheck aria-hidden="true" />,
-                    onSelect: () => onCancelAbsence(group.absence),
-                    tone: 'danger',
-                    separatorBefore: true,
-                  },
-                ]}
-              />
-            </header>
-            {group.days.map((day) => (
-              <div key={day.date} className="flex flex-col gap-1">
-                {showDates ? (
-                  <h4 className="sticky top-0 z-10 bg-surface px-1 pt-1 text-meta font-semibold text-secondary">{formatWeekdayDate(day.date)}</h4>
-                ) : null}
-                <ul className="flex flex-col gap-1">
-                  {day.entries.map((entry) => (
-                    <LessonRow
-                      key={lessonButtonId(entry)}
-                      entry={entry}
-                      selected={selectedKey === lessonButtonId(entry)}
-                      pulsing={pulsing.has(entry.item.lesson.id)}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </section>
-        );
-      })}
-    </div>
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
+      {before}
+      <header className="flex items-start justify-between gap-2 px-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h3 id={headingId} className="text-heading font-bold text-primary">
+            {absence.teacher.shortName}
+          </h3>
+          <p className="text-caption text-secondary">
+            {absencePeriod(absence)} · {ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}
+            <span className="text-muted"> · {ABSENCE_SOURCE_TEXT[absence.source]}</span>
+          </p>
+        </div>
+        <MoreMenu
+          label={`Дії з відсутністю: ${absence.teacher.shortName}`}
+          items={[
+            { label: 'Змінити дати чи пари', icon: <Pencil aria-hidden="true" />, onSelect: () => onEditAbsence(absence) },
+            {
+              label: 'Викладач на місці — скасувати',
+              icon: <UserRoundCheck aria-hidden="true" />,
+              onSelect: () => onCancelAbsence(absence),
+              tone: 'danger',
+              separatorBefore: true,
+            },
+          ]}
+        />
+      </header>
+      {group.days.length === 0 ? (
+        <p className="px-3 py-2 text-ui text-secondary">У цей період пар у викладача немає.</p>
+      ) : (
+        group.days.map((day) => (
+          <div key={day.date} className="flex flex-col gap-0.5">
+            {showDates ? <h4 className="px-3 pt-2 pb-1 text-caption font-semibold text-secondary">{formatWeekdayDate(day.date)}</h4> : null}
+            <ul className="flex flex-col gap-0.5">
+              {day.entries.map((entry) => (
+                <LessonRow
+                  key={lessonButtonId(entry)}
+                  entry={entry}
+                  selected={selectedKey === lessonButtonId(entry)}
+                  pulsing={pulsing.has(entry.item.lesson.id)}
+                  onSelect={onSelect}
+                />
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+    </section>
   );
 }

@@ -1,35 +1,48 @@
-import { Ban, CircleCheck, CircleDashed, FileCheck, Hourglass, UserX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { IsoInstant } from '@/api/types';
-import { Badge } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { LESSON_STATE, pendingInfo, type LessonState } from './model';
 
-const ICONS: Record<LessonState, ReactNode> = {
-  uncovered: <CircleDashed aria-hidden="true" className="size-3.5" />,
-  declined: <UserX aria-hidden="true" className="size-3.5" />,
-  substituteAbsent: <UserX aria-hidden="true" className="size-3.5" />,
-  objected: <UserX aria-hidden="true" className="size-3.5" />,
-  pending: <Hourglass aria-hidden="true" className="size-3.5" />,
-  confirmed: <CircleCheck aria-hidden="true" className="size-3.5" />,
-  cancelled: <Ban aria-hidden="true" className="size-3.5" />,
-  applied: <FileCheck aria-hidden="true" className="size-3.5" />,
+/** Крапка стану: колір лише підсилює слово (стан читається й у відтінках сірого). */
+const DOT: Record<LessonState, string> = {
+  uncovered: 'bg-[var(--fill-change)]',
+  declined: 'bg-[var(--fill-cancel)]',
+  substituteAbsent: 'bg-[var(--fill-cancel)]',
+  objected: 'bg-[var(--fill-cancel)]',
+  pending: 'border-[1.5px] border-[var(--fill-change)] bg-transparent',
+  confirmed: 'bg-[var(--fill-add)]',
+  cancelled: 'bg-[var(--fill-cancel)]',
+  applied: 'bg-[var(--fill-accent)]',
 };
 
-interface StateBadgeProps {
+/** Колір слова: лише стани, що чекають дії, підсвічені; решта — звичайним текстом. */
+const WORD: Record<LessonState, string> = {
+  uncovered: 'text-change',
+  declined: 'text-cancel',
+  substituteAbsent: 'text-cancel',
+  objected: 'text-cancel',
+  pending: 'text-secondary',
+  confirmed: 'text-secondary',
+  cancelled: 'text-cancel',
+  applied: 'text-secondary',
+};
+
+interface StateTextProps {
   state: LessonState;
-  size?: 'sm' | 'md';
+  /** Своє речення замість слова стану: «Кренцін проведе СТП · підтвердив». */
+  children?: ReactNode;
   className?: string;
 }
 
-/** Стан пари словами й іконкою; колір лише підсилює (DESIGN: «Detour Ink Rule»). */
-export function StateBadge({ state, size = 'sm', className }: StateBadgeProps) {
-  const meta = LESSON_STATE[state];
+/** Стан пари — крапка й слово (DESIGN §7: стани пар ніколи не «чипи»). */
+export function StateText({ state, children, className }: StateTextProps) {
   return (
-    <Badge tone={meta.tone} size={size} icon={ICONS[state]} className={className}>
-      {meta.label}
-    </Badge>
+    <span className={cn('inline-flex min-w-0 items-start gap-2 text-caption font-[550]', WORD[state], className)}>
+      {/* крапка — по центру першого рядка, навіть коли речення переноситься */}
+      <span aria-hidden="true" className={cn('mt-[calc(0.5lh-4px)] inline-block size-2 shrink-0 rounded-full', DOT[state])} />
+      <span className="min-w-0">{children ?? LESSON_STATE[state].label}</span>
+    </span>
   );
 }
 
@@ -43,9 +56,5 @@ export function PendingCountdown({ deadline, className }: PendingCountdownProps)
   const { now } = useNow();
   const info = pendingInfo(deadline, now.getTime());
   if (!info) return null;
-  return (
-    <span className={cn('figures font-semibold whitespace-nowrap', info.overdue ? 'text-danger' : 'text-change', className)}>
-      {info.label}
-    </span>
-  );
+  return <span className={cn('whitespace-nowrap figures', info.overdue ? 'text-danger' : 'text-secondary', className)}>{info.label}</span>;
 }

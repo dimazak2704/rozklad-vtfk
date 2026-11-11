@@ -1,7 +1,7 @@
-import { CalendarPlus, FileText, ListFilter, Plus, WifiOff } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { CalendarPlus, ChevronLeft, FileText, Plus } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { useCancelAbsence, useDailyLiveSync, useDashboard, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
+import { useCancelAbsence, useDailyLiveSync, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
 import { useSettings } from '@/api/settings';
@@ -15,52 +15,66 @@ import { useChangesWorkspace, type Period } from '@/components/admin-daily/chang
 import { useDecisionActions } from '@/components/admin-daily/changes/useDecisionActions';
 import { absencePeriod } from '@/components/admin-daily/format';
 import {
-  filterFromParam,
-  isOpen,
+  effectiveOptionKey,
   isObjection,
+  isOpen,
   lessonButtonId,
-  LESSON_FILTERS,
   LESSON_STATE,
-  matchesFilter,
   optionButtonId,
   optionKey,
   reasonForOption,
   teacherAnswered,
   VISIBLE_OPTIONS,
   type LessonEntry,
-  type LessonFilter,
 } from '@/components/admin-daily/model';
+import { OfflineState } from '@/components/admin-daily/OfflineState';
+import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
 import { useContainerWidth } from '@/components/admin-daily/useContainerWidth';
 import {
   Button,
   buttonClass,
-  Chip,
   Drawer,
   DrawerContent,
   EmptyState,
-  ErrorState,
-  Kbd,
+  PageErrorBanner,
   PageHeader,
-  ParityBadge,
   SegmentedControl,
   Skeleton,
   notify,
 } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { cn } from '@/lib/cn';
-import { formatDateRange, formatWeekdayDate, formatWeekdayDateAfterDo, isWeekend, shiftStudyDay } from '@/lib/date';
+import { formatWeekdayDate, formatWeekdayDateAfterDo, formatWeekdayDateAfterNa, isWeekend, shiftStudyDay } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 import { confirm } from '@/stores/confirm';
 
 /** Ширина робочої області, з якої поміщаються дві і три колонки. */
-const TWO_PANES = 860;
-const THREE_PANES = 1100;
+const TWO_PANES = 760;
+const THREE_PANES = 1080;
 const PULSE_MS = 2_400;
+
+const STICKY = 'lg:sticky lg:top-[calc(var(--sticky-top)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-top)-2rem)] lg:overflow-y-auto lg:overscroll-contain';
+
+function WorkspaceSkeleton({ columns }: { columns: number }) {
+  return (
+    <div aria-hidden="true" className={cn('grid gap-4 p-4', columns === 3 && 'grid-cols-[28fr_32fr_40fr]', columns === 2 && 'grid-cols-2')}>
+      {Array.from({ length: columns }, (_, column) => (
+        <div key={column} className="flex flex-col gap-3">
+          {[0, 1, 2].map((key) => (
+            <Skeleton key={key} className="h-14 w-full rounded-popover" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Головний щоденний екран диспетчера: відсутні → їхні пари → варіанти рішення → підтвердження.
- * Три колонки на широкому екрані, дві на ноутбуці, на планшеті варіанти відкриваються шторкою.
+ * Широкий екран — одна панель з трьома колонками; ноутбук — відсутні рядком над двома колонками;
+ * телефон і планшет — по рівнях: відсутні → пари → варіанти в шторці, з дорогою назад на кожному.
  */
 export default function ChangesPage() {
   const { date, setDate } = useWorkingDate();
@@ -69,9 +83,9 @@ export default function ChangesPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const width = useContainerWidth(rootRef);
   const panes = width >= THREE_PANES ? 3 : width >= TWO_PANES ? 2 : 1;
+  const narrow = !useMediaQuery('(min-width: 640px)', true);
 
   const period: Period = params.get('period') === 'week' ? 'week' : 'day';
-  const filter = filterFromParam(params.get('filter'));
   const absenceParam = params.get('absence');
   const lessonParam = params.get('lesson');
 
@@ -94,8 +108,6 @@ export default function ChangesPage() {
 
   useDailyLiveSync();
   const navigate = useNavigate();
-  // парність робочої дати (з урахуванням перевизначень тижнів) знає сервер — беремо її з панелі
-  const dashboard = useDashboard(date);
   const workspace = useChangesWorkspace(date, period);
   const actions = useDecisionActions();
   const cancelAbsence = useCancelAbsence();
@@ -113,42 +125,34 @@ export default function ChangesPage() {
   const [selection, setSelection] = useState<{ lessonId: Uuid; key: string } | null>(null);
   const [expandedFor, setExpandedFor] = useState<Uuid | null>(null);
 
-  const selectedAbsenceId = workspace.absences.some((a) => a.id === absenceParam) ? absenceParam : null;
-  const visible = useMemo(
-    () =>
-      workspace.entries.filter(
-        (entry) => (!selectedAbsenceId || entry.absence.id === selectedAbsenceId) && matchesFilter(entry.state, filter),
-      ),
-    [workspace.entries, selectedAbsenceId, filter],
-  );
-  const visibleGroups = useMemo(
-    () =>
-      workspace.groups
-        .map((group) => ({
-          ...group,
-          days: group.days
-            .map((day) => ({ ...day, entries: day.entries.filter((entry) => visible.includes(entry)) }))
-            .filter((day) => day.entries.length > 0),
-        }))
-        .filter((group) => group.days.length > 0),
-    [workspace.groups, visible],
-  );
+  const explicit = lessonParam ? (workspace.entries.find((e) => e.item.lesson.id === lessonParam) ?? null) : null;
+  // відсутній: з адреси → відсутній обраної пари → на широкому екрані перший, у кого є що вирішувати
+  const explicitAbsence = workspace.absences.find((a) => a.id === absenceParam) ?? explicit?.absence ?? null;
+  const fallbackAbsence =
+    panes > 1
+      ? (workspace.entries.find((e) => LESSON_STATE[e.state].needsAction)?.absence ?? workspace.absences[0] ?? null)
+      : null;
+  const selectedAbsence = explicitAbsence ?? fallbackAbsence;
+  const selectedAbsenceId = selectedAbsence?.id ?? null;
+  const group = workspace.groups.find((g) => g.absence.id === selectedAbsenceId) ?? null;
+  const visible = selectedAbsenceId ? workspace.entries.filter((entry) => entry.absence.id === selectedAbsenceId) : workspace.entries;
 
   // явно обрана пара з адреси; на широкому екрані без вибору — перша, що чекає рішення
-  const explicit = lessonParam ? (workspace.entries.find((e) => e.item.lesson.id === lessonParam) ?? null) : null;
   const fallback = panes > 1 ? (visible.find((e) => LESSON_STATE[e.state].needsAction) ?? visible[0] ?? null) : null;
   const selected = explicit ?? fallback;
   const selectedKey = selected ? lessonButtonId(selected) : null;
   const selectedLessonId = selected?.item.lesson.id ?? null;
   const options = useLessonOptions(selected && isOpen(selected.state) ? selected.item.lesson.id : null);
   const optionList = useMemo(() => options.data?.options ?? [], [options.data]);
-  const selectedOptionKey = selection && selection.lessonId === selectedLessonId ? selection.key : null;
+  const explicitOptionKey = selection && selection.lessonId === selectedLessonId ? selection.key : null;
+  const selectedOptionKey = effectiveOptionKey(optionList, explicitOptionKey);
   const selectedOption = selectedOptionKey ? (optionList.find((o) => optionKey(o) === selectedOptionKey) ?? null) : null;
   const ownReason = selected && reason.lessonId === selectedLessonId ? reason : null;
-  const reasonForSelected = {
-    code: ownReason?.code ?? reasonForOption(selectedOption?.kind, selected?.absence.reasonCategory),
+  const reasonFor = (option: ChangeOption | null) => ({
+    code: ownReason?.code ?? reasonForOption(option?.kind, selected?.absence.reasonCategory),
     text: ownReason?.text ?? '',
-  };
+  });
+  const reasonForSelected = reasonFor(selectedOption);
   const expanded = expandedFor !== null && expandedFor === selectedLessonId;
   // план дня: скільки пар цього відсутнього того ж дня ще чекають рішення
   const planCount = selected
@@ -157,7 +161,8 @@ export default function ChangesPage() {
 
   const selectEntry = useCallback(
     (entry: LessonEntry, focus = false) => {
-      updateParams({ lesson: entry.item.lesson.id });
+      // пара іншого відсутнього (J/K на межі списку) — перемикаємо й відсутнього
+      updateParams({ lesson: entry.item.lesson.id, absence: entry.absence.id });
       if (focus) {
         requestAnimationFrame(() => {
           const button = document.getElementById(lessonButtonId(entry));
@@ -169,10 +174,15 @@ export default function ChangesPage() {
     [updateParams],
   );
 
+  const selectAbsence = (id: Uuid | null) => updateParams({ absence: id, lesson: null });
+
+  /** J/K — наступна чи попередня пара; на межі списку переходить до пар сусіднього відсутнього. */
   const move = (step: 1 | -1) => {
-    if (visible.length === 0) return;
-    const index = selected ? visible.indexOf(selected) : -1;
-    const next = visible[Math.min(visible.length - 1, Math.max(0, index + step))];
+    // у тому ж порядку, що й на екрані: відсутній за відсутнім, усередині — за датою
+    const all = workspace.groups.flatMap((g) => g.days.flatMap((d) => d.entries));
+    if (all.length === 0) return;
+    const index = selected ? all.indexOf(selected) : -1;
+    const next = all[Math.min(all.length - 1, Math.max(0, index + step))];
     if (next) selectEntry(next, true);
   };
 
@@ -185,7 +195,7 @@ export default function ChangesPage() {
     if (!selected) return;
     // закріплюємо пару в адресі: після рішення диспетчер бачить його й строк, а не наступну пару
     updateParams({ lesson: selected.item.lesson.id });
-    void actions.pick(option, selected, reasonForSelected).then((done) => {
+    void actions.pick(option, selected, reasonFor(option)).then((done) => {
       if (done) setSelection(null);
     });
   };
@@ -222,11 +232,10 @@ export default function ChangesPage() {
 
   useRegisterCommands([
     { id: 'new-absence', label: 'Нова відсутність', group: 'Заміни', icon: CalendarPlus, shortcut: 'n', perform: openNewAbsence, keywords: ['лікарняний', 'відсутній'] },
-    { id: 'only-open', label: 'Показати лише пари без рішення', group: 'Заміни', icon: ListFilter, perform: () => updateParams({ filter: 'action' }) },
     { id: 'order-draft', label: 'Відкрити чернетку розпорядження', group: 'Заміни', icon: FileText, perform: () => void navigate(`/admin/orders?date=${date}`) },
   ]);
 
-  // відповідь викладача в Telegram: тост і короткий «пульс» на рядку пари
+  // відповідь викладача в Telegram: тост одним реченням і короткий «пульс» на рядку пари
   useServerEvent('change.updated', (change) => {
     const last = change.history.at(-1);
     if (!last || !teacherAnswered(last.from, last.to, change.approvalMode)) return;
@@ -235,13 +244,13 @@ export default function ChangesPage() {
     const teacher = change.new.teacher?.shortName ?? 'Викладач';
     const where = `${change.group.code}, ${change.pairFrom} пара`;
     if (isObjection(change)) {
-      notify.warning(`${teacher} не може, а заміна вже в розпорядженні`, { description: `${where} — потрібне доповнення` });
+      notify.warning(`${teacher} не може (${where}), а заміна вже в розпорядженні — потрібне доповнення`);
     } else if (last.to === 'DECLINED') {
-      notify.warning(`Відмова в Telegram: ${teacher}`, { description: `${where} — оберіть інший варіант` });
+      notify.warning(`${teacher} відмовився (${where}) — оберіть інший варіант`);
     } else if (change.approvalMode === 'NOTIFY') {
-      notify.info(`${teacher}: «Добре»`, { description: where });
+      notify.info(`${teacher}: «Добре» (${where})`);
     } else {
-      notify.success(`Підтверджено в Telegram: ${teacher}`, { description: where });
+      notify.success(`Підтверджено в Telegram: ${teacher} (${where})`);
     }
     if (entry) {
       const lessonId = entry.item.lesson.id;
@@ -275,207 +284,168 @@ export default function ChangesPage() {
     }
   };
 
-  const counts = useMemo(() => {
-    const scoped = workspace.entries.filter((e) => !selectedAbsenceId || e.absence.id === selectedAbsenceId);
-    return Object.fromEntries(LESSON_FILTERS.map((f) => [f.value, scoped.filter((e) => matchesFilter(e.state, f.value)).length])) as Record<
-      LessonFilter,
-      number
-    >;
-  }, [workspace.entries, selectedAbsenceId]);
-
+  const done = workspace.entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
   const weekend = period === 'day' && isWeekend(date);
   const nextStudyDay = shiftStudyDay(date, 1);
-  const rangeLabel = period === 'day' ? formatWeekdayDate(date) : `Тиждень: ${formatDateRange(workspace.from, workspace.to)}`;
 
-  const optionsPanel = selected ? (
-    <OptionsPanel
-      entry={selected}
-      approvalMode={approvalMode}
-      reasonCode={reasonForSelected.code}
-      reasonText={reasonForSelected.text}
-      onReasonCodeChange={(code) => setReason({ lessonId: selected.item.lesson.id, code, text: reasonForSelected.text })}
-      onReasonTextChange={(text) => setReason({ lessonId: selected.item.lesson.id, code: reasonForSelected.code, text })}
-      selectedKey={selectedOptionKey}
-      onSelect={selectOption}
-      expanded={expanded}
-      onExpandedChange={(next) => setExpandedFor(next ? selected.item.lesson.id : null)}
-      pickingKey={actions.pickingKey}
-      onAct={act}
-      onAssignManual={(teacher) => {
-        updateParams({ lesson: selected.item.lesson.id });
-        return actions.assignManual(teacher, selected, reasonForSelected);
-      }}
-      planCount={planCount}
-      onApplyPlan={(choices) => actions.applyPlan(choices, selected.absence, selected.item.date)}
-      decisionBusy={actions.busy}
-      onResend={() => selected.change && actions.resend(selected.change)}
-      onConfirm={() => selected.change && actions.confirm(selected.change)}
-      onCancelDecision={() => selected.change && actions.cancelDecision(selected.change, selected)}
+  const optionsPanel = (showTitle: boolean) =>
+    selected ? (
+      <OptionsPanel
+        entry={selected}
+        showTitle={showTitle}
+        approvalMode={approvalMode}
+        reasonCode={reasonForSelected.code}
+        reasonText={reasonForSelected.text}
+        onReasonCodeChange={(code) => setReason({ lessonId: selected.item.lesson.id, code, text: reasonForSelected.text })}
+        onReasonTextChange={(text) => setReason({ lessonId: selected.item.lesson.id, code: reasonForSelected.code, text })}
+        selectedKey={explicitOptionKey}
+        onSelect={selectOption}
+        expanded={expanded}
+        onExpandedChange={(next) => setExpandedFor(next ? selected.item.lesson.id : null)}
+        pickingKey={actions.pickingKey}
+        onAct={act}
+        onAssignManual={(teacher) => {
+          updateParams({ lesson: selected.item.lesson.id });
+          return actions.assignManual(teacher, selected, reasonForSelected);
+        }}
+        planCount={planCount}
+        onApplyPlan={(choices) => actions.applyPlan(choices, selected.absence, selected.item.date)}
+        decisionBusy={actions.busy}
+        onResend={() => selected.change && actions.resend(selected.change)}
+        onConfirm={() => selected.change && actions.confirm(selected.change)}
+        onCancelDecision={() => selected.change && actions.cancelDecision(selected.change, selected)}
+      />
+    ) : null;
+
+  const showDates = period === 'week' || workspace.absences.some((a) => a.dateFrom !== a.dateTo);
+  const lessons = (before?: ReactNode) =>
+    group ? (
+      <LessonList
+        group={group}
+        showDates={showDates}
+        selectedKey={selectedKey}
+        pulsing={pulsing}
+        onSelect={(entry) => selectEntry(entry)}
+        onEditAbsence={(absence) => openDialog(absence)}
+        onCancelAbsence={(absence) => void cancelAbsenceFlow(absence)}
+        before={before}
+      />
+    ) : null;
+
+  const absenceList = (drill: boolean) => (
+    <AbsenceList
+      absences={workspace.absences}
+      entries={workspace.entries}
+      selectedId={selectedAbsenceId}
+      onSelect={(id) => selectAbsence(id)}
+      onAdd={openNewAbsence}
+      loading={workspace.loading}
+      drill={drill}
     />
-  ) : null;
-
-  const lessonsPane = (
-    <section aria-label="Пари, які треба закрити" className="flex min-w-0 flex-col gap-3">
-      {panes < 3 && workspace.absences.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-meta font-semibold text-muted">Відсутні</p>
-          <AbsenceStrip
-            absences={workspace.absences}
-            entries={workspace.entries}
-            selectedId={selectedAbsenceId}
-            onSelect={(id) => updateParams({ absence: id, lesson: null })}
-          />
-        </div>
-      ) : null}
-      <div className="flex flex-col gap-1.5">
-        {panes < 3 ? <p className="text-meta font-semibold text-muted">Стан пар</p> : null}
-        <div role="group" aria-label="Стан пар" className="flex flex-wrap gap-1.5">
-          {LESSON_FILTERS.map((f) => (
-            <Chip
-              key={f.value}
-              selected={filter === f.value}
-              onToggle={() => updateParams({ filter: f.value === 'all' ? null : f.value })}
-              count={counts[f.value]}
-            >
-              {f.label}
-            </Chip>
-          ))}
-        </div>
-      </div>
-      {workspace.offline ? (
-        <EmptyState
-          size="sm"
-          icon={<WifiOff aria-hidden="true" className="size-5" />}
-          title="Немає звʼязку з сервером"
-          description="Дані на цю дату ще не завантажені, а без інтернету їх не отримати. Підключіться до мережі — список оновиться сам."
-        />
-      ) : workspace.loading && workspace.entries.length === 0 ? (
-        <div className="flex flex-col gap-2" aria-hidden="true">
-          {[0, 1, 2, 3, 4].map((key) => (
-            <Skeleton key={key} className="h-16 w-full rounded-control" />
-          ))}
-        </div>
-      ) : visibleGroups.length === 0 ? (
-        <EmptyState
-          size="sm"
-          title="Немає пар з таким станом"
-          description="Змініть фільтр або оберіть інших відсутніх."
-          action={
-            <Button size="sm" variant="secondary" onClick={() => updateParams({ filter: null, absence: null })}>
-              Показати всі пари
-            </Button>
-          }
-        />
-      ) : (
-        <LessonList
-          groups={visibleGroups}
-          showDates={period === 'week' || workspace.absences.some((a) => a.dateFrom !== a.dateTo)}
-          selectedKey={selectedKey}
-          pulsing={pulsing}
-          onSelect={(entry) => selectEntry(entry)}
-          onEditAbsence={(absence) => openDialog(absence)}
-          onCancelAbsence={(absence) => void cancelAbsenceFlow(absence)}
-        />
-      )}
-    </section>
   );
 
   let body;
   if (workspace.error && workspace.absences.length === 0) {
-    body = <ErrorState error={workspace.error} onRetry={workspace.retry} />;
+    body = <PageErrorBanner error={workspace.error} title="Не вдалося завантажити відсутності" onRetry={workspace.retry} retrying={workspace.loading} />;
   } else if (weekend) {
     body = (
       <EmptyState
-        title={`${formatWeekdayDate(date)} — вихідний`}
-        description="Пар цього дня немає. Відсутності на вихідні не потрібні — перейдіть до найближчого навчального дня."
+        title={`${formatWeekdayDate(date)} — вихідний, пар немає.`}
+        description="Відсутності на вихідні не потрібні."
         action={
-          <Button variant="primary" onClick={() => setDate(nextStudyDay)}>
+          <Button variant="secondary" onClick={() => setDate(nextStudyDay)}>
             До {formatWeekdayDateAfterDo(nextStudyDay)}
           </Button>
         }
         secondaryAction={
-          <Button variant="secondary" onClick={() => updateParams({ period: 'week' })}>
+          <Button variant="ghost" onClick={() => updateParams({ period: 'week' })}>
             Показати тиждень
           </Button>
         }
       />
     );
+  } else if (workspace.offline) {
+    body = <OfflineState />;
   } else if (!workspace.loading && workspace.absences.length === 0) {
     body = (
       <EmptyState
-        title={period === 'day' ? 'Відсутніх немає' : 'Цього тижня відсутніх немає'}
-        description="Коли викладач повідомить про відсутність — через бота, кабінет чи телефоном, — його пари зʼявляться тут разом з варіантами заміни."
+        title={period === 'day' ? `На ${formatWeekdayDateAfterNa(date)} ніхто не відсутній.` : 'Цього тижня ніхто не відсутній.'}
+        description="Коли викладач повідомить про відсутність через бота чи кабінет, його пари зʼявляться тут разом з варіантами заміни."
         action={
-          <Button variant="primary" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-            Нова відсутність
+          <Button variant="ghost" className="-ms-3" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+            Додати відсутність
           </Button>
         }
       />
     );
-  } else {
+  } else if (workspace.loading && workspace.entries.length === 0) {
     body = (
-      <div
-        className={cn(
-          'grid items-start gap-4',
-          panes === 3 && 'grid-cols-[15.5rem_minmax(0,1fr)_minmax(0,1.2fr)]',
-          panes === 2 && 'grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]',
-        )}
-      >
-        {panes === 3 ? (
-          <aside aria-label="Відсутні" className="sticky top-[calc(var(--sticky-top)+1rem)] flex flex-col gap-2">
-            <h2 className="px-1 text-heading font-semibold text-primary">Відсутні</h2>
-            <AbsenceList
-              absences={workspace.absences}
-              entries={workspace.entries}
-              selectedId={selectedAbsenceId}
-              onSelect={(id) => updateParams({ absence: id, lesson: null })}
-              loading={workspace.loading}
-            />
+      <div className="rounded-panel border border-default bg-surface">
+        <WorkspaceSkeleton columns={panes} />
+      </div>
+    );
+  } else if (panes === 3) {
+    body = (
+      <div className="grid grid-cols-[28fr_32fr_40fr] items-stretch rounded-panel border border-default bg-surface">
+        <section aria-labelledby="absent-heading" className="flex min-w-0 flex-col gap-2 p-3">
+          <h2 id="absent-heading" className="px-3 pt-2 text-ui font-[650] text-secondary">
+            Відсутні
+          </h2>
+          {absenceList(false)}
+        </section>
+        <div className="min-w-0 border-s border-separator p-3 pt-5">{lessons()}</div>
+        <aside aria-label="Рішення" className="min-w-0 border-s border-separator">
+          <div className={cn('p-5', STICKY)}>{optionsPanel(true)}</div>
+        </aside>
+      </div>
+    );
+  } else if (panes === 2) {
+    body = (
+      <div className="flex flex-col gap-4">
+        <AbsenceStrip
+          absences={workspace.absences}
+          entries={workspace.entries}
+          selectedId={selectedAbsenceId}
+          onSelect={(id) => selectAbsence(id)}
+          onAdd={openNewAbsence}
+        />
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-stretch rounded-panel border border-default bg-surface">
+          <div className="min-w-0 p-3 pt-5">{lessons()}</div>
+          <aside aria-label="Рішення" className="min-w-0 border-s border-separator">
+            <div className={cn('p-5', STICKY)}>{optionsPanel(true)}</div>
           </aside>
-        ) : null}
-        <div className="min-w-0 rounded-panel border border-default bg-surface p-3">{lessonsPane}</div>
-        {panes > 1 ? (
-          <aside
-            aria-label="Варіанти рішення"
-            className="sticky top-[calc(var(--sticky-top)+1rem)] max-h-[calc(100dvh-var(--sticky-top)-2rem)] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-default bg-surface p-4"
-          >
-            {optionsPanel ?? (
-              <EmptyState
-                size="sm"
-                title="Оберіть пару"
-                description="Ліворуч — пари відсутніх. Оберіть одну, щоб побачити варіанти: інша дисципліна групи, перестановка чи скасування."
-              />
-            )}
-          </aside>
-        ) : null}
+        </div>
+      </div>
+    );
+  } else {
+    // телефон і вузький планшет: по рівнях, і з кожного видно дорогу назад
+    body = (
+      <div className="rounded-panel border border-default bg-surface p-2 pt-3">
+        {group
+          ? lessons(
+              <button
+                type="button"
+                onClick={() => selectAbsence(null)}
+                className="ms-1 inline-flex min-h-9 w-fit items-center gap-0.5 rounded-control pe-2 text-ui font-[550] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+              >
+                <ChevronLeft aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
+                Усі відсутні
+              </button>,
+            )
+          : absenceList(true)}
       </div>
     );
   }
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-5">
+    <div ref={rootRef} className="flex flex-col gap-6">
       <PageHeader
         title="Заміни"
-        description="Відсутні викладачі, їхні пари і найкращі варіанти заміни з підтвердженням у Telegram."
-        meta={
-          <>
-            <span className="text-ui font-semibold text-primary">{rangeLabel}</span>
-            {/* панель попередньої дати (keepPreviousData) може мати іншу парність — показуємо лише свою */}
-            {dashboard.data && !dashboard.isPlaceholderData && period === 'day' && !weekend ? (
-              <ParityBadge parity={dashboard.data.parity} size="sm" />
-            ) : null}
-            {counts.action > 0 ? (
-              <span className="text-caption font-semibold text-danger">{counts.action} без рішення</span>
-            ) : workspace.entries.length > 0 ? (
-              <span className="text-caption font-semibold text-add">Усі пари вирішено</span>
-            ) : null}
-          </>
-        }
-        actions={
+        meta={workspace.entries.length > 0 && !weekend ? <ResolvedProgress done={done} total={workspace.entries.length} /> : null}
+        controls={
           <>
             <SegmentedControl<Period>
               aria-label="Період"
-              size="sm"
               value={period}
               onValueChange={(value) => updateParams({ period: value === 'day' ? null : value, lesson: null })}
               options={[
@@ -483,26 +453,25 @@ export default function ChangesPage() {
                 { value: 'week', label: 'Тиждень' },
               ]}
             />
-            <Link to={`/admin/orders?date=${date}`} className={buttonClass({ variant: 'secondary' })}>
+            <Link to={`/admin/orders?date=${date}`} className={buttonClass({ variant: 'secondary', className: 'max-sm:hidden' })}>
               <FileText aria-hidden="true" className="size-4" />
               Розпорядження
             </Link>
-            <Button variant="secondary" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-              Нова відсутність
-              <span aria-hidden="true" className="ms-1 hidden xl:inline-flex">
-                <Kbd>N</Kbd>
-              </span>
-            </Button>
           </>
         }
+        more={[
+          { label: 'Нова відсутність', icon: <CalendarPlus aria-hidden="true" />, onSelect: openNewAbsence },
+          // на телефоні кнопка «Розпорядження» ховається, щоб керування вмістилися в один рядок
+          ...(narrow ? [{ label: 'Розпорядження', icon: <FileText aria-hidden="true" />, to: `/admin/orders?date=${date}` }] : []),
+        ]}
       />
 
       {body}
 
       {panes === 1 ? (
         <Drawer direction="right" open={Boolean(explicit)} onOpenChange={(open) => !open && updateParams({ lesson: null })}>
-          <DrawerContent side="right" title="Варіанти рішення" description={explicit ? `${explicit.item.lesson.group.code}, ${explicit.item.lesson.pair} пара` : undefined}>
-            {optionsPanel}
+          <DrawerContent side="right" title={explicit ? `${explicit.item.lesson.group.code}, ${explicit.item.lesson.pair} пара` : 'Варіанти'}>
+            {optionsPanel(false)}
           </DrawerContent>
         </Drawer>
       ) : null}
@@ -515,10 +484,8 @@ export default function ChangesPage() {
         absence={dialog.absence}
         semester={meta.data?.semester ?? null}
         onSaved={(absence, created) => {
-          updateParams({ absence: absence.id, lesson: null, filter: null });
-          notify.success(created ? `Відсутність додано: ${absence.teacher.shortName}` : `Відсутність змінено: ${absence.teacher.shortName}`, {
-            description: absencePeriod(absence),
-          });
+          updateParams({ absence: absence.id, lesson: null });
+          notify.success(`${created ? 'Відсутність додано' : 'Відсутність змінено'}: ${absence.teacher.shortName}, ${absencePeriod(absence)}`);
         }}
       />
     </div>

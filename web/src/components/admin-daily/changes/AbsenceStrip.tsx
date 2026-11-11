@@ -1,35 +1,49 @@
+import { Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
-import { Chip } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { LESSON_STATE, type LessonEntry } from '../model';
 
 interface AbsenceStripProps {
   absences: readonly AbsenceDto[];
   entries: readonly LessonEntry[];
   selectedId: Uuid | null;
-  onSelect: (id: Uuid | null) => void;
+  onSelect: (id: Uuid) => void;
+  onAdd: () => void;
 }
 
-/** Вузька розкладка: відсутні — рядком фільтрів; число — пари без рішення. */
-export function AbsenceStrip({ absences, entries, selectedId, onSelect }: AbsenceStripProps) {
-  const open = (absenceId?: Uuid) =>
-    entries.filter((e) => (!absenceId || e.absence.id === absenceId) && LESSON_STATE[e.state].needsAction).length;
+/**
+ * Середня ширина: відсутні — рядком над робочою панеллю. Замість лічильників — бурштинова крапка в тих,
+ * у кого ще є пари без рішення (число — у підписі для читача екрана).
+ */
+export function AbsenceStrip({ absences, entries, selectedId, onSelect, onAdd }: AbsenceStripProps) {
+  const open = (absenceId: Uuid) => entries.filter((e) => e.absence.id === absenceId && LESSON_STATE[e.state].needsAction).length;
   return (
-    <div role="group" aria-label="Відсутні викладачі" className="flex flex-wrap gap-1.5">
-      <Chip selected={selectedId === null} onToggle={() => onSelect(null)} count={open()} aria-label={`Усі відсутні, без рішення: ${open()}`}>
-        Усі
-      </Chip>
-      {absences.map((absence) => (
-        <Chip
-          key={absence.id}
-          selected={absence.id === selectedId}
-          onToggle={() => onSelect(absence.id === selectedId ? null : absence.id)}
-          count={open(absence.id)}
-          aria-label={`${absence.teacher.shortName}, без рішення: ${open(absence.id)}`}
-          className="shrink-0"
-        >
-          {absence.teacher.shortName}
-        </Chip>
-      ))}
+    <div role="group" aria-label="Відсутні викладачі" className="flex flex-wrap items-center gap-1.5">
+      {absences.map((absence) => {
+        const selected = absence.id === selectedId;
+        const left = open(absence.id);
+        return (
+          <button
+            key={absence.id}
+            type="button"
+            aria-pressed={selected}
+            aria-label={`${absence.teacher.shortName}${left > 0 ? `, без рішення: ${left}` : ', усе вирішено'}`}
+            onClick={() => onSelect(absence.id)}
+            className={cn(
+              'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',
+              'transition-[background-color,border-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+              selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover:bg-hover hover:text-primary',
+            )}
+          >
+            {absence.teacher.shortName}
+            {left > 0 ? <span aria-hidden="true" className="size-2 rounded-full bg-[var(--fill-change)]" /> : null}
+          </button>
+        );
+      })}
+      <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+        Додати відсутність
+      </Button>
     </div>
   );
 }

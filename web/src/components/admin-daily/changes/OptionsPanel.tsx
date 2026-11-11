@@ -1,15 +1,14 @@
-import { ChevronDown, DoorOpen, MonitorSmartphone, UserRoundSearch } from 'lucide-react';
+import { CalendarRange, ChevronDown, UserRoundSearch } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode, TeacherRef } from '@/api/types';
-import { Button, EmptyState, ErrorState, LoadingRegion, Plate, Skeleton } from '@/components/ui';
-import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
-import { lineAttr } from '@/lib/discipline-color';
-import { ABSENCE_REASON_LABEL, subgroupLabel } from '@/lib/labels';
-import { lessonTime } from '@/lib/schedule';
-import { absencePeriod } from '../format';
+import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui';
+import { formatInstantTime } from '@/lib/date';
+import { plural } from '@/lib/labels';
 import {
   actionLabel,
+  bandHeading,
+  effectiveOptionKey,
   EMPTY_POOL_TEXT,
   isOpen,
   optionButtonId,
@@ -27,51 +26,23 @@ import { OtherTeacherDialog } from './OtherTeacherDialog';
 import { ReasonPicker } from './ReasonPicker';
 import { MANUAL_KEY, PLAN_KEY } from './useDecisionActions';
 
-/** Шапка панелі: яку пару вирішуємо — час, група, дисципліна, аудиторія, хто відсутній. */
-function LessonSummary({ entry }: { entry: LessonEntry }) {
-  const { lesson, date } = entry.item;
-  const subgroup = subgroupLabel(lesson.subgroup);
+const OPTION_FORMS = ['варіант', 'варіанти', 'варіантів'] as const;
+
+/** Шапка колонки: яку пару вирішуємо, одним реченням — замість чого, коли й де. */
+function LessonHeading({ entry, open, showTitle }: { entry: LessonEntry; open: boolean; showTitle: boolean }) {
+  const { lesson } = entry.item;
+  const what = `${lesson.group.code}${lesson.subgroup > 0 ? ` (${lesson.subgroup} п/г)` : ''}, ${lesson.pair} пара`;
+  const where = [lesson.startsAt ? `о ${lesson.startsAt}` : null, lesson.room ? `ауд. ${lesson.room.name}` : null, lesson.online ? 'дистанційно' : null]
+    .filter(Boolean)
+    .join(', ');
   return (
-    <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-x-3">
-      <div className="flex flex-col items-center leading-none">
-        <span className="font-condensed text-headline font-bold text-primary figures">{lesson.pair}</span>
-        <span className="mt-1 text-meta text-muted">пара</span>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-caption text-secondary figures">
-          {formatWeekdayDate(date)}
-          {lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}
-        </p>
-        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Plate>{lesson.group.code}</Plate>
-          {subgroup ? <span className="text-caption text-secondary">{subgroup}</span> : null}
-          <span {...lineAttr(lesson.discipline)} aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-[var(--line-dot)]" />
-          <span className="font-condensed text-heading leading-tight font-bold text-primary">{lesson.discipline.shortName}</span>
-        </p>
-        {lesson.discipline.name !== lesson.discipline.shortName ? (
-          <p className="text-caption text-secondary">{lesson.discipline.name}</p>
-        ) : null}
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-secondary">
-          {lesson.room ? (
-            <span className="inline-flex items-center gap-1">
-              <DoorOpen aria-hidden="true" className="size-3.5 text-muted" />
-              ауд. {lesson.room.name}
-            </span>
-          ) : null}
-          {lesson.online ? (
-            <span className="inline-flex items-center gap-1">
-              <MonitorSmartphone aria-hidden="true" className="size-3.5 text-muted" />
-              дистанційно
-            </span>
-          ) : null}
-        </p>
-        <p className="text-caption text-muted">
-          <span className="text-secondary line-through decoration-[var(--text-decoration-color-muted)]">{entry.absence.teacher.shortName}</span>
-          {' — '}
-          {ABSENCE_REASON_LABEL[entry.absence.reasonCategory].toLocaleLowerCase('uk')}, {absencePeriod(entry.absence)}
-        </p>
-      </div>
-    </div>
+    <header className="flex flex-col gap-1">
+      {showTitle ? <h3 className="text-heading font-bold text-pretty text-primary">{open ? `Варіанти для ${what}` : what}</h3> : null}
+      <p className="text-caption text-secondary">
+        Замість <span className="font-semibold text-primary">{lesson.discipline.shortName}</span> · {entry.absence.teacher.shortName}
+        {where ? <span className="figures"> {where}</span> : null}
+      </p>
+    </header>
   );
 }
 
@@ -84,6 +55,7 @@ interface OptionsPanelProps {
   reasonText: string;
   onReasonCodeChange: (code: ReasonCode) => void;
   onReasonTextChange: (text: string) => void;
+  /** Явний вибір диспетчера; без нього обрано рекомендований (якщо є). */
   selectedKey: string | null;
   onSelect: (option: ChangeOption) => void;
   expanded: boolean;
@@ -98,15 +70,17 @@ interface OptionsPanelProps {
   onResend: () => void;
   onConfirm: () => void;
   onCancelDecision: () => void;
+  /** Заголовок «Варіанти для 4КІ1, 3 пара»; у шторці його несе заголовок шторки. */
+  showTitle?: boolean;
 }
 
 /**
- * Права колонка: яку пару вирішуємо, ухвалене рішення (якщо є) і варіанти одним списком у порядку сервера.
- * Видно три, решта — за «Ще варіанти». Клік чи 1–9 лише обирають; дія — кнопка в обраному рядку або Enter.
- * Ручний шлях — «Інший викладач…»; кілька пар дня — «Запропонувати план дня».
+ * Колонка «Варіанти»: яку пару вирішуємо, ухвалене рішення (якщо є) і варіанти в порядку сервера.
+ * Рекомендований перший — розгорнутий блок з єдиною головною дією; решта — назва й одне речення,
+ * згруповані реченнями «Теж підходить», «З нюансами», «Крайній випадок». Видно три, решта — за «Ще…».
  */
 export function OptionsPanel(props: OptionsPanelProps) {
-  const { entry, selectedKey, onSelect, pickingKey, expanded } = props;
+  const { entry, onSelect, pickingKey, expanded } = props;
   const open = isOpen(entry.state);
   const lessonId = entry.item.lesson.id;
   const options = useLessonOptions(open ? lessonId : null);
@@ -120,88 +94,87 @@ export function OptionsPanel(props: OptionsPanelProps) {
   const shown = expanded ? list : list.slice(0, VISIBLE_OPTIONS);
   const hidden = list.length - shown.length;
   const heading = optionsHeading(list, past);
+  const selectedKey = effectiveOptionKey(list, props.selectedKey);
+  const recommended = Boolean(list[0]?.recommended);
 
   return (
-    <div className="@container flex flex-col gap-4">
-      <LessonSummary entry={entry} />
+    <div className="@container flex flex-col gap-5">
+      <LessonHeading entry={entry} open={open} showTitle={props.showTitle ?? true} />
 
       {entry.change && entry.state !== 'uncovered' ? (
-        <div className="border-t border-separator pt-4">
-          <DecisionCard
-            change={entry.change}
-            state={entry.state}
-            busy={props.decisionBusy}
-            onResend={props.onResend}
-            onConfirm={props.onConfirm}
-            onCancel={props.onCancelDecision}
-          />
-        </div>
+        <DecisionCard
+          change={entry.change}
+          state={entry.state}
+          busy={props.decisionBusy}
+          onResend={props.onResend}
+          onConfirm={props.onConfirm}
+          onCancel={props.onCancelDecision}
+        />
       ) : null}
 
       {open ? (
-        <section aria-labelledby={`${listId}-title`} className="flex flex-col gap-3 border-t border-separator pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <h3 id={`${listId}-title`} className="text-ui font-semibold text-primary">
-              Як закрити пару
-            </h3>
-            {props.planCount >= 2 ? (
-              <Button variant="secondary" size="sm" onClick={() => setPlanDialog(true)}>
-                Запропонувати план дня
-              </Button>
-            ) : null}
-          </div>
-
+        <section aria-label="Варіанти рішення" className="flex flex-col gap-3">
           {options.isPending ? (
             <LoadingRegion label="Підбираємо варіанти…">
               <div className="flex flex-col gap-2">
-                {[0, 1, 2].map((key) => (
-                  <Skeleton key={key} className="h-20 w-full" />
-                ))}
+                <Skeleton className="h-28 w-full rounded-popover" />
+                <Skeleton className="h-14 w-full rounded-popover" />
+                <Skeleton className="h-14 w-full rounded-popover" />
               </div>
             </LoadingRegion>
           ) : options.isError ? (
             <ErrorState error={options.error} onRetry={() => void options.refetch()} size="sm" />
           ) : (
             <>
-              {heading ? <p className="text-caption text-secondary">{heading}</p> : null}
+              {heading ? <p className="text-ui text-secondary">{heading}</p> : null}
               {declined.length > 0 ? (
-                <p className="text-caption text-secondary">
+                <p className="text-caption text-muted">
                   Відмовились: {declined.map((d) => `${d.teacher.shortName} (${formatInstantTime(d.at)})`).join(', ')}
                 </p>
               ) : null}
               {poolIsEmpty(list) ? <p className="text-caption text-secondary">{EMPTY_POOL_TEXT}</p> : null}
               {list.length === 0 ? (
-                <EmptyState title="Немає варіантів" description="Сервер не запропонував жодного рішення для цієї пари." size="sm" align="start" />
+                <EmptyState title="Сервер не запропонував жодного варіанта." description="Призначте викладача вручну." size="sm" />
               ) : (
-                <ol id={`${listId}-list`} className="flex flex-col gap-2" aria-label="Варіанти">
+                <ol id={`${listId}-list`} className="-mx-1.5 flex flex-col gap-1" aria-label="Варіанти">
                   {shown.map((option, index) => {
                     const key = optionKey(option);
+                    const best = index === 0 && recommended;
+                    // підзаголовок — коли змінюється смуга; перший рядок без рекомендації — без нього (є речення вище)
+                    const label = bandHeading(option.band);
+                    const previous = index === 0 ? null : index === 1 && recommended ? 'best' : bandHeading(shown[index - 1]?.band ?? 'CLEAN');
+                    const showHeading = !best && (index === 0 ? label !== 'Теж підходить' : label !== previous);
+                    const selected = selectedKey === key;
                     return (
-                      <OptionRow
-                        key={key}
-                        option={option}
-                        selectId={optionButtonId(lessonId, index)}
-                        hotkey={index < 9 ? index + 1 : null}
-                        selected={selectedKey === key}
-                        busy={pickingKey === key}
-                        disabled={pickingKey !== null}
-                        actionLabel={actionLabel(option, props.approvalMode)}
-                        onSelect={onSelect}
-                        onAct={props.onAct}
-                        actionExtra={
-                          <ReasonPicker
-                            code={props.reasonCode}
-                            text={props.reasonText}
-                            onCodeChange={props.onReasonCodeChange}
-                            onTextChange={props.onReasonTextChange}
-                          />
-                        }
-                      />
+                      <li key={key} className="flex flex-col">
+                        {showHeading ? <p className="px-3.5 pt-3 pb-1 text-ui font-[650] text-secondary">{label}</p> : null}
+                        <OptionRow
+                          option={option}
+                          selectId={optionButtonId(lessonId, index)}
+                          hotkey={index < 9 ? index + 1 : null}
+                          selected={selected}
+                          best={best}
+                          busy={pickingKey === key}
+                          disabled={pickingKey !== null}
+                          actionLabel={actionLabel(option, props.approvalMode)}
+                          onSelect={onSelect}
+                          onAct={props.onAct}
+                          actionExtra={
+                            <ReasonPicker
+                              collapsible
+                              code={props.reasonCode}
+                              text={props.reasonText}
+                              onCodeChange={props.onReasonCodeChange}
+                              onTextChange={props.onReasonTextChange}
+                            />
+                          }
+                        />
+                      </li>
                     );
                   })}
                 </ol>
               )}
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
                 {hidden > 0 || expanded ? (
                   <Button
                     variant="ghost"
@@ -211,17 +184,17 @@ export function OptionsPanel(props: OptionsPanelProps) {
                     onClick={() => props.onExpandedChange(!expanded)}
                     iconEnd={<ChevronDown aria-hidden="true" className={expanded ? 'size-4 rotate-180' : 'size-4'} />}
                   >
-                    {expanded ? 'Менше варіантів' : `Ще варіанти (${hidden})`}
+                    {expanded ? 'Менше варіантів' : `Ще ${hidden} ${plural(hidden, OPTION_FORMS)}`}
                   </Button>
                 ) : null}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setTeacherDialog(true)}
-                  iconStart={<UserRoundSearch aria-hidden="true" className="size-4" />}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setTeacherDialog(true)} iconStart={<UserRoundSearch aria-hidden="true" className="size-4" />}>
                   Інший викладач…
                 </Button>
+                {props.planCount >= 2 ? (
+                  <Button variant="ghost" size="sm" onClick={() => setPlanDialog(true)} iconStart={<CalendarRange aria-hidden="true" className="size-4" />}>
+                    Запропонувати план дня
+                  </Button>
+                ) : null}
               </div>
             </>
           )}
