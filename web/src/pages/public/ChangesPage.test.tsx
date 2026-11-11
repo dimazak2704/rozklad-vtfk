@@ -1,5 +1,6 @@
 import { onlineManager, QueryClient } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiPath } from '@/mocks/kit';
@@ -63,7 +64,7 @@ describe('«Заміни»: імпортоване паперове розпор
 });
 
 describe('«Заміни»: розпорядження з доповненнями', () => {
-  it('називає доповнення, дає їхні PDF і позначає рядки з доповнень; заголовок — «на вівторок»', async () => {
+  it('називає доповнення, дає їхні PDF у «⋯» і позначає рядки з доповнень; заголовок — «Заміни»', async () => {
     const row = (pairLabel: string, orderNumber: number) => ({
       pairLabel,
       rowType: 'CANCELLATION',
@@ -91,16 +92,25 @@ describe('«Заміни»: розпорядження з доповненням
       ),
     );
 
+    const user = userEvent.setup();
     renderWithProviders(<ChangesPage />, { route: '/changes?date=2026-12-22' });
 
-    expect(await screen.findByRole('link', { name: /Доповнення №45/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1, name: /Заміни на вівторок, 22/ })).toBeInTheDocument();
+    // заголовок — одне слово (не ламається на телефоні), дата — для читача екрана
+    expect(await screen.findByRole('heading', { level: 1, name: /Заміни на вівторок, 22/ })).toBeInTheDocument();
+    // рядок основного розпорядження без позначки, рядок доповнення — з нею
+    expect(await screen.findByText(/з доповнення №49/)).toBeInTheDocument();
+    // джерело — тихою приміткою під списком
     expect(screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'доповнення №45, №49')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Доповнення №45/ })).toHaveAttribute('href', expect.stringContaining('order-45.pdf'));
-    expect(screen.getByRole('link', { name: /Доповнення №49/ })).toHaveAttribute('href', expect.stringContaining('order-49.pdf'));
-    // рядок основного розпорядження без позначки, рядок доповнення — з нею (таблиця й картки)
-    expect(screen.getAllByText('Доповнення №49').length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText('Доповнення №43')).not.toBeInTheDocument();
+    expect(screen.queryByText(/з доповнення №43/)).not.toBeInTheDocument();
+    // «Пари не буде» — один раз на рядок, а не значок і ще рядок
+    expect(screen.getAllByText('Пари не буде')).toHaveLength(2);
+
+    // файли документів — у меню «⋯», а не чотирма кнопками над списком
+    expect(screen.queryByRole('link', { name: /Доповнення №45/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ще дії' }));
+    expect(await screen.findByRole('menuitem', { name: /Доповнення №45 — PDF/ })).toHaveAttribute('href', expect.stringContaining('order-45.pdf'));
+    expect(screen.getByRole('menuitem', { name: /Доповнення №49 — PDF/ })).toHaveAttribute('href', expect.stringContaining('order-49.pdf'));
+    expect(screen.getByRole('menuitem', { name: /Розпорядження №43 — PDF/ })).toBeInTheDocument();
   });
 });
 

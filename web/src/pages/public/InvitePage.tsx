@@ -5,14 +5,14 @@ import { isApiError } from '@/api/errors';
 import { useInvite } from '@/api/public';
 import { paths } from '@/app/routes';
 import { InviteForm } from '@/components/public/invite/InviteForm';
-import { ErrorState, LoadingRegion, Skeleton, buttonClass } from '@/components/ui';
+import { ErrorState, LoadingRegion, PageHeader, Skeleton, buttonClass } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { formatInstant } from '@/lib/date';
 
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-5 py-4 sm:py-10">
-      <h1 className="text-title font-semibold text-primary">{title}</h1>
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5 py-2 sm:py-8">
+      <PageHeader size="headline" title={title} />
       {children}
     </div>
   );
@@ -38,7 +38,7 @@ export default function InvitePage() {
   if (created) {
     return (
       <Frame title="Обліковий запис створено">
-        <p className="flex items-start gap-2.5 rounded-panel border border-add bg-add-subtle px-4 py-3 text-body text-primary" role="status">
+        <p className="flex items-start gap-2.5 text-body text-primary" role="status">
           <CircleCheck aria-hidden="true" className="mt-1 size-5 shrink-0 text-add" />
           <span>
             Ваш логін — <span className="font-semibold">{created}</span>. Увійдіть із ним і паролем: відкриється кабінет з вашим
@@ -110,13 +110,12 @@ export default function InvitePage() {
 
   return (
     <Frame title="Реєстрація викладача">
-      <div className="flex flex-col gap-1 rounded-panel border border-default bg-surface px-4 py-3">
-        <p className="text-ui text-secondary">Запрошення для</p>
-        <p className="text-heading font-semibold text-primary">{info.teacherName}</p>
-        <p className="text-caption text-muted figures">Діє до {formatInstant(info.expiresAt)}</p>
-      </div>
-      <p className="text-ui text-secondary">
-        Придумайте логін і пароль. Пароль зберігається лише на сервері входу в захищеному вигляді — диспетчер його не бачить.
+      <p className="text-body text-secondary">
+        Запрошення для <span className="font-[650] text-primary">{info.teacherName}</span> — придумайте логін і пароль.
+        Диспетчер пароля не бачить.
+        <span className="mt-1 block text-caption text-muted">
+          Посилання діє до <span className="figures">{formatInstant(info.expiresAt)}</span>.
+        </span>
       </p>
       <InviteForm token={token} onAccepted={setCreated} onGone={setGone} />
     </Frame>

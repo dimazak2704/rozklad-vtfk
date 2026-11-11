@@ -1,10 +1,10 @@
 import type { BellProfileDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { bellColumns, breakAfter, pairMinutes } from './bells-columns';
+import { bellColumns, breakAfter, pairMinutes, usualPairMinutes } from './bells-columns';
 
-/** Ледь помітне тло сьогоднішньої колонки (половина «вибраного»). */
-const TODAY_TINT = 'bg-[color-mix(in_oklab,var(--background-color-selected)_45%,transparent)]';
+/** Нерозривний пробіл: «10 хв» не розривається між рядками. */
+const NBSP = String.fromCharCode(0xa0);
 
 interface BellsTableProps {
   profile: BellProfileDto;
@@ -17,25 +17,26 @@ interface BellsTableProps {
 
 /**
  * Дзвінки профілю таблицею: пари рядками, дні з однаковими дзвінками — колонками; під часом — перерва.
- * Сьогоднішня колонка виділена, поточна пара — «живим» кольором зі смужкою прогресу.
+ * Тривалість пари пишемо лише тоді, коли вона не звичайна. Сьогоднішня колонка тонована, поточна пара —
+ * тлом і словом «зараз» (без смужок прогресу: «живу» доріжку дня показує відлік над таблицею).
  */
 export function BellsTable({ profile, todayWeekday, live = false, className }: BellsTableProps) {
   const columns = bellColumns(profile);
+  const usual = usualPairMinutes(profile);
   const todayColumn = columns.find((column) => column.weekdays.some((day) => day === todayWeekday)) ?? null;
   const { status } = useNow(live && todayColumn ? todayColumn.slots : null);
   const currentPair = status?.kind === 'in-pair' ? status.current.pair : null;
   const upcomingPair = status?.kind === 'break' || status?.kind === 'before-day' ? status.next.pair : null;
-  const progress = status?.kind === 'in-pair' ? status.progress : 0;
   const maxPairs = Math.max(0, ...columns.map((column) => column.slots.length));
   const pairs = Array.from({ length: maxPairs }, (_, index) => index + 1);
 
   return (
     <div className={cn('overflow-x-auto rounded-panel border border-default bg-surface', className)}>
-      <table className="w-full min-w-[18rem] border-collapse text-start">
+      <table className="w-full min-w-[17rem] border-collapse text-start">
         <caption className="sr-only">Дзвінки: {profile.name}</caption>
         <thead>
-          <tr className="bg-sunken">
-            <th scope="col" className="w-16 border-b border-default px-3 py-2.5 text-start text-caption font-semibold text-secondary">
+          <tr>
+            <th scope="col" className="w-14 border-b border-separator px-4 py-3 text-start text-caption font-semibold text-secondary sm:w-20">
               Пара
             </th>
             {columns.map((column) => {
@@ -45,10 +46,7 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                   key={column.label}
                   scope="col"
                   aria-current={isToday ? 'date' : undefined}
-                  className={cn(
-                    'border-b px-3 py-2.5 text-start text-ui font-semibold',
-                    isToday ? 'border-b-2 border-b-[var(--border-color-accent)] bg-selected text-primary' : 'border-default text-primary',
-                  )}
+                  className={cn('border-b border-separator px-3 py-3 text-start text-ui font-semibold text-primary', isToday && 'bg-today-wash')}
                 >
                   <span className="sm:hidden">{column.short}</span>
                   <span className="hidden sm:inline">{column.label}</span>
@@ -61,8 +59,8 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
         <tbody>
           {pairs.map((pair) => (
             <tr key={pair} className="border-b border-separator last:border-b-0">
-              <th scope="row" className="px-3 py-2.5 text-start align-top">
-                <span className={cn('font-condensed text-headline leading-none font-bold figures', pair === currentPair && todayColumn ? 'text-accent' : 'text-primary')}>
+              <th scope="row" className="px-4 py-3 text-start align-top">
+                <span className={cn('font-display text-title font-semibold figures', pair === currentPair && todayColumn ? 'text-accent' : 'text-primary')}>
                   {pair}
                 </span>
               </th>
@@ -71,29 +69,26 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                 const isToday = column === todayColumn;
                 const now = isToday && pair === currentPair;
                 const upcoming = isToday && pair === upcomingPair;
-                const gap = slot ? breakAfter(column.slots, pair) : null;
                 if (!slot) {
                   return (
-                    <td key={column.label} className={cn('px-3 py-2.5 align-top text-caption text-disabled', isToday && TODAY_TINT)}>
+                    <td key={column.label} className={cn('px-3 py-3 align-top text-caption text-muted', isToday && 'bg-today-wash')}>
                       пари немає
                     </td>
                   );
                 }
+                const gap = breakAfter(column.slots, pair);
+                const minutes = pairMinutes(slot);
+                const note = [minutes !== usual ? `${minutes}${NBSP}хв` : null, gap !== null ? `перерва ${gap}${NBSP}хв` : null]
+                  .filter(Boolean)
+                  .join(' · ');
                 return (
                   <td
                     key={column.label}
                     aria-current={now ? 'time' : undefined}
-                    className={cn('relative px-3 py-2.5 align-top', now && 'bg-selected', isToday && !now && TODAY_TINT)}
+                    className={cn('px-3 py-3 align-top', now ? 'bg-selected' : isToday && 'bg-today-wash')}
                   >
-                    {now ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute inset-x-0 top-0 h-0.5 origin-left bg-accent motion-safe:transition-transform motion-safe:duration-1000 motion-safe:ease-linear rtl:origin-right"
-                        style={{ transform: `scaleX(${Math.max(0.02, progress)})` }}
-                      />
-                    ) : null}
                     <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="text-body font-semibold text-primary figures">
+                      <span className="text-body font-semibold whitespace-nowrap text-primary figures">
                         {slot.startsAt}
                         <span className="font-normal text-muted">–</span>
                         {slot.endsAt}
@@ -101,9 +96,7 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                       {now ? <span className="text-caption font-semibold text-accent">зараз</span> : null}
                       {upcoming ? <span className="text-caption font-semibold text-secondary">далі</span> : null}
                     </span>
-                    <span className="mt-0.5 block text-meta font-normal text-muted figures">
-                      {pairMinutes(slot)} хв{gap !== null ? ` · перерва ${gap} хв` : ''}
-                    </span>
+                    {note ? <span className="mt-0.5 block text-caption text-muted figures">{note}</span> : null}
                   </td>
                 );
               })}

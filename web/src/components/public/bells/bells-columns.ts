@@ -60,3 +60,15 @@ export function breakAfter(slots: readonly BellSlotDto[], pair: number): number 
 export function pairMinutes(slot: BellSlotDto): number {
   return timeToMinutes(slot.endsAt) - timeToMinutes(slot.startsAt);
 }
+
+/** Звичайна тривалість пари профілю (найчастіша): її не пишемо в кожній клітинці, лише відхилення. */
+export function usualPairMinutes(profile: BellProfileDto): number | null {
+  const counts = new Map<number, number>();
+  for (const slot of profile.slots) {
+    const minutes = pairMinutes(slot);
+    counts.set(minutes, (counts.get(minutes) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  for (const [minutes, count] of counts) if (best === null || count > (counts.get(best) ?? 0)) best = minutes;
+  return best;
+}

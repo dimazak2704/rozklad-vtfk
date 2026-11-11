@@ -1,11 +1,11 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { usePublicMeta } from '@/api/meta';
 import { useBellProfiles } from '@/api/public';
 import type { Weekday } from '@/api/types';
 import { BellsTable } from '@/components/public/bells/BellsTable';
 import { bellColumns } from '@/components/public/bells/bells-columns';
 import { NowIndicator } from '@/components/schedule';
-import { ErrorState, LoadingRegion, PageHeader, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingRegion, PageErrorScope, PageHeader, ParityBadge, Skeleton } from '@/components/ui';
 import { formatWeekdayDate, isoWeekday, todayInKyiv } from '@/lib/date';
 
 function BellsSkeleton() {
@@ -20,7 +20,10 @@ function BellsSkeleton() {
   );
 }
 
-/** Розклад дзвінків: профіль, що діє (сьогоднішній день виділено), живий відлік і інші профілі для довідки. */
+/**
+ * Дзвінки: відлік і доріжка дня зверху (у навчальний день), під ними — таблиця профілю, що діє, зі
+ * сьогоднішньою колонкою. Інші профілі — згорнуті, для довідки.
+ */
 export default function BellsPage() {
   const profiles = useBellProfiles();
   const meta = usePublicMeta();
@@ -34,68 +37,62 @@ export default function BellsPage() {
     active && studyToday ? (bellColumns(active).find((c) => c.weekdays.includes(weekday as Weekday))?.slots ?? null) : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageErrorScope queries={[profiles, meta]} title="Дзвінки зараз не завантажуються" className="gap-8">
       <PageHeader
+        size="headline"
         title="Дзвінки"
-        description={
-          active
-            ? `Діє профіль «${active.name}». Сьогодні ${formatWeekdayDate(today).toLocaleLowerCase('uk')}${studyToday ? '' : ' — пар немає'}.`
-            : 'Час пар і перерв за профілем дзвінків, що діє.'
+        meta={
+          <>
+            <span>{formatWeekdayDate(today)}</span>
+            {studyToday && meta.data?.parity ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <ParityBadge parity={meta.data.parity} size="sm" />
+              </>
+            ) : (
+              <span>· пар немає</span>
+            )}
+          </>
         }
       />
+
+      {todaySlots && todaySlots.length > 0 ? <NowIndicator variant="strip" bells={todaySlots} date={today} /> : null}
 
       {profiles.isPending ? (
         <BellsSkeleton />
       ) : profiles.isError ? (
-        <ErrorState
-          error={profiles.error}
-          title="Не вдалося завантажити дзвінки"
-          onRetry={() => void profiles.refetch()}
-          retrying={profiles.isFetching}
-          className="rounded-panel border border-default bg-surface"
-        />
+        <ErrorState error={profiles.error} title="Не вдалося завантажити дзвінки" onRetry={() => void profiles.refetch()} retrying={profiles.isFetching} />
       ) : !active ? (
-        <ErrorState title="Профіль дзвінків не знайдено" description="Сервер не повернув профіль, що діє. Спробуйте трохи згодом." className="rounded-panel border border-default bg-surface" />
+        <EmptyState title="Профіль дзвінків ще не налаштовано." description="Щойно диспетчер його налаштує, час пар зʼявиться тут." />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 flex-col gap-3">
-            <BellsTable profile={active} todayWeekday={studyToday ? weekday : null} live={studyToday} />
-            <p className="text-caption text-muted">
-              Групи першої зміни починають з першої пари, другої зміни — з пізніших пар. Які саме пари у вашої групи, видно в її
-              розкладі.
-            </p>
-          </section>
-
-          <aside className="flex min-w-0 flex-col gap-6">
-            {todaySlots && todaySlots.length > 0 ? (
-              <section aria-label="Зараз" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
-                <h2 className="text-heading font-semibold text-primary">Зараз</h2>
-                <NowIndicator bells={todaySlots} date={today} className="pb-2" />
-              </section>
-            ) : null}
-
-            {others.length > 0 ? (
-              <section aria-labelledby="other-profiles" className="flex flex-col gap-3">
-                <h2 id="other-profiles" className="text-heading font-semibold text-primary">
-                  Інші профілі
-                </h2>
-                <p className="text-ui text-secondary">Зараз не діють. Профіль перемикає диспетчер, і тоді він зʼявиться вгорі.</p>
-                {others.map((profile) => (
-                  <details key={profile.id} className="group rounded-panel border border-default bg-surface">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-panel px-4 py-3 text-ui font-semibold text-primary hover:bg-hover focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
-                      <ChevronRight aria-hidden="true" className="size-4 text-muted motion-safe:transition-transform motion-safe:duration-150 group-open:rotate-90 rtl:rotate-180" />
-                      {profile.name}
-                    </summary>
-                    <div className="px-2 pb-2">
-                      <BellsTable profile={profile} todayWeekday={null} className="border-0" />
-                    </div>
-                  </details>
-                ))}
-              </section>
-            ) : null}
-          </aside>
-        </div>
+        <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 max-w-4xl flex-col gap-3">
+          <BellsTable profile={active} todayWeekday={studyToday ? weekday : null} live={studyToday} />
+          <p className="max-w-prose text-caption text-muted">
+            Профіль «{active.name}». Групи першої зміни починають з першої пари, другої — з пізніших; які саме пари у вашої
+            групи, видно в її розкладі.
+          </p>
+        </section>
       )}
-    </div>
+
+      {others.length > 0 ? (
+        <section aria-labelledby="other-profiles" className="flex flex-col gap-2">
+          <h2 id="other-profiles" className="text-heading font-bold text-primary">
+            Інші профілі
+          </h2>
+          <p className="text-ui text-secondary">Зараз не діють. Профіль перемикає диспетчер — тоді він стане основним.</p>
+          {others.map((profile) => (
+            <details key={profile.id} className="group border-b border-separator last:border-b-0">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-control text-ui font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+                {profile.name}
+                <ChevronDown aria-hidden="true" className="size-4 text-muted motion-safe:transition-transform motion-safe:duration-200 group-open:rotate-180" />
+              </summary>
+              <div className="pb-4">
+                <BellsTable profile={profile} todayWeekday={null} />
+              </div>
+            </details>
+          ))}
+        </section>
+      ) : null}
+    </PageErrorScope>
   );
 }

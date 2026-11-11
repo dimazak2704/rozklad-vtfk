@@ -7,7 +7,7 @@ import { paths } from '@/app/routes';
 import { QrPlate } from '@/components/public/QrPlate';
 import { TELEGRAM_BOT_HANDLE, TELEGRAM_BOT_URL } from '@/components/public/telegram';
 import { LessonCell } from '@/components/schedule';
-import { KbdCombo, PageHeader, ParityBadge, ParityMark, buttonClass } from '@/components/ui';
+import { PageHeader, ParityBadge, ParityMark, buttonClass } from '@/components/ui';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 
 /** Приклад заняття для легенди: лише ілюстрація станів, не дані розкладу. */
@@ -64,16 +64,6 @@ const FEATURES: ReadonlyArray<[string, string]> = [
   ['Друк і QR', 'Тиждень на аркуш A4 і табличка з QR-кодом на двері аудиторії.'],
 ];
 
-const SHORTCUTS: ReadonlyArray<[string, string]> = [
-  ['mod+k', 'пошук групи, викладача чи аудиторії'],
-  ['arrowleft', 'попередній день чи тиждень'],
-  ['arrowright', 'наступний день чи тиждень'],
-  ['t', 'повернутися до сьогодні'],
-  ['d', 'подання «День»'],
-  ['w', 'подання «Тиждень»'],
-  ['?', 'усі скорочення сторінки'],
-];
-
 function Block({ title, children, id }: { title: string; children: ReactNode; id: string }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
@@ -91,13 +81,14 @@ export default function AboutPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Про систему"
-        description="«Розклад ВТФК» збирає розклад занять, заміни й дзвінки Вінницького технічного фахового коледжу в одному місці. Без входу: відкрийте свою групу — і побачите пари на сьогодні з урахуванням замін."
-      />
+      <PageHeader size="headline" title="Про систему" />
 
       <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="flex min-w-0 flex-col gap-10">
+          <p className="max-w-prose text-body text-secondary">
+            «Розклад ВТФК» збирає розклад занять, заміни й дзвінки коледжу в одному місці. Вхід не потрібен: відкрийте
+            свою групу — і побачите пари на сьогодні з урахуванням замін.
+          </p>
           <Block title="Що тут є" id="about-features">
             <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
               {FEATURES.map(([term, description]) => (
@@ -111,8 +102,8 @@ export default function AboutPage() {
 
           <Block title="Як читати розклад" id="about-legend">
             <p className="max-w-prose text-body text-secondary">
-              Зміни їдуть поверх розкладу, як оголошення про обʼїзд: оригінал лишається видимим, нове — виділене своїм
-              кольором і підписане. Нижче — приклади станів: наведіть курсор на пару або натисніть на неї, щоб побачити всі деталі.
+              Зміна лежить поверх розкладу: над парою — слово стану, те, що було, — закреслене. Наведіть курсор на пару
+              або натисніть на неї, щоб побачити подробиці.
             </p>
             <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
               {LEGEND.map(({ lesson, text }) => (
@@ -124,15 +115,15 @@ export default function AboutPage() {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-col gap-2 rounded-panel border border-default bg-surface p-4">
+            <div className="flex flex-col gap-2 pt-2">
               <h3 className="flex items-center gap-2 text-heading font-semibold text-primary">
-                <ParityMark parity="NUMERATOR" className="text-accent" />
+                <ParityMark parity="NUMERATOR" className="text-secondary" />
                 Чисельник і знаменник
               </h3>
               <p className="max-w-prose text-ui text-secondary">
                 Навчальні тижні чергуються. У тиждень-чисельник діють пари з верхнього рядка друкованого розкладу, у
                 знаменник — з нижнього; пари на обидва рядки йдуть щотижня. Сайт уже показує пари саме вашого тижня, а
-                поточний тиждень видно в шапці.
+                поточний тиждень видно на головній і в розкладі групи.
               </p>
               {meta.data ? (
                 <p className="flex flex-wrap items-center gap-2 text-ui text-secondary">
@@ -140,19 +131,6 @@ export default function AboutPage() {
                 </p>
               ) : null}
             </div>
-          </Block>
-
-          <Block title="Швидкі клавіші" id="about-keys">
-            <dl className="grid max-w-xl grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5">
-              {SHORTCUTS.map(([keys, description]) => (
-                <div key={keys} className="contents">
-                  <dt>
-                    <KbdCombo keys={keys} />
-                  </dt>
-                  <dd className="text-ui text-secondary">{description}</dd>
-                </div>
-              ))}
-            </dl>
           </Block>
 
           <Block title="На телефоні як застосунок" id="about-install">
@@ -176,8 +154,8 @@ export default function AboutPage() {
         </div>
 
         <aside className="flex min-w-0 flex-col gap-6" aria-label="Telegram і вхід">
-          <section aria-labelledby="about-bot" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
-            <h2 id="about-bot" className="text-heading font-semibold text-primary">
+          <section aria-labelledby="about-bot" className="flex flex-col gap-3">
+            <h2 id="about-bot" className="text-heading font-bold text-primary">
               Telegram-бот {TELEGRAM_BOT_HANDLE}
             </h2>
             <p className="text-ui text-secondary">
@@ -191,8 +169,8 @@ export default function AboutPage() {
             </a>
           </section>
 
-          <section aria-labelledby="about-teachers" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
-            <h2 id="about-teachers" className="text-heading font-semibold text-primary">
+          <section aria-labelledby="about-teachers" className="flex flex-col gap-3 border-t border-separator pt-6">
+            <h2 id="about-teachers" className="text-heading font-bold text-primary">
               Викладачам
             </h2>
             <p className="text-ui text-secondary">

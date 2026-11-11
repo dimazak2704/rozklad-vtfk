@@ -1,34 +1,27 @@
-import { FileImage, FileText, Search, Star, WifiOff, X } from 'lucide-react';
+import { FileImage, FileText, Search, WifiOff, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { orderDocumentUrl, usePublicChanges } from '@/api/public';
 import type { IsoDate } from '@/api/types';
 import { ChangesList } from '@/components/public/changes/ChangesList';
-import {
-  coursesIn,
-  filterChangeGroups,
-  hasMyTargets,
-  myTargets,
-  parseCourses,
-} from '@/components/public/changes/changes-filter';
+import { filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
 import { useOnline } from '@/components/public/useOnline';
 import {
   Button,
-  Chip,
   DateNav,
   EmptyState,
   ErrorState,
   Input,
   LoadingRegion,
+  PageErrorScope,
+  PageHeader,
   ParityBadge,
   SegmentedControl,
   Skeleton,
   StatusDot,
-  Tooltip,
-  buttonClass,
+  type MoreMenuItem,
 } from '@/components/ui';
-import { cn } from '@/lib/cn';
 import {
   compareIsoDates,
   formatInstant,
@@ -44,14 +37,18 @@ import {
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 
+/** Пошук групи зʼявляється, лише коли список довгий: на 3–4 групи він тільки заважає. */
+const SEARCH_FROM = 6;
+/** Місцевий: «у 4 групах». */
+const GROUP_FORMS_LOC = ['групі', 'групах', 'групах'] as const;
 /** Знахідний після дієслова: «мають 1 групу». */
 const GROUP_FORMS_ACC = ['групу', 'групи', 'груп'] as const;
-const ROW_FORMS = ['зміна', 'зміни', 'змін'] as const;
-/** Знахідний після «Показано» і родовий після «з»: «Показано 1 зміну з 2 змін». */
-const ROW_FORMS_ACC = ['зміну', 'зміни', 'змін'] as const;
-const ROW_FORMS_GEN = ['зміни', 'змін', 'змін'] as const;
-/** Порожній стан у рамці: EmptyState ліворуч не має власних полів. */
-const EMPTY_BOX = 'rounded-panel border border-default bg-surface px-5';
+const ROW_FORMS = ['заміна', 'заміни', 'замін'] as const;
+/** Знахідний після «Показано» і родовий після «з»: «Показано 1 заміну з 2 замін». */
+const ROW_FORMS_ACC = ['заміну', 'заміни', 'замін'] as const;
+const ROW_FORMS_GEN = ['заміни', 'замін', 'замін'] as const;
+/** Порожній стан — речення на тлі сторінки, без рамки. */
+const EMPTY_BOX = 'py-2';
 
 function ChangesSkeleton() {
   return (
@@ -71,7 +68,10 @@ function ChangesSkeleton() {
   );
 }
 
-/** Сторінка «Заміни»: сьогодні, наступний день чи будь-яка дата; пошук групи, курси, «лише мої». */
+/**
+ * «Заміни»: сьогодні, наступний день чи будь-яка дата. Заголовок — слово «Заміни», дата — у перемикачі,
+ * один рядок підсумку; файли розпорядження — у «⋯», джерело — тихою приміткою під списком.
+ */
 export default function ChangesPage() {
   const [params, setParams] = useSearchParams();
   const online = useOnline();
@@ -81,8 +81,6 @@ export default function ChangesPage() {
   const rawDate = params.get('date');
   const date = nearestStudyDay(isIsoDate(rawDate) ? rawDate : home);
   const query = params.get('q') ?? '';
-  const courseParam = params.get('course');
-  const courses = useMemo(() => parseCourses(courseParam), [courseParam]);
   const mineOnly = params.get('mine') === '1';
   const favorites = useFavoritesStore((state) => state.favorites);
   const mine = useMemo(() => myTargets(favorites), [favorites]);
@@ -106,11 +104,10 @@ export default function ChangesPage() {
 
   const groups = useMemo(() => changes.data?.groups ?? [], [changes.data]);
   const filtered = useMemo(
-    () => filterChangeGroups(groups, { query, courses, mineOnly: mineOnly && hasMyTargets(mine) }, mine),
-    [groups, query, courses, mineOnly, mine],
+    () => filterChangeGroups(groups, { query, courses: [], mineOnly: mineOnly && hasMyTargets(mine) }, mine),
+    [groups, query, mineOnly, mine],
   );
-  const availableCourses = coursesIn(groups);
-  const filtering = query.trim() !== '' || courses.length > 0 || mineOnly;
+  const filtering = query.trim() !== '' || (mineOnly && hasMyTargets(mine));
   const rowCount = filtered.reduce((sum, g) => sum + g.items.length, 0);
   const order = changes.data?.order;
   const amendments = changes.data?.amendments ?? [];
@@ -145,7 +142,6 @@ export default function ChangesPage() {
         title="Не вдалося завантажити заміни"
         onRetry={() => void changes.refetch()}
         retrying={changes.isFetching}
-        className="rounded-panel border border-default bg-surface"
       />
     );
   } else if (groups.length === 0 && !order && !changes.data.studyDay) {
@@ -196,7 +192,7 @@ export default function ChangesPage() {
         title="За цим фільтром змін немає"
         description={`Загалом зміни мають ${countLabel(groups.length, GROUP_FORMS_ACC)}. Перевірте код групи або скиньте фільтри.`}
         action={
-          <Button variant="secondary" onClick={() => patch({ q: null, course: null, mine: null })}>
+          <Button variant="secondary" onClick={() => patch({ q: null, mine: null })}>
             Скинути фільтри
           </Button>
         }
@@ -206,166 +202,142 @@ export default function ChangesPage() {
     content = <ChangesList groups={filtered} date={date} myGroupIds={mine.groupIds} mainOrderNumber={order?.number ?? null} />;
   }
 
+  const more: MoreMenuItem[] = [];
+  if (order && !order.imported) {
+    more.push(
+      { label: `Розпорядження №${order.number} — зображення`, icon: <FileImage aria-hidden="true" className="size-4" />, href: orderDocumentUrl(order.id, 'png') },
+      { label: `Розпорядження №${order.number} — PDF`, icon: <FileText aria-hidden="true" className="size-4" />, href: orderDocumentUrl(order.id, 'pdf') },
+    );
+  }
+  for (const amendment of amendments.filter((item) => !item.imported)) {
+    more.push({ label: `Доповнення №${amendment.number} — PDF`, icon: <FileText aria-hidden="true" className="size-4" />, href: orderDocumentUrl(amendment.id, 'pdf') });
+  }
+
+  const totalRows = groups.reduce((sum, g) => sum + g.items.length, 0);
+  const summary =
+    groups.length > 0 ? (
+      <span className="inline-flex flex-wrap items-center gap-x-2" aria-live="polite">
+        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : null}
+        <span>
+          {filtering
+            ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(totalRows, ROW_FORMS_GEN)}`
+            : `${countLabel(totalRows, ROW_FORMS)} у ${countLabel(groups.length, GROUP_FORMS_LOC)}`}
+        </span>
+        {changes.dataUpdatedAt > 0 ? (
+          <span className="text-muted">оновлено о {formatInstantTime(new Date(changes.dataUpdatedAt).toISOString())}</span>
+        ) : null}
+      </span>
+    ) : null;
+
+  // джерело — тихою приміткою під списком: номери документів потрібні тим, хто звіряє з папером
+  const source = order ? (
+    <p className="text-caption text-muted">
+      Джерело: розпорядження{order.number !== null ? <span className="figures"> №{order.number}</span> : null}
+      {/* паперове розпорядження внесене в систему пізніше: час імпорту — не час видання */}
+      {order.imported ? (
+        <> (паперове, внесене в систему)</>
+      ) : order.publishedAt ? (
+        <>
+          , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
+        </>
+      ) : null}
+      {/* рядки доповнень надруковані в їхніх власних документах, не в основному розпорядженні */}
+      {amendments.length > 0 ? (
+        <>
+          ;{' '}
+          <span>
+            доповнення{' '}
+            {amendments.map((amendment, index) => (
+              <span key={amendment.id} className="figures">
+                {index > 0 ? ', ' : ''}№{amendment.number}
+              </span>
+            ))}
+          </span>
+        </>
+      ) : null}
+      .
+    </p>
+  ) : null;
+
+  const showSearch = groups.length >= SEARCH_FROM || query.trim() !== '';
+  const showMine = hasMyTargets(mine) && groups.length > 1;
+
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <h1 className="text-headline font-semibold tracking-[-0.005em] text-primary">
-              Заміни <span className="text-secondary">на {formatWeekdayDateAfterNa(date)}</span>
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-ui text-secondary">
-              {changes.data ? <ParityBadge parity={changes.data.parity} size="sm" /> : null}
-              {order ? (
-                <span>
-                  Розпорядження{order.number !== null ? <span className="font-semibold text-primary figures"> №{order.number}</span> : null}
-                  {/* паперове розпорядження внесене в систему пізніше: час імпорту — не час видання */}
-                  {order.imported ? (
-                    <> (паперове, внесене в систему)</>
-                  ) : order.publishedAt ? (
-                    <>
-                      , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
-                    </>
-                  ) : null}
-                </span>
-              ) : changes.data?.studyDay ? (
-                <span>Розпорядження ще немає</span>
-              ) : null}
-              {/* рядки доповнень надруковані в їхніх власних документах, не в основному розпорядженні */}
-              {amendments.length > 0 ? (
-                <span>
-                  доповнення{' '}
-                  {amendments.map((amendment, index) => (
-                    <span key={amendment.id} className="font-semibold text-primary figures">
-                      {index > 0 ? ', ' : ''}№{amendment.number}
-                    </span>
-                  ))}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          {/* файли (PNG, PDF) робить система лише для власних розпоряджень; імпортоване паперове їх не має */}
-          {(order && !order.imported) || amendments.some((amendment) => !amendment.imported) ? (
-            <div className="flex flex-wrap gap-2">
-              {order && !order.imported ? (
-                <>
-                  <Tooltip content={`Розпорядження №${order.number} як зображення`}>
-                    <a href={orderDocumentUrl(order.id, 'png')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
-                      <FileImage aria-hidden="true" className="size-4" />
-                      PNG
-                    </a>
-                  </Tooltip>
-                  <Tooltip content={`Розпорядження №${order.number} у PDF для друку`}>
-                    <a href={orderDocumentUrl(order.id, 'pdf')} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'secondary' })}>
-                      <FileText aria-hidden="true" className="size-4" />
-                      PDF
-                    </a>
-                  </Tooltip>
-                </>
-              ) : null}
-              {amendments
-                .filter((amendment) => !amendment.imported)
-                .map((amendment) => (
-                  <Tooltip key={amendment.id} content={`Доповнення №${amendment.number} у PDF для друку`}>
-                    <a
-                      href={orderDocumentUrl(amendment.id, 'pdf')}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={buttonClass({ variant: 'secondary' })}
+    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються">
+      <PageHeader
+        size="headline"
+        title={
+          <>
+            <span aria-hidden="true">Заміни</span>
+            <span className="sr-only">{`Заміни на ${formatWeekdayDateAfterNa(date)}`}</span>
+          </>
+        }
+        meta={
+          <>
+            {changes.data ? <ParityBadge parity={changes.data.parity} size="sm" /> : null}
+            {summary}
+          </>
+        }
+        controls={
+          <>
+            <SegmentedControl
+              aria-label="Швидкий вибір дня"
+              value={date === home ? 'home' : date === following ? 'next' : ''}
+              onValueChange={(value) => setDate(value === 'home' ? home : following)}
+              options={[
+                { value: 'home', label: quickDay(home) },
+                { value: 'next', label: quickDay(following) },
+              ]}
+            />
+            <DateNav value={date} onChange={setDate} today={today} hotkeys showTodayButton={false} showRelative={false} />
+          </>
+        }
+        more={more}
+      />
+
+      {showSearch || showMine ? (
+        <section aria-label="Фільтри" className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+          {showSearch ? (
+            <div className="w-full sm:w-72">
+              <Input
+                value={query}
+                onChange={(event) => patch({ q: event.target.value })}
+                placeholder="Група, напр. 4КІ1"
+                aria-label="Знайти групу"
+                iconStart={<Search aria-hidden="true" className="size-4" />}
+                endSlot={
+                  query ? (
+                    <button
+                      type="button"
+                      onClick={() => patch({ q: null })}
+                      aria-label="Очистити пошук групи"
+                      className="inline-flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:size-11"
                     >
-                      <FileText aria-hidden="true" className="size-4" />
-                      Доповнення №{amendment.number}
-                    </a>
-                  </Tooltip>
-                ))}
+                      <X aria-hidden="true" className="size-4" />
+                    </button>
+                  ) : undefined
+                }
+              />
             </div>
           ) : null}
-        </div>
+          {showMine ? (
+            <SegmentedControl
+              aria-label="Які заміни показати"
+              value={mineOnly ? 'mine' : 'all'}
+              onValueChange={(value) => patch({ mine: value === 'mine' ? '1' : null })}
+              options={[
+                { value: 'all', label: 'Усі' },
+                { value: 'mine', label: 'Лише мої' },
+              ]}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <SegmentedControl
-            aria-label="Швидкий вибір дня"
-            value={date === home ? 'home' : date === following ? 'next' : ''}
-            onValueChange={(value) => setDate(value === 'home' ? home : following)}
-            options={[
-              { value: 'home', label: quickDay(home) },
-              { value: 'next', label: quickDay(following) },
-            ]}
-          />
-          <DateNav value={date} onChange={setDate} today={today} hotkeys />
-        </div>
-      </header>
-
-      <section aria-label="Фільтри" className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-        <div className="w-full sm:w-64">
-          <Input
-            value={query}
-            onChange={(event) => patch({ q: event.target.value })}
-            placeholder="Група, напр. 4КІ1"
-            aria-label="Знайти групу"
-            iconStart={<Search aria-hidden="true" className="size-4" />}
-            endSlot={
-              query ? (
-                <button
-                  type="button"
-                  onClick={() => patch({ q: null })}
-                  aria-label="Очистити пошук групи"
-                  className="inline-flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus"
-                >
-                  <X aria-hidden="true" className="size-4" />
-                </button>
-              ) : undefined
-            }
-          />
-        </div>
-        {availableCourses.length > 1 ? (
-          <div role="group" aria-label="Курси" className="flex flex-wrap gap-1.5">
-            {availableCourses.map((course) => {
-              const selected = courses.includes(course);
-              return (
-                <Chip
-                  key={course}
-                  selected={selected}
-                  onToggle={() => {
-                    const next = selected ? courses.filter((c) => c !== course) : [...courses, course].sort((a, b) => a - b);
-                    patch({ course: next.length > 0 ? next.join(',') : null });
-                  }}
-                >
-                  {course} курс
-                </Chip>
-              );
-            })}
-          </div>
-        ) : null}
-        {hasMyTargets(mine) ? (
-          <Chip
-            selected={mineOnly}
-            onToggle={() => patch({ mine: mineOnly ? null : '1' })}
-            icon={<Star aria-hidden="true" className={cn('size-3.5', mineOnly && 'fill-current')} />}
-          >
-            Лише мої
-          </Chip>
-        ) : (
-          <Tooltip content="Додайте групу чи викладача в обране — зірочка на сторінці їхнього розкладу">
-            <span tabIndex={0} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
-              <Chip disabled icon={<Star aria-hidden="true" className="size-3.5" />}>
-                Лише мої
-              </Chip>
-            </span>
-          </Tooltip>
-        )}
-        {groups.length > 0 ? (
-          <p className="ms-auto flex items-center gap-2 text-caption text-muted" aria-live="polite">
-            {date === today && online ? <StatusDot tone="live" pulse label="Оновлюється наживо" /> : null}
-            {filtering
-              ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(groups.reduce((s, g) => s + g.items.length, 0), ROW_FORMS_GEN)}`
-              : `${countLabel(rowCount, ROW_FORMS)} у ${countLabel(groups.length, ['групі', 'групах', 'групах'])}`}
-            {changes.dataUpdatedAt > 0 ? ` · о ${formatInstantTime(new Date(changes.dataUpdatedAt).toISOString())}` : ''}
-          </p>
-        ) : null}
-      </section>
-
-      <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined}>{content}</div>
-    </div>
+      <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined} className="flex flex-col gap-3">
+        {content}
+        {source}
+      </div>
+    </PageErrorScope>
   );
 }

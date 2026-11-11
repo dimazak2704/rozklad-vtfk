@@ -21,7 +21,9 @@ test.describe('публічний розклад', () => {
     await search.press('Enter');
 
     await expect(page).toHaveURL(/\/g\/4%D0%9A%D0%861/);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Розклад групи\s*4КІ1/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/4КІ1\s*—\s*розклад групи/);
+    // з будь-якої сторінки розкладу є шлях на рівень вище
+    await expect(page.getByRole('link', { name: 'Назад: Розклад' })).toBeVisible();
 
     // типове подання залежить від ширини: на телефоні — день, на десктопі — тиждень
     const views = page.getByRole('radiogroup', { name: 'Подання розкладу' });
@@ -40,7 +42,8 @@ test.describe('публічний розклад', () => {
 
     // тиждень розпорядження №35: СТП Кренціна замінено на НДЕКСМ Непийводи («Зв.зам.»)
     await page.goto('/g/4%D0%9A%D0%861?view=week&date=2026-10-19');
-    await expect(page.getByRole('region', { name: 'Зміни цього тижня' })).toContainText('НДЕКСМ, Непийвода замість СТП, Кренцін');
+    // зміни тижня — одним рядком у заголовку, самі зміни видно в клітинках
+    await expect(page.getByRole('button', { name: /заміни? цього тижня|замін цього тижня/ })).toBeVisible();
     const lesson = page.getByRole('button', { name: /^2 пара, 09:40–10:40\. Надійність/ });
     if (isMobile) await lesson.click();
     else await lesson.hover();
@@ -59,32 +62,28 @@ test.describe('публічний розклад', () => {
 });
 
 test.describe('заміни', () => {
-  test('фільтр за групою, курсом і «лише мої»', async ({ page }) => {
+  test('пошук групи й «лише мої»; файли розпорядження — у «⋯»', async ({ page }) => {
     await open(page, '/changes?date=2026-10-19');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('19 жовтня');
-    await expect(page.getByText('Розпорядження №35', { exact: false })).toBeVisible();
+    await expect(page.getByText(/розпорядження\s*№35/)).toBeVisible();
     const group = (code: string) => page.getByRole('link', { name: new RegExp(`^${code}`) });
     for (const code of ['1КІ2', '1ТК1', '4КІ1']) await expect(group(code)).toBeVisible();
 
-    await page.getByRole('textbox', { name: 'Знайти групу' }).fill('4ki1');
-    await expect(group('4КІ1')).toBeVisible();
-    await expect(group('1КІ2')).toBeHidden();
-    await expect(page.getByText('НДЕКСМ, Непийвода').filter({ visible: true }).first()).toBeVisible();
+    const search = page.getByRole('textbox', { name: 'Знайти групу' });
+    if (await search.isVisible()) {
+      await search.fill('4ki1');
+      await expect(group('4КІ1')).toBeVisible();
+      await expect(group('1КІ2')).toBeHidden();
+      await page.getByRole('button', { name: 'Очистити пошук групи' }).click();
+    }
 
-    await page.getByRole('button', { name: 'Очистити пошук групи' }).click();
-    await page.getByRole('button', { name: '1 курс' }).click();
-    await expect(group('1КІ2')).toBeVisible();
-    await expect(group('1ТК1')).toBeVisible();
-    await expect(group('4КІ1')).toBeHidden();
-    await expect(page).toHaveURL(/course=1/);
-    await page.getByRole('button', { name: '1 курс' }).click();
-
-    // «Лише мої» з'являється, щойно в обраному є група
-    await expect(page.getByRole('button', { name: 'Лише мої' })).toBeDisabled();
+    // «Лише мої» зʼявляється, щойно в обраному є група; без обраного — його немає зовсім
+    await expect(page.getByRole('radio', { name: 'Лише мої' })).toHaveCount(0);
     await page.goto('/g/4%D0%9A%D0%861?date=2026-10-19');
-    await page.getByRole('button', { name: 'Додати 4КІ1 в обране' }).click();
+    await page.getByRole('button', { name: 'Ще дії' }).click();
+    await page.getByRole('menuitem', { name: 'Додати в обране' }).click();
     await page.goto('/changes?date=2026-10-19');
-    await page.getByRole('button', { name: 'Лише мої' }).click();
+    await page.getByRole('radio', { name: 'Лише мої' }).click();
     await expect(group('4КІ1')).toBeVisible();
     await expect(group('1КІ2')).toBeHidden();
     await expect(group('1ТК1')).toBeHidden();

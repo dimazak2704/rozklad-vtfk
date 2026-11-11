@@ -65,7 +65,7 @@ export function InviteForm({ token, onAccepted, onGone }: InviteFormProps) {
 
   return (
     <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-      <Field label="Логін" required error={errors.username?.message} hint="Латинськими малими літерами, наприклад kolesnyk.a — з ним ви входитимете.">
+      <Field label="Логін" required error={errors.username?.message} hint="Латиницею, наприклад kolesnyk.a">
         <Input {...form.register('username')} autoComplete="username" autoCapitalize="none" spellCheck={false} inputMode="email" />
       </Field>
       <Field label="Пароль" required error={errors.password?.message}>
