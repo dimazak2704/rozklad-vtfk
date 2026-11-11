@@ -1,9 +1,7 @@
-// Fira Sans: стандартні українські форми кирилиці, табличні цифри; Condensed — для цифр пар, табличок, сітки.
-// Чотири накреслення: 400 / 500 / 600 і Condensed 700 (ієрархія — кроками ваги, не жирністю всього).
-import '@fontsource/fira-sans/400.css';
-import '@fontsource/fira-sans/500.css';
-import '@fontsource/fira-sans/600.css';
-import '@fontsource/fira-sans-condensed/700.css';
+// Manrope — інтерфейс і текст, Geologica — заголовки й цифри. Змінні шрифти лише з віссю ваги (wght.css):
+// браузер вантажить тільки потрібні підмножини (кирилиця й латиниця) за unicode-range.
+import '@fontsource-variable/manrope/wght.css';
+import '@fontsource-variable/geologica/wght.css';
 import './styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

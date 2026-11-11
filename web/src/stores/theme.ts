@@ -37,7 +37,7 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
 
 /**
  * Застосовує тему до <html>. Під час перемикання вимикає CSS-переходи, щоб кольори не «розмазувалися»,
- * а де є View Transitions — нова тема опускається згори, як жалюзі табло.
+ * а де є View Transitions — нова тема проявляється спокійним перехресним згасанням (200 мс).
  */
 export function applyTheme(theme: ResolvedTheme, { animate = false }: { animate?: boolean } = {}): void {
   const root = document.documentElement;
@@ -51,7 +51,7 @@ export function applyTheme(theme: ResolvedTheme, { animate = false }: { animate?
     root.style.colorScheme = theme;
     document
       .querySelector('meta[name="theme-color"]:not([media])')
-      ?.setAttribute('content', theme === 'dark' ? '#0d233f' : '#0c3669');
+      ?.setAttribute('content', theme === 'dark' ? '#0e1116' : '#f8fafd');
     void root.offsetHeight;
     requestAnimationFrame(() => requestAnimationFrame(() => style.remove()));
   };

@@ -1,9 +1,11 @@
-/* Базові стилі: корінь документа, браузерні поверхні (виділення, фокус, скролбари), View Transitions. */
+/* Базові стилі: корінь документа, браузерні поверхні (виділення, фокус, скролбари), зміна теми. */
 
 @layer base {
   :root {
     color-scheme: light;
     scroll-padding-block-start: calc(var(--header-height) + 0.5rem);
+    /* відкрите меню блокує прокрутку — смуга прокрутки не зникає, і сторінка не «стрибає» вбік */
+    scrollbar-gutter: stable;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
@@ -11,6 +13,9 @@
   html {
     font-family: var(--font-sans);
     font-size: 100%;
+    /* Manrope 450 — основний текст; 400 у Manrope виглядає надто тонко на Windows */
+    font-weight: 450;
+    font-optical-sizing: auto;
     background-color: var(--background-color-canvas);
     color: var(--text-color-primary);
     -webkit-font-smoothing: antialiased;
@@ -53,6 +58,11 @@
   h3,
   h4 {
     text-wrap: balance;
+  }
+
+  /* Заголовок сторінки — короткий: переноситься лише цілими словами, ніколи не «Мій / розклад» через брак місця */
+  h1 {
+    overflow-wrap: normal;
   }
 
   p {
@@ -101,9 +111,27 @@
   );
 }
 
-/* Рядок таблиці/сітки: числа однакової ширини, щоб колонки часу не «танцювали» */
+/*
+ * Цифри в стовпчиках (час, номер пари, дата, аудиторія): Geologica з табличними цифрами — у Manrope
+ * таблична «1» робить діри в «11:11». Час усередині речення лишається в Manrope.
+ */
 @utility figures {
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Заголовкові ролі шкали — Geologica; `font-sans` поруч повертає Manrope (утиліти сильніші за цей шар) */
+@layer components {
+  .text-title,
+  .text-headline,
+  .text-display,
+  .text-numeral {
+    font-family: var(--font-display);
+  }
+
+  .text-numeral {
+    font-weight: 300;
+  }
 }
 
 @utility scrollbar-none {
@@ -124,7 +152,7 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background-color: var(--fill-accent);
+    background-color: var(--fill-now);
     opacity: 0;
     pointer-events: none;
   }
@@ -135,7 +163,7 @@
   }
 }
 
-/* Зміна теми — як табло-«жалюзі» трамвая: нова тема опускається згори вниз */
+/* Зміна теми — спокійне перехресне згасання 200 мс */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -144,11 +172,21 @@
 
 @media (prefers-reduced-motion: no-preference) {
   :root[data-theme-switching] ::view-transition-new(root) {
-    animation: blind-roll 280ms var(--ease-out) both;
+    animation: theme-fade 200ms var(--ease-in-out) both;
   }
 }
 
+/* Без руху: переходи й анімації вимкнені, значення оновлюються на місці (лінія стрибає, цифри міняються) */
 @media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   :root[data-theme-switching] ::view-transition-new(root) {
     animation: theme-fade 150ms linear both;
   }
@@ -156,15 +194,6 @@
   .animate-shimmer,
   .animate-live {
     animation: none;
-  }
-}
-
-@keyframes blind-roll {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
   }
 }
 

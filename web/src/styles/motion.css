@@ -1,7 +1,8 @@
 /*
  * Рух лише як відповідь на зміну стану. Radix ставить data-state="open|closed" і data-side.
  * Вхід — ease-out, вихід — коротший з ease-in. Нічого не розмивається й не крутиться безкінечно.
- * Без вподобання руху (prefers-reduced-motion) — лише прозорість ≤ 150 мс.
+ * Без вподобання руху (prefers-reduced-motion) — лише прозорість ≤ 150 мс, а base.css вимикає решту.
+ * Тривалості: 100 натискання · 160 наведення · 200 поповер · 280 діалог і шторка · 1000 «тік» часу.
  */
 
 @layer components {
@@ -74,7 +75,7 @@
     }
 
     .anim-pop[data-state='open'] {
-      animation: pop-in 160ms var(--ease-out);
+      animation: pop-in 200ms var(--ease-out);
     }
 
     .anim-pop[data-state='closed'] {
@@ -82,28 +83,46 @@
     }
 
     .anim-dialog[data-state='open'] {
-      animation: dialog-in 220ms var(--ease-out);
+      animation: dialog-in 280ms var(--ease-out);
     }
 
     .anim-dialog[data-state='closed'] {
-      animation: dialog-out 140ms var(--ease-in) forwards;
+      animation: dialog-out 210ms var(--ease-in) forwards;
     }
 
     .anim-overlay[data-state='open'] {
-      animation: fade-in 220ms var(--ease-out);
+      animation: fade-in 280ms var(--ease-out);
     }
 
     .anim-sheet-left[data-state='open'] {
-      animation: sheet-left-in 260ms var(--ease-out);
+      animation: sheet-left-in 280ms var(--ease-out);
     }
 
     .anim-sheet-left[data-state='closed'] {
-      animation: sheet-left-out 200ms var(--ease-in) forwards;
+      animation: sheet-left-out 210ms var(--ease-in) forwards;
     }
 
     .anim-tint-in {
       background-repeat: no-repeat;
-      animation: tint-sweep 320ms var(--ease-out);
+      animation: fade-in 200ms var(--ease-out) 200ms both;
+    }
+
+    /* Зміна прийшла наживо: лінія закреслення проводиться по старому значенню один раз (200 мс) */
+    .anim-strike {
+      animation: strike-draw 200ms var(--ease-out) both;
+    }
+
+    /* Відлік: нова цифра заходить знизу на 4 px, коли змінюється хвилина */
+    .anim-digit {
+      display: inline-block;
+      animation: digit-in 200ms var(--ease-out) both;
+    }
+
+    /* Пара завершилась: назва й крапка «осідають» до тихішого тону */
+    .anim-settle {
+      transition:
+        color 280ms var(--ease-out),
+        opacity 280ms var(--ease-out);
     }
   }
 }
@@ -155,13 +174,19 @@
   }
 }
 
-/* Тонування зміни, що прийшла наживо: «маркер» проводять по рядку один раз */
-@keyframes tint-sweep {
+@keyframes strike-draw {
   from {
     clip-path: inset(0 100% 0 0);
   }
   to {
     clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes digit-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
 }
 
