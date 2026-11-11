@@ -14,7 +14,7 @@ test.skip(!process.env.QA_SHOTS, 'Візуальні знімки — лише �
 test.describe.configure({ timeout: 240_000 });
 
 const PAGES = [
-  { id: 'dashboard', path: '/admin', heading: 'Сьогодні' },
+  { id: 'dashboard', path: '/admin', heading: 'Огляд' },
   { id: 'changes', path: '/admin/changes', heading: 'Заміни' },
   { id: 'orders', path: '/admin/orders', heading: 'Розпорядження' },
   { id: 'telegram', path: '/admin/telegram', heading: 'Telegram' },

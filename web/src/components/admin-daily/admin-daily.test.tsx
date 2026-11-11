@@ -485,6 +485,23 @@ describe('екран «Заміни»', () => {
     }
   });
 
+  it('«Огляд» після останньої пари: один рядок про завтра замість доріжки, без блоку «Сервіси» і зайвого «⋯»', { timeout: 20_000 }, async () => {
+    // 22:00 за Києвом: усі пари дня скінчилися
+    vi.setSystemTime(new Date('2026-11-09T20:00:00Z'));
+    renderWithProviders(<DashboardPage />, { route: '/admin' });
+    expect(screen.getByRole('heading', { level: 1, name: 'Огляд' })).toBeInTheDocument();
+    const day = await screen.findByRole('region', { name: 'Стан навчального дня' }, WAIT);
+    expect(day).toHaveTextContent(/^Пари закінчилися о \d{2}:\d{2}\./);
+    await waitFor(() => expect(day).toHaveTextContent(/(Завтра \d+ пар\S* без заміни|На завтра)/), WAIT);
+    expect(screen.queryByRole('heading', { name: 'Сервіси' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ще дії' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(day).getByRole('button', { name: 'Перейти на завтра' }));
+    // на завтра живого стану немає — рядок зникає, заголовок той самий
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Стан навчального дня' })).not.toBeInTheDocument(), WAIT);
+    expect(screen.getByRole('heading', { level: 1, name: 'Огляд' })).toBeInTheDocument();
+  });
+
   it('розпорядження без мережі — пояснення замість вічного силуету аркуша', { timeout: 20_000 }, async () => {
     onlineManager.setOnline(false);
     try {

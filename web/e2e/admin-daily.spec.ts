@@ -112,7 +112,7 @@ test.describe('щоденна робота диспетчера', () => {
 
   test('панель: пара без рішення веде просто до її варіантів', async ({ page }) => {
     await openAsDispatcher(page, '/admin');
-    await expect(page.getByRole('heading', { level: 1, name: 'Сьогодні' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { level: 1, name: 'Огляд' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/Вирішено \d+ з \d+/)).toBeVisible();
     const pair = page.getByRole('link').filter({ hasText: 'Потрібне рішення' }).first();
     await pair.click();
@@ -158,7 +158,7 @@ test.describe('щоденна робота диспетчера', () => {
 test('панель на телефоні: без горизонтальної прокрутки', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Перевірка вузького екрана');
   await openAsDispatcher(page, '/admin');
-  await expect(page.getByRole('heading', { level: 1, name: 'Сьогодні' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Огляд' })).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(800);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);

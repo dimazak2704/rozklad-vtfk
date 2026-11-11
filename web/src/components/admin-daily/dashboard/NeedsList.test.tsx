@@ -66,6 +66,23 @@ describe('«Що потребує рішення»', () => {
     expect(links[1]).toHaveAttribute('href', '/admin/changes?date=2026-11-09&lesson=l3');
   });
 
+  it('коли пара — одразу після слова стану; зламаний сервіс — рядок із переходом у розділ', () => {
+    renderWithProviders(
+      <NeedsList
+        date="2026-11-09"
+        pairsKnown
+        calm="—"
+        alerts={[]}
+        serviceAlerts={[{ kind: 'BOT_OFFLINE', severity: 'ERROR', message: 'Telegram-бот не відповідає', link: '/admin/telegram' }]}
+        entries={[entry({ id: 'l5', pair: 5, startsAt: '13:30', endsAt: '14:30' })]}
+      />,
+    );
+    const [pair, bot] = screen.getAllByRole('link');
+    expect(pair).toHaveTextContent(/Потрібне рішення · за\s1\sгод\s30\sхв/);
+    expect(bot).toHaveTextContent('Telegram-бот не відповідає');
+    expect(bot).toHaveAttribute('href', '/admin/telegram');
+  });
+
   it('без пар і сповіщень — одне спокійне речення; пари невідомі — сповіщення сервера показуються всі', () => {
     const { unmount } = renderWithProviders(<NeedsList date="2026-11-09" pairsKnown calm="Сьогодні ніхто не відсутній — замін не потрібно." alerts={[]} entries={[]} />);
     expect(screen.getByText('Сьогодні ніхто не відсутній — замін не потрібно.')).toBeInTheDocument();

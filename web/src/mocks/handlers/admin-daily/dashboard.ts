@@ -54,7 +54,8 @@ export function dashboardFor(world: World, date: IsoDate, now: Date): DashboardD
     alerts.push({
       kind: 'PENDING_OVERDUE',
       severity: 'WARN',
-      message: `${overdue.length} ${plural(overdue.length, ['заміна', 'заміни', 'замін'])} довше встановленого часу чекають підтвердження`,
+      // дієслово узгоджене з числом: «1 заміна … чекає», «2 заміни … чекають»
+      message: `${overdue.length} ${plural(overdue.length, ['заміна', 'заміни', 'замін'])} довше встановленого часу ${plural(overdue.length, ['чекає', 'чекають', 'чекають'])} підтвердження`,
       link: changesHref,
     });
   }

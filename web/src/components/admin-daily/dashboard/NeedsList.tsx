@@ -40,20 +40,22 @@ interface NeedsListProps {
   pairsKnown: boolean;
   /** Речення, коли рішень не потрібно. */
   calm: ReactNode;
+  /** Зламані сервіси (бот, генератор) — лише коли щось не так, рядками після сповіщень сервера. */
+  serviceAlerts?: readonly DashboardAlert[];
 }
 
 /**
- * «Що потребує рішення»: спершу пари без рішення за часом (сьогодні — з «вже йде» / «за 35 хв»), далі решта
- * сповіщень сервера реченнями. Колір несе лише крапка; кожен рядок веде туди, де це вирішують.
+ * «Що потребує рішення»: спершу пари без рішення за часом (сьогодні — з «вже йде» / «за 35 хв» після слова
+ * стану), далі решта сповіщень сервера і зламані сервіси реченнями. Колір несе лише крапка; кожен рядок веде туди, де це вирішують.
  */
-export function NeedsList({ entries, alerts, date, pairsKnown, calm }: NeedsListProps) {
+export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAlerts = [] }: NeedsListProps) {
   const { clock } = useNow();
   const today = clock.date === date;
   const open = entries
     .filter((entry) => LESSON_STATE[entry.state].needsAction)
     // без профілю дзвінків часу немає — тоді впорядковуємо за номером пари
     .sort((a, b) => a.item.lesson.pair - b.item.lesson.pair || a.item.lesson.group.code.localeCompare(b.item.lesson.group.code, 'uk'));
-  const rest = alerts.filter((alert) => !(pairsKnown && COVERED_BY_PAIRS.has(alert.kind)));
+  const rest = [...alerts.filter((alert) => !(pairsKnown && COVERED_BY_PAIRS.has(alert.kind))), ...serviceAlerts];
 
   if (open.length === 0 && rest.length === 0) {
     return <p className="px-3 py-2 text-body text-secondary">{calm}</p>;
@@ -67,6 +69,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm }: NeedsList
           const minutes = lesson.startsAt ? timeToMinutes(lesson.startsAt) - clock.minutes : null;
           const started = today && minutes !== null && minutes <= 0;
           const over = started && lesson.endsAt !== null && timeToMinutes(lesson.endsAt) <= clock.minutes;
+          const timing = !today || minutes === null ? null : over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`;
           return (
             <li key={`${entry.item.date}-${lesson.id}`}>
               <Row to={`/admin/changes?date=${date}&lesson=${lesson.id}`} className="grid-cols-[3.25rem_minmax(0,1fr)_auto]">
@@ -79,15 +82,18 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm }: NeedsList
                     <span className="figures">{lesson.group.code}</span> · {lesson.discipline.shortName}
                     <span className="font-normal text-secondary"> · {entry.absence.teacher.shortName}</span>
                   </span>
-                  <StateText state={entry.state}>{entry.state === 'declined' ? 'Відмова — потрібен інший варіант' : 'Потрібне рішення'}</StateText>
+                  <StateText state={entry.state}>
+                    {entry.state === 'declined' ? 'Відмова — потрібен інший варіант' : 'Потрібне рішення'}
+                    {/* коли — одразу після слова стану, а не в далекій правій колонці; на вузькому переноситься цілим */}
+                    {timing ? (
+                      <span className={cn('whitespace-nowrap max-sm:block', started && !over ? 'font-semibold text-cancel' : 'font-normal text-muted')}>
+                        <span className="max-sm:hidden"> · </span>
+                        {timing}
+                      </span>
+                    ) : null}
+                  </StateText>
                 </span>
-                {today && minutes !== null ? (
-                  <span className={cn('text-caption whitespace-nowrap', started && !over ? 'font-semibold text-cancel' : 'text-muted')}>
-                    {over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`}
-                  </span>
-                ) : (
-                  <ChevronRight aria-hidden="true" className="size-4 text-muted rtl:rotate-180" />
-                )}
+                <ChevronRight aria-hidden="true" className="size-4 text-muted rtl:rotate-180" />
               </Row>
             </li>
           );

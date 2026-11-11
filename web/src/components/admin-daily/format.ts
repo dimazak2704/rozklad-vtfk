@@ -75,8 +75,9 @@ export function decisionSummary(change: ChangeDto): string {
   }
 }
 
-/** Сума в доларах для витрат ШІ: дрібні суми — до тисячних. */
+const USD = new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol', maximumFractionDigits: 2 });
+
+/** Сума в доларах для витрат ШІ одним форматом на весь застосунок: «0,03 $», «2,00 $» — до центів. */
 export function usd(value: number): string {
-  const digits = value > 0 && value < 0.1 ? 4 : 2;
-  return `${new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value)}${NBSP}$`;
+  return USD.format(value);
 }
