@@ -4,6 +4,7 @@
  */
 import type { ChangeView, PublicChangesDto } from '@/api/types';
 import { matchScore, normalizeText } from '@/lib/search';
+import { reasonHint } from '../schedule/schedule-utils';
 import type { ScheduleTarget } from '@/stores/favorites';
 
 export type ChangeGroup = PublicChangesDto['groups'][number];
@@ -85,4 +86,24 @@ export function coursesIn(groups: readonly ChangeGroup[]): number[] {
 export function parseCourses(raw: string | null): number[] {
   if (!raw) return [];
   return [...new Set(raw.split(',').map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))].sort((a, b) => a - b);
+}
+
+/**
+ * Причина, яку мають щонайменше два рядки й більшість рядків дня («Викладач відсутній»): її пишемо один раз
+ * під списком, а в рядках — лише інші. null — спільної причини немає.
+ */
+export function dominantReason(groups: readonly ChangeGroup[]): string | null {
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const group of groups) {
+    for (const item of group.items) {
+      total += 1;
+      const hint = reasonHint(item.reasonText);
+      if (hint) counts.set(hint, (counts.get(hint) ?? 0) + 1);
+    }
+  }
+  let best: string | null = null;
+  for (const [hint, count] of counts) if (best === null || count > (counts.get(best) ?? 0)) best = hint;
+  const count = best ? (counts.get(best) ?? 0) : 0;
+  return best && count >= 2 && count * 2 > total ? best : null;
 }

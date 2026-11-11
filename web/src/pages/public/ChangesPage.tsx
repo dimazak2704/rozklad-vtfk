@@ -3,13 +3,13 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { orderDocumentUrl, usePublicChanges } from '@/api/public';
 import type { IsoDate } from '@/api/types';
+import { ChangesDatePicker } from '@/components/public/changes/ChangesDatePicker';
 import { ChangesList } from '@/components/public/changes/ChangesList';
-import { filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
+import { dominantReason, filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
 import { useOnline } from '@/components/public/useOnline';
 import {
   Button,
-  DateNav,
   EmptyState,
   ErrorState,
   Input,
@@ -27,6 +27,7 @@ import {
   formatInstant,
   formatInstantTime,
   formatShortWeekdayDate,
+  formatWeekdayDate,
   formatWeekdayDateAfterNa,
   isIsoDate,
   nearestStudyDay,
@@ -34,6 +35,7 @@ import {
   shiftStudyDay,
   todayInKyiv,
 } from '@/lib/date';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 
@@ -101,8 +103,15 @@ export default function ChangesPage() {
       { replace: true },
     );
   const setDate = (next: IsoDate) => patch({ date: nearestStudyDay(next) === home ? null : nearestStudyDay(next) });
+  // ←/→ — попередній і наступний навчальний день; окремих кнопок для цього на екрані немає
+  useHotkeys([
+    { keys: 'arrowleft', handler: () => setDate(shiftStudyDay(date, -1)), description: 'Попередній день', group: 'Заміни' },
+    { keys: 'arrowright', handler: () => setDate(shiftStudyDay(date, 1)), description: 'Наступний день', group: 'Заміни' },
+  ]);
 
   const groups = useMemo(() => changes.data?.groups ?? [], [changes.data]);
+  // однакова причина в кожному рядку — шум: пишемо її один раз під списком, у рядку — лише інші
+  const commonReason = useMemo(() => dominantReason(groups), [groups]);
   const filtered = useMemo(
     () => filterChangeGroups(groups, { query, courses: [], mineOnly: mineOnly && hasMyTargets(mine) }, mine),
     [groups, query, mineOnly, mine],
@@ -199,7 +208,9 @@ export default function ChangesPage() {
       />
     );
   } else {
-    content = <ChangesList groups={filtered} date={date} myGroupIds={mine.groupIds} mainOrderNumber={order?.number ?? null} />;
+    content = (
+      <ChangesList groups={filtered} date={date} myGroupIds={mine.groupIds} mainOrderNumber={order?.number ?? null} commonReason={commonReason} />
+    );
   }
 
   const more: MoreMenuItem[] = [];
@@ -214,18 +225,18 @@ export default function ChangesPage() {
   }
 
   const totalRows = groups.reduce((sum, g) => sum + g.items.length, 0);
+  const updated = changes.dataUpdatedAt > 0 ? formatInstantTime(new Date(changes.dataUpdatedAt).toISOString()) : null;
   const summary =
     groups.length > 0 ? (
       <span className="inline-flex flex-wrap items-center gap-x-2" aria-live="polite">
-        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : null}
+        {/* кольорова лише крапка «наживо», вона ж і розділювач; інакше — той самий « · », що між датою й парністю */}
+        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : <span aria-hidden="true">·</span>}
         <span>
           {filtering
             ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(totalRows, ROW_FORMS_GEN)}`
             : `${countLabel(totalRows, ROW_FORMS)} у ${countLabel(groups.length, GROUP_FORMS_LOC)}`}
+          {updated ? <span className="text-muted">, оновлено о {updated}</span> : null}
         </span>
-        {changes.dataUpdatedAt > 0 ? (
-          <span className="text-muted">оновлено о {formatInstantTime(new Date(changes.dataUpdatedAt).toISOString())}</span>
-        ) : null}
       </span>
     ) : null;
 
@@ -255,7 +266,7 @@ export default function ChangesPage() {
           </span>
         </>
       ) : null}
-      .
+      .{commonReason ? ` Причина замін, якщо біля рядка не сказано інше, — ${commonReason.toLocaleLowerCase('uk')}.` : null}
     </p>
   ) : null;
 
@@ -274,7 +285,13 @@ export default function ChangesPage() {
         }
         meta={
           <>
-            {changes.data ? <ParityBadge parity={changes.data.parity} size="sm" /> : null}
+            <span>{formatWeekdayDate(date)}</span>
+            {changes.data?.parity ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <ParityBadge parity={changes.data.parity} size="sm" />
+              </>
+            ) : null}
             {summary}
           </>
         }
@@ -289,7 +306,7 @@ export default function ChangesPage() {
                 { value: 'next', label: quickDay(following) },
               ]}
             />
-            <DateNav value={date} onChange={setDate} today={today} hotkeys showTodayButton={false} showRelative={false} />
+            <ChangesDatePicker value={date} today={today} onChange={setDate} />
           </>
         }
         more={more}

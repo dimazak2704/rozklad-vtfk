@@ -24,7 +24,15 @@ function joined(discipline?: string | null, teacher?: string | null): string {
 }
 
 /** Один рядок розпорядження реченням: що тепер (головне), що було (закреслено), де. */
-function ChangeRow({ item, mainOrderNumber }: { item: ChangeView; mainOrderNumber: number | null | undefined }) {
+function ChangeRow({
+  item,
+  mainOrderNumber,
+  commonReason,
+}: {
+  item: ChangeView;
+  mainOrderNumber: number | null | undefined;
+  commonReason: string | null;
+}) {
   const state = STATE[item.rowType];
   const before = joined(item.from.discipline, item.from.teacher);
   const after = joined(item.to.discipline, item.to.teacher);
@@ -34,7 +42,8 @@ function ChangeRow({ item, mainOrderNumber }: { item: ChangeView; mainOrderNumbe
   const title = cancelled || roomChange || !after ? before : after;
   const old = !cancelled && !roomChange && after && before && before !== after ? before : null;
   const room = cancelled ? null : roomLabel(item.room);
-  const hint = reasonHint(item.reasonText);
+  const reason = reasonHint(item.reasonText);
+  const hint = reason && reason !== commonReason ? reason : null;
   const fromAmendment = item.orderNumber != null && item.orderNumber !== mainOrderNumber;
   const note = [hint, fromAmendment ? `з доповнення №${item.orderNumber}` : null].filter(Boolean).join(' · ');
 
@@ -83,6 +92,8 @@ interface ChangesListProps {
   myGroupIds: ReadonlySet<string>;
   /** Номер основного розпорядження: рядки з іншим номером надруковані в доповненні. */
   mainOrderNumber?: number | null;
+  /** Причина, спільна для більшості рядків (див. `dominantReason`): у рядках її не повторюємо. */
+  commonReason?: string | null;
 }
 
 /**
@@ -90,7 +101,7 @@ interface ChangesListProps {
  * рядком «що тепер / що було / де». Без табличок-бейджів: стан — словом у своєму кольорі. Свої групи —
  * першими й на тонованому тлі.
  */
-export function ChangesList({ groups, date, myGroupIds, mainOrderNumber }: ChangesListProps) {
+export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonReason = null }: ChangesListProps) {
   const sorted = [...groups].sort((a, b) => Number(isMyGroup(myGroupIds, b.group.id)) - Number(isMyGroup(myGroupIds, a.group.id)));
   return (
     <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
@@ -110,7 +121,7 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber }: Chang
             </Link>
             <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
               {items.map((item, index) => (
-                <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} />
+                <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} commonReason={commonReason} />
               ))}
             </ol>
           </li>

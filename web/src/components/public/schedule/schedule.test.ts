@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DayDto, LessonView, ScheduleDto } from '@/api/types';
 import { bellColumns, breakAfter } from '../bells/bells-columns';
-import { coursesIn, filterChangeGroups, myTargets, parseCourses, sameTeacher, type ChangeGroup } from '../changes/changes-filter';
+import { coursesIn, dominantReason, filterChangeGroups, myTargets, parseCourses, sameTeacher, type ChangeGroup } from '../changes/changes-filter';
 import { parseSubgroup, parseView, resolveScheduleDate, studyWeek } from './schedule-params';
 import {
   activePairs,
@@ -192,6 +192,12 @@ describe('фільтр замін', () => {
     expect(filterChangeGroups(groups, { query: '', courses: [], mineOnly: true }, mine).map((g) => g.group.code)).toEqual(['1КІ2']);
     expect(coursesIn(groups)).toEqual([1, 4]);
     expect(parseCourses('4,1,x,9,1')).toEqual([1, 4]);
+  });
+
+  it('спільну причину пише один раз, лише коли вона в більшості рядків', () => {
+    expect(dominantReason(groups)).toBeNull();
+    const withAbsent = [...groups, { ...groups[0]!, group: { id: 'c', code: '2КІ1', course: 2 } }];
+    expect(dominantReason(withAbsent)).toMatch(/відсутн/i);
   });
 });
 
