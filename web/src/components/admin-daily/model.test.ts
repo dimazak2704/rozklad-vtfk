@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { AffectedLesson, ChangeOption } from '@/api/admin-daily';
-import type { AbsenceDto, ChangeDto, DashboardDto, OrderSummaryDto } from '@/api/types';
-import { buildStops, reachedCount } from './dashboard/morning';
+import type { AbsenceDto, ChangeDto, OrderSummaryDto } from '@/api/types';
 import { pairsText } from './format';
 import {
   actionLabel,
+  bandHeading,
   buildFeed,
   defaultReason,
+  effectiveOptionKey,
   filterFromParam,
   isObjection,
   isOpen,
@@ -326,38 +327,25 @@ describe('стрічка подій', () => {
   });
 });
 
-describe('маршрут ранку', () => {
-  const dashboard: DashboardDto = {
-    date: '2026-11-09',
-    parity: 'NUMERATOR',
-    absences: 3,
-    uncoveredLessons: 4,
-    pending: 2,
-    confirmed: 2,
-    declined: 1,
-    orderDraft: { id: 'd', itemCount: 2 },
-    generation: null,
-    aiSpendToday: null,
-    alerts: [],
-  };
+describe('обраний варіант і смуги', () => {
+  const opt = (patch: Partial<ChangeOption>): ChangeOption =>
+    ({ kind: 'REPLACE_DISCIPLINE', score: 0, title: 't', reasons: [], warnings: [], teacher: null, discipline: null, room: null, swapLesson: null, date: null, pair: null, band: 'CLEAN', recommended: false, suggestedRoom: null, ...patch });
 
-  it('поточна зупинка — перша з незробленою роботою', () => {
-    const stops = buildStops(dashboard, null, '2026-11-09');
-    expect(stops.map((s) => s.state)).toEqual(['done', 'current', 'ahead', 'ahead', 'ahead']);
-    expect(stops[1]).toMatchObject({ value: '4', alarm: true, href: '/admin/changes?date=2026-11-09&filter=uncovered' });
-    expect(stops[2]?.hint).toBe('і 1 відмова: потрібен інший');
-    expect(reachedCount(stops)).toBe(1);
+  it('без явного вибору обрано рекомендований перший; без рекомендації — нічого', () => {
+    const best = opt({ title: 'a', teacher: { id: 't1', shortName: 'А' } as never, recommended: true });
+    const other = opt({ kind: 'CANCEL', title: 'b' });
+    expect(effectiveOptionKey([best, other], null)).toBe(optionKey(best));
+    expect(effectiveOptionKey([best, other], optionKey(other))).toBe(optionKey(other));
+    expect(effectiveOptionKey([{ ...best, recommended: false }, other], null)).toBeNull();
+    // вибір від іншої пари (ключа немає в списку) не діє
+    expect(effectiveOptionKey([other], 'зник')).toBeNull();
   });
 
-  it('коли все закрито й опубліковано — весь маршрут пройдено', () => {
-    const done = buildStops(
-      { ...dashboard, uncoveredLessons: 0, pending: 0, declined: 0, orderDraft: { id: 'd', itemCount: 0 } },
-      { id: 'o', number: 36, date: '2026-11-09', kind: 'ORDER', status: 'PUBLISHED', itemCount: 3, publishedAt: '2026-11-09T05:30:00Z', imported: false },
-      '2026-11-09',
-    );
-    expect(done.every((s) => s.state === 'done')).toBe(true);
-    expect(done[4]?.value).toBe('№36');
-    expect(reachedCount(done)).toBe(5);
+  it('смуги сервера — реченнями, без номерів', () => {
+    expect(bandHeading('CLEAN')).toBe('Теж підходить');
+    expect(bandHeading('EASY_CANCEL')).toBe('Теж підходить');
+    expect(bandHeading('CAUTION')).toBe('З нюансами');
+    expect(bandHeading('LAST')).toBe('Крайній випадок');
   });
 });
 

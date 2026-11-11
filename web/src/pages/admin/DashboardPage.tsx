@@ -2,40 +2,53 @@ import { ArrowLeftRight, FileText } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { useDailyLiveSync, useDashboard, useOrders } from '@/api/admin-daily';
+import { useBells } from '@/api/meta';
 import { OfflineState } from '@/components/admin-daily/OfflineState';
 import { waitsForNetwork } from '@/components/admin-daily/network';
-import { usePublicMeta } from '@/api/meta';
 import { useChangesWorkspace } from '@/components/admin-daily/changes/useChangesWorkspace';
 import { ActivityFeed } from '@/components/admin-daily/dashboard/ActivityFeed';
-import { AlertList } from '@/components/admin-daily/dashboard/AlertList';
-import { MorningRoute } from '@/components/admin-daily/dashboard/MorningRoute';
+import { NeedsList } from '@/components/admin-daily/dashboard/NeedsList';
 import { SystemStatus } from '@/components/admin-daily/dashboard/SystemStatus';
-import { UpcomingUncovered } from '@/components/admin-daily/dashboard/UpcomingUncovered';
 import { useFreshSources } from '@/components/admin-daily/dashboard/useFreshSources';
 import { buildFeed, LESSON_STATE } from '@/components/admin-daily/model';
+import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
+import { NowIndicator } from '@/components/schedule';
 import {
   Button,
   buttonClass,
   EmptyState,
   ErrorState,
   LoadingRegion,
+  PageErrorScope,
   PageHeader,
-  Panel,
-  ParityBadge,
+  Section,
   Skeleton,
-  SkeletonText,
-  StatusDot,
+  type MoreMenuItem,
+  type QueryLike,
 } from '@/components/ui';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
-import { formatWeekdayDate, formatWeekdayDateAfterDo, isWeekend, relativeDayLabel, shiftStudyDay } from '@/lib/date';
+import { formatInstantTime, formatWeekdayDate, formatWeekdayDateAfterDo, isWeekend, relativeDayLabel, shiftStudyDay } from '@/lib/date';
+
+/** Живий стан дня диспетчера: яка пара йде і скільки до дзвінка — лише на сьогодні й лише в навчальний день. */
+function DayNow({ date }: { date: string }) {
+  const bells = useBells(date);
+  const wide = useMediaQuery('(min-width: 768px)', true);
+  const slots = bells.data?.slots ?? [];
+  if (slots.length === 0) return null;
+  return (
+    <div className="rounded-[20px] bg-today-wash px-5 py-5 md:rounded-hero md:px-8 md:py-6">
+      <NowIndicator bells={slots} date={date} variant={wide ? 'strip' : 'compact'} />
+    </div>
+  );
+}
 
 /**
- * Панель диспетчера на робочу дату: маршрут ранку (відсутні → рішення → підтвердження → розпорядження),
- * що горить, найближчі пари без заміни, стрічка подій наживо і стан довколишніх систем.
+ * «Сьогодні» диспетчера: живий стан дня, що потребує рішення (пари й сповіщення реченнями), останні дії
+ * і стан сервісів. Одне головне число — «Вирішено 3 з 7 пар»; решта — словами.
  */
 export default function DashboardPage() {
   const { date, today, setDate } = useWorkingDate();
-  const meta = usePublicMeta();
   useDailyLiveSync();
   const dashboard = useDashboard(date);
   const workspace = useChangesWorkspace(date, 'day');
@@ -65,167 +78,116 @@ export default function DashboardPage() {
   const weekend = isWeekend(date);
   const nextStudyDay = shiftStudyDay(date, 1);
   const relative = relativeDayLabel(date, today);
+  const title = relative === 'Сьогодні' || relative === 'Завтра' ? relative : formatWeekdayDate(date);
   const needsAction = workspace.entries.filter((e) => LESSON_STATE[e.state].needsAction).length;
-  const alerts = summary?.alerts ?? [];
+  const done = workspace.entries.length - needsAction;
+  const draftRows = summary?.orderDraft?.itemCount ?? 0;
+
+  const changesLink = `/admin/changes?date=${date}`;
+  const ordersLink = `/admin/orders?date=${date}`;
+  // одна головна дія — наступний крок дня: закрити пари, а коли їх немає — опублікувати розпорядження
+  const primary =
+    weekend ? null : needsAction > 0 ? (
+      <Link to={changesLink} className={buttonClass({ variant: 'primary' })}>
+        <ArrowLeftRight aria-hidden="true" className="size-4" />
+        До замін
+      </Link>
+    ) : draftRows > 0 ? (
+      <Link to={ordersLink} className={buttonClass({ variant: 'primary' })}>
+        <FileText aria-hidden="true" className="size-4" />
+        Розпорядження
+      </Link>
+    ) : null;
+  const more: MoreMenuItem[] = [
+    { label: 'Заміни', icon: <ArrowLeftRight aria-hidden="true" />, to: changesLink },
+    { label: 'Розпорядження', icon: <FileText aria-hidden="true" />, to: ordersLink },
+  ];
+
+  // одна помилка на сторінку: дані панелі, розпорядження дня й відсутності з рішеннями
+  const workspaceQuery: QueryLike = {
+    isError: Boolean(workspace.error),
+    error: workspace.error,
+    isFetching: workspace.loading,
+    refetch: workspace.retry,
+  };
+
+  const calm =
+    workspace.absences.length === 0
+      ? `${relative ? `${relative} н` : 'Н'}іхто не відсутній — замін не потрібно.`
+      : published && draftRows === 0
+        ? `Усі пари вирішено, розпорядження №${published.number ?? '—'} опубліковане${published.publishedAt ? ` о ${formatInstantTime(published.publishedAt)}` : ''}.`
+        : 'Усі пари вирішено. Лишилося опублікувати розпорядження.';
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PageHeader
-        title="Панель диспетчера"
-        description="Що відбувається з розкладом на робочу дату і що зробити далі."
-        meta={
-          <>
-            <span className="text-ui font-semibold text-primary">
-              {relative ? `${relative}, ` : ''}
-              {formatWeekdayDate(date).toLocaleLowerCase('uk')}
-            </span>
-            {summary && !weekend ? <ParityBadge parity={summary.parity} weekNumber={meta.data?.today === date ? meta.data.weekNumber : undefined} size="sm" /> : null}
-          </>
-        }
-        actions={
-          <>
-            <Link to={`/admin/orders?date=${date}`} className={buttonClass({ variant: 'secondary' })}>
-              <FileText aria-hidden="true" className="size-4" />
-              Розпорядження
-            </Link>
-            <Link to={`/admin/changes?date=${date}`} className={buttonClass({ variant: 'primary' })}>
-              <ArrowLeftRight aria-hidden="true" className="size-4" />
-              До замін
-              {needsAction > 0 ? <span className="rounded-full bg-[var(--fill-surface)] px-1.5 text-meta text-accent figures">{needsAction}</span> : null}
-            </Link>
-          </>
-        }
+        title={title}
+        meta={!weekend && workspace.entries.length > 0 ? <ResolvedProgress done={done} total={workspace.entries.length} /> : null}
+        primaryAction={primary}
+        more={more}
       />
 
       {weekend ? (
-        <Panel>
-          <EmptyState
-            title={`${formatWeekdayDate(date)} — вихідний`}
-            description="Пар немає, тож і замін теж. Підготуйте найближчий навчальний день: відсутності, повідомлені через бота, вже там."
-            action={
-              <Button variant="primary" onClick={() => setDate(nextStudyDay)}>
-                До {formatWeekdayDateAfterDo(nextStudyDay)}
-              </Button>
-            }
-          />
-        </Panel>
-      ) : offline && !summary ? (
-        <Panel>
-          <OfflineState />
-        </Panel>
-      ) : dashboard.isError && !summary ? (
-        <Panel>
-          <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />
-        </Panel>
+        <EmptyState
+          title={`${formatWeekdayDate(date)} — вихідний, пар немає.`}
+          description="Відсутності, повідомлені через бота, уже чекають на найближчий навчальний день."
+          action={
+            <Button variant="secondary" onClick={() => setDate(nextStudyDay)}>
+              До {formatWeekdayDateAfterDo(nextStudyDay)}
+            </Button>
+          }
+        />
       ) : (
-        <Panel title="Маршрут ранку" description="Від відсутностей до опублікованого розпорядження. Натисніть зупинку, щоб перейти до роботи." flush>
-          <MorningRoute dashboard={summary} published={published} date={date} />
-        </Panel>
-      )}
+        <PageErrorScope queries={[dashboard, orders, workspaceQuery]} className="gap-8">
+          {relative === 'Сьогодні' ? <DayNow date={date} /> : null}
 
-      {!weekend ? (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
-            <Panel
-              className="order-1"
-              title="Що потребує уваги"
-              description={alerts.length > 0 ? 'Від термінового до довідкового' : undefined}
-              flush
-            >
-              {!summary && offline ? (
+          <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+            <Section title="Що потребує рішення" className="gap-2">
+              {offline && !summary ? (
                 <OfflineState size="sm" />
-              ) : !summary && dashboard.isError ? (
-                <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} size="sm" />
-              ) : !summary ? (
-                <LoadingRegion label="Завантажуємо сповіщення…" className="flex flex-col gap-3 p-4">
-                  <SkeletonText lines={2} />
-                  <SkeletonText lines={2} />
-                </LoadingRegion>
-              ) : alerts.length === 0 ? (
-                <EmptyState
-                  size="sm"
-                  title="Нічого не горить"
-                  description="Нові відсутності, відмови й прострочені підтвердження зʼявляться тут."
-                />
-              ) : (
-                <AlertList alerts={alerts} />
-              )}
-            </Panel>
-
-            <Panel
-              className="order-3"
-              title="Стрічка подій"
-              description="Відсутності, запити й відповіді в Telegram, публікації — наживо"
-              actions={
-                offline ? (
-                  <StatusDot tone="neutral" label="Немає звʼязку" showLabel />
+              ) : !summary || (workspace.loading && workspace.entries.length === 0) ? (
+                dashboard.isError || workspace.error ? (
+                  <ErrorState error={dashboard.error ?? workspace.error} size="sm" inset />
                 ) : (
-                  <StatusDot tone="live" pulse label="Оновлюється наживо" showLabel />
+                  <LoadingRegion label="Завантажуємо, що потребує рішення…" className="flex flex-col gap-2 px-3 py-2">
+                    {[0, 1, 2].map((key) => (
+                      <Skeleton key={key} className="h-11 w-full rounded-popover" />
+                    ))}
+                  </LoadingRegion>
                 )
-              }
-              flush
-            >
-              {workspace.offline ? (
-                <OfflineState size="sm" />
-              ) : workspace.loading && feed.length === 0 ? (
-                <LoadingRegion label="Завантажуємо події…" className="flex flex-col gap-3 p-4">
-                  {[0, 1, 2, 3].map((key) => (
-                    <Skeleton key={key} className="h-5 w-full" />
-                  ))}
-                </LoadingRegion>
-              ) : workspace.error && feed.length === 0 ? (
-                <ErrorState error={workspace.error} onRetry={workspace.retry} size="sm" />
-              ) : feed.length === 0 ? (
-                <EmptyState size="sm" title="Подій ще немає" description="Щойно хтось повідомить про відсутність чи відповість на запит, подія зʼявиться тут." />
               ) : (
-                <ActivityFeed items={feed} fresh={fresh} />
+                <NeedsList entries={workspace.entries} alerts={summary.alerts} date={date} pairsKnown={!workspace.error} calm={calm} />
               )}
-            </Panel>
-          </div>
+            </Section>
 
-          <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
-            <Panel
-              className="order-2"
-              title="Пари без рішення"
-              description={relative === 'Сьогодні' ? 'За часом початку, з відліком' : 'За часом початку'}
-              flush
-              actions={
-                needsAction > 0 ? (
-                  <Link to={`/admin/changes?date=${date}&filter=uncovered`} className={buttonClass({ variant: 'ghost', size: 'sm' })}>
-                    Усі {needsAction}
-                  </Link>
-                ) : null
-              }
-            >
-              {workspace.offline ? (
-                <OfflineState size="sm" />
-              ) : workspace.loading && workspace.entries.length === 0 ? (
-                <LoadingRegion label="Завантажуємо пари…" className="flex flex-col gap-3 p-4">
-                  {[0, 1, 2].map((key) => (
-                    <Skeleton key={key} className="h-10 w-full" />
-                  ))}
-                </LoadingRegion>
-              ) : needsAction === 0 ? (
-                <EmptyState
-                  size="sm"
-                  title={workspace.entries.length > 0 ? 'Усі пари закрито' : 'Замін не потрібно'}
-                  description={
-                    workspace.entries.length > 0
-                      ? 'Лишилося дочекатися підтверджень і опублікувати розпорядження.'
-                      : 'Відсутніх на цю дату немає.'
-                  }
-                />
-              ) : (
-                <UpcomingUncovered entries={workspace.entries} date={date} />
-              )}
-            </Panel>
+            <div className="flex min-w-0 flex-col gap-10">
+              <Section title="Останні дії" className="gap-2">
+                {workspace.offline ? (
+                  <OfflineState size="sm" />
+                ) : workspace.loading && feed.length === 0 ? (
+                  <LoadingRegion label="Завантажуємо події…" className="flex flex-col gap-2 px-3 py-2">
+                    {[0, 1, 2, 3].map((key) => (
+                      <Skeleton key={key} className="h-5 w-full" />
+                    ))}
+                  </LoadingRegion>
+                ) : feed.length === 0 ? (
+                  workspace.error ? (
+                    <ErrorState error={workspace.error} size="sm" inset />
+                  ) : (
+                    <p className="px-3 py-2 text-body text-secondary">Подій ще немає.</p>
+                  )
+                ) : (
+                  <ActivityFeed items={feed} fresh={fresh} />
+                )}
+              </Section>
 
-            <Panel title="Сервіси" flush className="order-4">
-              <SystemStatus dashboard={summary} />
-            </Panel>
+              <Section title="Сервіси" className="gap-2">
+                <SystemStatus dashboard={summary} unavailable={dashboard.isError && !summary} />
+              </Section>
+            </div>
           </div>
-        </div>
-      ) : null}
+        </PageErrorScope>
+      )}
     </div>
   );
 }

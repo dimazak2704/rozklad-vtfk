@@ -17,11 +17,11 @@ const GENERATION: Record<GenerationJobStatus, { text: string; tone: StatusTone }
 
 function Row({ icon, title, children, href, label }: { icon: ReactNode; title: string; children: ReactNode; href: string; label: string }) {
   return (
-    <li className="border-b border-separator last:border-b-0">
+    <li>
       <Link
         to={href}
         aria-label={label}
-        className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-[background-color] duration-100 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+        className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-popover px-3 py-2.5 transition-[background-color] duration-100 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
       >
         <span className="text-muted [&_svg]:size-4">{icon}</span>
         <span className="flex min-w-0 flex-col">
@@ -53,11 +53,11 @@ function AiToday() {
 }
 
 /** Довкола змін: генератор розкладу, витрати ШІ сьогодні, Telegram-бот — коротко, з переходом у розділ. */
-export function SystemStatus({ dashboard }: { dashboard: DashboardDto | undefined }) {
+export function SystemStatus({ dashboard, unavailable = false }: { dashboard: DashboardDto | undefined; unavailable?: boolean }) {
   const bot = useBotStatus();
   const generation = dashboard?.generation ? GENERATION[dashboard.generation.status] : null;
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col gap-0.5">
       <Row icon={<Cpu aria-hidden="true" />} title="Генератор розкладу" href="/admin/generation" label="Генератор розкладу: відкрити">
         {dashboard ? (
           generation ? (
@@ -65,6 +65,8 @@ export function SystemStatus({ dashboard }: { dashboard: DashboardDto | undefine
           ) : (
             <span className="text-secondary">Активних задач немає</span>
           )
+        ) : unavailable ? (
+          <span className="text-secondary">Стан невідомий</span>
         ) : (
           <Skeleton className="h-4 w-32" />
         )}

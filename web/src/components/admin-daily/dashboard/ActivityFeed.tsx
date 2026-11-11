@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstantTime } from '@/lib/date';
+import { plural } from '@/lib/labels';
 import type { FeedItem, FeedKind } from '../model';
 
 const ICON: Record<FeedKind, { icon: ReactNode; tone: string }> = {
@@ -17,7 +18,8 @@ const ICON: Record<FeedKind, { icon: ReactNode; tone: string }> = {
   order: { icon: <FileCheck aria-hidden="true" />, tone: 'text-accent' },
 };
 
-const VISIBLE = 9;
+const VISIBLE = 5;
+const EVENT_FORMS = ['подія', 'події', 'подій'] as const;
 
 interface ActivityFeedProps {
   items: readonly FeedItem[];
@@ -39,7 +41,7 @@ export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
   }
   return (
     <div className="flex flex-col">
-      <ol aria-live="polite" aria-relevant="additions" className="flex flex-col">
+      <ol aria-label="Останні дії" aria-live="polite" aria-relevant="additions" className="flex flex-col">
         {shown.map((item) => {
           const isFresh = fresh.has(item.sourceId) && latestOfSource.has(item.id);
           const meta = ICON[item.kind];
@@ -53,11 +55,11 @@ export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
             </>
           );
           const rowClass = cn(
-            'flex items-start gap-3 px-4 py-2',
+            'flex items-start gap-3 rounded-popover px-3 py-2',
             isFresh && 'motion-safe:animate-[live-flash_2.4s_var(--ease-out)] bg-selected motion-safe:bg-transparent',
           );
           return (
-            <li key={item.id} className="border-b border-separator last:border-b-0">
+            <li key={item.id}>
               {item.href ? (
                 <Link
                   to={item.href}
@@ -76,11 +78,9 @@ export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
         })}
       </ol>
       {items.length > VISIBLE ? (
-        <div className="border-t border-separator px-4 py-2">
-          <Button variant="link" size="sm" onClick={() => setAll((value) => !value)}>
-            {all ? 'Згорнути' : `Показати всі події (${items.length})`}
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" className="mt-1 self-start" aria-expanded={all} onClick={() => setAll((value) => !value)}>
+          {all ? 'Згорнути' : `Ще ${items.length - VISIBLE} ${plural(items.length - VISIBLE, EVENT_FORMS)}`}
+        </Button>
       ) : null}
     </div>
   );
