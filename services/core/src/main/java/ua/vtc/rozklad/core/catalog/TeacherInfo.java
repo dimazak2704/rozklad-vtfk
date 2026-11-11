@@ -3,7 +3,7 @@ package ua.vtc.rozklad.core.catalog;
 import java.util.UUID;
 
 /**
- * Read model of a teacher for other modules. {@code keycloakUserId} links the account created by
+ * Read model of a teacher for other modules. {@code accountId} links the account created by
  * an invite ({@code null} = no account yet).
  */
 public record TeacherInfo(
@@ -16,13 +16,13 @@ public record TeacherInfo(
         UUID cycleCommissionId,
         Employment employment,
         boolean active,
-        UUID keycloakUserId) {
+        UUID accountId) {
 
     public static TeacherInfo of(Teacher teacher) {
         return new TeacherInfo(teacher.getId(), teacher.getLastName(), teacher.getFirstName(),
                 teacher.getMiddleName(), teacher.getShortName(), teacher.getDisplayName(),
                 teacher.getCycleCommissionId(), teacher.getEmployment(), teacher.isActive(),
-                teacher.getKeycloakUserId());
+                teacher.getAccountId());
     }
 
     public TeacherRef ref() {

@@ -408,3 +408,12 @@ types and the mock API:
 | Day plan | «Запропонувати план дня» (two or more open lessons of the absence that day) opens `GET /absences/{id}/plan`; every lesson's choice can be changed or skipped; «Надіслати всі (n)» / «Призначити всі (n)» posts `POST /changes/batch` and offers «Скасувати» (cancels all created). | Nothing is sent before the dispatcher confirms. |
 | `MERGE_SUBGROUPS` rendering | Admin order sheet right side «Обʼєднання підгруп: {to.discipline} ({to.teacher}) — обидві підгрупи»; public changes list badge «Обʼєднання підгруп» and «— обидві підгрупи» after the new teacher; `CHANGE_KIND_LABEL` «Обʼєднання підгруп». | New enum values need labels. |
 | Mock API | `rules.ts` no longer scores (+50/+20/… removed): it returns the v2 shape (group pool one option per teacher, merge, swap, cancel; band → kind → title order; `recommended` only when #1 is CLEAN and #2 is not); new handlers for teacher availability, the day plan and the batch (one transaction, `changes[i].field` errors). Static v2 fixtures for component tests: `web/src/mocks/fixtures/lesson-options.ts`. `ScoreBar` was removed from the UI kit. | The mock must not teach the old ranking. |
+
+## Own sign-in service, step 0 (preparation)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/internal/teachers/{id}` | Adds `accountId` (the account id = `sub` of the token). `keycloakUserId` carries the same value, is deprecated and goes away when Keycloak is removed. | Additive; the link is no longer Keycloak-specific (column `teacher.account_id`, V1_806). |
+| Access-token roles | core, importer, notification and scheduler read the flat `roles` claim and fall back to `realm_access.roles`; the SPA does the same. | Tokens of the new sign-in service and Keycloak tokens both work during the switch. |
+| Token validation config | `app.auth.issuer`, `app.auth.jwks-uri`, `app.auth.audience` (env `AUTH_ISSUER`, `AUTH_JWKS_URI`, `AUTH_AUDIENCE`) replace `app.keycloak.issuer/jwks-uri` (`KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URI`). A non-empty audience must be in `aud`; empty = no check. | Environment-neutral names before the issuer changes. |
+| SPA: sign-in callback | `/auth/callback` → `/login/callback`. The PWA service worker does not answer `/auth/**`, `/login/callback` and `/login/silent*` from the cache. | `/auth/**` belongs to the sign-in service. Keycloak's redirect URIs (`<origin>/*`) already accept the new path. |

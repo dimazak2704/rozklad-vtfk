@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 import ua.vtc.rozklad.core.identity.internal.InternalTeacherService;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.InternalTeacherDto;
 
-/** {@code GET /api/internal/teachers/{id}} (SERVICE): a teacher with the link to the Keycloak account. */
+/** {@code GET /api/internal/teachers/{id}} (SERVICE): a teacher with the link to the account. */
 @RestController
 class InternalTeacherController {
 

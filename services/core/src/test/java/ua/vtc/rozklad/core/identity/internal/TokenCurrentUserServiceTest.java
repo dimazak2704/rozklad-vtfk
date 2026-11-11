@@ -6,7 +6,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -22,7 +21,7 @@ import ua.vtc.rozklad.core.catalog.Employment;
 import ua.vtc.rozklad.core.catalog.TeacherInfo;
 import ua.vtc.rozklad.core.identity.UserProfile;
 import ua.vtc.rozklad.core.shared.security.CurrentUserProvider;
-import ua.vtc.rozklad.core.shared.security.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.core.shared.security.TokenRoles;
 
 /** The caller and the teacher linked to the account (ownership checks of other modules). */
 class TokenCurrentUserServiceTest {
@@ -71,9 +70,9 @@ class TokenCurrentUserServiceTest {
     private static void signIn(String... roles) {
         Jwt jwt = Jwt.withTokenValue("token").header("alg", "none").subject(ACCOUNT.toString())
                 .claim("preferred_username", "krentsin")
-                .claim("realm_access", Map.of("roles", List.of(roles)))
+                .claim("roles", List.of(roles))
                 .build();
         SecurityContextHolder.getContext().setAuthentication(
-                new JwtAuthenticationToken(jwt, new KeycloakRealmRoleConverter().convert(jwt)));
+                new JwtAuthenticationToken(jwt, TokenRoles.authorities(jwt)));
     }
 }

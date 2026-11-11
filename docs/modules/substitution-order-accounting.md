@@ -54,7 +54,7 @@ accounting  ← substitution ← order
 | `GET/PUT /api/me/preferences?semesterId` | same | unwanted/unavailable grid (PUT replaces it) |
 | `POST /api/internal/changes/{id}/reply`, `POST /api/internal/absences` | SERVICE | Telegram bot |
 
-The account of a teacher is found by `teacher.keycloak_user_id = sub`; an account without a
+The account of a teacher is found by `teacher.account_id = sub`; an account without a
 teacher gets 403 on `/api/me/*`.
 
 ## 3. Changes (DOMAIN §7)

@@ -287,16 +287,28 @@ class ApiErrorHandlingTest {
     }
 
     @Test
-    void bearerTokenIsDecodedAndRealmRolesBecomeAuthorities() throws Exception {
-        Jwt jwt = Jwt.withTokenValue("admin-token").header("alg", "RS256")
-                .subject(TestJwts.ADMIN_ID.toString())
-                .claim("preferred_username", "admin")
-                .claim("realm_access", Map.of("roles", List.of("ADMIN")))
-                .issuedAt(Instant.now().minusSeconds(5)).expiresAt(Instant.now().plusSeconds(300))
-                .build();
-        given(jwtDecoder.decode("admin-token")).willReturn(jwt);
+    void bearerTokenIsDecodedAndRolesClaimBecomesAuthorities() throws Exception {
+        givenAdminToken("roles", List.of("ADMIN"));
 
         mockMvc.perform(get("/api/admin/probe/not-found").header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void keycloakRealmRolesStillBecomeAuthorities() throws Exception {
+        givenAdminToken("realm_access", Map.of("roles", List.of("ADMIN")));
+
+        mockMvc.perform(get("/api/admin/probe/not-found").header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
+                .andExpect(status().isNotFound());
+    }
+
+    private void givenAdminToken(String rolesClaim, Object roles) {
+        Jwt jwt = Jwt.withTokenValue("admin-token").header("alg", "RS256")
+                .subject(TestJwts.ADMIN_ID.toString())
+                .claim("preferred_username", "admin")
+                .claim(rolesClaim, roles)
+                .issuedAt(Instant.now().minusSeconds(5)).expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        given(jwtDecoder.decode("admin-token")).willReturn(jwt);
     }
 }

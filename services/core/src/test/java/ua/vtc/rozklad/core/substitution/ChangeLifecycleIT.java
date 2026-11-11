@@ -544,7 +544,7 @@ class ChangeLifecycleIT {
 
     /** The demo account linked to the teacher (Keycloak ids of the realm import). */
     private static CurrentUser user(Teacher teacher) {
-        String username = TestJwts.KRENTSIN_ID.equals(teacher.getKeycloakUserId()) ? "krentsin" : "nepyivoda";
-        return new CurrentUser(teacher.getKeycloakUserId(), username, Set.of("TEACHER"));
+        String username = TestJwts.KRENTSIN_ID.equals(teacher.getAccountId()) ? "krentsin" : "nepyivoda";
+        return new CurrentUser(teacher.getAccountId(), username, Set.of("TEACHER"));
     }
 }

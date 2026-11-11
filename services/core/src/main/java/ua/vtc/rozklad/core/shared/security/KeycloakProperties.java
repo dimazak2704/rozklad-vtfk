@@ -8,9 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Keycloak settings ({@code app.keycloak.*}). Tokens are always issued for {@code issuer}
- * ({@code http://localhost:8180/realms/rozklad}), while keys are fetched from {@code jwksUri}
- * which differs inside docker compose ({@code http://keycloak:8080/...}).
+ * Keycloak admin API settings of the identity module ({@code app.keycloak.*}). Token validation
+ * lives in {@link AuthProperties}.
  *
  * @param url      base URL for the admin client ({@code KEYCLOAK_URL})
  * @param admin    service account {@code rozklad-core-admin} used by the identity module
@@ -18,8 +17,6 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties("app.keycloak")
 public record KeycloakProperties(
-        @NotBlank String issuer,
-        @NotNull URI jwksUri,
         @NotNull URI url,
         @NotBlank String realm,
         @Valid @NotNull AdminClient admin) {

@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
-import ua.vtc.rozklad.notification.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.notification.config.TokenRoles;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.support.TestcontainersConfiguration;
 
@@ -78,7 +77,7 @@ class NotificationApplicationIT {
     }
 
     private static JwtRequestPostProcessor token(String role) {
-        return jwt().jwt(token -> token.claim("realm_access", Map.of("roles", List.of(role))))
-                .authorities(new KeycloakRealmRoleConverter());
+        return jwt().jwt(token -> token.claim("roles", List.of(role)))
+                .authorities(TokenRoles::authorities);
     }
 }

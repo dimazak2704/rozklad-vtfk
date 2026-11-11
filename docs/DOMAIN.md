@@ -53,7 +53,7 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 - `department(name, short_name)`
 - `specialty(code '123', letters 'КІ', name, department_id)`
 - `cycle_commission(name)`
-- `teacher(last_name, first_name, middle_name, short_name, display_name, cycle_commission_id, employment 'STAFF'|'PART_TIME', email, active, keycloak_user_id uuid unique null, needs_review bool)`
+- `teacher(last_name, first_name, middle_name, short_name, display_name, cycle_commission_id, employment 'STAFF'|'PART_TIME', email, active, account_id uuid unique null, needs_review bool)`
 - `teacher_alias(teacher_id, alias, normalized unique)`
 - `discipline(name, short_name, color, active, needs_review bool)`; `discipline_alias(discipline_id, alias, normalized unique)`
 - `teacher_discipline(teacher_id, discipline_id)` — competence (not used by the substitute ranking since round 7)

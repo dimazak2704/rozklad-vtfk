@@ -101,7 +101,7 @@ public class ChangeNotifications {
         ChangeDto dto = views.toDto(change);
         sse.sendToRole(Roles.ADMIN, SseEventTypes.CHANGE_UPDATED, dto);
         if (change.getNewTeacherId() != null) {
-            UUID account = catalog.teacher(change.getNewTeacherId()).getKeycloakUserId();
+            UUID account = catalog.teacher(change.getNewTeacherId()).getAccountId();
             sse.sendToUser(account, SseEventTypes.CHANGE_UPDATED, dto);
         }
     }

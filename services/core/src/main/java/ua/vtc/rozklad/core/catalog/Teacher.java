@@ -11,7 +11,7 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 
 /**
  * Викладач. {@code shortName} is the unique form used in schedules and orders («Кренцін М.Д.»),
- * {@code displayName} the compact one («Кренцін»). {@code keycloakUserId} links the account
+ * {@code displayName} the compact one («Кренцін»). {@code accountId} links the account
  * created by invite; {@code needsReview} marks records created by import that an admin must check.
  */
 @Entity
@@ -46,8 +46,8 @@ public class Teacher extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
-    @Column(name = "keycloak_user_id")
-    private UUID keycloakUserId;
+    @Column(name = "account_id")
+    private UUID accountId;
 
     @Column(name = "needs_review", nullable = false)
     private boolean needsReview;
@@ -133,12 +133,12 @@ public class Teacher extends BaseEntity {
         this.active = active;
     }
 
-    public UUID getKeycloakUserId() {
-        return keycloakUserId;
+    public UUID getAccountId() {
+        return accountId;
     }
 
-    public void setKeycloakUserId(UUID keycloakUserId) {
-        this.keycloakUserId = keycloakUserId;
+    public void setAccountId(UUID accountId) {
+        this.accountId = accountId;
     }
 
     public boolean isNeedsReview() {

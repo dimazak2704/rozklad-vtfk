@@ -150,7 +150,7 @@ public class InviteService {
             log.error("Identity provider failed while accepting invite {}", invite.getId(), unavailable);
             throw IdentityProblems.identityUnavailable(unavailable);
         }
-        teacher.setKeycloakUserId(userId);
+        teacher.setAccountId(userId);
         invite.markUsed(now);
         invites.findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(teacher.getId()).stream()
                 .filter(other -> !other.getId().equals(invite.getId()))
@@ -168,7 +168,7 @@ public class InviteService {
 
     /** The linked account if it still exists in Keycloak (it may have been deleted there). */
     private Optional<Account> existingAccount(Teacher teacher) {
-        return Optional.ofNullable(teacher.getKeycloakUserId()).flatMap(identityProvider::findUser);
+        return Optional.ofNullable(teacher.getAccountId()).flatMap(identityProvider::findUser);
     }
 
     private UUID restore(Account account, String username, String password) {

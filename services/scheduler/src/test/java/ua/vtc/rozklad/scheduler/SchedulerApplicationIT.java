@@ -11,14 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import ai.timefold.solver.core.api.score.stream.ConstraintMetaModel;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
-import ua.vtc.rozklad.scheduler.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.scheduler.config.TokenRoles;
 import ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint;
 import ua.vtc.rozklad.scheduler.support.SchedulerIntegrationTest;
 
@@ -51,8 +50,8 @@ class SchedulerApplicationIT {
                 .andExpect(jsonPath("$.title").value("Потрібна автентифікація"));
 
         mockMvc.perform(get("/api/scheduler/status").with(jwt()
-                        .jwt(token -> token.claim("realm_access", Map.of("roles", List.of("TEACHER"))))
-                        .authorities(new KeycloakRealmRoleConverter())))
+                        .jwt(token -> token.claim("roles", List.of("TEACHER")))
+                        .authorities(TokenRoles::authorities)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.title").value("Доступ заборонено"));
     }
@@ -60,8 +59,8 @@ class SchedulerApplicationIT {
     /** Framework errors carry a stable type; an unconvertible path parameter names itself. */
     @Test
     void frameworkErrorsHaveATypeAndFields() throws Exception {
-        var admin = jwt().jwt(token -> token.claim("realm_access", Map.of("roles", List.of("ADMIN"))))
-                .authorities(new KeycloakRealmRoleConverter());
+        var admin = jwt().jwt(token -> token.claim("roles", List.of("ADMIN")))
+                .authorities(TokenRoles::authorities);
         mockMvc.perform(get("/api/scheduler/no-such-thing").with(admin))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.type").value("urn:rozklad:problem:not-found"));

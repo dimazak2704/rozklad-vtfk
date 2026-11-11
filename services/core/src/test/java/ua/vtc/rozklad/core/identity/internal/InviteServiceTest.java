@@ -103,7 +103,7 @@ class InviteServiceTest {
         FakeIdentityProvider.User user = keycloak.byUsername("krentsin").orElseThrow();
         assertThat(user.roles()).containsExactly(Roles.TEACHER);
         assertThat(user.password()).isEqualTo("secret-password");
-        assertThat(teacher.getKeycloakUserId()).isEqualTo(user.id());
+        assertThat(teacher.getAccountId()).isEqualTo(user.id());
         assertThat(stored(token).status(NOW)).isEqualTo(InviteStatus.USED);
         assertThat(another.status(NOW)).isEqualTo(InviteStatus.REVOKED);
     }
@@ -143,13 +143,13 @@ class InviteServiceTest {
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("«krentsin» уже зайняте");
         assertThat(stored(token).status(NOW)).isEqualTo(InviteStatus.ACTIVE);
-        assertThat(teacher.getKeycloakUserId()).isNull();
+        assertThat(teacher.getAccountId()).isNull();
     }
 
     @Test
     void linkedTeacherGetsAccessBackUnderTheSameUsername() {
         UUID account = keycloak.existingUser("krentsin", "forgotten", false);
-        teacher.setKeycloakUserId(account);
+        teacher.setAccountId(account);
         String token = activeInvite();
 
         service.accept(token, "krentsin", "new-password");
@@ -164,7 +164,7 @@ class InviteServiceTest {
 
     @Test
     void linkedTeacherCannotTakeAnotherUsername() {
-        teacher.setKeycloakUserId(keycloak.existingUser("krentsin", "forgotten", true));
+        teacher.setAccountId(keycloak.existingUser("krentsin", "forgotten", true));
         String token = activeInvite();
 
         assertThatThrownBy(() -> service.accept(token, "mykola", "new-password"))
@@ -175,12 +175,12 @@ class InviteServiceTest {
     @Test
     void accountDeletedInKeycloakIsCreatedAgain() {
         UUID deleted = UUID.randomUUID();
-        teacher.setKeycloakUserId(deleted);
+        teacher.setAccountId(deleted);
         String token = activeInvite();
 
         service.accept(token, "krentsin", "new-password");
 
-        assertThat(teacher.getKeycloakUserId()).isNotEqualTo(deleted)
+        assertThat(teacher.getAccountId()).isNotEqualTo(deleted)
                 .isEqualTo(keycloak.byUsername("krentsin").orElseThrow().id());
     }
 

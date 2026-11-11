@@ -100,7 +100,7 @@ class InviteFlowIT {
 
         UUID account = keycloak.byUsername("krentsin").orElseThrow().id();
         assertThat(keycloak.user(account).orElseThrow().roles()).containsExactly("TEACHER");
-        assertThat(teacherRepository.findById(teacher).orElseThrow().getKeycloakUserId()).isEqualTo(account);
+        assertThat(teacherRepository.findById(teacher).orElseThrow().getAccountId()).isEqualTo(account);
         mvc.perform(get("/api/me").with(TestJwts.user(account, "krentsin", "TEACHER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("krentsin"))
@@ -117,7 +117,9 @@ class InviteFlowIT {
         mvc.perform(get("/api/admin/teachers/{id}", teacher).with(TestJwts.admin()))
                 .andExpect(jsonPath("$.linked").value(true));
         mvc.perform(get("/api/internal/teachers/{id}", teacher).with(TestJwts.service()))
-                .andExpect(jsonPath("$.keycloakUserId").value(account.toString()));
+                .andExpect(jsonPath("$.accountId").value(account.toString()))
+                .andExpect(jsonPath("$.keycloakUserId").value(account.toString()))
+                .andExpect(jsonPath("$.linked").value(true));
     }
 
     @Test
@@ -162,7 +164,7 @@ class InviteFlowIT {
                 .isInstanceOf(ConflictException.class);
 
         mvc.perform(get("/api/public/invites/{token}", token)).andExpect(jsonPath("$.status").value("ACTIVE"));
-        assertThat(teacherRepository.findById(teacher).orElseThrow().getKeycloakUserId()).isNull();
+        assertThat(teacherRepository.findById(teacher).orElseThrow().getAccountId()).isNull();
     }
 
     @Test

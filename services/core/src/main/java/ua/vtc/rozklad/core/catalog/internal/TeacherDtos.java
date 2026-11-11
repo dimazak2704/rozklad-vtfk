@@ -16,7 +16,7 @@ public final class TeacherDtos {
     private TeacherDtos() {
     }
 
-    /** {@code linked} = the teacher has a Keycloak account (registered by invite). */
+    /** {@code linked} = the teacher has an account (registered by invite). */
     public record TeacherDto(
             UUID id,
             String lastName,
@@ -36,7 +36,7 @@ public final class TeacherDtos {
             return new TeacherDto(teacher.getId(), teacher.getLastName(), teacher.getFirstName(),
                     teacher.getMiddleName(), teacher.getShortName(), teacher.getDisplayName(), cycleCommission,
                     teacher.getEmployment(), teacher.getEmail(), teacher.isActive(), teacher.isNeedsReview(),
-                    teacher.getKeycloakUserId() != null, teacher.getVersion());
+                    teacher.getAccountId() != null, teacher.getVersion());
         }
     }
 

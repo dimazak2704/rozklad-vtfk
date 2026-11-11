@@ -33,8 +33,8 @@ x-prod-java-env: &prod-java-env
   SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
   # Browsers get tokens from https://auth.<domain>, so that is the issuer to validate.
   # The signing keys are still fetched inside the network.
-  KEYCLOAK_ISSUER: https://auth.${DOMAIN:?}/realms/rozklad
-  KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
+  AUTH_ISSUER: https://auth.${DOMAIN:?}/realms/rozklad
+  AUTH_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
   KEYCLOAK_URL: http://keycloak:8080
   # services are not reachable from the internet; keep their Swagger UI off anyway
   API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}

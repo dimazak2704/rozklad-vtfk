@@ -75,11 +75,14 @@ server:
 
 app:
   public-web-url: ${PUBLIC_WEB_URL:http://localhost:5180}
+  auth:
+    # хто видає токени (iss) і звідки брати ключі; audience порожня = aud не перевіряється
+    issuer: ${AUTH_ISSUER:http://localhost:8180/realms/rozklad}
+    jwks-uri: ${AUTH_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+    audience: ${AUTH_AUDIENCE:}
   keycloak:
     url: ${KEYCLOAK_URL:http://localhost:8180}
     realm: ${KEYCLOAK_REALM:rozklad}
-    issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
-    jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
     admin:
       client-id: ${CORE_ADMIN_CLIENT_ID:rozklad-core-admin}
       client-secret: ${CORE_ADMIN_CLIENT_SECRET:}

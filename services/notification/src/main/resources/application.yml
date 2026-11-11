@@ -80,9 +80,11 @@ server:
     include-stacktrace: never
 
 app:
-  keycloak:
-    issuer: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/rozklad}
-    jwks-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+  auth:
+    # хто видає токени (iss) і звідки брати ключі; audience порожня = aud не перевіряється
+    issuer: ${AUTH_ISSUER:http://localhost:8180/realms/rozklad}
+    jwks-uri: ${AUTH_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
+    audience: ${AUTH_AUDIENCE:}
   services:
     core-url: ${CORE_URL:http://localhost:8081}
     importer-url: ${IMPORTER_URL:http://localhost:8083}

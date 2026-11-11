@@ -48,8 +48,8 @@ public interface CatalogQueries {
     /** Room name, case and separators ignored («С.З.» = «с.з.»). */
     Optional<RoomInfo> roomByName(String name);
 
-    /** Teacher linked to a Keycloak account ({@code sub} of the access token). */
-    Optional<TeacherInfo> teacherByAccount(UUID keycloakUserId);
+    /** Teacher linked to an account ({@code sub} of the access token). */
+    Optional<TeacherInfo> teacherByAccount(UUID accountId);
 
     /** Competence used by candidate ranking (DOMAIN §7): {@code teacher_discipline}. */
     boolean hasCompetence(UUID teacherId, UUID disciplineId);

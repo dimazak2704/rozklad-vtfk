@@ -27,7 +27,7 @@ import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.support.TestJwts;
 
 /**
- * Linking accounts in parallel against PostgreSQL (the unique {@code keycloak_user_id} index is the
+ * Linking accounts in parallel against PostgreSQL (the unique {@code account_id} index is the
  * last guard, the advisory locks of {@link AccountLinkLocks} the first): a double click on «Прив'язати»
  * for one teacher is idempotent, a race with another teacher is a plain 409 «уже прив'язано».
  */
@@ -76,7 +76,7 @@ class AccountLinkIT {
         List<Object> results = Parallel.run(() -> link(stets), () -> link(hanza), () -> link(stets),
                 () -> link(hanza));
 
-        UUID owner = jdbc.queryForObject("SELECT id FROM teacher WHERE keycloak_user_id IS NOT NULL", UUID.class);
+        UUID owner = jdbc.queryForObject("SELECT id FROM teacher WHERE account_id IS NOT NULL", UUID.class);
         UUID loser = owner.equals(stets) ? hanza : stets;
         List<Object> ownerResults = List.of(results.get(owner.equals(stets) ? 0 : 1),
                 results.get(owner.equals(stets) ? 2 : 3));

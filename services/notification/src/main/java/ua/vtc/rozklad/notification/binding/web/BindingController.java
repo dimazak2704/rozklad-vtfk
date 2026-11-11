@@ -25,7 +25,7 @@ import ua.vtc.rozklad.notification.binding.BindingType;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.binding.MyTelegramBinding;
-import ua.vtc.rozklad.notification.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.notification.config.TokenRoles;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 
@@ -80,7 +80,7 @@ public class BindingController {
     public BindingCodeDto createCode(@Valid @RequestBody BindingCodeRequest request, @AuthenticationPrincipal Jwt jwt) {
         Caller caller = new Caller(jwt.getClaimAsString("preferred_username") != null
                 ? jwt.getClaimAsString("preferred_username") : jwt.getSubject(),
-                KeycloakRealmRoleConverter.realmRoles(jwt), jwt.getTokenValue());
+                TokenRoles.of(jwt), jwt.getTokenValue());
         return BindingCodeDto.of(codeRequests.create(request.type(), request.groupId(), request.teacherId(), caller));
     }
 

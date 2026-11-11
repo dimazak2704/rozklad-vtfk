@@ -509,11 +509,11 @@ the first start (swap); `KC_HOSTNAME` must be a full `https://auth.DOMAIN` URL â
 Keycloak is only reachable through Caddy here; check that you use `https://auth.DOMAIN`, not the IP.
 
 **Every API call returns 401 after a successful login (issuer mismatch).** Services accept only tokens
-whose `iss` equals `KEYCLOAK_ISSUER` = `https://auth.DOMAIN/realms/rozklad`. Compare with the discovery
+whose `iss` equals `AUTH_ISSUER` = `https://auth.DOMAIN/realms/rozklad`. Compare with the discovery
 document (section 7) and with the token (paste it into jwt.io or decode the middle part). Tokens from
 the development Keycloak (`http://localhost:8180`) or from a Keycloak opened through the IP are
 rejected; so are tokens issued before `DOMAIN` changed: log in again.
-`compose.sh exec core printenv KEYCLOAK_ISSUER` shows what the service expects.
+`compose.sh exec core printenv AUTH_ISSUER` shows what the service expects.
 
 **Login page does not open, browser console says "Refused to connect â€¦ Content-Security-Policy".**
 The SPA's CSP must allow `https://auth.DOMAIN`. Caddy rewrites `http://localhost:8180` in the CSP of

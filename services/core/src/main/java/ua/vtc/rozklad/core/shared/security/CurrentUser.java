@@ -6,10 +6,10 @@ import java.util.UUID;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * Authenticated caller resolved from the access token: Keycloak user id ({@code sub}),
- * {@code preferred_username} and realm roles. Declare it as a controller method parameter or use
- * {@link CurrentUserProvider} in services. Actor columns ({@code created_by}, …) store
- * {@link #username()}.
+ * Authenticated caller resolved from the access token: account id ({@code sub}),
+ * {@code preferred_username} and roles ({@link TokenRoles}). Declare it as a controller method
+ * parameter or use {@link CurrentUserProvider} in services. Actor columns ({@code created_by}, …)
+ * store {@link #username()}.
  */
 public record CurrentUser(UUID id, String username, Set<String> roles) {
 
@@ -22,7 +22,7 @@ public record CurrentUser(UUID id, String username, Set<String> roles) {
         String subject = jwt.getSubject();
         String username = jwt.getClaimAsString("preferred_username");
         return new CurrentUser(parseUuid(subject), username != null ? username : String.valueOf(subject),
-                KeycloakRealmRoleConverter.realmRoles(jwt));
+                TokenRoles.of(jwt));
     }
 
     public boolean hasRole(String role) {

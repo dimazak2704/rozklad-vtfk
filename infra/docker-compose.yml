@@ -15,8 +15,8 @@ x-java-env: &java-env
   REDIS_HOST: redis
   REDIS_PORT: "6379"
   # токени видає Keycloak з issuer http://localhost:8180/realms/rozklad, а ключі сервіси беруть усередині мережі
-  KEYCLOAK_ISSUER: http://localhost:8180/realms/rozklad
-  KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
+  AUTH_ISSUER: http://localhost:8180/realms/rozklad
+  AUTH_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
   KEYCLOAK_URL: http://keycloak:8080
   LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
 

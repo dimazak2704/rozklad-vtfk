@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
@@ -33,7 +32,7 @@ import ua.vtc.rozklad.notification.bot.BotUpdate.ChatKind;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatMessage;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatRef;
 import ua.vtc.rozklad.notification.bot.UpdateDispatcher;
-import ua.vtc.rozklad.notification.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.notification.config.TokenRoles;
 import ua.vtc.rozklad.notification.delivery.DeliveryWorker;
 import ua.vtc.rozklad.notification.documents.DocumentPrerenderer;
 
@@ -182,9 +181,9 @@ public abstract class IntegrationTest {
 
     protected static JwtRequestPostProcessor token(String role, String username, String tokenValue) {
         return jwt().jwt(token -> token.tokenValue(tokenValue)
-                        .claim("realm_access", Map.of("roles", List.of(role)))
+                        .claim("roles", List.of(role))
                         .claim("preferred_username", username))
-                .authorities(new KeycloakRealmRoleConverter());
+                .authorities(TokenRoles::authorities);
     }
 
     /** Polls until {@code condition} holds (asynchronous consumers); fails after {@code timeout}. */

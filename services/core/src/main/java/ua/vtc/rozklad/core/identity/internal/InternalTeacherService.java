@@ -29,6 +29,6 @@ public class InternalTeacherService {
                 : commissions.findById(teacher.getCycleCommissionId()).map(CycleCommission::getName).orElse(null);
         return new InternalTeacherDto(teacher.getId(), teacher.getLastName(), teacher.getFirstName(),
                 teacher.getMiddleName(), teacher.getShortName(), teacher.getDisplayName(), commission,
-                teacher.isActive(), teacher.getKeycloakUserId(), teacher.getKeycloakUserId() != null);
+                teacher.isActive(), teacher.getAccountId(), teacher.getAccountId(), teacher.getAccountId() != null);
     }
 }

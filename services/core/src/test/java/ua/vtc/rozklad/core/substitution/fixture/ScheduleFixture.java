@@ -111,7 +111,7 @@ public final class ScheduleFixture {
 
     public Teacher teacher(String shortName, String displayName, UUID account, UUID cycleCommissionId) {
         return persist(new Teacher(displayName.replaceAll("\\s.*", ""), shortName, displayName), teacher -> {
-            teacher.setKeycloakUserId(account);
+            teacher.setAccountId(account);
             teacher.setCycleCommissionId(cycleCommissionId);
         });
     }

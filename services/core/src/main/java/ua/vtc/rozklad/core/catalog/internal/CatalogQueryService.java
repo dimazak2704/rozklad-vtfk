@@ -162,8 +162,8 @@ class CatalogQueryService implements CatalogQueries {
     }
 
     @Override
-    public Optional<TeacherInfo> teacherByAccount(UUID keycloakUserId) {
-        return teachers.findByKeycloakUserId(keycloakUserId).map(TeacherInfo::of);
+    public Optional<TeacherInfo> teacherByAccount(UUID accountId) {
+        return teachers.findByAccountId(accountId).map(TeacherInfo::of);
     }
 
     @Override

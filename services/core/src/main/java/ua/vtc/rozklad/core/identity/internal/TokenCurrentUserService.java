@@ -12,7 +12,7 @@ import ua.vtc.rozklad.core.identity.UserProfile;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 import ua.vtc.rozklad.core.shared.security.CurrentUserProvider;
 
-/** {@link CurrentUserService} from the access token ({@code sub}) and {@code teacher.keycloak_user_id}. */
+/** {@link CurrentUserService} from the access token ({@code sub}) and {@code teacher.account_id}. */
 @Service
 @Transactional(readOnly = true)
 class TokenCurrentUserService implements CurrentUserService {

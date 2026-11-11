@@ -6,7 +6,7 @@ import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 
-/** Resolves the teacher linked to the signed-in account ({@code teacher.keycloak_user_id}). */
+/** Resolves the teacher linked to the signed-in account ({@code teacher.account_id}). */
 @Component
 public class CurrentTeacher {
 
@@ -21,7 +21,7 @@ public class CurrentTeacher {
         if (user.id() == null) {
             throw new AccessDeniedException("Обліковий запис не пов'язаний з викладачем");
         }
-        return teachers.findByKeycloakUserId(user.id())
+        return teachers.findByAccountId(user.id())
                 .orElseThrow(() -> new AccessDeniedException("Обліковий запис не пов'язаний з викладачем"));
     }
 }

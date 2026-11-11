@@ -35,7 +35,7 @@ import ua.vtc.rozklad.core.shared.web.Ref;
 /**
  * Викладачі. The short name («Кренцін М.Д.») is the natural key of imports and orders: it is
  * unique by its normalized key (DOMAIN §10) and must not collide with another teacher's alias.
- * The Keycloak link is set only by the invite flow (identity module).
+ * The account link is set only by the invite flow (identity module).
  */
 @Service
 @Transactional(readOnly = true)
@@ -161,7 +161,7 @@ public class TeacherService {
         if (linked == null) {
             return Specification.unrestricted();
         }
-        return (root, query, cb) -> linked ? cb.isNotNull(root.get("keycloakUserId")) : cb.isNull(root.get("keycloakUserId"));
+        return (root, query, cb) -> linked ? cb.isNotNull(root.get("accountId")) : cb.isNull(root.get("accountId"));
     }
 
     private record Values(String lastName, String firstName, String middleName, String shortName,

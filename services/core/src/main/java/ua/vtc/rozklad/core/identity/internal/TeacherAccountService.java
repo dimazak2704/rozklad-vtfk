@@ -49,10 +49,10 @@ public class TeacherAccountService {
     @Transactional(readOnly = true)
     public TeacherAccountDto get(UUID teacherId) {
         Teacher teacher = teacher(teacherId);
-        if (teacher.getKeycloakUserId() == null) {
+        if (teacher.getAccountId() == null) {
             return TeacherAccountDto.unlinked(teacher);
         }
-        return TeacherAccountDto.of(teacher, lookup(() -> identityProvider.findUser(teacher.getKeycloakUserId())));
+        return TeacherAccountDto.of(teacher, lookup(() -> identityProvider.findUser(teacher.getAccountId())));
     }
 
     /**
@@ -76,16 +76,16 @@ public class TeacherAccountService {
         // лише після замків, тож повторна прив'язка того самого запису бачить уже готовий зв'язок
         locks.lockAccountAndTeacher(account.id(), teacherId);
         Teacher teacher = teacher(teacherId);
-        if (account.id().equals(teacher.getKeycloakUserId())) {
+        if (account.id().equals(teacher.getAccountId())) {
             return TeacherAccountDto.of(teacher, Optional.of(account));
         }
-        teachers.findByKeycloakUserId(account.id()).ifPresent(owner -> {
+        teachers.findByAccountId(account.id()).ifPresent(owner -> {
             throw new ConflictException("Обліковий запис «%s» уже прив'язано до викладача %s."
                     .formatted(account.username(), owner.getShortName()));
         });
-        if (teacher.getKeycloakUserId() != null) {
+        if (teacher.getAccountId() != null) {
             // зв'язок з обліковим записом, який видалили в Keycloak, можна замінити без відв'язування
-            Optional<Account> current = lookup(() -> identityProvider.findUser(teacher.getKeycloakUserId()));
+            Optional<Account> current = lookup(() -> identityProvider.findUser(teacher.getAccountId()));
             if (current.isPresent()) {
                 throw new ConflictException("Викладач %s уже має обліковий запис «%s». Спершу відв'яжіть його."
                         .formatted(teacher.getShortName(), current.get().username()));
@@ -95,7 +95,7 @@ public class TeacherAccountService {
             identityProvider.grantRealmRole(account.id(), Roles.TEACHER);
             return null;
         });
-        teacher.setKeycloakUserId(account.id());
+        teacher.setAccountId(account.id());
         // відкрите запрошення тепер вело б до іншого імені користувача — відкликаємо його
         invites.findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(teacher.getId())
                 .forEach(invite -> invite.revoke(clock.instant()));
@@ -107,9 +107,9 @@ public class TeacherAccountService {
     public void unlink(UUID teacherId, String actor) {
         locks.lockTeacher(teacherId);
         Teacher teacher = teacher(teacherId);
-        if (teacher.getKeycloakUserId() != null) {
-            log.info("Teacher {} unlinked from account {} by {}", teacher.getId(), teacher.getKeycloakUserId(), actor);
-            teacher.setKeycloakUserId(null);
+        if (teacher.getAccountId() != null) {
+            log.info("Teacher {} unlinked from account {} by {}", teacher.getId(), teacher.getAccountId(), actor);
+            teacher.setAccountId(null);
         }
     }
 
@@ -135,7 +135,7 @@ public class TeacherAccountService {
         }
 
         static TeacherAccountDto of(Teacher teacher, Optional<Account> account) {
-            return new TeacherAccountDto(teacher.getId(), teacher.getShortName(), true, teacher.getKeycloakUserId(),
+            return new TeacherAccountDto(teacher.getId(), teacher.getShortName(), true, teacher.getAccountId(),
                     account.map(Account::username).orElse(null), account.map(Account::enabled).orElse(null));
         }
     }

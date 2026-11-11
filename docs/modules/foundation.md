@@ -25,7 +25,7 @@ scripts/run-local.sh            run one service jar on the host with secrets fro
 ```
 
 Each service has the same small skeleton (copied, not shared, so every agent owns its service):
-`config/SecurityConfig` (path rules), `KeycloakRealmRoleConverter`, `KeycloakProperties`,
+`config/SecurityConfig` (path rules), `TokenRoles`, `AuthProperties`,
 `ProblemDetailSecurityHandlers`, `InfrastructureConfig` (Clock, JSON conventions, Jackson 3 for
 Hibernate JSON, uk locale, OpenAPI), `web/ApiExceptionHandler`, `RequestIdFilter`,
 `NotFoundException`, `BusinessRuleException`, `messages.properties` (Ukrainian MVC error titles),
@@ -89,7 +89,7 @@ each user can connect only to its own database. Superuser `postgres` / `postgres
 ## 4. Keycloak realm `rozklad`
 
 Issuer is always `http://localhost:8180/realms/rozklad` (`KC_HOSTNAME`); containers fetch keys from
-`http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs` (`KEYCLOAK_JWKS_URI`). Login
+`http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs` (`AUTH_JWKS_URI`). Login
 pages are Ukrainian by default (`uk`, `en` supported). Roles: `ADMIN`, `TEACHER`, `SERVICE`.
 
 | User | Password | Role | Fixed id (`sub`) |
@@ -130,7 +130,7 @@ realm JSON does not define client scopes, so Keycloak creates the default ones i
 ## 5. Security in the services
 
 * Every service is a stateless resource server with a custom `JwtDecoder`: JWKS from
-  `KEYCLOAK_JWKS_URI`, issuer validated against `KEYCLOAK_ISSUER` (no discovery call, keys are fetched
+  `AUTH_JWKS_URI`, issuer validated against `AUTH_ISSUER` (no discovery call, keys are fetched
   lazily, so services start without Keycloak). `realm_access.roles` → `ROLE_<NAME>`.
 * Deny by default (`anyRequest().denyAll()`); `ASYNC`/`ERROR` dispatches are permitted (SSE, error
   pages). Health/info and OpenAPI are open (`API_DOCS_ENABLED=false` hides the docs).
@@ -278,8 +278,9 @@ Modules (Spring Modulith, `ModularityTests` verifies them and writes PlantUML do
 
 `domain` (Ids, IdentifiableEntity, BaseEntity) · `time.TimeConfig` (`Clock` Europe/Kyiv, `KYIV`) ·
 `persistence.JpaConfig` · `error.*` · `security.*` (SecurityConfig, CurrentUser, CurrentUserProvider,
-Roles, KeycloakProperties `app.keycloak.*` incl. `admin.client-id/client-secret` for the identity
-module's admin client) · `web.*` (RequestIdFilter + MDC `requestId`, `PageResponse.of(page, mapper)`
+Roles, TokenRoles, AuthProperties `app.auth.{issuer,jwks-uri,audience}`, KeycloakProperties
+`app.keycloak.*` incl. `admin.client-id/client-secret` for the identity module's admin client) ·
+`web.*` (RequestIdFilter + MDC `requestId`, `PageResponse.of(page, mapper)`
 → `{items,page,size,total}`, JacksonConfig: `LocalTime` written as `HH:mm`, OpenApiConfig, WebConfig)
 · `sse.*` (`SseBroadcaster.sendToUser(uuid, type, data)`, `sendToRole("ADMIN", …)`, `broadcast(…)`,
 `SseEventTypes`, `GET /api/events/stream`, 25 s `ping`, 30 min emitter timeout — EventSource

@@ -160,9 +160,10 @@ Keycloak realm `rozklad` (`infra/keycloak/rozklad-realm.json`, imported on start
   with realm role `SERVICE`).
 - Hostname: `KC_HOSTNAME=http://localhost:8180`, `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`. Issuer is always
   `http://localhost:8180/realms/rozklad`. Containers fetch JWKS from `http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs`.
-  Therefore resource servers configure `jwk-set-uri` (env `KEYCLOAK_JWKS_URI`) and validate the issuer
-  claim against `KEYCLOAK_ISSUER` explicitly (custom `JwtDecoder` with `JwtValidators.createDefaultWithIssuer`).
-- Roles mapping: Keycloak puts realm roles in `realm_access.roles`; convert to `ROLE_<NAME>` authorities.
+  Therefore resource servers configure `jwk-set-uri` (env `AUTH_JWKS_URI`) and validate the issuer
+  claim against `AUTH_ISSUER` explicitly (custom `JwtDecoder` with `JwtValidators.createDefaultWithIssuer`).
+- Roles mapping: `TokenRoles` reads the flat `roles` claim, else Keycloak's `realm_access.roles`, and maps
+  them to `ROLE_<NAME>` authorities. A non-empty `AUTH_AUDIENCE` must be in `aud` (empty = not checked).
 - Demo users in realm JSON (fixed ids so core seed can link teachers): `admin` / `admin` (ADMIN),
   `krentsin` / `teacher` (TEACHER), `nepyivoda` / `teacher` (TEACHER). Dev-only credentials, documented in README.
 - Authorization: `/api/public/**` permitAll; `/api/admin/**` → ADMIN; `/api/me/**` → TEACHER or ADMIN;
@@ -170,7 +171,7 @@ Keycloak realm `rozklad` (`infra/keycloak/rozklad-realm.json`, imported on start
   their own absences, preferences and assigned changes (checked in services, not only by role).
 - Registration = invite: admin creates a teacher → `POST /api/admin/invites` → link `/invite/{token}`
   → teacher sets username/password → core creates/enables the Keycloak user via admin client and links
-  `teacher.keycloak_user_id`. Passwords are hashed by Keycloak.
+  `teacher.account_id`. Passwords are hashed by Keycloak.
 - Secrets only via env (`.env`, never committed). Telegram webhook (if enabled) checks the secret token header.
 
 ## 7. Configuration (env)
@@ -181,8 +182,9 @@ Keycloak realm `rozklad` (`infra/keycloak/rozklad-realm.json`, imported on start
 | `DB_NAME`,`DB_USER`,`DB_PASSWORD` | per service | `core`/`core`/`core`, … |
 | `RABBIT_HOST`,`RABBIT_PORT`,`RABBIT_USER`,`RABBIT_PASSWORD` | all | `localhost`,`5672`,`rozklad`,`rozklad` |
 | `REDIS_HOST`,`REDIS_PORT` | gateway, notification, importer, core | `localhost`,`6379` |
-| `KEYCLOAK_ISSUER` | all | `http://localhost:8180/realms/rozklad` |
-| `KEYCLOAK_JWKS_URI` | all | `http://localhost:8180/realms/rozklad/protocol/openid-connect/certs` |
+| `AUTH_ISSUER` | all | `http://localhost:8180/realms/rozklad` |
+| `AUTH_JWKS_URI` | all | `http://localhost:8180/realms/rozklad/protocol/openid-connect/certs` |
+| `AUTH_AUDIENCE` | all | empty (no `aud` check) |
 | `KEYCLOAK_URL` | core (admin), clients | `http://localhost:8180` |
 | `CORE_ADMIN_CLIENT_SECRET`, `NOTIFICATION_CLIENT_SECRET`, `IMPORTER_CLIENT_SECRET` | | dev values in `.env.example` |
 | `CORE_URL`,`IMPORTER_URL` | notification, importer | `http://localhost:8081`, `http://localhost:8083` |

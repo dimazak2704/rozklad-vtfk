@@ -53,15 +53,15 @@ class DemoAccountLinks {
     void link() {
         List<Teacher> all = teachers.findAll();
         ACCOUNTS.forEach((lastName, accountId) -> {
-            if (all.stream().anyMatch(teacher -> accountId.equals(teacher.getKeycloakUserId()))) {
+            if (all.stream().anyMatch(teacher -> accountId.equals(teacher.getAccountId()))) {
                 return;
             }
             List<Teacher> candidates = all.stream()
-                    .filter(teacher -> teacher.getKeycloakUserId() == null)
+                    .filter(teacher -> teacher.getAccountId() == null)
                     .filter(teacher -> CatalogText.key(teacher.getLastName()).equals(CatalogText.key(lastName)))
                     .toList();
             if (candidates.size() == 1) {
-                candidates.getFirst().setKeycloakUserId(accountId);
+                candidates.getFirst().setAccountId(accountId);
                 log.info("Demo seed: teacher {} linked to the demo account {}", candidates.getFirst().getShortName(),
                         accountId);
             }

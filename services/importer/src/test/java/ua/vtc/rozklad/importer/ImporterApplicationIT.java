@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +25,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.RestClient;
 import ua.vtc.rozklad.importer.config.AiProperties;
-import ua.vtc.rozklad.importer.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.importer.config.TokenRoles;
 import ua.vtc.rozklad.importer.support.TestcontainersConfiguration;
 
 /** Smoke test: the importer boots against real PostgreSQL and Redis with its security rules. */
@@ -161,7 +160,7 @@ class ImporterApplicationIT {
     }
 
     private static JwtRequestPostProcessor token(String role) {
-        return jwt().jwt(token -> token.claim("realm_access", Map.of("roles", List.of(role))))
-                .authorities(new KeycloakRealmRoleConverter());
+        return jwt().jwt(token -> token.claim("roles", List.of(role)))
+                .authorities(TokenRoles::authorities);
     }
 }

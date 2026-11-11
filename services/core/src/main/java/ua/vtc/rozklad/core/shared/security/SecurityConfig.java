@@ -9,7 +9,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -59,18 +58,18 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** JWKS from {@code KEYCLOAK_JWKS_URI}, issuer checked against {@code KEYCLOAK_ISSUER} (no discovery call). */
+    /** JWKS from {@code AUTH_JWKS_URI}, issuer and audience from {@link AuthProperties} (no discovery call). */
     @Bean
-    JwtDecoder jwtDecoder(KeycloakProperties keycloak) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(keycloak.jwksUri().toString()).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(keycloak.issuer()));
+    JwtDecoder jwtDecoder(AuthProperties auth) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(auth.jwksUri().toString()).build();
+        decoder.setJwtValidator(auth.tokenValidator());
         return decoder;
     }
 
     @Bean
     JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(new KeycloakRealmRoleConverter());
+        converter.setJwtGrantedAuthoritiesConverter(TokenRoles::authorities);
         return converter;
     }
 }

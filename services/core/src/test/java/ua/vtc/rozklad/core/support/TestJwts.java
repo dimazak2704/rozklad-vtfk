@@ -1,15 +1,14 @@
 package ua.vtc.rozklad.core.support;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
-import ua.vtc.rozklad.core.shared.security.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.core.shared.security.TokenRoles;
 
 /**
- * Keycloak-like access tokens for MockMvc: realm roles in {@code realm_access.roles} mapped by the
- * production {@link KeycloakRealmRoleConverter}. Ids match the demo users of the realm import.
+ * Access tokens for MockMvc: roles in the flat {@code roles} claim, mapped by the production
+ * {@link TokenRoles}. Ids match the demo accounts.
  */
 public final class TestJwts {
 
@@ -37,7 +36,7 @@ public final class TestJwts {
         return SecurityMockMvcRequestPostProcessors.jwt()
                 .jwt(jwt -> jwt.subject(id.toString())
                         .claim("preferred_username", username)
-                        .claim("realm_access", Map.of("roles", List.of(roles))))
-                .authorities(new KeycloakRealmRoleConverter());
+                        .claim("roles", List.of(roles)))
+                .authorities(TokenRoles::authorities);
     }
 }

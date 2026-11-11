@@ -7,7 +7,7 @@ import ua.vtc.rozklad.core.shared.security.CurrentUser;
 
 /**
  * The caller of the current request and the teacher linked to the account
- * ({@code teacher.keycloak_user_id}). Ownership checks («a teacher changes only own absences,
+ * ({@code teacher.account_id}). Ownership checks («a teacher changes only own absences,
  * preferences and assigned changes») use {@link #requireTeacherId()}.
  */
 public interface CurrentUserService {

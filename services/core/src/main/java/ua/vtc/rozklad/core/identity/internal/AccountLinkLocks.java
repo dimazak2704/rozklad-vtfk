@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
  * Serializes links between teachers and accounts (transaction-scoped PostgreSQL advisory locks):
  * the account first, then the teacher, always in this order. Two parallel links of one account
  * then run one after another, and the second sees the first one's result instead of failing on
- * the unique {@code keycloak_user_id} index.
+ * the unique {@code account_id} index.
  */
 @Component
 class AccountLinkLocks {

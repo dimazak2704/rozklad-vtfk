@@ -1,6 +1,6 @@
 package ua.vtc.rozklad.core.shared.security;
 
-/** Keycloak realm roles ({@code realm_access.roles}); Spring authorities are {@code ROLE_<name>}. */
+/** Roles of the access token ({@link TokenRoles}); Spring authorities are {@code ROLE_<name>}. */
 public final class Roles {
 
     /** Dispatcher / deputy director. */

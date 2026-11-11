@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +38,7 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
-import ua.vtc.rozklad.scheduler.config.KeycloakRealmRoleConverter;
+import ua.vtc.rozklad.scheduler.config.TokenRoles;
 import ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint;
 import ua.vtc.rozklad.scheduler.support.SchedulerIntegrationTest;
 import ua.vtc.rozklad.scheduler.support.SyntheticCollege;
@@ -329,8 +328,8 @@ class GenerationMessagingIT {
 
     private static MockHttpServletRequestBuilder admin(MockHttpServletRequestBuilder request) {
         return request.with(jwt()
-                .jwt(token -> token.claim("realm_access", Map.of("roles", List.of("ADMIN"))))
-                .authorities(new KeycloakRealmRoleConverter()));
+                .jwt(token -> token.claim("roles", List.of("ADMIN")))
+                .authorities(TokenRoles::authorities));
     }
 
     private static org.hamcrest.Matcher<String> startsWithZeroHard() {

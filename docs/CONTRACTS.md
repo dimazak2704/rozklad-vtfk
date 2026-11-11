@@ -130,7 +130,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
 `GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...]}`;
-`GET /api/internal/teachers/{id}` → teacher with keycloak link.
+`GET /api/internal/teachers/{id}` → teacher with the account link `accountId` (`keycloakUserId` repeats it, deprecated).
 
 ## 5. Importer (role ADMIN; `ai/parse-absence` also SERVICE)
 

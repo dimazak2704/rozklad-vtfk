@@ -27,8 +27,8 @@ class DemoAccountLinksTest {
 
         links.link();
 
-        assertThat(krentsin.getKeycloakUserId()).isEqualTo(KRENTSIN_ACCOUNT);
-        assertThat(nepyivoda.getKeycloakUserId()).isEqualTo(NEPYIVODA_ACCOUNT);
+        assertThat(krentsin.getAccountId()).isEqualTo(KRENTSIN_ACCOUNT);
+        assertThat(nepyivoda.getAccountId()).isEqualTo(NEPYIVODA_ACCOUNT);
     }
 
     @Test
@@ -37,13 +37,13 @@ class DemoAccountLinksTest {
         Teacher second = new Teacher("Непийвода", "Непийвода О.", "Непийвода");
         Teacher krentsin = new Teacher("Кренцін", "Кренцін М.Д.", "Кренцін");
         Teacher alreadyLinked = new Teacher("Інший", "Інший І.", "Інший");
-        alreadyLinked.setKeycloakUserId(KRENTSIN_ACCOUNT);
+        alreadyLinked.setAccountId(KRENTSIN_ACCOUNT);
         given(teachers.findAll()).willReturn(List.of(first, second, krentsin, alreadyLinked));
 
         links.link();
 
-        assertThat(first.getKeycloakUserId()).isNull();
-        assertThat(second.getKeycloakUserId()).isNull();
-        assertThat(krentsin.getKeycloakUserId()).isNull();
+        assertThat(first.getAccountId()).isNull();
+        assertThat(second.getAccountId()).isNull();
+        assertThat(krentsin.getAccountId()).isNull();
     }
 }

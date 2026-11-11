@@ -10,7 +10,7 @@ public interface TeacherRepository extends JpaRepository<Teacher, UUID>, JpaSpec
 
     Optional<Teacher> findByShortName(String shortName);
 
-    Optional<Teacher> findByKeycloakUserId(UUID keycloakUserId);
+    Optional<Teacher> findByAccountId(UUID accountId);
 
     List<Teacher> findAllByActiveTrueOrderByShortName();
 }

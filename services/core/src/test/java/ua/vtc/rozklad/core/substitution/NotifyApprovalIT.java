@@ -361,6 +361,6 @@ class NotifyApprovalIT {
     }
 
     private static CurrentUser user(Teacher teacher) {
-        return new CurrentUser(teacher.getKeycloakUserId(), "nepyivoda", Set.of("TEACHER"));
+        return new CurrentUser(teacher.getAccountId(), "nepyivoda", Set.of("TEACHER"));
     }
 }
