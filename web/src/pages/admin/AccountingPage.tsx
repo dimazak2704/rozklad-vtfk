@@ -164,6 +164,8 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
         id: 'bar',
         header: 'Хід',
         hideBelow: 'md',
+        // у стосі на телефоні смуга без місця — числа «30 з 54 год» уже сказали те саме
+        className: 'max-md:hidden!',
         cell: (row) => <HoursBar row={row} />,
       },
       {
@@ -300,8 +302,9 @@ function StatusCell({ row }: { row: AccountingRow }) {
   const finish = row.forecastFinishDate && row.status !== 'WILL_UNDERRUN' ? formatNumericDate(row.forecastFinishDate) : null;
   return (
     <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-      <span className={cn('inline-flex items-center gap-1.5 text-ui font-[650] whitespace-nowrap', STATUS_TEXT[row.status])}>
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {/* колір — лише в крапці: 93 червоні рядки поспіль кричали б, а не інформували */}
+      <span className="inline-flex items-center gap-2 text-ui font-[550] whitespace-nowrap text-primary">
+        <span aria-hidden="true" className={cn('size-2 rounded-full bg-current', STATUS_TEXT[row.status])} />
         {statusLabel(row)}
         {finish && row.status === 'ON_TRACK' ? <span className="font-normal text-muted figures">до {finish}</span> : null}
       </span>
