@@ -51,7 +51,7 @@ export function AdminLayout() {
             className="anim-sheet-left fixed inset-y-0 start-0 z-50 w-72 max-w-[85vw] bg-canvas shadow-dialog focus-visible:outline-none lg:hidden"
           >
             <RadixDialog.Title className="sr-only">Розділи панелі диспетчера</RadixDialog.Title>
-            <AdminSidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />
+            <AdminSidebar collapsed={false} onNavigate={() => setMobileOpen(false)} showUser />
           </RadixDialog.Content>
         </RadixDialog.Portal>
       </RadixDialog.Root>

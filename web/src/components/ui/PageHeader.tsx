@@ -51,6 +51,7 @@ export function BackLink({ to, label, className }: Pick<BackTarget, 'to' | 'labe
   return (
     <Link
       to={to}
+      aria-label={`Назад: ${label}`}
       className={cn(
         '-ms-1.5 inline-flex min-h-8 w-fit items-center gap-0.5 rounded-control pe-2 ps-0.5 text-ui font-[550] text-secondary',
         className,
@@ -59,10 +60,7 @@ export function BackLink({ to, label, className }: Pick<BackTarget, 'to' | 'labe
       )}
     >
       <ChevronLeft aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
-      <span>
-        <span className="sr-only">Назад: </span>
-        {label}
-      </span>
+      <span>{label}</span>
     </Link>
   );
 }

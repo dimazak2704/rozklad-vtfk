@@ -14,7 +14,7 @@ interface AdminTopBarProps {
 
 /**
  * Верхня панель диспетчера — лише робоча дата і стан звʼязку (лише коли його немає) плюс пошук іконкою.
- * Користувач — унизу бічної панелі; на телефоні й планшеті (без панелі) — тут, аватаром.
+ * Користувач — унизу бічної панелі (і шторки на телефоні); на планшеті — тут, аватаром.
  */
 export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
   const openPalette = useCommandStore((state) => state.setOpen);
@@ -34,7 +34,8 @@ export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
           icon={<Search aria-hidden="true" className="size-5" />}
           onClick={() => openPalette(true)}
         />
-        <div className="lg:hidden">
+        {/* на телефоні користувач — унизу шторки з розділами, щоб у верхній панелі вмістилася дата */}
+        <div className="hidden sm:block lg:hidden">
           <UserMenu />
         </div>
       </div>
