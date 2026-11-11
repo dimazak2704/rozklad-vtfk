@@ -2,7 +2,7 @@ import { useParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { useBellProfiles, usePublicRooms, usePublicSchedule } from '@/api/public';
 import { paths } from '@/app/routes';
-import { RoomOccupancy } from '@/components/public/schedule/RoomOccupancy';
+import { RoomNowStatus } from '@/components/public/schedule/RoomOccupancy';
 import { ScheduleHeaderSkeleton } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
@@ -33,7 +33,14 @@ export default function RoomSchedulePage() {
   }
   if (!name) {
     if (query.isError) {
-      return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />;
+      return (
+        <ErrorState
+          error={query.error}
+          title="Розклад аудиторії зараз не відкривається"
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
+      );
     }
     return (
       <div className="flex flex-col gap-6">
@@ -52,14 +59,15 @@ export default function RoomSchedulePage() {
       kindLabel="Розклад аудиторії"
       documentTitle={`${label} — розклад аудиторії`}
       details={room ? roomDetails(room) : undefined}
+      status={
+        query.data && !query.isPlaceholderData && activeProfile ? (
+          <RoomNowStatus schedule={query.data} roomId={id} profile={activeProfile} today={params.today} />
+        ) : null
+      }
       perspective="room"
       query={query}
       params={params}
       doorSign
-    >
-      {query.data && !query.isPlaceholderData && activeProfile ? (
-        <RoomOccupancy schedule={query.data} roomId={id} profile={activeProfile} today={params.today} />
-      ) : null}
-    </SchedulePage>
+    />
   );
 }

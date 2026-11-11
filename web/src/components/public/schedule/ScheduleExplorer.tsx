@@ -1,17 +1,18 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { CalendarDays, CalendarRange, RotateCcw, WifiOff } from 'lucide-react';
+import { RotateCcw, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
 import { DayList, NowIndicator, WeekGrid } from '@/components/schedule';
-import { Button, DateNav, EmptyState, ErrorState, Panel, SegmentedControl } from '@/components/ui';
+import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import type { Perspective } from '@/lib/schedule';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
-import { ChangesStrip } from './ChangesStrip';
+import { ChangesNote, WEEK_REGION_ID } from './ChangesNote';
 import type { ScheduleParams, ScheduleView } from './schedule-params';
 import { activePairs, changedLessons, dayOf, filterBySubgroup } from './schedule-utils';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
@@ -26,18 +27,38 @@ interface ScheduleExplorerProps {
   ownerLabel: string;
   /** Підгрупи групи (для фільтра «Уся група · 1 п/г · 2 п/г»). */
   subgroups?: readonly number[];
+  /**
+   * Власний рядок керувань над розкладом («День / Тиждень», тиждень, підгрупа, заміни тижня).
+   * `false` — сторінка ставить `ScheduleControls` у свій заголовок (PageHeader), а фільтр підгрупи — у «⋯».
+   */
+  toolbar?: boolean;
+}
+
+/** «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки. */
+export function ScheduleControls({ params, hotkeys = true }: { params: ScheduleParams; hotkeys?: boolean }) {
+  const { date, today, view, setView, setDate } = params;
+  useHotkeys([
+    { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys },
+    { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад', enabled: hotkeys },
+  ]);
+  return (
+    <>
+      <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
+      <WeekNav value={date} onChange={setDate} today={today} hotkeys={hotkeys} />
+    </>
+  );
 }
 
 const VIEW_OPTIONS = [
-  { value: 'day' as const, label: 'День', icon: <CalendarDays aria-hidden="true" className="size-4" /> },
-  { value: 'week' as const, label: 'Тиждень', icon: <CalendarRange aria-hidden="true" className="size-4" /> },
+  { value: 'day' as const, label: 'День' },
+  { value: 'week' as const, label: 'Тиждень' },
 ];
 
 /**
  * Розклад групи, викладача чи аудиторії: «День / Тиждень», навігація датами, фільтр підгрупи,
  * «зараз», зміни тижня. Стан — в адресі (useScheduleParams), дані — з переданого запиту.
  */
-export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [] }: ScheduleExplorerProps) {
+export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [], toolbar = true }: ScheduleExplorerProps) {
   const { date, today, homeDate, view, subgroup, week, setDate, setView, setSubgroup } = params;
   const online = useOnline();
   const bells = useBells(date);
@@ -46,11 +67,8 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
   const changes = useMemo(() => (placeholder ? [] : changedLessons(schedule)), [schedule, placeholder]);
   const day = placeholder ? undefined : dayOf(schedule, date);
   const slots = bells.data?.slots;
-
-  useHotkeys([
-    { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад' },
-    { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад' },
-  ]);
+  const ownPairs = useMemo(() => (day ? new Set(activePairs(day)) : null), [day]);
+  const { status: dayStatus } = useNow(day && day.date === today ? slots : null, { date: day?.date ?? null, onlyPairs: ownPairs });
 
   const openDay = (next: string) => {
     setDate(next);
@@ -118,37 +136,47 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
       />
     );
   } else if (view === 'day') {
+    const live = Boolean(day && day.studyDay && day.date === today && slots && slots.length > 0);
+    // великий відлік — лише поки пари ще йдуть; після них досить одного тихого рядка
+    const running = live && (dayStatus?.kind === 'in-pair' || dayStatus?.kind === 'break' || dayStatus?.kind === 'before-day');
     content = (
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
-        <div className="flex min-w-0 flex-col gap-4">
-          {day && day.studyDay && slots && slots.length > 0 ? (
-            <NowIndicator
-              bells={slots}
-              lessonPairs={activePairs(day)}
-              date={day.date}
-              className="rounded-panel border border-default bg-surface px-4 pt-4 pb-3"
-            />
+      <div className="grid items-start gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {live && day && slots ? (
+            <>
+              {running ? (
+                <NowIndicator
+                  variant="compact"
+                  bells={slots}
+                  lessonPairs={activePairs(day)}
+                  date={day.date}
+                  className="rounded-[20px] bg-today-wash p-5 lg:hidden"
+                />
+              ) : null}
+              <NowIndicator
+                variant="inline"
+                bells={slots}
+                lessonPairs={activePairs(day)}
+                date={day.date}
+                className={running ? 'hidden lg:flex' : undefined}
+              />
+            </>
           ) : null}
-          {day ? (
-            <DayList day={day} bells={slots} perspective={perspective} today={today} className="max-w-3xl" />
-          ) : (
-            <ScheduleSkeleton view="day" />
-          )}
+          {day ? <DayList day={day} bells={slots} perspective={perspective} today={today} showHeader={false} /> : <ScheduleSkeleton view="day" />}
         </div>
-        <aside className="flex min-w-0 flex-col gap-4" aria-label="Тиждень і дзвінки">
-          <ChangesStrip items={changes} onSelect={openDay} />
-          {slots && slots.length > 0 ? (
-            <Panel title="Дзвінки цього дня" headingLevel={2} className="hidden lg:block">
-              <BellsCompact slots={slots} live={date === today} />
-            </Panel>
-          ) : null}
-        </aside>
+        {slots && slots.length > 0 ? (
+          <section aria-labelledby="day-bells-heading" className="hidden flex-col gap-2 lg:flex">
+            <h2 id="day-bells-heading" className="text-ui font-semibold text-secondary">
+              Дзвінки цього дня
+            </h2>
+            <BellsCompact slots={slots} live={date === today} showBreaks={false} />
+          </section>
+        ) : null}
       </div>
     );
   } else {
     content = (
-      <div className="flex flex-col gap-4">
-        <ChangesStrip items={changes} onSelect={openDay} />
+      <div id={WEEK_REGION_ID}>
         <div className="hidden md:block">
           <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" />
         </div>
@@ -163,26 +191,23 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
 
   return (
     <section aria-label={`Розклад: ${ownerLabel}`} className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
-        {view === 'day' ? (
-          <DateNav value={date} onChange={setDate} today={today} hotkeys />
-        ) : (
-          <WeekNav value={date} onChange={setDate} today={today} hotkeys />
-        )}
-        {subgroups.length > 0 ? (
-          <SegmentedControl
-            aria-label="Підгрупа"
-            value={subgroup === null ? 'all' : String(subgroup)}
-            onValueChange={(value) => setSubgroup(value === 'all' ? null : Number(value))}
-            options={[
-              { value: 'all', label: 'Уся група' },
-              ...subgroups.map((n) => ({ value: String(n), label: `${n} п/г`, ariaLabel: `${n} підгрупа` })),
-            ]}
-            className="lg:ms-auto"
-          />
-        ) : null}
-      </div>
+      {toolbar ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <ScheduleControls params={params} />
+          {subgroups.length > 0 ? (
+            <SegmentedControl
+              aria-label="Підгрупа"
+              value={subgroup === null ? 'all' : String(subgroup)}
+              onValueChange={(value) => setSubgroup(value === 'all' ? null : Number(value))}
+              options={[
+                { value: 'all', label: 'Уся група' },
+                ...subgroups.map((n) => ({ value: String(n), label: `${n} п/г`, ariaLabel: `${n} підгрупа` })),
+              ]}
+            />
+          ) : null}
+          <ChangesNote items={changes} view={view} onOpenDay={openDay} className="lg:ms-auto" />
+        </div>
+      ) : null}
 
       {view === 'day' ? (
         <WeekDayTabs
@@ -191,7 +216,6 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
           value={date}
           today={today}
           onChange={setDate}
-          className="max-w-3xl"
         />
       ) : null}
 

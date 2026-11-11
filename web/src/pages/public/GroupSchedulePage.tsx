@@ -9,7 +9,7 @@ import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton'
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { subgroupsIn } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
-import { Badge, ErrorState } from '@/components/ui';
+import { ErrorState } from '@/components/ui';
 import { canonicalGroupCode, fuzzyFilter } from '@/lib/search';
 
 function safeDecode(value: string): string {
@@ -20,10 +20,10 @@ function safeDecode(value: string): string {
   }
 }
 
-/** «4 курс · Компʼютерна інженерія · Компʼютерне відділення»; невідому назву спеціальності не показуємо. */
+/** «Компʼютерна інженерія · 4 курс»; невідому назву спеціальності не показуємо. Зміну навчання — теж ні: «1 зміна» читається як «одна заміна». */
 function groupDetails(group: PublicGroupDto): string {
   const specialty = group.specialty.name !== group.specialty.letters ? group.specialty.name : null;
-  return [`${group.course} курс`, specialty, group.department].filter(Boolean).join(' · ');
+  return [specialty, `${group.course} курс`].filter(Boolean).join(' · ');
 }
 
 function GroupSchedule({ group }: { group: PublicGroupDto }) {
@@ -38,7 +38,6 @@ function GroupSchedule({ group }: { group: PublicGroupDto }) {
       kindLabel="Розклад групи"
       documentTitle={`${group.code} — розклад групи`}
       details={groupDetails(group)}
-      badges={<Badge>{group.shift} зміна</Badge>}
       perspective="group"
       query={query}
       params={params}
@@ -74,7 +73,7 @@ export default function GroupSchedulePage() {
     return (
       <ErrorState
         error={groups.error}
-        title="Не вдалося завантажити список груп"
+        title={`Розклад ${code} зараз не відкривається`}
         onRetry={() => void groups.refetch()}
         retrying={groups.isFetching}
       />

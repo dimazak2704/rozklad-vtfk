@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
@@ -20,7 +20,7 @@ interface WeekNavProps {
   className?: string;
 }
 
-/** Перемикач тижня: ‹ 9–13 листопада › з календарем; день тижня при гортанні зберігається. */
+/** Перемикач тижня: ‹ 9–13 листопада › з календарем під датами; день тижня при гортанні зберігається. */
 export function WeekNav({ value, onChange, today, hotkeys = false, className }: WeekNavProps) {
   const [open, setOpen] = useState(false);
   const week = studyWeek(value);
@@ -44,15 +44,11 @@ export function WeekNav({ value, onChange, today, hotkeys = false, className }: 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="secondary"
-            iconStart={<CalendarDays aria-hidden="true" className="size-4" />}
-            aria-label={`Обрати тиждень. Зараз: ${formatDateRange(week.from, week.to)}`}
-            className="min-w-0 justify-start"
+            variant="ghost"
+            aria-label={`Обрати тиждень. Зараз: ${isCurrent ? 'цей тиждень, ' : ''}${formatDateRange(week.from, week.to)}`}
+            className="min-w-0 px-2.5 text-primary"
           >
-            <span className="truncate figures">
-              {isCurrent ? <span className="me-1">Цей тиждень,</span> : null}
-              <span className={cn(isCurrent && 'font-normal text-secondary')}>{formatDateRange(week.from, week.to)}</span>
-            </span>
+            <span className="truncate font-[650] figures">{formatDateRange(week.from, week.to)}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent width="auto" align="center" className="p-2">
