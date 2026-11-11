@@ -37,11 +37,11 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
         className={cn(
           'flex items-center gap-2 border-b border-separator px-3',
           compact ? 'h-10' : 'h-12',
-          isToday && 'shadow-[inset_0_-2px_0_var(--border-color-accent)]',
+          isToday && 'bg-today-wash',
         )}
       >
         <p className="flex min-w-0 items-baseline gap-2">
-          <span className={cn('font-semibold text-primary', compact ? 'text-ui' : 'text-body')}>
+          <span className={cn('font-[650] text-primary', compact ? 'text-ui' : 'text-body')}>
             {capitalize(weekdayName(day.weekday))}
           </span>
           <span className="text-caption text-secondary figures">{formatDayMonth(day.date)}</span>
@@ -63,7 +63,7 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
             return (
               <li key={slot.pair} className="grid grid-cols-[3.25rem_minmax(0,1fr)]" aria-current={current ? 'time' : undefined}>
                 <div className="flex flex-col items-center py-2 leading-none">
-                  <span className={cn('font-condensed text-title font-bold figures', current ? 'text-accent' : slot.isWindow ? 'text-muted' : 'text-primary')}>
+                  <span className={cn('text-title font-semibold figures', current ? 'text-accent' : slot.isWindow ? 'text-muted' : 'text-primary')}>
                     {slot.pair}
                   </span>
                   {slot.startsAt ? (

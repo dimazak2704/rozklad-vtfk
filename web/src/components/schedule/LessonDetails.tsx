@@ -1,26 +1,29 @@
-import { ArrowRight, Clock, DoorOpen, MonitorSmartphone, User, Users } from 'lucide-react';
+import { MonitorSmartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import type { IsoDate, LessonView, WeekParity } from '@/api/types';
+import { paths } from '@/app/routes';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { LESSON_VIEW_KIND_LABEL, PARITY_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { capitalize, LESSON_VIEW_KIND_LABEL, PARITY_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, lessonTime, roomLabel } from '@/lib/schedule';
-import { Badge } from '../ui/Badge';
-import { Plate } from '../ui/Plate';
-import { TONE_BADGE } from './tones';
 
-function Row({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+const STATE_WORD = {
+  change: 'text-change',
+  cancel: 'text-cancel',
+  add: 'text-add',
+  room: 'text-room',
+  regular: 'text-secondary',
+  block: 'text-secondary',
+} as const;
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2.5">
-      <span className="mt-0.5 text-muted [&_svg]:size-4" aria-hidden="true">
-        {icon}
-      </span>
-      <p className="text-ui text-primary">
-        <span className="sr-only">{label}: </span>
-        {children}
-      </p>
+    <div className="grid grid-cols-[4.75rem_minmax(0,1fr)] items-baseline gap-x-3">
+      <dt className="text-caption text-muted">{label}</dt>
+      <dd className="text-ui text-primary">{children}</dd>
     </div>
   );
 }
@@ -39,9 +42,13 @@ function reasonInWords(text: string): string {
   return code ? REASON_CODE_HINT[code].toLocaleLowerCase('uk') : text;
 }
 
+const LINK =
+  'inline-flex min-h-8 items-center rounded-control text-ui font-[650] text-accent hover:underline pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+
 /**
- * Повні відомості про заняття для картки при наведенні чи шторки на телефоні (UI.md §3).
- * Лише тут предмет має свій колір лінії — у сітці його називає коротка назва.
+ * Повні відомості про заняття для картки при наведенні чи шторки на телефоні: повна назва з крапкою
+ * дисципліни, «Веде / Де / Коли / Група», для зміни — «Було» й причина словами, і два переходи:
+ * розклад викладача й аудиторії.
  */
 export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
   const tone = LESSON_TONE[lesson.kind];
@@ -51,40 +58,30 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
   const replacedTeacher = original?.teacher && original.teacher.id !== lesson.teacher?.id;
   const replacedRoom = original?.room && original.room.id !== lesson.room?.id;
   const movedFrom = original?.pair && original.pair !== lesson.pair ? original.pair : null;
+  const when = [
+    date ? formatWeekdayDate(date) : null,
+    `${pairOrdinalLabel(lesson.pair)}${lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <div className="flex w-full flex-col gap-3 sm:w-[min(20rem,calc(100vw-3rem))]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="flex items-center gap-2 font-condensed text-heading leading-tight font-bold">
-            <span {...lineAttr(lesson.discipline)} className="size-2.5 shrink-0 rounded-full bg-[var(--line-dot)]" aria-hidden="true" />
-            <span className={cn(tone === 'cancel' && 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2')}>
-              {lesson.discipline.shortName}
-            </span>
-          </p>
-          {lesson.discipline.name && lesson.discipline.name !== lesson.discipline.shortName ? (
-            <p className="text-caption text-secondary">{lesson.discipline.name}</p>
-          ) : null}
-        </div>
-        {tone !== 'regular' ? (
-          <Badge tone={TONE_BADGE[tone]} size="sm">
-            {LESSON_VIEW_KIND_LABEL[lesson.kind]}
-          </Badge>
+    <div className="flex w-full flex-col gap-3 sm:w-[min(21rem,calc(100vw-3rem))]">
+      <div className="flex flex-col gap-1">
+        {tone !== 'regular' && tone !== 'block' ? (
+          <span className={cn('text-meta font-semibold', STATE_WORD[tone])}>{LESSON_VIEW_KIND_LABEL[lesson.kind]}</span>
         ) : null}
+        <p className="flex items-start gap-2 text-heading font-bold text-primary">
+          <span {...lineAttr(lesson.discipline)} className="mt-2 size-2 shrink-0 rounded-full bg-[var(--line-dot)]" aria-hidden="true" />
+          <span className={cn(tone === 'cancel' && 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2')}>
+            {lesson.discipline.name || lesson.discipline.shortName}
+          </span>
+        </p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Row icon={<Clock />} label="Час">
-          <span className="figures">
-            {pairOrdinalLabel(lesson.pair)}
-            {lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}
-          </span>
-          {date ? <span className="block text-caption text-secondary">{formatWeekdayDate(date)}</span> : null}
-        </Row>
-        <Row icon={<User />} label="Викладач">
-          {lesson.teacher ? lesson.teacher.shortName : <span className="text-muted">не призначено</span>}
-        </Row>
-        <Row icon={<DoorOpen />} label="Аудиторія">
+      <dl className="flex flex-col gap-1.5">
+        <Row label="Веде">{lesson.teacher ? lesson.teacher.shortName : <span className="text-muted">не призначено</span>}</Row>
+        <Row label="Де">
           {lesson.room ? (
             <>
               {roomLabel(lesson.room.name)}
@@ -93,56 +90,59 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           ) : (
             <span className="text-muted">не вказано</span>
           )}
+          {lesson.online ? (
+            <span className="ms-1 inline-flex items-center gap-1 text-secondary">
+              <MonitorSmartphone aria-hidden="true" className="size-3.5" />
+              дистанційно
+            </span>
+          ) : null}
         </Row>
-        <Row icon={<Users />} label="Група">
-          <Plate size="sm">{lesson.group.code}</Plate>
+        <Row label="Коли">
+          {capitalize(when)}
+          {dayParity ? <span className="text-secondary">, {PARITY_LABEL[dayParity]}</span> : null}
+        </Row>
+        <Row label="Група">
+          {lesson.group.code}
           {subgroup ? <span className="text-secondary"> · {subgroup}</span> : null}
         </Row>
-        {lesson.online ? (
-          <Row icon={<MonitorSmartphone />} label="Формат">
-            Дистанційно
-          </Row>
-        ) : null}
-      </div>
+      </dl>
 
       {tone !== 'regular' && tone !== 'block' && (replacedDiscipline || replacedTeacher || replacedRoom || movedFrom || lesson.reasonText) ? (
-        <div className="flex flex-col gap-1.5 border-t border-separator pt-2.5 text-ui">
+        <dl className="flex flex-col gap-1.5 border-t border-separator pt-3">
           {replacedDiscipline || replacedTeacher ? (
-            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="text-muted line-through decoration-[var(--text-decoration-color-cancel)]">
-                {[original?.discipline?.shortName ?? lesson.discipline.shortName, original?.teacher?.shortName]
-                  .filter(Boolean)
-                  .join(', ')}
-              </span>
-              <ArrowRight aria-label="замінено на" className="size-3.5 text-muted rtl:rotate-180" />
-              <span className="font-semibold text-primary">
-                {[lesson.discipline.shortName, lesson.teacher?.shortName].filter(Boolean).join(', ')}
-              </span>
-            </p>
+            <Row label="Було">
+              <s className="text-secondary decoration-[var(--text-decoration-color-change)]">
+                {[original?.discipline?.shortName ?? lesson.discipline.shortName, original?.teacher?.shortName].filter(Boolean).join(' · ')}
+              </s>
+            </Row>
           ) : null}
           {replacedRoom ? (
-            <p className="flex items-center gap-1.5">
-              <span className="text-muted line-through">{roomLabel(original?.room?.name)}</span>
-              <ArrowRight aria-label="перенесено в" className="size-3.5 text-muted rtl:rotate-180" />
-              <span className="font-semibold text-room">{roomLabel(lesson.room?.name)}</span>
-            </p>
+            <Row label="Аудиторія">
+              <s className="text-secondary">{roomLabel(original?.room?.name)}</s> → <span className="font-[650] text-room">{roomLabel(lesson.room?.name)}</span>
+            </Row>
           ) : null}
-          {movedFrom ? <p className="text-secondary">Перенесено з {pairOrdinalGenitive(movedFrom)} пари</p> : null}
+          {movedFrom ? <Row label="Перенесено">з {pairOrdinalGenitive(movedFrom)} пари</Row> : null}
           {lesson.reasonText ? (
-            <p className="text-secondary">
-              Причина: <span className="font-semibold text-primary">{reasonInWords(lesson.reasonText)}</span>
-            </p>
+            <Row label="Причина">
+              <span className="font-[650]">{reasonInWords(lesson.reasonText)}</span>
+            </Row>
           ) : null}
-        </div>
+        </dl>
       ) : null}
 
-      {dayParity ? (
-        <p className="border-t border-separator pt-2.5 text-caption text-secondary">
-          <span>
-            Цього тижня <span className="font-semibold text-primary">{PARITY_LABEL[dayParity]}</span>:{' '}
-            {dayParity === 'NUMERATOR' ? 'діють пари з верхнього рядка' : 'діють пари з нижнього рядка'} друкованого розкладу
-          </span>
-        </p>
+      {lesson.teacher || lesson.room ? (
+        <div className="flex flex-wrap gap-x-4 border-t border-separator pt-2">
+          {lesson.teacher ? (
+            <Link to={paths.teacher(lesson.teacher.id)} className={LINK}>
+              Розклад викладача
+            </Link>
+          ) : null}
+          {lesson.room ? (
+            <Link to={paths.room(lesson.room.id)} className={LINK}>
+              {/^\d/.test(lesson.room.name) ? `Аудиторія ${lesson.room.name}` : capitalize(lesson.room.name)}
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

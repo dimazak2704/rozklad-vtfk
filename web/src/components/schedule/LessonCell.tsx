@@ -1,7 +1,8 @@
-import { ArrowRight, MonitorSmartphone } from 'lucide-react';
+import { CornerDownRight, MonitorSmartphone } from 'lucide-react';
 import type { ComponentProps, ReactElement } from 'react';
 import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
+import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { pairOrdinalGenitive } from '@/lib/ordinal';
 import { LESSON_TONE, lessonCounterpart, lessonSummary, lessonTime, roomLabel, type Perspective } from '@/lib/schedule';
@@ -14,15 +15,15 @@ export interface LessonCellProps {
   lesson: LessonView;
   /** Чий розклад: група бачить викладача, викладач — групу, аудиторія — обох. */
   perspective?: Perspective;
-  /** `grid` — клітинка тижневої сітки (на всю клітинку таблиці), `list` — рядок денного списку. */
+  /** `grid` — клітинка тижневої сітки, `list` — рядок денного списку. */
   variant?: 'grid' | 'list';
   date?: IsoDate;
   dayParity?: WeekParity | null;
-  /** Пара йде зараз: доріжка прогресу 3 px уздовж верхнього краю. */
+  /** Пара йде зараз (для читача екрана; лінію «зараз» малює сітка чи список). */
   now?: boolean;
-  /** 0..1 — скільки пари минуло (для доріжки). */
+  /** Застаріле: прогрес малює лінія «зараз» сітки. */
   progress?: number;
-  /** Пара вже минула (сьогодні): тихіший текст, без прозорості (контраст лишається AA). */
+  /** Пара вже минула (сьогодні): «осідає» — назва тихіша, крапка на 40 %. */
   past?: boolean;
   /** Показати час (коли він відрізняється від часу рядка сітки, напр. у пʼятницю). */
   showTime?: boolean;
@@ -30,35 +31,28 @@ export interface LessonCellProps {
 }
 
 /**
- * Тло стану — як маркер на надрукованому аркуші: тонування від краю до краю, без рамок.
- * Справжній «маркер» один — бурштин заміни; «пари не буде» тонована ледь-ледь, бо значення несе закреслення.
- * Додаткова пара без заливки: лише риска 3 px на початку клітинки (або заливка, або межа — ніколи обидві).
- * Зміна аудиторії тла не має: її видно в самому рядку «ауд. 17 → ауд. 309».
+ * Тло стану — лише в заміни й додаткової пари: тонування з відступом 4 px усередині клітинки, радіус 10.
+ * «Пари не буде» без тла (значення несе закреслення), інша аудиторія змінює лише рядок аудиторії,
+ * перенесена пара — пунктирний контур. Стан читається й у відтінках сірого: слово, закреслення, форма.
  */
 const TONE_SURFACE = {
-  regular: 'hover:bg-hover',
-  change: 'bg-change-subtle',
-  cancel: 'bg-cancel-subtle',
-  add: 'hover:bg-hover before:absolute before:inset-y-0 before:start-0 before:w-[3px] before:bg-[var(--fill-add)]',
-  room: 'hover:bg-hover',
-  block: 'hatch bg-block-subtle',
+  regular: 'before:bg-transparent hover:before:bg-hover',
+  change: 'before:bg-change-subtle',
+  cancel: 'before:bg-transparent hover:before:bg-hover',
+  add: 'before:bg-add-subtle',
+  room: 'before:bg-transparent hover:before:bg-hover',
+  block: 'hatch before:bg-transparent',
 } as const;
 
-/** Одне слово стану над назвою — звичайним текстом, без «таблички». */
+/** Слово стану над назвою — звичайним текстом у кольорі стану, без «таблички». */
 const STATE_WORD = {
   change: 'text-change',
   cancel: 'text-cancel',
   add: 'text-add',
 } as const;
 
-/**
- * Змінене значення — напівжирним: клітинка вже тонована бурштином, а оригінал закреслений рядком нижче,
- * тож підкреслення було б уже пʼятим сигналом.
- */
-const MARKED = 'font-semibold text-primary';
-
-/** Закреслення оригіналу нейтральне; червоне — лише коли пари справді не буде. */
-const STRUCK = 'decoration-[var(--text-decoration-color-muted)] decoration-1';
+/** Закреслений оригінал: лінія кольору позначки заміни, текст тихий. */
+const STRUCK = 'line-through decoration-[var(--text-decoration-color-change)] decoration-1';
 const STRUCK_CANCEL = 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2';
 
 /** Деталі: на компʼютері — картка при наведенні/Enter, на телефоні — шторка знизу. */
@@ -91,10 +85,9 @@ function DetailsTrigger({
 }
 
 /**
- * Заняття в розкладі. Предмет названо повністю, коли є місце (список; клітинка сітки від ~200 px), інакше —
- * кодом; кольорів дисциплін у сітці немає. Стан — тонування і одне слово; для змін оригінал лишається
- * видимим закресленим («замість …»), а нове значення виділене вагою.
- * Наведення або Enter відкривають повні деталі.
+ * Заняття в розкладі (DESIGN.md, «Клітинка заняття»): слово стану (за потреби), крапка дисципліни й назва
+ * до двох рядків, викладач ліворуч і аудиторія праворуч, закреслений оригінал для заміни. Не більше трьох
+ * рядків тексту й рядка стану; решта — у картці деталей (наведення чи Enter, на телефоні — шторка).
  */
 export function LessonCell({
   lesson,
@@ -103,7 +96,6 @@ export function LessonCell({
   date,
   dayParity,
   now = false,
-  progress = 0,
   past = false,
   showTime = false,
   className,
@@ -111,6 +103,7 @@ export function LessonCell({
   const phone = usePhoneLayout();
   const tone = LESSON_TONE[lesson.kind];
   const cancelled = tone === 'cancel';
+  const moved = lesson.kind === 'MOVED';
   const counterpart = lessonCounterpart(lesson, perspective);
   const room = roomLabel(lesson.room?.name);
   const originalRoom = lesson.kind === 'ROOM_CHANGED' ? roomLabel(lesson.original?.room?.name) : null;
@@ -123,18 +116,18 @@ export function LessonCell({
           .filter(Boolean)
           .join(' · ')
       : null;
-  const movedFrom = lesson.kind === 'MOVED' && original?.pair ? original.pair : null;
+  const movedFrom = moved && original?.pair ? original.pair : null;
   const isList = variant === 'list';
   const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
-  // у списку (телефон) предмет названо повністю: скорочення зрозумілі не всім, а місця вистачає
   const title = lesson.discipline.name || lesson.discipline.shortName;
-  // один маркер на клітинку: змінився предмет — підкреслено предмет, інакше — нового викладача
-  const markCounterpart = Boolean(changedTeacher && !changedDiscipline && perspective !== 'teacher');
-  const emphasised = now || tone !== 'regular';
-  const titleTone = cn(
-    past ? 'text-secondary' : 'text-primary',
-    cancelled && cn('text-secondary', STRUCK_CANCEL),
-    changedDiscipline && !cancelled && MARKED,
+  // минула пара сьогодні «осідає»: назва вторинним чорнилом (контраст лишається AA), крапка на 40 %
+  const titleTone = cn('anim-settle', past || cancelled ? 'text-secondary' : 'text-primary', cancelled && STRUCK_CANCEL);
+  const dot = (
+    <span
+      {...lineAttr(lesson.discipline)}
+      aria-hidden="true"
+      className={cn('anim-settle mt-[0.375rem] size-2 shrink-0 rounded-full bg-[var(--line-dot)]', past && 'opacity-40')}
+    />
   );
 
   return (
@@ -147,90 +140,67 @@ export function LessonCell({
         type="button"
         aria-label={`${lessonSummary(lesson, perspective)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
         className={cn(
-          'group/lesson relative flex w-full min-w-0 flex-col items-stretch overflow-hidden text-start',
-          'transition-[background-color] duration-100 ease-out',
+          'group/lesson relative isolate flex w-full min-w-0 flex-col items-stretch gap-1 text-start',
+          // тло стану — псевдоелемент з відступом 4 px (у сітці) і радіусом 10
+          'before:absolute before:-z-10 before:rounded-cell before:transition-[background-color] before:duration-150',
+          'rounded-cell px-3.5 py-3',
+          isList ? 'before:inset-0' : '@container/cell h-full before:inset-1',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-          // у списку лівий край прямий — урівень із колонкою лінії маршруту, заокруглено лише праворуч
-          isList ? 'gap-0.5 rounded-e-control px-3 py-2.5' : '@container/cell h-full gap-0.5 px-3 py-2',
           TONE_SURFACE[tone],
+          // перенесена пара — пунктирний контур замість п'ятого кольору
+          moved && 'after:pointer-events-none after:absolute after:inset-1 after:rounded-cell after:border after:border-dashed after:border-control',
           className,
         )}
       >
-        {now ? (
-          <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent-subtle">
-            <span
-              className="block h-full origin-left bg-accent transition-transform duration-1000 ease-linear rtl:origin-right"
-              style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, progress))})` }}
-            />
-          </span>
-        ) : null}
-
-        {/* слово стану — окремим рядком над назвою (як рубрика), щоб назва мала всю ширину й не обрізалась */}
         {stateWord ? (
           <span className={cn('text-meta font-semibold', STATE_WORD[tone as keyof typeof STATE_WORD])}>{stateWord}</span>
         ) : null}
 
-        <span
-          className={cn(
-            'flex min-w-0 items-baseline gap-1.5',
-            // текст блоку пар лежить на непрозорій «плашці», щоб штрихування не різало літери
-            tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
-          )}
-        >
+        <span className={cn('flex min-w-0 items-start gap-2', tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1')}>
+          {dot}
           {isList ? (
-            <span
-              className={cn(
-                'min-w-0 text-body font-semibold text-pretty',
-                // змінену й поточну пару не обрізаємо ніколи: саме її людина відкрила сайт подивитись
-                !emphasised && 'line-clamp-3',
-                titleTone,
-              )}
-            >
-              {title}
-            </span>
+            <span className={cn('min-w-0 text-cell font-[650] text-pretty', !stateWord && 'line-clamp-2', titleTone)}>{title}</span>
           ) : (
             <>
-              {/* вузька колонка — код вузьким жирним; від ~200 px — повна назва, до двох рядків */}
-              <span className={cn('min-w-0 truncate font-condensed text-cell font-bold @[12.5rem]/cell:hidden', titleTone)}>
+              {/* вузька колонка — коротка назва; від ~200 px — повна, до двох рядків (повна — у картці) */}
+              <span className={cn('min-w-0 truncate text-cell font-[650] @[12.5rem]/cell:hidden', titleTone)}>
                 {lesson.discipline.shortName}
               </span>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'hidden min-w-0 text-cell font-semibold text-pretty',
-                  // змінена чи поточна пара — до трьох рядків, звичайна — до двох
-                  emphasised ? '@[12.5rem]/cell:line-clamp-3' : '@[12.5rem]/cell:line-clamp-2',
-                  titleTone,
-                )}
-              >
-                {lesson.discipline.name || lesson.discipline.shortName}
+              <span aria-hidden="true" className={cn('hidden min-w-0 text-cell font-[650] text-pretty @[12.5rem]/cell:line-clamp-2', titleTone)}>
+                {title}
               </span>
             </>
           )}
           {lesson.subgroup > 0 ? (
-            <span className="shrink-0 text-meta font-medium whitespace-nowrap text-muted figures">{lesson.subgroup}&nbsp;п/г</span>
+            <span className="ms-auto shrink-0 pt-px text-meta font-semibold whitespace-nowrap text-muted">{lesson.subgroup}&nbsp;п/г</span>
           ) : null}
         </span>
 
+        {/* викладач ліворуч, аудиторія праворуч; не вміщаються — аудиторія переноситься, але не обрізається */}
         <span
           className={cn(
-            'flex min-w-0 flex-wrap items-center gap-x-1.5',
-            isList ? 'text-cell' : 'text-caption',
+            'flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 ps-4 text-caption',
             past ? 'text-muted' : 'text-secondary',
             cancelled && 'line-through decoration-[var(--text-decoration-color-cancel)]',
-            tone === 'block' && '-mx-1 w-fit max-w-full rounded-plate bg-surface px-1',
+            tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1',
           )}
         >
-          {counterpart ? <span className={cn('truncate', markCounterpart && !cancelled && MARKED)}>{counterpart}</span> : null}
-          {counterpart && (room || originalRoom) ? <span aria-hidden="true">·</span> : null}
+          {counterpart ? <span className="min-w-0 truncate">{counterpart}</span> : null}
           {originalRoom ? (
-            <span className="inline-flex items-center gap-1 whitespace-nowrap text-room figures">
+            <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
               <s className={cn('text-muted', STRUCK)}>{originalRoom}</s>
-              <ArrowRight aria-hidden="true" className="size-3 text-muted rtl:rotate-180" />
-              <span className="font-semibold">{room}</span>
+              <span className="font-[650] text-room figures">{room?.replace(/^ауд\.\u00a0/, '')}</span>
             </span>
           ) : room ? (
-            <span className="whitespace-nowrap figures">{room}</span>
+            <span className="whitespace-nowrap">
+              {room.startsWith('ауд.') ? (
+                <>
+                  ауд.&nbsp;<span className="figures">{room.replace(/^ауд\.\u00a0/, '')}</span>
+                </>
+              ) : (
+                room
+              )}
+            </span>
           ) : null}
           {lesson.online ? (
             <span className="inline-flex items-center gap-1">
@@ -241,21 +211,22 @@ export function LessonCell({
         </span>
 
         {/*
-          Що було замість — простими словами: «замість СТП · Кренцін». Внутрішні коди розпорядження
+          Що було замість — закресленим тихим рядком: «КМ · Колесник А.». Внутрішні коди розпорядження
           («Зв.зам.», «Відп.») у клітинку не виносимо — причину словами показує картка деталей.
         */}
-        {replacedText || movedFrom ? (
-          <span className={cn('flex min-w-0 flex-wrap items-baseline gap-x-1 text-muted', isList ? 'text-caption' : 'text-meta')}>
-            {replacedText ? (
-              <span className="min-w-0 truncate">
-                замість <s className={STRUCK}>{replacedText}</s>
-              </span>
-            ) : null}
-            {movedFrom ? <span className="text-secondary">з {pairOrdinalGenitive(movedFrom)} пари</span> : null}
+        {replacedText ? (
+          <span className="min-w-0 truncate ps-4 text-caption text-muted">
+            <span className="sr-only">замість </span>
+            <s className={STRUCK}>{replacedText}</s>
+          </span>
+        ) : null}
+        {movedFrom ? (
+          <span className="flex items-center gap-1 ps-4 text-caption text-secondary">
+            <CornerDownRight aria-hidden="true" className="size-3.5 text-muted rtl:-scale-x-100" />з {pairOrdinalGenitive(movedFrom)} пари
           </span>
         ) : null}
 
-        {showTime && lessonTime(lesson) ? <span className="text-meta text-muted figures">{lessonTime(lesson)}</span> : null}
+        {showTime && lessonTime(lesson) ? <span className="ps-4 text-meta text-muted figures">{lessonTime(lesson)}</span> : null}
       </button>
     </DetailsTrigger>
   );

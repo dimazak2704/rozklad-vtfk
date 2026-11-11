@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import type { BellSlotDto, DayDto, IsoDate } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
@@ -34,9 +34,26 @@ function slotState(slot: DaySlot, minutes: number | null): { state: SlotState; f
   return { state: 'future', fill: 0 };
 }
 
+function clockLabel(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`;
+}
+
+/** Лінія «зараз» між рядками: пігулка з часом ліворуч і лінія 2 px через рядок. */
+function NowRule({ minutes }: { minutes: number }) {
+  return (
+    <li aria-hidden="true" className="relative grid h-0 grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3">
+      <span className="absolute inset-x-0 top-0 h-0.5 -translate-y-1/2 bg-[var(--fill-now)]" />
+      <span className="relative z-[1] flex h-5 w-fit -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures">
+        {clockLabel(minutes)}
+      </span>
+    </li>
+  );
+}
+
 /**
- * День як лінія маршруту (телефон): пари — зупинки на вертикальній лінії. Пройдена частина тихіша,
- * поточна зупинка — єдина синя з однією хвилею, «вікна» — пунктиром. Зміни видно прямо в рядку.
+ * День списком (телефон і денне подання): колонка часу (початок і номер пари) → тонка лінія → заняття
+ * з тією самою анатомією, що й клітинка сітки. Завершені сьогодні пари «осідають», «вікна» — тихим рядком.
+ * «Зараз» — лінія 2 px між рядками з пігулкою часу ліворуч (у перерві) або тонка лінія всередині поточної пари.
  */
 export function DayList({
   day,
@@ -54,12 +71,17 @@ export function DayList({
   const minutes = isToday ? (at ?? live.clock.minutes + live.clock.seconds / 60) : null;
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const relative = relativeDayLabel(day.date, today);
+  // перерва: лінія «зараз» стоїть перед першою парою, що ще не почалась (але не перед першою парою дня)
+  const breakBefore =
+    minutes === null
+      ? -1
+      : slots.findIndex((slot, index) => index > 0 && slot.startsAt && minutes < timeToMinutes(slot.startsAt) && slotState(slots[index - 1] as DaySlot, minutes).state === 'past');
 
   return (
     <section className={cn('flex flex-col gap-3', className)} aria-label={formatWeekdayDate(day.date)}>
       {showHeader ? (
         <header className="flex flex-wrap items-baseline gap-x-2">
-          <Heading className="text-body font-semibold text-primary">{formatWeekdayDate(day.date)}</Heading>
+          <Heading className="text-heading font-bold text-primary">{formatWeekdayDate(day.date)}</Heading>
           {relative ? <span className="text-caption font-semibold text-accent">{relative.toLocaleLowerCase('uk')}</span> : null}
         </header>
       ) : null}
@@ -75,101 +97,68 @@ export function DayList({
         <EmptyState
           size="sm"
           align="start"
-          className="px-0"
-          title={day.studyDay ? 'Пар немає' : 'Не навчальний день'}
-          description={day.studyDay ? 'У цей день занять за розкладом немає.' : 'Занять у цей день не проводять.'}
+          title={day.studyDay ? 'Цього дня пар немає.' : 'Не навчальний день.'}
+          description={day.studyDay ? undefined : 'Занять у цей день не проводять.'}
         />
       ) : (
         <ol className="flex flex-col">
           {slots.map((slot, index) => {
             const { state, fill } = slotState(slot, minutes);
-            const first = index === 0;
-            const last = index === slots.length - 1;
             const current = state === 'current';
             const past = state === 'past';
+            const last = index === slots.length - 1;
             return (
-              <li
-                key={slot.pair}
-                aria-current={current ? 'time' : undefined}
-                className="grid min-h-16 grid-cols-[3rem_1rem_minmax(0,1fr)] gap-x-2.5"
-              >
-                {/* номер пари великою цифрою, під ним час — як година в розкладі на зупинці */}
-                <div className="flex flex-col items-end pt-1.5 pb-3 leading-none">
-                  <span
-                    className={cn(
-                      'font-condensed text-headline leading-none font-bold figures',
-                      current ? 'text-accent' : slot.isWindow || past ? 'text-muted' : 'text-primary',
-                    )}
-                  >
-                    {slot.pair}
-                  </span>
-                  {slot.startsAt ? (
-                    // початок — основним, кінець — тихіше і з тире, щоб другий рядок не читався як окремий час
-                    <span className="mt-1.5 flex flex-col items-end text-caption leading-[1.125rem] figures">
-                      <span className={current ? 'text-accent' : past || slot.isWindow ? 'text-muted' : 'text-secondary'}>{slot.startsAt}</span>
-                      {slot.endsAt ? (
-                        <span className="text-muted">
-                          <span aria-hidden="true">–</span>
-                          <span className="sr-only">до </span>
-                          {slot.endsAt}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : null}
-                </div>
+              <Fragment key={slot.pair}>
+                {index === breakBefore && minutes !== null ? <NowRule minutes={minutes} /> : null}
+                <li
+                  aria-current={current ? 'time' : undefined}
+                  className={cn('relative grid min-h-16 grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3', !last && 'border-b border-separator')}
+                >
+                  {/* час: початок пари і її номер; кінець — у картці деталей */}
+                  <div className="flex flex-col border-e border-separator py-3 pe-3">
+                    {slot.startsAt ? (
+                      <span
+                        className={cn(
+                          'anim-settle text-ui leading-5 font-semibold figures',
+                          current ? 'text-accent' : past || slot.isWindow ? 'text-muted' : 'text-primary',
+                        )}
+                      >
+                        {slot.startsAt}
+                        {slot.endsAt ? <span className="sr-only"> до {slot.endsAt}</span> : null}
+                      </span>
+                    ) : null}
+                    <span className={cn('text-meta', current ? 'font-semibold text-accent' : 'text-muted')}>{slot.pair} пара</span>
+                  </div>
 
-                {/* лінія маршруту і зупинка */}
-                <div className="relative flex justify-center" aria-hidden="true">
-                  <span
-                    className={cn(
-                      'absolute w-0.5',
-                      first ? 'top-4' : 'top-0',
-                      last ? 'h-4' : 'bottom-0',
-                      slot.isWindow
-                        ? 'border-s-2 border-dashed border-default bg-transparent'
-                        : past
-                          ? 'bg-[var(--border-color-accent-subtle)]'
-                          : 'bg-[var(--border-color-default)]',
+                  <div className="flex min-w-0 flex-col py-1.5">
+                    {slot.isWindow ? (
+                      <p className="px-3.5 py-1.5 text-caption text-muted">Вікно — пари немає</p>
+                    ) : (
+                      slot.lessons.map((lesson) => (
+                        <LessonCell
+                          key={lesson.id}
+                          lesson={lesson}
+                          perspective={perspective}
+                          variant="list"
+                          date={day.date}
+                          dayParity={day.parity}
+                          now={current}
+                          past={past}
+                        />
+                      ))
                     )}
-                  />
-                  {current && !last ? (
+                  </div>
+
+                  {/* поточна пара: тонка лінія «зараз» на частці її тривалості */}
+                  {current ? (
                     <span
-                      className="absolute top-0 w-0.5 bg-accent transition-[height] duration-1000 ease-linear"
-                      style={{ height: `${Math.round(fill * 100)}%` }}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-0 h-0.5 -translate-y-1/2 bg-[var(--fill-now)] transition-[top] duration-1000 ease-linear"
+                      style={{ top: `${Math.round(fill * 100)}%` }}
                     />
                   ) : null}
-                  <span
-                    key={current ? `now-${slot.pair}` : slot.pair}
-                    className={cn(
-                      'relative z-[1] mt-2.5 block shrink-0 rounded-full',
-                      slot.isWindow && 'size-2 border-2 border-dashed border-default bg-[var(--fill-surface)]',
-                      !slot.isWindow && past && 'size-2 bg-[var(--border-color-accent-subtle)]',
-                      !slot.isWindow && current && 'live-ring size-3 bg-accent',
-                      !slot.isWindow && state === 'future' && 'size-2.5 border-2 border-strong bg-[var(--fill-surface)]',
-                    )}
-                  />
-                </div>
-
-                <div className="flex min-w-0 flex-col gap-1.5 pb-3">
-                  {slot.isWindow ? (
-                    <p className="pt-1.5 text-caption text-muted">Вікно — пари немає</p>
-                  ) : (
-                    slot.lessons.map((lesson) => (
-                      <LessonCell
-                        key={lesson.id}
-                        lesson={lesson}
-                        perspective={perspective}
-                        variant="list"
-                        date={day.date}
-                        dayParity={day.parity}
-                        now={current}
-                        progress={fill}
-                        past={past}
-                      />
-                    ))
-                  )}
-                </div>
-              </li>
+                </li>
+              </Fragment>
             );
           })}
         </ol>
@@ -178,20 +167,17 @@ export function DayList({
   );
 }
 
-/** Силует денного списку: 4 рядки по 64 px — номер, час, дві лінії тексту. */
+/** Силует денного списку: рядки по 64 px — час, номер, дві лінії тексту. */
 export function DayListSkeleton({ rows = 4, className }: { rows?: number; className?: string }) {
   return (
     <ol aria-hidden="true" className={cn('flex flex-col', className)}>
       {Array.from({ length: rows }, (_, index) => (
-        <li key={index} className="grid min-h-16 grid-cols-[3rem_1rem_minmax(0,1fr)] gap-x-2.5 pb-3">
-          <span className="flex flex-col items-end gap-1.5 pt-1.5">
-            <Skeleton className="h-7 w-5" />
-            <Skeleton className="h-2.5 w-9" />
+        <li key={index} className="grid min-h-16 grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3 border-b border-separator last:border-b-0">
+          <span className="flex flex-col gap-1.5 border-e border-separator py-3 pe-3">
+            <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-3 w-8" />
           </span>
-          <span className="flex justify-center pt-2.5">
-            <span className="size-2.5 rounded-full border-2 border-default" />
-          </span>
-          <span className="flex flex-col gap-2 pt-2">
+          <span className="flex flex-col gap-2 px-3.5 py-3.5">
             <Skeleton className="h-4 w-3/5" />
             <Skeleton className="h-3.5 w-2/5" />
           </span>
