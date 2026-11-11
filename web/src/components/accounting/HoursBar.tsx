@@ -12,9 +12,9 @@ interface HoursBarProps {
 const pct = (value: number, scale: number) => `${Math.max(0, Math.min(100, (value / scale) * 100))}%`;
 
 /**
- * План / факт / прогноз однією смугою: суцільна частина — уже вичитано, світла — заплановано далі,
- * риска — план. Те, що вийде за план, бурштинове; чого не вистачить — пунктир червоним. Прапорець
- * над рискою — дата, коли години буде вичитано.
+ * План / факт / прогноз однією смугою в нейтральному чорнилі: темніша частина — уже вичитано,
+ * світліша — заплановано далі, риска — план. Колір лише там, де є рішення: що вийде за план —
+ * бурштинове, чого не вистачить — червоний пунктир. Прапорець над рискою — дата, коли години буде вичитано.
  */
 export function HoursBar({ row, className }: HoursBarProps) {
   const scale = barScale(row);
@@ -60,13 +60,13 @@ export function HoursBar({ row, className }: HoursBarProps) {
           className,
         )}
       >
-        <span aria-hidden="true" className="relative block h-3 w-full rounded-full bg-sunken ring-1 ring-[var(--border-color-separator)] ring-inset">
+        <span aria-hidden="true" className="relative block h-2 w-full rounded-full bg-sunken">
           {/* заплановано далі (до прогнозу, в межах плану) */}
-          <span className="hatch absolute inset-y-0 start-0 rounded-full [--hatch-color:var(--border-color-accent-subtle)]" style={{ width: pct(withinPlan, scale) }} />
+          <span className="absolute inset-y-0 start-0 rounded-full bg-[var(--fill-track-future)]" style={{ width: pct(withinPlan, scale) }} />
           {/* понад план */}
           {over ? (
             <span
-              className="absolute inset-y-0 rounded-e-full bg-change-subtle ring-1 ring-[var(--border-color-change)] ring-inset"
+              className="absolute inset-y-0 rounded-e-full bg-[var(--text-decoration-color-change)]"
               style={{
                 insetInlineStart: pct(row.plan, scale),
                 width: pct(row.forecast - row.plan, scale),
@@ -76,7 +76,7 @@ export function HoursBar({ row, className }: HoursBarProps) {
           {/* бракує до плану */}
           {short ? (
             <span
-              className="absolute inset-y-0 rounded-e-full border border-dashed border-cancel"
+              className="absolute inset-y-0 rounded-e-full border border-dashed border-[var(--text-decoration-color-cancel)]"
               style={{
                 insetInlineStart: pct(row.forecast, scale),
                 width: pct(row.plan - row.forecast, scale),
@@ -84,7 +84,7 @@ export function HoursBar({ row, className }: HoursBarProps) {
             />
           ) : null}
           {/* вичитано */}
-          <span className="absolute inset-y-0 start-0 rounded-full bg-accent transition-[width] duration-300 ease-out" style={{ width: pct(factEnd, scale) }} />
+          <span className="absolute inset-y-0 start-0 rounded-full bg-[var(--fill-track-past)] transition-[width] duration-300 ease-out" style={{ width: pct(factEnd, scale) }} />
         </span>
         {/* риска плану; дата «вичитано» над нею — лише коли вона є (план уже написано числом поруч) */}
         <span aria-hidden="true" className="absolute top-0 bottom-0 w-0" style={{ insetInlineStart: pct(row.plan, scale) }}>
@@ -98,7 +98,7 @@ export function HoursBar({ row, className }: HoursBarProps) {
               {finish}
             </span>
           ) : null}
-          <span className={cn('absolute h-4 w-0.5 -translate-x-1/2 rounded-full bg-[var(--text-color-primary)]', finish ? 'top-3.5' : 'top-1.5')} />
+          <span className={cn('absolute h-3 w-0.5 -translate-x-1/2 rounded-full bg-[var(--text-color-primary)]', finish ? 'top-3.5' : 'top-1.5')} />
         </span>
       </button>
     </HoverDetails>

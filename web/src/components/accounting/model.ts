@@ -59,21 +59,17 @@ export function suggestionAction(suggestion: { kind: 'DISCIPLINE_FINISHED' | 'AD
 const DISCIPLINE_FORMS = ['дисципліна', 'дисципліни', 'дисциплін'] as const;
 
 /**
- * Один підсумок замість ряду лічильників: що потребує рішення в цьому семестрі.
- * «2 дисципліни перевищать план, 109 не встигнуть вичитати.» / «Усі дисципліни йдуть за планом.»
+ * Один підсумок замість ряду лічильників — тим самим числом, що й фільтр «Потребують уваги»:
+ * «95 дисциплін потребують уваги, 1 з них перевищить план.» / «Усі дисципліни йдуть за планом.»
+ * Перевищення — окремо, бо це зайві години, які треба оформити розпорядженням.
  */
-export function accountingSummary(rows: ReadonlyArray<Pick<AccountingRow, 'status'>>): string {
+export function accountingSummary(rows: ReadonlyArray<Pick<AccountingRow, 'status'>>, attention: number): string {
   if (rows.length === 0) return 'Плану годин у цьому семестрі ще немає.';
+  if (attention === 0) return 'Усі дисципліни йдуть за планом.';
   const over = rows.filter((row) => row.status === 'WILL_OVERRUN').length;
-  const under = rows.filter((row) => row.status === 'WILL_UNDERRUN').length;
-  if (over === 0 && under === 0) return 'Усі дисципліни йдуть за планом.';
-  const parts: string[] = [];
-  if (over > 0) parts.push(`${over}\u00a0${plural(over, DISCIPLINE_FORMS)} ${over === 1 ? 'перевищить' : 'перевищать'} план`);
-  if (under > 0) {
-    const noun = parts.length > 0 ? '' : `\u00a0${plural(under, DISCIPLINE_FORMS)}`;
-    parts.push(`${under}${noun} ${under === 1 ? 'не встигне' : 'не встигнуть'} вичитати`);
-  }
-  return `${parts.join(', ')}.`;
+  const head = `${attention}\u00a0${plural(attention, DISCIPLINE_FORMS)} ${attention === 1 ? 'потребує' : 'потребують'} уваги`;
+  if (over === 0) return `${head}.`;
+  return `${head}, ${over} з них ${over === 1 ? 'перевищить' : 'перевищать'} план.`;
 }
 
 /** Потребує дії диспетчера: є пропозиція або прогноз розходиться з планом. */

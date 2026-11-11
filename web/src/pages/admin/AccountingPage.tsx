@@ -212,7 +212,7 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
 
   return (
     <div className="flex flex-col gap-4">
-      {rows.data ? <p className="text-body text-secondary">{accountingSummary(rows.data)}</p> : null}
+      {rows.data ? <p className="text-body text-secondary">{accountingSummary(rows.data, counts.get('attention') ?? 0)}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         {semesters.data.length > 1 ? (
           <label className="flex w-full flex-col gap-1 text-caption font-[650] text-primary sm:w-auto">
@@ -308,20 +308,27 @@ function StatusCell({ row }: { row: AccountingRow }) {
         {statusLabel(row)}
         {finish && row.status === 'ON_TRACK' ? <span className="font-normal text-muted figures">до {finish}</span> : null}
       </span>
-      <SuggestionLink row={row} />
+      <SuggestionLink row={row} hideAtRest />
     </span>
   );
 }
 
-/** «Додати пару →» — у заміни з уже вибраною групою й дисципліною. */
-function SuggestionLink({ row }: { row: AccountingRow }) {
+/**
+ * «Додати пару →» — у заміни з уже вибраною групою й дисципліною. У таблиці зʼявляється при наведенні
+ * на рядок чи фокусі (як `RowActions`; лишається в порядку Tab), на дотику — завжди.
+ */
+function SuggestionLink({ row, hideAtRest = false }: { row: AccountingRow; hideAtRest?: boolean }) {
   const link = changesLink(row);
   if (!row.suggestion || !link) return null;
   return (
     <Link
       to={link}
       aria-label={`${suggestionAction(row.suggestion)}: ${row.group.code}, ${row.discipline.shortName} — у замінах`}
-      className="inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+      className={cn(
+        'inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11',
+        hideAtRest &&
+          'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100',
+      )}
     >
       {suggestionAction(row.suggestion)}
       <ArrowRight aria-hidden="true" className="size-3.5 rtl:rotate-180" />

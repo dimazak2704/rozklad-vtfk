@@ -76,11 +76,15 @@ describe('облік годин у інтерфейсі', () => {
     expect(barScale({ plan: 0, forecast: 0 })).toBeCloseTo(1.04);
   });
 
-  it('підсумок — одне речення замість лічильників', () => {
-    expect(accountingSummary([])).toBe('Плану годин у цьому семестрі ще немає.');
-    expect(accountingSummary([{ status: 'ON_TRACK' }, { status: 'FINISHED' }])).toBe('Усі дисципліни йдуть за планом.');
-    expect(accountingSummary([{ status: 'WILL_UNDERRUN' }, { status: 'WILL_UNDERRUN' }])).toBe('2\u00a0дисципліни не встигнуть вичитати.');
-    expect(accountingSummary([{ status: 'WILL_OVERRUN' }, { status: 'WILL_UNDERRUN' }])).toBe('1\u00a0дисципліна перевищить план, 1 не встигне вичитати.');
+  it('підсумок — одне речення тим самим числом, що й фільтр «Потребують уваги»', () => {
+    expect(accountingSummary([], 0)).toBe('Плану годин у цьому семестрі ще немає.');
+    expect(accountingSummary([{ status: 'ON_TRACK' }, { status: 'FINISHED' }], 0)).toBe('Усі дисципліни йдуть за планом.');
+    expect(accountingSummary([{ status: 'WILL_UNDERRUN' }, { status: 'WILL_UNDERRUN' }], 2)).toBe('2\u00a0дисципліни потребують уваги.');
+    // 1 перевищить + 1 не встигне + 1 вичитана з пропозицією «Оформити «Вичит.»» = 3, як у фільтрі
+    expect(accountingSummary([{ status: 'WILL_OVERRUN' }, { status: 'WILL_UNDERRUN' }, { status: 'FINISHED' }], 3)).toBe(
+      '3\u00a0дисципліни потребують уваги, 1 з них перевищить план.',
+    );
+    expect(accountingSummary([{ status: 'FINISHED' }], 1)).toBe('1\u00a0дисципліна потребує уваги.');
   });
 
   it('дія з пропозиції — без повтору стану', () => {

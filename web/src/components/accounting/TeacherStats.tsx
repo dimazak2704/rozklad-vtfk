@@ -40,12 +40,17 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         header: 'Провів замін',
         sortValue: (s) => s.substitutionsCount,
         width: '40%',
+        // смуга нейтральна: синім у системі позначено лише «зараз» і вибране
         cell: (s) => (
           <span className="flex items-center gap-3">
-            <span aria-hidden="true" className="relative h-2 flex-1 overflow-hidden rounded-full bg-sunken">
-              <span className="absolute inset-y-0 start-0 rounded-full bg-accent" style={{ width: `${(s.substitutionsCount / max) * 100}%` }} />
+            <span aria-hidden="true" className="relative h-1.5 flex-1 overflow-hidden rounded-full">
+              {s.substitutionsCount > 0 ? (
+                <span className="absolute inset-y-0 start-0 rounded-full bg-[var(--fill-track-past)]" style={{ width: `${(s.substitutionsCount / max) * 100}%` }} />
+              ) : null}
             </span>
-            <span className="w-8 text-end text-ui font-[650] figures">{s.substitutionsCount}</span>
+            <span className="w-8 text-end text-ui figures">
+              {s.substitutionsCount > 0 ? <span className="font-[650]">{s.substitutionsCount}</span> : <span className="text-muted">—</span>}
+            </span>
           </span>
         ),
       },
@@ -54,7 +59,7 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         header: 'Годин замін',
         numeric: true,
         sortValue: (s) => s.substitutionsHours,
-        cell: (s) => s.substitutionsHours,
+        cell: (s) => (s.substitutionsHours > 0 ? s.substitutionsHours : <span className="text-muted">—</span>),
       },
       {
         id: 'missed',
