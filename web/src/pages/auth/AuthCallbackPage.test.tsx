@@ -35,11 +35,11 @@ function Location() {
   return <p data-testid="location">{`${location.pathname}${location.search}`}</p>;
 }
 
-function renderCallback(url = '/auth/callback?code=x&state=y') {
+function renderCallback(url = '/login/callback?code=x&state=y') {
   render(
     <MemoryRouter initialEntries={[url]}>
       <Routes>
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/login/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<Location />} />
       </Routes>
     </MemoryRouter>,
@@ -87,7 +87,7 @@ describe('AuthCallbackPage', () => {
     auth.status = 'anonymous';
     // так react-oidc-context передає помилку: копія з innerError
     auth.error = Object.assign(new Error('No matching state found in storage'), { innerError: new Error('No matching state found in storage') });
-    renderCallback('/auth/callback?error=access_denied&error_description=User%20denied&state=abc');
+    renderCallback('/login/callback?error=access_denied&error_description=User%20denied&state=abc');
     expect(await screen.findByRole('alert')).toHaveTextContent('Вхід скасовано на сторінці входу коледжу.');
     expect(screen.getByRole('alert')).not.toHaveTextContent(/state|denied|застаріло/);
     auth.status = 'authenticated';
@@ -97,7 +97,7 @@ describe('AuthCallbackPage', () => {
   it('адреса без даних входу (закладка): не висить на «Завершуємо вхід…», а пропонує увійти ще раз', async () => {
     auth.status = 'anonymous';
     signIn.mockClear();
-    renderCallback('/auth/callback');
+    renderCallback('/login/callback');
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('Вхід не завершився');
     expect(alert).toHaveTextContent('даних входу в адресі немає');
@@ -109,14 +109,14 @@ describe('AuthCallbackPage', () => {
 
   it('code без state бібліотека теж не обробляє — так само пропонує увійти ще раз', () => {
     auth.status = 'anonymous';
-    renderCallback('/auth/callback?code=x');
+    renderCallback('/login/callback?code=x');
     expect(screen.getByRole('alert')).toHaveTextContent('Вхід не завершився');
     auth.status = 'authenticated';
   });
 
   it('поки AuthProvider завершує вхід (є code і state) — показує очікування', () => {
     auth.status = 'loading';
-    renderCallback('/auth/callback?code=x&state=y');
+    renderCallback('/login/callback?code=x&state=y');
     expect(screen.getByText('Завершуємо вхід…')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     auth.status = 'authenticated';

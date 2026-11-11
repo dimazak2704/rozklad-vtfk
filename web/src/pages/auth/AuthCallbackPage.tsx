@@ -23,7 +23,7 @@ export default function AuthCallbackPage() {
   const returnTo = returnToFromState(useAuth().user?.state);
   const [storedChecked, setStoredChecked] = useState(false);
   const { search, hash } = useLocation();
-  // відкрито /auth/callback без даних входу (закладка, ручний перехід): завершувати нічого
+  // відкрито /login/callback без даних входу (закладка, ручний перехід): завершувати нічого
   const nothingToFinish = status === 'anonymous' && !error && !hasCallbackParams(search, hash);
 
   useEffect(() => {

@@ -38,7 +38,7 @@ export function loginErrorText(error: unknown): string {
 }
 
 /**
- * Чому не завершився вхід на /auth/callback. Код `error` з адреси повернення важливіший за помилку
+ * Чому не завершився вхід на /login/callback. Код `error` з адреси повернення важливіший за помилку
  * бібліотеки: для скасованого входу з чужим `state` вона каже лише «No matching state».
  */
 export function callbackErrorText(error: unknown, search = ''): string {

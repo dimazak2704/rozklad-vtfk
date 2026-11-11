@@ -43,9 +43,15 @@ export async function login(page: Page, role: Role, returnTo?: string): Promise<
   await page.locator('#username').fill(username);
   await page.locator('#password').fill(password);
   await page.locator('#kc-login').click();
-  await page.waitForURL((url) => !url.href.startsWith(KEYCLOAK) && !url.pathname.startsWith('/auth/') && url.pathname !== '/login', {
-    timeout: 30_000,
-  });
+  // чекаємо, поки SPA завершить вхід на /login/callback і поведе далі
+  await page.waitForURL(
+    (url) =>
+      !url.href.startsWith(KEYCLOAK) &&
+      !url.pathname.startsWith('/auth/') &&
+      url.pathname !== '/login' &&
+      !url.pathname.startsWith('/login/'),
+    { timeout: 30_000 },
+  );
 }
 
 /** Окрема вкладка (свій контекст) з іншим користувачем: диспетчер і викладач працюють одночасно. */

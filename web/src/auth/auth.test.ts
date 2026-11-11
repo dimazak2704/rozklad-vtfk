@@ -11,8 +11,13 @@ function fakeJwt(payload: object): string {
   return `${encode({ alg: 'RS256' })}.${encode(payload)}.signature`;
 }
 
-describe('ролі з токена Keycloak', () => {
-  it('бере лише відомі ролі з realm_access.roles', () => {
+describe('ролі з access-токена', () => {
+  it('бере лише відомі ролі з плаского поля roles', () => {
+    const token = fakeJwt({ sub: 'u1', roles: ['ADMIN', 'TEACHER', 'offline_access'] });
+    expect(rolesFromAccessToken(token)).toEqual(['ADMIN', 'TEACHER']);
+  });
+
+  it('без поля roles читає realm_access.roles (токен Keycloak)', () => {
     const token = fakeJwt({
       sub: 'u1',
       name: 'Микола Кренцін',
@@ -25,6 +30,12 @@ describe('ролі з токена Keycloak', () => {
   it('повертає порожній список для зіпсованого токена', () => {
     expect(rolesFromAccessToken('not-a-jwt')).toEqual([]);
     expect(rolesFromAccessToken(fakeJwt({ realm_access: 'oops' }))).toEqual([]);
+    expect(rolesFromAccessToken(fakeJwt({ roles: 'ADMIN' }))).toEqual([]);
+  });
+
+  it('пласке поле roles важливіше за realm_access', () => {
+    const token = fakeJwt({ roles: ['TEACHER'], realm_access: { roles: ['ADMIN'] } });
+    expect(rolesFromAccessToken(token)).toEqual(['TEACHER']);
   });
 
   it('розбирає список ролей для dev-режиму', () => {
@@ -73,7 +84,8 @@ describe('куди вести після входу', () => {
   it('відкидає зовнішні й службові адреси', () => {
     expect(isSafeReturnPath('//evil.example')).toBe(false);
     expect(isSafeReturnPath('https://evil.example')).toBe(false);
-    expect(postLoginPath(['ADMIN'], '/auth/callback?code=1')).toBe('/admin');
+    expect(postLoginPath(['ADMIN'], '/login/callback?code=1')).toBe('/admin');
+    expect(postLoginPath(['ADMIN'], '/auth/login')).toBe('/admin');
     expect(returnToFromState({ returnTo: '//x' })).toBeUndefined();
     expect(returnToFromState({ returnTo: '/g/4КІ1' })).toBe('/g/4КІ1');
   });

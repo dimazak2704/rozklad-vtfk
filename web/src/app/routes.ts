@@ -148,9 +148,9 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'auth-callback',
-    path: '/auth/callback',
+    path: '/login/callback',
     title: 'Вхід',
-    description: 'Завершення входу після Keycloak.',
+    description: 'Завершення входу після сторінки входу.',
     layout: 'bare',
     page: () => import('@/pages/auth/AuthCallbackPage'),
   },

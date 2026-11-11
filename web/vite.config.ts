@@ -50,8 +50,8 @@ function pwa(): Plugin[] {
       // заздалегідь — лише оболонка; сторінки адмінки й кабінету не потрапляють у кеш, поки їх не відкрили
       globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg'],
       navigateFallback: 'index.html',
-      // /api (ICS, файли розпоряджень) і повернення з Keycloak завжди йдуть у мережу
-      navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
+      // /api (ICS, файли розпоряджень), сервіс входу /auth і повернення після входу завжди йдуть у мережу
+      navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/login\/(callback|silent)/],
       cleanupOutdatedCaches: true,
       runtimeCaching: [
         {
