@@ -108,7 +108,16 @@ export default function AboutPage() {
             <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
               {LEGEND.map(({ lesson, text }) => (
                 <li key={lesson.id} className="grid items-center gap-x-5 gap-y-2 p-3 sm:grid-cols-[17rem_minmax(0,1fr)]">
-                  <LessonCell lesson={lesson} perspective="group" />
+                  {/* «список», а не клітинка сітки: у навчальному прикладі назва не обрізається */}
+                  <div className="flex min-w-0 flex-col">
+                    {lesson.kind === 'ROOM_CHANGED' ? (
+                      // клітинка розкладу пише лише нову аудиторію; у легенді назвемо стан, як і для інших прикладів
+                      <span aria-hidden="true" className="-mb-2.5 px-3.5 pt-3 text-meta font-semibold text-room">
+                        {LESSON_VIEW_KIND_LABEL[lesson.kind]}
+                      </span>
+                    ) : null}
+                    <LessonCell lesson={lesson} perspective="group" variant="list" />
+                  </div>
                   <p className="text-ui text-secondary">
                     <span className="font-semibold text-primary">{LESSON_VIEW_KIND_LABEL[lesson.kind]}.</span> {text}
                   </p>
