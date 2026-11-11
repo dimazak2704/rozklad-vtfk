@@ -150,7 +150,7 @@ export function AbsenceList({ today }: { today: IsoDate }) {
   return (
     <div className="flex flex-col gap-8">
       <section aria-labelledby="absences-upcoming" className="flex flex-col gap-2">
-        <h2 id="absences-upcoming" className="text-title text-primary">
+        <h2 id="absences-upcoming" className="text-heading font-[700] text-primary">
           Попереду
         </h2>
         {upcoming.length === 0 ? (

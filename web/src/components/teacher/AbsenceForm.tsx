@@ -7,7 +7,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import { useCreateAbsence, useMySchedule } from '@/api/me';
 import type { DayDto, IsoDate, LessonView, Uuid } from '@/api/types';
-import { Button, Field, RadioGroup, Textarea, notify } from '@/components/ui';
+import { Button, Checkbox, Field, RadioGroup, Textarea, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import {
   addDays,
@@ -22,7 +22,7 @@ import {
   localDateFromIso,
   nearestStudyDay,
 } from '@/lib/date';
-import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS, PAIR_FORMS_ACC } from '@/lib/labels';
+import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
 import { DAY_PICKER_CLASSES } from '../public/schedule/day-picker-classes';
 import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
 
@@ -76,33 +76,89 @@ function LessonLines({ items }: { items: readonly OwnLesson[] }) {
   );
 }
 
-/**
- * Що зачепить відсутність. «Пар немає» — лише коли у викладача справді немає пар у ці дні; якщо пари є,
- * а обрані номери їх не зачіпають (або номери ще не обрано), показуємо його пари, щоб було видно, які обрати.
- */
-function AffectedPreview({ own, affected, pairsChosen }: { own: readonly OwnLesson[]; affected: readonly OwnLesson[]; pairsChosen: boolean }) {
+/** Що зачепить відсутність на весь день: його пари в обрані дні або спокійне «пар немає». */
+function AffectedPreview({ own }: { own: readonly OwnLesson[] }) {
   if (own.length === 0) return <p className="text-secondary">У ці дні за розкладом у вас пар немає.</p>;
-  if (!pairsChosen) {
+  return (
+    <>
+      <p className="font-semibold text-primary">Зачепить {countLabel(own.length, PAIR_FORMS_ACC)}:</p>
+      <LessonLines items={own} />
+    </>
+  );
+}
+
+/** Одна пара за номером у межах обраних днів: час і що саме я веду (у кожен із днів). */
+interface PairChoice {
+  pair: number;
+  startsAt: string;
+  lessons: readonly OwnLesson[];
+}
+
+/** Мої пари в обрані дні, згруповані за номером: відсутність у core задає номери пар для кожного дня діапазону. */
+function pairChoices(own: readonly OwnLesson[]): PairChoice[] {
+  const byPair = new Map<number, OwnLesson[]>();
+  for (const item of own) byPair.set(item.lesson.pair, [...(byPair.get(item.lesson.pair) ?? []), item]);
+  return [...byPair.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([pair, lessons]) => ({ pair, startsAt: lessons[0]?.lesson.startsAt ?? '', lessons }));
+}
+
+/** «4КІ2, СТП» для одного дня; «Ср, 11.11 — 4КІ2, СТП; Чт, 12.11 — 4КІ1, СТП» для кількох. */
+function choiceText(choice: PairChoice, oneDay: boolean): string {
+  const what = ({ lesson }: OwnLesson) => `${lesson.group.code}, ${lesson.discipline.shortName}`;
+  if (oneDay) return choice.lessons.map(what).join('; ');
+  return choice.lessons.map((item) => `${formatShortWeekdayDate(item.day.date)} — ${what(item)}`).join('; ');
+}
+
+/**
+ * Пара, якої немає в розкладі (консультація, перенесена пара): номери лише на запит — «Інша пара…».
+ * Відкрито одразу, коли своїх пар у ці дні немає або вже обрано номер поза списком.
+ */
+function OtherPairs({
+  pairs,
+  selected,
+  open: forced,
+  onToggle,
+}: {
+  pairs: readonly number[];
+  selected: readonly number[];
+  open: boolean;
+  onToggle: (pair: number, on: boolean) => void;
+}) {
+  const [opened, setOpened] = useState(false);
+  if (pairs.length === 0) return null;
+  if (!forced && !opened) {
     return (
-      <>
-        <p className="font-semibold text-primary">Оберіть пари вище. За розкладом у ці дні у вас {countLabel(own.length, PAIR_FORMS)}:</p>
-        <LessonLines items={own} />
-      </>
-    );
-  }
-  if (affected.length === 0) {
-    return (
-      <>
-        <p className="font-semibold text-primary">Обрані пари не зачеплять ваших занять. За розкладом у ці дні у вас {countLabel(own.length, PAIR_FORMS)}:</p>
-        <LessonLines items={own} />
-      </>
+      <Button variant="ghost" className="-ms-2.5 self-start" onClick={() => setOpened(true)}>
+        Інша пара…
+      </Button>
     );
   }
   return (
-    <>
-      <p className="font-semibold text-primary">Зачепить {countLabel(affected.length, PAIR_FORMS_ACC)}:</p>
-      <LessonLines items={affected} />
-    </>
+    <div role="group" aria-label="Інша пара" className="flex flex-col gap-2 pt-2">
+      <p className="text-caption text-secondary">Інша пара — за номером:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {pairs.map((pair) => {
+          const on = selected.includes(pair);
+          return (
+            <button
+              key={pair}
+              type="button"
+              aria-pressed={on}
+              aria-label={`${pair} пара`}
+              onClick={() => onToggle(pair, !on)}
+              className={cn(
+                'inline-flex size-10 items-center justify-center rounded-control border text-cell font-[650] figures pointer-coarse:size-11',
+                'transition-[background-color,border-color,color] duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                on ? 'border-accent bg-selected text-primary' : 'border-control bg-surface text-primary hover:border-strong hover:bg-hover',
+              )}
+            >
+              {pair}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -134,13 +190,13 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
     defaultValues: { dateFrom: first, dateTo: first, wholeDay: true, pairs: [], comment: '', reasonCategory: storedReason() },
   });
   const { errors, isSubmitting } = form.formState;
-  const [dateFrom, dateTo, wholeDay, pairs] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay', 'pairs'] });
+  const [dateFrom, dateTo, wholeDay] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay'] });
   const rangeValid = isIsoDate(dateFrom) && isIsoDate(dateTo) && compareIsoDates(dateFrom, dateTo) <= 0 && diffDays(dateFrom, dateTo) < 31;
   const preview = useMySchedule(rangeValid ? dateFrom : today, rangeValid ? dateTo : today, { enabled: rangeValid });
 
   useEffect(() => {
     if (!autoFocus) return;
-    container.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    // сторінка ставить форму першою (і на телефоні), тож прокручувати не треба — лише фокус на календар
     container.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
   }, [autoFocus]);
 
@@ -152,7 +208,8 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
       day.lessons.filter((lesson) => lesson.teacher?.id === teacherId && lesson.kind !== 'CANCELLED').map((lesson) => ({ day, lesson })),
     );
   }, [previewData, teacherId]);
-  const affected = useMemo(() => (wholeDay ? own : own.filter(({ lesson }) => pairs.includes(lesson.pair))), [own, wholeDay, pairs]);
+  const choices = useMemo(() => pairChoices(own), [own]);
+  const oneDay = dateFrom === dateTo;
 
   const submit = form.handleSubmit(async (values) => {
     try {
@@ -260,29 +317,52 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
               <Controller
                 control={form.control}
                 name="pairs"
-                render={({ field }) => (
-                  <div role="group" aria-label="Номери пар" className="flex flex-wrap gap-1.5">
-                    {ALL_PAIRS.map((pair) => {
-                      const on = field.value.includes(pair);
-                      return (
-                        <button
-                          key={pair}
-                          type="button"
-                          aria-pressed={on}
-                          aria-label={`${pair} пара`}
-                          onClick={() => field.onChange(on ? field.value.filter((p) => p !== pair) : [...field.value, pair].sort((a, b) => a - b))}
-                          className={cn(
-                            'inline-flex size-10 items-center justify-center rounded-control border text-cell font-[650] figures pointer-coarse:size-11',
-                            'transition-[background-color,border-color,color] duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                            on ? 'border-accent bg-accent text-on-accent hover:bg-accent-hover' : 'border-control bg-surface text-primary hover:border-strong hover:bg-hover',
-                          )}
-                        >
-                          {pair}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                render={({ field }) => {
+                  const toggle = (pair: number, on: boolean) =>
+                    field.onChange(on ? [...new Set([...field.value, pair])].sort((a, b) => a - b) : field.value.filter((p) => p !== pair));
+                  if (!previewData) {
+                    return (
+                      <p className="text-ui text-secondary" aria-live="polite">
+                        {preview.isError ? 'Не вдалося перевірити ваш розклад — оберіть номери пар нижче.' : 'Перевіряємо ваші пари на ці дні…'}
+                      </p>
+                    );
+                  }
+                  const listed = new Set(choices.map((choice) => choice.pair));
+                  const others = ALL_PAIRS.filter((pair) => !listed.has(pair));
+                  return (
+                    <div className="flex flex-col gap-1">
+                      {choices.length > 0 ? (
+                        <div role="group" aria-label="Ваші пари в ці дні" className="flex flex-col">
+                          {choices.map((choice) => (
+                            <Checkbox
+                              key={choice.pair}
+                              checked={field.value.includes(choice.pair)}
+                              onCheckedChange={(checked) => toggle(choice.pair, checked === true)}
+                              label={
+                                <>
+                                  <span className="font-[650] figures">
+                                    {choice.pair} пара · {choice.startsAt}
+                                  </span>
+                                  {oneDay ? <span className="text-secondary"> · {choiceText(choice, true)}</span> : null}
+                                </>
+                              }
+                              description={oneDay ? undefined : choiceText(choice, false)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-ui text-secondary">У ці дні за розкладом у вас пар немає.</p>
+                      )}
+                      {/* рідкісний випадок (консультація, пара поза розкладом) — номери пар за запитом */}
+                      <OtherPairs
+                        pairs={others}
+                        selected={field.value}
+                        open={choices.length === 0 || field.value.some((pair) => !listed.has(pair))}
+                        onToggle={toggle}
+                      />
+                    </div>
+                  );
+                }}
               />
             ) : null}
             {errors.pairs?.message ? (
@@ -291,10 +371,10 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
                 {errors.pairs.message}
               </p>
             ) : null}
-            {rangeValid ? (
+            {rangeValid && wholeDay ? (
               <div className="rounded-popover bg-sunken px-3.5 py-3 text-caption" aria-live="polite" aria-busy={!previewData && !preview.isError}>
                 {previewData ? (
-                  <AffectedPreview own={own} affected={affected} pairsChosen={wholeDay || pairs.length > 0} />
+                  <AffectedPreview own={own} />
                 ) : preview.isError && !preview.isPlaceholderData ? (
                   <p className="text-secondary">Не вдалося перевірити ваш розклад на ці дні. Відсутність можна повідомити й так.</p>
                 ) : (
@@ -326,7 +406,14 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             )}
           />
 
-          <Field label="Коментар для диспетчера" error={errors.comment?.message} hint="Необовʼязково.">
+          <Field
+            label={
+              <>
+                Коментар для диспетчера <span className="font-[500] text-muted">(необовʼязково)</span>
+              </>
+            }
+            error={errors.comment?.message}
+          >
             <Textarea {...form.register('comment')} rows={2} maxLength={COMMENT_MAX} />
           </Field>
 

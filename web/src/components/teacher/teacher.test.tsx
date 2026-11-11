@@ -211,6 +211,7 @@ describe('побажання', () => {
     await act(async () => user.keyboard('1'));
     expect(screen.getByRole('button', { name: /^Вівторок, 2 пара/ })).toHaveAccessibleName(/небажано/);
     expect(screen.queryByRole('button', { name: /^Пʼятниця, 7 пара/ })).toBeNull();
+    expect(screen.getAllByText('пари немає')).toHaveLength(2);
   });
 });
 
@@ -299,21 +300,44 @@ describe('AbsenceForm: які пари зачепить', () => {
 
   const preview = () => screen.getByText(/Зачепить|пар немає|Оберіть пари|не зачеплять|Перевіряємо/).closest('div')?.textContent ?? '';
 
-  it('окремі пари: без вибору й з парою, що не збігається, не каже «пар немає», а показує її пари', async () => {
+  it('окремі пари — список справжніх пар у ці дні; номер поза розкладом — лише через «Інша пара…»', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(apiPath('/me/absences'), async ({ request }) => {
+        bodies.push(await request.json());
+        return problem({ status: 422, detail: 'Тест' });
+      }),
+    );
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
     await user.click(screen.getByRole('button', { name: /четвер, 19/ }));
     await waitFor(() => expect(preview()).toMatch(/Зачепить 1\sпару:.*Чт, 19\.11 · 3 пара — 4КІ3, НДЕКС/));
 
     await user.click(screen.getByRole('radio', { name: 'Окремі пари' }));
-    expect(preview()).toMatch(/Оберіть пари вище\. За розкладом у ці дні у вас 1\sпара:.*3 пара — 4КІ3/);
-    expect(preview()).not.toContain('пар немає');
+    const own = await screen.findByRole('checkbox', { name: /^3 пара · 11:20\s*·\s*4КІ3, НДЕКС$/ });
+    // номерів 1–8 одразу немає: лише «Інша пара…» для рідкісного випадку
+    expect(screen.queryByRole('button', { name: '1 пара' })).not.toBeInTheDocument();
+    await user.click(own);
+    expect(own).toBeChecked();
 
+    await user.click(screen.getByRole('button', { name: 'Інша пара…' }));
+    expect(screen.queryByRole('button', { name: '3 пара' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '1 пара' }));
-    expect(preview()).toMatch(/Обрані пари не зачеплять ваших занять\..*3 пара — 4КІ3/);
 
-    await user.click(screen.getByRole('button', { name: '3 пара' }));
-    expect(preview()).toMatch(/Зачепить 1\sпару:.*3 пара/);
+    await user.click(screen.getByRole('radio', { name: 'Лікарняний' }));
+    await user.click(screen.getByRole('button', { name: 'Повідомити диспетчера' }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ dateFrom: '2026-11-19', dateTo: '2026-11-19', pairs: [1, 3], reasonCategory: 'SICK_LEAVE' });
+  });
+
+  it('окремі пари в день без моїх пар: одразу номери пар, бо обирати більше нічого', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
+    await user.click(screen.getByRole('radio', { name: 'Окремі пари' }));
+    await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
+    releaseFriday();
+    expect(await screen.findByText('У ці дні за розкладом у вас пар немає.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^\d пара$/ })).toHaveLength(8);
   });
 
   it('поки вантажиться новий діапазон, не показує пари попереднього', async () => {
