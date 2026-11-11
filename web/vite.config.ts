@@ -51,7 +51,8 @@ function pwa(): Plugin[] {
     },
     workbox: {
       // заздалегідь — лише оболонка; сторінки адмінки й кабінету не потрапляють у кеш, поки їх не відкрили
-      globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg'],
+      // поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html
+      globPatterns: ['index.html', 'assets/index-*.{js,css}', 'assets/modulepreload-polyfill-*.js', 'favicon.svg'],
       navigateFallback: 'index.html',
       // /api (ICS, файли розпоряджень), сервіс входу /auth і повернення після входу завжди йдуть у мережу
       navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/login\/(callback|silent)/],
@@ -136,8 +137,13 @@ export default defineConfig(({ mode }) => {
       // карти коду генеруються для налагодження, але не підключаються в бандл
       sourcemap: 'hidden',
       rolldownOptions: {
-        // стилі сторінки входу сервісу auth: окремий вхід із фіксованою назвою dist/brand/auth.css
-        input: { index: resolve(rootDir, 'index.html'), [AUTH_CSS_ENTRY]: resolve(rootDir, 'src/styles/auth-page.css') },
+        // стилі сторінки входу сервісу auth: окремий вхід із фіксованою назвою dist/brand/auth.css;
+        // login/silent.html — сторінка тихого оновлення входу в прихованому iframe (dist/login/silent.html)
+        input: {
+          index: resolve(rootDir, 'index.html'),
+          silent: resolve(rootDir, 'login/silent.html'),
+          [AUTH_CSS_ENTRY]: resolve(rootDir, 'src/styles/auth-page.css'),
+        },
         output: {
           assetFileNames: (asset) =>
             asset.names.includes(`${AUTH_CSS_ENTRY}.css`) ? 'brand/auth.css' : 'assets/[name]-[hash][extname]',

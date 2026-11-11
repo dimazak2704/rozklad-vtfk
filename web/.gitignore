@@ -1,2 +1,3 @@
 # Налаштування режиму мок-API без секретів (кореневий .gitignore ховає всі .env.*)
 !.env.mock
+!.env.development

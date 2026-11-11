@@ -26,6 +26,15 @@ function oauthCode(error: ErrorLike | null): string | null {
   return error?.name === 'ErrorResponse' && typeof error.error === 'string' ? error.error : null;
 }
 
+/**
+ * Помилка фонового тихого оновлення (react-oidc-context позначає її `source: 'renewSilent'`). Людині її
+ * не показуємо: сесії немає — користувача вже забуто й наступний вхід почнеться звичайно; мережа —
+ * токен ще дійсний або 401 сам поведе на вхід.
+ */
+export function isSilentRenewError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { source?: unknown }).source === 'renewSilent';
+}
+
 /** Чому не відкрилася сторінка входу коледжу (запуск входу на /login). */
 export function loginErrorText(error: unknown): string {
   if (isApiError(error)) return errorMessage(error);

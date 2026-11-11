@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * E2E на справжньому стенді: SPA → gateway :8080 → core/importer/notification, вхід через Keycloak :8180.
- * Не входить у `npm run e2e` (там мок-API). Запуск: `npm run e2e:real` при піднятому стенді з даними
- * (`scripts/dev-stack.sh up --no-telegram && scripts/dev-stack.sh seed`, docs/RUNNING.md).
+ * E2E на справжньому стенді: SPA → gateway :8080 → core/importer/notification, вхід через сервіс входу auth
+ * (сторінка http://localhost:8088/auth/login). Не входить у `npm run e2e` (там мок-API). Запуск: `npm run e2e:real`
+ * при піднятому стенді з даними (`scripts/dev-stack.sh up && scripts/dev-stack.sh seed`, docs/RUNNING.md).
  *
- * SPA береться з dev-сервера Vite на 5180 (єдиний dev-порт, дозволений у клієнті rozklad-web Keycloak)
- * без мок-API, або з nginx-контейнера: REAL_BASE_URL=http://localhost:8088 (`dev-stack.sh up --web`).
+ * SPA береться з dev-сервера Vite на 5180 без мок-API (видавець — http://localhost:8088/auth з .env.development),
+ * або з nginx-контейнера, як на сервері: REAL_BASE_URL=http://localhost:8088. API-токени — справжнім входом
+ * клієнта rozklad-cli (e2e-real/support/tokens.ts). Тихе оновлення входу: REAL_SILENT_RENEW=1 (auth.spec.ts).
  * Сценарій заміни змінює дані стенду (відсутність, заміна, розпорядження на вільну дату попереду).
  */
 const executablePath = process.env.PW_CHROMIUM_PATH || undefined;

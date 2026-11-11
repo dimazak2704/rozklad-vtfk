@@ -3,11 +3,11 @@
 interface ImportMetaEnv {
   /** Базовий шлях REST API (через gateway). За замовчуванням `/api`. */
   readonly VITE_API_BASE?: string;
-  /** Keycloak realm: `http://localhost:8180/realms/rozklad`. */
+  /** Видавець OIDC (сервіс входу). Порожньо — `${origin}/auth`; у `npm run dev` — `http://localhost:8088/auth`. */
   readonly VITE_OIDC_AUTHORITY?: string;
   readonly VITE_OIDC_CLIENT_ID?: string;
   readonly VITE_OIDC_SCOPE?: string;
-  /** Лише для `npm run dev`: ролі фіктивного користувача без Keycloak, напр. `ADMIN` або `TEACHER`. */
+  /** Лише для `npm run dev`: ролі фіктивного користувача без сервісу входу, напр. `ADMIN` або `TEACHER`. */
   readonly VITE_DEV_AUTH_ROLES?: string;
   /** `1` — у dev відповідає мок-API (MSW, src/mocks) замість бекенду. У production-збірці ігнорується. */
   readonly VITE_USE_MOCKS?: string;

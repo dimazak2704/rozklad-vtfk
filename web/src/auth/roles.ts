@@ -38,7 +38,7 @@ export function rolesFromAccessToken(token: string | undefined | null): Role[] {
   return token ? rolesFromClaims(decodeJwtPayload(token)) : [];
 }
 
-/** Ролі для dev-режиму без Keycloak: `VITE_DEV_AUTH_ROLES=ADMIN,TEACHER`. */
+/** Ролі для dev-режиму без сервісу входу: `VITE_DEV_AUTH_ROLES=ADMIN,TEACHER`. */
 export function parseRoleList(raw: string | undefined): Role[] {
   if (!raw) return [];
   return raw

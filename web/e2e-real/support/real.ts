@@ -1,21 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, request, type APIRequestContext, type Browser, type Page } from '@playwright/test';
+import { signInForToken } from './tokens';
 
 /**
- * Спільне для e2e на справжньому стенді (playwright.real.config.ts): облікові записи, вхід через Keycloak
- * і запити до API від імені диспетчера — щоб тест знав, що саме має показати сторінка.
+ * Спільне для e2e на справжньому стенді (playwright.real.config.ts): облікові записи, вхід через сторінку
+ * входу сервісу auth і запити до API від імені диспетчера — щоб тест знав, що саме має показати сторінка.
  */
 
 export const GATEWAY = process.env.REAL_GATEWAY_URL || 'http://localhost:8080';
-export const KEYCLOAK = process.env.REAL_KEYCLOAK_URL || 'http://localhost:8180';
-const REALM = `${KEYCLOAK}/realms/rozklad`;
+export { AUTH_URL } from './tokens';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'TEACHER2';
 
 /** Тестові облікові записи локального стенду — з того самого файла, що читають seed і dev-stack.sh. */
 function readDemoUsers(): Record<string, string> {
-  const file = fileURLToPath(new URL('../../../infra/keycloak/demo-users.env', import.meta.url));
+  const file = fileURLToPath(new URL('../../../infra/dev/demo-users.env', import.meta.url));
   const entries = readFileSync(file, 'utf8')
     .split(/\r?\n/)
     .filter((line) => /^[A-Z0-9_]+=/.test(line))
@@ -31,25 +31,29 @@ const users = readDemoUsers();
 export function credentials(role: Role): { username: string; password: string } {
   const username = users[`${role}_USERNAME`];
   const password = users[`${role}_PASSWORD`];
-  if (!username || !password) throw new Error(`У infra/keycloak/demo-users.env немає ${role}_USERNAME/${role}_PASSWORD`);
+  if (!username || !password) throw new Error(`У infra/dev/demo-users.env немає ${role}_USERNAME/${role}_PASSWORD`);
   return { username, password };
 }
 
-/** Вхід через справжню сторінку Keycloak (PKCE) і повернення в SPA. */
+/** Сторінка входу сервісу auth (/auth/login на 8088; з Vite 5180 — теж там, видавець фіксований). */
+export const isSignInPage = (url: URL) => url.pathname === '/auth/login';
+
+/** Заповнює форму сторінки входу сервісу auth: «Логін або e-mail», «Пароль», «Увійти». */
+export async function fillSignInForm(page: Page, username: string, password: string): Promise<void> {
+  await page.getByLabel('Логін або e-mail', { exact: true }).fill(username);
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Увійти', exact: true }).click();
+}
+
+/** Вхід через справжню сторінку входу (код + PKCE) і повернення в SPA. */
 export async function login(page: Page, role: Role, returnTo?: string): Promise<void> {
   const { username, password } = credentials(role);
   await page.goto(returnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login');
-  await page.waitForURL((url) => url.href.startsWith(KEYCLOAK), { timeout: 30_000 });
-  await page.locator('#username').fill(username);
-  await page.locator('#password').fill(password);
-  await page.locator('#kc-login').click();
+  await page.waitForURL(isSignInPage, { timeout: 30_000 });
+  await fillSignInForm(page, username, password);
   // чекаємо, поки SPA завершить вхід на /login/callback і поведе далі
   await page.waitForURL(
-    (url) =>
-      !url.href.startsWith(KEYCLOAK) &&
-      !url.pathname.startsWith('/auth/') &&
-      url.pathname !== '/login' &&
-      !url.pathname.startsWith('/login/'),
+    (url) => !url.pathname.startsWith('/auth/') && url.pathname !== '/login' && !url.pathname.startsWith('/login/'),
     { timeout: 30_000 },
   );
 }
@@ -62,18 +66,16 @@ export async function pageAs(browser: Browser, role: Role, baseURL: string, retu
   return page;
 }
 
+const tokens = new Map<Role, { value: string; until: number }>();
+
+/** Токен ролі для API; той самий, поки до кінця строку більше хвилини (один вхід на роль, нижче ліміту спроб). */
 async function token(role: Role): Promise<string> {
+  const cached = tokens.get(role);
+  if (cached && cached.until > Date.now() + 60_000) return cached.value;
   const { username, password } = credentials(role);
-  const api = await request.newContext();
-  try {
-    const response = await api.post(`${REALM}/protocol/openid-connect/token`, {
-      form: { client_id: 'rozklad-dev-cli', grant_type: 'password', username, password },
-    });
-    expect(response.ok(), `токен ${role}: ${response.status()}`).toBe(true);
-    return ((await response.json()) as { access_token: string }).access_token;
-  } finally {
-    await api.dispose();
-  }
+  const { accessToken, expiresIn } = await signInForToken(username, password);
+  tokens.set(role, { value: accessToken, until: Date.now() + expiresIn * 1000 });
+  return accessToken;
 }
 
 /** API через gateway від імені ролі (для підготовки й перевірок; сам сценарій іде через інтерфейс). */

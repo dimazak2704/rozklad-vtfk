@@ -54,8 +54,8 @@ test.describe('оболонка публічного сайту', () => {
 
   test('захищений розділ без входу веде на сторінку входу з поверненням', async ({ page }) => {
     await page.goto('/admin/orders');
-    // без Keycloak лишаємося на /login з поясненням; з Keycloak — одразу його сторінка входу
-    await expect(page).toHaveURL(/\/login\?returnTo=%2Fadmin%2Forders|\/realms\/rozklad\/protocol\/openid-connect\/auth/, {
+    // без стенда лишаємося на /login з поясненням; зі стендом — запит authorize і сторінка входу сервісу auth
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Fadmin%2Forders|\/auth\/oauth2\/authorize\?|\/auth\/login$/, {
       timeout: 30_000,
     });
   });

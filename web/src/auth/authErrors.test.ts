@@ -1,6 +1,6 @@
 import { ErrorResponse, ErrorTimeout } from 'oidc-client-ts';
 import { describe, expect, it } from 'vitest';
-import { callbackErrorText, hasCallbackParams, loginErrorText } from './authErrors';
+import { callbackErrorText, hasCallbackParams, isSilentRenewError, loginErrorText } from './authErrors';
 
 /** Як react-oidc-context передає помилку: копія name/message і сама помилка в innerError. */
 const wrapped = (error: Error) => ({ name: error.name, message: error.message, innerError: error });
@@ -24,7 +24,7 @@ describe('помилки входу українською', () => {
     expect(loginErrorText(undefined)).toBe('Сервер входу коледжу не відповів або відхилив запит.');
   });
 
-  it('повернення з Keycloak: код помилки з адреси важливіший за state', () => {
+  it('повернення зі сторінки входу: код помилки з адреси важливіший за state', () => {
     const noState = new Error('No matching state found in storage');
     expect(callbackErrorText(noState, '?error=access_denied&state=abc')).toBe('Вхід скасовано на сторінці входу коледжу.');
     expect(callbackErrorText(wrapped(new ErrorResponse({ error: 'access_denied', error_description: 'User denied' })))).toBe(
@@ -42,5 +42,12 @@ describe('помилки входу українською', () => {
     expect(hasCallbackParams('')).toBe(false);
     expect(hasCallbackParams('?code=x')).toBe(false);
     expect(hasCallbackParams('?state=y')).toBe(false);
+  });
+
+  it('помилку фонового тихого оновлення відрізняє від помилки входу', () => {
+    expect(isSilentRenewError({ name: 'ErrorResponse', message: 'login_required', source: 'renewSilent' })).toBe(true);
+    expect(isSilentRenewError({ name: 'Error', message: 'Sign-in failed', source: 'signinCallback' })).toBe(false);
+    expect(isSilentRenewError(new TypeError('Failed to fetch'))).toBe(false);
+    expect(isSilentRenewError(null)).toBe(false);
   });
 });

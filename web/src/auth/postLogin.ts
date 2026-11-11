@@ -26,7 +26,7 @@ export function postLoginPath(roles: readonly Role[], returnTo?: unknown): strin
   return '/';
 }
 
-/** Стан, який передаємо в Keycloak і отримуємо назад після входу. */
+/** Стан, який передаємо сервісу входу і отримуємо назад після входу. */
 export interface SigninState {
   returnTo?: string;
 }
@@ -39,7 +39,7 @@ export function returnToFromState(state: unknown): string | undefined {
 
 /**
  * Повне відкриття сторінки після входу: AuthProvider підхоплює сесію з `sessionStorage` під час
- * завантаження, тож так сторінка бачить користувача, навіть коли обробка повернення з Keycloak не вдалася.
+ * завантаження, тож так сторінка бачить користувача, навіть коли обробка повернення зі сторінки входу не вдалася.
  */
 export function openAfterLogin(path: string): void {
   window.location.replace(path);

@@ -1,15 +1,15 @@
 import { KeyRound, LogIn } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
-import { loginErrorText } from '@/auth/authErrors';
+import { isSilentRenewError, loginErrorText } from '@/auth/authErrors';
 import { isSafeReturnPath, postLoginPath } from '@/auth/postLogin';
 import { clearRejectedToken } from '@/auth/rejectedToken';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { Button } from '@/components/ui/Button';
 
 /**
- * Вхід для викладачів і диспетчерів (UI.md: «/login → Keycloak»). Сторінка одразу веде на вхід
- * коледжу (PKCE); якщо сервер входу недоступний — пояснює і дає спробувати ще раз.
+ * Вхід для викладачів і диспетчерів (UI.md: «/login → сервіс входу»). Сторінка одразу веде на сторінку
+ * входу коледжу /auth/login (PKCE); якщо сервер входу недоступний — пояснює і дає спробувати ще раз.
  * Після повернення диспетчер потрапляє в /admin, викладач — у /me, або на сторінку, з якої прийшли.
  */
 export default function LoginPage() {
@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   const returnTo = params.get('returnTo');
   const safeReturn = isSafeReturnPath(returnTo) ? returnTo : undefined;
-  // сервер двічі поспіль не прийняв вхід: не відкриваємо Keycloak по колу, а пояснюємо і чекаємо кнопки
+  // сервер двічі поспіль не прийняв вхід: не відкриваємо сторінку входу по колу, а пояснюємо і чекаємо кнопки
   const rejected = params.get('rejected') === '1';
   const [failure, setFailure] = useState<string | null>(
     rejected ? 'Сервер не прийняв ваш вхід навіть після повторного входу. Можливо, змінилися налаштування входу коледжу.' : null,
@@ -38,7 +38,8 @@ export default function LoginPage() {
 
   if (status === 'authenticated') return <Navigate to={postLoginPath(roles, safeReturn)} replace />;
 
-  const problem = failure ?? (error ? loginErrorText(error) : null);
+  // збій фонового тихого оновлення — не причина показувати помилку на сторінці входу
+  const problem = failure ?? (error && !isSilentRenewError(error) ? loginErrorText(error) : null);
   const waiting = !problem;
 
   return (

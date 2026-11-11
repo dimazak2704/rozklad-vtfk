@@ -28,7 +28,7 @@ export function clearRejectedToken(storage: Storage | null = storageOrNull()): v
   storage?.removeItem(KEY);
 }
 
-/** Адреса сторінки входу: з `rejected=1` вона не відкриває Keycloak сама, а пояснює, що сталося. */
+/** Адреса сторінки входу: з `rejected=1` вона не відкриває сторінку входу сама, а пояснює, що сталося. */
 export function loginAfterRejection(loginPath: string, repeated: boolean): string {
   if (!repeated) return loginPath;
   return `${loginPath}${loginPath.includes('?') ? '&' : '?'}rejected=1`;

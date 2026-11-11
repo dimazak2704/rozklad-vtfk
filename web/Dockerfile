@@ -11,8 +11,9 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 
 # Налаштування збірки (import.meta.env). Значення за замовчуванням — для docker compose на localhost.
+# VITE_OIDC_AUTHORITY порожній — вхід на тому ж походженні: ${origin}/auth (nginx проксіює /auth/ на сервіс auth)
 ARG VITE_API_BASE=/api
-ARG VITE_OIDC_AUTHORITY=http://localhost:8180/realms/rozklad
+ARG VITE_OIDC_AUTHORITY=
 ARG VITE_OIDC_CLIENT_ID=rozklad-web
 ARG VITE_TELEGRAM_BOT_URL=https://t.me/scheduler_vtfk_bot
 ENV VITE_API_BASE=$VITE_API_BASE \

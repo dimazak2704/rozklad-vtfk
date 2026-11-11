@@ -27,7 +27,7 @@ vi.mock('@/auth/useCurrentUser', () => ({
 
 function fakeToken(roles: string[]): string {
   const encode = (value: object) => btoa(JSON.stringify(value)).replace(/=+$/, '');
-  return `${encode({ alg: 'RS256' })}.${encode({ realm_access: { roles } })}.signature`;
+  return `${encode({ alg: 'RS256' })}.${encode({ roles })}.signature`;
 }
 
 function Location() {
@@ -83,7 +83,7 @@ describe('AuthCallbackPage', () => {
     auth.error = null;
   });
 
-  it('вхід скасовано на сторінці Keycloak (error=access_denied): так і пише, хоч бібліотека скаржиться на state', async () => {
+  it('вхід скасовано на сторінці входу (error=access_denied): так і пише, хоч бібліотека скаржиться на state', async () => {
     auth.status = 'anonymous';
     // так react-oidc-context передає помилку: копія з innerError
     auth.error = Object.assign(new Error('No matching state found in storage'), { innerError: new Error('No matching state found in storage') });

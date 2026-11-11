@@ -5,7 +5,7 @@ import { devRoles, rolesFromAccessToken } from './roles';
 import type { SigninState } from './postLogin';
 
 export interface CurrentUser {
-  /** `sub` з токена Keycloak. */
+  /** `sub` з токена: id облікового запису в сервісі входу. */
   id: string;
   username: string;
   /** Імʼя для показу: «Микола Кренцін» або логін. */
@@ -27,7 +27,7 @@ export interface CurrentUserState {
   signIn: (returnTo?: string) => Promise<void>;
   signOut: () => Promise<void>;
   error: Error | null;
-  /** Dev-режим без Keycloak (VITE_DEV_AUTH_ROLES). У production-збірці завжди false. */
+  /** Dev-режим без сервісу входу (VITE_DEV_AUTH_ROLES). У production-збірці завжди false. */
   isDevBypass: boolean;
 }
 
@@ -52,7 +52,7 @@ function displayName(profile: Record<string, unknown>, fallback: string): string
   return parts.length > 0 ? parts.join(' ') : fallback;
 }
 
-/** Поточний користувач і ролі з `realm_access.roles` access-токена. */
+/** Поточний користувач і ролі з поля `roles` access-токена. */
 export function useCurrentUser(): CurrentUserState {
   const auth = useAuth();
 
