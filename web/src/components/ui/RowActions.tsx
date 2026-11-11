@@ -30,8 +30,9 @@ export function RowActions({ actions, rowLabel }: RowActionsProps) {
           label={`Дії: ${rowLabel}`}
           icon={<Ellipsis aria-hidden="true" className="size-4" />}
           size="sm"
-          // приглушена в спокої, повна — при наведенні на рядок чи фокусі; лишається в порядку Tab
-          className="opacity-40 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+          // у спокої рядок без кнопок: «⋯» зʼявляється при наведенні на рядок чи фокусі (лишається в порядку Tab);
+          // на дотику — завжди видно
+          className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
         />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -39,7 +40,7 @@ export function RowActions({ actions, rowLabel }: RowActionsProps) {
           align="end"
           sideOffset={4}
           collisionPadding={8}
-          className="anim-pop z-50 min-w-48 rounded-panel border border-default bg-raised p-1 text-primary shadow-popover"
+          className="anim-pop z-50 min-w-48 rounded-popover border border-default bg-raised p-1 text-primary shadow-popover"
         >
           {actions.map((action) => (
             <div key={action.label}>

@@ -5,7 +5,7 @@ interface PlateProps {
   children: ReactNode;
   /** `sm`/`md` — коди в списках, `lg` — помітний код у панелі, `xl` — код у заголовку сторінки (без рамки). */
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  /** `default` — табличка на поверхні, `accent` — лише вибрана сутність, `on-shell` — біла табличка в синій смузі. */
+  /** `default` — код на поверхні, `accent` — лише вибрана сутність; `on-shell` — застаріле, = default. */
   tone?: 'default' | 'accent' | 'on-shell';
   className?: string;
 }
@@ -20,11 +20,11 @@ const SIZES = {
 const TONES = {
   default: 'border-default bg-surface text-primary',
   accent: 'border-accent bg-selected text-accent',
-  'on-shell': 'border-transparent bg-plate text-plate',
+  'on-shell': 'border-default bg-surface text-primary',
 } as const;
 
 /**
- * Табличка з кодом — як номер маршруту на зупинці: «4КІ1», «ВТФК», «ауд. 309».
+ * Код сутності: «4КІ1», «ауд. 309».
  * Для кодів груп, аудиторій і коротких ідентифікаторів, а не для довільного тексту.
  * У заголовку сторінки (`xl`) код стоїть сам, великим конденсованим, без рамки.
  */
@@ -32,9 +32,10 @@ export function Plate({ children, size = 'md', tone = 'default', className }: Pl
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center font-condensed leading-none font-bold whitespace-nowrap figures',
+        // Geologica 600 з табличними цифрами; +0.01em, щоб «І1» у «4КІ1» не злипалось
+        'inline-flex shrink-0 items-center font-display leading-none font-semibold tracking-[0.01em] whitespace-nowrap tabular-nums',
         SIZES[size],
-        size === 'xl' ? (tone === 'accent' ? 'text-accent' : tone === 'on-shell' ? 'text-on-shell' : 'text-primary') : ['rounded-plate border', TONES[tone]],
+        size === 'xl' ? (tone === 'accent' ? 'text-accent' : 'text-primary') : ['rounded-tag border', TONES[tone]],
         className,
       )}
     >

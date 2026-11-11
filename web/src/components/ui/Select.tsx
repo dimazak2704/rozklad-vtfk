@@ -81,7 +81,7 @@ export function Select<V extends string = string>({
           collisionPadding={8}
           className={cn(
             'anim-pop z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden',
-            'rounded-panel border border-default bg-raised text-primary shadow-popover',
+            'rounded-popover border border-default bg-raised text-primary shadow-popover',
             contentClassName,
           )}
         >

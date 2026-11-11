@@ -9,9 +9,9 @@ const twMerge = extendTailwindMerge({
   extend: {
     theme: {
       text: ['meta', 'caption', 'ui', 'body', 'heading', 'title', 'headline', 'display', 'numeral'],
-      radius: ['plate', 'control', 'panel', 'dialog'],
+      radius: ['tag', 'plate', 'control', 'cell', 'popover', 'panel', 'hero', 'dialog'],
       shadow: ['popover', 'dialog', 'lift'],
-      font: ['condensed'],
+      font: ['display', 'condensed'],
       animate: ['shimmer', 'live'],
       color: [
         'canvas',
@@ -23,6 +23,14 @@ const twMerge = extendTailwindMerge({
         'skeleton',
         'selected',
         'selected-hover',
+        'today-wash',
+        'accent-active',
+        'danger-active',
+        'on-danger',
+        'now',
+        'brand',
+        'track-past',
+        'track-future',
         'shell',
         'shell-hover',
         'shell-raised',

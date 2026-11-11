@@ -14,8 +14,9 @@ export interface PanelProps extends Omit<ComponentProps<'section'>, 'title'> {
 }
 
 /**
- * Робоча область на поверхні: тонка межа, без тіні (структура тримається на лініях).
- * Не вкладайте Panel у Panel — для підрозділів усередині використовуйте Section.
+ * Робоча область на поверхні: тонка межа, радіус 20, без тіні (структура тримається на лініях і тоні).
+ * Одна панель на екран — для цілого робочого простору (таблиця, сітка). Решта лежить просто на полотні
+ * як `Section`. Не вкладайте Panel у Panel.
  */
 export function Panel({
   title,
@@ -31,18 +32,22 @@ export function Panel({
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const hasHeader = Boolean(title || actions);
   return (
-    <section className={cn('min-w-0 rounded-panel border border-default bg-surface', className)} {...props}>
+    <section
+      // таблиця до краю: кути шапки не виходять за заокруглену рамку (clip не ламає липку шапку)
+      className={cn('min-w-0 rounded-panel border border-default bg-surface', flush && 'overflow-clip', className)}
+      {...props}
+    >
       {hasHeader ? (
-        <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-separator px-4 py-3">
+        <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-separator px-5 py-3">
           <div className="flex min-w-0 flex-col gap-0.5">
-            {title ? <Heading className="text-heading font-semibold text-primary">{title}</Heading> : null}
+            {title ? <Heading className="text-heading font-bold text-primary">{title}</Heading> : null}
             {description ? <p className="text-caption text-secondary">{description}</p> : null}
           </div>
           {actions ? <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </header>
       ) : null}
-      <div className={cn(!flush && 'p-4')}>{children}</div>
-      {footer ? <footer className="border-t border-separator px-4 py-3">{footer}</footer> : null}
+      <div className={cn(!flush && 'p-5')}>{children}</div>
+      {footer ? <footer className="border-t border-separator px-5 py-3">{footer}</footer> : null}
     </section>
   );
 }
@@ -61,7 +66,7 @@ export function Section({ title, description, actions, headingLevel = 2, classNa
     <section className={cn('flex min-w-0 flex-col gap-4', className)} {...props}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <Heading className={cn('font-semibold text-primary', headingLevel === 2 ? 'text-title' : 'text-heading')}>
+          <Heading className={cn('text-primary', headingLevel === 2 ? 'text-title font-semibold' : 'text-heading font-bold')}>
             {title}
           </Heading>
           {description ? <p className="text-ui text-secondary">{description}</p> : null}

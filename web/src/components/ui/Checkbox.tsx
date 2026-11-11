@@ -21,7 +21,7 @@ export function Checkbox({ label, description, className, id, disabled, ...props
       disabled={disabled}
       aria-describedby={descriptionId}
       className={cn(
-        'peer flex size-[1.125rem] shrink-0 items-center justify-center rounded-plate border-[1.5px] border-control bg-surface',
+        'peer flex size-[1.125rem] shrink-0 items-center justify-center rounded-tag border-[1.5px] border-control bg-surface',
         'transition-[background-color,border-color] duration-100 ease-out hover:border-strong',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         'data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-on-accent',

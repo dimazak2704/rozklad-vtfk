@@ -4,6 +4,7 @@ import { initials } from '@/lib/names';
 interface AvatarProps {
   name: string;
   size?: 'sm' | 'md' | 'lg';
+  /** Застаріле: колишня синя смуга; вигляд тепер один. */
   tone?: 'default' | 'on-shell';
   className?: string;
 }
@@ -14,14 +15,12 @@ const SIZES = { sm: 'size-6 text-meta', md: 'size-8 text-caption', lg: 'size-10 
  * Аватар з ініціалами. Фотографій викладачів система не зберігає. Нейтральний: колір у системі
  * зарезервований для станів і «живого», тож людина не отримує випадкового відтінку.
  */
-export function Avatar({ name, size = 'md', tone = 'default', className }: AvatarProps) {
+export function Avatar({ name, size = 'md', className }: AvatarProps) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-condensed leading-none font-bold select-none',
-        // у смузі — заповнене коло на тон світліше за смугу: кільце без заливки читалось як порожній радіо-перемикач
-        tone === 'default' ? 'bg-active text-secondary' : 'bg-shell-raised text-on-shell',
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-selected font-display leading-none font-semibold text-accent select-none',
         SIZES[size],
         className,
       )}

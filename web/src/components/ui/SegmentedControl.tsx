@@ -19,12 +19,14 @@ export interface SegmentedControlProps<V extends string = string> {
   size?: 'sm' | 'md';
   /** На всю ширину контейнера (мобільні перемикачі «День / Тиждень»). */
   stretch?: boolean;
+  /** Застаріле: колишня синя смуга. Тепер вигляд один скрізь. */
   tone?: 'default' | 'on-shell';
   className?: string;
 }
 
 /**
- * Перемикач подання: «День / Тиждень», «Сьогодні / Завтра». Порожнім бути не може.
+ * Перемикач подання: «День / Тиждень», «Сьогодні / Завтра», «Уся група / 1 п/г». Один вигляд скрізь:
+ * доріжка `sunken` з відступом 4 px, вибраний сегмент — поверхня з тонким кільцем. Порожнім бути не може.
  * Один «бігунок» під вибраним сегментом їде до нового вибору (200 мс), а не перефарбовує сегменти.
  * Значення, якого немає серед варіантів, означає «нічого не вибрано» — бігунок ховається.
  */
@@ -34,7 +36,6 @@ export function SegmentedControl<V extends string = string>({
   options,
   size = 'md',
   stretch = false,
-  tone = 'default',
   className,
   'aria-label': ariaLabel,
 }: SegmentedControlProps<V>) {
@@ -67,8 +68,6 @@ export function SegmentedControl<V extends string = string>({
     };
   }, [value, options]);
 
-  const onShell = tone === 'on-shell';
-
   return (
     <ToggleGroup.Root
       ref={root}
@@ -80,10 +79,10 @@ export function SegmentedControl<V extends string = string>({
       }}
       aria-label={ariaLabel}
       className={cn(
-        'scrollbar-none relative isolate inline-flex max-w-full items-stretch overflow-x-auto rounded-control p-0.5',
-        size === 'sm' ? 'h-7 pointer-coarse:h-9' : 'h-8 pointer-coarse:h-10',
-        // світла доріжка на тон темніша за полотно, тож однаково читається і на панелі, і на тлі сторінки
-        onShell ? 'bg-shell-hover' : 'bg-active dark:bg-sunken',
+        'scrollbar-none relative isolate inline-flex max-w-full items-stretch overflow-x-auto rounded-control p-1',
+        // 36 / 32 px; на дотику — 44, щоб сегмент був повноцінною ціллю натискання
+        size === 'sm' ? 'h-8 pointer-coarse:h-11' : 'h-9 pointer-coarse:h-11',
+        'bg-sunken shadow-[inset_0_0_0_1px_var(--border-color-separator)]',
         stretch ? 'flex w-full' : 'w-fit self-start',
         className,
       )}
@@ -92,9 +91,9 @@ export function SegmentedControl<V extends string = string>({
         ref={thumb}
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute inset-y-0.5 left-0 -z-10 rounded-[calc(var(--radius-control)-2px)] opacity-0',
+          'pointer-events-none absolute inset-y-1 left-0 -z-10 rounded-[calc(var(--radius-control)-4px)] opacity-0',
           'data-ready:transition-[transform,width] data-ready:duration-200 data-ready:ease-out motion-reduce:transition-none',
-          onShell ? 'bg-shell-raised' : 'bg-surface shadow-lift dark:bg-active',
+          'bg-surface shadow-lift dark:bg-active',
         )}
       />
       {options.map((option) => (
@@ -104,22 +103,20 @@ export function SegmentedControl<V extends string = string>({
           disabled={option.disabled}
           aria-label={option.ariaLabel}
           className={cn(
-            'inline-flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 whitespace-nowrap',
+            'inline-flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-4px)] px-3 whitespace-nowrap',
             'transition-[color] duration-100 ease-out',
             'focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus',
             'disabled:cursor-not-allowed disabled:text-disabled',
-            size === 'sm' ? 'text-caption' : 'text-ui',
+            size === 'sm' ? 'text-caption font-[550]' : 'text-ui font-[550]',
             stretch && 'flex-1',
-            onShell
-              ? 'text-on-shell-muted hover:text-on-shell data-[state=on]:font-semibold data-[state=on]:text-on-shell'
-              : 'text-secondary hover:text-primary data-[state=on]:font-semibold data-[state=on]:text-primary',
+            'text-secondary hover:text-primary data-[state=on]:font-[650] data-[state=on]:text-primary',
           )}
         >
           {option.icon}
           {/* невидимий жирний дублікат тримає ширину, щоб сегмент не «стрибав» при виборі */}
           <span className="inline-grid">
             <span className="col-start-1 row-start-1">{option.label}</span>
-            <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-semibold">
+            <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-[650]">
               {option.label}
             </span>
           </span>

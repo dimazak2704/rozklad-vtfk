@@ -11,22 +11,15 @@ interface ParityMarkProps {
 }
 
 /**
- * Знак парності — дріб із друкованого розкладу: дві смужки й риска між ними. Верхня смужка — чисельник,
- * нижня — знаменник; заповнена та, що діє цього тижня.
- * У шапках і сітці його більше немає: при 12–16 px він читався як значок бази даних, тож парність
- * завжди називає слово. Лишається для пояснення правила (картка деталей, сторінка «Про систему»).
+ * Знак парності — диск 14 px, заповнений наполовину: верхня половина — чисельник (верхній рядок
+ * друкованого розкладу), нижня — знаменник. Безбарвний: парність не має кольору. Завжди поруч зі словом.
  */
 export function ParityMark({ parity, className }: ParityMarkProps) {
   const top = parity === 'NUMERATOR';
-  const filled = (y: number) => <rect x="3" y={y} width="10" height="4" rx="1" fill="currentColor" />;
-  const hollow = (y: number) => (
-    <rect x="3.75" y={y + 0.75} width="8.5" height="2.5" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-  );
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className={cn('size-3.5 shrink-0', className)}>
-      {top ? filled(2) : hollow(2)}
-      <rect x="1" y="7.5" width="14" height="1" fill="currentColor" />
-      {top ? hollow(10) : filled(10)}
+      <circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d={top ? 'M1.25 8a6.75 6.75 0 0 1 13.5 0Z' : 'M1.25 8a6.75 6.75 0 0 0 13.5 0Z'} fill="currentColor" />
     </svg>
   );
 }
@@ -42,37 +35,32 @@ interface ParityBadgeProps {
   parity: WeekParity | null;
   /** Номер навчального тижня семестру. */
   weekNumber?: number | null;
-  /** Слово перед парністю (необовʼязково; у шапці його немає). */
+  /** Слово перед парністю (необовʼязково). */
   prefix?: string;
+  /** Застаріле: колишня синя смуга; вигляд тепер один. */
   tone?: 'default' | 'on-shell';
   size?: 'sm' | 'md';
   /** Просто текст, без кнопки з поясненням (коли пояснення вже поруч). */
   plain?: boolean;
+  /** Диск парності перед словом. Показуйте парність один раз на екрані. */
+  mark?: boolean;
   className?: string;
 }
 
 /**
- * «Знаменник · 10-й тиждень» — словами, звичайним регістром, як у реченні; без вигаданого знака.
+ * «◐ Чисельник · 11-й тиждень» — словами, звичайним регістром; диск — лише підказка форми.
  * Натискання (мишею, дотиком чи Enter) відкриває пояснення, як чергуються тижні.
+ * Правило: парність і номер тижня — один раз на екран.
  */
-export function ParityBadge({
-  parity,
-  weekNumber,
-  prefix,
-  tone = 'default',
-  size = 'md',
-  plain = false,
-  className,
-}: ParityBadgeProps) {
+export function ParityBadge({ parity, weekNumber, prefix, size = 'md', plain = false, mark = true, className }: ParityBadgeProps) {
   if (!parity) return null;
-  const onShell = tone === 'on-shell';
-  const quiet = onShell ? 'text-on-shell-muted' : 'text-secondary';
   const content = (
     <>
-      {prefix ? <span className={quiet}>{prefix}</span> : null}
-      <span className={cn('font-semibold', onShell ? 'text-on-shell' : 'text-primary')}>{capitalize(PARITY_LABEL[parity])}</span>
+      {mark ? <ParityMark parity={parity} className="text-secondary" /> : null}
+      {prefix ? <span className="text-secondary">{prefix}</span> : null}
+      <span className="font-[650] text-primary">{capitalize(PARITY_LABEL[parity])}</span>
       {weekNumber ? (
-        <span className={cn('figures', quiet)}>
+        <span className="text-secondary">
           <span aria-hidden="true">· </span>
           {weekOrdinal(weekNumber)}
         </span>
@@ -81,8 +69,8 @@ export function ParityBadge({
   );
   const shape = cn(
     'inline-flex items-center gap-1.5 rounded-control whitespace-nowrap',
-    size === 'md' ? 'h-9 px-2 text-ui' : 'h-6 text-caption',
-    size === 'sm' && !plain && 'px-1.5',
+    size === 'md' ? 'h-9 px-2 text-ui' : 'h-7 text-caption',
+    size === 'sm' && !plain && '-mx-1.5 px-1.5 pointer-coarse:h-11',
     className,
   );
 
@@ -94,17 +82,15 @@ export function ParityBadge({
         <PopoverTrigger
           className={cn(
             shape,
-            'transition-[background-color] duration-100 ease-out focus-visible:outline-2 focus-visible:outline-offset-2',
-            onShell
-              ? 'hover:bg-shell-hover active:bg-shell-raised focus-visible:outline-focus-on-shell'
-              : 'hover:bg-hover active:bg-active focus-visible:outline-focus',
+            'transition-[background-color] duration-150 ease-out hover:bg-hover active:bg-active',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
           )}
           aria-label={`${capitalize(PARITY_LABEL[parity])}${weekNumber ? `, ${weekOrdinal(weekNumber)}` : ''}. Як чергуються тижні`}
         >
           {content}
         </PopoverTrigger>
       </Tooltip>
-      <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[parity]}`}>
+      <PopoverContent width="sm" align="start" title={`Цього тижня ${PARITY_LABEL[parity]}`}>
         <p className="text-ui text-secondary">{PARITY_HINT[parity]}</p>
       </PopoverContent>
     </Popover>

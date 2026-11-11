@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { isApiError } from '@/api/errors';
 import { cn } from '@/lib/cn';
 import { Button } from './Button';
+import { errorTitle, useErrorCovered } from './error-scope';
 
 export interface ErrorStateProps {
   /** Помилка з запиту (ApiError або будь-яка інша). */
@@ -16,23 +17,16 @@ export interface ErrorStateProps {
   action?: ReactNode;
   align?: 'start' | 'center';
   size?: 'sm' | 'md';
+  /** Внутрішній відступ панелі (16 px) — коли блок стоїть просто в рамці картки. */
+  inset?: boolean;
   className?: string;
 }
 
-function titleFor(error: unknown): string {
-  if (!isApiError(error)) return 'Не вдалося завантажити';
-  if (error.kind === 'network' || error.kind === 'timeout') return 'Немає звʼязку із сервером';
-  if (error.isNotFound) return 'Не знайдено';
-  if (error.isForbidden) return 'Немає доступу';
-  if (error.isUnauthorized) return 'Потрібно увійти';
-  // gateway: сервіс зупинено чи перезапускається (503) або він не відповів вчасно (504)
-  if (error.status === 503) return 'Сервіс тимчасово недоступний';
-  if (error.status === 504) return 'Сервер не відповів вчасно';
-  if (error.status >= 500) return 'Сервер не відповів як слід';
-  return 'Не вдалося виконати запит';
-}
-
-/** Помилка в межах блоку: що сталося, що робити, кнопка «Спробувати ще раз». Решта сторінки працює. */
+/**
+ * Помилка в межах блоку: що сталося й що робити, одна кнопка «Спробувати ще раз». Решта сторінки працює.
+ * Усередині `PageErrorScope`, що вже показує спільну помилку, блок стає тихим рядком без кнопки —
+ * людина бачить одне речення й одну дію на сторінку, а не чотири однакові.
+ */
 export function ErrorState({
   error,
   title,
@@ -42,10 +36,21 @@ export function ErrorState({
   action,
   align = 'start',
   size = 'md',
+  inset = false,
   className,
 }: ErrorStateProps) {
+  const covered = useErrorCovered();
   const apiError = isApiError(error) ? error : null;
   const offline = apiError?.kind === 'network';
+
+  if (covered) {
+    return (
+      <p className={cn('py-3 text-ui text-muted', inset && 'px-4', align === 'center' && 'text-center', className)}>
+        Не вдалося завантажити.
+      </p>
+    );
+  }
+
   const message =
     description ??
     (offline || apiError?.kind === 'timeout'
@@ -59,20 +64,20 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        'flex flex-col gap-2',
-        // ліворуч — у колонці заголовка панелі, без власного відступу; по центру — з полями
+        'flex flex-col gap-1.5',
         align === 'center' ? 'items-center px-4 text-center' : 'items-start text-start',
-        size === 'md' ? 'py-8' : 'py-5',
+        inset && align === 'start' && 'px-4',
+        size === 'md' ? 'py-6' : 'py-4',
         className,
       )}
     >
-      <p className={cn('flex items-center gap-2 font-semibold text-primary', size === 'md' ? 'text-heading' : 'text-ui')}>
+      <p className={cn('flex items-center gap-2 font-[650] text-primary', size === 'md' ? 'text-body' : 'text-ui')}>
         {offline ? (
-          <WifiOff aria-hidden="true" className="size-5 text-danger" />
+          <WifiOff aria-hidden="true" className="size-[1.125rem] text-danger" />
         ) : (
-          <CircleAlert aria-hidden="true" className="size-5 text-danger" />
+          <CircleAlert aria-hidden="true" className="size-[1.125rem] text-danger" />
         )}
-        {title ?? titleFor(error)}
+        {title ?? errorTitle(error)}
       </p>
       <p className={cn('max-w-prose text-secondary', size === 'md' ? 'text-ui' : 'text-caption')}>{message}</p>
       {apiError?.requestId ? (
@@ -85,7 +90,7 @@ export function ErrorState({
           {canRetry ? (
             <Button
               variant="secondary"
-              size={size === 'md' ? 'md' : 'sm'}
+              size="sm"
               onClick={onRetry}
               loading={retrying}
               iconStart={<RotateCcw aria-hidden="true" className="size-4" />}

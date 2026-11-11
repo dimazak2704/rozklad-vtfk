@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentProps, type PointerEvent, ty
 import { cn } from '@/lib/cn';
 
 const CARD =
-  'z-50 max-w-[min(22rem,calc(100vw-1rem))] rounded-panel border border-default bg-raised p-3.5 text-primary shadow-popover ' +
+  'z-50 max-w-[min(22rem,calc(100vw-1rem))] rounded-popover border border-default bg-raised p-3.5 text-primary shadow-popover ' +
   'focus-visible:outline-none';
 
 export const HoverCard = RadixHoverCard.Root;

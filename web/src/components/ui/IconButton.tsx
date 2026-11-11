@@ -6,7 +6,7 @@ import { Tooltip } from './Tooltip';
 
 type IconButtonSize = 'sm' | 'md' | 'lg';
 
-/** 32/36/44 px; на дотику — щонайменше 44 px. */
+/** 32/36/44 px; на дотику — щонайменше 44 px. Завжди з підписом (aria-label) і підказкою. */
 const SIZES: Record<IconButtonSize, string> = {
   sm: 'size-8 px-0 pointer-coarse:size-11',
   md: 'size-9 px-0 pointer-coarse:size-11',

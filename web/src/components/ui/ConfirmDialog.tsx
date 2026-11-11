@@ -65,10 +65,12 @@ export function ConfirmDialog({
     >
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="anim-overlay fixed inset-0 z-50 bg-scrim" />
-        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-3">
+        {/* на телефоні — шторка знизу (кнопки над безпечною зоною), ширше — вікно 480 px по центру */}
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-end sm:place-items-center sm:p-6">
           <AlertDialog.Content
             className={cn(
-              'anim-dialog pointer-events-auto w-full max-w-md rounded-dialog border border-default bg-raised p-5 text-primary shadow-dialog',
+              'anim-dialog pointer-events-auto w-full rounded-t-dialog border-t border-default bg-raised p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-primary shadow-dialog',
+              'sm:max-w-[30rem] sm:rounded-dialog sm:border sm:pb-6',
               'focus-visible:outline-none',
             )}
             {...returnFocus}
@@ -78,7 +80,7 @@ export function ConfirmDialog({
                 <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-danger" />
               ) : null}
               <div className="flex min-w-0 flex-col gap-2">
-                <AlertDialog.Title className="text-heading font-semibold">{title}</AlertDialog.Title>
+                <AlertDialog.Title className="text-title font-semibold">{title}</AlertDialog.Title>
                 {description || objectName ? (
                   <AlertDialog.Description asChild>
                     <div className="flex flex-col gap-2 text-ui text-secondary">
@@ -98,7 +100,7 @@ export function ConfirmDialog({
                 ) : null}
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <AlertDialog.Cancel asChild>
                 <Button variant="secondary" disabled={pending}>
                   {cancelLabel}

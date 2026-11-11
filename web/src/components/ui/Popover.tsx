@@ -41,7 +41,7 @@ export function PopoverContent({
         align={align}
         className={cn(
           'anim-pop z-50 max-h-(--radix-popover-content-available-height) max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain',
-          'rounded-panel border border-default bg-raised p-3 text-primary shadow-popover',
+          'rounded-popover border border-default bg-raised p-3 text-primary shadow-popover',
           'origin-(--radix-popover-content-transform-origin) focus-visible:outline-none',
           WIDTHS[width],
           className,

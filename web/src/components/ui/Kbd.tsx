@@ -13,9 +13,8 @@ export function Kbd({ children, className, tone = 'default' }: KbdProps) {
   return (
     <kbd
       className={cn(
-        'inline-flex h-5 min-w-5 items-center justify-center rounded-plate px-1 font-sans text-meta font-medium figures',
-        tone === 'default' && 'border border-separator bg-sunken text-secondary',
-        tone === 'on-shell' && 'bg-shell-hover text-on-shell-muted',
+        'inline-flex h-5 min-w-5 items-center justify-center rounded-tag px-1 font-sans text-meta font-semibold',
+        (tone === 'default' || tone === 'on-shell') && 'border border-separator bg-sunken text-secondary',
         tone === 'inverse' && 'border border-[color-mix(in_oklab,currentColor_35%,transparent)] text-inverse',
         className,
       )}

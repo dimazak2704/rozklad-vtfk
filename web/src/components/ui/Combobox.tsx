@@ -105,7 +105,7 @@ export function Combobox({
             type="button"
             aria-label="Очистити вибір"
             onClick={() => onValueChange(null)}
-            className="absolute inset-y-0 end-8 my-auto flex size-6 items-center justify-center rounded-plate text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus"
+            className="absolute inset-y-0 end-8 my-auto flex size-6 items-center justify-center rounded-tag text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus"
           >
             <X aria-hidden="true" className="size-3.5" />
           </button>

@@ -17,7 +17,8 @@ export function Toaster() {
       position="bottom-right"
       offset={{ bottom: `calc(var(${TOAST_CLEARANCE_VAR}, 0px) + 16px)`, right: 16, left: 16, top: 16 }}
       mobileOffset={{ bottom: `calc(var(--tabbar-height) + var(${TOAST_CLEARANCE_VAR}, 0px) + 12px)`, left: 12, right: 12 }}
-      visibleToasts={4}
+      visibleToasts={2}
+      duration={4000}
       closeButton={false}
       containerAriaLabel="Сповіщення"
       icons={{
@@ -31,8 +32,8 @@ export function Toaster() {
         unstyled: true,
         classNames: {
           toast:
-            'group flex w-full items-start gap-3 rounded-panel border border-default bg-raised p-3.5 text-primary shadow-popover sm:w-[22rem]',
-          title: 'text-ui font-semibold',
+            'group flex w-full items-start gap-3 rounded-popover border border-default bg-raised px-4 py-3 text-primary shadow-popover sm:w-[22rem]',
+          title: 'text-ui font-[650]',
           description: 'mt-0.5 text-caption text-secondary',
           icon: 'mt-0.5 flex size-4 shrink-0 items-center justify-center',
           content: 'flex min-w-0 flex-1 flex-col',

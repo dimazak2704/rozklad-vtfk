@@ -62,7 +62,7 @@ export function Button({
 
   const classes = cn(
     buttonClass({ variant, size }),
-    !isStatic && variant !== 'link' && (size === 'sm' ? 'enabled:active:scale-[0.96]' : 'enabled:active:scale-[0.98]'),
+    !isStatic && variant !== 'link' && 'enabled:active:scale-[0.98]',
     iconStart && variant !== 'link' && (size === 'lg' ? 'ps-3' : 'ps-2.5'),
     iconEnd && variant !== 'link' && (size === 'lg' ? 'pe-3' : 'pe-2.5'),
     loading && 'pointer-events-none cursor-progress',

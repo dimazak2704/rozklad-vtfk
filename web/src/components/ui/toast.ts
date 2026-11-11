@@ -33,8 +33,10 @@ export const notify = {
     return toast.error(fallback, { description, duration: 8000, ...options });
   },
 
-  /** Оптимістична дія з можливістю скасувати (6 с). */
-  undo: (message: string, { onUndo, undoLabel = 'Скасувати', duration = 6000, ...options }: UndoOptions) =>
+  /**
+   * Оптимістична дія з можливістю скасувати (8 с): краще за діалог «Ви впевнені?», коли дію можна відкотити.
+   */
+  undo: (message: string, { onUndo, undoLabel = 'Скасувати', duration = 8000, ...options }: UndoOptions) =>
     toast(message, {
       duration,
       ...options,

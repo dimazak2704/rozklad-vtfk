@@ -42,7 +42,7 @@ export function Field({ label, hint, error, required = false, disabled = false, 
       >
         <label
           htmlFor={controlId}
-          className={cn('text-ui font-medium text-primary', error && 'text-danger', disabled && 'text-disabled')}
+          className={cn('text-caption font-[650] text-primary', error && 'text-danger', disabled && 'text-disabled')}
         >
           {label}
           {required ? (

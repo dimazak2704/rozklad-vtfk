@@ -6,7 +6,7 @@ export function Skeleton({ className, ...props }: ComponentProps<'span'>) {
   return (
     <span
       aria-hidden="true"
-      className={cn('block rounded-plate bg-skeleton motion-safe:animate-shimmer', className)}
+      className={cn('block rounded-tag bg-skeleton motion-safe:animate-shimmer', className)}
       {...props}
     />
   );

@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 export const Tabs = RadixTabs.Root;
 
 /**
- * Список вкладок з одним індикатором: смужка 3 px під активною вкладкою їде до нової (200 мс).
+ * Список вкладок з одним індикатором: смужка 2 px під активною вкладкою їде до нової (200 мс) — як у посилань шапки.
  * Положення пишемо прямо в стиль; стежимо за data-state вкладок, бо значення живе в <Tabs>.
  */
 export function TabsList({ className, children, ...props }: ComponentProps<typeof RadixTabs.List>) {
@@ -50,7 +50,7 @@ export function TabsList({ className, children, ...props }: ComponentProps<typeo
         ref={bar}
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute bottom-0 left-0 h-[3px] rounded-t-[2px] bg-accent opacity-0',
+          'pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full bg-accent opacity-0',
           'data-ready:transition-[transform,width] data-ready:duration-200 data-ready:ease-out motion-reduce:transition-none',
         )}
       />
@@ -69,10 +69,11 @@ export function TabsTrigger({ className, count, icon, children, ...props }: Tabs
   return (
     <RadixTabs.Trigger
       className={cn(
-        'relative inline-flex h-10 shrink-0 items-center gap-2 px-3 text-ui whitespace-nowrap pointer-coarse:h-12',
-        'text-secondary transition-[color] duration-100 ease-out hover:text-primary',
-        'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-        'data-[state=active]:font-semibold data-[state=active]:text-primary disabled:text-disabled',
+        'relative inline-flex h-10 shrink-0 items-center gap-2 px-3 text-ui font-[550] whitespace-nowrap pointer-coarse:h-12',
+        'text-secondary transition-[color] duration-150 ease-out hover:text-primary',
+        // кільце лише з клавіатури і заокруглене, як у решти контролів (клік мишею рамки не лишає)
+        'rounded-control outline-none focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
+        'data-[state=active]:font-[650] data-[state=active]:text-primary disabled:text-disabled',
         className,
       )}
       {...props}
@@ -80,7 +81,7 @@ export function TabsTrigger({ className, count, icon, children, ...props }: Tabs
       {icon}
       <span className="inline-grid">
         <span className="col-start-1 row-start-1">{children}</span>
-        <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-semibold">
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-[650]">
           {children}
         </span>
       </span>

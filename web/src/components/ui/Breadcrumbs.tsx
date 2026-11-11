@@ -26,7 +26,7 @@ export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
               {item.to && !last ? (
                 <Link
                   to={item.to}
-                  className="truncate rounded-plate hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  className="truncate rounded-tag hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 >
                   {item.label}
                 </Link>

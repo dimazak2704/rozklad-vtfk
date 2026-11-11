@@ -78,8 +78,7 @@ export function DateNav({
     { keys: 't', handler: () => go(today), description: 'Сьогодні', group: 'Дата', enabled: hotkeys },
   ]);
 
-  const onShell = tone === 'on-shell';
-  const iconVariant = onShell ? 'shell' : 'ghost';
+  void tone; // застаріле: колишня синя смуга
 
   return (
     <div className={cn('inline-flex min-w-0 items-center gap-0.5', className)} role="group" aria-label="Вибір дня">
@@ -87,7 +86,6 @@ export function DateNav({
         label="Попередній день"
         shortcut={hotkeys ? 'arrowleft' : undefined}
         icon={<ChevronLeft aria-hidden="true" className="size-4 rtl:rotate-180" />}
-        variant={iconVariant}
         size={size}
         disabled={prevDisabled}
         onClick={() => go(prev)}
@@ -95,18 +93,17 @@ export function DateNav({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant={onShell ? 'shell' : 'ghost'}
+            variant="ghost"
             size={size}
             static
             aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}
             // на вузькій панелі мітка скорочується (truncate), а не виштовхує сусідів за край екрана
-            className={cn('min-w-0 shrink px-2 sm:min-w-[8.25rem]', !onShell && 'text-primary')}
+            className="min-w-0 shrink px-2 text-primary sm:min-w-[8.25rem]"
           >
-            <span className="truncate font-semibold figures">
-              {relative ? <span>{relative} · </span> : null}
-              <span className={cn(relative && 'font-normal', relative && (onShell ? 'text-on-shell-muted' : 'text-secondary'))}>
-                {shortLabel}
-              </span>
+            {/* на телефоні — лише дата: саме її диспетчер має бачити завжди, «Сьогодні» підкаже кнопка поруч */}
+            <span className="truncate font-[650]">
+              {relative ? <span className="hidden sm:inline">{relative} · </span> : null}
+              <span className={cn(relative && 'sm:font-[450] sm:text-secondary')}>{shortLabel}</span>
             </span>
           </Button>
         </PopoverTrigger>
@@ -183,13 +180,12 @@ export function DateNav({
         label="Наступний день"
         shortcut={hotkeys ? 'arrowright' : undefined}
         icon={<ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />}
-        variant={iconVariant}
         size={size}
         disabled={nextDisabled}
         onClick={() => go(next)}
       />
       {showTodayButton && !isToday ? (
-        <Button variant={onShell ? 'shell' : 'ghost'} size={size} onClick={() => go(today)} className="hidden sm:inline-flex">
+        <Button variant="ghost" size={size} onClick={() => go(today)} className="hidden sm:inline-flex">
           Сьогодні
         </Button>
       ) : null}

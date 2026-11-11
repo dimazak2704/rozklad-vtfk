@@ -24,6 +24,8 @@ export interface DataTableColumn<T> {
   hideBelow?: 'sm' | 'md' | 'lg';
   /** Клітинка — заголовок рядка (th scope="row"). Зазвичай перша колонка з назвою. */
   rowHeader?: boolean;
+  /** Підпис значення в стосі на телефоні («Год: 4»), якщо `header` — не рядок. */
+  mobileLabel?: string;
   className?: string;
 }
 
@@ -62,14 +64,40 @@ export interface DataTableProps<T> {
   /** Обмежити висоту — тоді шапка прилипає всередині таблиці. */
   maxHeight?: string;
   skeletonRows?: number;
+  /**
+   * На вузьких екранах (< 768 px) таблиця стає списком: заголовок рядка — назвою, решта колонок —
+   * рядками «Підпис: значення» під нею, дії — праворуч. Без горизонтальної прокрутки стиснутої таблиці.
+   * `false` — лишити таблицю з прокруткою (сітки, де важливі стовпці).
+   */
+  stackOnMobile?: boolean;
   className?: string;
 }
 
+/** Класи стосу на телефоні: таблиця → список рядків. */
+const STACK = {
+  table: 'max-md:block',
+  head: 'max-md:hidden',
+  body: 'max-md:block',
+  row: 'max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-0.5 max-md:border-b max-md:border-separator max-md:px-5 max-md:py-3 max-md:last:border-b-0',
+  cell: 'max-md:col-start-1 max-md:h-auto max-md:border-0 max-md:p-0 max-md:first:ps-0 max-md:last:pe-0 max-md:text-start',
+  title: 'max-md:block max-md:text-cell max-md:font-[650]',
+  detail:
+    'max-md:flex max-md:min-w-0 max-md:flex-wrap max-md:items-baseline max-md:gap-x-1 max-md:text-caption max-md:text-secondary max-md:before:me-1 max-md:before:text-muted max-md:before:content-[attr(data-label)_":"] max-md:[&:not([data-label])]:before:content-none',
+  actions: 'max-md:col-start-2 max-md:row-span-6 max-md:row-start-1 max-md:block max-md:self-start max-md:border-0 max-md:p-0',
+  wide: 'max-md:block max-md:border-0',
+} as const;
+
 const ALIGN = { start: 'text-start', center: 'text-center', end: 'text-end' } as const;
 const HIDE = { sm: 'hidden sm:table-cell', md: 'hidden md:table-cell', lg: 'hidden lg:table-cell' } as const;
+/** У стосі «sm» означає «сховати лише на найвужчих», а ширше клітинка — рядок списку, а не table-cell. */
+const HIDE_STACKED = { sm: 'max-sm:hidden', md: 'hidden md:table-cell', lg: 'hidden lg:table-cell' } as const;
 
-/** Перша й остання клітинки — з відступом панелі (16 px), щоб таблиця стояла врівень із заголовком панелі. */
-const EDGE = 'first:ps-4 last:pe-4';
+function labelOf<T>(column: DataTableColumn<T>): string | undefined {
+  return column.mobileLabel ?? (typeof column.header === 'string' ? column.header : undefined);
+}
+
+/** Перша й остання клітинки — з відступом панелі (20 px), щоб таблиця стояла врівень із заголовком панелі. */
+const EDGE = 'first:ps-5 last:pe-5';
 
 /**
  * Таблиця даних: сортування (клієнт або сервер), липка шапка, стани завантаження/помилки/порожнечі,
@@ -98,8 +126,13 @@ export function DataTable<T>({
   density = 'comfortable',
   maxHeight,
   skeletonRows = 6,
+  stackOnMobile = true,
   className,
 }: DataTableProps<T>) {
+  const stack = stackOnMobile ? STACK : null;
+  const hide = stackOnMobile ? HIDE_STACKED : HIDE;
+  // заголовок рядка в стосі: явний rowHeader або перша колонка
+  const titleId = (columns.find((column) => column.rowHeader) ?? columns[0])?.id;
   const [innerSort, setInnerSort] = useState<SortState | null>(defaultSort);
   const sort = controlledSort !== undefined ? controlledSort : innerSort;
 
@@ -130,15 +163,15 @@ export function DataTable<T>({
   return (
     <div className={cn('flex flex-col', className)}>
       <div
-        className={cn('relative w-full overflow-x-auto', maxHeight && 'overflow-y-auto overscroll-contain')}
+        className={cn('relative w-full overflow-x-auto', stackOnMobile && 'max-md:overflow-x-visible', maxHeight && 'overflow-y-auto overscroll-contain')}
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table
-          className="w-full border-separate border-spacing-0 text-ui [&>tbody>tr:last-child>*]:border-b-0"
+          className={cn('w-full border-separate border-spacing-0 text-ui [&>tbody>tr:last-child>*]:border-b-0', stack?.table)}
           aria-busy={loading || undefined}
         >
           <caption className={cn(showCaption ? 'px-4 pb-2 text-start text-caption text-muted' : 'sr-only')}>{caption}</caption>
-          <thead>
+          <thead className={stack?.head}>
             <tr>
               {columns.map((column) => {
                 const canSort = Boolean(column.sortValue) || Boolean(column.sortable);
@@ -151,10 +184,12 @@ export function DataTable<T>({
                     aria-sort={canSort ? (ariaSort ?? 'none') : undefined}
                     style={column.width ? { width: column.width } : column.numeric ? { width: '5.5rem' } : undefined}
                     className={cn(
-                      'group/th sticky top-0 z-10 h-9 border-b border-separator bg-sunken px-3 py-0 text-meta font-semibold whitespace-nowrap text-secondary',
+                      // шапка прилипає лише в таблиці з власною прокруткою (maxHeight) — тоді їй потрібне тло
+                      'group/th sticky top-0 z-10 h-10 border-b border-separator px-3 py-0 text-caption font-[650] whitespace-nowrap text-secondary',
+                      maxHeight && 'bg-surface',
                       EDGE,
                       ALIGN[column.numeric ? 'end' : (column.align ?? 'start')],
-                      column.hideBelow && HIDE[column.hideBelow],
+                      column.hideBelow && hide[column.hideBelow],
                     )}
                   >
                     {canSort ? (
@@ -162,7 +197,7 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => changeSort(column.id)}
                         className={cn(
-                          'group/sort -mx-1 inline-flex items-center gap-1 rounded-plate px-1 hover:text-primary',
+                          'group/sort -mx-1 inline-flex items-center gap-1 rounded-tag px-1 hover:text-primary',
                           'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
                           active && 'text-primary',
                           column.numeric && 'flex-row-reverse',
@@ -190,40 +225,40 @@ export function DataTable<T>({
                 );
               })}
               {hasActions ? (
-                <th scope="col" className="sticky top-0 z-10 h-9 w-12 border-b border-separator bg-sunken px-2 last:pe-3">
+                <th scope="col" className={cn('sticky top-0 z-10 h-10 w-12 border-b border-separator px-2 last:pe-3', maxHeight && 'bg-surface')}>
                   <span className="sr-only">Дії</span>
                 </th>
               ) : null}
             </tr>
           </thead>
-          <tbody>
+          <tbody className={stack?.body}>
             {showSkeleton
               ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
-                  <tr key={`skeleton-${rowIndex}`}>
+                  <tr key={`skeleton-${rowIndex}`} className={stack?.row}>
                     {columns.map((column, colIndex) => (
                       <td
                         key={column.id}
-                        className={cn(cellPad, 'border-b border-separator', column.hideBelow && HIDE[column.hideBelow])}
+                        className={cn(cellPad, 'border-b border-separator', stack?.cell, column.hideBelow && hide[column.hideBelow])}
                       >
                         <Skeleton
                           className={cn('h-4', colIndex === 0 ? 'w-3/4' : (rowIndex + colIndex) % 3 === 0 ? 'w-1/2' : 'w-2/3', column.numeric && 'ms-auto w-10')}
                         />
                       </td>
                     ))}
-                    {hasActions ? <td className={cn(cellPad, 'border-b border-separator')} /> : null}
+                    {hasActions ? <td className={cn(cellPad, 'border-b border-separator', stack && 'max-md:hidden')} /> : null}
                   </tr>
                 ))
               : null}
             {showError ? (
-              <tr>
-                <td colSpan={colCount} className="border-b border-separator px-4">
+              <tr className={stack?.wide}>
+                <td colSpan={colCount} className={cn('border-b border-separator px-5', stack?.wide)}>
                   <ErrorState error={error} onRetry={onRetry} size="sm" />
                 </td>
               </tr>
             ) : null}
             {showEmpty ? (
-              <tr>
-                <td colSpan={colCount} className="border-b border-separator px-4">
+              <tr className={stack?.wide}>
+                <td colSpan={colCount} className={cn('border-b border-separator px-5', stack?.wide)}>
                   {empty ?? <EmptyState title="Записів немає" description="Змініть фільтри або додайте перший запис." size="sm" />}
                 </td>
               </tr>
@@ -243,22 +278,27 @@ export function DataTable<T>({
                         selected ? 'bg-selected' : 'hover:bg-hover',
                         'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
                         loading && 'text-muted',
+                        stack?.row,
                         rowClassName?.(row),
                       )}
                     >
                       {columns.map((column) => {
                         const Cell = column.rowHeader ? 'th' : 'td';
+                        const isTitle = column.id === titleId;
                         return (
                           <Cell
                             key={column.id}
                             scope={column.rowHeader ? 'row' : undefined}
+                            data-label={stack && !isTitle ? labelOf(column) : undefined}
                             className={cn(
                               cellPad,
                               'border-b border-separator align-middle',
                               'font-normal text-primary',
                               ALIGN[column.numeric ? 'end' : (column.align ?? 'start')],
                               column.numeric && 'figures',
-                              column.hideBelow && HIDE[column.hideBelow],
+                              stack?.cell,
+                              stack && (isTitle ? stack.title : stack.detail),
+                              column.hideBelow && hide[column.hideBelow],
                               column.className,
                             )}
                           >
@@ -268,7 +308,7 @@ export function DataTable<T>({
                       })}
                       {hasActions ? (
                         <td
-                          className="border-b border-separator px-2 py-1 text-end last:pe-3"
+                          className={cn('border-b border-separator px-2 py-1 text-end last:pe-3', stack?.actions)}
                           onClick={(event) => event.stopPropagation()}
                         >
                           {rowActions?.(row)}
@@ -282,7 +322,7 @@ export function DataTable<T>({
         </table>
       </div>
       {pagination && !showError ? (
-        <div className="border-t border-separator px-4 py-3">
+        <div className="border-t border-separator px-5 py-3">
           <Pagination {...pagination} />
         </div>
       ) : null}

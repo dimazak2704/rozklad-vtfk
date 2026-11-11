@@ -31,7 +31,7 @@ export function Badge({ tone = 'neutral', icon, size = 'md', className, children
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-plate font-medium whitespace-nowrap',
+        'inline-flex max-w-full items-center gap-1 rounded-tag font-semibold whitespace-nowrap',
         size === 'sm' ? 'h-5 px-1.5 text-meta' : 'h-6 px-2 text-caption',
         TONES[tone],
         className,
@@ -71,7 +71,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        'inline-flex h-8 items-stretch overflow-hidden rounded-full border text-caption font-medium pointer-coarse:h-10',
+        'inline-flex h-8 items-stretch overflow-hidden rounded-full border text-caption font-[550] pointer-coarse:h-11',
         selected ? 'border-transparent bg-selected text-accent' : 'border-default bg-surface text-secondary',
         disabled && 'border-separator bg-sunken text-disabled',
         className,
