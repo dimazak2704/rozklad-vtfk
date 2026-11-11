@@ -2,9 +2,12 @@
 # Local stack of «Розклад ВТФК» in Docker: infrastructure, the Java services, the sign-in service auth and
 # the web container (nginx: SPA, /api, /auth) (docs/RUNNING.md).
 #
-#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web]
+#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web] [--google-mock]
 #                                  build jars and images, start everything detached, wait until healthy;
-#                                  web starts by default (sign-in goes through it), --web is accepted as a no-op
+#                                  web starts by default (sign-in goes through it), --web is accepted as a no-op;
+#                                  --google-mock adds «Увійти через Google» against a local mock-oauth2-server
+#                                  (infra/docker-compose.google-mock.yml, http://localhost:8090/google);
+#                                  GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua turns the domain rule on
 #   scripts/dev-stack.sh down      stop the app services (infrastructure and data stay)
 #   scripts/dev-stack.sh down --all   stop everything incl. postgres/rabbitmq/redis/keycloak (data kept in volumes)
 #   scripts/dev-stack.sh status    containers, health, memory, URLs
@@ -108,10 +111,19 @@ auth_smoke() {
   echo "  auth: discovery and sign-in redirect through nginx are correct"
 }
 
+# The mock of an earlier `up --google-mock`: stopped when the stack comes up without it.
+stop_google_mock() {
+  if docker ps -q --filter name=rozklad-mock-oidc-1 | grep -q .; then
+    docker stop rozklad-mock-oidc-1 >/dev/null
+    echo "  mock-oidc: stopped (started without --google-mock)"
+  fi
+}
+
 cmd_up() {
-  local build=1 web=1 telegram=${TELEGRAM:-on}
+  local build=1 web=1 telegram=${TELEGRAM:-on} google_mock=0
   for arg in "$@"; do
     case $arg in
+      --google-mock) google_mock=1 ;;
       --no-telegram) telegram=off ;;
       --no-build) build=0 ;;
       --web) web=1 ;;
@@ -120,8 +132,10 @@ cmd_up() {
     esac
   done
   [[ $telegram == off ]] && compose_files+=(-f infra/docker-compose.no-telegram.yml)
+  ((google_mock)) && compose_files+=(-f infra/docker-compose.google-mock.yml)
   local targets=("${services[@]}")
   ((web)) && targets+=(web)
+  ((google_mock)) || stop_google_mock
 
   echo "== infrastructure"
   docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d
@@ -140,7 +154,8 @@ cmd_up() {
       compose build "$service"
     done
   fi
-  echo "== services (telegram: $telegram)"
+  echo "== services (telegram: $telegram, google mock: $( ((google_mock)) && echo on || echo off))"
+  ((google_mock)) && compose up -d mock-oidc
   compose up -d --no-build "${targets[@]}"
   wait_healthy "${services[@]}"
   if ((web)); then
@@ -148,6 +163,9 @@ cmd_up() {
     auth_smoke
   fi
   cmd_status
+  if ((google_mock)); then
+    echo "Mock Google     http://localhost:8090/google   (any name, claims e.g. {\"email\":\"krentsin@rozklad.local\"})"
+  fi
 }
 
 cmd_down() {
@@ -156,6 +174,7 @@ cmd_down() {
   else
     compose stop "${services[@]}" web
   fi
+  stop_google_mock
 }
 
 cmd_status() {

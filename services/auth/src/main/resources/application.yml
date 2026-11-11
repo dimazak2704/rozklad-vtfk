@@ -103,6 +103,21 @@ app:
       network-window: 15m
     password:
       min-length: ${AUTH_PASSWORD_MIN_LENGTH:12}
+    # вхід через Google (docs/GOOGLE_SIGNIN.md); порожній client-id = кнопки Google немає
+    google:
+      client-id: ${AUTH_GOOGLE_CLIENT_ID:}
+      client-secret: ${AUTH_GOOGLE_CLIENT_SECRET:}
+      # домен Workspace коледжу: адреса на ньому має прийти з тим самим hd. Порожньо — без правила домену
+      # (лише локальна перевірка; з https-видавцем ProdGuard цього не пропустить)
+      hosted-domain: ${AUTH_GOOGLE_HOSTED_DOMAIN:}
+      allow-consumer-accounts: ${AUTH_GOOGLE_ALLOW_CONSUMER_ACCOUNTS:false}
+      # лише локальний стенд з mock-oauth2-server (infra/docker-compose.google-mock.yml)
+      mock: ${AUTH_GOOGLE_MOCK:false}
+      issuer-uri: ${AUTH_GOOGLE_ISSUER_URI:}
+      authorization-uri: ${AUTH_GOOGLE_AUTHORIZATION_URI:}
+      token-uri: ${AUTH_GOOGLE_TOKEN_URI:}
+      jwk-set-uri: ${AUTH_GOOGLE_JWK_SET_URI:}
+      user-info-uri: ${AUTH_GOOGLE_USER_INFO_URI:}
     bootstrap:
       username: ${AUTH_BOOTSTRAP_ADMIN_USERNAME:}
       email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:}

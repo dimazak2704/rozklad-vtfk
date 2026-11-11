@@ -41,6 +41,7 @@ scripts/dev-stack.sh up                 # infra + build jars and images + 5 serv
 scripts/dev-stack.sh up --no-telegram   # the same, the bot stays off (empty token for notification)
 scripts/dev-stack.sh up --no-build      # start from the images already built
 scripts/dev-stack.sh up --web           # also the nginx SPA on :8088
+scripts/dev-stack.sh up --google-mock   # «Увійти через Google» against a local mock-oauth2-server (:8090)
 scripts/dev-stack.sh status             # containers, health, memory, URLs
 scripts/dev-stack.sh logs core          # follow one service
 scripts/dev-stack.sh seed               # real data through the API (idempotent, ~3 min)
@@ -82,6 +83,16 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/me
 
 `AUTH_URL=http://127.0.0.1:8085/auth` reaches the service directly when the web container is not running. Ten
 wrong passwords in a row lock a username for a while (`Забагато спроб…`); a successful sign-in resets the count.
+
+**Google without Google.** `scripts/dev-stack.sh up --google-mock` adds `infra/docker-compose.google-mock.yml`:
+`mock-oauth2-server` on `http://localhost:8090/google` and the Google button on the sign-in page. On the mock's
+page type any name (it becomes the Google id) and claims such as `{"email":"krentsin@rozklad.local"}`. Only
+addresses that have access in «Доступи» (`/admin/access`) get in; others see «Цієї адреси немає у списку
+доступу…». `GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua` turns the college-domain rule on (then type `"hd":"vtc.vn.ua"`
+too). `up` without the flag stops the mock again. The real Google client: `docs/GOOGLE_SIGNIN.md`.
+
+**«Доступи».** The admin page `/admin/access` grants access by e-mail (Google, or a password link the admin
+copies from the row menu), changes roles, revokes and restores access. A password link opens `/password/:token`.
 
 ## 5. What the seed creates (`scripts/seed_demo.py`)
 

@@ -8,6 +8,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import ua.vtc.rozklad.auth.config.AuthServerProperties;
+import ua.vtc.rozklad.auth.google.GoogleSignIn;
 
 /**
  * The Ukrainian sign-in page ({@code GET /auth/login}). The form posts to {@code /auth/login}; Spring
@@ -24,13 +25,13 @@ public class LoginController {
             "not_allowed", "Цієї адреси немає у списку доступу. Зверніться до навчальної частини.",
             "google", "Не вдалося увійти через Google. Спробуйте ще раз.");
 
-    /** Google sign-in arrives with its own configuration; until then the page shows the password form only. */
-    private static final boolean GOOGLE_ENABLED = false;
-
     private final AuthServerProperties properties;
+    /** Google is shown only when it is configured; otherwise the page has the password form alone. */
+    private final boolean googleEnabled;
 
-    public LoginController(AuthServerProperties properties) {
+    public LoginController(AuthServerProperties properties, GoogleSignIn google) {
         this.properties = properties;
+        this.googleEnabled = google.enabled();
     }
 
     /** {@code /auth/} has nothing of its own: show the sign-in page. */
@@ -47,9 +48,9 @@ public class LoginController {
             // уже увійшли: сайт сам завершить вхід через SSO
             return "redirect:" + publicWebUrl() + "/login";
         }
-        model.addAttribute("message", message(error, GOOGLE_ENABLED));
+        model.addAttribute("message", message(error, googleEnabled));
         model.addAttribute("passwordError", error != null && !"google".equals(error) && !"not_allowed".equals(error));
-        model.addAttribute("googleEnabled", GOOGLE_ENABLED);
+        model.addAttribute("googleEnabled", googleEnabled);
         model.addAttribute("publicWebUrl", publicWebUrl());
         return "login";
     }

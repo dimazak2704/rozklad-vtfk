@@ -50,6 +50,7 @@
         <keycloak-admin-client.version>26.0.12</keycloak-admin-client.version>
         <commons-text.version>1.15.0</commons-text.version>
         <archunit.version>1.5.1</archunit.version>
+        <mock-oauth2-server.version>6.1.5</mock-oauth2-server.version>
     </properties>
 
     <dependencyManagement>
@@ -131,6 +132,11 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>no.nav.security</groupId>
+                <artifactId>mock-oauth2-server</artifactId>
+                <version>${mock-oauth2-server.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

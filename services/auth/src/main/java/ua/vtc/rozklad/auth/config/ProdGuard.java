@@ -21,28 +21,36 @@ public class ProdGuard implements InitializingBean {
     /** Development values from {@code .env.example} and the dev compose file. */
     static final Set<String> DEV_SECRETS = Set.of(
             "dev-notification-secret", "dev-importer-secret", "dev-core-auth-secret", "dev-core-admin-secret",
+            "dev-google-secret",
             "change-me", "changeme");
 
     private final AuthServerProperties properties;
+    private final GoogleProperties google;
     private final Environment environment;
 
-    public ProdGuard(AuthServerProperties properties, Environment environment) {
+    public ProdGuard(AuthServerProperties properties, GoogleProperties google, Environment environment) {
         this.properties = properties;
+        this.google = google;
         this.environment = environment;
     }
 
     @Override
     public void afterPropertiesSet() {
         List<String> violations = violations(properties,
-                environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, false));
+                environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, false), google);
         if (!violations.isEmpty()) {
             throw new IllegalStateException("auth refuses to start with an https issuer:\n - "
                     + String.join("\n - ", violations));
         }
     }
 
-    /** The violated rules; empty for an http issuer (development) or a correct production configuration. */
+    /** The violated rules without Google sign-in. */
     static List<String> violations(AuthServerProperties properties, boolean secureCookie) {
+        return violations(properties, secureCookie, GoogleProperties.disabled());
+    }
+
+    /** The violated rules; empty for an http issuer (development) or a correct production configuration. */
+    static List<String> violations(AuthServerProperties properties, boolean secureCookie, GoogleProperties google) {
         List<String> violations = new ArrayList<>();
         if (!properties.secure()) {
             return violations;
@@ -68,6 +76,18 @@ public class ProdGuard implements InitializingBean {
         }
         if (properties.demoSeed().enabled()) {
             violations.add("AUTH_DEMO_SEED is on (development accounts with short passwords)");
+        }
+        if (google.mock()) {
+            violations.add("AUTH_GOOGLE_MOCK is on (the development stand-in for Google)");
+        }
+        if (google.hasEndpointOverrides()) {
+            violations.add("Google endpoints are overridden (AUTH_GOOGLE_*_URI); production uses Google's own");
+        }
+        if (google.enabled() && google.domain() == null && !google.allowConsumerAccounts()) {
+            violations.add("Google sign-in needs AUTH_GOOGLE_HOSTED_DOMAIN (or AUTH_GOOGLE_ALLOW_CONSUMER_ACCOUNTS=true)");
+        }
+        if (google.clientSecret() != null && DEV_SECRETS.contains(google.clientSecret().strip())) {
+            violations.add("the Google client secret is a known development value");
         }
         for (Map.Entry<String, AuthServerProperties.ServiceClient> client : properties.serviceClients().entrySet()) {
             String secret = client.getValue().secret();

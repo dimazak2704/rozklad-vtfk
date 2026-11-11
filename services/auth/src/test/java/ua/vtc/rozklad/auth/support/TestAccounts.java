@@ -30,12 +30,30 @@ public class TestAccounts {
     }
 
     public Created create(String role) {
+        String username = uniqueName();
+        return insert(role, username, username + "@test.local", passwordEncoder.encode(PASSWORD));
+    }
+
+    /** An access grant from «Доступи»: e-mail and role, no username and no password (Google only). */
+    public Created grant(String role, String email) {
+        return insert(role, null, email, null);
+    }
+
+    /** A unique address on {@code domain}. */
+    public static String email(String domain) {
+        return uniqueName() + "@" + domain;
+    }
+
+    private Created insert(String role, String username, String email, String passwordHash) {
         UUID id = UUID.randomUUID();
-        String username = "user" + SEQUENCE.incrementAndGet() + "." + Long.toString(System.nanoTime(), 36);
-        String email = username + "@test.local";
-        accounts.insert(new AccountRepository.NewAccount(id, username, email, "Тест " + username, Set.of(role),
-                passwordEncoder.encode(PASSWORD), false), Instant.now(), "test");
+        String name = username != null ? username : email;
+        accounts.insert(new AccountRepository.NewAccount(id, username, email, "Тест " + name, Set.of(role),
+                passwordHash, false), Instant.now(), "test");
         return new Created(id, username, email);
+    }
+
+    private static String uniqueName() {
+        return "user" + SEQUENCE.incrementAndGet() + "." + Long.toString(System.nanoTime(), 36);
     }
 
     public record Created(UUID id, String username, String email) {

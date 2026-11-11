@@ -15,6 +15,22 @@
     <name>rozklad-auth</name>
     <description>Sign-in service: OAuth 2.1 / OIDC provider (Spring Authorization Server), accounts and the login page</description>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- mock-oauth2-server (лише тести) зібраний з OkHttp 5; BOM Spring Cloud фіксує 4.12. У main OkHttp немає -->
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp</artifactId>
+                <version>5.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>mockwebserver</artifactId>
+                <version>5.5.1</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -43,6 +59,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <!-- вхід через Google (OIDC-клієнт); реєстрація будується в коді, див. google.GoogleSignIn -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -90,6 +111,12 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- OIDC-провайдер у процесі тесту замість Google (GoogleLoginIT) -->
+            <groupId>no.nav.security</groupId>
+            <artifactId>mock-oauth2-server</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

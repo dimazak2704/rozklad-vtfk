@@ -73,9 +73,56 @@ class ProdGuardTest {
     void startupFailsWithEveryViolationListed() {
         var guard = new ProdGuard(PropertiesFixture.prod().demoSeed(true)
                 .signingKey(new AuthServerProperties.SigningKey(null, "k", null, null)).build(),
-                new MockEnvironment().withProperty("server.servlet.session.cookie.secure", "true"));
+                GoogleProperties.disabled(), new MockEnvironment().withProperty("server.servlet.session.cookie.secure", "true"));
 
         assertThatThrownBy(guard::afterPropertiesSet).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AUTH_SIGNING_KEY_FILE").hasMessageContaining("AUTH_DEMO_SEED");
+    }
+
+    @Test
+    void realGoogleWithTheCollegeDomainPasses() {
+        var google = google("real-client-id", "real-google-secret", "vtc.vn.ua", false, false, null);
+
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true, google)).isEmpty();
+    }
+
+    @Test
+    void theMockAndEndpointOverridesAreRefused() {
+        var google = google("rozklad-dev", "real-google-secret", "vtc.vn.ua", false, true,
+                "http://mock-oidc:8090/google");
+
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true, google)).hasSize(2)
+                .anySatisfy(v -> assertThat(v).contains("AUTH_GOOGLE_MOCK"))
+                .anySatisfy(v -> assertThat(v).contains("overridden"));
+    }
+
+    @Test
+    void googleWithoutAHostedDomainNeedsConsumerAccountsExplicitly() {
+        var anyDomain = google("real-client-id", "real-google-secret", "", false, false, null);
+        var consumers = google("real-client-id", "real-google-secret", "", true, false, null);
+
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true, anyDomain)).singleElement().asString()
+                .contains("AUTH_GOOGLE_HOSTED_DOMAIN");
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true, consumers)).isEmpty();
+    }
+
+    @Test
+    void theDevelopmentGoogleSecretIsRefused() {
+        var google = google("real-client-id", "dev-google-secret", "vtc.vn.ua", false, false, null);
+
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true, google)).singleElement().asString()
+                .contains("Google client secret");
+    }
+
+    @Test
+    void developmentMayUseTheMockWithoutADomain() {
+        var google = google("rozklad-dev", "dev-google-secret", "", false, true, "http://mock-oidc:8090/google");
+
+        assertThat(ProdGuard.violations(PropertiesFixture.dev(), false, google)).isEmpty();
+    }
+
+    private static GoogleProperties google(String clientId, String secret, String domain, boolean consumers,
+            boolean mock, String issuer) {
+        return new GoogleProperties(clientId, secret, domain, consumers, mock, issuer, null, null, null, null);
     }
 }

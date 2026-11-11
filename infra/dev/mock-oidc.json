@@ -1,0 +1,19 @@
+{
+  "interactiveLogin": true,
+  "tokenCallbacks": [
+    {
+      "issuerId": "google",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {
+          "requestParam": "code",
+          "match": "*",
+          "claims": {
+            "aud": ["rozklad-dev"],
+            "email_verified": true
+          }
+        }
+      ]
+    }
+  ]
+}
