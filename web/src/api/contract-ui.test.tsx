@@ -199,7 +199,9 @@ describe('рішення щодо пари: зміна причини з version
       <DecisionCard change={change} state="confirmed" busy={null} onResend={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />,
     );
     expect(screen.getByText('«Відп.»')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Змінити причину' }));
+    // «Змінити причину» живе в меню «⋯» картки рішення
+    await user.click(screen.getByRole('button', { name: 'Ще дії з рішенням' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Змінити причину' }));
     const picker = screen.getByRole('radiogroup', { name: 'Причина в розпорядженні' });
     await user.click(within(picker).getByRole('radio', { name: /Зв\.зам\./ }));
     await user.click(screen.getByRole('button', { name: 'Зберегти' }));
