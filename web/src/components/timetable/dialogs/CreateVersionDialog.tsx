@@ -83,7 +83,7 @@ function CreateVersionForm({
   return (
     <DialogContent
       title="Нова версія розкладу"
-      description="Чернетку можна правити, порівнювати й публікувати; опублікована версія лишається незмінною, доки не замінити її новою."
+      description="Опублікований розклад не зміниться, доки не опублікуєте нову версію."
       footer={
         <>
           <DialogClose asChild>

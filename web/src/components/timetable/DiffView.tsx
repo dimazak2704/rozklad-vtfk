@@ -113,16 +113,16 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
   if (!base) {
     return (
       <EmptyState
-        title="Немає з чим порівнювати"
+        title="Немає з чим порівнювати."
         description="У семестрі лише одна версія. Створіть копію, змініть її — і тут зʼявиться різниця."
-        className="rounded-panel border border-default bg-surface"
       />
     );
   }
 
   return (
     <section aria-labelledby="diff-title" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3 rounded-panel border border-default bg-surface px-4 py-3">
+      {/* скільки чого змінилось — у самому перемикачі нижче; окремі плитки з тими самими числами не потрібні */}
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 id="diff-title" className="text-heading font-semibold text-primary">
             Що змінилось у «{target.name}»
@@ -131,24 +131,13 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
             <span>відносно</span>
             <Select
               aria-label="Базова версія для порівняння"
-              size="sm"
-              className="w-72"
+              className="w-full sm:w-72"
               value={base.id}
               onValueChange={onBaseChange}
               options={others.map((v) => ({ value: v.id, label: v.name, description: VERSION_STATUS_LABEL[v.status] }))}
             />
           </div>
         </div>
-        <dl className="ms-auto grid grid-cols-3 gap-px overflow-hidden rounded-control border border-default bg-[var(--border-color-separator)] text-center">
-          {(['added', 'removed', 'moved'] as const).map((kind) => (
-            <div key={kind} className="flex min-w-24 flex-col bg-surface px-4 py-2">
-              <dt className="order-2 text-caption text-secondary">{KIND_META[kind].label}</dt>
-              <dd className={cn('order-1 text-headline leading-none font-bold figures', KIND_META[kind].tone)}>
-                {diff.isPending ? <Skeleton className="mx-auto h-7 w-8" /> : `${counts[kind] > 0 && kind === 'added' ? '+' : counts[kind] > 0 && kind === 'removed' ? '−' : ''}${counts[kind]}`}
-              </dd>
-            </div>
-          ))}
-        </dl>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -159,11 +148,12 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
             setFilter(next);
             setLimit(PAGE);
           }}
+          // нульові види змін не показуємо: «Додано 0» — шум, а не вибір
           options={[
-            { value: 'all', label: `Усі ${rows.length}` },
-            { value: 'moved', label: `Переміщено ${counts.moved}` },
-            { value: 'added', label: `Додано ${counts.added}` },
-            { value: 'removed', label: `Прибрано ${counts.removed}` },
+            { value: 'all' as const, label: `Усі ${rows.length}` },
+            ...(counts.moved > 0 || filter === 'moved' ? [{ value: 'moved' as const, label: `Переміщено ${counts.moved}` }] : []),
+            ...(counts.added > 0 || filter === 'added' ? [{ value: 'added' as const, label: `Додано ${counts.added}` }] : []),
+            ...(counts.removed > 0 || filter === 'removed' ? [{ value: 'removed' as const, label: `Прибрано ${counts.removed}` }] : []),
           ]}
         />
         <Input
