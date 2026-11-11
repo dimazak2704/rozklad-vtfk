@@ -1,17 +1,17 @@
 import { ClipboardCopy, FileDown } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { canCopyImages, copyOrderPng, DOCUMENT_LABEL, downloadOrderFile } from '@/api/admin-daily';
 import type { DocumentFormat, OrderDto } from '@/api/types';
-import { Button, notify } from '@/components/ui';
-
-const FORMATS: readonly DocumentFormat[] = ['docx', 'pdf', 'png'];
+import { Button, notify, type MoreMenuItem } from '@/components/ui';
 
 /**
- * Файли опублікованого розпорядження (сервіс notification): DOCX для архіву, PDF для друку, PNG для чатів,
- * і «Копіювати PNG» — щоб вставити в Instagram чи месенджер без збереження файлу.
+ * Файли опублікованого розпорядження (сервіс notification): PDF для друку — одна видима кнопка, а DOCX для
+ * архіву, PNG для чатів і «Копіювати PNG» (вставити в Instagram чи месенджер без збереження) — у «⋯».
+ * Імпортоване паперове розпорядження — лише текст: файлів немає.
  */
-export function OrderFiles({ order }: { order: OrderDto }) {
+export function useOrderFiles(order: OrderDto | undefined): { pdfButton: ReactNode; menu: MoreMenuItem[] } {
   const [busy, setBusy] = useState<DocumentFormat | 'copy' | null>(null);
+  if (!order || order.status !== 'PUBLISHED' || order.imported) return { pdfButton: null, menu: [] };
 
   const download = async (format: DocumentFormat) => {
     setBusy(format);
@@ -28,7 +28,7 @@ export function OrderFiles({ order }: { order: OrderDto }) {
     setBusy('copy');
     try {
       await copyOrderPng(order.id);
-      notify.success('Зображення скопійовано', { description: 'Вставте його в Instagram чи чат (Ctrl+V).' });
+      notify.success('Зображення скопійовано — вставте його в Instagram чи чат (Ctrl+V)');
     } catch (error) {
       notify.error(error, 'Не вдалося скопіювати зображення');
     } finally {
@@ -36,43 +36,26 @@ export function OrderFiles({ order }: { order: OrderDto }) {
     }
   };
 
-  if (order.imported) {
-    return (
-      <p className="text-caption text-secondary">
-        Паперове розпорядження, внесене в систему як текст: файлів DOCX, PDF і PNG для нього немає.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-3 gap-2">
-        {FORMATS.map((format) => (
-          <Button
-            key={format}
-            size="sm"
-            variant="secondary"
-            loading={busy === format}
-            disabled={busy !== null}
-            onClick={() => void download(format)}
-            iconStart={<FileDown aria-hidden="true" className="size-4" />}
-            aria-label={`Завантажити ${DOCUMENT_LABEL[format]}`}
-          >
-            {DOCUMENT_LABEL[format]}
-          </Button>
-        ))}
-      </div>
-      <Button
-        size="sm"
-        variant="secondary"
-        loading={busy === 'copy'}
-        disabled={busy !== null || !canCopyImages()}
-        onClick={() => void copy()}
-        iconStart={<ClipboardCopy aria-hidden="true" className="size-4" />}
-      >
-        Копіювати PNG
-      </Button>
-      {!canCopyImages() ? <p className="text-caption text-muted">Цей браузер не копіює зображення — завантажте PNG.</p> : null}
-    </div>
+  const pdfButton = (
+    <Button
+      variant="secondary"
+      loading={busy === 'pdf'}
+      disabled={busy !== null}
+      onClick={() => void download('pdf')}
+      iconStart={<FileDown aria-hidden="true" className="size-4" />}
+      aria-label={`Завантажити ${DOCUMENT_LABEL.pdf}`}
+    >
+      {DOCUMENT_LABEL.pdf}
+    </Button>
   );
+
+  const menu: MoreMenuItem[] = [
+    { label: `Завантажити ${DOCUMENT_LABEL.docx}`, icon: <FileDown aria-hidden="true" />, onSelect: () => void download('docx'), disabled: busy !== null },
+    { label: `Завантажити ${DOCUMENT_LABEL.png}`, icon: <FileDown aria-hidden="true" />, onSelect: () => void download('png'), disabled: busy !== null },
+    // браузер без копіювання зображень (Firefox без дозволу) — пункт прихований, а PNG можна завантажити
+    ...(canCopyImages()
+      ? [{ label: 'Копіювати PNG', icon: <ClipboardCopy aria-hidden="true" />, onSelect: () => void copy(), disabled: busy !== null }]
+      : []),
+  ];
+  return { pdfButton, menu };
 }

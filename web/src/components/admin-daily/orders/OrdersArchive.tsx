@@ -1,10 +1,11 @@
-import { Eye, FileDown, Search, Trash2, X } from 'lucide-react';
+import { CalendarRange, Eye, FileDown, Search, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { downloadOrderFile, useDeleteImportedOrder, useOrders } from '@/api/admin-daily';
 import type { DocumentFormat, IsoDate, OrderSummaryDto, Uuid } from '@/api/types';
-import { DataTable, EmptyState, Field, IconButton, Input, notify, Plate, RowActions, type DataTableColumn } from '@/components/ui';
+import { Button, DataTable, EmptyState, Field, IconButton, Input, notify, RowActions, type DataTableColumn } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { formatInstant, formatNumericDate, formatShortWeekdayDate } from '@/lib/date';
+import { formatInstant, formatNumericDate, isoWeekday } from '@/lib/date';
+import { weekdayShort } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 
 const PAGE_SIZE = 10;
@@ -21,6 +22,8 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
+  // межі дат — рідкий фільтр: поля зʼявляються на вимогу, а не стоять трьома рядками на телефоні
+  const [datesOpen, setDatesOpen] = useState(false);
   const q = useDebouncedValue(query.trim(), 250);
   const orders = useOrders({
     status: 'PUBLISHED',
@@ -67,18 +70,26 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
       {
         id: 'number',
         header: '№',
-        width: '5.5rem',
+        width: '5rem',
         rowHeader: true,
-        cell: (row) => <Plate size="sm">№{row.number ?? '—'}</Plate>,
+        cell: (row) => <span className="font-semibold text-primary figures">№{row.number ?? '—'}</span>,
       },
-      { id: 'date', header: 'На дату', cell: (row) => <span className="figures">{formatShortWeekdayDate(row.date)}.{row.date.slice(0, 4)}</span> },
+      {
+        id: 'date',
+        header: 'На дату',
+        cell: (row) => (
+          <span className="whitespace-nowrap figures">
+            {weekdayShort(isoWeekday(row.date))}, {formatNumericDate(row.date)}
+          </span>
+        ),
+      },
       {
         id: 'kind',
         header: 'Документ',
         hideBelow: 'sm',
         cell: (row) => (row.kind === 'AMENDMENT' ? 'Доповнення' : 'Розпорядження'),
       },
-      { id: 'rows', header: 'Рядків', numeric: true, cell: (row) => row.itemCount },
+      { id: 'rows', header: 'Рядків', numeric: true, hideBelow: 'md', cell: (row) => row.itemCount },
       {
         id: 'published',
         header: 'Опубліковано',
@@ -91,35 +102,46 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]">
-        <Field label="Пошук" hint="Номер («35»), група («4ki1»), прізвище чи дисципліна">
-          <Input
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(0);
-            }}
-            iconStart={<Search className="size-4" />}
-            placeholder="Напр.: Прокопчук"
-            endSlot={
-              query ? (
-                <IconButton label="Очистити пошук" size="sm" icon={<X aria-hidden="true" className="size-4" />} onClick={() => setQuery('')} />
-              ) : null
-            }
-          />
-        </Field>
-        <Field label="Від">
-          <Input type="date" value={from} min={semester?.startsOn} max={to || semester?.endsOn} onChange={(event) => {
-            setFrom(event.target.value);
-            setPage(0);
-          }} className="figures" />
-        </Field>
-        <Field label="До">
-          <Input type="date" value={to} min={from || semester?.startsOn} max={semester?.endsOn} onChange={(event) => {
-            setTo(event.target.value);
-            setPage(0);
-          }} className="figures" />
-        </Field>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Пошук" className="min-w-0 flex-1 basis-64">
+            <Input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+              iconStart={<Search className="size-4" />}
+              placeholder="Номер, група чи прізвище"
+              endSlot={
+                query ? (
+                  <IconButton label="Очистити пошук" size="sm" icon={<X aria-hidden="true" className="size-4" />} onClick={() => setQuery('')} />
+                ) : null
+              }
+            />
+          </Field>
+          {!datesOpen && !from && !to ? (
+            <Button variant="ghost" onClick={() => setDatesOpen(true)} iconStart={<CalendarRange aria-hidden="true" className="size-4" />}>
+              За датами
+            </Button>
+          ) : null}
+        </div>
+        {datesOpen || from || to ? (
+          <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
+            <Field label="Від">
+              <Input type="date" value={from} min={semester?.startsOn} max={to || semester?.endsOn} onChange={(event) => {
+                setFrom(event.target.value);
+                setPage(0);
+              }} className="figures" />
+            </Field>
+            <Field label="До">
+              <Input type="date" value={to} min={from || semester?.startsOn} max={semester?.endsOn} onChange={(event) => {
+                setTo(event.target.value);
+                setPage(0);
+              }} className="figures" />
+            </Field>
+          </div>
+        ) : null}
       </div>
       <DataTable
         caption="Опубліковані розпорядження"

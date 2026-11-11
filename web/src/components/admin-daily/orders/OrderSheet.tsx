@@ -7,8 +7,9 @@ import { CHANGE_KIND_LABEL, CHANGE_STATUS_LABEL } from '@/lib/labels';
 import { ChangeTimeline } from '../ChangeTimeline';
 
 /** Ширини колонок як у Word-шаблоні коледжу (сума — 100%). */
-const COLUMNS = ['9%', '6%', '14%', '17%', '11%', '14%', '18%', '11%'] as const;
-const CELL = 'border border-current px-[0.35em] py-[0.15em] align-top';
+const COLUMNS = ['9%', '7%', '14%', '16%', '11%', '14%', '18%', '11%'] as const;
+// відступ 0.5em: текст не липне до лінії; переноси за складами — вузькі колонки шапки не «вилазять» за межі
+const CELL = 'border border-current px-[0.5em] py-[0.2em] align-top hyphens-auto [overflow-wrap:break-word]';
 const SERIF = '"Times New Roman", "Liberation Serif", Tinos, "Noto Serif", Times, serif';
 
 /** «РОЗПОРЯДЖЕННЯ» розрідженими літерами — як у шапці документа (самі літери, не CSS-капітель). */
@@ -121,8 +122,9 @@ export function OrderSheet({ order, parentNumber = null, changes, fresh, classNa
   return (
     <div data-theme="light" className={cn('@container mx-auto w-full max-w-[52rem]', className)}>
       <article
+        lang="uk"
         aria-label={draft ? `${label} (чернетка)` : label}
-        className="relative min-h-[141.4cqw] overflow-hidden border border-default bg-surface px-[7cqw] pt-[6cqw] pb-[8cqw] text-primary"
+        className="relative min-h-[90cqw] overflow-hidden border border-default bg-surface px-[7cqw] pt-[6cqw] pb-[8cqw] text-primary"
         style={{ fontFamily: SERIF, fontSize: 'clamp(8.5px, 1.95cqw, 15.5px)', lineHeight: 1.25 }}
       >
         {draft ? (
@@ -162,7 +164,8 @@ export function OrderSheet({ order, parentNumber = null, changes, fresh, classNa
             ))}
           </colgroup>
           <thead>
-            <tr className="text-center font-normal italic">
+            {/* шапка — без переносів посеред слова: вузькі «Пара» й «Ауд» мають менший відступ */}
+            <tr className="text-center font-normal italic [&_th]:px-[0.25em] [&_th]:hyphens-manual">
               <th scope="col" className={cn(CELL, 'font-normal')}>
                 Група
               </th>
