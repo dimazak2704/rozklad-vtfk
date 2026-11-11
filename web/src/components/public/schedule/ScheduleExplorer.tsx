@@ -82,7 +82,6 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
   if (unavailableOffline) {
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
         icon={<WifiOff aria-hidden="true" className="size-5" />}
         title={view === 'day' ? 'Цей день не збережено на пристрої' : 'Цей тиждень не збережено на пристрої'}
         description="Без інтернету відкриваються лише ті тижні, які ви вже переглядали. Підключіться до мережі — розклад завантажиться сам."
@@ -105,7 +104,6 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
           description={missing ? `Сервер не знає розкладу «${ownerLabel}». Можливо, посилання застаріло.` : undefined}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
-          className="rounded-panel border border-default bg-surface"
         />
       );
     } else {
@@ -117,7 +115,6 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     const notes = [...new Set(schedule.days.map((d) => d.note?.trim().replace(/\.$/, '')).filter((note): note is string => Boolean(note)))];
     content = (
       <EmptyState
-        className="rounded-panel border border-default bg-surface"
         title={noStudy ? 'Цього тижня занять немає' : `У ${ownerLabel} цього тижня пар немає`}
         description={
           notes.length > 0
@@ -177,10 +174,10 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
   } else {
     content = (
       <div id={WEEK_REGION_ID}>
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" />
         </div>
-        <div className="flex flex-col gap-8 md:hidden">
+        <div className="flex flex-col gap-8 lg:hidden">
           {schedule.days.map((d) => (
             <DayList key={d.date} day={d} perspective={perspective} today={today} />
           ))}

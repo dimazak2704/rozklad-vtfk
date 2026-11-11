@@ -58,7 +58,7 @@ export default function RoomSchedulePage() {
       target={{ type: 'ROOM', id, label, url: paths.room(id) }}
       kindLabel="Розклад аудиторії"
       documentTitle={`${label} — розклад аудиторії`}
-      details={room ? roomDetails(room) : undefined}
+      details={room && roomDetails(room) !== 'Аудиторія' ? roomDetails(room) : undefined}
       status={
         query.data && !query.isPlaceholderData && activeProfile ? (
           <RoomNowStatus schedule={query.data} roomId={id} profile={activeProfile} today={params.today} />

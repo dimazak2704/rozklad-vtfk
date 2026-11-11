@@ -93,7 +93,7 @@ interface ChangesListProps {
 export function ChangesList({ groups, date, myGroupIds, mainOrderNumber }: ChangesListProps) {
   const sorted = [...groups].sort((a, b) => Number(isMyGroup(myGroupIds, b.group.id)) - Number(isMyGroup(myGroupIds, a.group.id)));
   return (
-    <ul className="flex max-w-4xl flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
+    <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
       {sorted.map(({ group, items }) => {
         const own = isMyGroup(myGroupIds, group.id);
         return (

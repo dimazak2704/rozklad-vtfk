@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { usePublicGroups } from '@/api/public';
 import type { PublicGroupDto } from '@/api/types';
 import { paths } from '@/app/routes';
-import { ErrorState, Skeleton } from '@/components/ui';
+import { ErrorState, Skeleton, useErrorCovered } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
@@ -75,11 +75,13 @@ function CourseDisclosure({ course, list, ownId, defaultOpen }: { course: number
  */
 export function GroupsDirectory() {
   const groups = usePublicGroups();
+  const covered = useErrorCovered();
   const remembered = useRememberedGroup();
   const [open, setOpen] = usePersistentFlag('rozklad.home.groupsOpen', false);
   const phone = useMediaQuery('(max-width: 767px)');
   const panelId = useId();
 
+  if (groups.isError && !groups.data && covered) return null;
   let body;
   if (groups.isPending) {
     body = <Skeleton className="h-4 w-48" />;

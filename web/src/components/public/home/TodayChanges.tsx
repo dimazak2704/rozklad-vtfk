@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { Link } from 'react-router';
 import { usePublicChanges } from '@/api/public';
-import { ErrorState, Skeleton } from '@/components/ui';
+import { ErrorState, Skeleton, useErrorCovered } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDateAfterNa } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
@@ -19,6 +19,7 @@ const GROUP_FORMS = ['групі', 'групах', 'групах'] as const;
  */
 export function TodayChanges({ className }: { className?: string }) {
   const headingId = useId();
+  const covered = useErrorCovered();
   const home = useHomeDay();
   const changes = usePublicChanges(home.date, { refetchInterval: 2 * 60_000 });
   const favorites = useFavoritesStore((state) => state.favorites);
@@ -27,6 +28,8 @@ export function TodayChanges({ className }: { className?: string }) {
   const day = home.isToday ? 'Сьогодні' : `На ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
   const changesLink = home.isToday ? '/changes' : `/changes?date=${home.date}`;
 
+  // спільна помилка сторінки вже сказала, що сталося: блок без даних просто не показуємо
+  if (changes.isError && !changes.data && covered) return null;
   let body;
   if (changes.isPending) {
     body = (

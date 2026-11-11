@@ -37,7 +37,7 @@ export default function BellsPage() {
     active && studyToday ? (bellColumns(active).find((c) => c.weekdays.includes(weekday as Weekday))?.slots ?? null) : null;
 
   return (
-    <PageErrorScope queries={[profiles, meta]} title="Дзвінки зараз не завантажуються" className="gap-8">
+    <PageErrorScope queries={[profiles, meta]} title="Дзвінки зараз не завантажуються" className="max-w-4xl gap-8">
       <PageHeader
         size="headline"
         title="Дзвінки"
@@ -49,9 +49,9 @@ export default function BellsPage() {
                 <span aria-hidden="true">·</span>
                 <ParityBadge parity={meta.data.parity} size="sm" />
               </>
-            ) : (
+            ) : meta.data && !meta.data.studyDay ? (
               <span>· пар немає</span>
-            )}
+            ) : null}
           </>
         }
       />
@@ -65,7 +65,7 @@ export default function BellsPage() {
       ) : !active ? (
         <EmptyState title="Профіль дзвінків ще не налаштовано." description="Щойно диспетчер його налаштує, час пар зʼявиться тут." />
       ) : (
-        <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 max-w-4xl flex-col gap-3">
+        <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 flex-col gap-3">
           <BellsTable profile={active} todayWeekday={studyToday ? weekday : null} live={studyToday} />
           <p className="max-w-prose text-caption text-muted">
             Профіль «{active.name}». Групи першої зміни починають з першої пари, другої — з пізніших; які саме пари у вашої

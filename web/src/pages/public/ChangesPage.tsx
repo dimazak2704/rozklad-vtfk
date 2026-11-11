@@ -263,7 +263,7 @@ export default function ChangesPage() {
   const showMine = hasMyTargets(mine) && groups.length > 1;
 
   return (
-    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються">
+    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються" className="max-w-4xl">
       <PageHeader
         size="headline"
         title={

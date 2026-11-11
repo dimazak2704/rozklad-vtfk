@@ -1,7 +1,7 @@
 import { useBells } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
 import { DayList } from '@/components/schedule';
-import { EmptyState, ErrorState } from '@/components/ui';
+import { EmptyState, ErrorState, useErrorCovered } from '@/components/ui';
 import { formatWeekdayDateAfterNa } from '@/lib/date';
 import { MoreLink } from '../MoreLink';
 import { ScheduleSkeleton } from '../schedule/ScheduleSkeleton';
@@ -14,11 +14,12 @@ import { useRememberedGroup } from './useRememberedGroup';
  */
 export function LastViewedDay() {
   const group = useRememberedGroup();
+  const covered = useErrorCovered();
   const home = useHomeDay();
   const query = usePublicSchedule('GROUP', group?.id, home.date, home.date, { enabled: Boolean(group) });
   const bells = useBells(group ? home.date : null);
 
-  if (!group) return null;
+  if (!group || (query.isError && !query.data && covered)) return null;
   const day = query.data?.days[0];
   const when = home.isToday ? 'сьогодні' : `на ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
 

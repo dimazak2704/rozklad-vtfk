@@ -3,7 +3,7 @@ import { useBells, usePublicMeta } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
 import type { DayDto, IsoDate, LessonView } from '@/api/types';
 import { NowIndicator } from '@/components/schedule';
-import { ErrorState, ParityBadge, Skeleton } from '@/components/ui';
+import { ErrorState, ParityBadge, Skeleton, useErrorCovered } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { compareIsoDates, formatLongDate, formatWeekdayDate, formatWeekdayDateAfterNa, relativeDayLabel } from '@/lib/date';
@@ -42,6 +42,7 @@ function GroupLink({ group }: { group: ScheduleTarget }) {
  * відкривала свою групу, тут же одним рядком — що в неї зараз, а після пар — коли завтра перша.
  */
 export function NowPanel({ className }: { className?: string }) {
+  const covered = useErrorCovered();
   const meta = usePublicMeta();
   const group = useRememberedGroup();
   const today = meta.data?.today ?? null;
@@ -65,7 +66,9 @@ export function NowPanel({ className }: { className?: string }) {
       </section>
     );
   }
-  if (meta.isError) {
+  // сторінка вже показує одну спільну помилку: порожній тонований блок лише заважав би
+  if (meta.isError && !meta.data && covered) return null;
+  if (!meta.data) {
     return (
       <section aria-label="Стан навчального дня" className={cn(HERO, className)}>
         <ErrorState error={meta.error} size="sm" align="start" onRetry={() => void meta.refetch()} retrying={meta.isFetching} />
@@ -123,6 +126,7 @@ export function NowPanel({ className }: { className?: string }) {
     );
   }
 
+  if (studyToday && bells.isError && covered) return null;
   if (studyToday && bells.isError) {
     return (
       <section aria-label="Стан навчального дня" className={cn(HERO, className)}>

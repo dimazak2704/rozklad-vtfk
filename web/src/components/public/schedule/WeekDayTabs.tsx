@@ -61,8 +61,9 @@ export function WeekDayTabs({ weekStart, days, value, today, onChange, className
               'hover:bg-hover data-[state=on]:bg-selected data-[state=on]:hover:bg-selected',
             )}
           >
-            <span className={cn('text-meta font-semibold', isToday ? 'text-accent' : 'text-secondary group-data-[state=on]:text-primary')}>
+            <span className={cn('relative text-meta font-semibold', isToday ? 'text-accent' : 'text-secondary group-data-[state=on]:text-primary')}>
               {weekdayShort(isoWeekday(date))}
+              {changes > 0 ? <span aria-hidden="true" className="absolute top-0.5 -end-2.5 size-1.5 rounded-full bg-change" /> : null}
             </span>
             <span
               className={cn(
@@ -72,7 +73,6 @@ export function WeekDayTabs({ weekStart, days, value, today, onChange, className
             >
               {weekday.day}
             </span>
-            {changes > 0 ? <span aria-hidden="true" className="absolute top-2 end-2 size-1.5 rounded-full bg-change" /> : null}
           </ToggleGroup.Item>
         );
       })}
