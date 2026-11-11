@@ -16,7 +16,7 @@ function safeDecode(value: string): string {
 
 /**
  * 404 — одне речення і шлях далі, без велетенського «404». Людина, найімовірніше, шукала розклад:
- * даємо пошук, а якщо в адресі схоже на код групи — пряме посилання на неї.
+ * даємо пошук, а якщо в адресі схоже на код групи — пряме посилання на неї. Шлях додому один — «‹ Розклад».
  */
 export default function NotFoundPage() {
   const location = useLocation();
@@ -47,9 +47,6 @@ export default function NotFoundPage() {
         >
           Знайти розклад
         </Button>
-        <Link to="/" className={buttonClass({ variant: 'ghost' })}>
-          На головну
-        </Link>
       </div>
     </section>
   );

@@ -11,7 +11,8 @@ import { formatInstant } from '@/lib/date';
 
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-5 py-2 sm:py-8">
+    // як інші системні сторінки — від лівого краю вмісту, а не по центру
+    <div className="flex w-full max-w-md flex-col gap-5 py-2 sm:py-8">
       <PageHeader size="headline" title={title} />
       {children}
     </div>

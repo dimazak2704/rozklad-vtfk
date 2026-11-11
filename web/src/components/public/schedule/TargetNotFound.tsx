@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 import { Link } from 'react-router';
-import { BackLink, Button, buttonClass } from '@/components/ui';
+import { BackLink, Button } from '@/components/ui';
 import { useCommandStore } from '@/stores/commands';
 
 export interface TargetSuggestion {
@@ -19,7 +19,7 @@ interface TargetNotFoundProps {
   searchQuery?: string;
 }
 
-/** Невідома група / викладач / аудиторія: шлях назад, схожі варіанти й пошук замість глухого «не знайдено». */
+/** Невідома група / викладач / аудиторія: один шлях назад («‹ Розклад»), схожі варіанти й пошук замість глухого «не знайдено». */
 export function TargetNotFound({ title, description, suggestions = [], searchQuery = '' }: TargetNotFoundProps) {
   const openSearch = useCommandStore((state) => state.setOpen);
   return (
@@ -50,9 +50,6 @@ export function TargetNotFound({ title, description, suggestions = [], searchQue
         <Button variant="primary" iconStart={<Search aria-hidden="true" className="size-4" />} onClick={() => openSearch(true, searchQuery)}>
           Знайти розклад
         </Button>
-        <Link to="/" className={buttonClass({ variant: 'ghost' })}>
-          На головну
-        </Link>
       </div>
     </section>
   );
