@@ -3,7 +3,7 @@
  * і рахуємо їх у UTC, щоб перехід на літній час не зсував дні.
  */
 import type { IsoDate, IsoTime } from '@/api/types';
-import { capitalize, MONTHS_GENITIVE, WEEKDAY_ACCUSATIVE, WEEKDAY_GENITIVE, weekdayName, weekdayShort } from './labels';
+import { capitalize, MONTHS_GENITIVE, MONTHS_SHORT, WEEKDAY_ACCUSATIVE, WEEKDAY_GENITIVE, weekdayName, weekdayShort } from './labels';
 
 export const COLLEGE_TIME_ZONE = 'Europe/Kyiv';
 
@@ -138,6 +138,12 @@ export function minutesToTime(minutes: number): IsoTime {
 export function formatDayMonth(iso: IsoDate): string {
   const { month, day } = parseIsoDate(iso);
   return `${day}\u00a0${MONTHS_GENITIVE[month - 1] ?? ''}`;
+}
+
+/** «11 лист.» — для найвужчих місць, де повна назва місяця не вміщається. */
+export function formatDayMonthShort(iso: IsoDate): string {
+  const { month, day } = parseIsoDate(iso);
+  return `${day}\u00a0${MONTHS_SHORT[month - 1] ?? ''}`;
 }
 
 /** «19 жовтня 2026» */

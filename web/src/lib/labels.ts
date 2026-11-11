@@ -46,6 +46,9 @@ export const MONTHS_GENITIVE = [
   'грудня',
 ] as const;
 
+/** Скорочені назви місяців (родовий відмінок, як у CLDR для «uk»): «11 лист.». */
+export const MONTHS_SHORT = ['січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.'] as const;
+
 export const MONTHS_NOMINATIVE = [
   'січень',
   'лютий',

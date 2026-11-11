@@ -9,6 +9,7 @@ import { weekdayShort } from '@/lib/labels';
 import {
   addDays,
   formatDayMonth,
+  formatDayMonthShort,
   formatWeekdayDate,
   isoFromLocalDate,
   isoWeekday,
@@ -64,7 +65,10 @@ export function DateNav({
   const prevDisabled = min !== undefined && prev < min;
   const nextDisabled = max !== undefined && next > max;
   const relative = showRelative ? relativeDayLabel(value, today) : null;
-  const shortLabel = `${weekdayShort(isoWeekday(value)).toLocaleLowerCase('uk')}, ${formatDayMonth(value)}`;
+  const weekday = weekdayShort(isoWeekday(value)).toLocaleLowerCase('uk');
+  const shortLabel = `${weekday}, ${formatDayMonth(value)}`;
+  // найвужчі телефони: «ср, 11 лист.» — дата вміщається цілою і поруч зі станом звʼязку
+  const compactLabel = `${weekday}, ${formatDayMonthShort(value)}`;
   const isToday = value === today;
 
   const go = (date: IsoDate) => {
@@ -103,7 +107,8 @@ export function DateNav({
             {/* на телефоні — лише дата: саме її диспетчер має бачити завжди, «Сьогодні» підкаже кнопка поруч */}
             <span className="truncate font-[650]">
               {relative ? <span className="hidden sm:inline">{relative} · </span> : null}
-              <span className={cn(relative && 'sm:font-[450] sm:text-secondary')}>{shortLabel}</span>
+              <span className={cn('max-[399px]:hidden', relative && 'sm:font-[450] sm:text-secondary')}>{shortLabel}</span>
+              <span className="min-[400px]:hidden">{compactLabel}</span>
             </span>
           </Button>
         </PopoverTrigger>

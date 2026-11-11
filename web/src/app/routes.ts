@@ -76,6 +76,11 @@ export interface AppRoute {
   parent?: string;
   /** Лише в `npm run dev`. */
   devOnly?: boolean;
+  /**
+   * Сторінка адмінки читає робочу дату (`?date=`): лише тоді у верхній панелі є «Сьогодні | Завтра» і ‹ дата ›.
+   * На довідниках, налаштуваннях чи навантаженні дата нічого не змінює, тож її там немає.
+   */
+  usesWorkingDate?: boolean;
 }
 
 const TEACHER_ROLES: readonly Role[] = ['TEACHER', 'ADMIN'];
@@ -212,6 +217,7 @@ export const ROUTES: readonly AppRoute[] = [
   // ── Панель диспетчера ──
   {
     id: 'admin',
+    usesWorkingDate: true,
     path: '/admin',
     title: 'Панель диспетчера',
     description: 'Сьогодні й завтра: відсутності, непокриті пари, підтвердження, чернетка розпорядження.',
@@ -222,6 +228,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'admin-changes',
+    usesWorkingDate: true,
     parent: 'admin',
     path: '/admin/changes',
     title: 'Заміни',
@@ -233,6 +240,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'admin-orders',
+    usesWorkingDate: true,
     parent: 'admin',
     path: '/admin/orders',
     title: 'Розпорядження',
