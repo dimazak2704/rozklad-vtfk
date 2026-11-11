@@ -102,6 +102,14 @@ export function groupCodeVariants(raw: string): string[] {
   return [...out];
 }
 
+/**
+ * Повний код групи — курс, літери спеціальності й номер («4КІ1»). Неповний («4К», «4КІ») ще набирається,
+ * тож пропонувати відкрити його розклад напряму не можна: такої групи найчастіше немає.
+ */
+export function isFullGroupCode(code: string): boolean {
+  return /^\d[А-ЯІЇЄҐ]{1,3}\d$/u.test(code);
+}
+
 /** Нормалізує вільний текст для порівняння. */
 export function normalizeText(raw: string): string {
   const base = raw.normalize('NFC').toLocaleLowerCase('uk').replace(APOSTROPHES_RE, '').replace(/ё/g, 'е');

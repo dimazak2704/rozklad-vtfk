@@ -6,6 +6,7 @@ import {
   fromEnglishLayout,
   fuzzyFilter,
   groupCodeVariants,
+  isFullGroupCode,
   matchScore,
   normalizeText,
 } from './search';
@@ -34,6 +35,15 @@ describe('groupCodeVariants', () => {
   it('дає і візуальний, і фонетичний варіант для латиниці', () => {
     expect(groupCodeVariants('2ob')).toEqual(expect.arrayContaining(['2ОБ']));
     expect(groupCodeVariants('4ki1')).toEqual(['4КІ1']);
+  });
+});
+
+describe('isFullGroupCode', () => {
+  it('приймає лише код із курсом, літерами й номером', () => {
+    expect(isFullGroupCode('4КІ1')).toBe(true);
+    expect(isFullGroupCode('1ТК1')).toBe(true);
+    expect(isFullGroupCode('4К')).toBe(false);
+    expect(isFullGroupCode('4КІ')).toBe(false);
   });
 });
 

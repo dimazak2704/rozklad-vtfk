@@ -1,15 +1,16 @@
 import { Command } from 'cmdk';
-import { CornerDownLeft, DoorOpen, History, Monitor, Moon, Search, Sun, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { DoorOpen, History, Monitor, Moon, Search, Sun, UserRound, Users, type LucideIcon } from 'lucide-react';
 import { Dialog as RadixDialog } from 'radix-ui';
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { usePublicSearch } from '@/api/meta';
 import type { EntityType } from '@/api/types';
-import { ACTIVE_ROUTES, paths } from '@/app/routes';
+import { ACTIVE_ROUTES, paths, type AppRoute, type LayoutKind } from '@/app/routes';
 import { useCurrentUser } from '@/auth/useCurrentUser';
+import { routeForPath } from '@/hooks/useBackLink';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/cn';
-import { fuzzyFilter, groupCodeVariants } from '@/lib/search';
+import { fuzzyFilter, groupCodeVariants, isFullGroupCode } from '@/lib/search';
 import { useCommandStore } from '@/stores/commands';
 import { useFavoritesStore } from '@/stores/favorites';
 import { useThemeStore } from '@/stores/theme';
@@ -19,19 +20,38 @@ import { useReturnFocus } from '../ui/returnFocus';
 import { Spinner } from '../ui/Spinner';
 
 const ENTITY_ICON: Record<EntityType, LucideIcon> = { GROUP: Users, TEACHER: UserRound, ROOM: DoorOpen };
-const ENTITY_LABEL: Record<EntityType, string> = { GROUP: 'група', TEACHER: 'викладач', ROOM: 'аудиторія' };
+
+/** Розділ, у якому людина зараз: його сторінки в палітрі йдуть першими. */
+const LAYOUT_RANK: Record<LayoutKind, Record<LayoutKind, number>> = {
+  admin: { admin: 0, teacher: 1, public: 2, bare: 3 },
+  teacher: { teacher: 0, public: 1, admin: 2, bare: 3 },
+  public: { public: 0, teacher: 1, admin: 2, bare: 3 },
+  bare: { public: 0, teacher: 1, admin: 2, bare: 3 },
+};
+
+/** Підказка праворуч від сторінки іншого розділу: «Заміни · диспетчер» і «Заміни · публічна» не сплутати. */
+function pageHint(route: AppRoute, current: LayoutKind): string | undefined {
+  if (route.layout === current) return undefined;
+  if (route.layout === 'admin') return 'диспетчер';
+  if (route.layout === 'teacher') return 'кабінет';
+  return current === 'public' || current === 'bare' ? undefined : 'публічна';
+}
 
 function Item({
   value,
   onSelect,
   icon: Icon,
   children,
+  sublabel,
   hint,
 }: {
   value: string;
   onSelect: () => void;
   icon?: LucideIcon;
+  /** Головне (код групи, прізвище, назва сторінки): ніколи не обрізається. */
   children: ReactNode;
+  /** Уточнення приглушене; обрізається першим, а на телефоні переходить на другий рядок. */
+  sublabel?: ReactNode;
   hint?: ReactNode;
 }) {
   return (
@@ -44,7 +64,10 @@ function Item({
       )}
     >
       {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0 text-muted group-data-[selected=true]:text-accent" /> : null}
-      <span className="flex min-w-0 flex-1 items-baseline gap-2">{children}</span>
+      <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-2">
+        <span className="shrink-0">{children}</span>
+        {sublabel ? <span className="min-w-0 truncate text-caption text-muted">{sublabel}</span> : null}
+      </span>
       {hint ? <span className="shrink-0 text-caption text-muted">{hint}</span> : null}
     </Command.Item>
   );
@@ -90,6 +113,8 @@ export function CommandPalette() {
 
 function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose: () => void }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const layout: LayoutKind = routeForPath(pathname)?.layout ?? (pathname.startsWith('/admin') ? 'admin' : 'public');
   const { hasRole } = useCurrentUser();
   const [query, setQuery] = useState(initialQuery);
   const debounced = useDebouncedValue(query, 180);
@@ -112,17 +137,19 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
   const codes = useMemo(() => groupCodeVariants(trimmed), [trimmed]);
   const results = search.data ?? [];
   const resultCodes = new Set(results.filter((r) => r.type === 'GROUP').map((r) => r.label.toLocaleUpperCase('uk')));
-  const directCodes = codes.filter((code) => !resultCodes.has(code));
+  // «відкрити розклад групи» — лише для повного коду (4КІ1) або коли пошук на сервері впав: «4К» вів на «групи немає»
+  const directCodes = codes.filter((code) => !resultCodes.has(code) && (isFullGroupCode(code) || search.isError));
 
-  const pages = useMemo(
-    () =>
-      fuzzyFilter(
-        ACTIVE_ROUTES.filter((route) => route.nav && (!route.roles || hasRole(...route.roles))),
-        trimmed,
-        (route) => [route.title, route.nav?.label, ...(route.nav?.keywords ?? [])],
-      ).slice(0, trimmed ? 6 : 8),
-    [trimmed, hasRole],
-  );
+  const pages = useMemo(() => {
+    const available = ACTIVE_ROUTES.filter((route) => route.nav && (!route.roles || hasRole(...route.roles)));
+    const rank = LAYOUT_RANK[layout];
+    const ordered = [...available].sort((a, b) => rank[a.layout] - rank[b.layout] || (a.nav?.order ?? 0) - (b.nav?.order ?? 0));
+    if (trimmed) {
+      return fuzzyFilter(ordered, trimmed, (route) => [route.title, route.nav?.label, ...(route.nav?.keywords ?? [])]).slice(0, 6);
+    }
+    // без запиту — спершу розділ, у якому людина: у панелі диспетчера це всі її розділи, далі решта
+    return ordered.slice(0, layout === 'admin' ? 20 : 8);
+  }, [trimmed, hasRole, layout]);
   const actions = useMemo(
     () => fuzzyFilter(Object.values(commands), trimmed, (c) => [c.label, c.group, ...(c.keywords ?? [])]),
     [commands, trimmed],
@@ -180,11 +207,16 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
         {directCodes.length > 0 || results.length > 0 ? (
           <Command.Group heading="Розклад" className={GROUP_HEADING}>
             {directCodes.map((code) => (
-              <Item key={`code-${code}`} value={`code-${code}`} icon={Users} onSelect={() => go(paths.group(code))} hint="група">
+              <Item
+                key={`code-${code}`}
+                value={`code-${code}`}
+                icon={Users}
+                onSelect={() => go(paths.group(code))}
+                sublabel="відкрити розклад групи"
+              >
                 <Plate size="md" tone="accent">
                   {code}
                 </Plate>
-                <span className="truncate text-caption text-muted">відкрити розклад групи</span>
               </Item>
             ))}
             {results.map((result) => (
@@ -193,10 +225,9 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
                 value={`${result.type}-${result.id}`}
                 icon={ENTITY_ICON[result.type]}
                 onSelect={() => go(result.url)}
-                hint={ENTITY_LABEL[result.type]}
+                sublabel={result.sublabel}
               >
-                <span className="truncate font-semibold">{result.label}</span>
-                {result.sublabel ? <span className="truncate text-caption text-muted">{result.sublabel}</span> : null}
+                <span className="font-semibold">{result.label}</span>
               </Item>
             ))}
           </Command.Group>
@@ -216,9 +247,8 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
                 value={`recent-${target.type}-${target.id}`}
                 icon={History}
                 onSelect={() => go(target.url)}
-                hint={ENTITY_LABEL[target.type]}
               >
-                <span className="truncate">{target.label}</span>
+                {target.label}
               </Item>
             ))}
           </Command.Group>
@@ -234,7 +264,7 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
                 onSelect={() => run(command.perform)}
                 hint={command.shortcut ? <KbdCombo keys={command.shortcut} /> : command.hint}
               >
-                <span className="truncate">{command.label}</span>
+                {command.label}
               </Item>
             ))}
           </Command.Group>
@@ -248,9 +278,9 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
                 value={`page-${route.id}`}
                 icon={route.nav?.icon}
                 onSelect={() => go(route.path)}
-                hint={route.layout === 'admin' ? 'диспетчер' : route.layout === 'teacher' ? 'кабінет' : undefined}
+                hint={pageHint(route, layout)}
               >
-                <span className="truncate">{route.title}</span>
+                {route.title}
               </Item>
             ))}
           </Command.Group>
@@ -266,18 +296,6 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
           </Command.Group>
         ) : null}
       </Command.List>
-      <div className="hidden items-center gap-4 border-t border-separator bg-sunken px-4 py-2 text-caption text-muted sm:flex">
-        <span className="flex items-center gap-1.5">
-          <KbdCombo keys="arrowup" />
-          <KbdCombo keys="arrowdown" /> вибрати
-        </span>
-        <span className="flex items-center gap-1.5">
-          <CornerDownLeft aria-hidden="true" className="size-3.5" /> відкрити
-        </span>
-        <span className="flex items-center gap-1.5">
-          <KbdCombo keys="esc" /> закрити
-        </span>
-      </div>
     </>
   );
 }
