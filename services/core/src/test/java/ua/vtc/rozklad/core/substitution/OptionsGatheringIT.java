@@ -147,6 +147,8 @@ class OptionsGatheringIT {
         fixture.load(semester, ki11, sport, 40, ostapiuk);
         fixture.load(semester, ki11, chemistry, 40, vernyhora);
         fixture.splitLoad(semester, ki11, english, 40, krysak, mozharovska);
+        // сценарії з проханням і відмовою (CONFIRM); відмову в типовому NOTIFY перевіряє окремий тест
+        fixture.setting("substitution.approvalMode", "CONFIRM");
     }
 
     @AfterEach
@@ -187,6 +189,25 @@ class OptionsGatheringIT {
                 .satisfies(declined -> assertThat(declined.teacher().id()).isEqualTo(vernyhora.getId()));
         assertThat(result.past()).isTrue();
         assertThat(result.options()).noneMatch(OptionDto::recommended);
+    }
+
+    /** NOTIFY (the default): «Не можу» on an assigned cover also takes the teacher out of the pool (H6). */
+    @Test
+    void aTeacherWhoSaidHeCannotInNotifyModeIsListedAsDeclined() {
+        fixture.setting("substitution.approvalMode", "NOTIFY");
+        Lesson target = fixture.lesson(semester, MONDAY, 2, ki11, 0, math, badun, room12);
+        ChangeDto assigned = changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE, MONDAY, 2,
+                null, ki11.getId(), null, target.getId(), chemistry.getId(), vernyhora.getId(), null, null,
+                ReasonCode.MUTUAL, null, null), "admin");
+        assertThat(assigned.status()).isEqualTo(ChangeStatus.CONFIRMED);
+
+        replies.replyFromBot(assigned.id(), vernyhora.getId(), ConfirmationDecision.DECLINE, "Не можу");
+
+        OptionDto.LessonOptions result = lessonOptions.of(target.getId());
+        assertThat(result.declined()).singleElement()
+                .satisfies(declined -> assertThat(declined.teacher().id()).isEqualTo(vernyhora.getId()));
+        assertThat(result.options()).noneMatch(option -> option.teacher() != null
+                && option.teacher().id().equals(vernyhora.getId()));
     }
 
     /** A teacher whose own lesson an open decision takes away is free for a new one (also when creating it). */

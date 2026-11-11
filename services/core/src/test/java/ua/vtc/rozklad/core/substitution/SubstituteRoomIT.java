@@ -12,16 +12,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeKind;
+import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
+import ua.vtc.rozklad.core.substitution.internal.options.LessonOptions;
+import ua.vtc.rozklad.core.substitution.internal.options.OptionDto;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
@@ -29,7 +33,8 @@ import ua.vtc.rozklad.core.timetable.TimetableVersion;
 /**
  * Round 7: the room belongs to the teacher. A cover of another discipline (REPLACE_DISCIPLINE)
  * without a room goes to the substitute's usual room for that discipline in the group (the
- * published weekly timetable) when it is free; otherwise the lesson keeps its room.
+ * published weekly timetable) when it is free; otherwise the lesson keeps its room. The options
+ * suggest the same room ({@code suggestedRoom}), so what the dispatcher sees is what the change gets.
  */
 @CoreIntegrationTest
 class SubstituteRoomIT {
@@ -38,6 +43,9 @@ class SubstituteRoomIT {
 
     @Autowired
     private ChangeCommands commands;
+
+    @Autowired
+    private LessonOptions lessonOptions;
 
     @Autowired
     private TransactionTemplate transaction;
@@ -59,6 +67,7 @@ class SubstituteRoomIT {
     private Room room6;
     private Room room304;
     private Lesson stp;
+    private LoadItem kmLoad;
 
     @BeforeEach
     void schedule() {
@@ -81,6 +90,10 @@ class SubstituteRoomIT {
         fixture.templateLesson(published, 3, 1, ki41, km, nepyivoda, room304);
         fixture.templateLesson(published, 2, 2, ki42, km, nepyivoda, room12);
         stp = fixture.lesson(semester, MONDAY, 2, ki41, 0, stpDiscipline, krentsin, room6);
+        // пул групи 4КІ1: інші її дисципліни зі своїми викладачами
+        fixture.load(semester, ki41, stpDiscipline, 40, krentsin);
+        kmLoad = fixture.load(semester, ki41, km, 40, nepyivoda);
+        fixture.load(semester, ki41, opcz, 40, hanza);
         fixture.setting("substitution.approvalMode", "AUTO");
     }
 
@@ -118,6 +131,53 @@ class SubstituteRoomIT {
         ChangeDto change = cover(opcz, hanza, null);
 
         assertThat(change.replacement().room()).isNull();
+    }
+
+    @Test
+    void optionsSuggestTheRoomTheCoverGets() {
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("304");
+        assertThat(cover(km, nepyivoda, null).replacement().room().name()).isEqualTo("304");
+    }
+
+    @Test
+    void optionsSuggestTheLessonsRoomWhenTheSubstitutesRoomIsBusy() {
+        fixture.lesson(semester, MONDAY, 2, ki42, 0, opcz, hanza, room304);
+
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("6");
+        assertThat(cover(km, nepyivoda, null).replacement().room()).isNull();
+    }
+
+    @Test
+    void roomThatDoesNotSuitTheLessonIsNotSuggested() {
+        // аудиторія 304 замала для групи — create її не візьме, тож і варіант її не пропонує
+        jdbc.update("UPDATE room SET capacity = 10 WHERE id = ?", room304.getId());
+        jdbc.update("UPDATE student_group SET size = 25 WHERE id = ?", ki41.getId());
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("6");
+        assertThat(cover(km, nepyivoda, null).replacement().room()).isNull();
+    }
+
+    @Test
+    void roomOfAnotherTypeThanTheDisciplineNeedsIsNotSuggested() {
+        jdbc.update("UPDATE load_item SET required_room_type = ? WHERE id = ?", RoomType.LAB.name(), kmLoad.getId());
+
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("6");
+    }
+
+    @Test
+    void roomTakenOutOfUseIsNotSuggested() {
+        jdbc.update("UPDATE room SET active = false WHERE id = ?", room304.getId());
+
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("6");
+        assertThat(cover(km, nepyivoda, null).replacement().room()).isNull();
+    }
+
+    private String suggestedRoom(Teacher teacher) {
+        OptionDto option = lessonOptions.of(stp.getId()).options().stream()
+                .filter(candidate -> candidate.kind() == ChangeKind.REPLACE_DISCIPLINE
+                        && candidate.teacher().id().equals(teacher.getId()))
+                .findFirst()
+                .orElseThrow();
+        return option.suggestedRoom().name();
     }
 
     private ChangeDto cover(Discipline discipline, Teacher teacher, UUID roomId) {

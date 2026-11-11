@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -27,6 +28,7 @@ import ua.vtc.rozklad.core.accounting.AccountingQueries;
 import ua.vtc.rozklad.core.accounting.DisciplineProgress;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
+import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
@@ -50,12 +52,15 @@ import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
 import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.LessonStatus;
+import ua.vtc.rozklad.core.timetable.TeacherRoomQueries;
+import ua.vtc.rozklad.core.timetable.TeacherRooms;
 
 /**
  * Reads everything the ranking needs for the lessons of one date with a fixed number of queries
  * (DOMAIN §7): the day's lessons, open changes, absences, preferences, declines, the cover ledger of
- * six weeks and the teaching load once for the day; load items, accounting and usual rooms once per
- * group. The per-lesson endpoint is {@code forDay} with one lesson. Callers run it in a read-only
+ * six weeks, the teaching load, the usual rooms of the pool ({@link TeacherRoomQueries}, the same
+ * source as {@code SubstituteRooms} on create) and the groups once for the day; load items and
+ * accounting once per group. The per-lesson endpoint is {@code forDay} with one lesson. Callers run it in a read-only
  * transaction.
  *
  * <p>A teacher is busy at a pair with a SCHEDULED lesson or an open assignment there, except a
@@ -81,12 +86,13 @@ class OptionsGatherer {
     private final LessonDecisions decisions;
     private final CatalogLookup catalog;
     private final OptionsDeclines declines;
+    private final TeacherRoomQueries teacherRooms;
     private final EntityManager entityManager;
     private final Clock clock;
 
     OptionsGatherer(LessonRepository lessons, LoadItemRepository loadItems, AbsenceRepository absences,
                     ChangeRepository changes, TeacherPreferenceRepository preferences, AccountingQueries accounting,
-                    LessonDecisions decisions, CatalogLookup catalog, OptionsDeclines declines,
+                    LessonDecisions decisions, CatalogLookup catalog, OptionsDeclines declines, TeacherRoomQueries teacherRooms,
                     EntityManager entityManager, Clock clock) {
         this.lessons = lessons;
         this.loadItems = loadItems;
@@ -97,12 +103,9 @@ class OptionsGatherer {
         this.decisions = decisions;
         this.catalog = catalog;
         this.declines = declines;
+        this.teacherRooms = teacherRooms;
         this.entityManager = entityManager;
         this.clock = clock;
-    }
-
-    /** Usual room of a teacher for a discipline in a group (number of template lessons there). */
-    record RoomUse(UUID groupId, UUID teacherId, UUID disciplineId, UUID roomId, long lessons) {
     }
 
     /**
@@ -133,22 +136,23 @@ class OptionsGatherer {
                 .collect(Collectors.groupingBy(Lesson::getGroupId));
         Map<UUID, Change> decided = decisions.of(dayByGroup.values().stream().flatMap(List::stream).toList());
         Map<UUID, List<LoadItem>> itemsByGroup = new HashMap<>();
-        Map<UUID, Map<UUID, DisciplineProgress>> progressByGroup = new HashMap<>();
-        for (UUID groupId : groupIds) {
-            itemsByGroup.put(groupId, loadItems.findAllBySemesterIdAndGroupId(semesterId, groupId));
-            progressByGroup.put(groupId, accounting.progressOfGroup(semesterId, groupId));
-        }
-        Map<String, RoomUse> usualRooms = usualRooms(semesterId, groupIds);
-
+        groupIds.forEach(groupId -> itemsByGroup.put(groupId, new ArrayList<>()));
+        loadItems.findAllBySemesterIdAndGroupIdIn(semesterId, groupIds)
+                .forEach(item -> itemsByGroup.get(item.getGroupId()).add(item));
+        Map<UUID, Map<UUID, DisciplineProgress>> progressByGroup = accounting.progressOfGroups(semesterId, groupIds);
         Set<UUID> pool = itemsByGroup.values().stream().flatMap(List::stream)
                 .flatMap(item -> item.getTeachers().stream().map(teacher -> teacher.getTeacherId()))
                 .collect(Collectors.toSet());
+        // the room belongs to the teacher (DOMAIN §5): the same usual room POST /changes picks (SubstituteRooms)
+        TeacherRooms usualRooms = teacherRooms.published(semesterId, pool);
+        Map<UUID, StudentGroup> groups = catalog.groups(groupIds);
         Map<UUID, BigDecimal> weekly = weeklyHours(semesterId, pool);
         CoverLedger ledger = coverLedger(date, open);
 
         Set<UUID> roomIds = new HashSet<>();
         targets.forEach(lesson -> roomIds.add(lesson.getRoomId()));
-        usualRooms.values().forEach(use -> roomIds.add(use.roomId()));
+        itemsByGroup.forEach((groupId, items) -> items.forEach(item -> item.getTeachers().forEach(teacher ->
+                usualRooms.forGroup(teacher.getTeacherId(), item.getDisciplineId(), groupId).ifPresent(roomIds::add))));
         dayByGroup.values().stream().flatMap(List::stream).forEach(lesson -> roomIds.add(lesson.getRoomId()));
         Map<UUID, Room> rooms = catalog.rooms(roomIds);
         Set<UUID> teacherIds = new HashSet<>(pool);
@@ -184,7 +188,8 @@ class OptionsGatherer {
                     .map(Decline::teacherId).collect(Collectors.toSet());
             inputs.put(target.getId(), new RankingInput(described,
                     groupLessons(groupDay, decided, freed, disciplines, teachers),
-                    pool(target, items, progress, usualRooms, day, open, freed, disciplines, teachers),
+                    pool(target, items, progress, usualRooms, rooms, groups.get(target.getGroupId()), day, open,
+                            freed, disciplines, teachers),
                     teacherPairs(day, open, freed),
                     busyByPair(target, day, open, freed, dayById),
                     absentByPair(absent, date),
@@ -230,36 +235,6 @@ class OptionsGatherer {
                 .getResultStream()
                 .collect(Collectors.toMap(row -> (UUID) row[0],
                         row -> row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1]));
-    }
-
-    /** The room each teacher has a discipline in most often with each group (template lessons of the semester). */
-    private Map<String, RoomUse> usualRooms(UUID semesterId, Collection<UUID> groupIds) {
-        List<RoomUse> uses = entityManager.createQuery("""
-                        select l.groupId, l.teacherId, l.disciplineId, l.roomId, count(l)
-                        from Lesson l
-                        where l.semesterId = :semesterId and l.groupId in :groupIds
-                          and l.origin = :origin and l.roomId is not null and l.teacherId is not null
-                        group by l.groupId, l.teacherId, l.disciplineId, l.roomId
-                        """, Object[].class)
-                .setParameter("semesterId", semesterId)
-                .setParameter("groupIds", groupIds)
-                .setParameter("origin", LessonOrigin.TEMPLATE)
-                .getResultStream()
-                .map(row -> new RoomUse((UUID) row[0], (UUID) row[1], (UUID) row[2], (UUID) row[3],
-                        ((Number) row[4]).longValue()))
-                .toList();
-        Map<String, RoomUse> best = new HashMap<>();
-        for (RoomUse use : uses) {
-            best.merge(roomKey(use.groupId(), use.teacherId(), use.disciplineId()), use,
-                    (first, second) -> first.lessons() != second.lessons()
-                            ? (first.lessons() > second.lessons() ? first : second)
-                            : (first.roomId().compareTo(second.roomId()) <= 0 ? first : second));
-        }
-        return best;
-    }
-
-    private static String roomKey(UUID groupId, UUID teacherId, UUID disciplineId) {
-        return groupId + "|" + teacherId + "|" + disciplineId;
     }
 
     /**
@@ -330,10 +305,12 @@ class OptionsGatherer {
 
     /**
      * The pool (H2): whole group ↔ unsplit items, subgroup k ↔ split items with the teacher of k;
-     * one entry per discipline and teacher, with the usual room when it is free at the pair.
+     * one entry per discipline and teacher, with his usual room ({@link TeacherRooms#forGroup}) when it
+     * suits the lesson and is free at the pair.
      */
     private static List<GroupDiscipline> pool(Lesson target, List<LoadItem> items,
-                                              Map<UUID, DisciplineProgress> progress, Map<String, RoomUse> usualRooms,
+                                              Map<UUID, DisciplineProgress> progress, TeacherRooms usualRooms,
+                                              Map<UUID, Room> rooms, StudentGroup group,
                                               List<Lesson> day, List<Change> open, Set<UUID> freed,
                                               Map<UUID, Discipline> disciplines, Map<UUID, Teacher> teachers) {
         int cohort = target.getSubgroupNumber();
@@ -350,14 +327,31 @@ class OptionsGatherer {
             if (result.containsKey(key)) {
                 continue;
             }
-            RoomUse usual = usualRooms.get(roomKey(target.getGroupId(), teacherId, item.getDisciplineId()));
-            UUID ownRoom = usual != null && roomFree(usual.roomId(), target, day, open, freed) ? usual.roomId() : null;
+            UUID ownRoom = usualRooms.forGroup(teacherId, item.getDisciplineId(), target.getGroupId())
+                    .filter(roomId -> suits(rooms.get(roomId), item, target, group))
+                    .filter(roomId -> roomFree(roomId, target, day, open, freed))
+                    .orElse(null);
             result.put(key, new GroupDiscipline(item.getDisciplineId(), shortName(disciplines, item.getDisciplineId()),
                     teacherId, teacherName(teachers, teacherId),
                     progressOf(progress.get(item.getDisciplineId()), items, item.getDisciplineId(), cohort),
                     item.getRequiredRoomType(), ownRoom));
         }
         return List.copyOf(result.values());
+    }
+
+    /**
+     * The room can host the cover: in use, of the room type the discipline needs, big enough for a
+     * whole-group lesson (the same checks {@code DatedSlotChecker.roomConflicts} runs on create).
+     */
+    private static boolean suits(Room room, LoadItem item, Lesson target, StudentGroup group) {
+        if (room == null || !room.isActive()) {
+            return false;
+        }
+        if (item.getRequiredRoomType() != null && item.getRequiredRoomType() != room.getType()) {
+            return false;
+        }
+        return target.getSubgroupNumber() != 0 || group == null || room.getCapacity() == null
+                || group.getSize() == null || room.getCapacity() >= group.getSize();
     }
 
     /** No exclusive lesson (other than a freed one or the target) and no open change uses the room at the pair. */
