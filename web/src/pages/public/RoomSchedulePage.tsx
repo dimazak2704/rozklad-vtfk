@@ -3,13 +3,12 @@ import { isApiError } from '@/api/errors';
 import { useBellProfiles, usePublicRooms, usePublicSchedule } from '@/api/public';
 import { paths } from '@/app/routes';
 import { RoomNowStatus } from '@/components/public/schedule/RoomOccupancy';
-import { ScheduleHeaderSkeleton } from '@/components/public/schedule/ScheduleHeader';
+import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { roomDetails } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
-import { ErrorState } from '@/components/ui';
 import { roomLabel } from '@/lib/schedule';
 
 /** Розклад аудиторії /r/:id і її зайнятість за тиждень. */
@@ -34,12 +33,7 @@ export default function RoomSchedulePage() {
   if (!name) {
     if (query.isError) {
       return (
-        <ErrorState
-          error={query.error}
-          title="Розклад аудиторії зараз не відкривається"
-          onRetry={() => void query.refetch()}
-          retrying={query.isFetching}
-        />
+        <ScheduleLoadError heading="Розклад аудиторії" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );
     }
     return (

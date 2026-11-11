@@ -4,7 +4,9 @@ import { isApiError } from './errors';
 /**
  * Політика кешу:
  * - розклад змінюється рідко, тож 30 с «свіжості» достатньо (SSE інвалідує раніше, коли треба);
- * - повтор лише для мережевих збоїв і 5xx/429, максимум двічі; 4xx одразу показуємо;
+ * - повтор лише для мережевих збоїв і 5xx/429: один раз для відповіді сервера, двічі для обриву мережі,
+ *   з короткими паузами (0,7 і 1,4 с) — людина бачить помилку з «Спробувати ще раз» за 2–3 секунди,
+ *   а не дивиться на скелет; 4xx одразу показуємо;
  * - мутації не повторюються автоматично.
  */
 export function createQueryClient(): QueryClient {
@@ -24,9 +26,10 @@ export function createQueryClient(): QueryClient {
         gcTime: 10 * 60_000,
         retry: (failureCount, error) => {
           if (isApiError(error) && !error.isRetryable) return false;
-          return failureCount < 2;
+          const network = !isApiError(error) || error.kind === 'network' || error.kind === 'timeout';
+          return failureCount < (network ? 2 : 1);
         },
-        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+        retryDelay: (attempt) => Math.min(700 * 2 ** attempt, 2000),
         refetchOnWindowFocus: true,
       },
       mutations: {

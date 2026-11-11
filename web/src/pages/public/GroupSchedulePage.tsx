@@ -3,13 +3,12 @@ import { Navigate, useLocation, useParams } from 'react-router';
 import { usePublicGroups, usePublicSchedule } from '@/api/public';
 import type { PublicGroupDto } from '@/api/types';
 import { paths } from '@/app/routes';
-import { ScheduleHeaderSkeleton } from '@/components/public/schedule/ScheduleHeader';
+import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { subgroupsIn } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
-import { ErrorState } from '@/components/ui';
 import { canonicalGroupCode, fuzzyFilter } from '@/lib/search';
 
 function safeDecode(value: string): string {
@@ -71,12 +70,7 @@ export default function GroupSchedulePage() {
   }
   if (groups.isError) {
     return (
-      <ErrorState
-        error={groups.error}
-        title={`Розклад ${code} зараз не відкривається`}
-        onRetry={() => void groups.refetch()}
-        retrying={groups.isFetching}
-      />
+      <ScheduleLoadError heading={code} display error={groups.error} onRetry={() => void groups.refetch()} retrying={groups.isFetching} />
     );
   }
 

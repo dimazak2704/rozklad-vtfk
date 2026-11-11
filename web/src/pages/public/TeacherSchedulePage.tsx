@@ -2,12 +2,11 @@ import { useParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { usePublicSchedule, usePublicTeachers } from '@/api/public';
 import { paths } from '@/app/routes';
-import { ScheduleHeaderSkeleton } from '@/components/public/schedule/ScheduleHeader';
+import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
-import { ErrorState } from '@/components/ui';
 
 /** Розклад викладача /t/:id — публічні короткі імена (UI.md §1). */
 export default function TeacherSchedulePage() {
@@ -32,12 +31,7 @@ export default function TeacherSchedulePage() {
   if (!label) {
     if (query.isError) {
       return (
-        <ErrorState
-          error={query.error}
-          title="Розклад викладача зараз не відкривається"
-          onRetry={() => void query.refetch()}
-          retrying={query.isFetching}
-        />
+        <ScheduleLoadError heading="Розклад викладача" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );
     }
     return (
