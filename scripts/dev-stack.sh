@@ -168,9 +168,10 @@ API (gateway)   http://localhost:8080   e.g. /api/public/meta, /api/public/sched
 core            http://localhost:8081/swagger-ui.html      scheduler :8082  importer :8083  notification :8084
 Site            http://localhost:8088
 Sign-in         http://localhost:8088/auth/login   (service auth; host-run services: http://localhost:8085/auth)
-Keycloak        http://localhost:8180   (admin console: admin / admin, realm rozklad; the SPA still signs in here)
+Token (scripts) python scripts/rozklad_auth.py token --user admin
+Keycloak        http://localhost:8180   (no longer used for sign-in; removed soon)
 RabbitMQ UI     http://localhost:15672  (rozklad / rozklad)    PostgreSQL localhost:5433 (postgres / postgres)
-Demo users      infra/dev/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER; same in Keycloak)
+Demo users      infra/dev/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER)
 EOF
 }
 

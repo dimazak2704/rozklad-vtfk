@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
- * Calls core's import endpoints with the {@code rozklad-importer} service-account token (realm role
+ * Calls core's import endpoints with the {@code rozklad-importer} service-account token (role
  * SERVICE, allowed on {@code /api/admin/import/**}). Each call carries {@code Idempotency-Key}
  * {@code import-job:<id>:<step>} so core may deduplicate a retried step; the importer itself never
  * repeats a step that already succeeded.

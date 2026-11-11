@@ -25,7 +25,7 @@ final class UpstreamCalls {
         } catch (ResourceAccessException e) {
             throw new UpstreamUnavailableException(service, operation + ": " + e.getMessage(), e);
         } catch (OAuth2AuthorizationException e) {
-            // не вдалося отримати токен сервісного акаунта (Keycloak недоступний або невірний секрет)
+            // не вдалося отримати токен сервісного акаунта (сервіс входу auth недоступний або невірний секрет)
             throw new UpstreamUnavailableException(service, operation + ": no service token ("
                     + e.getError().getErrorCode() + ")", e);
         } catch (RestClientException e) {

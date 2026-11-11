@@ -26,7 +26,7 @@ public class RestCoreClient implements CoreClient {
 
     private static final String CORE = "core";
 
-    /** Public API and token relay: without the service token (works even when Keycloak is down). */
+    /** Public API and token relay: without the service token (works even when the sign-in service auth is down). */
     private final RestClient publicClient;
     /** Internal API: client-credentials token of rozklad-notification. */
     private final RestClient serviceClient;

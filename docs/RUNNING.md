@@ -11,13 +11,14 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 | postgres 18 | 5433 | — | databases `core`, `scheduler`, `importer`, `notification`, `keycloak` (`infra/postgres/init.sql`) |
 | rabbitmq 4.4 | 5672, UI 15672 | — | `rozklad` / `rozklad` |
 | redis 8 | 6379 | — | |
-| keycloak 26.8 | 8180 | — | realm `rozklad` imported from `infra/keycloak/rozklad-realm.json` on the first start |
+| keycloak 26.8 | 8180 | — | no longer issues tokens (the services and the SPA use `auth`); removed soon |
+| auth | 8085 (management 8086 in the container) | 256 / 512 MB | sign-in service (OIDC issuer `http://localhost:8088/auth`), database `auth` |
 | core | 8081 | heap 512 MB, limit 900 MB | domain, SSE `/api/events/stream`, Swagger `/swagger-ui.html` |
 | scheduler | 8082 | 512 / 900 MB | Timefold |
 | importer | 8083 | 384 / 900 MB | LibreOffice in the image, AI with `ANTHROPIC_API_KEY` |
 | notification | 8084 | 384 / 900 MB | Telegram bot, documents (LibreOffice) |
 | gateway | **8080** | 256 / 512 MB | the only entry point for clients: `http://localhost:8080/api/...` |
-| web (optional) | 8088 | — | nginx with the SPA; for development use `cd web && npm run dev` (5180) |
+| web | 8088 | — | nginx with the SPA, `/api` → gateway, `/auth` → auth; every sign-in goes through it (also from `npm run dev` on 5180) |
 
 Heaps are set with `JAVA_TOOL_OPTIONS=-Xmx…` (wins over `-XX:MaxRAMPercentage=75` of the images) and
 can be changed with `CORE_HEAP`, `CORE_MEM_LIMIT`, … in the shell or `.env`. The whole stack takes about
@@ -60,8 +61,9 @@ rejects admin REST calls without it; realms imported before 08.11.2026 lack it).
 
 ## 4. Demo users (test credentials)
 
-Defined in `infra/keycloak/rozklad-realm.json`; the values the scripts use are in
-`infra/keycloak/demo-users.env`. Development only — the server uses other passwords (`docs/DEPLOY.md` §9).
+The sign-in service creates them on start (`AUTH_DEMO_SEED=true`, dev compose only) with the passwords of
+`infra/dev/demo-users.env`, which the scripts and e2e-real read too. Development only — the server uses other
+passwords (`docs/DEPLOY.md` §9). Sign in at `http://localhost:8088/login` (the SPA sends you to `/auth/login`).
 
 | Username | Role | Linked teacher |
 |---|---|---|
@@ -69,15 +71,17 @@ Defined in `infra/keycloak/rozklad-realm.json`; the values the scripts use are i
 | `krentsin` | TEACHER | Кренцін (СТП) |
 | `nepyivoda` | TEACHER | Непийвода (НДЕКС, КБ) |
 
-Token for scripts (public client `rozklad-dev-cli`, password grant):
+Token for scripts and curl. There is no password grant: `scripts/rozklad_auth.py` signs in through the real
+sign-in page over HTTP with the public client `rozklad-cli` (code + PKCE, loopback redirect; the client exists
+only with `AUTH_CLI_ENABLED=true`, i.e. in development). The token lives 15 minutes and has no refresh token:
 
 ```bash
-source <(grep -E '^(ADMIN|TEACHER)_' infra/keycloak/demo-users.env)
-TOKEN=$(curl -s -d client_id=rozklad-dev-cli -d grant_type=password -d "username=$ADMIN_USERNAME" \
-  -d "password=$ADMIN_PASSWORD" http://localhost:8180/realms/rozklad/protocol/openid-connect/token \
-  | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+TOKEN=$(python scripts/rozklad_auth.py token --user admin)      # or krentsin, nepyivoda
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/me
 ```
+
+`AUTH_URL=http://127.0.0.1:8085/auth` reaches the service directly when the web container is not running. Ten
+wrong passwords in a row lock a username for a while (`Забагато спроб…`); a successful sign-in resets the count.
 
 ## 5. What the seed creates (`scripts/seed_demo.py`)
 
@@ -136,9 +140,20 @@ for real imports.
 ### The SPA against the stack (`web/e2e-real`)
 
 An opt-in Playwright suite (not part of `npm run e2e`, which uses the mock API) drives the SPA through the
-gateway with real Keycloak logins of the demo users. It starts its own Vite dev server on 5180 without mocks
-(the only dev port the Keycloak client `rozklad-web` accepts); `REAL_BASE_URL=http://localhost:8088` runs it
-against the nginx container instead (`up --web`), `REAL_REUSE_SERVER=1` reuses a dev server already on 5180.
+gateway with real sign-ins of the demo users on the page of the sign-in service. It starts its own Vite dev
+server on 5180 without mocks (its issuer is `http://localhost:8088/auth`, `web/.env.development`);
+`REAL_BASE_URL=http://localhost:8088` runs it against the nginx container instead, `REAL_REUSE_SERVER=1` reuses a
+dev server already on 5180. API calls of the tests take tokens the same way as `scripts/rozklad_auth.py`
+(`e2e-real/support/tokens.ts`).
+
+`auth.spec.ts` covers sign-in with `returnTo`, sign-out, the wrong-password and lockout messages. The silent renew
+test (a hidden iframe with `prompt=none`, no refresh token) waits for a real renewal, so it needs a short token:
+
+```bash
+AUTH_ACCESS_TOKEN_TTL=2m docker compose -f infra/docker-compose.yml --profile app up -d --no-build auth
+cd web && REAL_SILENT_RENEW=1 npx playwright test -c playwright.real.config.ts auth
+# afterwards: scripts/dev-stack.sh up --no-build (back to 15 minutes)
+```
 
 ```bash
 cd web
@@ -162,8 +177,10 @@ starts the container again and waits until it is healthy (about a minute).
 
 * A service stays `starting`: `scripts/dev-stack.sh logs <service>`; the JSON lines have `log.level` and
   `message`.
-* 503 «Сервіс входу недоступний» on invites or account links: the scope `kc-admin-api` is missing — run
-  `scripts/dev-stack.sh up --no-build` (it adds it) or `infra/deploy/scripts/keycloak-sync.sh` on the server.
+* 503 «Сервіс входу недоступний» on invites or account links: core cannot reach `auth`
+  (`scripts/dev-stack.sh logs auth`; core needs `CORE_AUTH_CLIENT_SECRET` equal on both sides).
+* 401 on every API call right after `auth` restarted: in development the signing key lives in memory, so tokens
+  issued before the restart are invalid — sign in again. The services fetch the new key by its new `kid` by themselves.
 * The importer reports «Не вдалося отримати каталог із сервера розкладу»: core was down during parsing; save mappings
   (`PUT /api/import/jobs/{id}/mappings` with `{"mappings": []}`) to match again.
 * `GET /api/documents/orders/{id}.pdf` is 404 for a moment after publication: notification gets the order

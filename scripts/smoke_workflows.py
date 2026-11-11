@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercises the main workflows against the running stack with real Keycloak tokens (docs/RUNNING.md).
+"""Exercises the main workflows against the running stack with real tokens of the sign-in service auth (docs/RUNNING.md).
 
 Run after `scripts/dev-stack.sh seed`. It CREATES data (an absence, changes and a published order on
 SMOKE_DATE, a generated draft version, optionally load items from the curriculum), so for a clean demo

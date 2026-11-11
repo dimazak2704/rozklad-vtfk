@@ -41,9 +41,12 @@ class SigningKeyLoaderTest {
     @Test
     void withoutAFileAnHttpIssuerGetsAnInMemoryKeyAndHttpsFails() {
         RSAKey generated = SigningKeyLoader.active(new SigningKey("", "dev", null, null), false);
+        RSAKey nextStart = SigningKeyLoader.active(new SigningKey("", "dev", null, null), false);
 
         assertThat(generated.isPrivate()).isTrue();
-        assertThat(generated.getKeyID()).isEqualTo("dev");
+        // новий ключ на кожен старт має новий kid: сервіси з кешованим JWKS побачать невідомий kid і перечитають
+        assertThat(generated.getKeyID()).matches("dev-[0-9a-f]{8}");
+        assertThat(nextStart.getKeyID()).isNotEqualTo(generated.getKeyID());
         assertThatThrownBy(() -> SigningKeyLoader.active(new SigningKey(null, "k", null, null), true))
                 .hasMessageContaining("AUTH_SIGNING_KEY_FILE");
     }

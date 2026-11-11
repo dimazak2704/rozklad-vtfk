@@ -18,6 +18,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
@@ -26,8 +27,10 @@ import ua.vtc.rozklad.auth.config.AuthServerProperties;
 /**
  * Loads the token signing key (D7): the active RSA private key from a PKCS#8 PEM file and, during a
  * rotation, the previous public key (X.509 {@code PUBLIC KEY} PEM). Without a file and with an http
- * issuer a fresh in-memory key is generated (development); {@code ProdGuard} refuses that with https.
- * The key material is never logged.
+ * issuer a fresh in-memory key is generated (development) with a {@code kid} unique to this start, so
+ * resource servers that cached the previous key fetch the JWKS again instead of failing the signature
+ * check under the old {@code kid}; {@code ProdGuard} refuses that with https. The key material is never
+ * logged.
  */
 public final class SigningKeyLoader {
 
@@ -43,9 +46,10 @@ public final class SigningKeyLoader {
             if (secureIssuer) {
                 throw new IllegalStateException("AUTH_SIGNING_KEY_FILE is required with an https issuer");
             }
-            log.warn("AUTH_SIGNING_KEY_FILE is not set: using an in-memory signing key (development only); "
-                    + "a restart invalidates the access tokens already issued");
-            return generated(keyId);
+            String startKeyId = keyId + "-" + UUID.randomUUID().toString().substring(0, 8);
+            log.warn("AUTH_SIGNING_KEY_FILE is not set: using an in-memory signing key '{}' (development only); "
+                    + "a restart invalidates the access tokens already issued", startKeyId);
+            return generated(startKeyId);
         }
         RSAPrivateCrtKey privateKey = readPrivateKey(Path.of(config.file()));
         return new RSAKey.Builder(publicOf(privateKey)).privateKey(privateKey).keyID(keyId)

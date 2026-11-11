@@ -9,11 +9,12 @@ make, so the seed also exercises the APIs. The steps are idempotent; a second ru
   3. import:    seed/schedule-2025-26.xlsx -> importer job -> review -> apply -> draft version
   4. publish:   the imported version, effective 2026-09-01; load items derived from it
   5. periods:   calendar periods from the notes of order №35
-  6. accounts:  demo Keycloak accounts linked to the teachers «Кренцін» and «Непийвода»
+  6. accounts:  demo accounts of the sign-in service linked to the teachers «Кренцін» and «Непийвода»
   7. order 35:  the changes of 19.10.2026 -> confirmations -> notes -> publication as №35
 
 Usage (stack running, see scripts/dev-stack.sh):  python scripts/seed_demo.py [step ...]
-Demo credentials come from infra/keycloak/demo-users.env (test values only).
+Demo credentials come from infra/dev/demo-users.env (test values only); tokens come from the sign-in
+service through scripts/rozklad_auth.py (AUTH_URL overrides its address).
 """
 from __future__ import annotations
 
@@ -22,15 +23,14 @@ import os
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
 
+import rozklad_auth
+
 ROOT = Path(__file__).resolve().parent.parent
 API = os.environ.get("API_URL", "http://localhost:8080")
-KEYCLOAK = os.environ.get("KEYCLOAK_URL", "http://localhost:8180")
-REALM = "rozklad"
 SEMESTER_I = "I семестр 2026/2027"
 VERSION_NAME = "Розклад 2025/26 (імпорт з Excel)"
 EFFECTIVE_FROM = "2026-09-01"
@@ -39,13 +39,7 @@ ORDER_NUMBER = 35
 
 
 def demo_credentials() -> dict[str, str]:
-    values = {}
-    for line in (ROOT / "infra" / "keycloak" / "demo-users.env").read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            values[key.strip()] = value.strip()
-    return values
+    return rozklad_auth.demo_credentials()
 
 
 class ApiError(RuntimeError):
@@ -64,20 +58,11 @@ class ApiError(RuntimeError):
 class Client:
     def __init__(self, username: str, password: str):
         self.username = username
-        self.password = password
-        self.token = None
-        self.expires = 0.0
+        # вхід через сторінку входу сервісу auth (код + PKCE, клієнт rozklad-cli); токен оновлюється сам
+        self.tokens = rozklad_auth.TokenSource(username, password)
 
     def _token(self) -> str:
-        if self.token is None or time.time() > self.expires - 30:
-            form = urllib.parse.urlencode({"client_id": "rozklad-dev-cli", "grant_type": "password",
-                                           "username": self.username, "password": self.password}).encode()
-            url = f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/token"
-            with urllib.request.urlopen(urllib.request.Request(url, data=form), timeout=30) as response:
-                answer = json.load(response)
-            self.token = answer["access_token"]
-            self.expires = time.time() + answer["expires_in"]
-        return self.token
+        return self.tokens.token()
 
     def call(self, method: str, path: str, body=None, *, raw: bytes | None = None, content_type: str | None = None,
              expect_json: bool = True):
@@ -287,7 +272,9 @@ def step_import(admin: Client) -> None:
     if job["status"] != "APPLIED":
         raise SystemExit(f"import job {job['id']} is {job['status']}: {job.get('error')}")
     catalog, timetable = job["result"]["catalog"], job["result"]["timetable"]
-    log(f"  applied: catalog created {catalog['created']}, version «{timetable['name']}» "
+    # каталог, що вже є в базі (повторний seed після reset-версій), імпорт не створює: {"skipped": true}
+    created = "nothing (already present)" if catalog.get("skipped") else catalog.get("created")
+    log(f"  applied: catalog created {created}, version «{timetable['name']}» "
         f"with {timetable['lessonCount']} lessons, {timetable['hardConflicts']} hard conflicts")
     log("import: ok")
 

@@ -91,10 +91,11 @@ server:
 app:
   public-web-url: ${PUBLIC_WEB_URL:http://localhost:5180}
   auth:
-    # хто видає токени (iss) і звідки брати ключі; audience порожня = aud не перевіряється
-    issuer: ${AUTH_ISSUER:http://localhost:8180/realms/rozklad}
-    jwks-uri: ${AUTH_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
-    audience: ${AUTH_AUDIENCE:}
+    # хто видає токени (iss, сервіс входу auth так, як його бачить браузер) і звідки брати ключі (з контейнера
+    # це http://auth:8085/auth/oauth2/jwks); токен має містити audience в aud (порожня = aud не перевіряється)
+    issuer: ${AUTH_ISSUER:http://localhost:8088/auth}
+    jwks-uri: ${AUTH_JWKS_URI:http://localhost:8085/auth/oauth2/jwks}
+    audience: ${AUTH_AUDIENCE:rozklad-api}
 
 management:
   endpoints:

@@ -61,7 +61,7 @@ class AuthorizationCodeFlowIT {
         assertThat(texts(access.path("aud"))).containsExactlyInAnyOrder("rozklad-web", "rozklad-api");
         assertThat(access.has("realm_access")).isFalse();
         // заголовок має kid активного ключа (NimbusJwtEncoder копіює його з JWK)
-        assertThat(tokens.accessHeader().path("kid").asString()).isEqualTo("dev");
+        assertThat(tokens.accessHeader().path("kid").asString()).startsWith("dev-");
         assertThat(tokens.accessHeader().path("alg").asString()).isEqualTo("RS256");
         long lifetime = access.path("exp").asLong() - access.path("iat").asLong();
         assertThat(lifetime).isEqualTo(15 * 60);
