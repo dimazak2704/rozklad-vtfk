@@ -1,0 +1,154 @@
+# auth — сервіс входу: OAuth 2.1 / OIDC (Spring Authorization Server), облікові записи, сторінка входу.
+# Усі значення з env (ARCHITECTURE §7); значення за замовчуванням — для розробки на localhost.
+spring:
+  application:
+    name: auth
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:auth}
+    username: ${DB_USER:auth}
+    password: ${DB_PASSWORD:auth}
+    hikari:
+      maximum-pool-size: ${AUTH_DB_POOL:10}
+      data-source-properties:
+        # повідомлення помилок PostgreSQL без значень рядків і параметрів запиту (як у core)
+        logServerErrorDetail: false
+  flyway:
+    locations: classpath:db/migration
+  session:
+    # простій сесії входу; абсолютний ліміт — app.auth.session.max-lifetime
+    timeout: ${AUTH_SESSION_IDLE:8h}
+    jdbc:
+      # схему сесій веде Flyway (V1_101)
+      initialize-schema: never
+      cleanup-cron: "0 */5 * * * *"
+  thymeleaf:
+    cache: ${AUTH_TEMPLATE_CACHE:true}
+  web:
+    locale: uk
+    locale-resolver: fixed
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8085}
+  shutdown: graceful
+  # схема, хост, порт і IP клієнта — з X-Forwarded-* від nginx/Caddy (RemoteIpValve).
+  # Довірені проксі: SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES (типово — приватні мережі).
+  forward-headers-strategy: native
+  tomcat:
+    # Location відносні (/auth/login): переадресації в межах auth не залежать від заголовків проксі
+    use-relative-redirects: true
+  servlet:
+    context-path: /auth
+    session:
+      cookie:
+        name: ${AUTH_COOKIE_NAME:RZ_AUTH}
+        path: /auth
+        http-only: true
+        secure: ${AUTH_COOKIE_SECURE:false}
+        same-site: lax
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  auth:
+    # одна фіксована адреса видавця на середовище; ніколи не береться із запиту
+    issuer: ${AUTH_ISSUER:http://localhost:8088/auth}
+    # куди повертати людину (кнопка «До розкладу», вхід без збереженого запиту)
+    public-web-url: ${PUBLIC_WEB_URL:http://localhost:8088}
+    # походження SPA: для кожного — <origin>/login/callback, <origin>/login/silent.html і вихід на <origin>/
+    web-origins: ${AUTH_WEB_ORIGINS:http://localhost:5180,http://localhost:5181,http://localhost:8088}
+    # CORS лише для протокольних точок (discovery, JWKS, token): SPA з Vite ходить на 8088
+    cors-origins: ${AUTH_CORS_ORIGINS:http://localhost:5180,http://localhost:5181}
+    # rozklad-cli: публічний клієнт для скриптів і e2e-real (код + PKCE на 127.0.0.1); у prod вимкнено
+    cli-enabled: ${AUTH_CLI_ENABLED:false}
+    tokens:
+      web-access: ${AUTH_ACCESS_TOKEN_TTL:15m}
+      cli-access: 15m
+      service-access: 5m
+      authorization-code: 60s
+    # сервісні клієнти client_credentials: секрет порожній = клієнт не реєструється
+    service-clients:
+      rozklad-notification:
+        secret: ${NOTIFICATION_CLIENT_SECRET:}
+        roles: [SERVICE]
+      rozklad-importer:
+        secret: ${IMPORTER_CLIENT_SECRET:}
+        roles: [SERVICE]
+      rozklad-core:
+        secret: ${CORE_AUTH_CLIENT_SECRET:}
+        scopes: [accounts.manage]
+    signing-key:
+      # PKCS#8 PEM (RSA 2048). Порожньо і http-видавець — ключ у пам'яті (лише розробка)
+      file: ${AUTH_SIGNING_KEY_FILE:}
+      key-id: ${AUTH_SIGNING_KEY_ID:dev}
+      previous-public-key-file: ${AUTH_PREVIOUS_PUBLIC_KEY_FILE:}
+      previous-key-id: ${AUTH_PREVIOUS_KEY_ID:}
+    session:
+      max-lifetime: ${AUTH_SESSION_MAX:24h}
+    lockout:
+      max-failures: ${AUTH_LOCKOUT_MAX_FAILURES:10}
+      window: 12h
+      base-delay: 60s
+      max-delay: 15m
+      slowdown-failures: 50
+      slowdown-window: 24h
+      slowdown-delay: 2s
+      network-distinct-identifiers: 20
+      network-window: 15m
+    password:
+      min-length: ${AUTH_PASSWORD_MIN_LENGTH:12}
+    bootstrap:
+      username: ${AUTH_BOOTSTRAP_ADMIN_USERNAME:}
+      email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
+      force: ${AUTH_BOOTSTRAP_FORCE:false}
+    demo-seed:
+      # демо-акаунти локального стенда (лише http-видавець); паролі з infra/dev/demo-users.env
+      enabled: ${AUTH_DEMO_SEED:false}
+      accounts:
+        - id: a0000000-0000-4000-8000-000000000001
+          username: admin
+          email: admin@rozklad.local
+          display-name: Диспетчер Розкладу
+          role: ADMIN
+          password: ${ADMIN_PASSWORD:}
+        - id: a0000000-0000-4000-8000-000000000002
+          username: krentsin
+          email: krentsin@rozklad.local
+          display-name: М. Д. Кренцін
+          role: TEACHER
+          password: ${TEACHER_PASSWORD:}
+        - id: a0000000-0000-4000-8000-000000000003
+          username: nepyivoda
+          email: nepyivoda@rozklad.local
+          display-name: М. В. Непийвода
+          role: TEACHER
+          password: ${TEACHER2_PASSWORD:}
+
+management:
+  # actuator на окремому порту: його не проксіюють і не публікують; healthcheck compose ходить сюди
+  server:
+    port: ${MANAGEMENT_PORT:8086}
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db,adminCredential
+
+logging:
+  level:
+    root: INFO
+    ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <title>Помилка входу — Розклад ВТФК</title>
+  <script th:src="@{/ui/theme.js}"></script>
+  <link rel="stylesheet" href="/brand/auth.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body class="auth">
+<main class="auth-column">
+  <svg class="auth-mark" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor"
+       stroke-width="1.5" stroke-linejoin="round">
+    <circle cx="13" cy="13" r="11.6"/>
+    <circle cx="13" cy="8.9" r="5.2"/>
+    <path d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z"/>
+  </svg>
+  <h1 class="auth-title">Не вдалося продовжити вхід</h1>
+  <p class="auth-lead">Посилання для входу застаріле або неправильне. Поверніться на сайт і спробуйте увійти ще раз.</p>
+  <p class="auth-help" th:if="${status}" th:text="|Код відповіді: ${status}|">Код відповіді: 400</p>
+</main>
+<footer class="auth-footer">
+  <a th:href="@{/login}" href="/auth/login">Сторінка входу</a>
+  <span aria-hidden="true">·</span>
+  <span>Вінницький технічний фаховий коледж</span>
+</footer>
+</body>
+</html>

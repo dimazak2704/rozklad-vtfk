@@ -25,6 +25,7 @@
         <module>services/importer</module>
         <module>services/notification</module>
         <module>services/gateway</module>
+        <module>services/auth</module>
     </modules>
 
     <properties>

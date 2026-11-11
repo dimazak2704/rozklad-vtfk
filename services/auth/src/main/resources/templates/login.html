@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f8fafd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex">
+  <title>Вхід — Розклад ВТФК</title>
+  <!-- тема до першого кадру: той самий вибір, що в SPA (localStorage rozklad.theme), інакше системна -->
+  <script th:src="@{/ui/theme.js}"></script>
+  <!-- стилі з веб-збірки (web/src/styles/auth-page.css → /brand/auth.css), спільне походження з SPA -->
+  <link rel="stylesheet" href="/brand/auth.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script th:src="@{/ui/login.js}" defer></script>
+</head>
+<body class="auth">
+<main class="auth-column">
+  <svg class="auth-mark" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor"
+       stroke-width="1.5" stroke-linejoin="round">
+    <circle class="auth-stroke" pathLength="1" cx="13" cy="13" r="11.6"/>
+    <circle class="auth-stroke" pathLength="1" cx="13" cy="8.9" r="5.2"/>
+    <path class="auth-stroke" pathLength="1"
+          d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z"/>
+  </svg>
+
+  <h1 class="auth-title">Вхід до розкладу</h1>
+  <p class="auth-lead">Для викладачів і диспетчерів. Студентам вхід не потрібен — розклад відкритий для всіх.</p>
+
+  <div id="auth-message" class="auth-alert" role="alert" th:if="${message}">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+    </svg>
+    <span th:text="${message}">Неправильний логін або пароль.</span>
+  </div>
+
+  <th:block th:if="${googleEnabled}">
+    <div class="auth-providers">
+      <a class="auth-button auth-button--primary" th:href="@{/oauth2/authorization/google}">
+        <span class="auth-google-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/>
+          </svg>
+        </span>
+        Увійти через Google
+      </a>
+      <p class="auth-hint">Використовуйте корпоративну пошту коледжу.</p>
+    </div>
+    <div class="auth-divider" aria-hidden="true">або</div>
+    <details class="auth-password" th:open="${passwordError}">
+      <summary>Увійти з паролем</summary>
+      <div th:replace="~{fragments/password-form :: form(secondary=true)}"></div>
+    </details>
+  </th:block>
+
+  <th:block th:unless="${googleEnabled}">
+    <div th:replace="~{fragments/password-form :: form(secondary=false)}"></div>
+  </th:block>
+</main>
+
+<footer class="auth-footer">
+  <a th:href="${publicWebUrl}" href="/">← До розкладу</a>
+  <span aria-hidden="true">·</span>
+  <span>Вінницький технічний фаховий коледж</span>
+</footer>
+
+<svg class="auth-spire" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor"
+     stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round">
+  <circle cx="13" cy="13" r="11.6" vector-effect="non-scaling-stroke"/>
+  <circle cx="13" cy="8.9" r="5.2" vector-effect="non-scaling-stroke"/>
+  <path vector-effect="non-scaling-stroke"
+        d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z"/>
+</svg>
+</body>
+</html>

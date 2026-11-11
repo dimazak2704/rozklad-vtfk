@@ -1,0 +1,81 @@
+package ua.vtc.rozklad.auth.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
+import ua.vtc.rozklad.auth.config.AuthServerProperties.ServiceClient;
+import ua.vtc.rozklad.auth.support.PropertiesFixture;
+
+class ProdGuardTest {
+
+    @Test
+    void developmentIsNotGuarded() {
+        assertThat(ProdGuard.violations(PropertiesFixture.builder().demoSeed(true).build(), false)).isEmpty();
+    }
+
+    @Test
+    void aCorrectProductionConfigurationPasses() {
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), true)).isEmpty();
+    }
+
+    @Test
+    void theSigningKeyFileIsRequired() {
+        var properties = PropertiesFixture.prod()
+                .signingKey(new AuthServerProperties.SigningKey("", "k", null, null)).build();
+
+        assertThat(ProdGuard.violations(properties, true)).singleElement().asString().contains("AUTH_SIGNING_KEY_FILE");
+    }
+
+    @Test
+    void theCookieMustBeSecure() {
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().build(), false)).singleElement().asString()
+                .contains("Secure");
+    }
+
+    @Test
+    void developmentOriginsAreRefused() {
+        var properties = PropertiesFixture.prod()
+                .webOrigins(List.of(URI.create("https://rozklad.example.ua"), URI.create("http://localhost:5180")))
+                .corsOrigins(List.of("https://127.0.0.1:8443"))
+                .publicWebUrl("http://rozklad.example.ua")
+                .build();
+
+        assertThat(ProdGuard.violations(properties, true)).hasSize(3)
+                .anySatisfy(v -> assertThat(v).contains("AUTH_WEB_ORIGINS").contains("localhost:5180"))
+                .anySatisfy(v -> assertThat(v).contains("AUTH_CORS_ORIGINS"))
+                .anySatisfy(v -> assertThat(v).contains("PUBLIC_WEB_URL"));
+    }
+
+    @Test
+    void theDemoSeedIsRefused() {
+        assertThat(ProdGuard.violations(PropertiesFixture.prod().demoSeed(true).build(), true)).singleElement()
+                .asString().contains("AUTH_DEMO_SEED");
+    }
+
+    @Test
+    void knownDevelopmentSecretsAreRefused() {
+        var properties = PropertiesFixture.prod().serviceClients(Map.of(
+                "rozklad-importer", new ServiceClient("dev-importer-secret", Set.of("SERVICE"), Set.of()),
+                "rozklad-core", new ServiceClient("dev-core-auth-secret", Set.of(), Set.of("accounts.manage")),
+                "rozklad-notification", new ServiceClient("", Set.of("SERVICE"), Set.of()))).build();
+
+        assertThat(ProdGuard.violations(properties, true)).hasSize(2)
+                .allSatisfy(v -> assertThat(v).contains("known development value"));
+    }
+
+    @Test
+    void startupFailsWithEveryViolationListed() {
+        var guard = new ProdGuard(PropertiesFixture.prod().demoSeed(true)
+                .signingKey(new AuthServerProperties.SigningKey(null, "k", null, null)).build(),
+                new MockEnvironment().withProperty("server.servlet.session.cookie.secure", "true"));
+
+        assertThatThrownBy(guard::afterPropertiesSet).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AUTH_SIGNING_KEY_FILE").hasMessageContaining("AUTH_DEMO_SEED");
+    }
+}
