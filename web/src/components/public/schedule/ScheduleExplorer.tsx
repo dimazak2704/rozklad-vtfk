@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { RotateCcw, WifiOff } from 'lucide-react';
+import { CalendarDays, CalendarRange, RotateCcw, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
@@ -7,6 +7,7 @@ import type { ScheduleDto } from '@/api/types';
 import { DayList, NowIndicator, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import type { Perspective } from '@/lib/schedule';
@@ -32,24 +33,33 @@ interface ScheduleExplorerProps {
    * `false` — сторінка ставить `ScheduleControls` у свій заголовок (PageHeader), а фільтр підгрупи — у «⋯».
    */
   toolbar?: boolean;
+  /** Перетворення розкладу лише для показу (аудиторія ховає саму себе з клітинок). */
+  select?: (schedule: ScheduleDto) => ScheduleDto;
 }
+
+/** Телефон: тиждень і подання живуть в одному рядку над днями, а не трьома рядками керувань. */
+export const PHONE_QUERY = '(max-width: 639.98px)';
 
 /** «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки. */
 export function ScheduleControls({
   params,
   hotkeys = true,
   subgroups = [],
+  phone = false,
 }: {
   params: ScheduleParams;
   hotkeys?: boolean;
   /** Підгрупи групи: перемикач «Уся група / 1 п/г / 2 п/г» стоїть поруч із тижнем, лише якщо вони є. */
   subgroups?: readonly number[];
+  /** На телефоні в заголовку лишається тільки підгрупа: тиждень і подання — у рядку над днями (`PhoneWeekBar`). */
+  phone?: boolean;
 }) {
   const { date, today, view, setView, setDate } = params;
   useHotkeys([
-    { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys },
-    { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад', enabled: hotkeys },
+    { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys && !phone },
+    { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад', enabled: hotkeys && !phone },
   ]);
+  if (phone) return <SubgroupSwitch subgroups={subgroups} value={params.subgroup} onChange={params.setSubgroup} />;
   return (
     <>
       <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
@@ -84,6 +94,37 @@ function SubgroupSwitch({
   );
 }
 
+/**
+ * Телефон: «‹ 9–13 листопада ›» і перемикач подання в одному рядку, під ним — дні тижня. Тиждень обирають
+ * в одному місці, а до першої пари лишається на рядок керувань менше. Інший тиждень — тихе «До цього тижня».
+ */
+function PhoneWeekBar({ params }: { params: ScheduleParams }) {
+  const { date, today, homeDate, view, week, setDate, setView } = params;
+  const offWeek = homeDate < week.from || homeDate > week.to;
+  const toWeek = view === 'day';
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <div className="flex w-full items-center justify-between gap-2">
+        <WeekNav value={date} onChange={setDate} today={today} returnLink="none" className="-ms-2" />
+        <Button
+          variant="ghost"
+          aria-label={toWeek ? 'Показати весь тиждень' : 'Показати один день'}
+          iconStart={toWeek ? <CalendarRange aria-hidden="true" className="size-4" /> : <CalendarDays aria-hidden="true" className="size-4" />}
+          onClick={() => setView(toWeek ? 'week' : 'day')}
+          className="-me-2 shrink-0"
+        >
+          {toWeek ? 'Тиждень' : 'День'}
+        </Button>
+      </div>
+      {offWeek ? (
+        <Button variant="link" size="sm" onClick={() => setDate(homeDate)}>
+          До цього тижня
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 const VIEW_OPTIONS = [
   { value: 'day' as const, label: 'День' },
   { value: 'week' as const, label: 'Тиждень' },
@@ -93,11 +134,16 @@ const VIEW_OPTIONS = [
  * Розклад групи, викладача чи аудиторії: «День / Тиждень», навігація датами, фільтр підгрупи,
  * «зараз», зміни тижня. Стан — в адресі (useScheduleParams), дані — з переданого запиту.
  */
-export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [], toolbar = true }: ScheduleExplorerProps) {
+export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [], toolbar = true, select }: ScheduleExplorerProps) {
   const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
   const online = useOnline();
+  const phone = useMediaQuery(PHONE_QUERY);
   const bells = useBells(date);
-  const schedule = useMemo(() => (query.data ? filterBySubgroup(query.data, subgroup) : undefined), [query.data, subgroup]);
+  const schedule = useMemo(() => {
+    if (!query.data) return undefined;
+    const filtered = filterBySubgroup(query.data, subgroup);
+    return select ? select(filtered) : filtered;
+  }, [query.data, subgroup, select]);
   const placeholder = query.isPlaceholderData;
   const changes = useMemo(() => (placeholder ? [] : changedLessons(schedule)), [schedule, placeholder]);
   const day = placeholder ? undefined : dayOf(schedule, date);
@@ -229,6 +275,8 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
           <ChangesNote items={changes} view={view} onOpenDay={openDay} className="lg:ms-auto" />
         </div>
       ) : null}
+
+      {phone && !toolbar ? <PhoneWeekBar params={params} /> : null}
 
       {view === 'day' ? (
         <WeekDayTabs

@@ -37,6 +37,22 @@ export function filterBySubgroup(schedule: ScheduleDto, subgroup: number | null)
   };
 }
 
+/**
+ * Розклад аудиторії без самої аудиторії в кожній клітинці: «ауд. 301» тридцять разів на сторінці 301 — шум.
+ * Лишаємо її лише там, де вона щось каже: пару перенесли сюди з іншої аудиторії (видно закреслену стару).
+ */
+export function withoutOwnRoom(schedule: ScheduleDto, roomId: string): ScheduleDto {
+  return {
+    ...schedule,
+    days: schedule.days.map((day) => ({
+      ...day,
+      lessons: day.lessons.map((lesson) =>
+        lesson.room?.id === roomId && lesson.kind !== 'ROOM_CHANGED' ? { ...lesson, room: null } : lesson,
+      ),
+    })),
+  };
+}
+
 export interface ChangedLesson {
   day: DayDto;
   lesson: LessonView;

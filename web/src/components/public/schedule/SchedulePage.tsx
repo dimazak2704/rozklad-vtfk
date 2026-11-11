@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
 import { PageErrorScope, PageHeader, ParityBadge } from '@/components/ui';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { Perspective } from '@/lib/schedule';
 import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
 import { SchedulePrint } from '../print/SchedulePrint';
@@ -13,9 +14,9 @@ import { ChangesNote } from './ChangesNote';
 import { QrDoorDialog } from './QrDoorDialog';
 import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
-import { ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
+import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
 import type { ScheduleParams } from './schedule-params';
-import { changedLessons, dayOf, dayShareText, filterBySubgroup, semesterWeekOf } from './schedule-utils';
+import { changedLessons, dayOf, dayShareText, filterBySubgroup, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
 
 interface SchedulePageProps {
   /** Ціль для обраного й нещодавніх: тип, id, підпис, маршрут у застосунку. */
@@ -56,6 +57,7 @@ export function SchedulePage({
   doorSign = false,
 }: SchedulePageProps) {
   const meta = usePublicMeta();
+  const phone = useMediaQuery(PHONE_QUERY);
   const { mode, print } = usePrintMode();
   const [qrOpen, setQrOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -66,6 +68,10 @@ export function SchedulePage({
   const parity = placeholder ? null : (visible?.days[0]?.parity ?? null);
   const weekNumber = semesterWeekOf(params.date, meta.data?.semester);
   const printTitle = params.subgroup ? `${target.label} · ${params.subgroup} підгрупа` : target.label;
+
+  // на сторінці аудиторії клітинки не повторюють її номер: другий рядок — група й викладач
+  const roomId = target.type === 'ROOM' ? target.id : null;
+  const select = useMemo(() => (roomId ? (schedule: ScheduleDto) => withoutOwnRoom(schedule, roomId) : undefined), [roomId]);
 
   useDocumentTitle(documentTitle);
 
@@ -112,7 +118,7 @@ export function SchedulePage({
           </>
         }
         meta={headerMeta}
-        controls={<ScheduleControls params={params} subgroups={subgroups} />}
+        controls={phone && subgroups.length === 0 ? undefined : <ScheduleControls params={params} subgroups={subgroups} phone={phone} />}
         more={more}
       />
       <ScheduleExplorer
@@ -122,6 +128,7 @@ export function SchedulePage({
         ownerLabel={target.label}
         subgroups={subgroups}
         toolbar={false}
+        select={select}
       />
       <SchedulePrint
         mode={mode}

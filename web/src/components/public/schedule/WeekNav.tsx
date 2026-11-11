@@ -17,11 +17,17 @@ interface WeekNavProps {
   today: IsoDate;
   /** ←/→ — попередній/наступний тиждень, T — цей тиждень. Лише на одному перемикачі на екрані. */
   hotkeys?: boolean;
+  /**
+   * Де стоїть «До цього тижня», коли на екрані інший тиждень: `below` — тихим посиланням під датами
+   * (у заголовку сторінки, де керування вирівняні праворуч, — щоб перемикач не «зʼїжджав» під курсором),
+   * `none` — сторінка показує його сама (телефон).
+   */
+  returnLink?: 'below' | 'none';
   className?: string;
 }
 
 /** Перемикач тижня: ‹ 9–13 листопада › з календарем під датами; день тижня при гортанні зберігається. */
-export function WeekNav({ value, onChange, today, hotkeys = false, className }: WeekNavProps) {
+export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 'below', className }: WeekNavProps) {
   const [open, setOpen] = useState(false);
   const week = studyWeek(value);
   const home = nearestStudyDay(today);
@@ -34,7 +40,7 @@ export function WeekNav({ value, onChange, today, hotkeys = false, className }: 
   ]);
 
   return (
-    <div className={cn('inline-flex min-w-0 items-center gap-1', className)} role="group" aria-label="Вибір тижня">
+    <div className={cn('relative inline-flex min-w-0 items-center gap-1', className)} role="group" aria-label="Вибір тижня">
       <IconButton
         label="Попередній тиждень"
         shortcut={hotkeys ? 'arrowleft' : undefined}
@@ -106,9 +112,16 @@ export function WeekNav({ value, onChange, today, hotkeys = false, className }: 
         icon={<ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />}
         onClick={() => onChange(addDays(value, 7))}
       />
-      {!isCurrent ? (
-        <Button variant="ghost" onClick={() => onChange(home)} className="hidden sm:inline-flex">
-          Цей тиждень
+      {!isCurrent && returnLink === 'below' ? (
+        // на компʼютері керування вирівняні праворуч: посилання поза потоком, під датами, і перемикач не зсувається;
+        // вужче керування вирівняні ліворуч — посилання просто стоїть у кінці рядка
+        <Button
+          variant="link"
+          size="sm"
+          onClick={() => onChange(home)}
+          className="ms-2 hidden whitespace-nowrap sm:inline-flex lg:absolute lg:top-full lg:left-1/2 lg:ms-0 lg:mt-0.5 lg:-translate-x-1/2"
+        >
+          До цього тижня
         </Button>
       ) : null}
     </div>

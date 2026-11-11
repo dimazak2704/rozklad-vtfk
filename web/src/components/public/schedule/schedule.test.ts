@@ -14,6 +14,7 @@ import {
   roomOccupancy,
   semesterWeekOf,
   subgroupsIn,
+  withoutOwnRoom,
 } from './schedule-utils';
 
 const ref = (id: string) => ({ id, shortName: id, name: `${id} повна`, color: null });
@@ -224,5 +225,27 @@ describe('roomDetails', () => {
     expect(roomDetails({ id: 'r', name: '6', type: 'COMPUTER_LAB', capacity: 30, building: '2', maxParallel: 1 })).toBe(
       'Компʼютерний клас · 30 місць · корпус: 2',
     );
+  });
+});
+
+describe('withoutOwnRoom', () => {
+  it('прибирає з клітинок саму аудиторію, але лишає перенесення з іншої', () => {
+    const own = { id: 'r301', name: '301', type: 'CLASSROOM' as const };
+    const schedule = {
+      days: [
+        {
+          date: '2026-11-09',
+          lessons: [
+            lesson({ room: own }),
+            lesson({ pair: 2, kind: 'ROOM_CHANGED', room: own, original: { room: { id: 'r14', name: '14', type: 'CLASSROOM' } } as LessonView['original'] }),
+          ],
+        },
+      ],
+    } as unknown as ScheduleDto;
+    const [regular, moved] = withoutOwnRoom(schedule, 'r301').days[0]!.lessons;
+    expect(regular!.room).toBeNull();
+    expect(moved!.room).toEqual(own);
+    // вхідні дані не змінюються
+    expect(schedule.days[0]!.lessons[0]!.room).toEqual(own);
   });
 });
