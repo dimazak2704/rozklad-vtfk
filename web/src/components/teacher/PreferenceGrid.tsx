@@ -81,7 +81,7 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
 
   return (
     <div className="overflow-x-auto rounded-panel border border-default bg-surface">
-      <table className="w-full min-w-[20rem] table-fixed border-collapse sm:min-w-[34rem]">
+      <table className="w-full min-w-[18rem] table-fixed border-collapse sm:min-w-[34rem]">
         <caption className="sr-only">Побажання: дні тижня й пари</caption>
         <colgroup>
           <col className="w-11 sm:w-[5.5rem]" />
