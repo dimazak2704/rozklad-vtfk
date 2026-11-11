@@ -44,8 +44,8 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
           <span className="inline-flex items-baseline gap-2">
             <span aria-hidden="true" className={cn('size-2 shrink-0 translate-y-[-1px] rounded-full', KIND_DOT[p.kind])} />
             <span>
-              {PERIOD_KIND_LABEL[p.kind]}
-              {p.studyMode ? <span className="text-secondary">, {STUDY_MODE_LABEL[p.studyMode].toLocaleLowerCase('uk')}</span> : null}
+              {/* для форми навчання вистачає самої форми: «Дистанційно», а не «Форма навчання, дистанційно» */}
+              {p.kind === 'STUDY_MODE' && p.studyMode ? STUDY_MODE_LABEL[p.studyMode] : PERIOD_KIND_LABEL[p.kind]}
             </span>
           </span>
         ),

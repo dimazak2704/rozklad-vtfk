@@ -186,13 +186,11 @@ export default function CalendarPage() {
 }
 
 /**
- * Семестр одним рядком замість таблички з чотирьох полів:
- * «01.09.2026 – 31.12.2026, 18 навчальних тижнів; перший — чисельник; дзвінки: типові».
+ * Під заголовком — лише межі семестру: «01.09.2026 – 30.12.2026». Тижні й парність видно на смузі нижче,
+ * дзвінки — на вкладці «Дзвінки», тож тут вони не повторюються.
  */
 function semesterSentence(semester: CalendarSemester): string {
-  const weeks = countLabel(semester.teachingWeeks, ['навчальний тиждень', 'навчальні тижні', 'навчальних тижнів']);
-  const bells = semester.bellProfile?.label ? `дзвінки: ${semester.bellProfile.label}` : 'дзвінки типові';
-  return `${formatNumericDate(semester.startsOn)} – ${formatNumericDate(semester.endsOn)}, ${weeks}; перший — ${PARITY_LABEL[semester.firstWeekParity]}; ${bells}${semester.active ? '' : '. Не активний'}`;
+  return `${formatNumericDate(semester.startsOn)} – ${formatNumericDate(semester.endsOn)}${semester.active ? '' : ' · не активний'}`;
 }
 
 function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; onOpenPeriod: (period: CalendarPeriod) => void }) {

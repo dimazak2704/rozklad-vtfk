@@ -58,12 +58,12 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
     [periods, weeks],
   );
 
-  const columns = `repeat(${weeks.length}, minmax(3.25rem, 1fr))`;
+  const columns = `repeat(${weeks.length}, minmax(2.5rem, 1fr))`;
 
   return (
     <>
-    {/* телефон: смуга з 18 тижнів у 324 px — це прокрутка вбік, якої ніхто не помічає; тут список тижнів */}
-    <ol aria-label="Тижні семестру" className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface md:hidden">
+    {/* телефон і планшет: смуга з 18 тижнів не вміщується, а прокрутку вбік ніхто не помічає — тут список тижнів */}
+    <ol aria-label="Тижні семестру" className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface lg:hidden">
       {weeks.map((week) => {
         const isCurrent = week.weekStart === currentWeek;
         const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
@@ -115,11 +115,11 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
         );
       })}
     </ol>
-    <div className="overflow-x-auto overscroll-x-contain rounded-panel border border-default bg-surface max-md:hidden">
+    <div className="overflow-x-auto overscroll-x-contain rounded-panel border border-default bg-surface max-lg:hidden">
       <div
         className="p-3"
-        // тижні ділять ширину порівну; вужче за 3,25rem на тиждень — горизонтальна прокрутка
-        style={{ display: 'grid', gridTemplateColumns: columns, columnGap: '0.25rem', rowGap: '0.375rem', minWidth: `${weeks.length * 3.5 + 1.5}rem` }}
+        // тижні ділять ширину порівну; вужче за 2,5rem на тиждень — горизонтальна прокрутка
+        style={{ display: 'grid', gridTemplateColumns: columns, columnGap: '0.25rem', rowGap: '0.375rem', minWidth: `${weeks.length * 2.75 + 1.5}rem` }}
       >
         {months.map((month, i) => (
           <span
@@ -149,7 +149,7 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 aria-label={`${hint}${onToggleWeek ? ` Зробити ${PARITY_LABEL[next]}ом` : ''}`}
                 style={{ gridRow: 2, gridColumn: index + 1 }}
                 className={cn(
-                  'group relative flex h-16 flex-col items-center justify-center gap-0.5 rounded-control border text-center',
+                  'group relative flex h-12 flex-col items-center justify-center gap-1 rounded-control border text-center',
                   'transition-[background-color,border-color] duration-150 ease-out',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                   week.parity === 'DENOMINATOR' ? 'bg-sunken' : 'bg-surface',
@@ -159,11 +159,8 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 )}
               >
                 <span className="text-heading leading-none font-bold figures text-primary">{week.weekNumber}</span>
-                <span className={cn('flex items-center gap-1 text-meta font-semibold', week.overridden ? 'text-accent' : 'text-secondary')}>
-                  <ParityMark parity={week.parity} className="h-3 w-2.5" />
-                  {week.parity === 'NUMERATOR' ? 'чис' : 'знам'}
-                </span>
-                <span className="text-meta font-normal text-muted figures">{formatNumericDate(week.weekStart).slice(0, 5)}</span>
+                {/* номер і диск парності; дата й слово «чисельник» — у підказці */}
+                <ParityMark parity={week.parity} className={cn('h-3 w-2.5', week.overridden ? 'text-accent' : 'text-secondary')} />
                 {week.overridden ? (
                   <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-[var(--background-color-surface)] bg-accent" />
                 ) : null}
@@ -212,8 +209,8 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 BAR_TONE[period.kind],
               )}
             >
-              {/* кому діє — у підказці: так коротка смуга вміщує саму назву */}
-              <span className="truncate">{period.title}</span>
+              {/* кому діє — у підказці; коротка смуга без тексту — назва стоїть поруч, а не двічі */}
+              <span className={last - first < 2 && last + 2 <= weeks.length ? 'sr-only' : 'truncate'}>{period.title}</span>
             </button>
           </HoverDetails>
         ))}
