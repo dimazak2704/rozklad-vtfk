@@ -1,6 +1,6 @@
 # Розклад ВТФК — локальний стенд.
 #   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis, keycloak
-#   docker compose -f infra/docker-compose.yml --profile app up -d --build    # + усі сервіси та web
+#   docker compose -f infra/docker-compose.yml --profile app up -d --build    # + усі сервіси, auth та web
 # Перед --profile app зберіть jar-и: mvn -q -DskipTests package (Dockerfile копіює target/app.jar).
 # Секрети (TELEGRAM_*, ANTHROPIC_API_KEY, *_CLIENT_SECRET) беруться з ../.env, якщо він є.
 name: rozklad
@@ -109,6 +109,50 @@ services:
     healthcheck:
       # в образі Keycloak немає curl: HTTP-запит через /dev/tcp до management-порту 9000
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Сервіс входу: OIDC-провайдер (Spring Authorization Server), сторінка входу /auth/login.
+  # Браузер бачить його лише через nginx контейнера web (http://localhost:8088/auth); 8085 опубліковано для
+  # сервісів, запущених на хості. Actuator — на 8086, лише для healthcheck.
+  auth:
+    <<: *java-service
+    build: ../services/auth
+    image: rozklad/auth:dev
+    env_file:
+      - path: ../.env
+        required: false
+      # демо-акаунти admin / krentsin / nepyivoda (лише розробка)
+      - path: ./dev/demo-users.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: auth
+      DB_USER: auth
+      DB_PASSWORD: auth
+      # видавець фіксований: так його бачить браузер через nginx (web/nginx.conf, location /auth/)
+      AUTH_ISSUER: http://localhost:8088/auth
+      PUBLIC_WEB_URL: http://localhost:8088
+      AUTH_WEB_ORIGINS: http://localhost:5180,http://localhost:5181,http://localhost:8088
+      AUTH_CORS_ORIGINS: http://localhost:5180,http://localhost:5181
+      AUTH_CLI_ENABLED: "true"
+      AUTH_DEMO_SEED: "true"
+      # dev-секрети сервісних клієнтів (ті самі, що в .env.example); environment перекриває ../.env
+      NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:-dev-notification-secret}
+      IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:-dev-importer-secret}
+      CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:-dev-core-auth-secret}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      JAVA_TOOL_OPTIONS: -Xmx${AUTH_HEAP:-256m}
+    mem_limit: ${AUTH_MEM_LIMIT:-512m}
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8086 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -267,6 +311,8 @@ services:
       - "8088:${WEB_CONTAINER_PORT:-80}"
     depends_on:
       gateway:
+        condition: service_started
+      auth:
         condition: service_started
 
 volumes:

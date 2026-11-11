@@ -8,6 +8,9 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const DAY_SECONDS = 24 * 60 * 60;
+const rootDir = fileURLToPath(new URL('.', import.meta.url));
+/** Вхід збірки для стилів сторінки входу auth (/brand/auth.css). */
+const AUTH_CSS_ENTRY = 'brand-auth';
 
 /**
  * PWA для публічних сторінок (UI.md §4.13): встановлюється на телефон, оболонка кешується заздалегідь,
@@ -132,6 +135,14 @@ export default defineConfig(({ mode }) => {
       target: 'es2022',
       // карти коду генеруються для налагодження, але не підключаються в бандл
       sourcemap: 'hidden',
+      rolldownOptions: {
+        // стилі сторінки входу сервісу auth: окремий вхід із фіксованою назвою dist/brand/auth.css
+        input: { index: resolve(rootDir, 'index.html'), [AUTH_CSS_ENTRY]: resolve(rootDir, 'src/styles/auth-page.css') },
+        output: {
+          assetFileNames: (asset) =>
+            asset.names.includes(`${AUTH_CSS_ENTRY}.css`) ? 'brand/auth.css' : 'assets/[name]-[hash][extname]',
+        },
+      },
     },
     test: {
       environment: 'jsdom',

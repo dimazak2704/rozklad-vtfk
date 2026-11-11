@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        service: [core, scheduler, importer, notification, gateway, web]
+        service: [core, scheduler, importer, notification, gateway, auth, web]
     env:
       # Vite reads these at build time; the SPA talks to /api on its own origin
       WEB_BUILD_ARGS: |

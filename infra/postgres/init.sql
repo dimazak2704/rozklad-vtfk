@@ -17,6 +17,11 @@ CREATE USER notification WITH PASSWORD 'notification';
 CREATE DATABASE notification OWNER notification ENCODING 'UTF8';
 REVOKE CONNECT ON DATABASE notification FROM PUBLIC;
 
+-- сервіс входу (services/auth). Для томів, створених раніше, базу додає scripts/dev-stack.sh (ensure_databases)
+CREATE USER auth WITH PASSWORD 'auth';
+CREATE DATABASE auth OWNER auth ENCODING 'UTF8';
+REVOKE CONNECT ON DATABASE auth FROM PUBLIC;
+
 CREATE USER keycloak WITH PASSWORD 'keycloak';
 CREATE DATABASE keycloak OWNER keycloak ENCODING 'UTF8';
 REVOKE CONNECT ON DATABASE keycloak FROM PUBLIC;

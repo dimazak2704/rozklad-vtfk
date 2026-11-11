@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Local stack of «Розклад ВТФК» in Docker: infrastructure + the five Java services (docs/RUNNING.md).
+# Local stack of «Розклад ВТФК» in Docker: infrastructure, the Java services, the sign-in service auth and
+# the web container (nginx: SPA, /api, /auth) (docs/RUNNING.md).
 #
-#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--web]
-#                                  build jars and images, start everything detached, wait until healthy
+#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web]
+#                                  build jars and images, start everything detached, wait until healthy;
+#                                  web starts by default (sign-in goes through it), --web is accepted as a no-op
 #   scripts/dev-stack.sh down      stop the app services (infrastructure and data stay)
 #   scripts/dev-stack.sh down --all   stop everything incl. postgres/rabbitmq/redis/keycloak (data kept in volumes)
 #   scripts/dev-stack.sh status    containers, health, memory, URLs
 #   scripts/dev-stack.sh seed [step ...]   real data through the API (scripts/seed_demo.py)
 #   scripts/dev-stack.sh reset-data --yes  empty the core/importer/scheduler/notification databases
-#                                  (Keycloak and its realm stay); then `up` and `seed` again
+#                                  (auth, Keycloak and its realm stay); then `up` and `seed` again
 #   scripts/dev-stack.sh logs <service>    follow the logs of one service
 #
 # Telegram: by default notification polls the bot of TELEGRAM_BOT_TOKEN from .env. One token can be
@@ -18,7 +20,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-services=(core scheduler importer notification gateway)
+services=(auth core scheduler importer notification gateway)
 compose_files=(-f infra/docker-compose.yml)
 env_args=()
 [[ -f .env ]] && env_args=(--env-file .env)
@@ -77,13 +79,43 @@ keycloak_user_profile() {
   echo "  keycloak: user profile without required e-mail and first name"
 }
 
+# Databases added after the postgres volume was created: init.sql runs only on an empty volume. Idempotent.
+ensure_databases() {
+  docker exec -i rozklad-postgres-1 psql -q -v ON_ERROR_STOP=1 -U postgres -d postgres >/dev/null <<'SQL'
+SELECT 'CREATE USER auth WITH PASSWORD ''auth''' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'auth')\gexec
+SELECT 'CREATE DATABASE auth OWNER auth ENCODING ''UTF8''' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'auth')\gexec
+REVOKE CONNECT ON DATABASE auth FROM PUBLIC;
+SQL
+  echo "  postgres: database auth is present"
+}
+
+# The sign-in service through nginx, the way a browser reaches it: discovery must name the fixed issuer and an
+# authorize request without a session must land on /auth/login of the same origin (forwarded host and port).
+auth_smoke() {
+  local base=http://localhost:8088 issuer location
+  issuer=$(curl -fsS --resolve localhost:8088:127.0.0.1 "$base/auth/.well-known/openid-configuration" |
+    sed -n 's/.*"issuer":"\([^"]*\)".*/\1/p')
+  if [[ $issuer != "$base/auth" ]]; then
+    echo "  auth smoke: discovery issuer is '$issuer', expected $base/auth" >&2
+    return 1
+  fi
+  location=$(curl -sS -o /dev/null -w '%{redirect_url}' --resolve localhost:8088:127.0.0.1 -H 'Accept: text/html' \
+    "$base/auth/oauth2/authorize?response_type=code&client_id=rozklad-web&scope=openid&state=smoke&redirect_uri=http%3A%2F%2Flocalhost%3A8088%2Flogin%2Fcallback&code_challenge=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU&code_challenge_method=S256")
+  if [[ $location != "$base/auth/login" ]]; then
+    echo "  auth smoke: authorize without a session redirects to '$location', expected $base/auth/login" >&2
+    return 1
+  fi
+  echo "  auth: discovery and sign-in redirect through nginx are correct"
+}
+
 cmd_up() {
-  local build=1 web=0 telegram=${TELEGRAM:-on}
+  local build=1 web=1 telegram=${TELEGRAM:-on}
   for arg in "$@"; do
     case $arg in
       --no-telegram) telegram=off ;;
       --no-build) build=0 ;;
       --web) web=1 ;;
+      --no-web) web=0 ;;
       *) echo "unknown option $arg" >&2; exit 2 ;;
     esac
   done
@@ -94,6 +126,7 @@ cmd_up() {
   echo "== infrastructure"
   docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d
   wait_healthy postgres rabbitmq redis keycloak
+  ensure_databases
   keycloak_admin_scope
   keycloak_user_profile
 
@@ -110,6 +143,10 @@ cmd_up() {
   echo "== services (telegram: $telegram)"
   compose up -d --no-build "${targets[@]}"
   wait_healthy "${services[@]}"
+  if ((web)); then
+    wait_healthy web
+    auth_smoke
+  fi
   cmd_status
 }
 
@@ -129,9 +166,11 @@ cmd_status() {
 
 API (gateway)   http://localhost:8080   e.g. /api/public/meta, /api/public/schedule/group/{id}
 core            http://localhost:8081/swagger-ui.html      scheduler :8082  importer :8083  notification :8084
-Keycloak        http://localhost:8180   (admin console: admin / admin, realm rozklad)
+Site            http://localhost:8088
+Sign-in         http://localhost:8088/auth/login   (service auth; host-run services: http://localhost:8085/auth)
+Keycloak        http://localhost:8180   (admin console: admin / admin, realm rozklad; the SPA still signs in here)
 RabbitMQ UI     http://localhost:15672  (rozklad / rozklad)    PostgreSQL localhost:5433 (postgres / postgres)
-Demo users      infra/keycloak/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER)
+Demo users      infra/dev/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER; same in Keycloak)
 EOF
 }
 
@@ -158,5 +197,5 @@ case ${1:-} in
   seed) shift; PYTHONIOENCODING=utf-8 "$(python_cmd)" "$root/scripts/seed_demo.py" "$@" ;;
   reset-data) shift; cmd_reset_data "$@" ;;
   logs) shift; compose logs -f --tail=200 "${1:?service}" ;;
-  *) sed -n '2,16p' "$0"; exit 2 ;;
+  *) sed -n '2,18p' "$0"; exit 2 ;;
 esac
