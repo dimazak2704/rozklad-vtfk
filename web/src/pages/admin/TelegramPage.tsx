@@ -10,6 +10,7 @@ import { useRegisterCommands } from '@/stores/commands';
 
 /**
  * Telegram: стан бота, привʼязані чати груп, викладачів і диспетчерів, коди привʼязки з QR, журнал розсилки.
+ * Пояснення, що бот надсилає й кому, — у самому діалозі коду привʼязки, а не абзацами над таблицями.
  */
 export default function TelegramPage() {
   const bindings = useBindings();
@@ -23,8 +24,7 @@ export default function TelegramPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Telegram"
-        description="Бот надсилає групам розпорядження, а викладачам — запити на заміни. Тут видно, хто підключений і що дійшло."
-        actions={
+        primaryAction={
           <Button variant="primary" onClick={() => setCodeOpen(true)} iconStart={<KeyRound aria-hidden="true" className="size-4" />}>
             Код привʼязки
           </Button>
@@ -33,11 +33,11 @@ export default function TelegramPage() {
 
       <BotStatusPanel bindings={bindings.data} />
 
-      <Panel title="Привʼязані чати" description="Чат групи отримує лише свої рядки розпорядження; викладач — особисті запити на заміни.">
+      <Panel title="Привʼязані чати">
         <BindingsTable bindings={bindings.data} loading={bindings.isPending} error={bindings.error} onRetry={() => void bindings.refetch()} />
       </Panel>
 
-      <Panel id="deliveries" title="Журнал розсилки" description="Останні повідомлення бота: розпорядження, запити, службові.">
+      <Panel id="deliveries" title="Журнал розсилки">
         <DeliveriesTable />
       </Panel>
 

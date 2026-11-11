@@ -2,7 +2,7 @@ import { usePublicMeta } from '@/api/meta';
 import { useSettings } from '@/api/settings';
 import { AiInfo, NumberingInfo } from '@/components/admin-daily/settings/ReadOnlyBlocks';
 import { SettingsForm } from '@/components/admin-daily/settings/SettingsForm';
-import { ErrorState, LoadingRegion, PageHeader, Panel, Skeleton, SkeletonText } from '@/components/ui';
+import { LoadingRegion, PageErrorBanner, PageHeader, Panel, Skeleton, SkeletonText } from '@/components/ui';
 
 function FormSkeleton() {
   return (
@@ -30,15 +30,12 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Налаштування"
-        description="Правила, за якими працюють заміни й розпорядження. Зміни діють одразу після збереження."
-      />
+      <PageHeader title="Налаштування" meta="Зміни діють одразу після збереження." />
       <Panel>
         {settings.isPending ? (
           <FormSkeleton />
         ) : settings.isError ? (
-          <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />
+          <PageErrorBanner error={settings.error} title="Налаштування не завантажено" retrying={settings.isFetching} onRetry={() => void settings.refetch()} />
         ) : (
           <SettingsForm settings={settings.data} numbering={<NumberingInfo semester={semester} />} ai={<AiInfo />} />
         )}
