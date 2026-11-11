@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.accounting.internal;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +46,27 @@ public class AccountingService implements AccountingQueries {
 
     @Override
     public Map<UUID, DisciplineProgress> progressOfGroup(UUID semesterId, UUID groupId) {
-        return compute(calendar.semester(semesterId), groupId).stream()
-                .collect(Collectors.toMap(AccountingRow::disciplineId, AccountingRow::progress));
+        return progress(compute(calendar.semester(semesterId), groupId));
+    }
+
+    @Override
+    public Map<UUID, Map<UUID, DisciplineProgress>> progressOfGroups(UUID semesterId, Collection<UUID> groupIds) {
+        // the semester, the ended-lesson rule and hours per pair are the same for every group: read them once
+        SemesterInfo semester = calendar.semester(semesterId);
+        BiPredicate<LocalDate, Integer> ended = calendar.endedLessons();
+        int hoursPerPair = settings.hoursPerPair();
+        List<UUID> ids = groupIds.stream().distinct().toList();
+        Map<UUID, List<LoadItem>> itemsByGroup = ids.isEmpty() ? Map.of()
+                : loadItems.findAllBySemesterIdAndGroupIdIn(semester.id(), ids).stream()
+                        .collect(Collectors.groupingBy(LoadItem::getGroupId));
+        Map<UUID, Map<UUID, DisciplineProgress>> result = new LinkedHashMap<>();
+        ids.forEach(groupId -> result.put(groupId, progress(compute(semester, groupId,
+                itemsByGroup.getOrDefault(groupId, List.of()), ended, hoursPerPair))));
+        return result;
+    }
+
+    private static Map<UUID, DisciplineProgress> progress(List<AccountingRow> rows) {
+        return rows.stream().collect(Collectors.toMap(AccountingRow::disciplineId, AccountingRow::progress));
     }
 
     @Override
@@ -58,14 +78,17 @@ public class AccountingService implements AccountingQueries {
         List<LoadItem> items = groupId == null
                 ? loadItems.findAllBySemesterId(semester.id())
                 : loadItems.findAllBySemesterIdAndGroupId(semester.id(), groupId);
+        return compute(semester, groupId, items, calendar.endedLessons(), settings.hoursPerPair());
+    }
+
+    private List<AccountingRow> compute(SemesterInfo semester, UUID groupId, List<LoadItem> items,
+                                        BiPredicate<LocalDate, Integer> ended, int hoursPerPair) {
         Map<Key, Integer> plans = new LinkedHashMap<>();
         items.forEach(item -> plans.merge(new Key(item.getGroupId(), item.getDisciplineId()), item.getPlannedHours(),
                 Integer::sum));
 
         Map<Key, List<ScheduledLessonFact>> lessonsByKey = lessons.scheduled(semester.id(), groupId).stream()
                 .collect(Collectors.groupingBy(fact -> new Key(fact.groupId(), fact.disciplineId())));
-        BiPredicate<LocalDate, Integer> ended = calendar.endedLessons();
-        int hoursPerPair = settings.hoursPerPair();
 
         return plans.entrySet().stream()
                 .map(entry -> {

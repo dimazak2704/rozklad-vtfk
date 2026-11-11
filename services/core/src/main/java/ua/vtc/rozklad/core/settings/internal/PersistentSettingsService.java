@@ -9,6 +9,8 @@ import java.util.function.Function;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import ua.vtc.rozklad.core.settings.ChangeApprovalMode;
@@ -23,6 +25,10 @@ import ua.vtc.rozklad.core.shared.error.FieldErrors;
  * Settings stored as JSON values under {@link SettingKey}s. A missing row means "default"; a row
  * whose value has the wrong type is a data error and fails loudly instead of being replaced by
  * the default.
+ *
+ * <p>{@link #current()} is read once per transaction: one request often asks for several settings
+ * (approval mode, hours per pair, the active bell profile) through different modules. A write in the
+ * same transaction drops the remembered value.
  */
 @Service
 class PersistentSettingsService implements SettingsService {
@@ -31,6 +37,9 @@ class PersistentSettingsService implements SettingsService {
     static final String VERSION_KEY = "settings.version";
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
+
+    /** Key of the settings remembered for the current transaction. */
+    private static final Object TRANSACTION_KEY = PersistentSettingsService.class.getName() + ".current";
 
     private final SettingRepository settings;
     private final List<SettingsConstraint> constraints;
@@ -43,6 +52,24 @@ class PersistentSettingsService implements SettingsService {
     @Override
     @Transactional(readOnly = true)
     public SystemSettings current() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return load();
+        }
+        if (TransactionSynchronizationManager.getResource(TRANSACTION_KEY) instanceof SystemSettings remembered) {
+            return remembered;
+        }
+        SystemSettings loaded = load();
+        TransactionSynchronizationManager.bindResource(TRANSACTION_KEY, loaded);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                TransactionSynchronizationManager.unbindResourceIfPossible(TRANSACTION_KEY);
+            }
+        });
+        return loaded;
+    }
+
+    private SystemSettings load() {
         Map<String, JsonNode> stored = new HashMap<>();
         // JSON null (наприклад, типовий профіль дзвінків знято) — це значення, а не відсутній рядок
         settings.findAll().forEach(setting -> stored.put(setting.getKey(),
@@ -86,6 +113,7 @@ class PersistentSettingsService implements SettingsService {
     }
 
     private SystemSettings write(SystemSettings proposed, String actor) {
+        TransactionSynchronizationManager.unbindResourceIfPossible(TRANSACTION_KEY);
         SystemSettings normalized = new SystemSettings(proposed.approvalMode(), proposed.confirmTimeoutMinutes(),
                 proposed.signatoryPosition().strip(), proposed.signatoryName().strip(), proposed.collegeName().strip(),
                 proposed.hoursPerPair(), proposed.showTeacherFullNames(), proposed.activeBellProfileId());

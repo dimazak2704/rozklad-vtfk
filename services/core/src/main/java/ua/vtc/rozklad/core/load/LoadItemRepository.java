@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.load;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,10 @@ public interface LoadItemRepository extends JpaRepository<LoadItem, UUID> {
 
     @EntityGraph(attributePaths = "teachers")
     List<LoadItem> findAllBySemesterIdAndGroupId(UUID semesterId, UUID groupId);
+
+    /** Load items of several groups in one query (the substitution day plan, accounting of several groups). */
+    @EntityGraph(attributePaths = "teachers")
+    List<LoadItem> findAllBySemesterIdAndGroupIdIn(UUID semesterId, Collection<UUID> groupIds);
 
     List<LoadItem> findAllBySemesterIdAndGroupIdAndDisciplineId(UUID semesterId, UUID groupId, UUID disciplineId);
 

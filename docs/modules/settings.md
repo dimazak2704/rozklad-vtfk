@@ -8,7 +8,9 @@ depends on nothing but `shared`).
 - `SettingsService`: `current()` → `SystemSettings`, `update(settings, actor)`, convenience accessors
   (`approvalMode()`, `requiresConfirmation()`, `confirmTimeoutMinutes()`, `signatoryPosition()`,
   `signatoryName()`, `collegeName()`, `hoursPerPair()`, `showTeacherFullNames()`,
-  `activeBellProfileId()`). Each accessor reads the table; call `current()` once for several values.
+  `activeBellProfileId()`). Inside a transaction the table is read once: `current()` is kept as a
+  transaction resource until the transaction ends, and `update` in the same transaction drops it. Outside a
+  transaction each call reads the table.
 - `ChangeApprovalMode {AUTO, CONFIRM, NOTIFY}` — own enum so settings does not depend on substitution; the
   substitution module maps it to its `ApprovalMode` (DOMAIN §7). `requiresConfirmation()` is true for CONFIRM
   only.

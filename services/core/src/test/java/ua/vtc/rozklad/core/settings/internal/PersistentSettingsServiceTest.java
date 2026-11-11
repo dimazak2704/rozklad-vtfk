@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.util.List;
@@ -13,6 +14,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.node.JsonNodeFactory;
 import ua.vtc.rozklad.core.settings.ChangeApprovalMode;
 import ua.vtc.rozklad.core.settings.Setting;
@@ -114,6 +117,63 @@ class PersistentSettingsServiceTest {
                         .containsExactly("activeBellProfileId", "confirmTimeoutMinutes", "hoursPerPair",
                                 "signatoryPosition"));
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void outsideATransactionEveryCallReadsTheTable() {
+        given(repository.findAll()).willReturn(List.of());
+        PersistentSettingsService service = service();
+
+        service.current();
+        service.current();
+
+        verify(repository, times(2)).findAll();
+    }
+
+    @Test
+    void oneTransactionReadsTheTableOnceAndTheNextOneReadsAgain() {
+        given(repository.findAll()).willReturn(List.of());
+        PersistentSettingsService service = service();
+
+        inTransaction(() -> {
+            service.current();
+            service.hoursPerPair();
+            service.approvalMode();
+        });
+        verify(repository, times(1)).findAll();
+
+        inTransaction(service::current);
+        verify(repository, times(2)).findAll();
+    }
+
+    @Test
+    void anUpdateInTheSameTransactionIsSeenByTheNextRead() {
+        given(repository.findById(any())).willReturn(Optional.empty());
+        given(repository.findAll()).willReturn(List.of(
+                new Setting("substitution.approvalMode", JSON.stringNode("CONFIRM"), "admin")));
+        PersistentSettingsService service = service();
+
+        inTransaction(() -> {
+            assertThat(service.current().approvalMode()).isEqualTo(ChangeApprovalMode.CONFIRM);
+            service.update(new SystemSettings(ChangeApprovalMode.AUTO, 60, "Директор", "Ім'я", "Коледж", 2, false,
+                    null), "admin");
+            given(repository.findAll()).willReturn(List.of(
+                    new Setting("substitution.approvalMode", JSON.stringNode("AUTO"), "admin")));
+
+            assertThat(service.current().approvalMode()).isEqualTo(ChangeApprovalMode.AUTO);
+        });
+    }
+
+    /** Runs the body with transaction synchronization on, the way a real transaction does, and completes it. */
+    private static void inTransaction(Runnable body) {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            body.run();
+        } finally {
+            List<TransactionSynchronization> synchronizations = TransactionSynchronizationManager.getSynchronizations();
+            TransactionSynchronizationManager.clearSynchronization();
+            synchronizations.forEach(sync -> sync.afterCompletion(TransactionSynchronization.STATUS_COMMITTED));
+        }
     }
 
     private PersistentSettingsService service() {
