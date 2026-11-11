@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { usePublicSchedule, usePublicTeachers } from '@/api/public';
@@ -6,6 +7,7 @@ import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/s
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
+import { mainDisciplines } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
 
 /** Розклад викладача /t/:id — публічні короткі імена (UI.md §1). */
@@ -17,6 +19,8 @@ export default function TeacherSchedulePage() {
   const query = usePublicSchedule('TEACHER', id, params.week.from, params.week.to);
   const teacher = teachers.data?.find((t) => t.id === id);
   const label = teacher?.shortName ?? query.data?.owner.label;
+  const loaded = query.isPlaceholderData ? undefined : query.data;
+  const disciplines = useMemo(() => mainDisciplines(loaded).join(', '), [loaded]);
 
   const missing = (isApiError(query.error) && query.error.isNotFound) || (teachers.isSuccess && !teacher);
   if (missing) {
@@ -42,8 +46,10 @@ export default function TeacherSchedulePage() {
     );
   }
 
-  // повне імʼя core надсилає лише тоді, коли це дозволено налаштуванням showTeacherFullNames; інакше — циклова комісія
-  const details = teacher?.fullName ?? teacher?.cycleCommission ?? null;
+  // повне імʼя core надсилає лише тоді, коли це дозволено налаштуванням showTeacherFullNames; інакше — імʼя з
+  // ініціалами чи циклова комісія. Поруч — що викладач веде цього тижня («СТП, ДК»): прізвище саме по собі мало каже
+  const who = teacher?.fullName ?? (teacher?.displayName && teacher.displayName !== label ? teacher.displayName : null) ?? teacher?.cycleCommission ?? null;
+  const details = [who, disciplines ? `Веде ${disciplines}` : null].filter(Boolean).join(' · ');
 
   return (
     <SchedulePage

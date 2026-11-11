@@ -9,6 +9,7 @@ import {
   changedLessons,
   dayShareText,
   filterBySubgroup,
+  mainDisciplines,
   reasonHint,
   roomDetails,
   roomOccupancy,
@@ -253,5 +254,25 @@ describe('withoutOwnRoom', () => {
     expect(moved!.room).toEqual(own);
     // вхідні дані не змінюються
     expect(schedule.days[0]!.lessons[0]!.room).toEqual(own);
+  });
+});
+
+describe('mainDisciplines', () => {
+  it('найчастіші дисципліни викладача, без скасованих пар', () => {
+    const schedule = {
+      days: [
+        {
+          date: '2026-11-09',
+          lessons: [
+            lesson({ discipline: ref('СТП') }),
+            lesson({ pair: 2, discipline: ref('СТП') }),
+            lesson({ pair: 3, discipline: ref('ДК') }),
+            lesson({ pair: 4, discipline: ref('КМ'), kind: 'CANCELLED' }),
+          ],
+        },
+      ],
+    } as unknown as ScheduleDto;
+    expect(mainDisciplines(schedule)).toEqual(['СТП', 'ДК']);
+    expect(mainDisciplines(undefined)).toEqual([]);
   });
 });

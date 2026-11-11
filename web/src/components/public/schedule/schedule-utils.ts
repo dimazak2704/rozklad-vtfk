@@ -53,6 +53,25 @@ export function withoutOwnRoom(schedule: ScheduleDto, roomId: string): ScheduleD
   };
 }
 
+/**
+ * Що викладач веде найчастіше: «СТП, ДК» — рядок контексту під прізвищем, щоб сторінка викладача не була
+ * голим словом. Скасовані пари не рахуються; не більше `limit` дисциплін.
+ */
+export function mainDisciplines(schedule: ScheduleDto | undefined, limit = 3): string[] {
+  const counts = new Map<string, number>();
+  for (const day of schedule?.days ?? []) {
+    for (const lesson of day.lessons) {
+      if (lesson.kind === 'CANCELLED') continue;
+      const name = lesson.discipline.shortName || lesson.discipline.name;
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'uk'))
+    .slice(0, limit)
+    .map(([name]) => name);
+}
+
 export interface ChangedLesson {
   day: DayDto;
   lesson: LessonView;
