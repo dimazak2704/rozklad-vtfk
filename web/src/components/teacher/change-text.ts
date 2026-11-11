@@ -1,9 +1,12 @@
 /** Тексти для карток запитів на заміну: що саме треба провести і замість кого. */
 import type { ChangeDto, IsoDate } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
-import { compareIsoDates, formatWeekdayDate, relativeDayLabel, todayInKyiv } from '@/lib/date';
-import { REASON_CODE_LABEL } from '@/lib/labels';
+import { compareIsoDates, formatDayMonth, formatWeekdayDate, isoWeekday, relativeDayLabel, todayInKyiv } from '@/lib/date';
+import { weekdayShort } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
+
+/** Повна назва, поки вона коротка («Фізичне виховання»); довгу заміняє скорочення («СТП»). */
+const TITLE_MAX = 32;
 
 /** Яку дисципліну проводить новий викладач: нову (взаємна заміна) або ту саму. */
 export function changeDiscipline(change: ChangeDto): string {
@@ -19,9 +22,30 @@ export function changeRoom(change: ChangeDto): string | null {
   return roomLabel((change.new.room ?? change.original.room)?.name);
 }
 
-/** «Відп.» або власний текст причини. */
-export function changeReason(change: ChangeDto): string | null {
-  return change.reasonCode === 'OTHER' ? change.reasonText : REASON_CODE_LABEL[change.reasonCode];
+/** Назва для рядка заміни: повна, якщо вміщається, інакше скорочення. */
+export function changeDisciplineTitle(change: ChangeDto): string {
+  const discipline = change.new.discipline ?? change.original.discipline;
+  if (!discipline) return 'Пара';
+  return discipline.name && discipline.name.length <= TITLE_MAX ? discipline.name : discipline.shortName;
+}
+
+/** Кого (і що) я заміняю: «Паламарчук» або «КБ, Непийвода», коли дисципліна теж інша. */
+export function changeReplaced(change: ChangeDto): string | null {
+  const swapped = change.kind === 'REPLACE_DISCIPLINE' ? change.original.discipline?.shortName : null;
+  return [swapped, change.original.teacher?.displayName].filter(Boolean).join(', ') || null;
+}
+
+/** «Сьогодні», «Завтра» або «Пт, 13 листопада» — коротко для колонки часу. */
+export function changeWhen(change: ChangeDto, today: string = todayInKyiv()): string {
+  return relativeDayLabel(change.date, today) ?? `${weekdayShort(isoWeekday(change.date))}, ${formatDayMonth(change.date)}`;
+}
+
+/** Хвіст строку відповіді: «» (сьогодні), « завтра» або « 12 листопада». */
+export function deadlineDay(deadline: Date, today: string): string {
+  const day = todayInKyiv(deadline);
+  if (day === today) return '';
+  const relative = relativeDayLabel(day, today);
+  return relative ? ` ${relative.toLocaleLowerCase('uk')}` : `, ${formatDayMonth(day)}`;
 }
 
 /** «Завтра, 10 листопада» або «Середа, 11 листопада». */

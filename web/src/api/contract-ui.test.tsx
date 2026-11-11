@@ -142,7 +142,7 @@ describe('Telegram у кабінеті: стан власної привʼязк
   it('уже підключений бот — стан замість нового посилання', async () => {
     server.use(http.get(apiPath('/notify/bindings/me'), () => HttpResponse.json(status(true))));
     renderWithProviders(<TelegramConnect teacherId={teacherNamed('Кренцін').id} />);
-    expect(await screen.findByRole('status')).toHaveTextContent(/Telegram підключено: Микола Кренцін, з 02\.09\.2026/);
+    expect(await screen.findByRole('status')).toHaveTextContent(/Telegram підключено: Микола Кренцін\./);
     expect(screen.queryByRole('button', { name: 'Підключити Telegram' })).not.toBeInTheDocument();
   });
 

@@ -12,13 +12,14 @@ test.describe('кабінет викладача', () => {
     await page.clock.setFixedTime(NOW);
   });
 
-  test('підтвердження заміни: картка одразу зникає із запитів і зʼявляється в «Моїх замінах»', async ({ page }) => {
+  test('підтвердження заміни: рядок одразу зникає із запитів і зʼявляється в «Моїх замінах»', async ({ page }) => {
     await page.goto('/me');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Мій розклад', { timeout: 30_000 });
     const cards = page.getByRole('article', { name: /^Запит на заміну/ });
     await expect(cards).toHaveCount(2);
+    // повідомлення без відповіді стоїть лише серед запитів, тож «Мої заміни» поки порожні
     const mine = page.getByRole('region', { name: 'Мої заміни' }).getByRole('listitem');
-    await expect(mine).toHaveCount(1);
+    await expect(mine).toHaveCount(0);
     const first = cards.first();
     const label = (await first.getAttribute('aria-label')) ?? '';
     await first.getByRole('button', { name: 'Підтверджую' }).click();
@@ -26,7 +27,7 @@ test.describe('кабінет викладача', () => {
     await expect(page.getByRole('article', { name: label, exact: true })).toHaveCount(0);
     await expect(cards).toHaveCount(1);
     await expect(page.getByText('Заміну підтверджено')).toBeVisible();
-    await expect(mine).toHaveCount(2);
+    await expect(mine).toHaveCount(1);
     await expect(page.getByRole('region', { name: 'Мої заміни' })).toContainText('Підтверджено');
   });
 

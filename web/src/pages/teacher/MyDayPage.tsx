@@ -1,125 +1,146 @@
-import { CalendarCog, CalendarX, ExternalLink, Printer } from 'lucide-react';
+import { CalendarArrowDown, CalendarX, ExternalLink, House, Printer, Smartphone } from 'lucide-react';
 import { Link } from 'react-router';
-import { usePublicMeta } from '@/api/meta';
-import { useMe, useMySchedule } from '@/api/me';
+import { isApiError } from '@/api/errors';
+import { useBells, usePublicMeta } from '@/api/meta';
+import { useMe, useMyChanges, useMySchedule } from '@/api/me';
+import { downloadIcs, icsUrls } from '@/api/public';
+import { useMyBinding } from '@/api/telegram';
 import { paths } from '@/app/routes';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { SchedulePrint } from '@/components/public/print/SchedulePrint';
 import { usePrintMode } from '@/components/public/print/usePrintMode';
-import { CalendarMenuButton } from '@/components/public/schedule/ScheduleActions';
-import { ScheduleExplorer } from '@/components/public/schedule/ScheduleExplorer';
-import { useScheduleParams } from '@/components/public/schedule/schedule-params';
+import { studyWeek, useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { semesterWeekOf } from '@/components/public/schedule/schedule-utils';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
+import { MyLessons } from '@/components/teacher/MyLessons';
+import { MyNow } from '@/components/teacher/MyNow';
 import { MyUpcomingChanges } from '@/components/teacher/MyUpcomingChanges';
 import { SubstitutionRequests } from '@/components/teacher/SubstitutionRequests';
 import { TelegramConnect } from '@/components/teacher/TelegramConnect';
-import { EmptyState, ErrorState, IconButton, PageHeader, ParityBadge, Skeleton, buttonClass } from '@/components/ui';
+import {
+  EmptyState,
+  PageErrorBanner,
+  PageErrorScope,
+  PageHeader,
+  Skeleton,
+  buttonClass,
+  notify,
+  type MoreMenuItem,
+} from '@/components/ui';
+import { isWeekend } from '@/lib/date';
 
-const LINK = 'flex items-center gap-2.5 rounded-control px-2 py-2 text-ui font-semibold text-primary hover:bg-hover focus-visible:outline-2 focus-visible:outline-focus';
+const ICS_FILE = 'rozklad-mii.ics';
 
-/** Кабінет викладача: запити на заміну, мій день і тиждень (наживо), мої заміни, Telegram. */
+/** Заголовок без переносу посеред назви: «Мій розклад» завжди одним рядком. */
+const TITLE = <span className="whitespace-nowrap">Мій розклад</span>;
+
+/**
+ * Кабінет викладача. Угорі — «зараз» (відлік до дзвінка і що я веду), далі заміни, що чекають відповіді,
+ * мій день чи тиждень з урахуванням замін, а внизу — мої майбутні заміни й Telegram.
+ * Усе другорядне (календар, друк, публічна сторінка) — у меню «⋯»; одна помилка на сторінку.
+ */
 export default function MyDayPage() {
   const me = useMe();
   const { isAdmin } = useCurrentUser();
   const meta = usePublicMeta();
   const params = useScheduleParams();
   const teacher = me.data?.teacher ?? null;
-  const schedule = useMySchedule(params.week.from, params.week.to, { enabled: teacher !== null });
+  const linked = teacher !== null;
+  const schedule = useMySchedule(params.week.from, params.week.to, { enabled: linked });
+  // «зараз» — завжди про сьогодні, хоч би який тиждень відкрито нижче (той самий ключ кешу для поточного тижня)
+  const todayWeek = studyWeek(params.today);
+  const current = useMySchedule(todayWeek.from, todayWeek.to, { enabled: linked && !isWeekend(params.today) });
+  const bells = useBells(isWeekend(params.today) ? null : params.today);
+  const changes = useMyChanges();
+  const binding = useMyBinding({ waiting: false });
   const { mode, print } = usePrintMode();
 
   useDocumentTitle(teacher ? `${teacher.shortName} — мій розклад` : null);
 
   if (me.isPending) {
     return (
-      <div className="flex flex-col gap-4" aria-busy="true">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-        <Skeleton className="h-48 w-full rounded-panel" />
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-52 w-full rounded-hero" />
+        <Skeleton className="h-64 w-full rounded-panel" />
       </div>
     );
   }
   if (me.isError) {
-    return <ErrorState error={me.error} title="Не вдалося відкрити кабінет" onRetry={() => void me.refetch()} retrying={me.isFetching} />;
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title={TITLE} size="headline" />
+        <PageErrorBanner error={me.error} title="Не вдалося відкрити кабінет" onRetry={() => void me.refetch()} retrying={me.isFetching} />
+      </div>
+    );
   }
   if (!teacher) {
     return (
-      <EmptyState
-        align="start"
-        title="Обліковий запис не повʼязаний з викладачем"
-        description="Кабінет показує розклад і заміни конкретного викладача. Попросіть диспетчера надіслати вам запрошення або привʼязати обліковий запис до вашого прізвища."
-        action={
-          isAdmin ? (
-            <Link to="/admin" className={buttonClass({ variant: 'primary' })}>
-              До панелі диспетчера
-            </Link>
-          ) : (
-            <Link to="/" className={buttonClass({ variant: 'secondary' })}>
-              Розклад коледжу
-            </Link>
-          )
-        }
-      />
+      <div className="flex flex-col gap-6">
+        <PageHeader title={TITLE} size="headline" />
+        <EmptyState
+          title="Обліковий запис ще не повʼязаний з викладачем."
+          description="Кабінет показує пари й заміни конкретного викладача. Попросіть диспетчера привʼязати ваш обліковий запис до вашого прізвища."
+          action={
+            isAdmin ? (
+              <Link to="/admin" className={buttonClass({ variant: 'primary' })}>
+                До панелі диспетчера
+              </Link>
+            ) : (
+              <Link to="/" className={buttonClass({ variant: 'secondary' })}>
+                Розклад коледжу
+              </Link>
+            )
+          }
+        />
+      </div>
     );
   }
 
   const weekNumber = semesterWeekOf(params.date, meta.data?.semester);
-  const parity = schedule.isPlaceholderData ? null : schedule.data?.days[0]?.parity;
+  const ics = icsUrls('TEACHER', teacher.id);
+  const downloadCalendar = async () => {
+    try {
+      await downloadIcs('TEACHER', teacher.id, ICS_FILE);
+      notify.success(`Файл ${ICS_FILE} завантажено`, { description: 'Відкрийте його — календар запропонує додати пари.' });
+    } catch (error) {
+      notify.error(error, 'Не вдалося завантажити календар');
+    }
+  };
+  const more: MoreMenuItem[] = [
+    { label: 'Підписатися в календарі телефону', icon: <Smartphone aria-hidden="true" />, href: ics.webcal },
+    { label: 'Завантажити календар (.ics)', icon: <CalendarArrowDown aria-hidden="true" />, onSelect: () => void downloadCalendar() },
+    { label: 'Друкувати тиждень', icon: <Printer aria-hidden="true" />, onSelect: () => print('week') },
+    { label: 'Моя публічна сторінка', icon: <ExternalLink aria-hidden="true" />, to: paths.teacher(teacher.id), separatorBefore: true },
+    { label: 'Розклад коледжу', icon: <House aria-hidden="true" />, to: '/' },
+  ];
+  // 422 teacher-not-linked — не збій, а стан облікового запису: його пояснює сам блок Telegram
+  const bindingFailed = binding.isError && !(isApiError(binding.error) && binding.error.code === 'teacher-not-linked');
+  const nowReady = current.data && !current.isPlaceholderData && bells.data;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 lg:gap-12">
       <PageHeader
-        title="Мій розклад"
-        description={`${teacher.shortName} · запити на заміну, ваші пари з урахуванням замін і привʼязка Telegram.`}
-        meta={parity ? <ParityBadge parity={parity} weekNumber={weekNumber ?? undefined} size="sm" /> : undefined}
-        actions={
-          <>
-            <Link to="/me/absences?new=1" className={buttonClass({ variant: 'primary' })}>
-              <CalendarX aria-hidden="true" className="size-4" />
-              Повідомити про відсутність
-            </Link>
-            <CalendarMenuButton ics={{ owner: 'TEACHER', id: teacher.id, fileName: 'rozklad-mii.ics' }} />
-            <IconButton
-              variant="secondary"
-              label="Друкувати тиждень (A4)"
-              shortcut="mod+p"
-              icon={<Printer aria-hidden="true" className="size-4" />}
-              onClick={() => print('week')}
-            />
-          </>
+        title={TITLE}
+        size="headline"
+        controls={
+          <Link to="/me/absences?new=1" className={buttonClass({ variant: 'secondary' })}>
+            <CalendarX aria-hidden="true" className="size-4" />
+            Повідомити про відсутність
+          </Link>
         }
+        more={more}
       />
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-10">
-          <SubstitutionRequests teacherId={teacher.id} />
-          <section aria-labelledby="my-lessons-heading" className="flex flex-col gap-3">
-            <h2 id="my-lessons-heading" className="text-title font-semibold text-primary">
-              Мої пари
-            </h2>
-            <ScheduleExplorer query={schedule} params={params} perspective="teacher" ownerLabel={teacher.shortName} />
-          </section>
-        </div>
-
-        <aside aria-label="Заміни, Telegram і налаштування" className="flex min-w-0 flex-col gap-6">
+      <PageErrorScope queries={[schedule, current, bells, changes, { ...binding, isError: bindingFailed }]} className="gap-8 lg:gap-12">
+        {nowReady ? <MyNow teacherId={teacher.id} today={params.today} days={current.data.days} bells={bells.data.slots} /> : null}
+        <SubstitutionRequests teacherId={teacher.id} />
+        <MyLessons query={schedule} params={params} weekNumber={weekNumber} />
+        <div className="grid gap-x-12 gap-y-8 border-t border-separator pt-8 md:grid-cols-2">
           <MyUpcomingChanges />
           <TelegramConnect teacherId={teacher.id} />
-          <nav aria-label="Кабінет" className="flex flex-col rounded-panel border border-default bg-surface p-2">
-            <Link to="/me/absences" className={LINK}>
-              <CalendarX aria-hidden="true" className="size-4 text-muted" />
-              Мої відсутності
-            </Link>
-            <Link to="/me/preferences" className={LINK}>
-              <CalendarCog aria-hidden="true" className="size-4 text-muted" />
-              Побажання до розкладу
-            </Link>
-            <Link to={paths.teacher(teacher.id)} className={LINK}>
-              <ExternalLink aria-hidden="true" className="size-4 text-muted" />
-              Мій публічний розклад
-            </Link>
-          </nav>
-        </aside>
-      </div>
+        </div>
+      </PageErrorScope>
 
       <SchedulePrint
         mode={mode}

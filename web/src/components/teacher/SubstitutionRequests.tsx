@@ -1,16 +1,19 @@
-import { CircleCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useServerEvent } from '@/api/live';
 import { useMyChanges, useReplyToChange } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
-import { ErrorState, Skeleton, notify } from '@/components/ui';
+import { notify } from '@/components/ui';
 import { todayInKyiv } from '@/lib/date';
+import { countLabel } from '@/lib/labels';
 import { awaitingAnswer, changeTitle, isUnansweredNotice } from './change-text';
 import { SubstitutionCard } from './SubstitutionCard';
 
+const REQUEST_FORMS = ['заміна чекає', 'заміни чекають', 'замін чекають'] as const;
+
 /**
- * Заміни, що чекають моєї відповіді. Нові приходять наживо (SSE `change.updated`) — з підсвіткою картки й
- * сповіщенням; відповідь оптимістична (src/api/me.ts → useReplyToChange).
+ * Заміни, що чекають моєї відповіді, — головна дія кабінету, тому стоять угорі. Немає запитів — немає й
+ * блоку (спокійне речення про це — у «Моїх замінах»). Нові приходять наживо (SSE `change.updated`) —
+ * з підсвіткою рядка й сповіщенням; відповідь оптимістична (src/api/me.ts → useReplyToChange).
  */
 export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   const changes = useMyChanges();
@@ -49,55 +52,28 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
       },
     );
 
-  let body;
-  if (changes.isPending) {
-    body = <Skeleton className="h-44 w-full rounded-panel" />;
-  } else if (changes.isError) {
-    body = (
-      <ErrorState
-        error={changes.error}
-        size="sm"
-        align="start"
-        onRetry={() => void changes.refetch()}
-        retrying={changes.isFetching}
-        className="rounded-panel border border-default bg-surface"
-      />
-    );
-  } else if (waiting.length === 0) {
-    body = (
-      <p className="flex items-center gap-2 rounded-panel border border-default bg-surface px-4 py-3 text-ui text-secondary">
-        <CircleCheck aria-hidden="true" className="size-4 text-add" />
-        Нових замін немає. Коли диспетчер поставить вас на заміну, вона зʼявиться тут і в Telegram.
-      </p>
-    );
-  } else {
-    body = (
-      <ul className="flex flex-col gap-3">
-        {waiting.map((change) => (
-          <li key={change.id}>
-            <SubstitutionCard
-              change={change}
-              fresh={fresh.has(change.id)}
-              onConfirm={() => confirm(change)}
-              onDecline={(comment) => decline(change, comment)}
-            />
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
+  // помилку й завантаження показує сторінка (одна на всіх); тут — лише те, що треба вирішити
   return (
-    <section aria-labelledby="requests-heading" className="flex flex-col gap-3">
-      <h2 id="requests-heading" className="flex items-center gap-2 text-title font-semibold text-primary">
-        Нові заміни
-        {waiting.length > 0 ? (
-          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-change px-1.5 text-caption font-bold text-on-change figures">
-            {waiting.length}
-          </span>
-        ) : null}
-      </h2>
-      <div aria-live="polite">{body}</div>
+    <section aria-labelledby="requests-heading" aria-live="polite" className={waiting.length === 0 ? 'hidden' : 'flex flex-col gap-3'}>
+      {waiting.length > 0 ? (
+        <>
+          <h2 id="requests-heading" className="text-title text-primary">
+            {countLabel(waiting.length, REQUEST_FORMS)} вашої відповіді
+          </h2>
+          <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-change bg-surface">
+            {waiting.map((change) => (
+              <li key={change.id}>
+                <SubstitutionCard
+                  change={change}
+                  fresh={fresh.has(change.id)}
+                  onConfirm={() => confirm(change)}
+                  onDecline={(comment) => decline(change, comment)}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </section>
   );
 }
