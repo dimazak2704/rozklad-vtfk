@@ -4,7 +4,7 @@ import { http } from 'msw';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BellSlotDto, ChangeDto, DayDto, LessonView, PreferenceKind, Weekday } from '@/api/types';
-import { ConfirmDialogHost, notify } from '@/components/ui';
+import { notify } from '@/components/ui';
 import { teacherNamed } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
@@ -12,7 +12,9 @@ import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
-import { awaitingAnswer, changeStatusBadge } from './change-text';
+import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay } from './change-text';
+import { lessonPhrase, nextDaySentence } from './my-day';
+import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
@@ -56,10 +58,36 @@ describe('SubstitutionRequests', () => {
     await waitFor(() => expect(screen.queryAllByRole('article', { name: /^Нова заміна/ })).toHaveLength(0));
   });
 
-  it('без запитів — спокійний порожній стан', async () => {
+  it('без запитів блоку немає, а «Мої заміни» кажуть одним реченням, що буде далі', async () => {
     server.use(http.get(apiPath('/me/changes'), () => Response.json([])));
+    renderWithProviders(
+      <>
+        <SubstitutionRequests teacherId={krentsin.id} />
+        <MyUpcomingChanges />
+      </>,
+    );
+    expect(await screen.findByText(/Нових запитів на заміну немає/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /чекають вашої відповіді|чекає вашої відповіді/ })).not.toBeInTheDocument();
+  });
+
+  it('заголовок каже, скільки замін чекає, а рядок — строк відповіді реченням, без табличок', async () => {
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
-    expect(await screen.findByText(/Нових замін немає/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^3\sзаміни чекають вашої відповіді$/ })).toBeInTheDocument();
+    const [request] = screen.getAllByRole('article', { name: /^Запит на заміну/ });
+    expect(within(request as HTMLElement).getByText(/^Просять замінити · відповісти до \d\d:\d\d/)).toBeInTheDocument();
+    // скорочення причини з розпорядження («Відп.») викладачу не показуємо
+    expect(within(request as HTMLElement).queryByText(/Відп\./)).not.toBeInTheDocument();
+  });
+
+  it('повідомлення без відповіді не дублюються в «Моїх замінах»', async () => {
+    renderWithProviders(
+      <>
+        <SubstitutionRequests teacherId={krentsin.id} />
+        <MyUpcomingChanges />
+      </>,
+    );
+    await screen.findAllByRole('article', { name: /^Нова заміна/ });
+    expect(screen.queryByRole('region', { name: 'Мої заміни' })).not.toBeInTheDocument();
   });
 });
 
@@ -140,16 +168,15 @@ describe('AbsenceForm: дні', () => {
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
     const day = (name: RegExp) => screen.getByRole('button', { name });
-    const summary = () => screen.getByText(/навчальних днів/).closest('p')?.textContent ?? '';
+    const summary = () => screen.getAllByRole('status').at(-1)?.textContent ?? '';
 
     await user.click(day(/четвер, 19/));
-    expect(summary()).toContain('навчальних днів: 1');
+    expect(summary()).toMatch(/^Четвер, 19\sлистопада$/);
     await user.click(day(/пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/));
-    expect(summary()).toMatch(/19–20\sлистопада/);
-    expect(summary()).toContain('навчальних днів: 2');
+    expect(summary()).toMatch(/19–20\sлистопада, 2\sнавчальні дні/);
 
     await user.click(day(/вівторок, 24/));
-    expect(summary()).toContain('навчальних днів: 1');
+    expect(summary()).toMatch(/^Вівторок, 24\sлистопада$/);
   });
 });
 
@@ -226,7 +253,7 @@ describe('AbsenceForm: які пари зачепить', () => {
     await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
     await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
 
-    expect(screen.getByText(/навчальних днів/).closest('p')?.textContent).toMatch(/^20\sлистопада/);
+    expect(screen.getAllByRole('status').at(-1)?.textContent).toMatch(/^П.ятниця, 20\sлистопада$/);
     expect(preview()).toBe('Перевіряємо ваші пари на ці дні…');
     expect(preview()).not.toContain('19.11');
 
@@ -235,7 +262,7 @@ describe('AbsenceForm: які пари зачепить', () => {
   });
 });
 
-describe('AbsenceList: видалення', () => {
+describe('AbsenceList: видалення зі «Скасувати»', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
@@ -245,30 +272,105 @@ describe('AbsenceList: видалення', () => {
     vi.restoreAllMocks();
   });
 
-  it('після видалення зʼявляється сповіщення, хоч рядок зник одразу (оптимістично)', async () => {
-    const success = vi.spyOn(notify, 'success');
-    // відповідь сервера приходить після того, як рядок уже зник (як у живій мережі)
-    server.use(http.delete(apiPath('/me/absences/:id'), async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return new Response(null, { status: 204 });
-    }));
-    const user = userEvent.setup();
-    renderWithProviders(
-      <>
-        <AbsenceList today="2026-11-09" />
-        <ConfirmDialogHost />
-      </>,
+  function trackDeletes() {
+    const deleted: string[] = [];
+    server.use(
+      http.delete(apiPath('/me/absences/:id'), ({ params }) => {
+        deleted.push(String(params.id));
+        return new Response(null, { status: 204 });
+      }),
     );
+    return deleted;
+  }
+
+  it('рядок зникає одразу без «Ви впевнені?», а «Скасувати» повертає його й нічого не видаляє', async () => {
+    const deleted = trackDeletes();
+    const undo = vi.spyOn(notify, 'undo');
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceList today="2026-11-09" />);
     const button = await screen.findByRole('button', { name: /^Видалити відсутність / });
     const range = (button.getAttribute('aria-label') ?? '').replace('Видалити відсутність ', '');
     await user.click(button);
-    await user.click(await screen.findByRole('button', { name: 'Видалити' }));
-    // рядок зник ще до відповіді сервера
-    expect(screen.queryByRole('button', { name: /^Видалити відсутність / })).not.toBeInTheDocument();
-    expect(success).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(success).toHaveBeenCalledWith('Відсутність видалено', { description: range }));
-    expect(range).not.toBe('');
+    expect(screen.queryByRole('button', { name: /^Видалити відсутність / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(undo).toHaveBeenCalledWith(`Відсутність ${range} видалено`, expect.objectContaining({ duration: 8000 }));
+
+    act(() => undo.mock.calls[0]?.[1].onUndo());
+    expect(await screen.findByRole('button', { name: `Видалити відсутність ${range}` })).toBeInTheDocument();
+    expect(deleted).toEqual([]);
+  });
+
+  it('піти зі сторінки, не скасувавши, — видалення йде одразу', async () => {
+    const deleted = trackDeletes();
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(<AbsenceList today="2026-11-09" />);
+    await user.click(await screen.findByRole('button', { name: /^Видалити відсутність / }));
+    expect(deleted).toEqual([]);
+    unmount();
+    await waitFor(() => expect(deleted).toHaveLength(1));
+  });
+});
+
+describe('мій день реченням', () => {
+  const lesson = (pair: number, startsAt: string, teacherId: string, kind: LessonView['kind'] = 'REGULAR'): LessonView => ({
+    id: `l-${pair}-${teacherId}`,
+    pair,
+    startsAt,
+    endsAt: '00:00',
+    discipline: { id: 'd1', shortName: 'СТП', name: 'Сучасні технології проєктування', color: null },
+    teacher: { id: teacherId, shortName: 'Т', displayName: 'Т' },
+    room: { id: 'r1', name: '14', type: 'CLASSROOM' },
+    group: { id: 'g1', code: '4КІ2', course: 4 },
+    subgroup: 0,
+    kind,
+    online: false,
+    original: null,
+    reasonText: null,
+    changeId: null,
+  });
+  const day = (date: string, lessons: LessonView[]): DayDto => ({ date, weekday: 1, weekdayLabel: '', parity: 'NUMERATOR', studyDay: true, note: null, lessons });
+
+  it('що веду: дисципліна, група, аудиторія', () => {
+    expect(lessonPhrase(lesson(1, '08:30', 'me'))).toBe('СТП, 4КІ2, ауд. 14');
+  });
+
+  it('наступний день з моїми парами: чужі й скасовані пари не рахуються', () => {
+    const days = [
+      day('2026-11-09', [lesson(1, '08:30', 'me')]),
+      day('2026-11-10', [lesson(1, '08:30', 'other'), lesson(2, '09:40', 'me', 'CANCELLED')]),
+      day('2026-11-11', [lesson(3, '11:00', 'me'), lesson(2, '09:40', 'me')]),
+    ];
+    expect(nextDaySentence(days, '2026-11-09', 'me')).toBe('Середа, 11 листопада перша о 09:40 — СТП, 4КІ2, ауд. 14.');
+    expect(nextDaySentence(days, '2026-11-10', 'me')).toBe('Завтра перша о 09:40 — СТП, 4КІ2, ауд. 14.');
+    expect(nextDaySentence(days, '2026-11-11', 'me')).toBeNull();
+  });
+});
+
+describe('тексти заміни', () => {
+  const change = (patch: Partial<ChangeDto>): ChangeDto =>
+    ({
+      date: '2026-11-13',
+      kind: 'REPLACE_TEACHER',
+      original: { discipline: { shortName: 'КБ' }, teacher: { displayName: 'Непийвода' } },
+      ...patch,
+    }) as unknown as ChangeDto;
+
+  it('коли: сьогодні, завтра або короткий день з датою', () => {
+    expect(changeWhen(change({ date: '2026-11-09' }), '2026-11-09')).toBe('Сьогодні');
+    expect(changeWhen(change({ date: '2026-11-10' }), '2026-11-09')).toBe('Завтра');
+    expect(changeWhen(change({}), '2026-11-09')).toBe('Пт, 13 листопада');
+  });
+
+  it('кого заміняю: дисципліну згадуємо, лише коли вона теж інша', () => {
+    expect(changeReplaced(change({}))).toBe('Непийвода');
+    expect(changeReplaced(change({ kind: 'REPLACE_DISCIPLINE' }))).toBe('КБ, Непийвода');
+  });
+
+  it('строк відповіді: сьогодні — лише час, завтра — словом, далі — датою', () => {
+    expect(deadlineDay(new Date('2026-11-09T15:00:00Z'), '2026-11-09')).toBe('');
+    expect(deadlineDay(new Date('2026-11-10T05:30:00Z'), '2026-11-09')).toBe(' завтра');
+    expect(deadlineDay(new Date('2026-11-12T05:30:00Z'), '2026-11-09')).toBe(', 12 листопада');
   });
 });
 

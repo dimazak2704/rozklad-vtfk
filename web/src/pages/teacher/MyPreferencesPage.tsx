@@ -6,15 +6,20 @@ import { useMe, useMyPreferences, useMySchedule, useSavePreferences } from '@/ap
 import { useBellProfiles } from '@/api/public';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { studyWeek } from '@/components/public/schedule/schedule-params';
-import { PreferenceGrid } from '@/components/teacher/PreferenceGrid';
-import { cellKey, changedCells, countKinds, KIND_CELL, KIND_TEXT, toList, toMap, type CellKey } from '@/components/teacher/preferences';
-import { Button, EmptyState, ErrorState, LoadingRegion, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
+import { KindIcon, PreferenceGrid } from '@/components/teacher/PreferenceGrid';
+import { cellKey, changedCells, KIND_CELL, toList, toMap, type CellKey } from '@/components/teacher/preferences';
+import { Button, EmptyState, LoadingRegion, PageErrorScope, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, nearestStudyDay, todayInKyiv } from '@/lib/date';
 import { countLabel, PARITY_LABEL } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 
 const CELL_FORMS = ['клітинка', 'клітинки', 'клітинок'] as const;
+
+const LEGEND = [
+  { kind: 'UNWANTED', title: 'Небажано', text: 'генератор уникатиме цієї пари, якщо зможе' },
+  { kind: 'UNAVAILABLE', title: 'Неможливо', text: 'пару сюди не поставлять зовсім — позначайте, лише коли справді не можете' },
+] as const;
 
 /** Побажання до розкладу: сітка «день × пара» з небажаними й неможливими парами для генератора. */
 export default function MyPreferencesPage() {
@@ -33,7 +38,6 @@ export default function MyPreferencesPage() {
   const saved = useMemo(() => toMap(preferences.data ?? []), [preferences.data]);
   const current = draft ?? saved;
   const changed = changedCells(saved, current);
-  const counts = countKinds(current);
 
   const slotsByWeekday = useMemo(() => {
     const active = profiles.data?.profiles?.find((p) => p.id === profiles.data.profile.id);
@@ -90,97 +94,91 @@ export default function MyPreferencesPage() {
       return next;
     });
 
+  // скасувати чернетку — з можливістю повернути її, а не через «Ви впевнені?»
+  const onDiscard = () => {
+    const previous = draft;
+    setDraft(null);
+    notify.undo('Зміни скасовано', { onUndo: () => setDraft(previous) });
+  };
+
   const onSave = () =>
     save.mutate(toList(current, preferences.data ?? []), {
       onSuccess: () => {
         setDraft(null);
-        notify.success('Побажання збережено', { description: 'Генератор врахує їх під час наступного складання розкладу.' });
+        notify.success('Побажання збережено', { description: 'Генератор врахує їх, коли складатиме наступний розклад.' });
       },
       onError: (error) => notify.error(error, 'Не вдалося зберегти побажання'),
     });
 
   // вимкнений запит (ще немає викладача чи семестру) у TanStack Query 5 лишається «pending», тож для побажань — isLoading
   const loading = me.isPending || meta.isPending || preferences.isLoading || profiles.isPending;
-  const failure = me.error ?? meta.error ?? preferences.error ?? profiles.error;
+  const failed = me.isError || meta.isError || preferences.isError || profiles.isError;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PageHeader
         title="Побажання до розкладу"
-        description={`Позначте пари, які вам незручні або неможливі${semester ? ` (${semester.name})` : ''}. Генератор розкладу уникає небажаних пар і не ставить пари туди, де ви не можете.`}
+        size="headline"
+        meta={semester ? <span>{semester.name}</span> : undefined}
       />
 
-      {failure ? (
-        <ErrorState
-          error={failure}
-          onRetry={() => {
-            void me.refetch();
-            void meta.refetch();
-            void preferences.refetch();
-            void profiles.refetch();
-          }}
-          className="rounded-panel border border-default bg-surface"
-        />
-      ) : !loading && !teacher ? (
-        <EmptyState
-          align="start"
-          title="Обліковий запис не повʼязаний з викладачем"
-          description="Побажання стосуються конкретного викладача. Попросіть диспетчера привʼязати ваш обліковий запис."
-        />
-      ) : loading ? (
-        <LoadingRegion label="Завантажуємо побажання…">
-          <Skeleton className="h-[30rem] w-full rounded-panel" />
-        </LoadingRegion>
-      ) : (
-        <>
-          <div id="preferences-legend" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-secondary">
-            {(['UNWANTED', 'UNAVAILABLE'] as const).map((kind) => (
-              <span key={kind} className="inline-flex items-center gap-2">
-                <span aria-hidden="true" className={cn('inline-block h-5 w-8 rounded-plate border', KIND_CELL[kind])} />
-                <span>
-                  <span className="font-semibold text-primary">{KIND_TEXT[kind]}</span>
-                  {kind === 'UNWANTED' ? ' — уникати, якщо можна' : ' — пару сюди не ставити'}
-                </span>
-              </span>
-            ))}
-            <span className="inline-flex items-center gap-2">
-              <span aria-hidden="true" className="text-meta font-semibold text-muted">4КІ1</span>
-              ваша пара за поточним розкладом
-            </span>
-            <span className="text-muted">Клік — змінити; клавіші: 1, 2, 0 і стрілки.</span>
-          </div>
+      <PageErrorScope queries={[me, meta, preferences, profiles]}>
+        {failed ? null : !loading && !teacher ? (
+          <EmptyState
+            title="Обліковий запис ще не повʼязаний з викладачем."
+            description="Побажання стосуються конкретного викладача. Попросіть диспетчера привʼязати ваш обліковий запис."
+          />
+        ) : loading ? (
+          <LoadingRegion label="Завантажуємо побажання…">
+            <Skeleton className="h-[30rem] w-full rounded-panel" />
+          </LoadingRegion>
+        ) : (
+          <div className="flex flex-col gap-5">
+            <div id="preferences-legend" className="flex flex-col gap-3">
+              <p className="max-w-prose text-body text-primary">
+                Натисніть пару, яка вам незручна. Натисніть ще раз, якщо прийти тоді не можете зовсім.
+              </p>
+              <ul className="flex flex-col gap-1.5 text-ui text-secondary md:flex-row md:gap-6">
+                {LEGEND.map(({ kind, title, text }) => (
+                  <li key={kind} className="flex items-start gap-2">
+                    <span aria-hidden="true" className={cn('mt-0.5 inline-flex h-5 w-7 shrink-0 items-center justify-center rounded-tag border', KIND_CELL[kind])}>
+                      <KindIcon kind={kind} className="size-3.5" />
+                    </span>
+                    <span>
+                      <span className="font-[650] text-primary">{title}</span> — {text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          <PreferenceGrid value={current} onCellChange={onCellChange} slotsByWeekday={slotsByWeekday} lessons={lessons} describedBy="preferences-legend" />
+            <PreferenceGrid value={current} onCellChange={onCellChange} slotsByWeekday={slotsByWeekday} lessons={lessons} describedBy="preferences-legend" />
+            {lessons.size > 0 ? <p className="text-caption text-muted">Код групи в клітинці — ваша пара там за поточним розкладом.</p> : null}
 
-          <p className="text-ui text-secondary" aria-live="polite">
-            Небажано: <span className="font-semibold text-primary figures">{counts.UNWANTED}</span> · Неможливо:{' '}
-            <span className="font-semibold text-primary figures">{counts.UNAVAILABLE}</span>
-            {counts.UNAVAILABLE > 0 ? ' — «неможливо» ставте лише там, де справді не можете: це жорстке обмеження для розкладу.' : null}
-          </p>
-
-          <div
-            ref={toastClearanceRef}
-            className={cn(
-              'sticky bottom-[calc(var(--tabbar-height)+0.75rem)] z-20 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-default bg-raised px-4 py-3 shadow-popover md:bottom-4',
-              changed === 0 && 'hidden',
-            )}
-            role="region"
-            aria-label="Незбережені зміни"
-          >
-            <p className="text-ui text-primary">
-              Не збережено: <span className="font-semibold figures">{countLabel(changed, CELL_FORMS)}</span>
-            </p>
-            <div className="flex gap-2">
-              <Button variant="ghost" iconStart={<Undo2 aria-hidden="true" className="size-4" />} onClick={() => setDraft(null)} disabled={save.isPending}>
-                Скасувати
-              </Button>
-              <Button variant="primary" iconStart={<Save aria-hidden="true" className="size-4" />} loading={save.isPending} onClick={onSave}>
-                Зберегти
-              </Button>
+            <div
+              ref={toastClearanceRef}
+              className={cn(
+                'sticky bottom-[calc(var(--tabbar-height)+0.75rem)] z-20 flex flex-wrap items-center justify-between gap-3 rounded-popover border border-default bg-raised px-4 py-3 shadow-popover md:bottom-4',
+                changed === 0 && 'hidden',
+              )}
+              role="region"
+              aria-label="Незбережені зміни"
+            >
+              <p className="text-ui text-primary">
+                Не збережено: <span className="font-[650] figures">{countLabel(changed, CELL_FORMS)}</span>
+              </p>
+              <div className="flex gap-2">
+                <Button variant="ghost" iconStart={<Undo2 aria-hidden="true" className="size-4" />} onClick={onDiscard} disabled={save.isPending}>
+                  Скасувати
+                </Button>
+                <Button variant="primary" iconStart={<Save aria-hidden="true" className="size-4" />} loading={save.isPending} onClick={onSave}>
+                  Зберегти
+                </Button>
+              </div>
             </div>
           </div>
-        </>
-      )}
+        )}
+      </PageErrorScope>
     </div>
   );
 }
