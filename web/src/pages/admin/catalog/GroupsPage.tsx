@@ -218,6 +218,11 @@ export default function GroupsPage() {
         onSortChange={table.setSort}
         onRowClick={(g) => setEditing(g)}
         rowClassName={(g) => (g.active ? undefined : 'text-muted')}
+        mobileRow={(g) => ({
+          title: <span className="figures">{g.code}</span>,
+          caption: `${g.course} курс · ${g.shift} зміна`,
+          status: g.active ? null : <span className="text-muted">неактивна</span>,
+        })}
         rowActions={(g) => (
           <RowActions
             rowLabel={`група ${g.code}`}

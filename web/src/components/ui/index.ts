@@ -6,7 +6,7 @@ export { Button, type ButtonProps } from './Button';
 export { Checkbox } from './Checkbox';
 export { Combobox, type ComboboxOption } from './Combobox';
 export { ConfirmDialog, ConfirmDialogHost } from './ConfirmDialog';
-export { DataTable, type DataTableColumn, type DataTablePagination } from './DataTable';
+export { DataTable, type DataTableColumn, type DataTableMobileRow, type DataTablePagination } from './DataTable';
 export { DateNav } from './DateNav';
 export { Dialog, DialogClose, DialogContent, DialogTrigger } from './Dialog';
 export { Drawer, DrawerClose, DrawerContent, DrawerTrigger } from './Drawer';

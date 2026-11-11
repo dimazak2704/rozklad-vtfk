@@ -265,6 +265,7 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
           error={rows.error}
           onRetry={() => void rows.refetch()}
           rowClassName={(row) => (needsAttention(row) ? undefined : 'text-secondary')}
+          mobileRow={(row) => mobileAccountingRow(row, groupId)}
           empty={
             rows.data && rows.data.length > 0 ? (
               <EmptyState
@@ -298,7 +299,6 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
 
 /** Стан словом і одна дія з пропозиції — без повтору того самого в бейджі, реченні й посиланні. */
 function StatusCell({ row }: { row: AccountingRow }) {
-  const link = changesLink(row);
   const finish = row.forecastFinishDate && row.status !== 'WILL_UNDERRUN' ? formatNumericDate(row.forecastFinishDate) : null;
   return (
     <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -308,16 +308,38 @@ function StatusCell({ row }: { row: AccountingRow }) {
         {statusLabel(row)}
         {finish && row.status === 'ON_TRACK' ? <span className="font-normal text-muted figures">до {finish}</span> : null}
       </span>
-      {row.suggestion && link ? (
-        <Link
-          to={link}
-          aria-label={`${suggestionAction(row.suggestion)}: ${row.group.code}, ${row.discipline.shortName} — у замінах`}
-          className="inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
-        >
-          {suggestionAction(row.suggestion)}
-          <ArrowRight aria-hidden="true" className="size-3.5 rtl:rotate-180" />
-        </Link>
-      ) : null}
+      <SuggestionLink row={row} />
     </span>
   );
+}
+
+/** «Додати пару →» — у заміни з уже вибраною групою й дисципліною. */
+function SuggestionLink({ row }: { row: AccountingRow }) {
+  const link = changesLink(row);
+  if (!row.suggestion || !link) return null;
+  return (
+    <Link
+      to={link}
+      aria-label={`${suggestionAction(row.suggestion)}: ${row.group.code}, ${row.discipline.shortName} — у замінах`}
+      className="inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+    >
+      {suggestionAction(row.suggestion)}
+      <ArrowRight aria-hidden="true" className="size-3.5 rtl:rotate-180" />
+    </Link>
+  );
+}
+
+/** Рядок списку на телефоні: «1ВЕ · БіЕ», під ним «● 30 з 54 год · не вистачить 4 год», дія праворуч. */
+function mobileAccountingRow(row: AccountingRow, groupId: string | null | undefined) {
+  const label = statusLabel(row);
+  return {
+    title: groupId ? row.discipline.shortName : `${row.group.code} · ${row.discipline.shortName}`,
+    caption: (
+      <>
+        <span aria-hidden="true" className={cn('me-1.5 inline-block size-2 rounded-full bg-current align-middle', STATUS_TEXT[row.status])} />
+        {row.fact} з {row.plan} год · {label.charAt(0).toLocaleLowerCase('uk') + label.slice(1)}
+      </>
+    ),
+    status: <SuggestionLink row={row} />,
+  };
 }

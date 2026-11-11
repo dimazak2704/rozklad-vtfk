@@ -29,6 +29,16 @@ export interface DataTableColumn<T> {
   className?: string;
 }
 
+/** Рядок списку на телефоні: назва, один рядок підпису, необовʼязковий стан праворуч. */
+export interface DataTableMobileRow {
+  /** «1ВЕ · БіЕ» — головне, що відрізняє рядок. */
+  title: ReactNode;
+  /** Один рядок без «Підпис:» — «30 з 54 год · не вистачить 4 год», «1 курс · 1 зміна». */
+  caption?: ReactNode;
+  /** Одне слово стану (`StatusText`) праворуч. */
+  status?: ReactNode;
+}
+
 export interface DataTablePagination {
   page: number;
   size: number;
@@ -70,6 +80,11 @@ export interface DataTableProps<T> {
    * `false` — лишити таблицю з прокруткою (сітки, де важливі стовпці).
    */
   stackOnMobile?: boolean;
+  /**
+   * Свій вигляд рядка на телефоні (< 768 px): назва, рядок підпису й стан — без стосу «Підпис: значення».
+   * Решта полів — у шторці чи формі рядка (`onRowClick`), дії — у `⋯` праворуч.
+   */
+  mobileRow?: (row: T) => DataTableMobileRow;
   className?: string;
 }
 
@@ -127,6 +142,7 @@ export function DataTable<T>({
   maxHeight,
   skeletonRows = 6,
   stackOnMobile = true,
+  mobileRow,
   className,
 }: DataTableProps<T>) {
   const stack = stackOnMobile ? STACK : null;
@@ -159,11 +175,63 @@ export function DataTable<T>({
   const showSkeleton = loading && (!rows || rows.length === 0);
   const showError = !loading && error !== undefined && error !== null;
   const showEmpty = !loading && !showError && rows !== undefined && rows.length === 0;
+  // на телефоні з власним рядком — список замість таблиці (стани завантаження, помилки й порожнечі — спільні)
+  const listMode = Boolean(mobileRow) && stackOnMobile && !showSkeleton && !showError && !showEmpty;
 
   return (
     <div className={cn('flex flex-col', className)}>
+      {listMode && mobileRow ? (
+        <ul className="md:hidden" aria-label={caption}>
+          {sortedRows.map((row) => {
+            const id = getRowId(row);
+            const item = mobileRow(row);
+            const body = (
+              <>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-cell font-[650] text-primary">{item.title}</span>
+                  {item.caption ? <span className="line-clamp-2 text-caption text-secondary">{item.caption}</span> : null}
+                </span>
+                {item.status ? <span className="shrink-0 text-caption">{item.status}</span> : null}
+              </>
+            );
+            return (
+              <li
+                key={id}
+                data-selected={selectedRowId === id || undefined}
+                className={cn(
+                  'flex items-center gap-2 border-b border-separator last:border-b-0',
+                  rowActions ? 'pe-3' : 'pe-5',
+                  selectedRowId === id && 'bg-selected',
+                  rowClassName?.(row),
+                )}
+              >
+                {onRowClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onRowClick(row)}
+                    className={cn(
+                      'flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2.5 ps-5 text-start',
+                      'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                    )}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2.5 ps-5">{body}</div>
+                )}
+                {rowActions ? <div className="shrink-0">{rowActions(row)}</div> : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
       <div
-        className={cn('relative w-full overflow-x-auto', stackOnMobile && 'max-md:overflow-x-visible', maxHeight && 'overflow-y-auto overscroll-contain')}
+        className={cn(
+          'relative w-full overflow-x-auto',
+          stackOnMobile && 'max-md:overflow-x-visible',
+          listMode && 'max-md:hidden',
+          maxHeight && 'overflow-y-auto overscroll-contain',
+        )}
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table

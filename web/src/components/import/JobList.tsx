@@ -88,6 +88,11 @@ export function JobList({ onOpen }: JobListProps) {
         error={jobs.error}
         onRetry={() => void jobs.refetch()}
         onRowClick={onOpen}
+        mobileRow={(job) => ({
+          title: <span className="block truncate">{job.fileName}</span>,
+          caption: `${IMPORT_KIND_LABEL[job.kind]} · ${when(job.createdAt)}`,
+          status: <JobStatusBadge status={job.status} />,
+        })}
         pagination={
           data && data.total > IMPORT_JOBS_PAGE_SIZE
             ? { page, size: IMPORT_JOBS_PAGE_SIZE, total: data.total, onPageChange: setPage, noun: 'завдань' }

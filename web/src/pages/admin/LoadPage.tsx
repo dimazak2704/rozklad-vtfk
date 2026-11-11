@@ -331,6 +331,13 @@ export default function LoadPage() {
         sort={sort}
         onSortChange={table.setSort}
         onRowClick={(item) => setEditing(item)}
+        mobileRow={(item) => ({
+          title: groupId ? item.discipline.shortName : `${item.group.code} · ${item.discipline.shortName}`,
+          caption: [
+            `${formatHours(item.hoursPerWeek)} год/тиж`,
+            item.teachers.length === 0 ? 'викладача не призначено' : item.teachers.map((t) => t.teacher.shortName).join(', '),
+          ].join(' · '),
+        })}
         rowActions={(item) => (
           <RowActions
             rowLabel={`${item.group.code} · ${item.discipline.shortName}`}
