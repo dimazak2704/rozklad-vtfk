@@ -38,8 +38,17 @@ export interface NavMeta {
   /** Підпис у меню (може бути коротшим за заголовок сторінки). */
   label: string;
   icon: LucideIcon;
-  /** Розділ бічної панелі адмінки. */
-  section?: 'Щодня' | 'Розклад' | 'Дані' | 'Система';
+  /**
+   * Розділ бічної панелі адмінки: щоденні інструменти вгорі, рідкісні — у групі «Планування»,
+   * що згортається (стан запамʼятовується).
+   */
+  section?: 'Щодня' | 'Планування';
+  /** Показувати в бічній панелі адмінки (за замовчуванням так). Палітра команд бачить усі пункти. */
+  sidebar?: boolean;
+  /** Інший підпис у бічній панелі: кілька сторінок довідників — один пункт «Довідники». */
+  sidebarLabel?: string;
+  /** Пункт активний для всіх адрес з цим префіксом (`/admin/catalog`). */
+  activePrefix?: string;
   order: number;
   /** Показувати в нижніх вкладках на телефоні (публічна частина, кабінет). */
   tab?: boolean;
@@ -60,6 +69,11 @@ export interface AppRoute {
   roles?: readonly Role[];
   page: () => Promise<{ default: ComponentType }>;
   nav?: NavMeta;
+  /**
+   * Рівень вище (id маршруту): куди веде «‹ Назад» у заголовку сторінки. Кожна сторінка, що не є
+   * верхнім рівнем свого розділу, має батька — з будь-якої сторінки є очевидний шлях назад.
+   */
+  parent?: string;
   /** Лише в `npm run dev`. */
   devOnly?: boolean;
 }
@@ -80,6 +94,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'group',
+    parent: 'home',
     path: '/g/:code',
     title: 'Розклад групи',
     description: 'День і тиждень групи з виділеними змінами, «зараз» і поділитися посиланням.',
@@ -88,6 +103,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'teacher',
+    parent: 'home',
     path: '/t/:id',
     title: 'Розклад викладача',
     description: 'Пари викладача на день і тиждень (публічні короткі імена).',
@@ -96,6 +112,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'room',
+    parent: 'home',
     path: '/r/:id',
     title: 'Розклад аудиторії',
     description: 'Зайнятість аудиторії на день і тиждень.',
@@ -122,6 +139,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'about',
+    parent: 'home',
     path: '/about',
     title: 'Про систему',
     description: 'Що вміє система, як читати розклад і як підписатися на Telegram-бота.',
@@ -132,6 +150,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'invite',
+    parent: 'home',
     path: '/invite/:token',
     title: 'Реєстрація викладача',
     description: 'Створення облікового запису за запрошенням: логін і пароль.',
@@ -140,6 +159,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'login',
+    parent: 'home',
     path: '/login',
     title: 'Вхід',
     description: 'Вхід для викладачів і диспетчерів через обліковий запис коледжу.',
@@ -168,6 +188,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'me-absences',
+    parent: 'me',
     path: '/me/absences',
     title: 'Мої відсутності',
     description: 'Повідомлені відсутності; нові можна додати на сьогодні чи майбутні дати.',
@@ -178,6 +199,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'me-preferences',
+    parent: 'me',
     path: '/me/preferences',
     title: 'Побажання до розкладу',
     description: 'Сітка небажаних і неможливих пар для генератора розкладу.',
@@ -196,10 +218,11 @@ export const ROUTES: readonly AppRoute[] = [
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/DashboardPage'),
-    nav: { label: 'Панель', icon: LayoutDashboard, section: 'Щодня', order: 1 },
+    nav: { label: 'Сьогодні', icon: LayoutDashboard, section: 'Щодня', order: 1, keywords: ['панель', 'диспетчер'] },
   },
   {
     id: 'admin-changes',
+    parent: 'admin',
     path: '/admin/changes',
     title: 'Заміни',
     description: 'Відсутності → зачеплені пари → варіанти з оцінками → підтвердження викладачів.',
@@ -210,6 +233,7 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'admin-orders',
+    parent: 'admin',
     path: '/admin/orders',
     title: 'Розпорядження',
     description: 'Чернетки за датами, перегляд у форматі коледжу, публікація, доповнення, архів.',
@@ -220,133 +244,161 @@ export const ROUTES: readonly AppRoute[] = [
   },
   {
     id: 'admin-timetable',
+    parent: 'admin',
     path: '/admin/timetable',
     title: 'Базовий розклад',
     description: 'Редактор сітки з перетягуванням, конфлікти, версії, порівняння, публікація.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/TimetablePage'),
-    nav: { label: 'Базовий розклад', icon: Table2, section: 'Розклад', order: 4, keywords: ['версія', 'сітка'] },
+    nav: { label: 'Розклад', icon: Table2, section: 'Щодня', order: 4, keywords: ['базовий розклад', 'версія', 'сітка'] },
   },
   {
     id: 'admin-generation',
+    parent: 'admin',
     path: '/admin/generation',
     title: 'Генератор розкладу',
     description: 'Параметри, хід розвʼязання наживо, метрики «було / стало», застосування як чернетки.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/GenerationPage'),
-    nav: { label: 'Генератор', icon: Wand, section: 'Розклад', order: 5, keywords: ['timefold', 'оптимізація'] },
+    nav: { label: 'Генерація', icon: Wand, section: 'Планування', order: 7, keywords: ['генератор', 'timefold', 'оптимізація'] },
   },
   {
     id: 'admin-load',
+    parent: 'admin',
     path: '/admin/load',
     title: 'Навантаження',
     description: 'Години на тиждень за групами й дисциплінами з тижневим шаблоном.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/LoadPage'),
-    nav: { label: 'Навантаження', icon: Layers, section: 'Розклад', order: 6 },
+    nav: { label: 'Навантаження', icon: Layers, section: 'Планування', order: 5 },
   },
   {
     id: 'admin-accounting',
+    parent: 'admin',
     path: '/admin/accounting',
     title: 'Облік годин',
     description: 'План, факт, прогноз; «вичитано» з діями в один клік; статистика замін викладачів.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/AccountingPage'),
-    nav: { label: 'Облік годин', icon: Calculator, section: 'Розклад', order: 7, keywords: ['вичитано', 'план', 'факт'] },
+    nav: { label: 'Облік годин', icon: Calculator, section: 'Планування', order: 6, keywords: ['вичитано', 'план', 'факт'] },
   },
   {
     id: 'admin-import',
+    parent: 'admin',
     path: '/admin/import',
     title: 'Імпорт',
     description: 'Завантаження Excel, DOCX, PDF і фото; перевірка чернетки; зіставлення назв; застосування.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/ImportPage'),
-    nav: { label: 'Імпорт', icon: Upload, section: 'Дані', order: 8, keywords: ['excel', 'файл'] },
+    nav: { label: 'Імпорт', icon: Upload, section: 'Планування', order: 8, keywords: ['excel', 'файл'] },
   },
   {
     id: 'admin-catalog-groups',
+    parent: 'admin',
     path: '/admin/catalog/groups',
     title: 'Групи',
     description: 'Групи й підгрупи: пошук, фільтр, сортування, форма.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/catalog/GroupsPage'),
-    nav: { label: 'Групи', icon: Users, section: 'Дані', order: 9, keywords: ['каталог'] },
+    nav: {
+      label: 'Групи',
+      icon: Users,
+      section: 'Планування',
+      order: 10,
+      sidebarLabel: 'Довідники',
+      activePrefix: '/admin/catalog',
+      keywords: ['каталог', 'довідники'],
+    },
   },
   {
     id: 'admin-catalog-teachers',
+    parent: 'admin',
     path: '/admin/catalog/teachers',
     title: 'Викладачі',
     description: 'Викладачі, псевдоніми, дисципліни, запрошення до системи.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/catalog/TeachersPage'),
-    nav: { label: 'Викладачі', icon: UserRound, section: 'Дані', order: 10, keywords: ['каталог', 'запрошення'] },
+    nav: { label: 'Викладачі', icon: UserRound, section: 'Планування', order: 11, sidebar: false, keywords: ['каталог', 'запрошення'] },
   },
   {
     id: 'admin-catalog-rooms',
+    parent: 'admin',
     path: '/admin/catalog/rooms',
     title: 'Аудиторії',
     description: 'Аудиторії й корпуси: тип, місткість, одночасні заняття.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/catalog/RoomsPage'),
-    nav: { label: 'Аудиторії', icon: DoorOpen, section: 'Дані', order: 11, keywords: ['каталог'] },
+    nav: { label: 'Аудиторії', icon: DoorOpen, section: 'Планування', order: 12, sidebar: false, keywords: ['каталог'] },
   },
   {
     id: 'admin-catalog-disciplines',
+    parent: 'admin',
     path: '/admin/catalog/disciplines',
     title: 'Дисципліни',
     description: 'Дисципліни з короткими назвами, псевдонімами й кольором лінії.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/catalog/DisciplinesPage'),
-    nav: { label: 'Дисципліни', icon: BookOpen, section: 'Дані', order: 12, keywords: ['каталог', 'псевдоніми'] },
+    nav: { label: 'Дисципліни', icon: BookOpen, section: 'Планування', order: 13, sidebar: false, keywords: ['каталог', 'псевдоніми'] },
   },
   {
     id: 'admin-catalog-structure',
+    parent: 'admin',
     path: '/admin/catalog/structure',
     title: 'Структура коледжу',
     description: 'Відділення, спеціальності, циклові комісії, корпуси.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/catalog/StructurePage'),
-    nav: { label: 'Структура', icon: Building, section: 'Дані', order: 13, keywords: ['відділення', 'спеціальності', 'комісії'] },
+    nav: {
+      label: 'Структура',
+      icon: Building,
+      section: 'Планування',
+      order: 14,
+      sidebar: false,
+      keywords: ['відділення', 'спеціальності', 'комісії'],
+    },
   },
   {
     id: 'admin-calendar',
+    parent: 'admin',
     path: '/admin/calendar',
     title: 'Календар',
     description: 'Семестри, чисельник/знаменник, профілі дзвінків, канікули, практика, режими навчання.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/CalendarPage'),
-    nav: { label: 'Календар', icon: CalendarCog, section: 'Дані', order: 14, keywords: ['семестр', 'дзвінки', 'канікули'] },
+    nav: { label: 'Календар', icon: CalendarCog, section: 'Планування', order: 9, keywords: ['семестр', 'дзвінки', 'канікули'] },
   },
   {
     id: 'admin-telegram',
+    parent: 'admin',
     path: '/admin/telegram',
     title: 'Telegram',
     description: 'Стан бота, привʼязані чати, коди привʼязки, журнал розсилок.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/TelegramPage'),
-    nav: { label: 'Telegram', icon: Send, section: 'Система', order: 15, keywords: ['бот', 'розсилка'] },
+    nav: { label: 'Telegram', icon: Send, section: 'Планування', order: 16, keywords: ['бот', 'розсилка'] },
   },
   {
     id: 'admin-settings',
+    parent: 'admin',
     path: '/admin/settings',
     title: 'Налаштування',
     description: 'Режим погодження, підписант, нумерація, модель ШІ й бюджет, видимість, години на пару.',
     layout: 'admin',
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/SettingsPage'),
-    nav: { label: 'Налаштування', icon: Settings, section: 'Система', order: 16 },
+    nav: { label: 'Налаштування', icon: Settings, section: 'Планування', order: 15 },
   },
 
 ];
@@ -384,6 +436,17 @@ export function navFor(layout: LayoutKind): Array<AppRoute & { nav: NavMeta }> {
 
 export function routeById(id: string): AppRoute | undefined {
   return ACTIVE_ROUTES.find((route) => route.id === id);
+}
+
+/** Рівень вище для сторінки: маршрут-батько або нічого (верхній рівень розділу). */
+export function parentRoute(id: string | undefined): AppRoute | undefined {
+  const parent = id ? routeById(id)?.parent : undefined;
+  return parent ? routeById(parent) : undefined;
+}
+
+/** Підпис кроку «назад»: як у меню, а для головної — «Розклад». */
+export function backLabel(route: AppRoute): string {
+  return route.nav?.label ?? route.title;
 }
 
 /** Шлях до розкладу групи/викладача/аудиторії. */

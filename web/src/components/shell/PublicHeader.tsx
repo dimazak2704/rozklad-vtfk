@@ -1,117 +1,93 @@
+import { Search } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
-import { usePublicMeta } from '@/api/meta';
 import { navFor, type LayoutKind } from '@/app/routes';
+import { useScrolled } from '@/hooks/useScrolled';
 import { cn } from '@/lib/cn';
-import { capitalize, PARITY_HINT, PARITY_LABEL } from '@/lib/labels';
-import { ParityBadge } from '../ui/ParityBadge';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
-import { Skeleton } from '../ui/Skeleton';
+import { useCommandStore } from '@/stores/commands';
+import { IconButton } from '../ui/IconButton';
 import { activeNavId } from './activeSection';
 import { SearchTrigger } from './SearchTrigger';
 import { UserMenu } from './UserMenu';
 import { Wordmark } from './Wordmark';
 
-/** Парність тижня з /public/meta текстом: «Знаменник · 10-й тиждень». Поки немає даних — силует, при помилці — нічого. */
-function HeaderParity({ withWeek }: { withWeek: boolean }) {
-  const meta = usePublicMeta();
-  if (meta.isPending) return <Skeleton className="h-5 w-36 bg-shell-hover" />;
-  if (!meta.data) return null;
-  return <ParityBadge parity={meta.data.parity} weekNumber={withWeek ? meta.data.weekNumber : undefined} tone="on-shell" />;
-}
+const LINK = cn(
+  'relative inline-flex h-10 items-center rounded-control px-3 text-ui whitespace-nowrap transition-colors duration-150',
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+);
 
-/** Телефон: лише слово, конденсованим, — найважливіший факт для студента; тап пояснює правило. */
-function CompactParity() {
-  const meta = usePublicMeta();
-  // поза семестром парності й номера тижня немає — нічого не показуємо
-  if (!meta.data?.parity) return null;
-  const { parity, weekNumber } = meta.data;
-  const label = capitalize(PARITY_LABEL[parity]);
-  const week = weekNumber ? `, ${weekNumber}-й тиждень` : '';
+/** Текстове посилання шапки: активне — чорнилом з рискою 2 px акценту на 6 px нижче тексту. */
+function HeaderLink({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
-    <Popover>
-      <PopoverTrigger
-        aria-label={`${label}${week}. Як чергуються тижні`}
-        className="inline-flex h-11 items-center rounded-control px-2 text-on-shell focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-on-shell"
-      >
-        <span className="font-condensed text-cell font-bold">{label}</span>
-      </PopoverTrigger>
-      <PopoverContent width="sm" align="end" title={`Цього тижня — ${PARITY_LABEL[parity]}${week}`}>
-        <p className="text-ui text-secondary">{PARITY_HINT[parity]}</p>
-      </PopoverContent>
-    </Popover>
+    <Link
+      to={to}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        LINK,
+        active
+          ? 'font-[650] text-primary after:absolute after:inset-x-3 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent'
+          : 'font-[550] text-secondary hover:text-primary',
+      )}
+    >
+      {/* невидимий жирний дублікат тримає ширину, щоб сусіди не «стрибали» при переході */}
+      <span className="inline-grid">
+        <span className="col-start-1 row-start-1">{label}</span>
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-[650]">
+          {label}
+        </span>
+      </span>
+    </Link>
   );
 }
 
 /**
- * Шапка публічного сайту — одна спокійна емальована смуга: знак, три розділи текстом, одне поле пошуку,
- * парність тижня словами й вхід. Тема — одна, у підвалі. На телефоні смуга нижча й не липне — постійна лише нижня панель.
+ * Шапка публічного сайту й кабінету — на полотні, без смуги: знак і назва, три розділи текстом, тихе поле
+ * пошуку (на головній його немає — там велике поле) і «Увійти» чи аватар. Лінія знизу зʼявляється лише
+ * після прокрутки. Вужче за 1024 px — знак, назва, пошук іконкою; розділи — у нижній панелі.
+ * Теми й парності в шапці немає: тема — у підвалі й меню користувача, парність — один раз на сторінці.
  */
 export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKind, 'public' | 'teacher'> }) {
   const nav = navFor(layout).filter((route) => route.nav.header);
   const { pathname } = useLocation();
   const activeId = activeNavId(nav, pathname);
+  const scrolled = useScrolled();
+  const openSearch = useCommandStore((state) => state.setOpen);
+  const onHome = layout === 'public' && pathname === '/';
 
   return (
-    <header className="z-30 border-b border-transparent bg-shell text-on-shell md:sticky md:top-0 dark:border-shell">
-      <div className="mx-auto flex h-13 w-full max-w-[90rem] items-center gap-2 ps-4 pe-2 md:h-(--header-height) md:gap-4 md:px-6 lg:px-8">
-        <Wordmark to={layout === 'teacher' ? '/me' : '/'} />
-        <nav aria-label={layout === 'teacher' ? 'Кабінет викладача' : 'Розділи сайту'} className="ms-3 hidden self-stretch md:block">
-          <ul className="flex h-full items-stretch">
-            {nav.map((route) => {
-              const active = route.id === activeId;
-              return (
-                <li key={route.id} className="flex">
-                  <Link
-                    to={route.path}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'group/nav relative flex items-center px-0.5 outline-none',
-                      // індикатор 3 px урівень з нижнім краєм смуги
-                      active &&
-                        'after:absolute after:inset-x-3.5 after:bottom-0 after:h-[3px] after:rounded-t-[2px] after:bg-[var(--text-color-on-shell)]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'inline-flex h-9 items-center rounded-control px-3 text-ui transition-[background-color,color] duration-100',
-                        'group-focus-visible/nav:outline-2 group-focus-visible/nav:outline-offset-2 group-focus-visible/nav:outline-focus-on-shell',
-                        active
-                          ? 'font-semibold text-on-shell'
-                          : 'font-normal text-on-shell-muted group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell group-active/nav:bg-shell-raised',
-                      )}
-                    >
-                      {route.nav.label}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
+    <header
+      className={cn(
+        'sticky top-0 z-30 border-b bg-canvas transition-[border-color] duration-150',
+        scrolled ? 'border-separator' : 'border-transparent',
+      )}
+    >
+      <div className="mx-auto flex h-(--header-height) w-full max-w-[calc(76rem+2*var(--page-gutter))] items-center gap-2 px-(--page-gutter)">
+        <Wordmark to={layout === 'teacher' ? '/me' : '/'} className="-ms-1 px-1" />
+        <nav aria-label={layout === 'teacher' ? 'Кабінет викладача' : 'Розділи сайту'} className="ms-6 hidden lg:block">
+          <ul className="flex items-center gap-1">
+            {nav.map((route) => (
+              <li key={route.id}>
+                <HeaderLink to={route.path} label={route.nav.label} active={route.id === activeId} />
+              </li>
+            ))}
             {layout === 'teacher' ? (
-              <li className="flex">
-                <Link to="/" className="group/nav relative flex items-center px-0.5 outline-none">
-                  <span className="inline-flex h-9 items-center rounded-control px-3 text-ui font-normal text-on-shell-muted transition-[background-color,color] duration-100 group-hover/nav:bg-shell-hover group-hover/nav:text-on-shell group-active/nav:bg-shell-raised group-focus-visible/nav:outline-2 group-focus-visible/nav:outline-offset-2 group-focus-visible/nav:outline-focus-on-shell">
-                    Розклад коледжу
-                  </span>
-                </Link>
+              <li>
+                <HeaderLink to="/" label="Розклад коледжу" active={false} />
               </li>
             ) : null}
           </ul>
         </nav>
 
-        <div className="ms-auto flex min-w-0 items-center gap-1 md:gap-2">
-          <SearchTrigger tone="on-shell" className="hidden md:flex md:w-72 xl:w-80" />
-          <div className="hidden lg:block">
-            <HeaderParity withWeek />
-          </div>
-          <div className="hidden md:block lg:hidden">
-            <HeaderParity withWeek={false} />
-          </div>
-          <div className="md:hidden">
-            <CompactParity />
-          </div>
-          <div className="ms-1 flex items-center">
-            <UserMenu tone="on-shell" />
-          </div>
+        <div className="ms-auto flex min-w-0 items-center gap-2">
+          {onHome ? null : <SearchTrigger className="hidden w-64 lg:flex xl:w-72" />}
+          <IconButton
+            label="Пошук розкладу"
+            shortcut="mod+k"
+            icon={<Search aria-hidden="true" className="size-5" />}
+            size="lg"
+            className="lg:hidden"
+            onClick={() => openSearch(true)}
+          />
+          <UserMenu />
         </div>
       </div>
     </header>

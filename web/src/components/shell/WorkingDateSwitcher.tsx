@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react';
 import { usePublicMeta } from '@/api/meta';
 import type { IsoDate, WeekParity } from '@/api/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { diffDays, isoWeekday, shiftStudyDay, startOfWeek } from '@/lib/date';
 import { capitalize, weekdayName } from '@/lib/labels';
@@ -12,19 +12,6 @@ type Quick = 'today' | 'next' | 'other';
 
 /** ≥1024 px: поруч із датою стоїть «Сьогодні | Завтра», тож сама мітка дати — без відносного слова. */
 const WIDE = '(min-width: 1024px)';
-function subscribeWide(onChange: () => void): () => void {
-  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-  const list = window.matchMedia(WIDE);
-  list.addEventListener?.('change', onChange);
-  return () => list.removeEventListener?.('change', onChange);
-}
-function useWide(): boolean {
-  return useSyncExternalStore(
-    subscribeWide,
-    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.(WIDE).matches),
-    () => true,
-  );
-}
 
 /**
  * Парність і номер тижня для робочої дати від сьогоднішніх з /public/meta: тижні чергуються.
@@ -72,7 +59,7 @@ export function WorkingDateSwitcher() {
   const next = shiftStudyDay(today, 1);
   const nextLabel = diffDays(today, next) === 1 ? 'Завтра' : capitalize(weekdayName(isoWeekday(next)));
   const quick: Quick = date === today ? 'today' : date === next ? 'next' : 'other';
-  const wide = useWide();
+  const wide = useMediaQuery(WIDE, true);
 
   return (
     <div className="flex min-w-0 items-center gap-2 lg:gap-3">

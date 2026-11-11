@@ -118,6 +118,12 @@
       animation: digit-in 200ms var(--ease-out) both;
     }
 
+    /* Знак малює себе один раз (екран входу): лінія проходить за 1.4 с */
+    .anim-mark-draw {
+      stroke-dasharray: 1;
+      animation: mark-draw 1400ms var(--ease-out) both;
+    }
+
     /* Пара завершилась: назва й крапка «осідають» до тихішого тону */
     .anim-settle {
       transition:
@@ -180,6 +186,15 @@
   }
   to {
     clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes mark-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
   }
 }
 

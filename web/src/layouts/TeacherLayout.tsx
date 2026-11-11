@@ -8,8 +8,8 @@ import { PublicHeader } from '@/components/shell/PublicHeader';
 import { SkipLink } from '@/components/shell/SkipLink';
 
 /**
- * Кабінет викладача: та сама смуга, що й на сайті, але розділи кабінету; живі оновлення (SSE),
- * щоб запит на заміну зʼявлявся без перезавантаження.
+ * Кабінет викладача: та сама шапка, що й на сайті, але розділи кабінету («Мій розклад · Відсутності ·
+ * Побажання» і «Розклад коледжу»); живі оновлення (SSE), щоб запит на заміну зʼявлявся без перезавантаження.
  */
 export function TeacherLayout() {
   const { status, isDevBypass } = useCurrentUser();
@@ -17,13 +17,13 @@ export function TeacherLayout() {
   useLiveConnection(status === 'authenticated' && (!isDevBypass || MOCK_API));
 
   return (
-    <div className="flex min-h-dvh flex-col [--sticky-top:0px] md:[--sticky-top:var(--header-height)]">
+    <div className="flex min-h-dvh flex-col [--sticky-top:var(--header-height)]">
       <SkipLink />
       <PublicHeader layout="teacher" />
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-[90rem] flex-1 px-4 pt-5 pb-10 text-body focus:outline-none sm:px-6 sm:pt-8 md:pb-12 lg:px-8"
+        className="mx-auto w-full max-w-[calc(76rem+2*var(--page-gutter))] flex-1 px-(--page-gutter) pt-6 pb-12 text-body focus:outline-none lg:pt-10"
       >
         <Outlet />
       </main>

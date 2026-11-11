@@ -1,60 +1,71 @@
 import { Link } from 'react-router';
 import { cn } from '@/lib/cn';
 
+interface BrandMarkProps {
+  /** Розмір у px (квадрат). */
+  size?: number;
+  /** Знак малює себе один раз (екран входу). Без руху — одразу намальований. */
+  draw?: boolean;
+  className?: string;
+}
+
+/**
+ * Знак — кільце й шпиль з емблеми коледжу, перемальовані однією лінією 1.5 px кольором `fill-brand`
+ * (#4297D7, як на сайті коледжу). Лише графіка, ніколи не текст.
+ */
+export function BrandMark({ size = 26, draw = false, className }: BrandMarkProps) {
+  const path = cn(draw && 'anim-mark-draw');
+  return (
+    <svg
+      viewBox="0 0 26 26"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinejoin="round"
+      className={cn('shrink-0 text-[var(--fill-brand)]', className)}
+    >
+      <circle className={path} pathLength={1} cx="13" cy="13" r="11.6" />
+      <circle className={path} pathLength={1} cx="13" cy="8.9" r="5.2" />
+      <path
+        className={path}
+        pathLength={1}
+        d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z"
+      />
+    </svg>
+  );
+}
+
 interface WordmarkProps {
   to?: string;
-  /** Лише квадратний знак «ВТФК» емаллю (згорнута бічна панель на 64 px). */
+  /** Лише знак (згорнута бічна панель, вузька шапка). */
   compact?: boolean;
-  /**
-   * `shell` — у синій смузі: білі літери, риска напівпрозора;
-   * `surface` — на білій панелі диспетчера: чорнило й звичайна лінія.
-   */
+  /** Застаріле: колишня синя смуга. Вигляд тепер один. */
   tone?: 'shell' | 'surface';
   className?: string;
 }
 
 /**
- * Словесний знак — один і той самий скрізь: «ВТФК» вузьким жирним, тонка вертикальна риска і «Розклад»,
- * як рядок назви на титулі надрукованого розкладу. Без «таблички»: біла плашка на смузі читалась як бейдж версії.
- * Квадратний знак емаллю — лише там, де справді потрібен квадрат (згорнута панель, іконка застосунку).
- * Офіційного логотипа коледжу в системі немає — герб не вигадуємо.
+ * Словесний знак — один скрізь: знак-лінія і «Розклад ВТФК» (14/700). Посилання на головну свого розділу.
  */
-export function Wordmark({ to = '/', compact = false, tone = 'shell', className }: WordmarkProps) {
-  const onShell = tone === 'shell';
+export function Wordmark({ to = '/', compact = false, className }: WordmarkProps) {
   return (
     <Link
       to={to}
       aria-label="Розклад ВТФК — на головну"
       className={cn(
-        'inline-flex shrink-0 items-center rounded-control',
-        'focus-visible:outline-2 focus-visible:outline-offset-4',
-        onShell ? 'focus-visible:outline-focus-on-shell' : 'focus-visible:outline-focus',
+        'inline-flex min-h-10 shrink-0 items-center gap-2.5 rounded-control',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        compact && 'justify-center',
         className,
       )}
     >
-      {compact ? (
-        <span
-          aria-hidden="true"
-          className="inline-flex size-8 items-center justify-center rounded-control bg-shell font-condensed text-[0.8125rem] leading-none font-bold tracking-[0.02em] text-on-shell"
-        >
-          ВТФК
-        </span>
-      ) : (
-        <span aria-hidden="true" className="inline-flex items-center gap-2.5 leading-none">
-          <span
-            className={cn(
-              'font-condensed text-[1.0625rem] leading-5 font-bold tracking-[0.02em] md:text-[1.125rem] md:leading-5',
-              onShell ? 'text-on-shell' : 'text-primary',
-            )}
-          >
-            ВТФК
-          </span>
-          <span
-            className={cn('h-5 w-px', onShell ? 'bg-[var(--text-color-on-shell)] opacity-35' : 'bg-[var(--border-color-default)]')}
-          />
-          <span className={cn('text-[0.9375rem] leading-5 font-medium md:text-body md:leading-5', onShell ? 'text-on-shell' : 'text-primary')}>
-            Розклад
-          </span>
+      <BrandMark />
+      {compact ? null : (
+        <span aria-hidden="true" className="text-[0.9375rem] leading-5 font-bold tracking-[-0.005em] whitespace-nowrap text-primary">
+          Розклад ВТФК
         </span>
       )}
     </Link>
