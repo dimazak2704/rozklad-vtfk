@@ -309,15 +309,19 @@ describe('варіанти й зміни', () => {
     await api.put('/admin/settings', { ...settings, approvalMode: 'NOTIFY' });
     const { lesson } = await firstLessonOf('Погосян');
     const { options } = await api.get<LessonOptions>(`/admin/lessons/${lesson.lesson.id}/options`);
-    const teacherId = options.find((o) => o.kind === 'REPLACE_TEACHER')?.teacher?.id;
+    // v2 offers other disciplines of the group; another teacher of the same discipline is a manual exception
+    const best = options.find((o) => o.kind === 'REPLACE_DISCIPLINE');
+    const teacherId = best?.teacher?.id;
+    if (!teacherId) throw new Error('Демо-пара має мати варіант іншим предметом групи');
     const change = await api.post<ChangeDto>('/admin/changes', {
-      kind: 'REPLACE_TEACHER',
+      kind: 'REPLACE_DISCIPLINE',
       date: DAY,
       pairFrom: lesson.lesson.pair,
       groupId: lesson.lesson.group.id,
       originalLessonId: lesson.lesson.id,
       newTeacherId: teacherId,
-      reasonCode: 'ABSENT',
+      newDisciplineId: best?.discipline?.id,
+      reasonCode: 'MUTUAL',
     });
     expect(change).toMatchObject({ status: 'CONFIRMED', approvalMode: 'NOTIFY', confirmDeadline: null, teacherAnswer: null });
     const declined = await api.post<ChangeDto>(`/internal/changes/${change.id}/reply`, { teacherId, decision: 'DECLINE' });
