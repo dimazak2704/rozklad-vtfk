@@ -99,7 +99,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
       open={open}
       onOpenChange={onOpenChange}
       title={group ? `Група ${group.code}` : 'Нова група'}
-      description={group ? 'Код змінює курс і спеціальність групи — перевірте розклад після зміни.' : 'Курс, спеціальність і номер беремо з коду.'}
+      description={group ? 'Код змінює курс і спеціальність групи — перевірте розклад після зміни.' : undefined}
       formId={formId}
       submitLabel={group ? 'Зберегти' : 'Додати групу'}
       pending={save.isPending}
@@ -152,7 +152,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
                 ) : null}
               </>
             ) : (
-              <p className="text-caption text-muted">Цифра курсу, 1–3 літери спеціальності, номер групи.</p>
+              <p className="text-caption text-muted">Курс, спеціальність і номер візьмемо з коду.</p>
             )}
           </div>
         </div>
@@ -181,7 +181,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
               )}
             />
           </Field>
-          <Field label="Домашня аудиторія" error={errors.homeRoomId?.message} hint="Для довідки. Генератор ставить пари в аудиторії викладачів">
+          <Field label="Домашня аудиторія" error={errors.homeRoomId?.message}>
             <Controller
               control={form.control}
               name="homeRoomId"
@@ -198,7 +198,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
               )}
             />
           </Field>
-          <Field label="Студентів" error={errors.size?.message} hint="Для перевірки місткості аудиторій">
+          <Field label="Студентів" error={errors.size?.message}>
             <Controller
               control={form.control}
               name="size"

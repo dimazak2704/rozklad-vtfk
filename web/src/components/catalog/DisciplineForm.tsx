@@ -65,7 +65,7 @@ export function DisciplineFormDialog({ discipline, open, onOpenChange }: Discipl
       open={open}
       onOpenChange={onOpenChange}
       title={discipline ? discipline.shortName : 'Нова дисципліна'}
-      description={discipline ? discipline.name : 'Скорочення — як у розкладі й розпорядженнях, повна назва — як у навчальному плані.'}
+      description={discipline ? discipline.name : undefined}
       formId={formId}
       submitLabel={discipline ? 'Зберегти' : 'Додати дисципліну'}
       pending={save.isPending}
@@ -75,7 +75,7 @@ export function DisciplineFormDialog({ discipline, open, onOpenChange }: Discipl
       <form id={formId} noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <FormAlert message={formError} />
         <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
-          <Field label="Скорочення" required error={errors.shortName?.message} hint="Так друкують у розкладі">
+          <Field label="Скорочення" required error={errors.shortName?.message} hint="Як у розкладі">
             <Input {...form.register('shortName')} autoComplete="off" spellCheck={false} autoFocus={!discipline} />
           </Field>
           <Field label="Повна назва" required error={errors.name?.message}>
