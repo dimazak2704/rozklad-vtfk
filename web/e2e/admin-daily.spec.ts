@@ -49,7 +49,7 @@ test.describe('щоденна робота диспетчера', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Заміни' })).toBeVisible({ timeout: 30_000 });
 
     // 1. Нова відсутність: Погосян на весь день (пари 6 і 7 у групах 2ВЕ і 2ЕА1)
-    await page.getByRole('button', { name: /Нова відсутність/ }).first().click();
+    await page.getByRole('button', { name: 'Додати відсутність' }).first().click();
     const form = page.getByRole('dialog', { name: 'Нова відсутність' });
     await form.getByRole('combobox', { name: 'Викладач' }).click();
     await page.getByPlaceholder('Прізвище, напр. «кренц»').fill('погосян');
@@ -64,8 +64,9 @@ test.describe('щоденна робота диспетчера', () => {
     await expect(lesson).toHaveAttribute('aria-current', 'true');
     // мок працює в режимі CONFIRM: дія над обраним варіантом надсилає викладачу прохання
     const options = page.getByRole('list', { name: 'Варіанти' });
-    const best = options.locator('button[aria-pressed]').filter({ hasText: 'Інша дисципліна групи' }).first();
-    const title = (await best.locator('span.text-ui').textContent()) ?? '';
+    // інша дисципліна групи стоїть першою (сервер ставить її вище за обʼєднання, перестановку й скасування)
+    const best = options.locator('button[aria-pressed]').first();
+    const title = (await best.locator('span.text-pretty').textContent()) ?? '';
     const candidate = title.split(' — ')[1] ?? '';
     expect(candidate).not.toBe('');
     await best.click();
@@ -102,20 +103,21 @@ test.describe('щоденна робота диспетчера', () => {
     await expect(page.getByRole('article', { name: /Розпорядження №36 на 9\sлистопада 2026/ })).toBeVisible();
 
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Завантажити DOCX' }).click();
+    // PDF — видима кнопка, решта форматів — у «⋯»
+    await expect(page.getByRole('button', { name: 'Завантажити PDF' })).toBeVisible();
+    await page.getByRole('button', { name: 'Ще дії' }).click();
+    await page.getByRole('menuitem', { name: 'Завантажити DOCX' }).click();
     expect((await download).suggestedFilename()).toBe('Розпорядження №36 від 09.11.2026.docx');
   });
 
-  test('панель: маршрут ранку веде до пар без рішення', async ({ page }) => {
+  test('панель: пара без рішення веде просто до її варіантів', async ({ page }) => {
     await openAsDispatcher(page, '/admin');
-    await expect(page.getByRole('heading', { level: 1, name: 'Панель диспетчера' })).toBeVisible({ timeout: 30_000 });
-    const route = page.getByRole('navigation', { name: /Маршрут ранку/ });
-    const stop = route.getByRole('link', { name: /Без рішення/ });
-    await expect(stop).toContainText('4');
-    await expect(stop).toHaveAttribute('aria-current', 'step');
-    await stop.click();
-    await expect(page).toHaveURL(/\/admin\/changes\?.*filter=uncovered/);
-    await expect(page.getByRole('button', { name: /Без рішення/, pressed: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Сьогодні' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Вирішено \d+ з \d+/)).toBeVisible();
+    const pair = page.getByRole('link').filter({ hasText: 'Потрібне рішення' }).first();
+    await pair.click();
+    await expect(page).toHaveURL(/\/admin\/changes\?.*lesson=/);
+    await expect(page.getByRole('list', { name: 'Варіанти' })).toBeVisible();
   });
 
   test('Telegram: код привʼязки чату групи з посиланням і QR', async ({ page }) => {
@@ -156,7 +158,7 @@ test.describe('щоденна робота диспетчера', () => {
 test('панель на телефоні: без горизонтальної прокрутки', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Перевірка вузького екрана');
   await openAsDispatcher(page, '/admin');
-  await expect(page.getByRole('heading', { level: 1, name: 'Панель диспетчера' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Сьогодні' })).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(800);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);

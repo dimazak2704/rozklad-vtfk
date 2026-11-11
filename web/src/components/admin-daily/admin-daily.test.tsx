@@ -173,29 +173,36 @@ describe('варіанти рішення (рекомендатор v2)', () => 
     serve(OPTIONS_RECOMMENDED);
     const user = userEvent.setup();
     const { container } = renderWithProviders(<Harness onAct={vi.fn()} />);
-    const list = await screen.findByRole('list', { name: 'Варіанти' });
-    const titles = within(list).getAllByRole('button', { pressed: false }).map((b) => b.textContent);
+    await screen.findByRole('list', { name: 'Варіанти' });
+    // рекомендований перший уже обраний (розгорнутий блок), тож рахуємо всі кнопки вибору
+    const titles = rows().map((b) => b.textContent);
     expect(titles).toHaveLength(3);
-    expect(titles[0]).toContain('НДКС — Непийвода');
-    expect(titles[1]).toContain('Обʼєднати підгрупи — Можаровська веде обидві');
+    expect(titles.some((t) => t.includes('НДКС — Непийвода'))).toBe(true);
+    expect(titles.some((t) => t.includes('Обʼєднати підгрупи — Можаровська веде обидві'))).toBe(true);
     // жодних вкладок, шкал і «N зі 100»
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.queryByRole('meter')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/зі 100|\b(100|90|80)\b/);
 
-    const more = screen.getByRole('button', { name: 'Ще варіанти (2)' });
+    const more = screen.getByRole('button', { name: 'Ще 2 варіанти' });
     expect(more).toHaveAttribute('aria-expanded', 'false');
     await user.click(more);
     expect(rows()).toHaveLength(5);
     expect(screen.getByRole('button', { name: 'Менше варіантів' })).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('«Рекомендовано» лише на першому й лише коли сервер так позначив; відмови й аудиторія', async () => {
+  it('«Найкращий варіант» лише на першому й лише коли сервер так позначив — він одразу обраний; відмови й аудиторія', async () => {
     serve(OPTIONS_RECOMMENDED);
     renderWithProviders(<Harness onAct={vi.fn()} />);
     const list = await screen.findByRole('list', { name: 'Варіанти' });
-    expect(within(list).getAllByText('Рекомендовано')).toHaveLength(1);
-    expect(within(list).getAllByRole('button', { pressed: false })[0]).toHaveTextContent('Рекомендовано');
+    expect(within(list).getAllByText('Найкращий варіант')).toHaveLength(1);
+    const best = within(list).getByRole('button', { pressed: true });
+    expect(best).toHaveTextContent('Найкращий варіант');
+    expect(best).toHaveTextContent('НДКС — Непийвода');
+    // єдина головна дія — у розгорнутому блоці найкращого
+    expect(within(list).getAllByRole('button', { name: 'Надіслати прохання' })).toHaveLength(1);
+    // смуги — реченнями: «Теж підходить», «З нюансами»
+    expect(within(list).getByText('З нюансами')).toBeInTheDocument();
     expect(screen.queryByText('Рівноцінні варіанти — оберіть самі')).not.toBeInTheDocument();
     expect(screen.getByText('Відмовились: Ганза (14:05)')).toBeInTheDocument();
     // аудиторія, куди прийде група: своя аудиторія замінника й аудиторія іншої підгрупи
@@ -205,14 +212,17 @@ describe('варіанти рішення (рекомендатор v2)', () => 
     const caution = within(list).getAllByRole('listitem').find((li) => li.textContent.includes('Прогр. — Стець'));
     expect(caution).toBeDefined();
     expect(within(caution as HTMLElement).getByText(/Вже має пару з цією групою/)).toBeInTheDocument();
-    expect(within(caution as HTMLElement).getAllByText('Увага:')).toHaveLength(2);
+    // у спокої — одне застереження; обраний рядок показує всі
+    expect(within(caution as HTMLElement).getAllByText('Увага:')).toHaveLength(1);
+    await userEvent.click(within(caution as HTMLElement).getByRole('button', { pressed: false }));
+    expect(within(caution as HTMLElement).getAllByText('Увага:').length).toBeGreaterThan(1);
   });
 
   it('без рекомендації — «Рівноцінні варіанти»; минула пара — свій заголовок; порожній пул — пояснення', async () => {
     serve(OPTIONS_EQUAL);
     const { unmount } = renderWithProviders(<Harness onAct={vi.fn()} />);
     expect(await screen.findByText('Рівноцінні варіанти — оберіть самі')).toBeInTheDocument();
-    expect(screen.queryByText('Рекомендовано')).not.toBeInTheDocument();
+    expect(screen.queryByText('Найкращий варіант')).not.toBeInTheDocument();
     unmount();
 
     serve(OPTIONS_PAST);
@@ -231,7 +241,8 @@ describe('варіанти рішення (рекомендатор v2)', () => 
     const onAct = vi.fn();
     renderWithProviders(<Harness onAct={onAct} />);
     const list = await screen.findByRole('list', { name: 'Варіанти' });
-    expect(within(list).queryByRole('button', { name: 'Надіслати прохання' })).not.toBeInTheDocument();
+    // рекомендований обрано одразу: одна дія — у його блоці; решта рядків без кнопок
+    expect(within(list).getAllByRole('button', { name: 'Надіслати прохання' })).toHaveLength(1);
 
     const merge = within(list).getByRole('button', { name: /Обʼєднати підгрупи — Можаровська веде обидві/, pressed: false });
     await user.click(merge);
@@ -258,9 +269,10 @@ describe('варіанти рішення (рекомендатор v2)', () => 
     const user = userEvent.setup();
     renderWithProviders(<Harness onAct={vi.fn()} approvalMode="NOTIFY" />);
     const list = await screen.findByRole('list', { name: 'Варіанти' });
-    await user.click(within(list).getByRole('button', { name: /НДКС — Непийвода/, pressed: false }));
+    // рекомендований уже обраний
+    expect(within(list).getByRole('button', { name: /НДКС — Непийвода/, pressed: true })).toBeInTheDocument();
     expect(within(list).getByRole('button', { name: 'Призначити' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Ще варіанти (2)' }));
+    await user.click(screen.getByRole('button', { name: 'Ще 2 варіанти' }));
     await user.click(within(list).getByRole('button', { name: /Пари не буде/, pressed: false }));
     expect(within(list).getByRole('button', { name: 'Застосувати' })).toBeInTheDocument();
   });
@@ -400,6 +412,39 @@ describe('екран «Заміни»', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toBeInTheDocument(), WAIT);
   });
 
+  it('телефон: відсутні → пари → варіанти в шторці, і з кожного рівня є дорога назад', { timeout: 30_000 }, async () => {
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+    try {
+      const user = userEvent.setup();
+      renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
+      // перший рівень — лише відсутні, без пар і варіантів
+      const krysak = await screen.findByRole('button', { name: /Крисак Л\.В\./ }, WAIT);
+      expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Варіанти' })).not.toBeInTheDocument();
+
+      await user.click(krysak);
+      expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л.В.' }, WAIT)).toBeInTheDocument();
+      // назад на рівень відсутніх і знову до пар
+      await user.click(screen.getByRole('button', { name: 'Усі відсутні' }));
+      await waitFor(() => expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument(), WAIT);
+      await user.click(screen.getByRole('button', { name: /Крисак Л\.В\./ }));
+
+      // пара відкриває варіанти в шторці (там є «Закрити» і Esc)
+      await user.click(await screen.findByRole('button', { name: /3Ф/ }, WAIT));
+      expect(await screen.findByRole('list', { name: 'Варіанти' }, WAIT)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
+  });
+
+  it('порожня чернетка — речення, а не порожній аркуш A4', { timeout: 20_000 }, async () => {
+    renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-11-17' });
+    expect(await screen.findByText(/^На вівторок, 17\sлистопада підтверджених змін ще немає\.$/, undefined, WAIT)).toBeInTheDocument();
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Опублікувати/ })).not.toBeInTheDocument();
+  });
+
   it('без мережі — пояснення замість вічних силуетів', { timeout: 20_000 }, async () => {
     onlineManager.setOnline(false);
     try {
@@ -426,15 +471,15 @@ describe('екран «Заміни»', () => {
       </>,
       { route: '/admin?date=2026-11-09' },
     );
-    await waitFor(() => expect(screen.queryByText('Завантажуємо сповіщення…')).not.toBeInTheDocument(), WAIT);
-    expect(screen.getByText('Оновлюється наживо')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Завантажуємо, що потребує рішення…')).not.toBeInTheDocument(), WAIT);
+    expect(await screen.findByRole('list', { name: 'Останні дії' }, WAIT)).toBeInTheDocument();
 
     onlineManager.setOnline(false);
     try {
       await userEvent.click(screen.getByRole('button', { name: 'наступний день' }));
       expect((await screen.findAllByText('Немає звʼязку з сервером', undefined, WAIT)).length).toBeGreaterThan(0);
-      expect(screen.queryByText('Оновлюється наживо')).not.toBeInTheDocument();
-      expect(screen.queryByText('Маршрут ранку')).not.toBeInTheDocument();
+      // події попередньої дати не показуємо
+      expect(screen.queryByRole('list', { name: 'Останні дії' })).not.toBeInTheDocument();
     } finally {
       onlineManager.setOnline(true);
     }
