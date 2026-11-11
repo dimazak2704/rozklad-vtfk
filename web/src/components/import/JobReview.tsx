@@ -1,19 +1,17 @@
-import { ArrowLeft, PencilLine } from 'lucide-react';
+import { PencilLine } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { type ImportJob, type OrderDraft, typedDraft, useImportJob } from '@/api/import';
 import type { Uuid } from '@/api/types';
 import {
   Button,
-  ErrorState,
   LoadingRegion,
+  PageErrorBanner,
   Skeleton,
   Spinner,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  buttonClass,
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
@@ -24,7 +22,7 @@ import { OrderDraftEditor } from './drafts/OrderDraftEditor';
 import { OrderPreview } from './drafts/OrderPreview';
 import { ProgramPreview } from './drafts/ProgramPreview';
 import { TimetablePreview } from './drafts/TimetablePreview';
-import { IMPORT_KIND_LABEL } from './labels';
+import { IMPORT_KIND_LABEL, summarySentence, usdShort } from './labels';
 import { JobStatusBadge } from './JobStatus';
 import { LoadOptionsPanel } from './LoadOptionsPanel';
 import { MappingPanel } from './MappingPanel';
@@ -48,13 +46,8 @@ function OrderReview({ job, draft }: { job: ImportJob; draft: OrderDraft }) {
   return (
     <div className="flex flex-col gap-3">
       {editable ? (
-        <div
-          className={cn(
-            'flex flex-wrap items-center justify-between gap-3 rounded-panel border px-4 py-3',
-            mustReview ? 'border-change bg-change-subtle' : 'border-default bg-surface',
-          )}
-        >
-          <p className={cn('text-ui', mustReview ? 'text-change' : 'text-secondary')}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className={cn('max-w-prose text-ui', mustReview ? 'text-primary' : 'text-secondary')}>
             {mustReview
               ? 'Рядки прочитав ШІ з фото. Звірте їх з оригіналом, виправте помилки й збережіть — лише тоді розпорядження можна застосувати.'
               : job.status === 'FAILED'
@@ -74,7 +67,7 @@ function OrderReview({ job, draft }: { job: ImportJob; draft: OrderDraft }) {
 }
 
 /** Перегляд завдання імпорту: підсумок, рішення щодо назв, звіт, чернетка й застосування. */
-export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
+export function JobReview({ jobId }: { jobId: Uuid }) {
   const job = useImportJob(jobId);
   const [tab, setTab] = useState<Tab | null>(null);
 
@@ -82,25 +75,18 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
     return (
       <LoadingRegion label="Завантажуємо імпорт" className="flex flex-col gap-4">
         <Skeleton className="h-8 w-80" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20" />
-          ))}
-        </div>
+        <Skeleton className="h-5 w-2/3 max-w-xl" />
         <Skeleton className="h-72 w-full" />
       </LoadingRegion>
     );
   }
   if (job.isError) {
     return (
-      <ErrorState
+      <PageErrorBanner
         error={job.error}
+        title="Завдання імпорту не завантажено"
+        retrying={job.isFetching}
         onRetry={() => void job.refetch()}
-        action={
-          <Link to={backTo} className={buttonClass({ variant: 'ghost' })}>
-            До всіх імпортів
-          </Link>
-        }
       />
     );
   }
@@ -110,23 +96,9 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
   const decisions = decisionRows(data);
   const parsing = data.status === 'UPLOADED' || data.status === 'PARSING';
   const active: Tab = tab ?? (data.summary.conflicts > 0 ? blockingReason(data).tab : 'draft');
-  const stats = [
-    { label: 'Розпізнано', value: data.summary.recognized, tone: 'text-primary' },
-    { label: 'Нових записів', value: data.summary.unknown, tone: 'text-primary' },
-    { label: 'Чекають рішення', value: data.summary.conflicts, tone: data.summary.conflicts > 0 ? 'text-change' : 'text-primary' },
-    { label: 'Попереджень', value: data.summary.warnings, tone: 'text-primary' },
-  ];
 
   return (
     <div className="flex flex-col gap-5">
-      <Link
-        to={backTo}
-        className="inline-flex items-center gap-1.5 self-start rounded-plate text-ui font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Усі імпорти
-      </Link>
-
       <header className="flex flex-wrap items-start gap-3">
         <FileIcon name={data.fileName} className="mt-1 size-7" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -135,12 +107,10 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
             <span>{IMPORT_KIND_LABEL[data.kind]}</span>
             <span className="figures">завантажено {formatInstant(data.createdAt)}</span>
             {data.ai ? (
-              <span className="figures" title={`${data.ai.inputTokens} токенів на вході, ${data.ai.outputTokens} на виході`}>
-                ШІ: {data.ai.model} · ${data.ai.costUsd.toFixed(3)}
+              <span className="figures" title={`${data.ai.model}: ${data.ai.inputTokens} токенів на вході, ${data.ai.outputTokens} на виході`}>
+                прочитав ШІ, {usdShort(data.ai.costUsd)}
               </span>
-            ) : (
-              <span>без ШІ</span>
-            )}
+            ) : null}
           </p>
         </div>
         <JobStatusBadge status={data.status} />
@@ -158,16 +128,10 @@ export function JobReview({ jobId, backTo }: { jobId: Uuid; backTo: string }) {
         </div>
       ) : (
         <>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="flex flex-col-reverse rounded-panel border border-default bg-surface px-4 py-3">
-                <dt className="mt-1 text-caption text-muted">{stat.label}</dt>
-                <dd className={cn('font-condensed text-display leading-none font-bold figures', stat.tone)}>{stat.value}</dd>
-              </div>
-            ))}
-          </dl>
+          {/* підсумок одним реченням замість чотирьох плиток з числами */}
+          <p className="text-body text-secondary">{summarySentence(data.summary)}</p>
 
-          <ApplyPanel job={data} onShowTab={setTab} />
+          <ApplyPanel job={data} onShowTab={setTab} activeTab={active} />
 
           <Tabs value={active} onValueChange={(value) => setTab(value as Tab)}>
             <TabsList aria-label="Розділи імпорту">

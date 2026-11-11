@@ -192,7 +192,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
           <Input value={signatoryName} onChange={(event) => setSignatoryName(event.target.value)} maxLength={200} />
         </Field>
       </fieldset>
-      <div className="overflow-x-auto rounded-plate border border-default">
+      <div className="overflow-x-auto rounded-tag border border-default">
         <table className="w-full min-w-[64rem] border-collapse text-caption">
           <caption className="sr-only">Рядки розпорядження для звірки</caption>
           <thead>

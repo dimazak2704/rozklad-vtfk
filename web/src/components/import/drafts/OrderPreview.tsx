@@ -27,7 +27,7 @@ export function OrderPreview({ draft }: { draft: OrderDraft }) {
           ))}
         </ul>
       ) : null}
-      <article data-theme="light" aria-label={`Розпізнане ${title}`} className="overflow-x-auto rounded-plate border border-default bg-surface px-5 py-5 text-primary">
+      <article data-theme="light" aria-label={`Розпізнане ${title}`} className="overflow-x-auto rounded-tag border border-default bg-surface px-5 py-5 text-primary">
         <header className="mb-3 flex flex-col items-center gap-0.5 text-center">
           <p className="text-heading font-bold tracking-[0.06em]">{title}</p>
           <p className="text-ui font-semibold">По коледжу про деякі зміни в розкладі занять</p>

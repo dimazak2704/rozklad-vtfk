@@ -73,7 +73,7 @@ export function ReportTable({ report }: { report: readonly ImportReportRow[] }) 
         id: 'raw',
         header: 'Як у файлі',
         rowHeader: true,
-        cell: (row) => <span className="font-condensed text-body font-bold break-words">{row.raw}</span>,
+        cell: (row) => <span className="text-body font-bold break-words">{row.raw}</span>,
       },
       {
         id: 'matched',

@@ -3,7 +3,7 @@ import { ErrorState, HoverDetails, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 
-const usd = (value: number) => `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
+const usd = (value: number) => `$${value.toFixed(2)}`;
 const tokens = (value: number) => new Intl.NumberFormat('uk-UA').format(value);
 
 /**
@@ -15,7 +15,7 @@ export function AiUsageWidget({ className }: { className?: string }) {
 
   if (usage.isPending) {
     return (
-      <div className={cn('flex flex-col gap-2 rounded-panel border border-default bg-surface p-4', className)} aria-busy="true">
+      <div className={cn('flex flex-col gap-2', className)} aria-busy="true">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-2 w-full" />
         <Skeleton className="h-3 w-40" />
@@ -24,7 +24,7 @@ export function AiUsageWidget({ className }: { className?: string }) {
   }
   if (usage.isError) {
     return (
-      <div className={cn('rounded-panel border border-default bg-surface', className)}>
+      <div className={className}>
         <ErrorState error={usage.error} onRetry={() => void usage.refetch()} size="sm" title="Витрати ШІ недоступні" />
       </div>
     );
@@ -36,9 +36,9 @@ export function AiUsageWidget({ className }: { className?: string }) {
   const tone = share >= 1 ? 'bg-[var(--fill-cancel)]' : share >= 0.8 ? 'bg-[var(--fill-change)]' : 'bg-accent';
 
   return (
-    <section aria-label="Витрати ШІ сьогодні" className={cn('flex flex-col gap-2.5 rounded-panel border border-default bg-surface p-4', className)}>
+    <section aria-label="Витрати ШІ сьогодні" className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-ui font-semibold text-primary">ШІ сьогодні</h2>
+        <h2 className="text-heading font-bold text-primary">ШІ сьогодні</h2>
         <HoverDetails
           label="Моделі ШІ"
           content={
@@ -56,14 +56,14 @@ export function AiUsageWidget({ className }: { className?: string }) {
         >
           <button
             type="button"
-            className="rounded-plate text-caption font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="rounded-tag text-caption font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
             Моделі
           </button>
         </HoverDetails>
       </div>
       <p className="flex items-baseline gap-1.5">
-        <span className="font-condensed text-title font-bold figures text-primary">{usd(today.costUsd)}</span>
+        <span className="text-title font-semibold figures text-primary">{usd(today.costUsd)}</span>
         <span className="text-caption text-muted figures">з {usd(dailyBudgetUsd)}</span>
       </p>
       <div
@@ -73,7 +73,7 @@ export function AiUsageWidget({ className }: { className?: string }) {
         aria-valuemax={dailyBudgetUsd}
         aria-valuenow={today.costUsd}
         aria-valuetext={`${usd(today.costUsd)} з ${usd(dailyBudgetUsd)}`}
-        className="relative h-2 overflow-hidden rounded-full bg-sunken"
+        className="relative h-1.5 overflow-hidden rounded-full bg-[var(--fill-track-future)]"
       >
         <span className={cn('absolute inset-y-0 start-0 rounded-full transition-[width] duration-300 ease-out', tone)} style={{ width: `${Math.min(100, share * 100)}%` }} />
       </div>

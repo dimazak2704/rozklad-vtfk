@@ -11,6 +11,8 @@ import { blockingReason, type ReviewTab } from './decisions';
 interface ApplyPanelProps {
   job: ImportJob;
   onShowTab: (tab: ReviewTab) => void;
+  /** Вкладка, яку людина вже бачить: туди не треба «вести», а причину не треба повторювати двічі. */
+  activeTab?: ReviewTab;
 }
 
 const TAB_BUTTON: Record<ReviewTab, string> = { decisions: 'До рішень', draft: 'До чернетки', report: 'До звіту' };
@@ -74,7 +76,7 @@ function useElapsed(running: boolean): number {
  * Нижня панель перегляду: що станеться після застосування, кнопка (з підтвердженням), хід застосування
  * і результат з посиланнями туди, де видно зміни.
  */
-export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
+export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
   const apply = useApplyImport(job.id);
   const applying = job.status === 'APPLYING';
   const elapsed = useElapsed(applying);
@@ -153,13 +155,16 @@ export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
   // core відхилив застосування: причина в job.error, завдання знову на перевірці
   const rejected = job.status === 'NEEDS_REVIEW' && Boolean(job.error);
   const reason = blockingReason(job);
+  // людина вже на потрібній вкладці: там і пояснення, і дія — тут лише коротко
+  const here = activeTab !== undefined && reason.tab === activeTab;
 
   return (
     <section
       aria-label="Застосування імпорту"
       className={cn(
         'flex flex-wrap items-center gap-3 rounded-panel border px-4 py-3',
-        failed || rejected ? 'border-cancel bg-danger-subtle' : blocked ? 'border-change bg-change-subtle' : 'border-default bg-surface',
+        // заблоковане — спокійна панель з реченням кольору стану, а не друга бурштинова плашка
+        failed || rejected ? 'border-cancel bg-danger-subtle' : 'border-default bg-surface',
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -169,7 +174,9 @@ export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
             {job.error ?? 'Імпорт не вдався.'}
           </p>
         ) : null}
-        {blocked && reason.decisions > 0 ? (
+        {blocked && here ? (
+          <p className="text-ui font-semibold text-change">Застосувати можна, коли виправите позначене нижче.</p>
+        ) : blocked && reason.decisions > 0 ? (
           <p className="text-ui font-semibold text-change">
             Щоб застосувати, вирішіть {countLabel(reason.decisions, ['рядок', 'рядки', 'рядків'])} на вкладці «Рішення».
           </p>
@@ -181,7 +188,7 @@ export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
         ) : !failed && !rejected ? (
           <p className="text-ui font-semibold text-primary">Готово до застосування</p>
         ) : null}
-        <p className="text-caption text-secondary">
+        <p className={cn('text-caption text-secondary', blocked && here && 'sr-only')}>
           {failed && !canApply
             ? 'Чернетки немає — завантажте файл ще раз.'
             : rejected && canApply
@@ -189,7 +196,7 @@ export function ApplyPanel({ job, onShowTab }: ApplyPanelProps) {
               : APPLY_EFFECT[job.kind]}
         </p>
       </div>
-      {blocked && (reason.decisions > 0 || reason.errors.length > 0) ? (
+      {blocked && !here && (reason.decisions > 0 || reason.errors.length > 0) ? (
         <Button variant="secondary" onClick={() => onShowTab(reason.tab)}>
           {TAB_BUTTON[reason.tab]}
         </Button>

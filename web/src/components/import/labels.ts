@@ -1,6 +1,7 @@
 import type { ReportRowType } from '@/api/import';
 import type { ImportJobStatus, ImportKind, MappingType, ReportSeverity } from '@/api/types';
 import type { BadgeTone, SelectOption } from '@/components/ui';
+import { countLabel } from '@/lib/labels';
 
 export const IMPORT_KIND_LABEL: Record<ImportKind, string> = {
   TIMETABLE_XLSX: 'Розклад (Excel)',
@@ -30,6 +31,25 @@ export const IMPORT_STATUS_LABEL: Record<ImportJobStatus, string> = {
   APPLIED: 'Застосовано',
   FAILED: 'Помилка',
 };
+
+/** «$0.04», «<$0.01» — витрати ШІ без зайвих знаків після коми. */
+export function usdShort(value: number): string {
+  if (value === 0) return '$0';
+  if (value < 0.01) return '<$0.01';
+  return `$${value.toFixed(2)}`;
+}
+
+/**
+ * Що в звіті одним реченням: «74 рядки розпізнано, 9 нових записів, 1 чекає рішення, 3 попередження.»
+ * Нулі не називаємо.
+ */
+export function summarySentence(summary: { recognized: number; unknown: number; conflicts: number; warnings: number }): string {
+  const parts = [countLabel(summary.recognized, ['рядок', 'рядки', 'рядків']) + ' розпізнано'];
+  if (summary.unknown > 0) parts.push(countLabel(summary.unknown, ['новий запис', 'нові записи', 'нових записів']));
+  if (summary.conflicts > 0) parts.push(`${summary.conflicts} ${summary.conflicts % 10 === 1 && summary.conflicts % 100 !== 11 ? 'чекає' : 'чекають'} рішення`);
+  if (summary.warnings > 0) parts.push(countLabel(summary.warnings, ['попередження', 'попередження', 'попереджень']));
+  return `${parts.join(', ')}.`;
+}
 
 export const IMPORT_STATUS_TONE: Record<ImportJobStatus, BadgeTone> = {
   UPLOADED: 'neutral',

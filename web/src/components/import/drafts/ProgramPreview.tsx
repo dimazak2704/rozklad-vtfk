@@ -108,7 +108,7 @@ export function ProgramPreview({ draft, checks }: ProgramPreviewProps) {
                   )}
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-condensed text-ui font-bold figures text-primary">{check.raw}</span>
+                      <span className="text-ui font-bold figures text-primary">{check.raw}</span>
                       {warn ? (
                         <Badge tone="warning" size="sm">
                           Увага

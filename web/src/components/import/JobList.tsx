@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { IMPORT_JOBS_PAGE_SIZE, useImportJobs, type ImportJob } from '@/api/import';
 import { DataTable, EmptyState, type DataTableColumn } from '@/components/ui';
 import { formatInstant, formatInstantTime, todayInKyiv } from '@/lib/date';
-import { IMPORT_KIND_LABEL } from './labels';
+import { IMPORT_KIND_LABEL, usdShort } from './labels';
 import { JobStatusBadge, JobSummary } from './JobStatus';
 import { FileIcon } from './UploadPanel';
 
@@ -38,17 +38,27 @@ export function JobList({ onOpen }: JobListProps) {
           </span>
         ),
       },
-      { id: 'status', header: 'Стан', width: '13rem', cell: (job) => <JobStatusBadge status={job.status} /> },
-      { id: 'summary', header: 'Звіт', hideBelow: 'md', cell: (job) => <JobSummary job={job} /> },
+      {
+        id: 'status',
+        header: 'Стан',
+        width: '15rem',
+        cell: (job) => (
+          <span className="flex flex-col gap-0.5">
+            <JobStatusBadge status={job.status} />
+            <JobSummary job={job} />
+          </span>
+        ),
+      },
       {
         id: 'ai',
         header: 'ШІ',
         numeric: true,
         width: '5.5rem',
-        hideBelow: 'sm',
+        hideBelow: 'md',
+        className: 'max-md:hidden!',
         cell: (job) =>
           job.ai ? (
-            <span title={`${job.ai.model}: ${job.ai.inputTokens} + ${job.ai.outputTokens} токенів`}>${job.ai.costUsd.toFixed(3)}</span>
+            <span title={`${job.ai.model}: ${job.ai.inputTokens} + ${job.ai.outputTokens} токенів`}>{usdShort(job.ai.costUsd)}</span>
           ) : (
             <span className="text-muted" title="Без моделі ШІ: розібрано детерміновано">
               —
@@ -60,7 +70,7 @@ export function JobList({ onOpen }: JobListProps) {
         header: 'Коли',
         width: '10.5rem',
         hideBelow: 'lg',
-        className: 'figures whitespace-nowrap text-secondary',
+        className: 'figures whitespace-nowrap text-secondary max-md:hidden!',
         cell: (job) => when(job.createdAt),
       },
     ],
@@ -86,7 +96,7 @@ export function JobList({ onOpen }: JobListProps) {
         empty={
           <EmptyState
             size="sm"
-            title="Імпортів ще не було"
+            title="Імпортів ще не було."
             description="Почніть з таблиці розкладу: з неї система візьме групи, викладачів, дисципліни й аудиторії."
           />
         }

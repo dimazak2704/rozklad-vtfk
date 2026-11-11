@@ -36,7 +36,7 @@ export function TimetablePreview({ draft }: { draft: TimetableDraft }) {
         {stats.map((stat) => (
           <div key={stat.label} className="flex flex-col-reverse rounded-panel border border-default bg-surface px-3 py-2">
             <dt className="text-caption text-muted">{stat.label}</dt>
-            <dd className="font-condensed text-headline font-bold figures text-primary">{stat.value}</dd>
+            <dd className="text-headline font-bold figures text-primary">{stat.value}</dd>
           </div>
         ))}
       </dl>
@@ -88,7 +88,7 @@ export function TimetablePreview({ draft }: { draft: TimetableDraft }) {
                 return (
                   <tr key={pair}>
                     <th scope="row" className="border-e border-b border-separator px-2 py-2 text-start align-top">
-                      <span className="block font-condensed text-headline leading-none font-bold figures text-primary">{pair}</span>
+                      <span className="block text-headline leading-none font-bold figures text-primary">{pair}</span>
                       {time ? <span className="text-meta font-normal text-muted figures">{time.startsAt}</span> : null}
                     </th>
                     {WEEKDAYS.map((day) => (
@@ -133,7 +133,7 @@ function Cell({ lessons, names }: { lessons: TimetableDraftLesson[]; names: Read
               <span
                 key={`empty-${index}`}
                 aria-label={index === 0 ? 'Чисельник: пари немає' : 'Знаменник: пари немає'}
-                className="hatch flex items-center gap-1 rounded-plate px-2 py-1 text-meta text-muted"
+                className="hatch flex items-center gap-1 rounded-tag px-2 py-1 text-meta text-muted"
               >
                 <ParityMark parity={index === 0 ? 'NUMERATOR' : 'DENOMINATOR'} className="h-3 w-2.5" />
                 немає
@@ -171,13 +171,13 @@ function LessonChip({ lesson, names }: { lesson: TimetableDraftLesson; names: Re
         type="button"
         data-line={line}
         className={cn(
-          'flex w-full min-w-0 flex-col items-start rounded-plate px-2 py-1 text-start',
+          'flex w-full min-w-0 flex-col items-start rounded-tag px-2 py-1 text-start',
           'hover:bg-[var(--line-tint)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
         )}
       >
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
-          <span className="truncate font-condensed text-ui font-bold text-primary">{lesson.discipline}</span>
+          <span className="truncate text-ui font-bold text-primary">{lesson.discipline}</span>
           {lesson.parity !== 'BOTH' ? (
             <span className="ms-auto flex shrink-0 items-center gap-0.5 text-meta text-secondary">
               <ParityMark parity={lesson.parity} className="h-3 w-2.5" />

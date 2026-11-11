@@ -55,7 +55,7 @@ function OrderMatching({ job }: { job: ImportJob }) {
             <Badge size="sm" tone="neutral">
               {ROW_TYPE_LABEL[row.type]}
             </Badge>
-            <span className="font-condensed text-heading font-bold break-words text-primary">«{row.raw}»</span>
+            <span className="text-heading font-bold break-words text-primary">«{row.raw}»</span>
             {row.suggestions.length > 0 ? (
               <span className="text-caption text-secondary">
                 схоже: {row.suggestions.map((s) => `«${s.label}»`).join(', ')}
@@ -209,7 +209,7 @@ function MappingRow({ row, decision, onChange, missing, disabled, creatable }: M
           <Badge size="sm" tone={needsDecision(row) || row.severity === 'ERROR' ? 'warning' : 'neutral'}>
             {ROW_TYPE_LABEL[row.type]}
           </Badge>
-          <span className="font-condensed text-heading font-bold break-words text-primary">«{row.raw}»</span>
+          <span className="text-heading font-bold break-words text-primary">«{row.raw}»</span>
         </span>
         {row.message ? <span className="text-caption text-secondary">{row.message}</span> : null}
         <span className="text-meta font-normal text-muted">{row.location}</span>
