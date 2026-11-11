@@ -3,8 +3,11 @@ import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { bellColumns, breakAfter, pairMinutes, usualPairMinutes } from './bells-columns';
 
-/** Нерозривний пробіл: «10 хв» не розривається між рядками. */
+/** Нерозривний пробіл: «20 хв» не розривається між рядками. */
 const NBSP = String.fromCharCode(0xa0);
+
+/** Перерву пишемо лише довгу: короткі випливають із часу пар, а цифри без рішення — шум. */
+export const LONG_BREAK_MINUTES = 20;
 
 interface BellsTableProps {
   profile: BellProfileDto;
@@ -16,9 +19,9 @@ interface BellsTableProps {
 }
 
 /**
- * Дзвінки профілю таблицею: пари рядками, дні з однаковими дзвінками — колонками; під часом — перерва.
- * Тривалість пари пишемо лише тоді, коли вона не звичайна. Сьогоднішня колонка тонована, поточна пара —
- * тлом і словом «зараз» (без смужок прогресу: «живу» доріжку дня показує відлік над таблицею).
+ * Дзвінки профілю таблицею: пари рядками, дні з однаковими дзвінками — колонками. Під часом — один тихий
+ * рядок, лише коли є що сказати: «зараз»/«далі», незвична тривалість пари, довга перерва (≥ 20 хв).
+ * Сьогоднішня колонка тонована, поточна пара — тлом (без смужок прогресу: доріжку дня показує відлік).
  */
 export function BellsTable({ profile, todayWeekday, live = false, className }: BellsTableProps) {
   const columns = bellColumns(profile);
@@ -48,9 +51,10 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                   aria-current={isToday ? 'date' : undefined}
                   className={cn('border-b border-separator px-3 py-3 text-start text-ui font-semibold text-primary', isToday && 'bg-today-wash')}
                 >
-                  <span className="sm:hidden">{column.short}</span>
-                  <span className="hidden sm:inline">{column.label}</span>
-                  {isToday ? <span className="ms-2 text-caption font-semibold text-accent">сьогодні</span> : null}
+                  {/* «Пн–Чт» — одне ціле, не ламається на «Пн–» і «Чт»; «сьогодні» на телефоні — рядком нижче */}
+                  <span className="whitespace-nowrap sm:hidden">{column.short}</span>
+                  <span className="hidden whitespace-nowrap sm:inline">{column.label}</span>
+                  {isToday ? <span className="block text-caption font-semibold text-accent sm:ms-2 sm:inline">сьогодні</span> : null}
                 </th>
               );
             })}
@@ -78,25 +82,31 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                 }
                 const gap = breakAfter(column.slots, pair);
                 const minutes = pairMinutes(slot);
-                const note = [minutes !== usual ? `${minutes}${NBSP}хв` : null, gap !== null ? `перерва ${gap}${NBSP}хв` : null]
+                const note = [
+                  minutes !== usual ? `${minutes}${NBSP}хв` : null,
+                  gap !== null && gap >= LONG_BREAK_MINUTES ? `перерва ${gap}${NBSP}хв` : null,
+                ]
                   .filter(Boolean)
                   .join(' · ');
+                const state = now ? 'зараз' : upcoming ? 'далі' : null;
                 return (
                   <td
                     key={column.label}
                     aria-current={now ? 'time' : undefined}
                     className={cn('px-3 py-3 align-top', now ? 'bg-selected' : isToday && 'bg-today-wash')}
                   >
-                    <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="text-body font-semibold whitespace-nowrap text-primary figures">
-                        {slot.startsAt}
-                        <span className="font-normal text-muted">–</span>
-                        {slot.endsAt}
-                      </span>
-                      {now ? <span className="text-caption font-semibold text-accent">зараз</span> : null}
-                      {upcoming ? <span className="text-caption font-semibold text-secondary">далі</span> : null}
+                    <span className="block text-body font-semibold whitespace-nowrap text-primary figures">
+                      {slot.startsAt}
+                      <span className="font-normal text-muted">–</span>
+                      {slot.endsAt}
                     </span>
-                    {note ? <span className="mt-0.5 block text-caption text-muted figures">{note}</span> : null}
+                    {state || note ? (
+                      <span className="mt-0.5 block text-caption text-muted figures">
+                        {state ? <span className={cn('font-semibold', now ? 'text-accent' : 'text-secondary')}>{state}</span> : null}
+                        {state && note ? ' · ' : null}
+                        {note}
+                      </span>
+                    ) : null}
                   </td>
                 );
               })}

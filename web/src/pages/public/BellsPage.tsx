@@ -68,8 +68,7 @@ export default function BellsPage() {
         <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 flex-col gap-3">
           <BellsTable profile={active} todayWeekday={studyToday ? weekday : null} live={studyToday} />
           <p className="max-w-prose text-caption text-muted">
-            Профіль «{active.name}». Групи першої зміни починають з першої пари, другої — з пізніших; які саме пари у вашої
-            групи, видно в її розкладі.
+            Групи другої зміни починають пізніше — коли саме, видно в розкладі вашої групи.
           </p>
         </section>
       )}
