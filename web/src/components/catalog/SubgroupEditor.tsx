@@ -123,7 +123,7 @@ export function SubgroupEditor({ groupId, groupCode }: SubgroupEditorProps) {
               <Fragment key={subgroup.id}>{editor(draft)}</Fragment>
             ) : (
               <li key={subgroup.id} className="flex items-center gap-3 rounded-control border border-default px-3 py-1.5">
-                <span className="font-condensed text-heading font-bold figures text-primary">{subgroup.number}</span>
+                <span className="text-heading font-bold figures text-primary">{subgroup.number}</span>
                 <span className="min-w-0 flex-1 truncate text-ui text-primary">{subgroup.name ?? `${subgroup.number} підгрупа`}</span>
                 <span className="text-caption text-muted figures">
                   {subgroup.size !== null ? countLabel(subgroup.size, ['студент', 'студенти', 'студентів']) : 'розмір невідомий'}

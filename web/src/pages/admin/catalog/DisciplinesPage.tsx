@@ -2,7 +2,7 @@ import { Pencil, Plus, Power, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useCatalogList, useDeleteCatalogItem, type CatalogDiscipline } from '@/api/catalog';
 import { CatalogNav } from '@/components/catalog/CatalogNav';
-import { ActiveFilterControl, CatalogToolbar } from '@/components/catalog/CatalogToolbar';
+import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { DisciplineFormDialog } from '@/components/catalog/DisciplineForm';
 import { lineName, lineOf } from '@/components/catalog/discipline-palette';
@@ -11,20 +11,20 @@ import { disciplineRequest } from '@/components/catalog/requests';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
-  Badge,
   Button,
-  Chip,
   DataTable,
   EmptyState,
   PageHeader,
+  Panel,
   RowActions,
-  StatusDot,
+  Switch,
   Tooltip,
   notify,
   type DataTableColumn,
 } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { countLabel } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -75,7 +75,8 @@ export default function DisciplinesPage() {
                   className="size-2.5 shrink-0 rounded-full bg-[var(--line-dot)]"
                 />
               </Tooltip>
-              <span className="font-condensed text-body font-bold">{d.shortName}</span>
+              <span className="text-cell font-[650]">{d.shortName}</span>
+              {d.active ? null : <span className="text-caption font-normal text-muted">неактивна</span>}
             </span>
           );
         },
@@ -84,25 +85,16 @@ export default function DisciplinesPage() {
         id: 'name',
         header: 'Повна назва',
         sortable: true,
-        cell: (d) => (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={d.needsReview ? 'text-secondary' : undefined}>{d.name}</span>
-            {d.needsReview ? (
-              <Badge tone="warning" size="sm">
-                Перевірити назву
-              </Badge>
-            ) : null}
-          </span>
-        ),
-      },
-      {
-        id: 'active',
-        header: 'Стан',
-        sortable: true,
-        width: '9rem',
-        hideBelow: 'sm',
+        // назва, що лише повторює скорочення, — це не назва: кажемо прямо, без бурштинової таблички в кожному рядку
         cell: (d) =>
-          d.active ? <StatusDot tone="add" label="Викладається" showLabel /> : <StatusDot tone="neutral" label="Неактивна" showLabel />,
+          d.name.trim().toLocaleLowerCase('uk') === d.shortName.trim().toLocaleLowerCase('uk') ? (
+            <span className="text-muted">розшифровки ще немає</span>
+          ) : (
+            <span className="flex flex-wrap items-baseline gap-x-2">
+              <span className={d.needsReview ? 'text-secondary' : undefined}>{d.name}</span>
+              {d.needsReview ? <span className="text-caption text-muted">перевірити</span> : null}
+            </span>
+          ),
       },
     ],
     [],
@@ -115,8 +107,7 @@ export default function DisciplinesPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Дисципліни"
-        description="Скорочення з розкладу й розпоряджень, повні назви з навчального плану, колір лінії в розкладі."
-        actions={
+        primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати дисципліну
           </Button>
@@ -132,15 +123,32 @@ export default function DisciplinesPage() {
         noun={NOUN}
         filtered={table.filtered}
         onReset={table.reset}
+        activeFilters={(review ? 1 : 0) + (table.get('active') ? 1 : 0)}
       >
-        <Chip selected={review} onToggle={() => table.set({ review: review ? null : '1' })} count={needsReviewTotal}>
-          Перевірити назву
-        </Chip>
-        <ActiveFilterControl
-          value={toActiveFilter(table.get('active'))}
-          onChange={(value) => table.set({ active: value === 'all' ? null : value })}
-        />
+        <Switch label="Лише ті, що треба перевірити" checked={review} onCheckedChange={(checked) => table.set({ review: checked ? '1' : null })} />
+        <FilterField label="Стан">
+          <ActiveFilterControl
+            value={toActiveFilter(table.get('active'))}
+            onChange={(value) => table.set({ active: value === 'all' ? null : value })}
+          />
+        </FilterField>
       </CatalogToolbar>
+      {/* одна фраза з числом замість позначки в кожному рядку */}
+      {!review && needsReviewTotal ? (
+        <p className="-mt-1 flex flex-wrap items-baseline gap-x-2 text-ui text-secondary">
+          <span>
+            {countLabel(needsReviewTotal, ['назва чекає', 'назви чекають', 'назв чекають'])} перевірки: імпорт не знайшов повної розшифровки.
+          </span>
+          <button
+            type="button"
+            onClick={() => table.set({ review: '1' })}
+            className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+          >
+            Показати їх
+          </button>
+        </p>
+      ) : null}
+      <Panel flush>
       <DataTable
         caption="Дисципліни"
         columns={columns}
@@ -173,28 +181,28 @@ export default function DisciplinesPage() {
           table.filtered ? (
             <EmptyState
               size="sm"
-              title="Нічого не знайдено"
-              description="Спробуйте інше написання або скиньте фільтри."
+              title={table.q ? `«${table.q}» не знайдено.` : review ? 'Усі назви перевірено.' : 'За цим фільтром дисциплін немає.'}
               action={
-                <Button variant="secondary" size="sm" onClick={table.reset}>
-                  Скинути фільтри
+                <Button variant="ghost" size="sm" onClick={table.reset}>
+                  Показати всі
                 </Button>
               }
             />
           ) : (
             <EmptyState
               size="sm"
-              title="Дисциплін ще немає"
-              description="Імпортуйте таблицю розкладу — скорочення з неї стануть дисциплінами, або додайте першу вручну."
+              title="Дисциплін ще немає."
+              description="Імпортуйте таблицю розкладу — скорочення з неї стануть дисциплінами."
               action={
-                <Button variant="primary" size="sm" onClick={openNew}>
-                  Додати дисципліну
+                <Button variant="ghost" size="sm" onClick={openNew}>
+                  Додати дисципліну вручну
                 </Button>
               }
             />
           )
         }
       />
+      </Panel>
 
       {editing ? (
         <DisciplineFormDialog

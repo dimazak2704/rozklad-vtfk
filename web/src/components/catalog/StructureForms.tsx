@@ -138,7 +138,7 @@ export function SpecialtyFormDialog({ item, open, onOpenChange }: DialogProps<Ca
         <FormAlert message={formError} />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Літери" required error={errors.letters?.message}>
-            <Input {...form.register('letters')} autoComplete="off" spellCheck={false} autoFocus={!item} className="font-condensed font-bold" placeholder="КІ" />
+            <Input {...form.register('letters')} autoComplete="off" spellCheck={false} autoFocus={!item} className="font-bold" placeholder="КІ" />
           </Field>
           <Field label="Код класифікатора" error={errors.code?.message} hint="Три цифри; можна лишити порожнім">
             <Input {...form.register('code')} autoComplete="off" inputMode="numeric" maxLength={3} placeholder="123" />

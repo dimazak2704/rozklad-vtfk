@@ -109,7 +109,8 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
       <form id={formId} noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <FormAlert message={formError} />
         <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
-          <Field label="Код групи" required error={errors.code?.message}>
+          {/* без прикладу в полі: «4КІ1» з автофокусом читали як уже введене значення */}
+          <Field label="Код групи" required error={errors.code?.message} hint={group ? undefined : 'Як у розкладі, напр. 4КІ1'}>
             <Input
               {...form.register('code', {
                 onChange: (event: { target: { value: string } }) => {
@@ -120,9 +121,8 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
               })}
               autoComplete="off"
               spellCheck={false}
-              placeholder="4КІ1"
               autoFocus={!group}
-              className="font-condensed text-heading font-bold"
+              className="text-heading font-semibold"
             />
           </Field>
           <div className="flex min-h-full flex-col justify-end gap-1 pb-1" aria-live="polite">
@@ -134,7 +134,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
                   </Plate>
                   <span>
                     {canonical.charAt(0)} курс · {letters}
-                    {specialty ? ` — ${specialty.name}` : ''}
+                    {specialty && specialty.name.toLocaleLowerCase('uk') !== (letters ?? '').toLocaleLowerCase('uk') ? ` — ${specialty.name}` : ''}
                     {/\d$/.test(canonical) ? ` · група ${canonical.slice(-1)}` : ''}
                   </span>
                 </p>

@@ -48,6 +48,6 @@ describe('сторінка «Аудиторії»', () => {
     await user.click(within(blocked).getByRole('button', { name: 'Позначити неактивною' }));
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
-    expect(await within(row).findByText('Неактивна')).toBeInTheDocument();
+    expect(await within(row).findByText('неактивна')).toBeInTheDocument();
   });
 });

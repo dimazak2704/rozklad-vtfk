@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router';
 import { paths } from '@/app/routes';
 import { useCatalogList, useCatalogOptions, useDeleteCatalogItem, type CatalogGroup } from '@/api/catalog';
 import { CatalogNav } from '@/components/catalog/CatalogNav';
-import { ActiveFilterControl, CatalogToolbar } from '@/components/catalog/CatalogToolbar';
+import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
 import { GroupFormDialog } from '@/components/catalog/GroupForm';
@@ -17,11 +17,10 @@ import {
   DataTable,
   EmptyState,
   PageHeader,
-  Plate,
+  Panel,
   RowActions,
   SegmentedControl,
   Select,
-  StatusDot,
   Tooltip,
   notify,
   type DataTableColumn,
@@ -76,9 +75,10 @@ export default function GroupsPage() {
         rowHeader: true,
         width: '7.5rem',
         cell: (g) => (
-          <Plate size="md" className={g.active ? undefined : 'opacity-60'}>
-            {g.code}
-          </Plate>
+          <span className="flex items-baseline gap-2">
+            <span className="figures font-semibold">{g.code}</span>
+            {g.active ? null : <span className="text-caption text-muted">неактивна</span>}
+          </span>
         ),
       },
       { id: 'course', header: 'Курс', sortable: true, numeric: true, width: '5rem', cell: (g) => g.course },
@@ -86,6 +86,7 @@ export default function GroupsPage() {
         id: 'specialty',
         header: 'Спеціальність',
         hideBelow: 'md',
+        className: 'max-md:hidden!',
         cell: (g) =>
           g.specialty ? (
             <span className="flex flex-col">
@@ -106,38 +107,38 @@ export default function GroupsPage() {
         width: '5.5rem',
         cell: (g) => (
           <Tooltip content={SHIFT_HINT[g.shift]}>
-            <span tabIndex={0} className="rounded-plate figures">
+            <span tabIndex={0} className="rounded-tag figures">
               {g.shift}
             </span>
           </Tooltip>
         ),
       },
-      { id: 'curator', header: 'Куратор', hideBelow: 'lg', cell: (g) => g.curator?.shortName ?? <EmptyValue /> },
+      { id: 'curator', header: 'Куратор', hideBelow: 'lg', className: 'max-md:hidden!', cell: (g) => g.curator?.shortName ?? <EmptyValue /> },
       {
         id: 'homeRoom',
         header: 'Аудиторія',
         hideBelow: 'md',
-        cell: (g) => (g.homeRoom ? <Plate size="sm">{g.homeRoom.name}</Plate> : <EmptyValue />),
+        className: 'max-md:hidden!',
+        cell: (g) => (g.homeRoom ? <span className="figures">{g.homeRoom.name}</span> : <EmptyValue />),
       },
       {
         id: 'subgroups',
         header: 'Підгрупи',
         hideBelow: 'lg',
+        className: 'max-md:hidden!',
         cell: (g) => (g.subgroups.length > 0 ? countLabel(g.subgroups.length, ['підгрупа', 'підгрупи', 'підгруп']) : <EmptyValue label="не поділена" />),
       },
-      { id: 'size', header: 'Студентів', sortable: true, numeric: true, hideBelow: 'lg', cell: (g) => g.size ?? <EmptyValue label="невідомо" /> },
-      {
-        id: 'active',
-        header: 'Стан',
-        sortable: true,
-        hideBelow: 'sm',
-        cell: (g) => (g.active ? <StatusDot tone="add" label="Навчається" showLabel /> : <StatusDot tone="neutral" label="Неактивна" showLabel />),
-      },
+      { id: 'size', header: 'Студентів', sortable: true, numeric: true, hideBelow: 'lg', className: 'max-md:hidden!', cell: (g) => g.size ?? <EmptyValue label="невідомо" /> },
     ],
     [specialtyName],
   );
 
   const data = list.data;
+  // «—» у кожному рядку нічого не каже: колонку кількості студентів показуємо, лише коли вона десь відома
+  const visibleColumns = useMemo(
+    () => (data && data.items.length > 0 && data.items.every((g) => g.size == null) ? columns.filter((c) => c.id !== 'size') : columns),
+    [columns, data],
+  );
   const specialtyOptions = [
     { value: ALL, label: 'Усі спеціальності' },
     ...(specialties.items ?? []).map((s) => ({ value: s.id, label: s.letters, description: s.name !== s.letters ? s.name : undefined })),
@@ -147,8 +148,7 @@ export default function GroupsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Групи"
-        description="Групи з кодами як у розкладі, зміни, куратори, домашні аудиторії та підгрупи для лабораторних і мов."
-        actions={
+        primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати групу
           </Button>
@@ -164,31 +164,30 @@ export default function GroupsPage() {
         noun={NOUN}
         filtered={table.filtered}
         onReset={table.reset}
+        activeFilters={(course ? 1 : 0) + (table.get('specialty') ? 1 : 0) + (table.get('shift') ? 1 : 0) + (table.get('active') ? 1 : 0)}
       >
-        <span className="flex items-center gap-2">
-          <span aria-hidden="true" className="text-caption font-semibold text-secondary">
-            Курс
-          </span>
+        <FilterField label="Курс">
           <SegmentedControl<string>
             aria-label="Курс"
-            size="sm"
+            stretch
             value={course ?? ALL}
             onValueChange={(value) => table.set({ course: value === ALL ? null : value })}
             options={[{ value: ALL, label: 'Усі' }, ...COURSES.map((c) => ({ value: c, label: c, ariaLabel: `${c} курс` }))]}
           />
-        </span>
+        </FilterField>
+        <FilterField label="Спеціальність">
         <Select<string>
           aria-label="Спеціальність"
-          size="sm"
-          className="w-44"
+          className="w-full"
           value={table.get('specialty') ?? ALL}
           onValueChange={(value) => table.set({ specialty: value === ALL ? null : value })}
           options={specialtyOptions}
         />
+        </FilterField>
+        <FilterField label="Зміна">
         <Select<string>
           aria-label="Зміна"
-          size="sm"
-          className="w-36"
+          className="w-full"
           value={table.get('shift') ?? ALL}
           onValueChange={(value) => table.set({ shift: value === ALL ? null : value })}
           options={[
@@ -197,14 +196,18 @@ export default function GroupsPage() {
             { value: '2', label: '2 зміна', description: SHIFT_HINT[2] },
           ]}
         />
-        <ActiveFilterControl
-          value={toActiveFilter(table.get('active'))}
-          onChange={(value) => table.set({ active: value === 'all' ? null : value })}
-        />
+        </FilterField>
+        <FilterField label="Стан">
+          <ActiveFilterControl
+            value={toActiveFilter(table.get('active'))}
+            onChange={(value) => table.set({ active: value === 'all' ? null : value })}
+          />
+        </FilterField>
       </CatalogToolbar>
+      <Panel flush>
       <DataTable
         caption="Групи коледжу"
-        columns={columns}
+        columns={visibleColumns}
         rows={data?.items}
         getRowId={(g) => g.id}
         loading={list.isPending || list.isPlaceholderData}
@@ -235,28 +238,29 @@ export default function GroupsPage() {
           table.filtered ? (
             <EmptyState
               size="sm"
-              title="Груп не знайдено"
-              description="Код можна писати латиницею: «4ki1» знайде 4КІ1. Або скиньте фільтри."
+              title={table.q ? `Групи «${table.q}» немає.` : 'За цим фільтром груп немає.'}
+              description="Код можна писати латиницею: «4ki1» знайде 4КІ1."
               action={
-                <Button variant="secondary" size="sm" onClick={table.reset}>
-                  Скинути фільтри
+                <Button variant="ghost" size="sm" onClick={table.reset}>
+                  Показати всі
                 </Button>
               }
             />
           ) : (
             <EmptyState
               size="sm"
-              title="Груп ще немає"
+              title="Груп ще немає."
               description="Імпортуйте таблицю розкладу — групи з неї зʼявляться тут разом із кураторами й аудиторіями."
               action={
-                <Button variant="primary" size="sm" onClick={openNew}>
-                  Додати групу
+                <Button variant="ghost" size="sm" onClick={openNew}>
+                  Додати групу вручну
                 </Button>
               }
             />
           )
         }
       />
+      </Panel>
 
       {editing ? (
         <GroupFormDialog

@@ -11,6 +11,7 @@ import {
 } from '@/api/catalog';
 import { CatalogNav } from '@/components/catalog/CatalogNav';
 import { DeleteDialog, type DeleteTarget } from '@/components/catalog/DeleteDialog';
+import { informativeColumns } from '@/components/catalog/columns';
 import { EmptyValue } from '@/components/catalog/FormParts';
 import { DepartmentFormDialog, NamedFormDialog, SpecialtyFormDialog } from '@/components/catalog/StructureForms';
 import {
@@ -18,7 +19,7 @@ import {
   DataTable,
   EmptyState,
   PageHeader,
-  Plate,
+  Select,
   RowActions,
   Tabs,
   TabsContent,
@@ -50,7 +51,8 @@ function TabPanel({
   onAdd,
   children,
 }: {
-  description: string;
+  /** Лише коли без пояснення незрозуміло, навіщо цей довідник. */
+  description?: string;
   addLabel: string;
   onAdd: () => void;
   children: ReactNode;
@@ -58,7 +60,7 @@ function TabPanel({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-prose text-ui text-secondary">{description}</p>
+        {description ? <p className="max-w-prose text-caption text-muted">{description}</p> : <span />}
         <Button variant="secondary" size="sm" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={onAdd}>
           {addLabel}
         </Button>
@@ -142,13 +144,7 @@ export default function StructurePage() {
       cell: (d) => {
         const own = (specialties.items ?? []).filter((s) => s.departmentId === d.id);
         return own.length > 0 ? (
-          <span className="flex flex-wrap gap-1">
-            {own.map((s) => (
-              <Plate key={s.id} size="sm">
-                {s.letters}
-              </Plate>
-            ))}
-          </span>
+          <span className="figures">{own.map((s) => s.letters).join(', ')}</span>
         ) : (
           <EmptyValue label="немає" />
         );
@@ -157,7 +153,7 @@ export default function StructurePage() {
   ];
 
   const specialtyColumns: Array<DataTableColumn<CatalogSpecialty>> = [
-    { id: 'letters', header: 'Літери', rowHeader: true, width: '7rem', sortValue: (s) => s.letters, cell: (s) => <Plate size="md">{s.letters}</Plate> },
+    { id: 'letters', header: 'Літери', rowHeader: true, width: '7rem', sortValue: (s) => s.letters, cell: (s) => <span className="figures font-semibold">{s.letters}</span> },
     { id: 'name', header: 'Назва', sortValue: (s) => s.name, cell: (s) => (s.name === s.letters ? <span className="text-secondary">Повна назва невідома</span> : s.name) },
     { id: 'code', header: 'Код', width: '6rem', hideBelow: 'sm', sortValue: (s) => s.code, cell: (s) => s.code ?? <EmptyValue /> },
     { id: 'department', header: 'Відділення', hideBelow: 'md', sortValue: (s) => s.department?.label, cell: (s) => s.department?.label ?? <EmptyValue /> },
@@ -167,7 +163,7 @@ export default function StructurePage() {
       numeric: true,
       width: '6rem',
       sortValue: (s) => counts.groupsBySpecialty.get(s.id) ?? 0,
-      cell: (s) => counts.groupsBySpecialty.get(s.id) ?? 0,
+      cell: (s) => counts.groupsBySpecialty.get(s.id) || <span className="text-muted">—</span>,
     },
   ];
 
@@ -179,7 +175,7 @@ export default function StructurePage() {
       numeric: true,
       width: '8rem',
       sortValue: (c) => counts.teachersByCommission.get(c.id) ?? 0,
-      cell: (c) => counts.teachersByCommission.get(c.id) ?? 0,
+      cell: (c) => counts.teachersByCommission.get(c.id) || <span className="text-muted">—</span>,
     },
   ];
 
@@ -191,42 +187,45 @@ export default function StructurePage() {
       numeric: true,
       width: '8rem',
       sortValue: (b) => counts.roomsByBuilding.get(b.id) ?? 0,
-      cell: (b) => counts.roomsByBuilding.get(b.id) ?? 0,
+      cell: (b) => counts.roomsByBuilding.get(b.id) || <span className="text-muted">—</span>,
     },
   ];
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Структура коледжу"
-        description="Відділення, спеціальності з літерами для кодів груп, циклові комісії викладачів і корпуси з аудиторіями."
-      />
+      <PageHeader title="Структура коледжу" />
       <CatalogNav />
       <Tabs value={tab} onValueChange={(value) => selectTab(value as Tab)}>
-        <TabsList aria-label="Розділи структури">
-          <TabsTrigger value="departments" count={departments.items?.length}>
-            Відділення
-          </TabsTrigger>
-          <TabsTrigger value="specialties" count={specialties.items?.length}>
-            Спеціальності
-          </TabsTrigger>
-          <TabsTrigger value="commissions" count={commissions.items?.length}>
-            Циклові комісії
-          </TabsTrigger>
-          <TabsTrigger value="buildings" count={buildings.items?.length}>
-            Корпуси
-          </TabsTrigger>
+        {/* на телефоні чотири вкладки не влазять — там це список, як і перемикач довідників */}
+        <div className="sm:hidden">
+          <Select<Tab>
+            aria-label="Розділ структури"
+            className="w-full"
+            value={tab}
+            onValueChange={selectTab}
+            options={[
+              { value: 'departments', label: 'Відділення' },
+              { value: 'specialties', label: 'Спеціальності' },
+              { value: 'commissions', label: 'Циклові комісії' },
+              { value: 'buildings', label: 'Корпуси' },
+            ]}
+          />
+        </div>
+        <TabsList aria-label="Розділи структури" className="max-sm:hidden">
+          <TabsTrigger value="departments">Відділення</TabsTrigger>
+          <TabsTrigger value="specialties">Спеціальності</TabsTrigger>
+          <TabsTrigger value="commissions">Циклові комісії</TabsTrigger>
+          <TabsTrigger value="buildings">Корпуси</TabsTrigger>
         </TabsList>
 
         <TabsContent value="departments">
           <TabPanel
-            description="Відділення обʼєднують спеціальності; їх назви бачать на сайті поруч із групою."
             addLabel="Додати відділення"
             onAdd={() => setEditing({ tab: 'departments', item: null })}
           >
             <DataTable
               caption="Відділення"
-              columns={departmentColumns}
+              columns={informativeColumns(departmentColumns, departments.items, { shortName: (d) => d.shortName })}
               rows={departments.items}
               getRowId={(d) => d.id}
               loading={departments.isPending}
@@ -242,13 +241,13 @@ export default function StructurePage() {
 
         <TabsContent value="specialties">
           <TabPanel
-            description="Літери спеціальності входять у код групи: «КІ» у «4КІ1». За ними нова група сама знаходить спеціальність."
+            description="Літери входять у код групи: «КІ» у «4КІ1». За ними нова група сама знаходить спеціальність."
             addLabel="Додати спеціальність"
             onAdd={() => setEditing({ tab: 'specialties', item: null })}
           >
             <DataTable
               caption="Спеціальності"
-              columns={specialtyColumns}
+              columns={informativeColumns(specialtyColumns, specialties.items, { code: (s) => s.code, department: (s) => s.department?.label })}
               rows={specialties.items}
               getRowId={(s) => s.id}
               loading={specialties.isPending}
@@ -264,7 +263,7 @@ export default function StructurePage() {
 
         <TabsContent value="commissions">
           <TabPanel
-            description="Комісія викладача важить при підборі замін: колега з тієї самої комісії отримує +20 балів."
+            description="Колегу з тієї самої комісії пропонують на заміну першим."
             addLabel="Додати комісію"
             onAdd={() => setEditing({ tab: 'commissions', item: null })}
           >
@@ -285,7 +284,7 @@ export default function StructurePage() {
                   title="Циклових комісій ще немає"
                   description="У таблиці розкладу їх немає, тому довідник порожній. Додайте комісії й призначте їх викладачам."
                   action={
-                    <Button variant="primary" size="sm" onClick={() => setEditing({ tab: 'commissions', item: null })}>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing({ tab: 'commissions', item: null })}>
                       Додати комісію
                     </Button>
                   }
@@ -297,7 +296,6 @@ export default function StructurePage() {
 
         <TabsContent value="buildings">
           <TabPanel
-            description="Корпус допомагає розрізнити однакові номери аудиторій і показати, де пара."
             addLabel="Додати корпус"
             onAdd={() => setEditing({ tab: 'buildings', item: null })}
           >
@@ -318,7 +316,7 @@ export default function StructurePage() {
                   title="Корпусів ще немає"
                   description="У документах коледжу корпуси не вказані. Додайте їх, щоб привʼязати аудиторії."
                   action={
-                    <Button variant="primary" size="sm" onClick={() => setEditing({ tab: 'buildings', item: null })}>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing({ tab: 'buildings', item: null })}>
                       Додати корпус
                     </Button>
                   }

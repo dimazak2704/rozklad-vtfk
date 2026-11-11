@@ -10,7 +10,7 @@ import {
 } from '@/api/catalog';
 import type { RoomType } from '@/api/types';
 import { CatalogNav } from '@/components/catalog/CatalogNav';
-import { ActiveFilterControl, CatalogToolbar } from '@/components/catalog/CatalogToolbar';
+import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
 import { activeParam, CATALOG_PAGE_SIZE, ROOM_TYPE_OPTIONS, toActiveFilter } from '@/components/catalog/labels';
@@ -23,10 +23,9 @@ import {
   DataTable,
   EmptyState,
   PageHeader,
-  Plate,
+  Panel,
   RowActions,
   Select,
-  StatusDot,
   notify,
   type DataTableColumn,
 } from '@/components/ui';
@@ -75,10 +74,9 @@ export default function RoomsPage() {
         rowHeader: true,
         width: '9rem',
         cell: (room) => (
-          <span className="flex items-center gap-2">
-            <Plate size="md" className={room.active ? undefined : 'opacity-60'}>
-              {room.name}
-            </Plate>
+          <span className="flex items-baseline gap-2">
+            <span className="figures font-semibold">{room.name}</span>
+            {room.active ? null : <span className="text-caption text-muted">неактивна</span>}
           </span>
         ),
       },
@@ -103,30 +101,42 @@ export default function RoomsPage() {
         hideBelow: 'sm',
         cell: (room) => room.maxParallel,
       },
-      {
-        id: 'active',
-        header: 'Стан',
-        sortable: true,
-        cell: (room) =>
-          room.active ? (
-            <StatusDot tone="add" label="Діє" showLabel />
-          ) : (
-            <StatusDot tone="neutral" label="Неактивна" showLabel />
-          ),
-      },
     ],
     [],
   );
 
   const data = list.data;
+  // колонки, де в усіх рядках однаково або порожньо, нічого не кажуть: «Аудиторія» в кожному рядку, «—» скрізь
+  const visibleColumns = useMemo(() => {
+    const items = data?.items ?? [];
+    if (items.length === 0) return columns;
+    const uniform = (pick: (room: CatalogRoom) => unknown) => new Set(items.map(pick)).size <= 1;
+    return columns.filter((column) => {
+      if (column.id === 'type') return Boolean(type) || !uniform((room) => room.type);
+      if (column.id === 'building') return items.some((room) => room.building);
+      if (column.id === 'capacity') return items.some((room) => room.capacity != null);
+      if (column.id === 'maxParallel') return !uniform((room) => room.maxParallel);
+      return true;
+    });
+  }, [columns, data?.items, type]);
+  const activeFilters = (type ? 1 : 0) + (table.get('building') ? 1 : 0) + (table.get('active') ? 1 : 0);
+  // чому колонок мало — одним реченням, щоб порожнеча не виглядала як збій
+  const hidden = new Set(columns.map((c) => c.id).filter((id) => !visibleColumns.some((c) => c.id === id)));
+  const missingNote =
+    data && data.items.length > 0 && hidden.size > 0
+      ? [
+          hidden.has('type') ? 'усі аудиторії одного типу' : null,
+          hidden.has('maxParallel') ? 'у кожній займається одна група' : null,
+          hidden.has('capacity') || hidden.has('building') ? 'місткість і корпус ще не вказані — їх можна додати в картці аудиторії' : null,
+        ].filter(Boolean)
+      : [];
   const buildingOptions = [{ value: ALL, label: 'Усі корпуси' }, ...(buildings.items ?? []).map((b) => ({ value: b.id, label: b.name }))];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Аудиторії"
-        description="Аудиторії з розкладу та їхні обмеження: тип, місткість і скільки груп можуть займатися одночасно."
-        actions={
+        primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати аудиторію
           </Button>
@@ -142,33 +152,40 @@ export default function RoomsPage() {
         noun={NOUN}
         filtered={table.filtered}
         onReset={table.reset}
+        activeFilters={activeFilters}
       >
-        <Select<string>
-          aria-label="Тип приміщення"
-          size="sm"
-          className="w-48"
-          value={type ?? ALL}
-          onValueChange={(value) => table.set({ type: value === ALL ? null : value })}
-          options={[{ value: ALL, label: 'Усі типи' }, ...ROOM_TYPE_OPTIONS]}
-        />
-        {buildingOptions.length > 1 ? (
+        <FilterField label="Тип приміщення">
           <Select<string>
-            aria-label="Корпус"
-            size="sm"
-            className="w-44"
-            value={table.get('building') ?? ALL}
-            onValueChange={(value) => table.set({ building: value === ALL ? null : value })}
-            options={buildingOptions}
+            aria-label="Тип приміщення"
+            className="w-full"
+            value={type ?? ALL}
+            onValueChange={(value) => table.set({ type: value === ALL ? null : value })}
+            options={[{ value: ALL, label: 'Усі типи' }, ...ROOM_TYPE_OPTIONS]}
           />
+        </FilterField>
+        {buildingOptions.length > 1 ? (
+          <FilterField label="Корпус">
+            <Select<string>
+              aria-label="Корпус"
+              className="w-full"
+              value={table.get('building') ?? ALL}
+              onValueChange={(value) => table.set({ building: value === ALL ? null : value })}
+              options={buildingOptions}
+            />
+          </FilterField>
         ) : null}
-        <ActiveFilterControl
-          value={toActiveFilter(table.get('active'))}
-          onChange={(value) => table.set({ active: value === 'all' ? null : value })}
-        />
+        <FilterField label="Стан">
+          <ActiveFilterControl
+            value={toActiveFilter(table.get('active'))}
+            onChange={(value) => table.set({ active: value === 'all' ? null : value })}
+          />
+        </FilterField>
       </CatalogToolbar>
+      {missingNote.length > 0 ? <p className="-mt-1 max-w-prose text-caption text-muted">{capitalize(missingNote.join('; '))}.</p> : null}
+      <Panel flush className={visibleColumns.length <= 2 ? 'max-w-2xl' : undefined}>
       <DataTable
         caption="Аудиторії коледжу"
-        columns={columns}
+        columns={visibleColumns}
         rows={data?.items}
         getRowId={(room) => room.id}
         loading={list.isPending || list.isPlaceholderData}
@@ -199,28 +216,28 @@ export default function RoomsPage() {
           table.filtered ? (
             <EmptyState
               size="sm"
-              title="Нічого не знайдено"
-              description="Перевірте написання номера або скиньте фільтри."
+              title={table.q ? `Аудиторії «${table.q}» немає.` : 'За цим фільтром аудиторій немає.'}
               action={
-                <Button variant="secondary" size="sm" onClick={table.reset}>
-                  Скинути фільтри
+                <Button variant="ghost" size="sm" onClick={table.reset}>
+                  Показати всі
                 </Button>
               }
             />
           ) : (
             <EmptyState
               size="sm"
-              title="Аудиторій ще немає"
-              description="Додайте першу аудиторію або імпортуйте таблицю розкладу — аудиторії з неї зʼявляться тут."
+              title="Аудиторій ще немає."
+              description="Імпортуйте таблицю розкладу — аудиторії з неї зʼявляться тут."
               action={
-                <Button variant="primary" size="sm" onClick={openNew}>
-                  Додати аудиторію
+                <Button variant="ghost" size="sm" onClick={openNew}>
+                  Додати аудиторію вручну
                 </Button>
               }
             />
           )
         }
       />
+      </Panel>
 
       {editing ? (
         <RoomFormDialog

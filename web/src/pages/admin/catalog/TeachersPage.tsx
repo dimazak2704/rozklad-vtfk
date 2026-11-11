@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router';
 import { paths } from '@/app/routes';
 import { useCatalogList, useCatalogOptions, useDeleteCatalogItem, type CatalogTeacher } from '@/api/catalog';
 import { CatalogNav } from '@/components/catalog/CatalogNav';
-import { ActiveFilterControl, CatalogToolbar } from '@/components/catalog/CatalogToolbar';
+import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
+import { informativeColumns } from '@/components/catalog/columns';
 import { EmptyValue } from '@/components/catalog/FormParts';
 import { activeParam, CATALOG_PAGE_SIZE, EMPLOYMENT_LABEL, toActiveFilter } from '@/components/catalog/labels';
 import { teacherRequest } from '@/components/catalog/requests';
@@ -13,15 +14,14 @@ import { TeacherFormDialog } from '@/components/catalog/TeacherForm';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
-  Badge,
   Button,
-  Chip,
   DataTable,
   EmptyState,
   PageHeader,
+  Panel,
   RowActions,
   Select,
-  StatusDot,
+  Switch,
   notify,
   type DataTableColumn,
 } from '@/components/ui';
@@ -71,63 +71,53 @@ export default function TeachersPage() {
         rowHeader: true,
         cell: (t) => (
           <span className="flex flex-col">
-            <span>{t.shortName}</span>
+            <span className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-[650]">{t.shortName}</span>
+              {t.active ? null : <span className="text-caption font-normal text-muted">неактивний</span>}
+              {t.needsReview ? <span className="text-caption font-normal text-change">перевірити дані</span> : null}
+            </span>
             {[t.lastName, t.firstName, t.middleName].filter(Boolean).length > 1 ? (
               <span className="text-caption font-normal text-muted">{[t.lastName, t.firstName, t.middleName].filter(Boolean).join(' ')}</span>
             ) : null}
           </span>
         ),
       },
-      { id: 'displayName', header: 'На сайті', sortable: true, hideBelow: 'md', cell: (t) => t.displayName },
+      { id: 'displayName', header: 'На сайті', sortable: true, hideBelow: 'md', className: 'max-md:hidden!', cell: (t) => t.displayName },
       {
         id: 'commission',
         header: 'Циклова комісія',
         hideBelow: 'lg',
+        className: 'max-md:hidden!',
         cell: (t) => t.cycleCommission?.label ?? <EmptyValue />,
       },
-      { id: 'employment', header: 'Зайнятість', sortable: true, hideBelow: 'lg', cell: (t) => EMPLOYMENT_LABEL[t.employment] },
+      { id: 'employment', header: 'Зайнятість', sortable: true, hideBelow: 'lg', className: 'max-md:hidden!', cell: (t) => EMPLOYMENT_LABEL[t.employment] },
       {
         id: 'linked',
         header: 'Вхід у систему',
         hideBelow: 'sm',
-        cell: (t) =>
-          t.linked ? (
-            <Badge tone="accent" size="sm">
-              Має обліковий запис
-            </Badge>
-          ) : (
-            <span className="text-caption text-muted">Немає</span>
-          ),
-      },
-      {
-        id: 'active',
-        header: 'Стан',
-        sortable: true,
-        width: '10rem',
-        cell: (t) => (
-          <span className="flex flex-wrap items-center gap-1.5">
-            {t.active ? <StatusDot tone="add" label="Працює" showLabel /> : <StatusDot tone="neutral" label="Неактивний" showLabel />}
-            {t.needsReview ? (
-              <Badge tone="warning" size="sm">
-                Перевірити
-              </Badge>
-            ) : null}
-          </span>
-        ),
+        cell: (t) => (t.linked ? <span>Так</span> : <span className="text-muted">—</span>),
       },
     ],
     [],
   );
 
   const data = list.data;
+  const visibleColumns = useMemo(
+    () =>
+      informativeColumns(columns, data?.items, {
+        commission: (t) => t.cycleCommission?.label,
+        employment: (t) => t.employment,
+        linked: (t) => t.linked,
+      }),
+    [columns, data?.items],
+  );
   const commissionOptions = [{ value: ALL, label: 'Усі комісії' }, ...(commissions.items ?? []).map((c) => ({ value: c.id, label: c.name }))];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Викладачі"
-        description="Імена так, як їх пишуть у розкладі й на сайті, циклові комісії, псевдоніми з таблиць і дисципліни для підбору замін."
-        actions={
+        primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати викладача
           </Button>
@@ -143,31 +133,32 @@ export default function TeachersPage() {
         noun={NOUN}
         filtered={table.filtered}
         onReset={table.reset}
+        activeFilters={(table.get('commission') ? 1 : 0) + (review ? 1 : 0) + (unlinked ? 1 : 0) + (table.get('active') ? 1 : 0)}
       >
         {commissionOptions.length > 1 ? (
-          <Select<string>
-            aria-label="Циклова комісія"
-            size="sm"
-            className="w-52"
-            value={table.get('commission') ?? ALL}
-            onValueChange={(value) => table.set({ commission: value === ALL ? null : value })}
-            options={commissionOptions}
-          />
+          <FilterField label="Циклова комісія">
+            <Select<string>
+              aria-label="Циклова комісія"
+              className="w-full"
+              value={table.get('commission') ?? ALL}
+              onValueChange={(value) => table.set({ commission: value === ALL ? null : value })}
+              options={commissionOptions}
+            />
+          </FilterField>
         ) : null}
-        <Chip selected={review} onToggle={() => table.set({ review: review ? null : '1' })}>
-          Перевірити дані
-        </Chip>
-        <Chip selected={unlinked} onToggle={() => table.set({ unlinked: unlinked ? null : '1' })}>
-          Без облікового запису
-        </Chip>
-        <ActiveFilterControl
-          value={toActiveFilter(table.get('active'))}
-          onChange={(value) => table.set({ active: value === 'all' ? null : value })}
-        />
+        <Switch label="Лише ті, де треба перевірити дані" checked={review} onCheckedChange={(checked) => table.set({ review: checked ? '1' : null })} />
+        <Switch label="Лише без облікового запису" checked={unlinked} onCheckedChange={(checked) => table.set({ unlinked: checked ? '1' : null })} />
+        <FilterField label="Стан">
+          <ActiveFilterControl
+            value={toActiveFilter(table.get('active'))}
+            onChange={(value) => table.set({ active: value === 'all' ? null : value })}
+          />
+        </FilterField>
       </CatalogToolbar>
+      <Panel flush>
       <DataTable
         caption="Викладачі коледжу"
-        columns={columns}
+        columns={visibleColumns}
         rows={data?.items}
         getRowId={(t) => t.id}
         loading={list.isPending || list.isPlaceholderData}
@@ -198,28 +189,29 @@ export default function TeachersPage() {
           table.filtered ? (
             <EmptyState
               size="sm"
-              title="Нікого не знайдено"
-              description="Перевірте прізвище — пошук враховує й псевдоніми з таблиць. Або скиньте фільтри."
+              title={table.q ? `«${table.q}» не знайдено.` : 'За цим фільтром нікого немає.'}
+              description={table.q ? 'Пошук враховує й псевдоніми з таблиць.' : undefined}
               action={
-                <Button variant="secondary" size="sm" onClick={table.reset}>
-                  Скинути фільтри
+                <Button variant="ghost" size="sm" onClick={table.reset}>
+                  Показати всіх
                 </Button>
               }
             />
           ) : (
             <EmptyState
               size="sm"
-              title="Викладачів ще немає"
-              description="Імпортуйте таблицю розкладу — прізвища з неї стануть викладачами, або додайте першого вручну."
+              title="Викладачів ще немає."
+              description="Імпортуйте таблицю розкладу — прізвища з неї стануть викладачами."
               action={
-                <Button variant="primary" size="sm" onClick={openNew}>
-                  Додати викладача
+                <Button variant="ghost" size="sm" onClick={openNew}>
+                  Додати викладача вручну
                 </Button>
               }
             />
           )
         }
       />
+      </Panel>
 
       {editing ? (
         <TeacherFormDialog
