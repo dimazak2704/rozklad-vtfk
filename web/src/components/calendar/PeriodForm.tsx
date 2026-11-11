@@ -11,6 +11,7 @@ import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea, notify } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
 import { PERIOD_KIND_EFFECT, PERIOD_KIND_OPTIONS, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
+import { DateInput } from './DateInput';
 import { composeOrderNote } from './notes';
 
 const periodSchema = z
@@ -158,10 +159,22 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="З" required error={errors.startsOn?.message}>
-              <Input type="date" min={semester.startsOn} max={semester.endsOn} {...form.register('startsOn')} />
+              <Controller
+                control={form.control}
+                name="startsOn"
+                render={({ field }) => (
+                  <DateInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} min={semester.startsOn} max={semester.endsOn} />
+                )}
+              />
             </Field>
             <Field label="По (включно)" required error={errors.endsOn?.message}>
-              <Input type="date" min={semester.startsOn} max={semester.endsOn} {...form.register('endsOn')} />
+              <Controller
+                control={form.control}
+                name="endsOn"
+                render={({ field }) => (
+                  <DateInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} min={semester.startsOn} max={semester.endsOn} />
+                )}
+              />
             </Field>
           </div>
           {values.kind === 'STUDY_MODE' ? (

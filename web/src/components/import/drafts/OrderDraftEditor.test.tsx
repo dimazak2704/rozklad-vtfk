@@ -33,7 +33,7 @@ describe('звірка заголовка розпорядження', () => {
     renderWithProviders(<OrderDraftEditor jobId="job-1" version={3} draft={headless} onDone={onDone} />);
 
     await user.type(screen.getByRole('textbox', { name: /Номер/ }), '35');
-    await user.type(screen.getByLabelText(/Дата/), '2026-10-19');
+    await user.type(screen.getByLabelText(/Дата/), '19.10.2026');
     await user.click(screen.getByRole('button', { name: 'Зберегти звірені рядки' }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
@@ -79,7 +79,7 @@ describe('звірка заголовка розпорядження', () => {
     expect(screen.getByText('За датою це ЧЕТВЕР — перевірте дату або день тижня.')).toBeInTheDocument();
     const date = screen.getByLabelText(/^Дата/);
     await user.clear(date);
-    await user.type(date, '2026-10-16');
+    await user.type(date, '16.10.2026');
     expect(screen.queryByText(/За датою це/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Зберегти звірені рядки' }));
 

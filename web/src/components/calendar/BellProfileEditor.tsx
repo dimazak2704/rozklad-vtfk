@@ -6,9 +6,10 @@ import { applyServerErrors } from '@/components/catalog/forms';
 import { FormAlert } from '@/components/catalog/FormParts';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { Badge, Button, Checkbox, Field, IconButton, Input, Switch, notify } from '@/components/ui';
+import { TimeInput } from './TimeInput';
 import { cn } from '@/lib/cn';
 import { capitalize, countLabel, PAIR_FORMS, weekdayName, weekdayShort } from '@/lib/labels';
-import { breakAfter, duration, gridFromSlots, hasErrors, nextSlot, slotsFromGrid, validateDay, type BellGrid, type SlotDraft } from './bells';
+import { breakAfter, duration, gridFromSlots, hasErrors, mostCommon, nextSlot, slotsFromGrid, validateDay, type BellGrid, type SlotDraft } from './bells';
 
 interface BellProfileEditorProps {
   /** null — новий профіль (копія `template`). */
@@ -136,11 +137,18 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
           const day = column.days[0] as Weekday;
           const slots = grid.days[day];
           const errors = validateDay(slots);
+          // однакова тривалість пар — один раз у заголовку колонки; типова перерва не повторюється в кожному рядку
+          const lengths = slots.map(duration);
+          const sameLength = lengths.every((value) => value !== null && value === lengths[0]) ? lengths[0] : null;
+          const usualBreak = mostCommon(slots.slice(0, -1).map((_, index) => breakAfter(slots, index)));
           return (
             <section key={column.key} aria-label={`Дзвінки: ${column.title}`} className="flex min-w-0 flex-col rounded-panel border border-default bg-surface">
               <header className="flex items-center justify-between gap-2 border-b border-separator bg-sunken px-3 py-2">
                 <h3 className="text-ui font-semibold text-primary">{column.title}</h3>
-                <span className="text-meta text-muted figures">{countLabel(slots.length, PAIR_FORMS)}</span>
+                <span className="text-meta text-muted figures">
+                  {countLabel(slots.length, PAIR_FORMS)}
+                  {sameLength ? ` по ${sameLength} хв` : ''}
+                </span>
               </header>
               <ol className="flex flex-col px-3 py-2">
                 {slots.map((slot, index) => {
@@ -156,31 +164,27 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
                     <li key={index} className="flex flex-col">
                       <div className="flex items-center gap-2 py-1">
                         <span className="w-6 text-heading font-bold figures text-primary">{index + 1}</span>
-                        <Input
-                          type="time"
-                          size="sm"
+                        <TimeInput
                           value={slot.startsAt}
                           aria-label={`${index + 1} пара, ${weekdayShort(day)}: початок`}
                           aria-invalid={error ? true : undefined}
-                          onChange={(event) => setSlot({ startsAt: event.target.value })}
-                          className="w-[6.5rem] figures [&::-webkit-calendar-picker-indicator]:hidden"
+                          onChange={(startsAt) => setSlot({ startsAt })}
+                          className="w-[4.75rem]"
                         />
                         <span aria-hidden="true" className="text-muted">
                           –
                         </span>
-                        <Input
-                          type="time"
-                          size="sm"
+                        <TimeInput
                           value={slot.endsAt}
                           aria-label={`${index + 1} пара, ${weekdayShort(day)}: кінець`}
                           aria-invalid={error ? true : undefined}
-                          onChange={(event) => setSlot({ endsAt: event.target.value })}
-                          className="w-[6.5rem] figures [&::-webkit-calendar-picker-indicator]:hidden"
+                          onChange={(endsAt) => setSlot({ endsAt })}
+                          className="w-[4.75rem]"
                         />
-                        <span className="ms-auto text-meta text-muted figures">{length && length > 0 ? `${length} хв` : ''}</span>
+                        <span className="ms-auto text-meta text-muted figures">{!sameLength && length && length > 0 ? `${length} хв` : ''}</span>
                       </div>
                       {error ? <p className="ps-8 text-caption font-medium text-danger">{error}</p> : null}
-                      {pause !== null && index < slots.length - 1 ? (
+                      {pause !== null && index < slots.length - 1 && (pause !== usualBreak || pause < 5) ? (
                         <p
                           className={cn(
                             'flex items-center gap-2 ps-8 text-meta figures',

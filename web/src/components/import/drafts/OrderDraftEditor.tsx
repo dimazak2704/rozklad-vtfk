@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { type OrderDraft, type OrderDraftRow, useSaveOrderDraft } from '@/api/import';
 import { isApiError } from '@/api/errors';
 import type { OrderKind, OrderRowType, Uuid } from '@/api/types';
+import { DateInput } from '@/components/calendar/DateInput';
 import { Button, Field, IconButton, Input, Select, Textarea, notify } from '@/components/ui';
 
 /** Типи рядків розпорядження (DOMAIN §8); «за текстом» — сервер визначить тип сам. */
@@ -172,7 +173,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
           <Input inputMode="numeric" value={number} onChange={(event) => setNumber(event.target.value)} />
         </Field>
         <Field label="Дата" required error={errors.date}>
-          <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <DateInput value={date} onChange={setDate} />
         </Field>
         {kind === 'AMENDMENT' ? (
           <Field label="Доповнює розпорядження №" required error={errors.parentNumber}>

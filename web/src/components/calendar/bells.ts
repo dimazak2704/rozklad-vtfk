@@ -93,3 +93,40 @@ export function nextSlot(slots: readonly SlotDraft[]): SlotDraft {
   const start = timeToMinutes(last.endsAt) + 10;
   return { pair: slots.length + 1, startsAt: minutesToTime(start), endsAt: minutesToTime(start + length) };
 }
+
+/**
+ * Час з клавіатури → «HH:MM» (24 год, як у розкладі): «830» і «8:30» → «08:30», «1730» → «17:30»,
+ * «8» → «08:00». Не час (25:00, 8:75, літери) — null.
+ */
+export function normalizeTime(raw: string): string | null {
+  const text = raw.trim().replace(/[.,\s]/g, ':');
+  let hours: number;
+  let minutes: number;
+  const parts = text.split(':');
+  if (parts.length === 2 && /^\d{1,2}$/.test(parts[0] ?? '') && /^\d{1,2}$/.test(parts[1] ?? '')) {
+    hours = Number(parts[0]);
+    minutes = Number(parts[1]);
+  } else if (/^\d{1,4}$/.test(text)) {
+    hours = Number(text.length <= 2 ? text : text.slice(0, -2));
+    minutes = text.length <= 2 ? 0 : Number(text.slice(-2));
+  } else {
+    return null;
+  }
+  if (hours > 23 || minutes > 59) return null;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/** Найчастіше значення (типова перерва чи тривалість пари в колонці); null — якщо значень немає. */
+export function mostCommon(values: ReadonlyArray<number | null>): number | null {
+  const counts = new Map<number, number>();
+  for (const value of values) if (value !== null) counts.set(value, (counts.get(value) ?? 0) + 1);
+  let best: number | null = null;
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
+}

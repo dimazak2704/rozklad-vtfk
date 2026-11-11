@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BellProfileSlotDto } from '@/api/types';
 import { BELL_PROFILES } from '@/mocks/fixtures';
-import { breakAfter, gridFromSlots, hasErrors, nextSlot, slotsFromGrid, validateDay } from './bells';
+import { breakAfter, gridFromSlots, hasErrors, mostCommon, nextSlot, normalizeTime, slotsFromGrid, validateDay } from './bells';
+import { isoToText, textToIso } from './dateText';
 import { composeOrderNote, orderDate } from './notes';
 import { periodAudience } from './periods';
 
@@ -113,5 +114,45 @@ describe('редактор дзвінків', () => {
     expect(breakAfter(day, 1)).toBeNull();
     expect(nextSlot(day)).toEqual({ pair: 3, startsAt: '10:50', endsAt: '11:50' });
     expect(nextSlot([])).toEqual({ pair: 1, startsAt: '08:30', endsAt: '09:30' });
+  });
+});
+
+describe('час дзвінків текстом', () => {
+  it('приводить набране до «HH:MM» у 24 години', () => {
+    expect(normalizeTime('830')).toBe('08:30');
+    expect(normalizeTime('8:30')).toBe('08:30');
+    expect(normalizeTime('1730')).toBe('17:30');
+    expect(normalizeTime('8')).toBe('08:00');
+    expect(normalizeTime('17.05')).toBe('17:05');
+    expect(normalizeTime('08:30')).toBe('08:30');
+  });
+
+  it('не вигадує час із неправильного', () => {
+    expect(normalizeTime('25:00')).toBeNull();
+    expect(normalizeTime('8:75')).toBeNull();
+    expect(normalizeTime('ab')).toBeNull();
+    expect(normalizeTime('')).toBeNull();
+  });
+
+  it('типова перерва — найчастіша', () => {
+    expect(mostCommon([10, 20, 10, null])).toBe(10);
+    expect(mostCommon([null])).toBeNull();
+  });
+});
+
+describe('дата текстом', () => {
+  it('показує «дд.мм.рррр» і читає набране день-місяць-рік', () => {
+    expect(isoToText('2026-11-11')).toBe('11.11.2026');
+    expect(isoToText('')).toBe('');
+    expect(textToIso('11.11.2026')).toBe('2026-11-11');
+    expect(textToIso('1.9.26')).toBe('2026-09-01');
+    expect(textToIso('11/11/2026')).toBe('2026-11-11');
+    expect(textToIso('2026-11-11')).toBe('2026-11-11');
+  });
+
+  it('неіснуюча дата чи не дата — null', () => {
+    expect(textToIso('31.02.2026')).toBeNull();
+    expect(textToIso('завтра')).toBeNull();
+    expect(textToIso('')).toBeNull();
   });
 });

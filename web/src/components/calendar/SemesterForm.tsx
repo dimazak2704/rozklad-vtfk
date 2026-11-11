@@ -6,6 +6,7 @@ import { useBellProfiles, useSaveSemester, type CalendarSemester } from '@/api/c
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { Field, Input, NumberInput, RadioGroup, SegmentedControl, Select, notify } from '@/components/ui';
+import { DateInput } from './DateInput';
 import { diffDays, isIsoDate, startOfWeek } from '@/lib/date';
 
 const semesterSchema = z
@@ -133,10 +134,18 @@ export function SemesterFormDialog({ semester, open, onOpenChange, onSaved }: Se
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Перший день" required error={errors.startsOn?.message}>
-            <Input type="date" {...form.register('startsOn')} />
+            <Controller
+              control={form.control}
+              name="startsOn"
+              render={({ field }) => <DateInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />}
+            />
           </Field>
           <Field label="Останній день" required error={errors.endsOn?.message} hint={spanWeeks ? `${spanWeeks} тижнів за календарем` : undefined}>
-            <Input type="date" {...form.register('endsOn')} />
+            <Controller
+              control={form.control}
+              name="endsOn"
+              render={({ field }) => <DateInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />}
+            />
           </Field>
           <Field label="Навчальних тижнів" error={errors.weeksCount?.message} hint="Порожньо — за датами">
             <Controller

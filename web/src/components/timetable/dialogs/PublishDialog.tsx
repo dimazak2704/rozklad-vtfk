@@ -4,7 +4,8 @@ import { Link } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { usePublishVersion, type TimetableConflict } from '@/api/timetable';
 import type { IsoDate, SemesterRef, TimetableVersionDto } from '@/api/types';
-import { Button, buttonClass, Dialog, DialogClose, DialogContent, Field, Input, notify } from '@/components/ui';
+import { DateInput } from '@/components/calendar/DateInput';
+import { Button, buttonClass, Dialog, DialogClose, DialogContent, Field, notify } from '@/components/ui';
 import { compareIsoDates, formatLongDate, formatNumericDate, isIsoDate } from '@/lib/date';
 import { defaultEffectiveFrom } from '../model/versions';
 
@@ -152,7 +153,7 @@ function PublishForm({
             error={fieldError ?? dateError}
             hint={`Семестр: ${formatNumericDate(semester.startsOn)}–${formatNumericDate(semester.endsOn)}`}
           >
-            <Input data-publish-focus="" type="date" value={effectiveFrom} min={minDate} max={semester.endsOn} onChange={(event) => setEffectiveFrom(event.target.value)} />
+            <DateInput data-publish-focus="" value={effectiveFrom} min={minDate} max={semester.endsOn} onChange={setEffectiveFrom} />
           </Field>
           <ul className="flex list-disc flex-col gap-1.5 ps-5 text-ui text-secondary">
             <li>Поточна опублікована версія піде в архів — її можна буде переглядати й копіювати.</li>
