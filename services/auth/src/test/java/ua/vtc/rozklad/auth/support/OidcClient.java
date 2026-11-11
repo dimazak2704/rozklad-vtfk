@@ -83,6 +83,19 @@ public final class OidcClient {
         return browser.postForm("/auth/oauth2/token", form);
     }
 
+    /** A {@code client_credentials} token of a service client ({@code scope} may be {@code null}). */
+    public static String serviceToken(Browser browser, String clientId, String secret, String scope) {
+        String basic = Base64.getEncoder().encodeToString((clientId + ":" + secret).getBytes(StandardCharsets.UTF_8));
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("grant_type", "client_credentials");
+        if (scope != null) {
+            form.put("scope", scope);
+        }
+        HttpResponse<String> response = browser.postForm("/auth/oauth2/token", form, "Authorization", "Basic " + basic);
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        return JSON.readTree(response.body()).path("access_token").asString();
+    }
+
     public static JsonNode json(String body) {
         return JSON.readTree(body);
     }

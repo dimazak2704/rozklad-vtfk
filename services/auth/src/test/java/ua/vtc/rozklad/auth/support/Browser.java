@@ -62,6 +62,17 @@ public class Browser {
         return send(request, headers);
     }
 
+    /** A JSON request ({@code PUT}, {@code PATCH}, {@code POST}, {@code DELETE}); {@code body} may be {@code null}. */
+    public HttpResponse<String> json(String method, String path, String body, String... headers) {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path))
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        if (body != null) {
+            request.header("Content-Type", "application/json");
+        }
+        return send(request, headers);
+    }
+
     /** Opens the sign-in page and posts the form with its CSRF token. */
     public HttpResponse<String> signIn(String username, String password) {
         HttpResponse<String> page = get("/auth/login", "Accept", "text/html");

@@ -116,6 +116,71 @@ public class AccountRepository {
                 """).params(Timestamp.from(now), actor, id).update();
     }
 
+    /** Profile fields; {@code null} keeps the stored value. Identifiers are stored in lower case. */
+    public void updateProfile(UUID id, String username, String email, String displayName, Instant now, String actor) {
+        jdbc.sql("""
+                UPDATE account SET username = coalesce(:username, username), email = coalesce(:email, email),
+                                   display_name = coalesce(:displayName, display_name), updated_at = :now,
+                                   updated_by = :actor, version = version + 1
+                 WHERE id = :id
+                """)
+                .param("username", normalise(username))
+                .param("email", normalise(email))
+                .param("displayName", displayName)
+                .param("now", Timestamp.from(now))
+                .param("actor", actor)
+                .param("id", id)
+                .update();
+    }
+
+    public void replaceRoles(UUID id, Set<String> roles) {
+        jdbc.sql("DELETE FROM account_role WHERE account_id = ? AND NOT (role = ANY(?))")
+                .params(id, roles.toArray(String[]::new)).update();
+        for (String role : roles) {
+            addRole(id, role);
+        }
+    }
+
+    /** Disables the account with a reason ({@code REVOKED}, {@code DEMO_OFF}). */
+    public void disable(UUID id, String reason, Instant now, String actor) {
+        jdbc.sql("""
+                UPDATE account SET enabled = false, disabled_reason = ?, disabled_at = ?, updated_at = ?,
+                                   updated_by = ?, version = version + 1
+                 WHERE id = ?
+                """).params(reason, Timestamp.from(now), Timestamp.from(now), actor, id).update();
+    }
+
+    public void delete(UUID id) {
+        jdbc.sql("DELETE FROM account WHERE id = ?").param(id).update();
+    }
+
+    /** Removes the Google binding; {@code true} when there was one. */
+    public boolean unbindGoogle(UUID id) {
+        return jdbc.sql("DELETE FROM federated_identity WHERE account_id = ? AND provider = 'google'")
+                .param(id).update() > 0;
+    }
+
+    public boolean usernameTaken(String username, UUID except) {
+        return jdbc.sql("SELECT count(*) FROM account WHERE username = ? AND id <> ?")
+                .params(normalise(username), except).query(Long.class).single() > 0;
+    }
+
+    public boolean emailTaken(String email, UUID except) {
+        return jdbc.sql("SELECT count(*) FROM account WHERE email = ? AND id <> ?")
+                .params(normalise(email), except).query(Long.class).single() > 0;
+    }
+
+    /** Usable admins (D12) other than {@code id}. */
+    public long countUsableAdminsExcept(UUID id) {
+        return jdbc.sql("SELECT count(*) FROM account a WHERE a.id <> ? AND " + USABLE_ADMIN)
+                .param(id).query(Long.class).single();
+    }
+
+    public boolean hasGoogleBinding(UUID id) {
+        return jdbc.sql("SELECT count(*) FROM federated_identity WHERE account_id = ?")
+                .param(id).query(Long.class).single() > 0;
+    }
+
     public void recordLogin(UUID id, Instant now) {
         jdbc.sql("UPDATE account SET last_login_at = ? WHERE id = ?").params(Timestamp.from(now), id).update();
     }
