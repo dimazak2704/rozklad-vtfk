@@ -46,7 +46,7 @@ Admin layout: compact left sidebar (icons + labels, collapsible), top bar with d
 
 The visual language must come from this product (a Ukrainian college timetable), not from a template.
 Before coding UI, run the design skills (`impeccable`, `frontend-design`; then `better-*` for exact values)
-and write the decisions to `web/DESIGN.md` (palette, type scale, spacing, radii, motion tokens, components).
+and keep the decisions in `web/DESIGN.md` (palette, type scale, spacing, radii, motion tokens, components).
 
 Hard bans (the "slop detector" checklist — `web/scripts/slop-check.mjs` must grep the source and fail CI):
 - purple/indigo→pink gradients, glassmorphism everywhere, neon glows, gradient text, random blobs;
@@ -54,19 +54,33 @@ Hard bans (the "slop detector" checklist — `web/scripts/slop-check.mjs` must g
 - centered-everything landing with a big CTA and no real content; lorem ipsum; fake testimonials/stats;
 - uniform rounded-2xl cards with drop shadows for everything; identical icon-in-circle tiles;
 - Inter/Roboto as the only face with default weights and no typographic hierarchy;
+- `light-dark()` inside token variables (it resolves at `:root`, so light islands turn dark);
 - grey-on-grey low-contrast text; meaningless placeholders («Welcome back!», «Get started»).
 
-Positive direction (to be refined by the design skills):
-- Feels like an official yet modern Ukrainian institution timetable board: dense, tabular, calm, precise.
-  Think railway/airport departure boards and printed college schedules: strong grid, tabular numerals,
-  clear time column, restrained colour used **semantically** (change = amber, cancelled = red strike,
-  added = green, room change = blue, numerator/denominator = two distinct subtle patterns/tints).
-- A distinctive but readable type pairing with full Cyrillic support (e.g. a grotesk with character for UI +
-  tabular figures; optionally a condensed face for the timetable grid). Self-host via `@fontsource`.
-- Discipline colours are deterministic per discipline (hash → palette with AA contrast in both themes).
-- Light and dark themes from the same tokens; dark is not just inverted — tuned surfaces and accents.
-- Motion is purposeful: layout transitions when lessons move, list reorder, toast/undo, skeleton shimmer,
-  live pulse on realtime updates; respects `prefers-reduced-motion`.
+Positive direction — «Повітря» з живим часом (round 8; the full system is `web/DESIGN.md`):
+- **A calm personal calendar where only time moves.** One sky-blue signal marks "now" (the countdown, the
+  now-line, the current pair); everything else is ink on a cool canvas with hairlines, quiet until the user
+  hovers, taps or asks. The earlier "tram stop timetable" world (navy band, condensed digits, route plates,
+  departure-board rows) is retired.
+- **One loud thing per screen.** Home leads with the countdown («4 пара · 38 хв до дзвінка»), a group page
+  with the group code and the week grid, admin «Заміни» with the decision. Say it in a sentence, not in a
+  number: «Далі перерва 20 хв, 5 пара о 13:30», «Вирішено 3 з 7 пар» — no KPI tile rows, no zero counts.
+- **Restraint budget.** Per area: one primary button, at most two secondary, the rest in `⋯`; rows show no
+  buttons at rest; parity and week number once per screen; no description under page titles.
+- **Every page has a way back.** `PageHeader` shows «‹ Розклад» / «‹ Мій розклад» from the route registry;
+  the mark always leads home; no dead ends — empty states say what happens next and offer one action.
+- **States are shape and word first, colour second:** change = amber wash + the old value struck through,
+  cancelled = red strike and «Пари не буде», added = green wash, room change = `ауд. ~~301~~ 208`,
+  moved = dashed outline; numerator/denominator = a half-filled disc, never a colour.
+- **Type:** Manrope (UI and text) and Geologica (headings and tabular figures), both OFL via
+  `@fontsource-variable`, full Ukrainian Cyrillic. No uppercase labels, no eyebrows.
+- **Discipline colour** is only an 8 px dot before the title (five hues from `lines.css`), never a fill.
+- **Themes follow the system** by default; the override lives in the footer and the user menu. Dark is
+  layered by lightness (higher layer = lighter), washes stay low-chroma, the accent flips lighter with dark
+  text on it. Light «paper» islands (`data-theme="light"`) stay light in dark mode.
+- **Motion only answers time and state:** the now-line glides, the countdown digits roll, a finished pair
+  settles, a live change draws its strike once; nothing loops except the spinner, and
+  `prefers-reduced-motion` turns it all off.
 
 ## 3. UX rules
 

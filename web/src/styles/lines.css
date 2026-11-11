@@ -1,15 +1,54 @@
 /*
- * «Лінії» дисциплін: як кольори маршрутів на схемі. Лише 5 відтінків, кожен ≥ 30° від зарезервованих
- * (стани занять 27° / 58–81° / 150° / 221–226°, «живий» синій 256°), тож дисципліна ніколи не схожа на стан.
- * У сітці розкладу кольорів дисциплін немає: предмет називає коротка назва. Лінія живе лише в картці деталей
- * заняття та в діаграмах адмінки (редактор, навантаження).
- * Крапка світла — oklch(56% 0.12 h), ≥ 4.2:1 до білого; темна — oklch(72% 0.09 h), ≥ 6.9:1 до поверхні.
+ * Лінії дисциплін: п'ять відтінків OKLCH — 115°, 186°, 290°, 320°, 352°, кожен ≥ 30° від станів занять
+ * (27° / 62–82° / 150° / 222°) і від акценту (244–248°), тож дисципліна ніколи не схожа на стан.
+ * Колір дисципліни — лише крапка 8 px перед назвою (клітинка тижня, рядок дня, картка деталей, діаграми адмінки),
+ * ніколи не заливка, не колір тексту й не бічна смуга.
+ * Крапка світла — oklch(56% 0.12 h) (≥ 4.5:1 до поверхні), темна — oklch(72% 0.09 h).
  * Елемент отримує data-line="N" (див. src/lib/discipline-color.ts) і читає змінні:
  *   --line-dot   — крапка/позначка (графічний елемент)
  *   --line-tint  — ледь помітне тонування (діаграми)
  *   --line-text  — кольоровий текст (за потреби, ≥ 4.5:1 до тла й до тонування)
  * Шоста й далі дисципліна на одному екрані — нейтральна (--fill-muted).
+ * Як і в theme.css, значення задаються окремо для кожної теми (без light-dark()), тож світлий «острівець»
+ * у темній темі показує світлі крапки.
  */
+
+:root,
+[data-theme='light'] {
+  --c-line-0-dot: oklch(56% 0.12 115);
+  --c-line-0-tint: oklch(96.5% 0.025 115);
+  --c-line-0-text: oklch(44% 0.095 115);
+  --c-line-1-dot: oklch(56% 0.12 186);
+  --c-line-1-tint: oklch(96.5% 0.025 186);
+  --c-line-1-text: oklch(44% 0.095 186);
+  --c-line-2-dot: oklch(56% 0.12 290);
+  --c-line-2-tint: oklch(96.5% 0.025 290);
+  --c-line-2-text: oklch(44% 0.095 290);
+  --c-line-3-dot: oklch(56% 0.12 320);
+  --c-line-3-tint: oklch(96.5% 0.025 320);
+  --c-line-3-text: oklch(44% 0.095 320);
+  --c-line-4-dot: oklch(56% 0.12 352);
+  --c-line-4-tint: oklch(96.5% 0.025 352);
+  --c-line-4-text: oklch(44% 0.095 352);
+}
+
+[data-theme='dark'] {
+  --c-line-0-dot: oklch(72% 0.09 115);
+  --c-line-0-tint: oklch(26.5% 0.03 115);
+  --c-line-0-text: oklch(85% 0.07 115);
+  --c-line-1-dot: oklch(72% 0.09 186);
+  --c-line-1-tint: oklch(26.5% 0.03 186);
+  --c-line-1-text: oklch(85% 0.07 186);
+  --c-line-2-dot: oklch(72% 0.09 290);
+  --c-line-2-tint: oklch(26.5% 0.03 290);
+  --c-line-2-text: oklch(85% 0.07 290);
+  --c-line-3-dot: oklch(72% 0.09 320);
+  --c-line-3-tint: oklch(26.5% 0.03 320);
+  --c-line-3-text: oklch(85% 0.07 320);
+  --c-line-4-dot: oklch(72% 0.09 352);
+  --c-line-4-tint: oklch(26.5% 0.03 352);
+  --c-line-4-text: oklch(85% 0.07 352);
+}
 
 [data-line] {
   --line-dot: var(--fill-muted);
@@ -19,35 +58,35 @@
 
 /* 115° — оливковий */
 [data-line='0'] {
-  --line-dot: light-dark(oklch(56% 0.12 115), oklch(72% 0.09 115));
-  --line-tint: light-dark(oklch(96.5% 0.025 115), oklch(26.5% 0.03 115));
-  --line-text: light-dark(oklch(44% 0.095 115), oklch(85% 0.07 115));
+  --line-dot: var(--c-line-0-dot);
+  --line-tint: var(--c-line-0-tint);
+  --line-text: var(--c-line-0-text);
 }
 
 /* 186° — бірюзовий */
 [data-line='1'] {
-  --line-dot: light-dark(oklch(56% 0.12 186), oklch(72% 0.09 186));
-  --line-tint: light-dark(oklch(96.5% 0.025 186), oklch(26.5% 0.03 186));
-  --line-text: light-dark(oklch(44% 0.095 186), oklch(85% 0.07 186));
+  --line-dot: var(--c-line-1-dot);
+  --line-tint: var(--c-line-1-tint);
+  --line-text: var(--c-line-1-text);
 }
 
 /* 290° — фіалковий */
 [data-line='2'] {
-  --line-dot: light-dark(oklch(56% 0.12 290), oklch(72% 0.09 290));
-  --line-tint: light-dark(oklch(96.5% 0.025 290), oklch(26.5% 0.03 290));
-  --line-text: light-dark(oklch(44% 0.095 290), oklch(85% 0.07 290));
+  --line-dot: var(--c-line-2-dot);
+  --line-tint: var(--c-line-2-tint);
+  --line-text: var(--c-line-2-text);
 }
 
 /* 320° — сливовий */
 [data-line='3'] {
-  --line-dot: light-dark(oklch(56% 0.12 320), oklch(72% 0.09 320));
-  --line-tint: light-dark(oklch(96.5% 0.025 320), oklch(26.5% 0.03 320));
-  --line-text: light-dark(oklch(44% 0.095 320), oklch(85% 0.07 320));
+  --line-dot: var(--c-line-3-dot);
+  --line-tint: var(--c-line-3-tint);
+  --line-text: var(--c-line-3-text);
 }
 
 /* 352° — малиновий */
 [data-line='4'] {
-  --line-dot: light-dark(oklch(56% 0.12 352), oklch(72% 0.09 352));
-  --line-tint: light-dark(oklch(96.5% 0.025 352), oklch(26.5% 0.03 352));
-  --line-text: light-dark(oklch(44% 0.095 352), oklch(85% 0.07 352));
+  --line-dot: var(--c-line-4-dot);
+  --line-tint: var(--c-line-4-tint);
+  --line-text: var(--c-line-4-text);
 }

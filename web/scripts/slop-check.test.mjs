@@ -36,6 +36,11 @@ describe('slop-check', () => {
     expect(rules('<p className="text-meta uppercase tracking-widest">Можливості</p>')).toContain('eyebrow');
   });
 
+  it('ловить light-dark() у змінних (світлі острівці темніли б)', () => {
+    expect(rules(':root { --background-color-surface: light-dark(#fff, #000); }', '.css')).toContain('light-dark-token');
+    expect(rules('[data-theme="dark"] { --c-bg-surface: oklch(21% 0.013 256); }', '.css')).toEqual([]);
+  });
+
   it('не чіпає коментарі та рядки з поясненим винятком', () => {
     expect(rules('// приклад: bg-gradient-to-r from-purple-500')).toEqual([]);
     expect(rules('// slop-allow: прев’ю чужого макета\n<div className="backdrop-blur-md">')).toEqual([]);

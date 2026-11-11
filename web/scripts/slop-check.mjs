@@ -2,6 +2,7 @@
 /**
  * Детектор «AI slop» (docs/UI.md §2): шукає в коді шаблонні прийоми, які власник заборонив,
  * і падає з кодом 1, якщо щось знайшов. Запускається в `npm run lint`.
+ * Напрям — «Повітря» з живим часом (web/DESIGN.md): спокійний календар, у якому рухається лише час.
  *
  * Виняток для конкретного рядка — коментар з причиною на тому ж або попередньому рядку:
  *   // slop-allow: <чому тут це доречно>        /* slop-allow: <чому> *\/
@@ -19,7 +20,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.impeccable', 'p
 const RULES = [
   {
     id: 'gradient',
-    message: 'Декоративний градієнт. Світ «Розкладу» — пласкі кольорові поля без градієнтів (DESIGN.md).',
+    message: 'Декоративний градієнт. «Розклад» — пласкі тони й тонкі лінії, без градієнтів (DESIGN.md).',
     ext: ['.ts', '.tsx', '.css', '.html'],
     test: (line) =>
       /(?<!repeating-)(linear|radial|conic)-gradient\(/.test(line) ||
@@ -40,7 +41,7 @@ const RULES = [
   },
   {
     id: 'glassmorphism',
-    message: 'Скло й розмиття тла як декор (glassmorphism).',
+    message: 'Скло й розмиття тла як декор (glassmorphism). Нижня панель і шапка — суцільне полотно.',
     ext: ['.ts', '.tsx', '.css', '.html'],
     test: (line) => /\bbackdrop-blur(-[a-z0-9]+)?\b|backdrop-filter:\s*blur/.test(line),
   },
@@ -85,7 +86,7 @@ const RULES = [
   },
   {
     id: 'generic-font',
-    message: 'Inter/Roboto як єдиний шрифт. Шрифти системи — Fira Sans і Fira Sans Condensed (DESIGN.md).',
+    message: 'Inter/Roboto як єдиний шрифт. Шрифти системи — Manrope і Geologica (DESIGN.md).',
     ext: ['.ts', '.tsx', '.css', '.html'],
     test: (line) =>
       /@fontsource(-variable)?\/(inter|roboto)\b/i.test(line) ||
@@ -123,6 +124,13 @@ const RULES = [
     message: 'Сирий hex-колір у компоненті. Кольори — лише токени з src/styles/theme.css.',
     ext: ['.tsx'],
     test: (line) => /(?:className|style)=.*#[0-9a-fA-F]{3,8}\b|\[(?:#[0-9a-fA-F]{3,8})\]/.test(line),
+  },
+  {
+    id: 'light-dark-token',
+    message:
+      'light-dark() у змінній: Lightning CSS обчислює її на :root, і світлі «острівці» темніють. Задавайте значення окремо для кожної теми (theme.css).',
+    ext: ['.css'],
+    test: (line) => /--[\w-]+\s*:[^;]*light-dark\(/.test(line),
   },
   {
     id: 'eyebrow',
