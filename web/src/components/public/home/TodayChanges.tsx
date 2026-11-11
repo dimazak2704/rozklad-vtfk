@@ -7,6 +7,7 @@ import { formatWeekdayDateAfterNa } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 import { MoreLink } from '../MoreLink';
+import { useStalled } from '../useStalled';
 import { isMyGroup } from '../changes/changes-filter';
 import { useHomeDay } from './useHomeDay';
 
@@ -27,9 +28,12 @@ export function TodayChanges({ className }: { className?: string }) {
   const mine = new Set([...favorites, ...recent].filter((t) => t.type === 'GROUP').map((t) => t.id));
   const day = home.isToday ? 'Сьогодні' : `На ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
   const changesLink = home.isToday ? '/changes' : `/changes?date=${home.date}`;
+  const stall = useStalled([changes]);
 
   // спільна помилка сторінки вже сказала, що сталося: блок без даних просто не показуємо
   if (changes.isError && !changes.data && covered) return null;
+  // немає мережі чи сервер мовчить — про це вже сказав рядок сторінки; порожній силует не тримаємо
+  if (changes.isPending && stall) return null;
   let body;
   if (changes.isPending) {
     body = (

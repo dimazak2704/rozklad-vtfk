@@ -1,13 +1,14 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import HomePage from '@/pages/public/HomePage';
 import { useFavoritesStore } from '@/stores/favorites';
 import { renderWithProviders } from '@/test/render';
 import { GroupsDirectory } from './GroupsDirectory';
+import { StallNote } from './StallNote';
 import { TodayChanges } from './TodayChanges';
 
 beforeEach(() => {
@@ -78,5 +79,25 @@ describe('Головна без сервера', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Розклад зараз не завантажується');
     // пошук лишається — ним можна скористатися, щойно сервер оживе
     expect(screen.getByRole('combobox', { name: /Знайти розклад/ })).toBeInTheDocument();
+  });
+});
+
+describe('Перший візит', () => {
+  it('без своєї групи список груп відкритий одразу, без перемикача', async () => {
+    renderWithProviders(<GroupsDirectory expanded />);
+    expect(await screen.findByRole('link', { name: '4КІ1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /список/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Рядок «немає звʼязку»', () => {
+  it('запит на паузі без мережі — спокійне речення замість силуету', () => {
+    renderWithProviders(<StallNote queries={[{ isPending: true, fetchStatus: 'paused', refetch: vi.fn() }]} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Немає звʼязку. Розклад завантажиться сам, щойно зʼявиться інтернет.');
+  });
+
+  it('коли все завантажилось — мовчить', () => {
+    const { container } = renderWithProviders(<StallNote queries={[{ isPending: false, fetchStatus: 'idle', refetch: vi.fn() }]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { groupSpecialtyName } from '@/lib/names';
 import { usePersistentFlag } from '../usePersistentFlag';
+import { useStalled } from '../useStalled';
 import { useRememberedGroup } from './useRememberedGroup';
 
 const COURSE_WORDS = ['', 'один курс', 'два курси', 'три курси', 'чотири курси', 'пʼять курсів', 'шість курсів'] as const;
@@ -72,16 +73,21 @@ function CourseDisclosure({ course, list, ownId, defaultOpen }: { course: number
 /**
  * «Усі групи» — розкриття, а не стіна з 56 табличок. Закрито: одне речення. Відкрито: курси рядками
  * простих посилань. Стан запамʼятовується; на телефоні курси згорнуті, крім курсу своєї групи.
+ * `expanded` — перший візит (своєї групи ще немає): список одразу відкритий, без перемикача —
+ * людині саме його й треба.
  */
-export function GroupsDirectory() {
+export function GroupsDirectory({ expanded = false }: { expanded?: boolean }) {
   const groups = usePublicGroups();
+  const stall = useStalled([groups]);
   const covered = useErrorCovered();
   const remembered = useRememberedGroup();
-  const [open, setOpen] = usePersistentFlag('rozklad.home.groupsOpen', false);
+  const [rememberedOpen, setOpen] = usePersistentFlag('rozklad.home.groupsOpen', false);
+  const open = expanded || rememberedOpen;
   const phone = useMediaQuery('(max-width: 767px)');
   const panelId = useId();
 
   if (groups.isError && !groups.data && covered) return null;
+  if (groups.isPending && stall) return null;
   let body;
   if (groups.isPending) {
     body = <Skeleton className="h-4 w-48" />;
@@ -93,13 +99,17 @@ export function GroupsDirectory() {
     const byCourse = (course: number) => groups.data.filter((g) => g.course === course);
     body = (
       <>
-        <p className="text-body text-secondary">
-          {countLabel(groups.data.length, ['група', 'групи', 'груп'])}, {COURSE_WORDS[courses.length] ?? `${courses.length} курсів`}.
-        </p>
-        <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)} className={TOGGLE}>
-          {open ? 'Згорнути список' : 'Відкрити список'}
-          <ChevronDown aria-hidden="true" className={cn('size-4 motion-safe:transition-transform motion-safe:duration-200', open && 'rotate-180')} />
-        </button>
+        {expanded ? null : (
+          <>
+            <p className="text-body text-secondary">
+              {countLabel(groups.data.length, ['група', 'групи', 'груп'])}, {COURSE_WORDS[courses.length] ?? `${courses.length} курсів`}.
+            </p>
+            <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)} className={TOGGLE}>
+              {open ? 'Згорнути список' : 'Відкрити список'}
+              <ChevronDown aria-hidden="true" className={cn('size-4 motion-safe:transition-transform motion-safe:duration-200', open && 'rotate-180')} />
+            </button>
+          </>
+        )}
         <div id={panelId} hidden={!open}>
           {phone ? (
             <ul className="flex flex-col">

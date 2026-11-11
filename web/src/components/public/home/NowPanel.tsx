@@ -10,6 +10,7 @@ import { compareIsoDates, formatLongDate, formatWeekdayDate, formatWeekdayDateAf
 import { capitalize } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 import type { ScheduleTarget } from '@/stores/favorites';
+import { useStalled } from '../useStalled';
 import { useRememberedGroup } from './useRememberedGroup';
 
 /** Тонований блок героя — і для завантаження, і для спокійних станів без доріжки. */
@@ -56,7 +57,10 @@ export function NowPanel({ className }: { className?: string }) {
   const groupSchedule = usePublicSchedule('GROUP', group?.id, range?.from ?? '', range?.to ?? '', {
     enabled: Boolean(group && range),
   });
+  const stall = useStalled([meta, studyToday ? bells : null]);
 
+  // запит «завис» (немає мережі, сервер мовчить) — силует не висить: сторінка каже це одним рядком
+  if ((meta.isPending || (studyToday && bells.isPending)) && stall) return null;
   if (meta.isPending) {
     return (
       <section aria-label="Стан навчального дня" aria-busy="true" className={cn(HERO, 'gap-4', className)}>

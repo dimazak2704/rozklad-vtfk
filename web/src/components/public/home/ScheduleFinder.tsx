@@ -129,11 +129,14 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Група, викладач або аудиторія"
+          placeholder="Група, викладач, аудиторія"
           className={cn(
-            'h-13 w-full rounded-popover border border-control bg-surface ps-12 pe-12 text-body text-primary',
-            'transition-[border-color] duration-100 placeholder:text-muted hover:border-strong',
-            'focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
+            'h-13 w-full rounded-popover border border-control bg-surface ps-12 text-body text-primary',
+            // справа місце лише під «Очистити»: без нього підказка не обрізається на вузькому телефоні
+            query ? 'pe-12' : 'pe-4',
+            'transition-[border-color,box-shadow] duration-100 placeholder:text-muted hover:border-strong',
+            // поле в фокусі одразу (автофокус) — тож не «подвійне кільце», а рамка 2 px акцентом і курсор
+            'focus:border-accent focus:shadow-[inset_0_0_0_1px_var(--border-color-accent)] focus:outline-none',
             '[&::-webkit-search-cancel-button]:hidden',
           )}
         />
