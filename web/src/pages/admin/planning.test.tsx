@@ -66,7 +66,7 @@ describe('Генератор розкладу', () => {
   it('без запусків показує, що буде «Було», і не дає запустити «окремі курси» без курсу', async () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
-    expect(await screen.findByText('Генератор у цьому семестрі ще не запускали', undefined, LONG)).toBeInTheDocument();
+    expect(await screen.findByText(/Генератор у цьому семестрі ще не запускали/, undefined, LONG)).toBeInTheDocument();
     expect(await screen.findByText('Зараз у «Розклад I семестру 2026/2027»', undefined, LONG)).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Окремі курси' }));
     await user.click(screen.getByRole('button', { name: 'Запустити генерацію' }));

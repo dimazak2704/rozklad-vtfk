@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { useTeacherStats } from '@/api/accounting';
 import type { TeacherStatsDto } from '@/api/types';
 import { paths } from '@/app/routes';
-import { Button, DataTable, EmptyState, IconButton, type DataTableColumn } from '@/components/ui';
+import { Button, DataTable, EmptyState, IconButton, Panel, type DataTableColumn } from '@/components/ui';
 import { monthLabel, shiftMonth } from './model';
 
 interface TeacherStatsProps {
@@ -29,7 +29,7 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         cell: (s) => (
           <Link
             to={paths.teacher(s.teacher.id)}
-            className="rounded-plate font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="rounded-tag font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
             {s.teacher.shortName}
           </Link>
@@ -45,17 +45,23 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
             <span aria-hidden="true" className="relative h-2 flex-1 overflow-hidden rounded-full bg-sunken">
               <span className="absolute inset-y-0 start-0 rounded-full bg-accent" style={{ width: `${(s.substitutionsCount / max) * 100}%` }} />
             </span>
-            <span className="w-8 text-end font-condensed text-body font-bold figures">{s.substitutionsCount}</span>
+            <span className="w-8 text-end text-ui font-[650] figures">{s.substitutionsCount}</span>
           </span>
         ),
       },
-      { id: 'hours', header: 'Годин замін', numeric: true, sortValue: (s) => s.substitutionsHours, cell: (s) => s.substitutionsHours },
+      {
+        id: 'hours',
+        header: 'Годин замін',
+        numeric: true,
+        sortValue: (s) => s.substitutionsHours,
+        cell: (s) => s.substitutionsHours,
+      },
       {
         id: 'missed',
         header: 'Пропустив пар',
         numeric: true,
         sortValue: (s) => s.missedCount,
-        cell: (s) => (s.missedCount > 0 ? <span className="font-semibold text-change">{s.missedCount}</span> : 0),
+        cell: (s) => (s.missedCount > 0 ? <span className="font-semibold text-change">{s.missedCount}</span> : <span className="text-muted">—</span>),
       },
     ],
     [max],
@@ -74,32 +80,34 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
           onClick={() => onMonthChange(shiftMonth(month, 1))}
           disabled={month >= currentMonth}
         />
-        <p className="ms-auto text-caption text-muted">Рахуються заміни з опублікованих розпоряджень.</p>
+        <p className="text-caption text-muted sm:ms-auto">За опублікованими розпорядженнями</p>
       </div>
-      <DataTable
-        caption={`Заміни викладачів: ${monthLabel(month)}`}
-        columns={columns}
-        rows={stats.data}
-        getRowId={(s) => s.teacher.id}
-        loading={stats.isPending}
-        error={stats.error}
-        onRetry={() => void stats.refetch()}
-        defaultSort={{ columnId: 'substitutions', direction: 'desc' }}
-        empty={
-          <EmptyState
-            size="sm"
-            title={`Замін за ${monthLabel(month)} немає`}
-            description="Статистика зʼявиться, щойно розпорядження із замінами буде опубліковано."
-            action={
-              month !== currentMonth ? (
-                <Button size="sm" variant="secondary" onClick={() => onMonthChange(currentMonth)}>
-                  До поточного місяця
-                </Button>
-              ) : undefined
-            }
-          />
-        }
-      />
+      <Panel flush>
+        <DataTable
+          caption={`Заміни викладачів: ${monthLabel(month)}`}
+          columns={columns}
+          rows={stats.data}
+          getRowId={(s) => s.teacher.id}
+          loading={stats.isPending}
+          error={stats.error}
+          onRetry={() => void stats.refetch()}
+          defaultSort={{ columnId: 'substitutions', direction: 'desc' }}
+          empty={
+            <EmptyState
+              size="sm"
+              title={`За ${monthLabel(month)} замін не було.`}
+
+              action={
+                month !== currentMonth ? (
+                  <Button size="sm" variant="secondary" onClick={() => onMonthChange(currentMonth)}>
+                    До поточного місяця
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
+        />
+      </Panel>
     </div>
   );
 }

@@ -1,13 +1,15 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { GenerationProgressPoint } from '@/api/types';
 import { cn } from '@/lib/cn';
-import { formatSeconds } from './model';
+import { formatSeconds, timeTicks } from './model';
 
 interface ScoreChartsProps {
   progress: readonly GenerationProgressPoint[];
   /** Ліміт часу — права межа осі, щоб було видно, скільки ще лишилось. */
   limitSeconds: number | null;
   live: boolean;
+  /** Скільки задача справді тривала: лінія тягнеться до кінця, а не обривається на останньому покращенні. */
+  endSeconds?: number;
 }
 
 interface Point {
@@ -20,13 +22,21 @@ interface Point {
  * Хід розвʼязання двома графіками зі спільною віссю часу (не одна вісь на дві різні величини):
  * зверху — мʼякий штраф (вікна, рвані дні…), знизу — жорсткі порушення. Обидва «менше — краще».
  */
-export function ScoreCharts({ progress, limitSeconds, live }: ScoreChartsProps) {
+export function ScoreCharts({ progress, limitSeconds, live, endSeconds }: ScoreChartsProps) {
   // Timefold дає оцінки зі знаком мінус; показуємо штраф як додатне число, що падає до нуля
   // оцінки Timefold недодатні; модуль дає штраф без «-0»
-  const data: Point[] = progress.map((p) => ({ t: p.t, hard: Math.abs(p.hard), soft: Math.abs(p.soft) }));
+  const data: Point[] = progress.map((p) => ({
+    t: p.t,
+    hard: Math.abs(p.hard),
+    soft: Math.abs(p.soft),
+  }));
+  // після кінця остання оцінка трималась до зупинки — дотягуємо сходинку до фактичного часу
+  const tail = data.at(-1);
+  if (!live && tail && endSeconds && endSeconds > tail.t + 0.5) data.push({ ...tail, t: endSeconds });
   const lastT = data.at(-1)?.t ?? 0;
   // поки йде — вісь до ліміту (видно, скільки лишилось); після кінця — до фактичного часу
-  const domainEnd = live ? Math.max(limitSeconds ?? 0, lastT, 10) : Math.max(lastT, 2);
+  const domainEnd = Math.ceil(live ? Math.max(limitSeconds ?? 0, lastT, 10) : Math.max(lastT, 2));
+  const ticks = timeTicks(domainEnd);
   const hardMax = Math.max(1, ...data.map((d) => d.hard));
 
   return (
@@ -37,6 +47,7 @@ export function ScoreCharts({ progress, limitSeconds, live }: ScoreChartsProps) 
         data={data}
         dataKey="soft"
         domainEnd={domainEnd}
+        ticks={ticks}
         height={190}
         live={live}
         lineClass="[&_.recharts-line-curve]:stroke-[var(--stroke-accent)] [&_.recharts-dot]:fill-[var(--fill-accent)]"
@@ -47,6 +58,7 @@ export function ScoreCharts({ progress, limitSeconds, live }: ScoreChartsProps) 
         data={data}
         dataKey="hard"
         domainEnd={domainEnd}
+        ticks={ticks}
         height={110}
         yMax={hardMax}
         live={live}
@@ -67,13 +79,14 @@ interface ChartBlockProps {
   data: Point[];
   dataKey: 'soft' | 'hard';
   domainEnd: number;
+  ticks: number[];
   height: number;
   yMax?: number;
   live: boolean;
   lineClass: string;
 }
 
-function ChartBlock({ title, note, data, dataKey, domainEnd, height, yMax, live, lineClass }: ChartBlockProps) {
+function ChartBlock({ title, note, data, dataKey, domainEnd, ticks, height, yMax, live, lineClass }: ChartBlockProps) {
   const last = data.at(-1);
   return (
     <div className="flex flex-col gap-1">
@@ -82,7 +95,7 @@ function ChartBlock({ title, note, data, dataKey, domainEnd, height, yMax, live,
           {title} <span className="text-caption font-normal text-muted">· {note}</span>
         </p>
         {last ? (
-          <span className="font-condensed text-heading font-bold text-primary figures" aria-label={`${title} зараз: ${last[dataKey]}`}>
+          <span className="text-heading font-semibold text-primary figures" aria-label={`${title} зараз: ${last[dataKey]}`}>
             {last[dataKey].toLocaleString('uk-UA')}
           </span>
         ) : null}
@@ -106,6 +119,8 @@ function ChartBlock({ title, note, data, dataKey, domainEnd, height, yMax, live,
               dataKey="t"
               type="number"
               domain={[0, domainEnd]}
+              ticks={ticks}
+              interval="preserveStartEnd"
               tickFormatter={(value: number) => formatSeconds(value)}
               tickLine={false}
               minTickGap={24}

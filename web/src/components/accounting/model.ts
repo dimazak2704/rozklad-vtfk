@@ -5,7 +5,7 @@
 import type { AccountingRow } from '@/api/accounting';
 import type { AccountingStatus } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
-import { MONTHS_NOMINATIVE } from '@/lib/labels';
+import { MONTHS_NOMINATIVE, plural } from '@/lib/labels';
 
 export const STATUS_TONE: Record<AccountingStatus, BadgeTone> = {
   FINISHED: 'accent',
@@ -38,6 +38,44 @@ export function statusLabel(row: Pick<AccountingRow, 'status' | 'plan' | 'foreca
 
 export type StatusFilter = 'attention' | 'all' | AccountingStatus;
 
+/** Колір слова стану в рядку (крапка + слово, без «таблички»). */
+export const STATUS_TEXT: Record<AccountingStatus, string> = {
+  FINISHED: 'text-add',
+  WILL_OVERRUN: 'text-change',
+  WILL_UNDERRUN: 'text-cancel',
+  ON_TRACK: 'text-secondary',
+};
+
+/**
+ * Дія з пропозиції сервера одним коротким реченням: «Не вистачає 4 год: додати 2 пари» → «Додати 2 пари».
+ * Стан уже сказано словом поруч, тому повторювати «не вистачає» не треба.
+ */
+export function suggestionAction(suggestion: { kind: 'DISCIPLINE_FINISHED' | 'ADDITIONAL'; text: string }): string {
+  const tail = suggestion.text.split(':').slice(1).join(':').trim();
+  if (tail) return tail.charAt(0).toLocaleUpperCase('uk') + tail.slice(1);
+  return suggestion.kind === 'DISCIPLINE_FINISHED' ? 'Оформити «Вичит.»' : 'Додати пари';
+}
+
+const DISCIPLINE_FORMS = ['дисципліна', 'дисципліни', 'дисциплін'] as const;
+
+/**
+ * Один підсумок замість ряду лічильників: що потребує рішення в цьому семестрі.
+ * «2 дисципліни перевищать план, 109 не встигнуть вичитати.» / «Усі дисципліни йдуть за планом.»
+ */
+export function accountingSummary(rows: ReadonlyArray<Pick<AccountingRow, 'status'>>): string {
+  if (rows.length === 0) return 'Плану годин у цьому семестрі ще немає.';
+  const over = rows.filter((row) => row.status === 'WILL_OVERRUN').length;
+  const under = rows.filter((row) => row.status === 'WILL_UNDERRUN').length;
+  if (over === 0 && under === 0) return 'Усі дисципліни йдуть за планом.';
+  const parts: string[] = [];
+  if (over > 0) parts.push(`${over}\u00a0${plural(over, DISCIPLINE_FORMS)} ${over === 1 ? 'перевищить' : 'перевищать'} план`);
+  if (under > 0) {
+    const noun = parts.length > 0 ? '' : `\u00a0${plural(under, DISCIPLINE_FORMS)}`;
+    parts.push(`${under}${noun} ${under === 1 ? 'не встигне' : 'не встигнуть'} вичитати`);
+  }
+  return `${parts.join(', ')}.`;
+}
+
 /** Потребує дії диспетчера: є пропозиція або прогноз розходиться з планом. */
 export function needsAttention(row: AccountingRow): boolean {
   return row.status === 'WILL_OVERRUN' || row.status === 'WILL_UNDERRUN' || Boolean(row.suggestion);
@@ -56,7 +94,11 @@ export function matchesFilter(row: AccountingRow, filter: StatusFilter): boolean
 export function changesLink(row: AccountingRow): string | null {
   const suggestion = row.suggestion;
   if (!suggestion) return null;
-  const params = new URLSearchParams({ group: row.group.id, discipline: row.discipline.id, suggest: suggestion.kind });
+  const params = new URLSearchParams({
+    group: row.group.id,
+    discipline: row.discipline.id,
+    suggest: suggestion.kind,
+  });
   if (suggestion.fromDate) params.set('date', suggestion.fromDate);
   return `/admin/changes?${params.toString()}`;
 }

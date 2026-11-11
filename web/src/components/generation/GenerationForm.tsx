@@ -1,11 +1,12 @@
 import { Play, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { DEFAULT_WEIGHTS, TIME_LIMIT_MAX, TIME_LIMIT_MIN } from '@/api/generation';
+import { DEFAULT_WEIGHTS } from '@/api/generation';
 import type { PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
-import { Button, Chip, Combobox, Field, NumberInput, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
+import { Button, Chip, Combobox, Field, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
 import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
 import { groupDescription } from '@/lib/names';
 import { formatSeconds, validateForm, WEIGHT_FIELDS, WEIGHT_MAX, type GenerationFormState, type ScopeMode } from './model';
+import { Disclosure } from './Disclosure';
 import { WeightSlider } from './WeightSlider';
 
 const NO_BASE = 'none';
@@ -23,8 +24,8 @@ interface GenerationFormProps {
 }
 
 /**
- * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Кожна вага пояснена
- * словами; «Скинути ваги» повертає типові значення core.
+ * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
+ * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
  */
 export function GenerationForm({ form, onChange, groups, versions, busy, starting, onStart }: GenerationFormProps) {
   const [submitted, setSubmitted] = useState(false);
@@ -51,7 +52,6 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
   return (
     <Panel
       title="Параметри"
-      description="Розвʼязувач Timefold переставляє незакріплені пари, доки не вичерпає ліміт часу."
       footer={
         <Button
           variant="primary"
@@ -113,7 +113,12 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
                     <Chip
                       key={id}
                       selected
-                      onRemove={() => onChange({ ...form, groupIds: form.groupIds.filter((g) => g !== id) })}
+                      onRemove={() =>
+                        onChange({
+                          ...form,
+                          groupIds: form.groupIds.filter((g) => g !== id),
+                        })
+                      }
                       removeLabel={`Прибрати ${groupsById.get(id)?.code ?? 'групу'}`}
                     >
                       {groupsById.get(id)?.code ?? '—'}
@@ -126,48 +131,48 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
           <p className={errors.scope ? 'text-caption font-medium text-danger' : 'text-caption text-muted'}>{errors.scope ?? scopeHint}</p>
         </div>
 
-        <Field
-          label="Базова версія"
-          hint={
-            form.baseVersionId
-              ? 'Закріплені пари й «Було» беруться з неї; результат — нова чернетка, база не змінюється.'
-              : 'Пари складаються з навантаження семестру; «Було» — опублікований розклад.'
-          }
-        >
+        <Field label="Базова версія" hint={form.baseVersionId ? undefined : 'Пари складаються з навантаження семестру.'}>
           <Select
             value={form.baseVersionId ?? NO_BASE}
-            onValueChange={(value) => onChange({ ...form, baseVersionId: value === NO_BASE ? null : value })}
+            onValueChange={(value) =>
+              onChange({
+                ...form,
+                baseVersionId: value === NO_BASE ? null : value,
+              })
+            }
             options={[
-              ...versions.map((v) => ({ value: v.id, label: v.name, description: `${VERSION_STATUS_LABEL[v.status]} · конфліктів: ${v.hardConflicts}` })),
+              ...versions.map((v) => ({
+                value: v.id,
+                label: v.name,
+                description:
+                  v.hardConflicts > 0 ? `${VERSION_STATUS_LABEL[v.status]}, конфліктів: ${v.hardConflicts}` : VERSION_STATUS_LABEL[v.status],
+              })),
               { value: NO_BASE, label: 'Без базової — з навантаження' },
             ]}
           />
         </Field>
 
-        <div className="flex flex-col gap-2">
-          <Field label="Ліміт часу" error={errors.timeLimitSeconds} hint={`Від ${TIME_LIMIT_MIN} с до ${TIME_LIMIT_MAX / 60} хв. Довше — краща оцінка, але чекати довше.`}>
-            <NumberInput
-              value={form.timeLimitSeconds}
-              onValueChange={(value) => onChange({ ...form, timeLimitSeconds: value ?? TIME_LIMIT_MIN })}
-              min={TIME_LIMIT_MIN}
-              max={TIME_LIMIT_MAX}
-              step={10}
-              unit="с"
-            />
-          </Field>
+        {/* одне керування на одне значення: лише швидкий вибір, без окремого поля з плюсом і мінусом */}
+        <div className="flex flex-col gap-1.5">
+          <span aria-hidden="true" className="text-caption font-[650] text-primary">
+            Ліміт часу
+          </span>
           <SegmentedControl
-            aria-label="Швидкий вибір ліміту"
-            size="sm"
+            aria-label="Ліміт часу"
             stretch
-            value={String(form.timeLimitSeconds)}
+            value={TIME_PRESETS.includes(form.timeLimitSeconds as (typeof TIME_PRESETS)[number]) ? String(form.timeLimitSeconds) : ''}
             onValueChange={(value) => onChange({ ...form, timeLimitSeconds: Number(value) })}
-            options={TIME_PRESETS.map((seconds) => ({ value: String(seconds), label: formatSeconds(seconds) }))}
+            options={TIME_PRESETS.map((seconds) => ({
+              value: String(seconds),
+              label: formatSeconds(seconds),
+            }))}
           />
+          {errors.timeLimitSeconds ? <p className="text-caption font-medium text-danger">{errors.timeLimitSeconds}</p> : null}
         </div>
 
         <div className="flex flex-col gap-4 border-t border-separator pt-4">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-heading font-semibold text-primary">Що важливіше</h3>
+            <h3 className="text-heading font-bold text-primary">Що важливіше</h3>
             {weightsChanged ? (
               <Button
                 size="sm"
@@ -188,9 +193,28 @@ export function GenerationForm({ form, onChange, groups, versions, busy, startin
               max={WEIGHT_MAX}
               defaultValue={DEFAULT_WEIGHTS[key]}
               disabled={busy}
-              onValueChange={(value) => onChange({ ...form, weights: { ...form.weights, [key]: value } })}
+              onValueChange={(value) =>
+                onChange({
+                  ...form,
+                  weights: { ...form.weights, [key]: value },
+                })
+              }
             />
           ))}
+          <Disclosure summary="Що означають ваги?" contentClassName="ps-5.5">
+            <dl className="flex flex-col gap-2 text-caption">
+              {WEIGHT_FIELDS.map(({ key, label, hint }) => (
+                <div key={key}>
+                  <dt className="font-[650] text-primary">{label}</dt>
+                  <dd className="text-secondary">{hint}</dd>
+                </div>
+              ))}
+              <div>
+                <dt className="font-[650] text-primary">0</dt>
+                <dd className="text-secondary">Не враховувати це зовсім. Більше число — важливіше.</dd>
+              </div>
+            </dl>
+          </Disclosure>
         </div>
       </fieldset>
     </Panel>

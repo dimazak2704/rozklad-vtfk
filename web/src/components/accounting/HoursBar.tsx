@@ -54,7 +54,8 @@ export function HoursBar({ row, className }: HoursBarProps) {
         type="button"
         aria-label={summary}
         className={cn(
-          'group relative block w-full min-w-40 rounded-plate pt-4 text-start',
+          'group relative block w-full min-w-40 rounded-tag py-2 text-start',
+          finish && 'pt-4',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
           className,
         )}
@@ -66,30 +67,38 @@ export function HoursBar({ row, className }: HoursBarProps) {
           {over ? (
             <span
               className="absolute inset-y-0 rounded-e-full bg-change-subtle ring-1 ring-[var(--border-color-change)] ring-inset"
-              style={{ insetInlineStart: pct(row.plan, scale), width: pct(row.forecast - row.plan, scale) }}
+              style={{
+                insetInlineStart: pct(row.plan, scale),
+                width: pct(row.forecast - row.plan, scale),
+              }}
             />
           ) : null}
           {/* бракує до плану */}
           {short ? (
             <span
               className="absolute inset-y-0 rounded-e-full border border-dashed border-cancel"
-              style={{ insetInlineStart: pct(row.forecast, scale), width: pct(row.plan - row.forecast, scale) }}
+              style={{
+                insetInlineStart: pct(row.forecast, scale),
+                width: pct(row.plan - row.forecast, scale),
+              }}
             />
           ) : null}
           {/* вичитано */}
           <span className="absolute inset-y-0 start-0 rounded-full bg-accent transition-[width] duration-300 ease-out" style={{ width: pct(factEnd, scale) }} />
         </span>
-        {/* риска плану з датою «вичитано»; біля країв підпис вирівнюємо всередину смуги */}
+        {/* риска плану; дата «вичитано» над нею — лише коли вона є (план уже написано числом поруч) */}
         <span aria-hidden="true" className="absolute top-0 bottom-0 w-0" style={{ insetInlineStart: pct(row.plan, scale) }}>
-          <span
-            className={cn(
-              'absolute top-0 text-meta leading-none font-semibold whitespace-nowrap text-secondary figures',
-              planShare > 0.8 ? 'right-0' : planShare < 0.2 ? 'left-0' : 'left-0 -translate-x-1/2',
-            )}
-          >
-            {finish ?? `план ${row.plan}`}
-          </span>
-          <span className="absolute top-3.5 h-4 w-0.5 -translate-x-1/2 rounded-full bg-[var(--text-color-primary)]" />
+          {finish ? (
+            <span
+              className={cn(
+                'absolute top-0 text-meta leading-none font-semibold whitespace-nowrap text-secondary figures',
+                planShare > 0.8 ? 'right-0' : planShare < 0.2 ? 'left-0' : 'left-0 -translate-x-1/2',
+              )}
+            >
+              {finish}
+            </span>
+          ) : null}
+          <span className={cn('absolute h-4 w-0.5 -translate-x-1/2 rounded-full bg-[var(--text-color-primary)]', finish ? 'top-3.5' : 'top-1.5')} />
         </span>
       </button>
     </HoverDetails>

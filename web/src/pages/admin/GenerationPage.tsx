@@ -20,7 +20,7 @@ import { JobHistory } from '@/components/generation/JobHistory';
 import { JobPanel } from '@/components/generation/JobPanel';
 import { initialForm, toJobRequest, type GenerationFormState } from '@/components/generation/model';
 import { publishedVersion } from '@/components/timetable/model/versions';
-import { EmptyState, ErrorState, LoadingRegion, notify, PageHeader, Skeleton } from '@/components/ui';
+import { EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
 
 /**
@@ -48,7 +48,9 @@ export default function GenerationPage() {
 
   useServerEvent('generation.completed', (event) => {
     if (event.status === 'SOLVED') {
-      notify.success('Генерацію завершено', { description: 'Результат збережено як нову чернетку — відкрийте й перегляньте її.' });
+      notify.success('Генерацію завершено', {
+        description: 'Результат збережено як нову чернетку — відкрийте й перегляньте її.',
+      });
     }
   });
 
@@ -67,7 +69,9 @@ export default function GenerationPage() {
     try {
       const created = await start.mutateAsync(toJobRequest(form, semesterId));
       selectJob(created.jobId);
-      notify.info('Генерацію запущено', { description: 'Хід розвʼязання видно на графіку; сторінку можна закрити — задача працює на сервері.' });
+      notify.info('Генерацію запущено', {
+        description: 'Хід розвʼязання видно на графіку; сторінку можна закрити — задача працює на сервері.',
+      });
     } catch (error) {
       const fields = isApiError(error) ? error.errors.map((e) => e.message).join('; ') : '';
       notify.error(error, 'Генерацію не запущено', fields ? { description: fields } : undefined);
@@ -76,35 +80,39 @@ export default function GenerationPage() {
 
   const stop = (jobId: Uuid) =>
     cancel.mutate(jobId, {
-      onSuccess: () => notify.info('Генерацію скасовано', { description: 'Чернетку не створено.' }),
+      onSuccess: () =>
+        notify.info('Генерацію скасовано', {
+          description: 'Чернетку не створено.',
+        }),
       onError: (error) => notify.error(error, 'Не вдалося скасувати генерацію'),
     });
 
   useRegisterCommands([
-    { id: 'start-generation', label: 'Запустити генерацію розкладу', group: 'Генератор', icon: Cpu, perform: () => void launch() },
+    {
+      id: 'start-generation',
+      label: 'Запустити генерацію розкладу',
+      group: 'Генератор',
+      icon: Cpu,
+      perform: () => void launch(),
+    },
   ]);
 
-  const header = (
-    <PageHeader
-      title="Генератор розкладу"
-      description="Розставляє пари так, щоб не було накладок, а вікон, рваних днів і пізніх пар — якнайменше. Результат зберігається новою чернеткою, опублікований розклад не змінюється."
-    />
-  );
+  const header = <PageHeader title="Генератор розкладу" />;
 
   const loadError = meta.error ?? versions.error ?? catalog.error;
   if (loadError) {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <ErrorState
+        <PageErrorBanner
           error={loadError}
           title="Дані для генератора не завантажено"
+          retrying={meta.isFetching || versions.isFetching}
           onRetry={() => {
             if (meta.error) void meta.refetch();
             if (versions.error) void versions.refetch();
             catalog.refetch();
           }}
-          className="rounded-panel border border-default bg-surface"
         />
       </div>
     );
@@ -134,7 +142,7 @@ export default function GenerationPage() {
 
         <div className="flex min-w-0 flex-col gap-6">
           {jobs.error ? (
-            <ErrorState error={jobs.error} title="Запуски не завантажено" onRetry={() => void jobs.refetch()} className="rounded-panel border border-default bg-surface" />
+            <PageErrorBanner error={jobs.error} title="Запуски не завантажено" retrying={jobs.isFetching} onRetry={() => void jobs.refetch()} />
           ) : jobs.isPending || (selectedJobId && job.isPending) ? (
             <LoadingRegion label="Завантажуємо запуски…" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
               <Skeleton className="h-6 w-40" />
@@ -142,25 +150,24 @@ export default function GenerationPage() {
               <Skeleton className="h-24 w-full" />
             </LoadingRegion>
           ) : job.error ? (
-            <ErrorState error={job.error} title="Задачу не завантажено" onRetry={() => void job.refetch()} className="rounded-panel border border-default bg-surface" />
+            <PageErrorBanner error={job.error} title="Задачу не завантажено" retrying={job.isFetching} onRetry={() => void job.refetch()} />
           ) : job.data ? (
             <JobPanel
               job={job.data}
               publishedId={published?.id ?? null}
+              baseMetrics={(versions.data ?? []).find((v) => v.id === job.data?.baseVersionId)?.metrics ?? published?.metrics ?? null}
               cancelling={cancel.isPending}
               onCancel={() => job.data && stop(job.data.id)}
-              onRestart={() => void launch()}
             />
           ) : (
-            <>
+            <div className="flex flex-col gap-6 lg:pt-2">
               <EmptyState
-                icon={<Cpu aria-hidden="true" />}
-                title="Генератор у цьому семестрі ще не запускали"
-                description="Оберіть групи й базову версію, задайте ліміт часу і ваги — і натисніть «Запустити генерацію». Хід розвʼязання зʼявиться тут наживо, а результат — новою чернеткою."
-                className="rounded-panel border border-default bg-surface"
+                title="Генератор у цьому семестрі ще не запускали."
+                description="Натисніть «Запустити генерацію» — хід розвʼязання зʼявиться тут наживо. Результат стане новою чернеткою, опублікований розклад не зміниться."
+                className="py-0"
               />
               {baseVersion ? <BaselinePanel version={baseVersion} /> : null}
-            </>
+            </div>
           )}
           {jobs.data && jobs.data.length > 0 ? <JobHistory jobs={jobs.data} selectedId={selectedJobId} onSelect={selectJob} /> : null}
         </div>
