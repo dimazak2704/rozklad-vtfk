@@ -80,10 +80,14 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
-        <!-- identity: створення користувачів Keycloak через service account rozklad-core-admin -->
+        <!-- identity: облікові записи в auth (внутрішній API) з токеном client credentials rozklad-core -->
         <dependency>
-            <groupId>org.keycloak</groupId>
-            <artifactId>keycloak-admin-client</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
         </dependency>
         <!-- нечіткий пошук і нормалізація (Jaro-Winkler) -->
         <dependency>

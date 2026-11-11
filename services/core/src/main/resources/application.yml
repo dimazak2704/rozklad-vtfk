@@ -65,6 +65,21 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  security:
+    oauth2:
+      client:
+        registration:
+          # identity: внутрішній API облікових записів auth (client credentials, scope accounts.manage)
+          rozklad-auth-admin:
+            provider: rozklad-auth
+            client-id: ${CORE_AUTH_CLIENT_ID:rozklad-core}
+            client-secret: ${CORE_AUTH_CLIENT_SECRET:}
+            authorization-grant-type: client_credentials
+            scope: accounts.manage
+        provider:
+          rozklad-auth:
+            # з контейнера це http://auth:8085/auth/oauth2/token; iss токена все одно публічний видавець
+            token-uri: ${AUTH_TOKEN_URI:http://localhost:8085/auth/oauth2/token}
 
 server:
   port: ${SERVER_PORT:8081}
@@ -80,12 +95,6 @@ app:
     issuer: ${AUTH_ISSUER:http://localhost:8180/realms/rozklad}
     jwks-uri: ${AUTH_JWKS_URI:http://localhost:8180/realms/rozklad/protocol/openid-connect/certs}
     audience: ${AUTH_AUDIENCE:}
-  keycloak:
-    url: ${KEYCLOAK_URL:http://localhost:8180}
-    realm: ${KEYCLOAK_REALM:rozklad}
-    admin:
-      client-id: ${CORE_ADMIN_CLIENT_ID:rozklad-core-admin}
-      client-secret: ${CORE_ADMIN_CLIENT_SECRET:}
 
 management:
   endpoints:
@@ -126,6 +135,9 @@ logging:
 app.identity:
   # термін дії посилання-запрошення (DOMAIN: 7 днів)
   invite-ttl: ${INVITE_TTL:7d}
+  # облікові записи живуть у сервісі входу auth (внутрішній API, не проксується назовні)
+  accounts-api:
+    url: ${AUTH_INTERNAL_URL:http://localhost:8085/auth/internal}
 
 # timetable: задача генерації без вістей від планувальника довше за запас вважається збійною
 app.timetable:

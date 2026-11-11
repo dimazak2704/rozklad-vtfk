@@ -157,7 +157,10 @@ services:
       <<: *prod-java-env
       DB_PASSWORD: ${CORE_DB_PASSWORD:?}
       PUBLIC_WEB_URL: https://${DOMAIN:?}
-      CORE_ADMIN_CLIENT_SECRET: ${CORE_ADMIN_CLIENT_SECRET:?}
+      # accounts live in the sign-in service auth (internal API on the container network only)
+      AUTH_INTERNAL_URL: http://auth:8085/auth/internal
+      AUTH_TOKEN_URI: http://auth:8085/auth/oauth2/token
+      CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:?}
       # -Xmx in JAVA_TOOL_OPTIONS wins over -XX:MaxRAMPercentage=75 of the image entrypoint
       JAVA_TOOL_OPTIONS: -Xmx${CORE_HEAP:-384m}
     stop_grace_period: 30s

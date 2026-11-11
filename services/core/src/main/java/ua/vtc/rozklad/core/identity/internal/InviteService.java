@@ -24,6 +24,8 @@ import ua.vtc.rozklad.core.identity.Invite;
 import ua.vtc.rozklad.core.identity.InviteRepository;
 import ua.vtc.rozklad.core.identity.InviteStatus;
 import ua.vtc.rozklad.core.identity.internal.IdentityProvider.Account;
+import ua.vtc.rozklad.core.identity.internal.IdentityProvider.AccountNotFoundException;
+import ua.vtc.rozklad.core.identity.internal.IdentityProvider.AccountRevokedException;
 import ua.vtc.rozklad.core.identity.internal.IdentityProvider.IdentityProviderException;
 import ua.vtc.rozklad.core.identity.internal.IdentityProvider.NewAccount;
 import ua.vtc.rozklad.core.identity.internal.IdentityProvider.PasswordRejectedException;
@@ -43,10 +45,11 @@ import ua.vtc.rozklad.core.shared.security.Roles;
 /**
  * Registration by invite (ARCHITECTURE §6). The admin creates an invite for a teacher and gets a
  * one-time link; the teacher opens it, picks a username and password, and the account is created
- * in Keycloak with the realm role TEACHER and linked to the teacher. A new invite revokes the
- * teacher's older ones, and using one revokes the rest, so only the latest link ever works. A
- * teacher who already has an account gets access back (enabled, new password) under the same
- * username.
+ * in the sign-in service {@code auth} with the role TEACHER and linked to the teacher. A new invite
+ * revokes the teacher's older ones, and using one revokes the rest, so only the latest link ever
+ * works. A teacher who already has an account gets access back (enabled, new password) under the same
+ * username; an account granted by e-mail without a username gets the chosen one. A revoked account
+ * (DESIGN D11) is never re-enabled by an invite: the invite is revoked and the answer is 410.
  */
 @Service
 public class InviteService {
@@ -117,10 +120,11 @@ public class InviteService {
 
     /**
      * @throws NotFoundException      unknown token (404)
-     * @throws org.springframework.web.ErrorResponseException 410 used / expired / revoked, 503 Keycloak down
+     * @throws org.springframework.web.ErrorResponseException 410 used / expired / revoked invite or revoked
+     *                                account, 503 sign-in service down
      * @throws ConflictException      username taken, or another username than the teacher's account (409)
      */
-    @Transactional
+    @Transactional(noRollbackFor = IdentityProblems.AccessRevokedException.class)
     public AcceptedInviteDto accept(String token, String rawUsername, String password) {
         if (!InviteTokens.hasValidFormat(token)) {
             throw new NotFoundException(NOT_FOUND);
@@ -138,14 +142,25 @@ public class InviteService {
         Teacher teacher = teachers.findById(invite.getTeacherId()).orElseThrow(() -> new NotFoundException(NOT_FOUND));
         UUID userId;
         try {
-            userId = existingAccount(teacher)
+            Optional<Account> existing = existingAccount(teacher);
+            if (existing.isPresent() && existing.get().revoked()) {
+                throw accessRevoked(invite, now);
+            }
+            userId = existing
                     .map(account -> restore(account, username, password))
                     .orElseGet(() -> createAccount(teacher, username, password));
+        } catch (AccountRevokedException revoked) {
+            // відкликали між перевіркою і викликом: auth не вмикає такий запис (D11)
+            throw accessRevoked(invite, now);
         } catch (UsernameTakenException taken) {
             throw new ConflictException("Ім'я користувача «%s» уже зайняте. Виберіть інше.".formatted(username));
         } catch (PasswordRejectedException rejected) {
-            log.info("Keycloak rejected the password of a new account: {}", rejected.getMessage());
-            throw FieldValidationException.of("password", "Пароль не відповідає правилам безпеки сервера входу.");
+            log.info("auth rejected the password of invite {}: {}", invite.getId(), rejected.reason());
+            throw FieldValidationException.of("password", passwordRejected(rejected.reason()));
+        } catch (AccountNotFoundException vanished) {
+            log.error("Account of teacher {} vanished while accepting invite {}", teacher.getId(), invite.getId(),
+                    vanished);
+            throw IdentityProblems.identityUnavailable(vanished);
         } catch (IdentityProviderException unavailable) {
             log.error("Identity provider failed while accepting invite {}", invite.getId(), unavailable);
             throw IdentityProblems.identityUnavailable(unavailable);
@@ -166,43 +181,65 @@ public class InviteService {
         return invites.findByTokenHash(InviteTokens.hash(token)).orElseThrow(() -> new NotFoundException(NOT_FOUND));
     }
 
-    /** The linked account if it still exists in Keycloak (it may have been deleted there). */
+    /** The linked account if it still exists in {@code auth} (it may have been deleted there). */
     private Optional<Account> existingAccount(Teacher teacher) {
         return Optional.ofNullable(teacher.getAccountId()).flatMap(identityProvider::findUser);
     }
 
+    /** 410 for a revoked account; the invite is revoked too and stays so (the transaction commits). */
+    private static IdentityProblems.AccessRevokedException accessRevoked(Invite invite, Instant now) {
+        invite.revoke(now);
+        log.info("Invite {} refused: the linked account is revoked", invite.getId());
+        return IdentityProblems.accessRevoked();
+    }
+
     private UUID restore(Account account, String username, String password) {
-        if (!account.username().equalsIgnoreCase(username)) {
+        if (account.username() == null) {
+            // доступ надали за e-mail у «Доступах»: викладач вибирає ім'я користувача тут
+            identityProvider.setUsername(account.id(), username);
+        } else if (!account.username().equalsIgnoreCase(username)) {
             throw new ConflictException(("Для викладача вже є обліковий запис «%s». Вкажіть це ім'я користувача, "
                     + "щоб відновити доступ.").formatted(account.username()));
         }
         identityProvider.restoreAccess(account.id(), password);
-        identityProvider.grantRealmRole(account.id(), Roles.TEACHER);
+        identityProvider.grantRole(account.id(), Roles.TEACHER);
         return account.id();
     }
 
     private UUID createAccount(Teacher teacher, String username, String password) {
-        UUID userId = identityProvider.createUser(new NewAccount(username, password, teacher.getFirstName(),
-                teacher.getLastName()));
-        // якщо транзакція не закомітиться (зв'язок з викладачем не збережено), обліковий запис не має лишитися
+        NewAccount account = NewAccount.teacher(username, displayName(teacher), password);
+        // якщо транзакція не закомітиться (зв'язок з викладачем не збережено), обліковий запис не має лишитися;
+        // реєструємо до виклику: auth міг створити запис, навіть якщо відповідь не дійшла
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
                 if (status != STATUS_COMMITTED) {
-                    deleteQuietly(userId);
+                    deleteQuietly(account.id());
                 }
             }
         });
-        identityProvider.grantRealmRole(userId, Roles.TEACHER);
-        return userId;
+        return identityProvider.createUser(account);
     }
 
     private void deleteQuietly(UUID userId) {
         try {
             identityProvider.deleteUser(userId);
         } catch (RuntimeException failed) {
-            log.error("Orphan Keycloak user {} after a failed invite; delete it in the admin console", userId, failed);
+            log.error("Orphan account {} in auth after a failed invite; delete it by hand", userId, failed);
         }
+    }
+
+    /** Ukrainian text of a {@code password-rejected} reason of {@code auth}. */
+    static String passwordRejected(String reason) {
+        return switch (reason == null ? "" : reason) {
+            case "too-short" -> "Пароль має містити щонайменше %d символів.".formatted(InviteDtos.MIN_PASSWORD);
+            case "too-long" -> "Пароль задовгий: щонайбільше %d символів, а кирилицею — %d."
+                    .formatted(InviteDtos.MAX_PASSWORD, InviteDtos.MAX_PASSWORD_CYRILLIC);
+            case "same-as-username" -> "Пароль не може збігатися з ім'ям користувача.";
+            case "same-as-email" -> "Пароль не може збігатися з адресою e-mail.";
+            case "too-common" -> "Цей пароль надто поширений. Виберіть інший.";
+            default -> "Пароль не відповідає правилам безпеки сервера входу.";
+        };
     }
 
     private String link(String token) {

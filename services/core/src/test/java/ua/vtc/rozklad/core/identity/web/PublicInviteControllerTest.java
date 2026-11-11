@@ -107,7 +107,7 @@ class PublicInviteControllerTest {
                         .content("{\"username\":\"ко\",\"password\":\"short\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("password"))
-                .andExpect(jsonPath("$.errors[0].message").value("Пароль має містити від 8 до 128 символів"))
+                .andExpect(jsonPath("$.errors[0].message").value("Пароль має містити від 12 до 64 символів"))
                 .andExpect(jsonPath("$.errors[1].field").value("username"));
     }
 }

@@ -1,5 +1,5 @@
 /**
- * Identity module: current user, teacher invites, Keycloak admin integration, teacher ↔ user link.
+ * Identity module: current user, teacher invites, accounts in the sign-in service auth, teacher ↔ account link.
  *
  * <p>Entities and repositories live in this base package and are readable by other modules;
  * services and controllers belong in sub-packages (internal to the module).

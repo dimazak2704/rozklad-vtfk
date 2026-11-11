@@ -18,8 +18,8 @@ import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.persistence.DemoSeedConfig;
 
 /**
- * Demo seed (DOMAIN §12): links the demo Keycloak accounts {@code krentsin} and {@code nepyivoda}
- * (fixed ids from {@code infra/keycloak/rozklad-realm.json}) to the teachers «Кренцін» and
+ * Demo seed (DOMAIN §12): links the demo accounts {@code krentsin} and {@code nepyivoda}
+ * (fixed ids, the same in the dev seed of {@code auth}) to the teachers «Кренцін» and
  * «Непийвода» once the Excel import has created them. Links only when exactly one unlinked teacher
  * has the surname and no teacher holds the account yet.
  */

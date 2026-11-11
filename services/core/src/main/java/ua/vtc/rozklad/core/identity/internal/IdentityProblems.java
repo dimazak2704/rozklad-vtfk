@@ -32,7 +32,18 @@ public final class IdentityProblems {
         return new ErrorResponseException(HttpStatus.GONE, body, null);
     }
 
-    /** 503: Keycloak is unreachable or rejected the service account. */
+    /**
+     * 410 for an invite whose teacher's account is revoked (DESIGN D11): only an admin's explicit restore gives
+     * access back. {@code inviteStatus} is {@code REVOKED}, the invite is revoked as well.
+     */
+    public static AccessRevokedException accessRevoked() {
+        ProblemDetail body = problem(HttpStatus.GONE, "invite-gone", "Доступ відкликано",
+                "Доступ відкликано. Зверніться до навчальної частини.");
+        body.setProperty("inviteStatus", InviteStatus.REVOKED);
+        return new AccessRevokedException(body);
+    }
+
+    /** 503: the sign-in service is unreachable or rejected the service token. */
     public static ErrorResponseException identityUnavailable(Throwable cause) {
         return new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE, problem(HttpStatus.SERVICE_UNAVAILABLE,
                 "identity-unavailable", "Сервіс входу недоступний",
@@ -58,5 +69,13 @@ public final class IdentityProblems {
         body.setType(URI.create("urn:rozklad:problem:" + slug));
         body.setTitle(title);
         return body;
+    }
+
+    /** {@link #accessRevoked()}; its own type so the invite's revocation is committed, not rolled back. */
+    public static final class AccessRevokedException extends ErrorResponseException {
+
+        private AccessRevokedException(ProblemDetail body) {
+            super(HttpStatus.GONE, body, null);
+        }
     }
 }

@@ -168,9 +168,12 @@ services:
       DB_USER: core
       DB_PASSWORD: core
       PUBLIC_WEB_URL: http://localhost:8088
-      # dev-секрети клієнтів з keycloak/rozklad-realm.json; environment перекриває ../.env, тому значення
-      # з оболонки підставляє інтерполяція (${VAR:-dev})
-      CORE_ADMIN_CLIENT_SECRET: ${CORE_ADMIN_CLIENT_SECRET:-dev-core-admin-secret}
+      # облікові записи — у сервісі входу auth (внутрішній API лише в мережі контейнерів);
+      # dev-секрет клієнта rozklad-core той самий, що в сервісі auth; environment перекриває ../.env,
+      # тому значення з оболонки підставляє інтерполяція (${VAR:-dev})
+      AUTH_INTERNAL_URL: http://auth:8085/auth/internal
+      AUTH_TOKEN_URI: http://auth:8085/auth/oauth2/token
+      CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:-dev-core-auth-secret}
       # -Xmx у JAVA_TOOL_OPTIONS перекриває -XX:MaxRAMPercentage=75 з ENTRYPOINT образу
       JAVA_TOOL_OPTIONS: -Xmx${CORE_HEAP:-512m}
     mem_limit: ${CORE_MEM_LIMIT:-900m}

@@ -20,8 +20,9 @@ import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
 
 /**
- * Links a teacher of the catalog to an account that already exists in Keycloak (an account made in
- * the admin console, the demo accounts of the realm import) and removes that link. New accounts are
+ * Links a teacher of the catalog to an account that already exists in the sign-in service {@code auth}
+ * (a demo account, an access granted by e-mail) and removes that link. The account is named by its
+ * username or e-mail. New accounts are
  * created through invites ({@link InviteService}); this service never creates or deletes users.
  */
 @Service
@@ -45,7 +46,7 @@ public class TeacherAccountService {
         this.clock = clock;
     }
 
-    /** The linked account; {@code linked=false} without one, {@code username=null} when Keycloak lost it. */
+    /** The linked account; {@code linked=false} without one, {@code username=null} when {@code auth} lost it. */
     @Transactional(readOnly = true)
     public TeacherAccountDto get(UUID teacherId) {
         Teacher teacher = teacher(teacherId);
@@ -65,12 +66,13 @@ public class TeacherAccountService {
             throw NotFoundException.of("Викладач", teacherId);
         }
         String username = rawUsername.strip().toLowerCase(Locale.ROOT);
-        Account account = lookup(() -> identityProvider.findUserByUsername(username))
+        Account account = lookup(() -> username.contains("@") ? identityProvider.findUserByEmail(username)
+                : identityProvider.findUserByUsername(username))
                 .orElseThrow(() -> new BusinessRuleException("ACCOUNT_NOT_FOUND",
                         "Обліковий запис «%s» не знайдено на сервері входу.".formatted(username)));
         if (!account.enabled()) {
             throw new BusinessRuleException("ACCOUNT_DISABLED", ("Обліковий запис «%s» вимкнено. Надішліть викладачеві "
-                    + "запрошення, щоб відновити доступ.").formatted(account.username()));
+                    + "запрошення, щоб відновити доступ.").formatted(account.loginName()));
         }
         // паралельні прив'язки одного облікового запису чи викладача — по черзі; викладача читаємо
         // лише після замків, тож повторна прив'язка того самого запису бачить уже готовий зв'язок
@@ -81,18 +83,18 @@ public class TeacherAccountService {
         }
         teachers.findByAccountId(account.id()).ifPresent(owner -> {
             throw new ConflictException("Обліковий запис «%s» уже прив'язано до викладача %s."
-                    .formatted(account.username(), owner.getShortName()));
+                    .formatted(account.loginName(), owner.getShortName()));
         });
         if (teacher.getAccountId() != null) {
-            // зв'язок з обліковим записом, який видалили в Keycloak, можна замінити без відв'язування
+            // зв'язок з обліковим записом, який видалили в auth, можна замінити без відв'язування
             Optional<Account> current = lookup(() -> identityProvider.findUser(teacher.getAccountId()));
             if (current.isPresent()) {
                 throw new ConflictException("Викладач %s уже має обліковий запис «%s». Спершу відв'яжіть його."
-                        .formatted(teacher.getShortName(), current.get().username()));
+                        .formatted(teacher.getShortName(), current.get().loginName()));
             }
         }
         lookup(() -> {
-            identityProvider.grantRealmRole(account.id(), Roles.TEACHER);
+            identityProvider.grantRole(account.id(), Roles.TEACHER);
             return null;
         });
         teacher.setAccountId(account.id());
@@ -103,7 +105,7 @@ public class TeacherAccountService {
         return TeacherAccountDto.of(teacher, Optional.of(account));
     }
 
-    /** Idempotent: a teacher without an account stays as is. The Keycloak user itself is kept. */
+    /** Idempotent: a teacher without an account stays as is. The account in {@code auth} is kept. */
     public void unlink(UUID teacherId, String actor) {
         locks.lockTeacher(teacherId);
         Teacher teacher = teacher(teacherId);
@@ -136,7 +138,7 @@ public class TeacherAccountService {
 
         static TeacherAccountDto of(Teacher teacher, Optional<Account> account) {
             return new TeacherAccountDto(teacher.getId(), teacher.getShortName(), true, teacher.getAccountId(),
-                    account.map(Account::username).orElse(null), account.map(Account::enabled).orElse(null));
+                    account.map(Account::loginName).orElse(null), account.map(Account::enabled).orElse(null));
         }
     }
 }

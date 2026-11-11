@@ -27,7 +27,7 @@ import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
 
-/** Linking a teacher to an existing Keycloak account (the demo accounts of the realm import). */
+/** Linking a teacher to an existing account of the sign-in service (demo accounts, access grants). */
 class TeacherAccountServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-08T10:00:00Z");
@@ -64,6 +64,17 @@ class TeacherAccountServiceTest {
         assertThat(keycloak.user(account).orElseThrow().roles()).contains(Roles.TEACHER);
         assertThat(open.status(NOW)).isEqualTo(InviteStatus.REVOKED);
         assertThat(service.get(krentsin.getId()).username()).isEqualTo("krentsin");
+    }
+
+    @Test
+    void anAccessGrantWithoutUsernameIsLinkedByItsEmail() {
+        UUID granted = keycloak.grantedByEmail("krentsin@college.example", java.util.Set.of());
+
+        TeacherAccountDto linked = service.link(krentsin.getId(), " Krentsin@College.Example ", "admin");
+
+        assertThat(linked.userId()).isEqualTo(granted);
+        assertThat(linked.username()).isEqualTo("krentsin@college.example");
+        assertThat(keycloak.user(granted).orElseThrow().roles()).containsExactly(Roles.TEACHER);
     }
 
     @Test

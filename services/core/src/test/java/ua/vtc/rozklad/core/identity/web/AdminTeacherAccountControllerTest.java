@@ -66,7 +66,7 @@ class AdminTeacherAccountControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.errors[0].field").value("username"))
-                .andExpect(jsonPath("$.errors[0].message").value("Вкажіть ім'я користувача"));
+                .andExpect(jsonPath("$.errors[0].message").value("Вкажіть ім'я користувача або e-mail"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 # Module `identity` (core)
 
-Current user, teacher ↔ Keycloak account link, registration by invite, internal teacher lookup.
+Current user, teacher ↔ account link, registration by invite, internal teacher lookup. Accounts live in the
+sign-in service `services/auth`; core manages them through its internal accounts API.
 
 ## API for other modules (base package `ua.vtc.rozklad.core.identity`)
 
@@ -16,15 +17,12 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
 | `POST /api/admin/invites {teacherId}` | 201 `{id, token, url, expiresAt, teacher}` — the token is shown once |
 | `GET /api/admin/invites?teacherId=` | `[{id, teacher, status: ACTIVE\|USED\|EXPIRED\|REVOKED, expiresAt, usedAt, revokedAt, createdAt, createdBy}]` |
 | `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt}`; 404 for an unknown token |
-| `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation; 404; 409 username taken; 410 used/expired/revoked (`status` in the body); 503 Keycloak unavailable |
+| `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation (password 12–64 characters; `auth` may refuse it with a reason, shown in Ukrainian); 404; 409 username taken; 410 used/expired/revoked invite, or a revoked account («Доступ відкликано…», `inviteStatus: REVOKED`); 503 sign-in service unavailable |
 | `GET /api/internal/teachers/{id}` (SERVICE) | teacher with `accountId` (and deprecated `keycloakUserId`), `linked`, cycle commission |
-| `GET /api/admin/teachers/{id}/account` | `{teacherId, teacherName, linked, userId, username, enabled}` (`username` null when Keycloak lost the user) |
-| `PUT /api/admin/teachers/{id}/account {username}` | links an **existing** Keycloak account (`TeacherAccountService`): grants TEACHER, revokes open invites; 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher already has a live account, 503 Keycloak down. `scripts/seed_demo.py` links `krentsin`/`nepyivoda` this way |
-| `DELETE /api/admin/teachers/{id}/account` | 204, idempotent; the Keycloak user stays |
+| `GET /api/admin/teachers/{id}/account` | `{teacherId, teacherName, linked, userId, username, enabled}` (`username` is the username or, for an access grant by e-mail, the e-mail; null when `auth` lost the account) |
+| `PUT /api/admin/teachers/{id}/account {username}` | links an **existing** account by username or e-mail (`TeacherAccountService`): grants TEACHER, revokes open invites; 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher already has a live account, 503 sign-in service down. `scripts/seed_demo.py` links `krentsin`/`nepyivoda` this way |
+| `DELETE /api/admin/teachers/{id}/account` | 204, idempotent; the account in `auth` stays |
 
-Keycloak 26.8 accepts admin REST calls only with the audience of the client scope `kc-admin-api`; the realm
-files give it to `rozklad-core-admin` (realms imported earlier: `scripts/dev-stack.sh up` and
-`infra/deploy/scripts/keycloak-sync.sh` add it). Without it every invite and link failed with 503.
 
 ## Invite flow
 
@@ -33,50 +31,51 @@ files give it to `rozklad-core-admin` (realms imported earlier: `scripts/dev-sta
    revoked (column `revoked_at`, migration `V1_801`), so only the newest link works. Inactive teacher → 422.
 2. The SPA page `/invite/{token}` shows `teacherName` (full name when known).
 3. Accept locks the invite row (`SELECT … FOR UPDATE`), checks the status (410 otherwise), lower-cases
-   the username (3–50 Latin letters, digits, `.`, `_`, `-`), requires a password of 8–128 characters
-   that is not the username.
-   - Teacher without an account → create an enabled Keycloak user, set the password, grant the realm
-     role TEACHER, link `teacher.account_id`. If the transaction does not commit, the new user is
-     deleted again (transaction synchronization); a partly created user (password rejected) is deleted
-     at once.
-   - Teacher already linked → the same username restores access (enable + new password + TEACHER);
-     another username → 409 naming the existing one. A link to a user deleted in Keycloak creates a
+   the username (3–50 Latin letters, digits, `.`, `_`, `-`, starting with a letter), requires a password
+   of 12–64 characters that is not the username. `auth` applies its full policy (at most 72 UTF-8 bytes,
+   not the username or e-mail, not a common password) and core shows the reason in Ukrainian.
+   - Teacher without an account → core picks the account id and creates the account (`PUT`, idempotent)
+     with the role TEACHER, the password and the teacher's full name, then links `teacher.account_id`.
+     The compensation (delete the account if the transaction does not commit) is registered **before**
+     the call, so an account `auth` created while the answer was lost is removed too.
+   - Teacher linked to an account without a username (access granted by e-mail) → the chosen username
+     is set, then password + enable + TEACHER.
+   - Teacher already linked → the same username restores access (new password + enable + TEACHER);
+     another username → 409 naming the existing one. A link to an account deleted in `auth` creates a
      new account.
+   - Linked account **revoked** (DESIGN D11) → 410 «Доступ відкликано. Зверніться до навчальної частини.»
+     with `inviteStatus: REVOKED`; the invite is revoked and that is committed. `auth` refuses to enable a
+     revoked account without an explicit restore, so a revocation racing the accept still wins.
    - Success marks the invite used and revokes the teacher's other open invites.
-4. Keycloak calls go through `IdentityProvider` (`KeycloakIdentityProvider`: keycloak-admin-client,
-   client `rozklad-core-admin`, client credentials, 5 s connect / 15 s read timeouts, created lazily —
-   core starts without Keycloak or the secret; a missing `CORE_ADMIN_CLIENT_SECRET` is a 503 on accept).
-   The role is looked up with `role-mappings/realm/available`, which `view-users` allows, so the service
-   account needs no `view-realm`. The email is not sent to Keycloak (duplicate e-mails would look like a
-   taken username).
+4. Calls to `auth` go through `IdentityProvider` (`AuthServiceIdentityProvider`: `RestClient` on
+   `app.identity.accounts-api.url` = `AUTH_INTERNAL_URL`, 5 s connect / 15 s read timeouts, header
+   `X-Actor` with the admin's `preferred_username` or `rozklad-core`). The token comes from the
+   registration `rozklad-auth-admin` (client `rozklad-core`, `client_credentials`, scope `accounts.manage`,
+   `AUTH_TOKEN_URI`, secret `CORE_AUTH_CLIENT_SECRET`) on the first call, so core starts while `auth` is
+   down. Problems of `auth` map to the port: 409 `username-taken`/`email-taken`/`last-admin`/
+   `account-revoked`, 400 `password-rejected` with `reason`, 404; anything else, timeouts and token
+   failures are `IdentityProviderException` (503). A timed-out create is retried once with the same id.
 
 ## Demo seed (profile `demo`)
 
-`DemoAccountLinks` links the realm users `krentsin` / `nepyivoda` (fixed ids `…0002` / `…0003`) to
+`DemoAccountLinks` links the demo accounts `krentsin` / `nepyivoda` (fixed ids `…0002` / `…0003`, the same
+in the dev seed of `auth`) to
 the imported teachers «Кренцін» / «Непийвода» at startup and after each catalog import — only when
 exactly one unlinked teacher has the surname and the account is not linked yet.
 
 ## How to test
 
-`InviteTokensTest`, `InviteServiceTest` (all branches with `FakeIdentityProvider`), `DemoAccountLinksTest`,
+`InviteTokensTest`, `InviteServiceTest` (all branches with `FakeIdentityProvider`, which keeps the
+revocation rule of `auth`), `AuthServiceIdentityProviderTest` (the HTTP contract with `MockRestServiceServer`:
+201/200, 409s, 400 reasons, 404, 5xx, 403, timeout and retry, `X-Actor`), `DemoAccountLinksTest`,
 `PublicInviteControllerTest`, `MeControllerTest`, `InviteFlowIT` (PostgreSQL; account creation with
 the fake provider inside a real transaction, HTTP for 404/410/revocation/`/api/me`).
 
-Manual check against the running Keycloak: start core with `CORE_ADMIN_CLIENT_SECRET` set, create an
-invite as admin, accept it, log in as the new user in the SPA, then delete the user in the admin console.
-
-Manual check on 2026-11-08 (core jar with profile `demo`, own database, local Keycloak 26.8.2): invite
-creation, `GET` of the invite and the demo account link worked. Accept answered 503
-`identity-unavailable` and the invite stayed usable, because Keycloak answered 401 to every admin REST
-call made with a `rozklad` realm token — even though the token of `rozklad-core-admin` was issued,
-carried `aud: realm-management` with `manage-users`/`view-users`/`query-users`, and the service
-account user was enabled; the same call with a `master` admin token succeeded. So account creation,
-login of the new user and the 410 on a second accept were not verified live. The repository `.env`
-has no `CORE_ADMIN_CLIENT_SECRET`; the check used the dev value from `.env.example`, which the realm
-import also uses.
+The other side of the contract is tested in `auth`: `InternalAccountsApiIT` (only `rozklad-core` with
+`accounts.manage` may call; idempotent `PUT`; the 409s and password reasons; revoke ends sessions and
+authorizations; `account-revoked`) and `LastAdminIT` (the usable-admin rule).
 
 ## Known gaps
 
-- The live Keycloak path is not covered by automated tests (no Keycloak container in the test suite)
-  and failed in the manual check above with 401 from the Keycloak admin API (environment, see above).
+- No end-to-end test runs core against a live `auth`; the contract is covered from both sides (see above).
 - No endpoint to unlink an account or to delete invites; old invites stay as history.

@@ -12,6 +12,12 @@ import ua.vtc.rozklad.core.identity.InviteStatus;
 /** DTOs of invites (admin and public) and of the internal teacher endpoint. */
 public final class InviteDtos {
 
+    /** Password rules of the sign-in service (OWASP ASVS 2.1.1); {@code auth} enforces them, core checks early. */
+    public static final int MIN_PASSWORD = 12;
+    public static final int MAX_PASSWORD = 64;
+    /** BCrypt reads 72 bytes; a Cyrillic letter takes two in UTF-8. */
+    public static final int MAX_PASSWORD_CYRILLIC = 36;
+
     private InviteDtos() {
     }
 
@@ -38,10 +44,12 @@ public final class InviteDtos {
 
     public record AcceptInviteRequest(
             @NotBlank
-            @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{2,49}",
-                    message = "Ім'я користувача — 3–50 латинських літер, цифр або «.», «_», «-»; починається з літери чи цифри")
+            @Pattern(regexp = "[A-Za-z][A-Za-z0-9._-]{2,49}",
+                    message = "Ім'я користувача — 3–50 латинських літер, цифр або «.», «_», «-»; починається з літери")
             String username,
-            @NotBlank @Size(min = 8, max = 128, message = "Пароль має містити від 8 до 128 символів") String password) {
+            @NotBlank @Size(min = MIN_PASSWORD, max = MAX_PASSWORD,
+                    message = "Пароль має містити від " + MIN_PASSWORD + " до " + MAX_PASSWORD + " символів")
+            String password) {
 
         @Override
         public String toString() {

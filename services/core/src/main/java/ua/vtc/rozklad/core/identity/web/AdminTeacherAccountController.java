@@ -19,7 +19,8 @@ import ua.vtc.rozklad.core.shared.security.CurrentUser;
 
 /**
  * Account of a teacher (ADMIN): {@code GET} shows the link, {@code PUT {username}} links an existing
- * Keycloak account (200; 404 teacher, 422 no such / disabled account, 409 taken, 503 Keycloak down),
+ * account of the sign-in service by username or e-mail (200; 404 teacher, 422 no such / disabled account,
+ * 409 taken, 503 sign-in service down),
  * {@code DELETE} removes the link (204). Invites remain the way to create new accounts.
  */
 @RestController
@@ -50,6 +51,6 @@ class AdminTeacherAccountController {
     }
 
     record LinkAccountRequest(
-            @NotBlank(message = "Вкажіть ім'я користувача") @Size(max = 100) String username) {
+            @NotBlank(message = "Вкажіть ім'я користувача або e-mail") @Size(max = 254) String username) {
     }
 }
