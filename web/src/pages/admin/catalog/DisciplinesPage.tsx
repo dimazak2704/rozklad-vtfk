@@ -1,7 +1,7 @@
 import { Pencil, Plus, Power, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useCatalogList, useDeleteCatalogItem, type CatalogDiscipline } from '@/api/catalog';
-import { CatalogNav } from '@/components/catalog/CatalogNav';
+import { CatalogNav, CatalogTitle } from '@/components/catalog/CatalogNav';
 import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { DisciplineFormDialog } from '@/components/catalog/DisciplineForm';
@@ -85,10 +85,12 @@ export default function DisciplinesPage() {
         id: 'name',
         header: 'Повна назва',
         sortable: true,
-        // назва, що лише повторює скорочення, — це не назва: кажемо прямо, без бурштинової таблички в кожному рядку
+        // назва, що лише повторює скорочення, — це не назва: тихе «—» (знайти їх усі — фільтр «Показати їх»)
         cell: (d) =>
           d.name.trim().toLocaleLowerCase('uk') === d.shortName.trim().toLocaleLowerCase('uk') ? (
-            <span className="text-muted">розшифровки ще немає</span>
+            <span className="text-muted" title="Розшифровки ще немає">
+              —
+            </span>
           ) : (
             <span className="flex flex-wrap items-baseline gap-x-2">
               <span className={d.needsReview ? 'text-secondary' : undefined}>{d.name}</span>
@@ -106,7 +108,7 @@ export default function DisciplinesPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Дисципліни"
+        title={<CatalogTitle section="Дисципліни" />}
         primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати дисципліну
@@ -117,7 +119,7 @@ export default function DisciplinesPage() {
       <CatalogToolbar
         search={table.q}
         onSearch={(value) => table.set({ q: value })}
-        placeholder="Скорочення, назва або псевдонім"
+        placeholder="Пошук"
         searchLabel="Пошук дисципліни"
         total={data?.total}
         noun={NOUN}

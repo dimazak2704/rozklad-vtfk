@@ -8,7 +8,7 @@ test.describe('довідник аудиторій', () => {
   test.beforeEach(async ({ page }) => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin/catalog/rooms');
-    await expect(page.getByRole('heading', { level: 1, name: 'Аудиторії' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { level: 1, name: 'Довідники: Аудиторії' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('rowheader', { name: '301' })).toBeVisible();
   });
 

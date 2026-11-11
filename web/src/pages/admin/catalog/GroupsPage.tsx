@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { paths } from '@/app/routes';
 import { useCatalogList, useCatalogOptions, useDeleteCatalogItem, type CatalogGroup } from '@/api/catalog';
-import { CatalogNav } from '@/components/catalog/CatalogNav';
+import { CatalogNav, CatalogTitle } from '@/components/catalog/CatalogNav';
 import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
@@ -147,7 +147,7 @@ export default function GroupsPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Групи"
+        title={<CatalogTitle section="Групи" />}
         primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати групу

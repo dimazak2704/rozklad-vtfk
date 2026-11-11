@@ -55,3 +55,15 @@ export function CatalogNav() {
     </>
   );
 }
+
+/**
+ * Заголовок довідника: на екрані — «Довідники» (вкладки під ним уже кажуть, який саме, і «Групи»
+ * не повторюється двічі поспіль), для читача екрана — «Довідники: Групи».
+ */
+export function CatalogTitle({ section }: { section: string }) {
+  return (
+    <>
+      Довідники<span className="sr-only">: {section}</span>
+    </>
+  );
+}

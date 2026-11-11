@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { paths } from '@/app/routes';
 import { useCatalogList, useCatalogOptions, useDeleteCatalogItem, type CatalogTeacher } from '@/api/catalog';
-import { CatalogNav } from '@/components/catalog/CatalogNav';
+import { CatalogNav, CatalogTitle } from '@/components/catalog/CatalogNav';
 import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { informativeColumns } from '@/components/catalog/columns';
@@ -82,7 +82,15 @@ export default function TeachersPage() {
           </span>
         ),
       },
-      { id: 'displayName', header: 'На сайті', sortable: true, hideBelow: 'md', className: 'max-md:hidden!', cell: (t) => t.displayName },
+      {
+        id: 'displayName',
+        header: 'На сайті',
+        sortable: true,
+        hideBelow: 'md',
+        className: 'max-md:hidden!',
+        // типово на сайті — прізвище, і воно вже є в назві рядка; показуємо лише інше написання
+        cell: (t) => (t.displayName === t.lastName ? null : t.displayName),
+      },
       {
         id: 'commission',
         header: 'Циклова комісія',
@@ -105,6 +113,7 @@ export default function TeachersPage() {
   const visibleColumns = useMemo(
     () =>
       informativeColumns(columns, data?.items, {
+        displayName: (t) => (t.displayName === t.lastName ? null : t.displayName),
         commission: (t) => t.cycleCommission?.label,
         employment: (t) => t.employment,
         linked: (t) => t.linked,
@@ -116,7 +125,7 @@ export default function TeachersPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Викладачі"
+        title={<CatalogTitle section="Викладачі" />}
         primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати викладача

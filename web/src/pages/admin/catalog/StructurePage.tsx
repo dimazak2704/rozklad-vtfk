@@ -9,7 +9,7 @@ import {
   type CatalogDepartment,
   type CatalogSpecialty,
 } from '@/api/catalog';
-import { CatalogNav } from '@/components/catalog/CatalogNav';
+import { CatalogNav, CatalogTitle } from '@/components/catalog/CatalogNav';
 import { DeleteDialog, type DeleteTarget } from '@/components/catalog/DeleteDialog';
 import { informativeColumns } from '@/components/catalog/columns';
 import { EmptyValue } from '@/components/catalog/FormParts';
@@ -19,12 +19,10 @@ import {
   DataTable,
   EmptyState,
   PageHeader,
-  Select,
+  Panel,
   RowActions,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
+  SegmentedControl,
+  Select,
   type DataTableColumn,
 } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
@@ -45,12 +43,27 @@ const DELETE_TEXT: Record<Tab, { title: string; description: string }> = {
   buildings: { title: 'Видалити корпус?', description: 'Корпус, у якому є аудиторії, видалити не можна.' },
 };
 
+const SECTION_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
+  { value: 'departments', label: 'Відділення' },
+  { value: 'specialties', label: 'Спеціальності' },
+  { value: 'commissions', label: 'Комісії' },
+  { value: 'buildings', label: 'Корпуси' },
+];
+
+/**
+ * Одна панель, як у сусідніх довідників: угорі — перемикач розділу (на телефоні — список) і «Додати …»,
+ * під ним за потреби одне речення пояснення, далі таблиця.
+ */
 function TabPanel({
+  tab,
+  onTabChange,
   description,
   addLabel,
   onAdd,
   children,
 }: {
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
   /** Лише коли без пояснення незрозуміло, навіщо цей довідник. */
   description?: string;
   addLabel: string;
@@ -58,15 +71,19 @@ function TabPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {description ? <p className="max-w-prose text-caption text-muted">{description}</p> : <span />}
+    <Panel flush>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-separator px-5 py-3">
+        <SegmentedControl<Tab> aria-label="Розділ структури" value={tab} onValueChange={onTabChange} options={SECTION_OPTIONS} className="max-sm:hidden" />
+        <div className="w-full sm:hidden">
+          <Select<Tab> aria-label="Розділ структури" className="w-full" value={tab} onValueChange={onTabChange} options={SECTION_OPTIONS} />
+        </div>
         <Button variant="secondary" size="sm" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={onAdd}>
           {addLabel}
         </Button>
       </div>
+      {description ? <p className="max-w-prose px-5 pt-3 text-caption text-muted">{description}</p> : null}
       {children}
-    </div>
+    </Panel>
   );
 }
 
@@ -193,33 +210,12 @@ export default function StructurePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Структура коледжу" />
+      <PageHeader title={<CatalogTitle section="Структура коледжу" />} />
       <CatalogNav />
-      <Tabs value={tab} onValueChange={(value) => selectTab(value as Tab)}>
-        {/* на телефоні чотири вкладки не влазять — там це список, як і перемикач довідників */}
-        <div className="sm:hidden">
-          <Select<Tab>
-            aria-label="Розділ структури"
-            className="w-full"
-            value={tab}
-            onValueChange={selectTab}
-            options={[
-              { value: 'departments', label: 'Відділення' },
-              { value: 'specialties', label: 'Спеціальності' },
-              { value: 'commissions', label: 'Циклові комісії' },
-              { value: 'buildings', label: 'Корпуси' },
-            ]}
-          />
-        </div>
-        <TabsList aria-label="Розділи структури" className="max-sm:hidden">
-          <TabsTrigger value="departments">Відділення</TabsTrigger>
-          <TabsTrigger value="specialties">Спеціальності</TabsTrigger>
-          <TabsTrigger value="commissions">Циклові комісії</TabsTrigger>
-          <TabsTrigger value="buildings">Корпуси</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="departments">
+        {tab === 'departments' ? (
           <TabPanel
+            tab={tab}
+            onTabChange={selectTab}
             addLabel="Додати відділення"
             onAdd={() => setEditing({ tab: 'departments', item: null })}
           >
@@ -237,10 +233,12 @@ export default function StructurePage() {
               empty={<EmptyState size="sm" title="Відділень ще немає" description="Додайте відділення, щоб привʼязати до них спеціальності." />}
             />
           </TabPanel>
-        </TabsContent>
+        ) : null}
 
-        <TabsContent value="specialties">
+        {tab === 'specialties' ? (
           <TabPanel
+            tab={tab}
+            onTabChange={selectTab}
             description="Літери входять у код групи: «КІ» у «4КІ1». За ними нова група сама знаходить спеціальність."
             addLabel="Додати спеціальність"
             onAdd={() => setEditing({ tab: 'specialties', item: null })}
@@ -259,10 +257,12 @@ export default function StructurePage() {
               empty={<EmptyState size="sm" title="Спеціальностей ще немає" description="Без спеціальності не вийде додати групу з такими літерами в коді." />}
             />
           </TabPanel>
-        </TabsContent>
+        ) : null}
 
-        <TabsContent value="commissions">
+        {tab === 'commissions' ? (
           <TabPanel
+            tab={tab}
+            onTabChange={selectTab}
             description="Колегу з тієї самої комісії пропонують на заміну першим."
             addLabel="Додати комісію"
             onAdd={() => setEditing({ tab: 'commissions', item: null })}
@@ -292,10 +292,12 @@ export default function StructurePage() {
               }
             />
           </TabPanel>
-        </TabsContent>
+        ) : null}
 
-        <TabsContent value="buildings">
+        {tab === 'buildings' ? (
           <TabPanel
+            tab={tab}
+            onTabChange={selectTab}
             addLabel="Додати корпус"
             onAdd={() => setEditing({ tab: 'buildings', item: null })}
           >
@@ -324,8 +326,7 @@ export default function StructurePage() {
               }
             />
           </TabPanel>
-        </TabsContent>
-      </Tabs>
+        ) : null}
 
       {editing?.tab === 'departments' ? (
         <DepartmentFormDialog key={editing.item?.id ?? 'new'} item={editing.item} open onOpenChange={(open) => !open && setEditing(null)} />

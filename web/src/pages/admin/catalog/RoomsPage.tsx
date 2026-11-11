@@ -9,7 +9,7 @@ import {
   type CatalogRoom,
 } from '@/api/catalog';
 import type { RoomType } from '@/api/types';
-import { CatalogNav } from '@/components/catalog/CatalogNav';
+import { CatalogNav, CatalogTitle } from '@/components/catalog/CatalogNav';
 import { ActiveFilterControl, CatalogToolbar, FilterField } from '@/components/catalog/CatalogToolbar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
@@ -120,22 +120,12 @@ export default function RoomsPage() {
     });
   }, [columns, data?.items, type]);
   const activeFilters = (type ? 1 : 0) + (table.get('building') ? 1 : 0) + (table.get('active') ? 1 : 0);
-  // чому колонок мало — одним реченням, щоб порожнеча не виглядала як збій
-  const hidden = new Set(columns.map((c) => c.id).filter((id) => !visibleColumns.some((c) => c.id === id)));
-  const missingNote =
-    data && data.items.length > 0 && hidden.size > 0
-      ? [
-          hidden.has('type') ? 'усі аудиторії одного типу' : null,
-          hidden.has('maxParallel') ? 'у кожній займається одна група' : null,
-          hidden.has('capacity') || hidden.has('building') ? 'місткість і корпус ще не вказані — їх можна додати в картці аудиторії' : null,
-        ].filter(Boolean)
-      : [];
   const buildingOptions = [{ value: ALL, label: 'Усі корпуси' }, ...(buildings.items ?? []).map((b) => ({ value: b.id, label: b.name }))];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Аудиторії"
+        title={<CatalogTitle section="Аудиторії" />}
         primaryAction={
           <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
             Додати аудиторію
@@ -181,8 +171,7 @@ export default function RoomsPage() {
           />
         </FilterField>
       </CatalogToolbar>
-      {missingNote.length > 0 ? <p className="-mt-1 max-w-prose text-caption text-muted">{capitalize(missingNote.join('; '))}.</p> : null}
-      <Panel flush className={visibleColumns.length <= 2 ? 'max-w-2xl' : undefined}>
+      <Panel flush>
       <DataTable
         caption="Аудиторії коледжу"
         columns={visibleColumns}
