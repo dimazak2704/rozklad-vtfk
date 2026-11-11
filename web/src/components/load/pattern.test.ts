@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHours, loadPattern, pairsPerWeek, patternDescription, patternLabel } from './pattern';
+import { formatHours, loadPattern, pairsPerWeek, patternDescription, patternLabel, patternShort } from './pattern';
 
 describe('loadPattern (DOMAIN §4)', () => {
   it.each([
@@ -38,6 +38,13 @@ describe('опис шаблону', () => {
     );
     expect(patternDescription({ whole: 2, half: 0 })).toBe('2 пари щотижня.');
     expect(patternDescription({ whole: 0, half: 1 })).toBe('Ще 1 пара через тиждень (лише чисельник або лише знаменник).');
+  });
+
+  it('коротко для рядка таблиці — словами, а не гліфами', () => {
+    expect(patternShort({ whole: 1, half: 1 })).toBe('1 щотижня + 1 через тиждень');
+    expect(patternShort({ whole: 2, half: 0 })).toBe('2 щотижня');
+    expect(patternShort({ whole: 0, half: 1 })).toBe('1 через тиждень');
+    expect(patternShort({ whole: 0, half: 0 })).toBe('—');
   });
 
   it('пари в середньому й години з комою', () => {

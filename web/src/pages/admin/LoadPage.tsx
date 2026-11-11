@@ -9,8 +9,7 @@ import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { DeriveDialog } from '@/components/load/DeriveDialog';
 import { CONTROL_FORM_LABEL, LOAD_SOURCE_HINT, LOAD_SOURCE_LABEL } from '@/components/load/labels';
 import { LoadFormDialog } from '@/components/load/LoadForm';
-import { formatHours, pairsPerWeek } from '@/components/load/pattern';
-import { WeeklyPatternView } from '@/components/load/WeeklyPatternView';
+import { formatHours, pairsPerWeek, patternDescription, patternShort } from '@/components/load/pattern';
 import { Link } from 'react-router';
 import {
   Button,
@@ -74,6 +73,11 @@ export default function LoadPage() {
     );
   }, [items.data, table.q, source]);
 
+  // за замовчуванням: усі групи — за групою, одна група — за дисципліною
+  const sort = table.sort ?? { columnId: groupId ? 'discipline' : 'group', direction: 'asc' as const };
+  // у таблиці за групами код групи — лише в першому рядку групи: решта рядків читаються як її частина
+  const [groupStarts, setGroupStarts] = useState<ReadonlySet<string> | null>(null);
+
   const columns = useMemo<Array<DataTableColumn<LoadItem>>>(
     () => [
       ...(groupId
@@ -84,7 +88,12 @@ export default function LoadPage() {
               header: 'Група',
               width: '6rem',
               sortValue: (item: LoadItem) => item.group.code,
-              cell: (item: LoadItem) => <span className="figures font-semibold">{item.group.code}</span>,
+              cell: (item: LoadItem) =>
+                !groupStarts || groupStarts.has(item.id) ? (
+                  <span className="figures font-semibold">{item.group.code}</span>
+                ) : (
+                  <span className="sr-only">{item.group.code}</span>
+                ),
             } satisfies DataTableColumn<LoadItem>,
           ]),
       {
@@ -114,21 +123,35 @@ export default function LoadPage() {
         numeric: true,
         width: '6rem',
         sortValue: (item) => item.hoursPerWeek,
+        // на планшеті стовпця «Пари» немає: години й так кажуть головне, а шаблон тижня — у формі рядка
         cell: (item) => formatHours(item.hoursPerWeek),
       },
       {
+        // пари словами («1 щотижня + 1 через тиждень»), а не гліфами; пояснення про чисельник — у підказці
         id: 'pattern',
-        header: 'Тиждень',
-        width: '9.5rem',
+        header: 'Пари',
+        width: '14rem',
+        hideBelow: 'lg',
+        className: 'whitespace-nowrap max-md:hidden!',
         sortValue: (item) => pairsPerWeek(item.pattern),
-        cell: (item) => <WeeklyPatternView pattern={item.pattern} line={disciplineLine(item.discipline)} />,
+        cell: (item) => (
+          <Tooltip content={patternDescription(item.pattern)}>
+            <span
+              tabIndex={0}
+              className="rounded-tag text-ui text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              {patternShort(item.pattern)}
+            </span>
+          </Tooltip>
+        ),
       },
       {
         id: 'planned',
         header: 'За семестр',
         numeric: true,
         width: '7rem',
-        hideBelow: 'md',
+        // на планшеті — без нього: план за семестр видно у формі й обліку годин
+        hideBelow: 'lg',
         className: 'max-md:hidden!',
         sortValue: (item) => item.plannedHours,
         cell: (item) => `${item.plannedHours} год`,
@@ -159,26 +182,31 @@ export default function LoadPage() {
         hideBelow: 'lg',
         className: 'max-md:hidden!',
         sortValue: (item) => LOAD_SOURCE_LABEL[item.source],
-        cell: (item) => (
+        // звичайне джерело («З розкладу») не повторюємо в кожному рядку — лише винятки
+        cell: (item) =>
+          item.source === DEFAULT_SOURCE && !item.note ? null : (
           <Tooltip content={item.note ? `${LOAD_SOURCE_HINT[item.source]} ${item.note}` : LOAD_SOURCE_HINT[item.source]}>
             <span tabIndex={0} className="inline-flex rounded-tag text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
               {LOAD_SOURCE_LABEL[item.source]}
             </span>
           </Tooltip>
-        ),
+          ),
       },
     ],
-    [groupId],
+    [groupId, groupStarts],
   );
 
-  // за замовчуванням: усі групи — за групою, одна група — за дисципліною
-  const sort = table.sort ?? { columnId: groupId ? 'discipline' : 'group', direction: 'asc' as const };
   // сортуємо всі знайдені записи, а не лише сторінку, і лише потім ділимо на сторінки
   const sorted = useMemo(() => {
     const column = columns.find((c) => c.id === sort.columnId);
     return column?.sortValue ? sortRows(filtered, column.sortValue, sort.direction) : filtered;
   }, [columns, filtered, sort.columnId, sort.direction]);
-  const pageRows = groupId ? sorted : sorted.slice(table.page * PAGE_SIZE, (table.page + 1) * PAGE_SIZE);
+  const pageRows = useMemo(
+    () => (groupId ? sorted : sorted.slice(table.page * PAGE_SIZE, (table.page + 1) * PAGE_SIZE)),
+    [groupId, sorted, table.page],
+  );
+  const starts = useMemo(() => (sort.columnId === 'group' ? firstOfGroup(pageRows) : null), [pageRows, sort.columnId]);
+  if (!sameSet(starts, groupStarts)) setGroupStarts(starts);
 
   if (semesters.isPending) {
     return (
@@ -408,6 +436,23 @@ export default function LoadPage() {
 }
 
 const FILTER_LABEL = 'flex w-full flex-col gap-1 text-caption font-[650] text-primary sm:w-auto';
+const DEFAULT_SOURCE: LoadSource = 'TIMETABLE_DERIVED';
+
+/** Рядки, з яких починається нова група (перший рядок сторінки — завжди). */
+function firstOfGroup(rows: readonly LoadItem[]): ReadonlySet<string> {
+  const out = new Set<string>();
+  rows.forEach((row, index) => {
+    if (index === 0 || rows[index - 1]?.group.id !== row.group.id) out.add(row.id);
+  });
+  return out;
+}
+
+function sameSet(a: ReadonlySet<string> | null, b: ReadonlySet<string> | null): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.size !== b.size) return false;
+  for (const value of a) if (!b.has(value)) return false;
+  return true;
+}
 
 /** Другий рядок дисципліни: повна назва, вид занять, форма контролю, поділ на підгрупи. */
 function disciplineNote(item: LoadItem): string {

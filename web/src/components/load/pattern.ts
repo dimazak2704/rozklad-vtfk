@@ -41,6 +41,16 @@ export function patternDescription({ whole, half }: WeeklyPattern): string {
   return `${every || alternate.charAt(0).toLocaleUpperCase('uk') + alternate.slice(1)}.`;
 }
 
+/**
+ * Коротко для рядка таблиці, словами замість гліфів: «1 щотижня + 1 через тиждень», «2 щотижня»,
+ * «1 через тиждень», «—». Повне пояснення — `patternDescription`.
+ */
+export function patternShort({ whole, half }: WeeklyPattern): string {
+  if (whole === 0 && half === 0) return '—';
+  if (whole === 0) return '1 через тиждень';
+  return half > 0 ? `${whole} щотижня + 1 через тиждень` : `${whole} щотижня`;
+}
+
 /** Пари на тиждень у середньому: 1 + ½ → 1,5. */
 export function pairsPerWeek({ whole, half }: WeeklyPattern): number {
   return whole + half / 2;
