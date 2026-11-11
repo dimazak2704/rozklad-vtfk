@@ -49,8 +49,9 @@ export default function MyDayPage() {
   const schedule = useMySchedule(params.week.from, params.week.to, { enabled: linked });
   // «зараз» — завжди про сьогодні, хоч би який тиждень відкрито нижче (той самий ключ кешу для поточного тижня)
   const todayWeek = studyWeek(params.today);
-  const current = useMySchedule(todayWeek.from, todayWeek.to, { enabled: linked && !isWeekend(params.today) });
-  const bells = useBells(isWeekend(params.today) ? null : params.today);
+  const current = useMySchedule(todayWeek.from, todayWeek.to, { enabled: linked });
+  const weekend = isWeekend(params.today);
+  const bells = useBells(weekend ? null : params.today);
   const changes = useMyChanges();
   const binding = useMyBinding({ waiting: false });
   const { mode, print } = usePrintMode();
@@ -116,7 +117,9 @@ export default function MyDayPage() {
   ];
   // 422 teacher-not-linked — не збій, а стан облікового запису: його пояснює сам блок Telegram
   const bindingFailed = binding.isError && !(isApiError(binding.error) && binding.error.code === 'teacher-not-linked');
-  const nowReady = current.data && !current.isPlaceholderData && bells.data;
+  // у вихідний дзвінків немає, але «що далі» (перша пара в понеділок) людині все одно потрібне
+  const nowSlots = weekend ? [] : bells.data?.slots;
+  const nowReady = current.data && !current.isPlaceholderData && nowSlots;
 
   return (
     <div className="flex flex-col gap-8 lg:gap-12">
@@ -133,7 +136,7 @@ export default function MyDayPage() {
       />
 
       <PageErrorScope queries={[schedule, current, bells, changes, { ...binding, isError: bindingFailed }]} className="gap-8 lg:gap-12">
-        {nowReady ? <MyNow teacherId={teacher.id} today={params.today} days={current.data.days} bells={bells.data.slots} /> : null}
+        {nowReady ? <MyNow teacherId={teacher.id} today={params.today} days={current.data.days} bells={nowSlots} /> : null}
         <SubstitutionRequests teacherId={teacher.id} />
         <MyLessons query={schedule} params={params} weekNumber={weekNumber} />
         <div className="grid gap-x-12 gap-y-8 border-t border-separator pt-8 md:grid-cols-2">

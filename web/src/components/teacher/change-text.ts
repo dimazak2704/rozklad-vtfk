@@ -1,5 +1,5 @@
 /** Тексти для карток запитів на заміну: що саме треба провести і замість кого. */
-import type { ChangeDto, IsoDate } from '@/api/types';
+import type { ChangeDto, IsoDate, Uuid } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
 import { compareIsoDates, formatDayMonth, formatWeekdayDate, isoWeekday, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { weekdayShort } from '@/lib/labels';
@@ -102,4 +102,18 @@ export function isUnansweredNotice(change: ChangeDto, today: IsoDate): boolean {
 /** Що чекає моєї відповіді: прохання (CONFIRM) і нові заміни, про які мені повідомили (NOTIFY). */
 export function awaitingAnswer(changes: readonly ChangeDto[], today: IsoDate): ChangeDto[] {
   return changes.filter((c) => c.status === 'PENDING_CONFIRMATION' || isUnansweredNotice(c, today)).sort(byDateAndPair);
+}
+
+/** Скільки часу є, щоб передумати: стільки ж живе сповіщення з «Скасувати». */
+export const REPLY_UNDO_MS = 8_000;
+
+/**
+ * Найтерміновіший рядок — єдиний із заповненою кнопкою: прохання з найближчим строком відповіді,
+ * а якщо строків немає — перший у списку (найближча пара). Решта — звичайні кнопки, щоб блок не кричав.
+ */
+export function mostUrgent(waiting: readonly ChangeDto[], now: Date): Uuid | null {
+  const open = waiting
+    .filter((c) => c.status === 'PENDING_CONFIRMATION' && c.confirmDeadline && new Date(c.confirmDeadline).getTime() > now.getTime())
+    .sort((a, b) => new Date(a.confirmDeadline ?? 0).getTime() - new Date(b.confirmDeadline ?? 0).getTime());
+  return open[0]?.id ?? waiting[0]?.id ?? null;
 }

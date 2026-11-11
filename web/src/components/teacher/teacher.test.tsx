@@ -12,8 +12,8 @@ import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
-import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay } from './change-text';
-import { lessonPhrase, nextDaySentence } from './my-day';
+import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, mostUrgent, REPLY_UNDO_MS } from './change-text';
+import { endSentence, lessonPhrase, nextDaySentence } from './my-day';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
@@ -27,24 +27,96 @@ describe('SubstitutionRequests', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
-  it('підтвердження оптимістичне: картка зникає одразу', async () => {
+  function trackReplies() {
+    const sent: string[] = [];
+    server.use(
+      http.post(apiPath('/me/changes/:id/:decision'), ({ params }) => {
+        sent.push(`${String(params.decision)}:${String(params.id)}`);
+        return problem({ status: 409, detail: 'На цей запит уже відповіли.' });
+      }),
+    );
+    return sent;
+  }
+
+  it('підтвердження: картка зникає одразу, а запит іде лише після 8 с, які дає «Скасувати»', async () => {
+    const sent = trackReplies();
+    const undo = vi.spyOn(notify, 'undo');
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const requests = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
     expect(requests).toHaveLength(2);
     await user.click(within(requests[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
     expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
+    expect(undo).toHaveBeenCalledWith('Заміну підтверджено', expect.objectContaining({ duration: REPLY_UNDO_MS }));
+    expect(sent).toEqual([]);
+
+    act(() => undo.mock.calls[0]?.[1].onUndo());
+    expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(2);
+    expect(sent).toEqual([]);
   });
 
   it('якщо сервер відмовив — картка повертається', async () => {
-    server.use(http.post(apiPath('/me/changes/:id/confirm'), () => problem({ status: 409, detail: 'На цей запит уже відповіли.' })));
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+    const sent = trackReplies();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const requests = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
     await user.click(within(requests[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REPLY_UNDO_MS);
+    });
+    await waitFor(() => expect(sent).toHaveLength(1));
     await waitFor(() => expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(2));
+  });
+
+  it('піти зі сторінки, не скасувавши, — відповідь іде одразу', async () => {
+    const sent = trackReplies();
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [notice] = await screen.findAllByRole('article', { name: /^Нова заміна/ });
+    await user.click(within(notice as HTMLElement).getByRole('button', { name: 'Добре' }));
+    expect(sent).toEqual([]);
+    unmount();
+    await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
+  });
+
+  it('відмова — звичайною кнопкою, з коментарем і можливістю передумати', async () => {
+    const undo = vi.spyOn(notify, 'undo');
+    const user = userEvent.setup();
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    await user.click(within(request as HTMLElement).getByRole('button', { name: 'Не можу' }));
+    await user.type(await screen.findByLabelText(/Коментар для диспетчера/), 'Маю пару');
+    await user.click(screen.getByRole('button', { name: 'Відмовитися' }));
+    expect(undo).toHaveBeenCalledWith('Ви відмовилися від заміни', expect.objectContaining({ duration: REPLY_UNDO_MS }));
+    expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
+  });
+
+  it('заповнена кнопка — лише в найтерміновішому рядку', async () => {
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const rows = await screen.findAllByRole('article');
+    const filled = rows.filter((row) => within(row).getByRole('button', { name: /^(Підтверджую|Добре)$/ }).className.includes('bg-accent'));
+    expect(filled).toHaveLength(1);
+  });
+
+  it('найтерміновіший — прохання з найближчим строком, інакше перший рядок', () => {
+    const now = new Date('2026-11-09T08:00:00Z');
+    const list = [
+      { id: 'notice', status: 'APPLIED', confirmDeadline: null },
+      { id: 'late', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-12T05:30:00Z' },
+      { id: 'soon', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-10T05:30:00Z' },
+      { id: 'overdue', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-09T05:30:00Z' },
+    ] as ChangeDto[];
+    expect(mostUrgent(list, now)).toBe('soon');
+    expect(mostUrgent(list.slice(0, 1), now)).toBe('notice');
+    expect(mostUrgent([], now)).toBeNull();
   });
 
   it('призначена заміна (NOTIFY): «Добре» чи «Не можу», без строку відповіді', async () => {
@@ -341,9 +413,16 @@ describe('мій день реченням', () => {
       day('2026-11-10', [lesson(1, '08:30', 'other'), lesson(2, '09:40', 'me', 'CANCELLED')]),
       day('2026-11-11', [lesson(3, '11:00', 'me'), lesson(2, '09:40', 'me')]),
     ];
-    expect(nextDaySentence(days, '2026-11-09', 'me')).toBe('Середа, 11 листопада перша о 09:40 — СТП, 4КІ2, ауд. 14.');
+    expect(nextDaySentence(days, '2026-11-09', 'me')).toMatch(/^Завтра пар немає\. У середу, 11\sлистопада, перша о 09:40 — СТП, 4КІ2, ауд\.\s14\.$/);
     expect(nextDaySentence(days, '2026-11-10', 'me')).toBe('Завтра перша о 09:40 — СТП, 4КІ2, ауд. 14.');
     expect(nextDaySentence(days, '2026-11-11', 'me')).toBeNull();
+  });
+
+  it('після пʼятниці — без «завтра пар немає»; скорочення в кінці не дає двох крапок', () => {
+    const gym: LessonView = { ...lesson(1, '08:30', 'me'), discipline: { id: 'd2', shortName: 'ФВ', name: 'Фізичне виховання', color: null }, room: { id: 'r2', name: 'с.з.', type: 'GYM' } };
+    expect(nextDaySentence([day('2026-11-16', [gym])], '2026-11-13', 'me')).toMatch(/^У понеділок, 16\sлистопада, перша о 08:30 — ФВ, 4КІ2, с\.з\.$/);
+    expect(nextDaySentence([day('2026-11-12', [gym])], '2026-11-11', 'me')).toBe('Завтра перша о 08:30 — ФВ, 4КІ2, с.з.');
+    expect(endSentence('ауд. 14')).toBe('ауд. 14.');
   });
 });
 

@@ -78,7 +78,7 @@ export function MyUpcomingChanges() {
 
   return (
     <section aria-labelledby="my-changes-heading" className="flex flex-col gap-3">
-      <h2 id="my-changes-heading" className="text-heading text-primary">
+      <h2 id="my-changes-heading" className="text-title text-primary">
         Мої заміни
       </h2>
       {body}

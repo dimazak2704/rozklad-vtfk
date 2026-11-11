@@ -15,6 +15,8 @@ interface SubstitutionCardProps {
   change: ChangeDto;
   onConfirm: () => void;
   onDecline: (comment: string) => void;
+  /** Найтерміновіший рядок блоку: лише він має заповнену кнопку, решта — звичайні. */
+  primary?: boolean;
   /** Щойно прийшов через живе оновлення — коротко підсвітити. */
   fresh?: boolean;
 }
@@ -23,8 +25,9 @@ interface SubstitutionCardProps {
  * Заміна, що чекає відповіді, — один рядок списку: коли, що провести, у якій групі й де, замість кого.
  * Прохання (CONFIRM) має строк і «Підтверджую» / «Не можу»; повідомлення про призначену заміну (NOTIFY) —
  * «Добре» / «Не можу», бо заміна вже діє. «Не можу» — з необовʼязковим коментарем для диспетчера.
+ * Будь-яку відповідь можна скасувати в сповіщенні протягом 8 с, тому підтверджувальних діалогів немає.
  */
-export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }: SubstitutionCardProps) {
+export function SubstitutionCard({ change, onConfirm, onDecline, primary = false, fresh = false }: SubstitutionCardProps) {
   const bells = useBells(change.date);
   const { now } = useNow();
   const [comment, setComment] = useState('');
@@ -91,7 +94,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
       </div>
 
       <div className="flex flex-wrap items-center gap-2 sm:col-start-2 lg:col-start-auto">
-        <Button variant="primary" onClick={onConfirm}>
+        <Button variant={primary ? 'primary' : 'secondary'} onClick={onConfirm}>
           {notice ? 'Добре' : 'Підтверджую'}
         </Button>
         <Popover>
@@ -123,7 +126,8 @@ export function SubstitutionCard({ change, onConfirm, onDecline, fresh = false }
                     Скасувати
                   </Button>
                 </PopoverClose>
-                <Button type="submit" variant="danger" size="sm">
+                {/* відмова — не втрата даних: звичайна кнопка, а передумати можна в сповіщенні */}
+                <Button type="submit" variant="secondary" size="sm">
                   {notice ? 'Повідомити диспетчера' : 'Відмовитися'}
                 </Button>
               </div>

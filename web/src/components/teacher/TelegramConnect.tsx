@@ -41,7 +41,7 @@ export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
 
   return (
     <section aria-labelledby="telegram-connect-heading" className="flex flex-col gap-3">
-      <h2 id="telegram-connect-heading" className="text-heading text-primary">
+      <h2 id="telegram-connect-heading" className="text-title text-primary">
         Telegram
       </h2>
       {mine.isPending ? (
