@@ -136,15 +136,15 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
       tone: 'warn',
       text:
         delivery === 'botOff'
-          ? `Telegram-бот вимкнений, тож запит ${substitute} не надіслано. Зателефонуйте й підтвердьте за викладача.`
-          : `${substitute} не підключив Telegram, тож запит не надіслано. Домовтеся телефоном і підтвердьте за викладача.`,
+          ? `Telegram-бот вимкнений, тож прохання ${substitute} не надіслано. Зателефонуйте й підтвердьте за викладача.`
+          : `${substitute} не підключив Telegram, тож прохання не надіслано. Домовтеся телефоном і підтвердьте за викладача.`,
     };
   } else if (pending) {
     sentence = pending.overdue
       ? { tone: 'alert', text: `${substitute} не відповідає: строк минув (${pending.label}). Нагадайте або підтвердьте, якщо домовилися телефоном.` }
       : { tone: 'plain', text: `Чекаємо відповіді в Telegram — ${pending.label}.` };
   } else if (state === 'declined') {
-    sentence = { tone: 'plain', text: 'Оберіть інший варіант нижче або надішліть запит ще раз.' };
+    sentence = { tone: 'plain', text: 'Оберіть інший варіант нижче або надішліть прохання ще раз.' };
   } else if (answer === 'waiting' && (state === 'confirmed' || state === 'applied')) {
     sentence = {
       tone: 'plain',
@@ -261,7 +261,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
           {state === 'declined' ? (
             // core не дає підтвердити відхилену заміну (422 CHANGE_DECLINED): викладача питаємо ще раз
             <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={onResend} iconStart={<BellRing aria-hidden="true" className="size-4" />}>
-              Надіслати запит ще раз
+              Надіслати прохання ще раз
             </Button>
           ) : null}
           {state === 'substituteAbsent' ? (

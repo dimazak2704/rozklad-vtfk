@@ -479,7 +479,7 @@ export function buildFeed(changes: readonly ChangeDto[], absences: readonly Abse
         text = `Нагадування в Telegram: ${teacher} — ${changeLine(change)}`;
       } else if (entry.to === 'PENDING_CONFIRMATION') {
         kind = 'request';
-        text = `Запит у Telegram: ${teacher} — ${changeLine(change)}`;
+        text = `Прохання в Telegram: ${teacher} — ${changeLine(change)}`;
       } else if (entry.to === 'CONFIRMED') {
         kind = 'confirmed';
         text =

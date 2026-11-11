@@ -459,9 +459,12 @@ export default function ChangesPage() {
             </Link>
           </>
         }
+        // `⋯` тримає лише те, чого на екрані немає: «Додати відсутність» видно в списку відсутніх, тож у меню
+        // вона потрібна тільки на телефоні на рівні пар; кнопка «Розпорядження» ховається на вузькому
         more={[
-          { label: 'Нова відсутність', icon: <CalendarPlus aria-hidden="true" />, onSelect: openNewAbsence },
-          // на телефоні кнопка «Розпорядження» ховається, щоб керування вмістилися в один рядок
+          ...(panes === 1 && group && !weekend
+            ? [{ label: 'Нова відсутність', icon: <CalendarPlus aria-hidden="true" />, onSelect: openNewAbsence }]
+            : []),
           ...(narrow ? [{ label: 'Розпорядження', icon: <FileText aria-hidden="true" />, to: `/admin/orders?date=${date}` }] : []),
         ]}
       />

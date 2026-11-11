@@ -51,12 +51,21 @@ function StatusLine({ entry }: { entry: LessonEntry }) {
     case 'cancelled':
       return <StateText state="cancelled">Пари не буде</StateText>;
     case 'pending':
+      // стан і строк — одним рядком, а хто проведе — окремим тихим рядком нижче (≤ 2 розділювачі в рядку)
       return (
-        <StateText state="pending">
-          <span>Чекає відповіді</span>
-          {summary ? rest(summary) : null}
-          {change?.confirmDeadline ? rest(<PendingCountdown deadline={change.confirmDeadline} />) : null}
-        </StateText>
+        <>
+          <StateText state="pending">
+            <span className="whitespace-nowrap">Чекає відповіді</span>
+            {/* на телефоні строк — під словом стану, а не розірваним хвостом рядка */}
+            {change?.confirmDeadline ? (
+              <span className="font-normal whitespace-nowrap text-secondary max-sm:block">
+                <span className="max-sm:hidden"> · </span>
+                <PendingCountdown deadline={change.confirmDeadline} />
+              </span>
+            ) : null}
+          </StateText>
+          {summary ? <span className="ps-4 text-caption text-secondary">{summary}</span> : null}
+        </>
       );
     case 'confirmed':
     case 'applied': {
