@@ -6,6 +6,7 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
@@ -58,7 +59,7 @@ public class EventPublisher {
         String routingKey = RozkladEvents.routingKey(event);
         CorrelationData correlation = new CorrelationData(event.eventId().toString());
         try {
-            rabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, routingKey, event, correlation);
+            rabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, routingKey, event, stamped(event), correlation);
             CorrelationData.Confirm confirm = correlation.getFuture().get(CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             if (!confirm.ack()) {
                 log.warn("Event {} ({}) was rejected by the broker: {}", event.eventId(), routingKey, confirm.reason());
@@ -73,10 +74,18 @@ public class EventPublisher {
         }
     }
 
+    /** {@code message_id} = event id, {@code X-Request-Id} of the current work ({@link RequestIdMessages}). */
+    private static MessagePostProcessor stamped(RozkladEvent event) {
+        return message -> {
+            RequestIdMessages.stamp(message.getMessageProperties(), event.eventId().toString());
+            return message;
+        };
+    }
+
     private void sendQuietly(RozkladEvent event) {
         String routingKey = RozkladEvents.routingKey(event);
         try {
-            rabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, routingKey, event);
+            rabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, routingKey, event, stamped(event));
         } catch (AmqpException e) {
             log.warn("Event {} ({}) was not sent: {}", event.eventId(), routingKey, e.getMessage());
         }

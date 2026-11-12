@@ -39,6 +39,7 @@ import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.scheduler.config.TokenRoles;
+import ua.vtc.rozklad.scheduler.messaging.RequestIdMessages;
 import ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint;
 import ua.vtc.rozklad.scheduler.support.SchedulerIntegrationTest;
 import ua.vtc.rozklad.scheduler.support.SyntheticCollege;
@@ -127,6 +128,35 @@ class GenerationMessagingIT {
                 .andExpect(jsonPath("$.hardScore").value(0))
                 .andExpect(jsonPath("$.bestScore").value(startsWithZeroHard()))
                 .andExpect(jsonPath("$.resultDelivered").value(true));
+    }
+
+    @Test
+    void theRequestIdOfTheRequestComesBackOnTheCompletion() {
+        SyntheticCollege.Problem college = SyntheticCollege.generate(SyntheticCollege.Options.tiny());
+        UUID jobId = UUID.randomUUID();
+        GenerationRequested request = request(jobId, 2, college.snapshot());
+
+        rabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, RozkladEvents.routingKey(request), request, message -> {
+            message.getMessageProperties().setHeader(RequestIdMessages.HEADER, "req-gen-1");
+            message.getMessageProperties().setMessageId(request.eventId().toString());
+            return message;
+        });
+
+        long deadline = System.nanoTime() + SOLVE_TIMEOUT.toNanos();
+        Message completion = null;
+        while (completion == null && System.nanoTime() < deadline) {
+            Message message = rabbitTemplate.receive(resultsQueue, 250);
+            if (message != null && RozkladEvents.GENERATION_COMPLETED.equals(
+                    message.getMessageProperties().getReceivedRoutingKey())
+                    && rabbitTemplate.getMessageConverter().fromMessage(message) instanceof GenerationCompleted done
+                    && jobId.equals(done.jobId())) {
+                completion = message;
+            }
+        }
+        assertThat(completion).as("generation.completed of job %s", jobId).isNotNull();
+        assertThat((String) completion.getMessageProperties().getHeader(RequestIdMessages.HEADER)).isEqualTo("req-gen-1");
+        GenerationCompleted done = (GenerationCompleted) rabbitTemplate.getMessageConverter().fromMessage(completion);
+        assertThat(completion.getMessageProperties().getMessageId()).isEqualTo(done.eventId().toString());
     }
 
     @Test
