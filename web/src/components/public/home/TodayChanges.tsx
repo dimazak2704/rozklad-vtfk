@@ -38,9 +38,15 @@ export function TodayChanges({ className }: { className?: string }) {
   let body;
   if (changes.isPending) {
     body = (
-      <div className="flex flex-col gap-2" aria-hidden="true">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-2/3" />
+      // рядки висотою з рядок тексту (24 px): у широкій колонці речення вміщається в один, у вузькій — у два,
+      // тож «Усі групи» під ним не підскакують, коли відповідь приходить
+      <div className="flex flex-col" aria-hidden="true">
+        <span className="flex h-6 items-center">
+          <Skeleton className="h-4 w-full lg:w-4/5" />
+        </span>
+        <span className="flex h-6 items-center lg:hidden">
+          <Skeleton className="h-4 w-2/3" />
+        </span>
       </div>
     );
   } else if (changes.isError) {

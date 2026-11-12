@@ -13,6 +13,7 @@ import { capitalize, LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { LESSON_TONE, roomLabel } from '@/lib/schedule';
 import type { ScheduleTarget } from '@/stores/favorites';
 import { useStalled } from '../useStalled';
+import { groupFocusPlan } from './group-focus';
 import { nowPanelRange } from './now-range';
 import { useRememberedGroup } from './useRememberedGroup';
 
@@ -27,6 +28,48 @@ function lessonLine(lesson: LessonView): string {
 
 function firstLesson(day: DayDto | undefined): LessonView | undefined {
   return day?.lessons.filter((l) => l.kind !== 'CANCELLED').sort((a, b) => a.pair - b.pair)[0];
+}
+
+/**
+ * Силует героя тієї ж висоти, що й готовий герой посеред пари (рядок дати 28 px, відлік з реченням 96 px,
+ * доріжка 56 px; на телефоні — відлік у два рядки й смуга пари): пошук і списки під ним не стрибають,
+ * коли приходять дані. Із запамʼятованою групою на телефоні під відліком є ще її блок — тримаємо і його місце
+ * (на десктопі він стоїть праворуч від відліку й висоти не додає).
+ */
+function HeroSkeleton({ dateLine, withFocus, className }: { dateLine?: ReactNode; withFocus?: boolean; className?: string }) {
+  return (
+    <section
+      aria-label="Стан навчального дня"
+      aria-busy="true"
+      className={cn('flex flex-col gap-5 rounded-[20px] bg-today-wash p-5 md:gap-7 md:rounded-hero md:px-10 md:py-8', className)}
+    >
+      <div className="flex flex-col gap-2">
+        {dateLine ? (
+          <p className="flex h-7 items-center text-body text-secondary">{dateLine}</p>
+        ) : (
+          <span className="flex h-7 items-center">
+            <Skeleton className="h-5 w-56" />
+          </span>
+        )}
+        <span className="flex h-[6.375rem] flex-col justify-end gap-3 md:h-24 md:justify-center">
+          <Skeleton className="h-12 w-72 max-w-full md:h-16" />
+          <Skeleton className="hidden h-5 w-80 max-w-full md:block" />
+        </span>
+        {withFocus ? (
+          <span className="mt-2 md:hidden">
+            <FocusSkeleton />
+          </span>
+        ) : null}
+      </div>
+      <span className="hidden h-14 items-center md:flex">
+        <Skeleton className="h-2 w-full" />
+      </span>
+      <span className="flex h-16 flex-col justify-center gap-3 md:hidden">
+        <Skeleton className="h-2 w-full" />
+        <Skeleton className="h-4 w-2/3" />
+      </span>
+    </section>
+  );
 }
 
 /** Група одним посиланням у реченні героя. */
@@ -69,10 +112,10 @@ function placeLine(lesson: LessonView): ReactNode {
 }
 
 /**
- * Що в запамʼятованої групи зараз чи далі — окремим блоком героя: назва заняття (повна, рівнем заголовка),
+ * Що в запамʼятованої групи зараз чи далі (`groupFocusPlan`) — окремим блоком героя: назва заняття (повна, рівнем заголовка),
  * під нею аудиторія й викладач. Це найкорисніше після відліку («куди йти»), тож не ховається дрібним рядком.
  */
-function GroupFocus({ group, lessons, when }: { group: ScheduleTarget; lessons: readonly LessonView[]; when: 'зараз' | 'далі' }) {
+function GroupFocus({ group, lessons, when }: { group: ScheduleTarget; lessons: readonly LessonView[]; when: string }) {
   return (
     <div className="flex flex-col gap-1">
       <p className="text-caption text-secondary">
@@ -89,6 +132,23 @@ function GroupFocus({ group, lessons, when }: { group: ScheduleTarget; lessons: 
           </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/** Силует блоку групи: підпис, назва заняття, рядок місця — як у `GroupFocus`. */
+function FocusSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex w-64 max-w-full flex-col gap-1">
+      <span className="flex h-[1.125rem] items-center">
+        <Skeleton className="h-3 w-24" />
+      </span>
+      <span className="flex h-6 items-center">
+        <Skeleton className="h-4 w-56 max-w-full" />
+      </span>
+      <span className="flex h-5 items-center">
+        <Skeleton className="h-3 w-40" />
+      </span>
     </div>
   );
 }
@@ -115,15 +175,7 @@ export function NowPanel({ className }: { className?: string }) {
 
   // запит «завис» (немає мережі, сервер мовчить) — силует не висить: сторінка каже це одним рядком
   if ((meta.isPending || (studyToday && bells.isPending)) && stall) return null;
-  if (meta.isPending) {
-    return (
-      <section aria-label="Стан навчального дня" aria-busy="true" className={cn(HERO, 'gap-4', className)}>
-        <Skeleton className="h-5 w-56" />
-        <Skeleton className="h-12 w-72 max-w-full" />
-        <Skeleton className="mt-4 hidden h-2 w-full md:block" />
-      </section>
-    );
-  }
+  if (meta.isPending) return <HeroSkeleton withFocus={Boolean(group)} className={className} />;
   // сторінка вже показує одну спільну помилку: порожній тонований блок лише заважав би
   if (meta.isError && !meta.data && covered) return null;
   if (!meta.data) {
@@ -176,12 +228,7 @@ export function NowPanel({ className }: { className?: string }) {
   }
 
   if (studyToday && !bells.data && !bells.isError) {
-    return (
-      <section aria-label="Стан навчального дня" aria-busy="true" className={cn(HERO, 'gap-4', className)}>
-        <p className="text-body text-secondary">{dateLine}</p>
-        <Skeleton className="h-12 w-72 max-w-full" />
-      </section>
-    );
+    return <HeroSkeleton dateLine={dateLine} withFocus={Boolean(group)} className={className} />;
   }
 
   if (studyToday && bells.isError && covered) return null;
@@ -205,21 +252,18 @@ export function NowPanel({ className }: { className?: string }) {
   const groupToday = days.find((d) => d.date === data.today);
   const groupNextDay = nextDay ? days.find((d) => d.date === nextDay) : undefined;
 
-  // «У 4КІ1 зараз / Іноземна мова / ауд. 16 · Крисак Л.В.» — лише коли в групи справді є пара зараз чи наступна
-  let focus = null;
-  const status = live.status;
-  if (group && groupToday && status && (status.kind === 'in-pair' || status.kind === 'break' || status.kind === 'before-day')) {
-    const pair = status.kind === 'in-pair' ? status.current.pair : status.next.pair;
-    const lessons = groupToday.lessons
-      .filter((l) => l.pair === pair && l.kind !== 'CANCELLED')
-      .sort((a, b) => a.subgroup - b.subgroup)
-      .slice(0, 2);
-    if (lessons.length > 0) {
-      focus = (
-        <GroupFocus group={group} lessons={lessons} when={status.kind === 'in-pair' ? 'зараз' : 'далі'} />
-      );
-    }
-  }
+  // «У 4КІ1 зараз / Іноземна мова / ауд. 16 · Крисак Л.В.»; на цьому дзвінку в групи пари немає —
+  // її наступне заняття («У 2КІ1 далі о 13:30»), а коли в неї на сьогодні все — перша пара наступного дня
+  const plan = group
+    ? groupFocusPlan({ status: live.status, groupToday, groupNextDay, today: data.today, nextDay })
+    : null;
+  // розклад групи ще йде — місце блоку тримає силует тієї ж висоти, щоб на телефоні доріжка не з'їжджала вниз
+  const focus =
+    group && plan && plan.lessons.length > 0 ? (
+      <GroupFocus group={group} lessons={plan.lessons} when={plan.when} />
+    ) : group && groupSchedule.isPending && (live.status?.kind === 'in-pair' || live.status?.kind === 'break' || live.status?.kind === 'before-day') ? (
+      <FocusSkeleton />
+    ) : null;
 
   // після пар чи у вихідний — коли наступного разу: «Завтра перша о 09:40 — ЕУ, ауд. 22»
   let afterDay: string | undefined;
