@@ -104,10 +104,12 @@ public class SubstitutionRequests implements OutboundRelevance {
     }
 
     /**
-     * {@code substitution.confirmation-requested}. A repeated request for a pending change is a reminder.
-     * A notice (NOTIFY) about a lesson that is already over is not sent. A teacher without Telegram is not
-     * reported right away: {@link #reportTeachersWithoutTelegram()} tells admins once per teacher and date
-     * about requests and notices that are still unanswered.
+     * {@code substitution.confirmation-requested}. A repeated request for a pending change is a reminder; when
+     * what the teacher sees changed (core re-sends it after the dispatcher edited the room) it is
+     * «✏️ Заміну змінено» instead, a request or notice again with the same deadline. A notice (NOTIFY) about a
+     * lesson that is already over is not sent. A teacher without Telegram is not reported right away:
+     * {@link #reportTeachersWithoutTelegram()} tells admins once per teacher and date about requests and notices
+     * that are still unanswered.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void onConfirmationRequested(SubstitutionConfirmationRequested event) {
@@ -115,14 +117,13 @@ public class SubstitutionRequests implements OutboundRelevance {
         boolean notice = event.effectiveMode() == SubstitutionRequestMode.NOTIFY;
         Optional<SubstitutionRequest> existing = requests.findForUpdate(event.changeId());
         boolean sameTeacher = existing.map(found -> found.getTeacherId().equals(event.teacherId())).orElse(false);
-        boolean reminder = !notice && sameTeacher && existing.get().isPending()
+        // the teacher already holds a message of this change that still waits for him
+        boolean told = sameTeacher && existing.get().getMode() == event.effectiveMode()
+                && (notice ? existing.get().isNoticeInForce() : existing.get().isPending())
                 && !messages.findByChangeId(event.changeId()).isEmpty();
-        // core's deadline reminder (the same, already passed deadline, nothing else changed) is the round
-        // remindOverdue() reminds about too: both use one dedup key, so the teacher gets one reminder whichever
-        // comes first. A new room re-sends the request even then.
-        boolean deadlineReminder = reminder && event.deadline() != null && !event.deadline().isAfter(now)
-                && Objects.equals(existing.get().getDeadline(), event.deadline())
-                && Objects.equals(existing.get().getRoomName(), event.roomName());
+        SubstitutionRequest.Details before = told ? existing.get().details() : null;
+        boolean sameDeadlinePassed = told && event.deadline() != null && !event.deadline().isAfter(now)
+                && Objects.equals(existing.get().getDeadline(), event.deadline());
         if (existing.isPresent() && !sameTeacher) {
             retireMessages(existing.get(), event.eventId());
         }
@@ -130,6 +131,12 @@ public class SubstitutionRequests implements OutboundRelevance {
             found.refresh(event, now);
             return found;
         }).orElseGet(() -> requests.save(SubstitutionRequest.from(event, now)));
+        boolean updated = told && SubstitutionTexts.differs(before, request.details());
+        boolean reminder = told && !notice && !updated;
+        // core's deadline reminder (the same, already passed deadline, nothing else changed) is the round
+        // remindOverdue() reminds about too: both use one dedup key, so the teacher gets one reminder whichever
+        // comes first. An update (a new room) is its own message and is never swallowed by that key.
+        boolean deadlineReminder = reminder && sameDeadlinePassed;
 
         if (notice && lessonOver(event.date(), event.endsAt())) {
             // пара вже минула (і сьогоднішня теж): повідомляти нема про що, диспетчер вносить це для обліку
@@ -140,11 +147,12 @@ public class SubstitutionRequests implements OutboundRelevance {
             request.markSent(now);
             OutboundDraft draft = notice
                     ? OutboundDraft.text(Recipient.of(chat.get()), DeliveryPurpose.SUBSTITUTION_NOTICE,
-                            SubstitutionTexts.notice(request))
+                            updated ? SubstitutionTexts.update(request, before) : SubstitutionTexts.notice(request))
                     .withKeyboard(SubstitutionTexts.noticeButtons(event.changeId()))
                     : OutboundDraft.text(Recipient.of(chat.get()),
                             reminder ? DeliveryPurpose.SUBSTITUTION_REMINDER : DeliveryPurpose.SUBSTITUTION_REQUEST,
-                            SubstitutionTexts.request(request, reminder))
+                            updated ? SubstitutionTexts.update(request, before)
+                                    : SubstitutionTexts.request(request, reminder))
                     .withKeyboard(SubstitutionTexts.buttons(event.changeId()));
             draft = draft.correlatedWith(event.changeId());
             outbox.enqueue(deadlineReminder ? draft.dedupBy(reminderKey(request))

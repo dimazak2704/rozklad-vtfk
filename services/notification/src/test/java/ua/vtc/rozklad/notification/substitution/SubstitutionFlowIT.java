@@ -476,21 +476,100 @@ class SubstitutionFlowIT extends IntegrationTest {
                 .filteredOn(text -> text.startsWith("⏰ <b>Немає відповіді щодо заміни</b>")).hasSize(2);
     }
 
-    /** After the deadline round was reminded, a new room (core re-sends the request) still reaches the teacher. */
+    /**
+     * After the deadline round was reminded, a new room (core re-sends the request) still reaches the teacher as
+     * an update; core's later plain deadline reminder of the same round is still deduplicated with the job's.
+     */
     @Test
     void newRoomAfterTheDeadlineReminderIsStillSent() {
         handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
         worker.drain();
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
         assertThat(substitutions.remindOverdue()).isEqualTo(1);
-        handlers.handle(new SubstitutionConfirmationRequested(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
-                CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
-                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "12",
-                Instant.parse("2026-10-19T07:00:00Z")));
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "12"));
         worker.drain();
 
         assertThat(telegram.sentTo(TEACHER)).hasSize(3);
-        assertThat(telegram.lastSentTo(TEACHER).text()).contains("🚪 Аудиторія 12");
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("✏️ <b>Заміну змінено</b>\n"
+                + "Нова аудиторія: 12 (була 6)\n\n").contains("🚪 Аудиторія 12");
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "12")); // core's deadline reminder
+        assertThat(substitutions.remindOverdue()).isZero();
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(3);
+    }
+
+    /**
+     * The dispatcher moved a pending CONFIRM request to another room: the teacher gets one «✏️ Заміну змінено»
+     * with the new room, the same deadline and buttons, not a reminder. A plain repeat afterwards is still a
+     * reminder, and the answer edits both messages to the new room.
+     */
+    @Test
+    void roomEditOfAPendingRequestIsAnUpdateNotAReminder() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        Sent update = telegram.lastSentTo(TEACHER);
+        assertThat(update.text()).startsWith("✏️ <b>Заміну змінено</b>\nНова аудиторія: 214 (була 6)\n\n📅")
+                .contains("🚪 Аудиторія 214")
+                .doesNotContain("Нагадування", "Аудиторія 6")
+                .endsWith("Будь ласка, дайте відповідь до 19.10 о 10:00.");
+        assertThat(update.buttons()).containsExactly("✅ Підтверджую", "❌ Не можу");
+        assertThat(jdbc.queryForList("select purpose from outbound_message where chat_id = ? order by created_at",
+                String.class, TEACHER)).containsExactly("SUBSTITUTION_REQUEST", "SUBSTITUTION_REQUEST");
+        assertThat(substitutions.find(CHANGE)).get().satisfies(request -> {
+            assertThat(request.getRoomName()).isEqualTo("214");
+            assertThat(request.getDeadline()).isEqualTo(Instant.parse("2026-10-19T07:00:00Z"));
+            assertThat(request.isPending()).isTrue();
+        });
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(3);
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("⏰ <b>Нагадування: потрібна ваша відповідь</b>")
+                .contains("🚪 Аудиторія 214");
+
+        press(TEACHER, update.messageId(), update.callbackOf("✅ Підтверджую").orElseThrow());
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).hasSize(3).allSatisfy(edit -> assertThat(edit.text())
+                .startsWith("🙋 <b>Прохання про заміну</b>").contains("🚪 Аудиторія 214")
+                .endsWith("✅ <b>Ви підтвердили заміну.</b> Дякуємо!"));
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
+    /**
+     * The same for a NOTIFY notice: «✏️ Заміну змінено» with the new room and [👍 Добре] [❌ Не можу]; a plain
+     * repeat stays the usual notice.
+     */
+    @Test
+    void roomEditOfANoticeIsAnUpdateWithTheNoticeButtons() {
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.NOTIFY, "6"));
+        worker.drain();
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.NOTIFY, "214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        Sent update = telegram.lastSentTo(TEACHER);
+        assertThat(update.text()).startsWith("✏️ <b>Заміну змінено</b>\nНова аудиторія: 214 (була 6)\n\n📅")
+                .contains("🚪 Аудиторія 214")
+                .doesNotContain("Вам поставили заміну", "дайте відповідь до")
+                .endsWith("Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.");
+        assertThat(update.buttons()).containsExactly("👍 Добре", "❌ Не можу");
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getRoomName).isEqualTo("214");
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.NOTIFY, "214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(3);
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("📌 <b>Вам поставили заміну</b>");
+
+        core.answerAsNotice(ChangeStatus.CONFIRMED);
+        press(TEACHER, update.messageId(), update.callbackOf("👍 Добре").orElseThrow());
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).isNotEmpty().allSatisfy(edit -> assertThat(edit.text())
+                .contains("🚪 Аудиторія 214").endsWith("👍 <b>Добре, заміну прийнято.</b> Дякуємо!"));
     }
 
     /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
@@ -824,6 +903,15 @@ class SubstitutionFlowIT extends IntegrationTest {
     private static SubstitutionTeacherReplied teacherReplied(ConfirmationDecision decision, ChangeStatus status) {
         return new SubstitutionTeacherReplied(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
                 CoreFixtures.TEACHER_NEPYIVODA, decision, status, Order35.DATE, 2, "4КІ1");
+    }
+
+    /** core's re-sent request of {@link #CHANGE} for the same teacher and deadline, in another room. */
+    private static SubstitutionConfirmationRequested requestedInRoom(SubstitutionRequestMode mode, String room) {
+        boolean notice = mode == SubstitutionRequestMode.NOTIFY;
+        return new SubstitutionConfirmationRequested(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
+                CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
+                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", room,
+                notice ? null : Instant.parse("2026-10-19T07:00:00Z"), mode, null, null, null);
     }
 
     private static SubstitutionConfirmationRequested requested(UUID teacherId) {

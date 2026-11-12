@@ -6,12 +6,15 @@ import static ua.vtc.rozklad.notification.text.Html.escape;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.notification.config.InfrastructureConfig;
+import ua.vtc.rozklad.notification.substitution.SubstitutionRequest.Details;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineButton;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
 import ua.vtc.rozklad.notification.text.UaDates;
@@ -28,6 +31,8 @@ public final class SubstitutionTexts {
 
     private static final String REQUEST_TITLE = "🙋 " + b("Прохання про заміну");
     private static final String NOTICE_TITLE = "📌 " + b("Вам поставили заміну");
+    private static final String UPDATE_TITLE = "✏️ " + b("Заміну змінено");
+    private static final String NOTICE_HINT = "Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.";
     private static final String MUTUAL = "MUTUAL";
 
     private SubstitutionTexts() {
@@ -36,10 +41,76 @@ public final class SubstitutionTexts {
     public static String request(SubstitutionRequest request, boolean reminder) {
         String title = reminder ? "⏰ " + b("Нагадування: потрібна ваша відповідь") : REQUEST_TITLE;
         StringBuilder text = new StringBuilder(title).append("\n\n").append(details(request));
+        appendDeadline(text, request);
+        return text.toString();
+    }
+
+    /**
+     * The request (CONFIRM) or notice (NOTIFY) sent again because the dispatcher changed what the teacher sees
+     * (the room): says what changed, then the usual details and the request's deadline, which does not restart.
+     */
+    public static String update(SubstitutionRequest request, Details before) {
+        StringBuilder text = new StringBuilder(UPDATE_TITLE).append('\n').append(whatChanged(before, request.details()))
+                .append("\n\n").append(details(request));
+        if (request.isNotice()) {
+            text.append("\n\n").append(NOTICE_HINT);
+        } else {
+            appendDeadline(text, request);
+        }
+        return text.toString();
+    }
+
+    /** The message body would read differently with {@code after} than with {@code before}. */
+    public static boolean differs(Details before, Details after) {
+        return !details(before).equals(details(after));
+    }
+
+    /** «Нова аудиторія: 214 (була 108)», «Змінено: дату, пару» or both in one line. */
+    static String whatChanged(Details before, Details after) {
+        List<String> other = new ArrayList<>();
+        if (!Objects.equals(before.lessonDate(), after.lessonDate())) {
+            other.add("дату");
+        }
+        if (before.pair() != after.pair()) {
+            other.add("пару");
+        } else if (!UaDates.timeRange(before.startsAt(), before.endsAt())
+                .equals(UaDates.timeRange(after.startsAt(), after.endsAt()))) {
+            other.add("час");
+        }
+        if (!Objects.equals(before.groupCode(), after.groupCode()) || before.subgroup() != after.subgroup()) {
+            other.add("групу");
+        }
+        if (!Objects.equals(before.disciplineName(), after.disciplineName())
+                || !Objects.equals(before.originalDisciplineName(), after.originalDisciplineName())) {
+            other.add("дисципліну");
+        }
+        String room = roomChange(before.roomName(), after.roomName());
+        if (room == null && other.isEmpty()) {
+            return "Змінено деталі заміни";
+        }
+        if (room == null) {
+            return "Змінено: " + String.join(", ", other);
+        }
+        return other.isEmpty() ? room : room + "; змінено також: " + String.join(", ", other);
+    }
+
+    /** {@code null} when the room reads the same. */
+    private static String roomChange(String before, String after) {
+        String was = notBlank(before) ? before : null;
+        String now = notBlank(after) ? after : null;
+        if (Objects.equals(was, now)) {
+            return null;
+        }
+        if (now == null) {
+            return "Аудиторію більше не вказано (була " + escape(was) + ")";
+        }
+        return "Нова аудиторія: " + escape(now) + (was == null ? "" : " (була " + escape(was) + ")");
+    }
+
+    private static void appendDeadline(StringBuilder text, SubstitutionRequest request) {
         if (request.getDeadline() != null) {
             text.append("\n\nБудь ласка, дайте відповідь до ").append(escape(deadline(request.getDeadline()))).append('.');
         }
-        return text.toString();
     }
 
     public static InlineKeyboard buttons(UUID changeId) {
@@ -50,8 +121,7 @@ public final class SubstitutionTexts {
 
     /** NOTIFY: the change is already in force, the teacher is told and may object. */
     public static String notice(SubstitutionRequest request) {
-        return NOTICE_TITLE + "\n\n" + details(request)
-                + "\n\nЯкщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.";
+        return NOTICE_TITLE + "\n\n" + details(request) + "\n\n" + NOTICE_HINT;
     }
 
     public static InlineKeyboard noticeButtons(UUID changeId) {
@@ -153,39 +223,43 @@ public final class SubstitutionTexts {
     }
 
     static String details(SubstitutionRequest request) {
+        return details(request.details());
+    }
+
+    static String details(Details request) {
         StringBuilder text = new StringBuilder()
-                .append("📅 ").append(escape(UaDates.capitalize(UaDates.weekdayDayMonth(request.getLessonDate()))))
-                .append("\n🕘 ").append(request.getPair()).append(" пара");
-        String time = UaDates.timeRange(request.getStartsAt(), request.getEndsAt());
+                .append("📅 ").append(escape(UaDates.capitalize(UaDates.weekdayDayMonth(request.lessonDate()))))
+                .append("\n🕘 ").append(request.pair()).append(" пара");
+        String time = UaDates.timeRange(request.startsAt(), request.endsAt());
         if (!time.isEmpty()) {
             text.append(" · ").append(time);
         }
-        if (request.getGroupCode() != null) {
-            text.append("\n👥 ").append(escape(request.getGroupCode()));
-            if (request.getSubgroup() > 0) {
-                text.append(" (").append(request.getSubgroup()).append(" підгрупа)");
+        if (request.groupCode() != null) {
+            text.append("\n👥 ").append(escape(request.groupCode()));
+            if (request.subgroup() > 0) {
+                text.append(" (").append(request.subgroup()).append(" підгрупа)");
             }
         }
-        if (notBlank(request.getDisciplineName())) {
-            text.append("\n📘 ").append(escape(request.getDisciplineName()));
+        if (notBlank(request.disciplineName())) {
+            text.append("\n📘 ").append(escape(request.disciplineName()));
         }
-        boolean otherDiscipline = request.getChangeKind() == ChangeKind.REPLACE_DISCIPLINE
-                && notBlank(request.getOriginalDisciplineName());
+        boolean otherDiscipline = request.changeKind() == ChangeKind.REPLACE_DISCIPLINE
+                && notBlank(request.originalDisciplineName());
         if (otherDiscipline) {
             // заміна іншою дисципліною групи: викладач веде свою дисципліну замість чужої
-            text.append("\n🔁 Замість «").append(escape(request.getOriginalDisciplineName())).append('»');
-            if (notBlank(request.getOriginalTeacherName())) {
-                text.append(" (").append(escape(request.getOriginalTeacherName())).append(')');
+            text.append("\n🔁 Замість «").append(escape(request.originalDisciplineName())).append('»');
+            if (notBlank(request.originalTeacherName())) {
+                text.append(" (").append(escape(request.originalTeacherName())).append(')');
             }
-            if (MUTUAL.equals(request.getReasonCode())) {
+            if (MUTUAL.equals(request.reasonCode())) {
                 text.append(" (взаємна заміна)");
             }
         }
-        if (notBlank(request.getRoomName())) {
-            text.append("\n🚪 Аудиторія ").append(escape(request.getRoomName()));
+        if (notBlank(request.roomName())) {
+            text.append("\n🚪 Аудиторія ").append(escape(request.roomName()));
         }
-        if (!otherDiscipline && notBlank(request.getOriginalTeacherName())) {
-            text.append("\n👤 Замість: ").append(escape(request.getOriginalTeacherName()));
+        if (!otherDiscipline && notBlank(request.originalTeacherName())) {
+            text.append("\n👤 Замість: ").append(escape(request.originalTeacherName()));
         }
         return text.toString();
     }

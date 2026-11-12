@@ -210,6 +210,17 @@ public class SubstitutionRequest implements Persistable<UUID> {
         this.updatedAt = now;
     }
 
+    /** NOTIFY: the change is in force (confirmed or in a published order), whatever the teacher answered. */
+    boolean isNoticeInForce() {
+        return isNotice() && (status == ChangeStatus.CONFIRMED || status == ChangeStatus.APPLIED);
+    }
+
+    /** What the teacher reads about the substitution in the message body. */
+    public Details details() {
+        return new Details(lessonDate, pair, startsAt, endsAt, groupCode, subgroup, disciplineName, changeKind,
+                originalDisciplineName, originalTeacherName, reasonCode, roomName);
+    }
+
     public boolean isWithoutTelegram() {
         return noTelegramAt != null;
     }
@@ -317,5 +328,14 @@ public class SubstitutionRequest implements Persistable<UUID> {
 
     public ChangeStatus getStatus() {
         return status;
+    }
+
+    /**
+     * The details of a request or notice the teacher sees ({@link SubstitutionTexts#details}): a snapshot that
+     * outlives {@link #refresh}, so a re-sent request can say what changed.
+     */
+    public record Details(LocalDate lessonDate, int pair, LocalTime startsAt, LocalTime endsAt, String groupCode,
+                          int subgroup, String disciplineName, ChangeKind changeKind, String originalDisciplineName,
+                          String originalTeacherName, String reasonCode, String roomName) {
     }
 }

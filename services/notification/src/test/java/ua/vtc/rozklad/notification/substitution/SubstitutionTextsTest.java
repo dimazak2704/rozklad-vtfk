@@ -82,6 +82,69 @@ class SubstitutionTextsTest {
     }
 
     @Test
+    void updatedRequestNamesTheNewRoomAndKeepsTheDeadline() {
+        SubstitutionRequest request = SubstitutionRequest.from(event(0, "108"), NOW);
+        SubstitutionRequest.Details before = request.details();
+        request.refresh(event(0, "214"), NOW);
+
+        assertThat(SubstitutionTexts.differs(before, request.details())).isTrue();
+        assertThat(SubstitutionTexts.update(request, before)).isEqualTo("""
+                ✏️ <b>Заміну змінено</b>
+                Нова аудиторія: 214 (була 108)
+
+                📅 Понеділок, 19 жовтня
+                🕘 2 пара · 09:40–10:40
+                👥 4КІ1
+                📘 Надійність, діагностика та експлуатація комп'ютерних систем і мереж
+                🚪 Аудиторія 214
+                👤 Замість: Кренцін М.Д.
+
+                Будь ласка, дайте відповідь до 18.10 о 20:00.""");
+    }
+
+    @Test
+    void updatedNoticeNamesTheRoomEvenWithoutAPreviousOne() {
+        SubstitutionRequest notice = SubstitutionRequest.from(notice("ABSENT", null), NOW);
+        SubstitutionRequest.Details before = notice.details();
+        notice.refresh(notice("ABSENT", "214"), NOW);
+
+        assertThat(SubstitutionTexts.update(notice, before)).isEqualTo("""
+                ✏️ <b>Заміну змінено</b>
+                Нова аудиторія: 214
+
+                📅 Понеділок, 19 жовтня
+                🕘 2 пара · 09:40–10:40
+                👥 4КІ1
+                📘 Надійність, діагностика та експлуатація комп'ютерних систем і мереж
+                🔁 Замість «Сучасні технології проєктування» (Кренцін М.Д.)
+                🚪 Аудиторія 214
+
+                Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.""");
+    }
+
+    @Test
+    void whatChangedNamesEveryVisibleDetailInOneLine() {
+        SubstitutionRequest.Details base = SubstitutionRequest.from(event(0, "108"), NOW).details();
+        assertThat(SubstitutionTexts.differs(base, SubstitutionRequest.from(event(0, "108"), NOW).details()))
+                .isFalse();
+        assertThat(SubstitutionTexts.whatChanged(base, SubstitutionRequest.from(event(0, null), NOW).details()))
+                .isEqualTo("Аудиторію більше не вказано (була 108)");
+        assertThat(SubstitutionTexts.whatChanged(base, SubstitutionRequest.from(event(1, "108"), NOW).details()))
+                .isEqualTo("Змінено: групу");
+        assertThat(SubstitutionTexts.whatChanged(base, SubstitutionRequest.from(event(1, "214"), NOW).details()))
+                .isEqualTo("Нова аудиторія: 214 (була 108); змінено також: групу");
+        SubstitutionRequest.Details otherTeacher = new SubstitutionRequest.Details(base.lessonDate(), base.pair(),
+                base.startsAt(), base.endsAt(), base.groupCode(), base.subgroup(), base.disciplineName(),
+                base.changeKind(), base.originalDisciplineName(), "Ганза", base.reasonCode(), base.roomName());
+        assertThat(SubstitutionTexts.whatChanged(base, otherTeacher)).isEqualTo("Змінено деталі заміни");
+        SubstitutionRequest.Details laterPair = new SubstitutionRequest.Details(base.lessonDate(), 3,
+                LocalTime.of(10, 50), LocalTime.of(11, 50), base.groupCode(), base.subgroup(), base.disciplineName(),
+                base.changeKind(), base.originalDisciplineName(), base.originalTeacherName(), base.reasonCode(),
+                base.roomName());
+        assertThat(SubstitutionTexts.whatChanged(base, laterPair)).isEqualTo("Змінено: пару");
+    }
+
+    @Test
     void noticeStatesFollowTheAnswerAndKeepButtonsOnlyWhileUnanswered() {
         SubstitutionRequest request = SubstitutionRequest.from(notice("ABSENT"), NOW);
         UUID id = Order35.CHANGE_4KI1;
@@ -151,15 +214,23 @@ class SubstitutionTextsTest {
     }
 
     private static SubstitutionConfirmationRequested event(int subgroup) {
+        return event(subgroup, "6");
+    }
+
+    private static SubstitutionConfirmationRequested event(int subgroup, String room) {
         return new SubstitutionConfirmationRequested(UUID.randomUUID(), NOW, 1, Order35.CHANGE_4KI1,
                 Order35.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1",
-                subgroup, NDKS, "Кренцін М.Д.", "6", Instant.parse("2026-10-18T17:00:00Z"), null, null, null, null);
+                subgroup, NDKS, "Кренцін М.Д.", room, Instant.parse("2026-10-18T17:00:00Z"), null, null, null, null);
     }
 
     private static SubstitutionConfirmationRequested notice(String reasonCode) {
+        return notice(reasonCode, "6");
+    }
+
+    private static SubstitutionConfirmationRequested notice(String reasonCode, String room) {
         return new SubstitutionConfirmationRequested(UUID.randomUUID(), NOW, 1, Order35.CHANGE_4KI1,
                 Order35.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
-                NDKS, "Кренцін М.Д.", "6", null, SubstitutionRequestMode.NOTIFY, ChangeKind.REPLACE_DISCIPLINE,
+                NDKS, "Кренцін М.Д.", room, null, SubstitutionRequestMode.NOTIFY, ChangeKind.REPLACE_DISCIPLINE,
                 "Сучасні технології проєктування", reasonCode);
     }
 }
