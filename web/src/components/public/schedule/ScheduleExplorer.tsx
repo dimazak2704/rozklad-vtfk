@@ -205,7 +205,8 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       />
     );
   } else if (view === 'day') {
-    const live = Boolean(day && day.studyDay && day.date === today && slots && slots.length > 0);
+    // пар цього дня немає — про це вже каже список («Цього дня пар немає.»), тож рядок стану не повторює його
+    const live = Boolean(day && day.studyDay && day.date === today && slots && slots.length > 0 && activePairs(day).length > 0);
     // на сторінці розкладу головне — код групи, тож стан дня — один тихий рядок на всіх ширинах;
     // великий відлік лишається для головної та «Дзвінків»
     content = (

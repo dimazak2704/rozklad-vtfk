@@ -109,6 +109,29 @@ describe('ScheduleExplorer: тиждень без пар', () => {
   });
 });
 
+describe('ScheduleExplorer: сьогодні без пар у поданні «День»', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('«пар немає» звучить один раз — списком, без рядка стану над ним', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-09T08:00:00Z')); // понеділок, 10:00 у Києві
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const free: ScheduleDto = { ...DEMO_WEEK, days: DEMO_WEEK.days.map((d) => (d.date === '2026-11-09' ? { ...d, lessons: [] } : d)) };
+    renderWithProviders(
+      <ScheduleExplorer
+        query={query(free, { placeholder: false, paused: false })}
+        params={{ ...params('2026-11-09', '2026-11-09', '2026-11-13'), view: 'day' }}
+        perspective="teacher"
+        ownerLabel="Кренцін"
+      />,
+    );
+    expect(await screen.findByText('Цього дня пар немає.')).toBeInTheDocument();
+    // дзвінки вже прийшли (їх показує бічна колонка), а рядка «Сьогодні пар немає» над списком немає
+    expect(await screen.findByRole('heading', { name: 'Дзвінки цього дня' })).toBeInTheDocument();
+    expect(screen.queryByText('Сьогодні пар немає')).not.toBeInTheDocument();
+  });
+});
+
 describe('ScheduleExplorer: копія з кешу Service Worker, коли мережа є', () => {
   afterEach(() => resetSavedCopies());
 

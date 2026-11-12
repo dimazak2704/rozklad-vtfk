@@ -10,6 +10,7 @@ import {
   dayShareText,
   filterBySubgroup,
   mainDisciplines,
+  roomDisciplinesLine,
   reasonHint,
   roomDetails,
   roomOccupancy,
@@ -300,5 +301,29 @@ describe('mainDisciplines', () => {
       days: [{ date: '2026-11-09', lessons: [lesson({ discipline: ref('ФВ'), kind: 'SUBSTITUTED' })] }],
     } as unknown as ScheduleDto;
     expect(mainDisciplines(schedule)).toEqual(['ФВ']);
+  });
+});
+
+describe('roomDisciplinesLine', () => {
+  const week = (...names: string[]) =>
+    ({ days: [{ date: '2026-11-09', lessons: names.map((name, index) => lesson({ pair: index + 1, discipline: ref(name) })) }] }) as unknown as ScheduleDto;
+
+  it('усі дисципліни тижня вміщаються — «Цього тижня тут»', () => {
+    expect(roomDisciplinesLine(week('КМ', 'КМ', 'АСД'))).toBe('Цього тижня тут КМ, АСД');
+  });
+
+  it('дисциплін більше, ніж у рядку, — «Найчастіше тут», а не неповний список', () => {
+    expect(roomDisciplinesLine(week('КМ', 'КМ', 'АСД', 'АСД', 'КБ', 'КБ', 'СТП', 'ДМ'))).toBe('Найчастіше тут: АСД, КБ, КМ');
+  });
+
+  it('заміна з іншою дисципліною — теж не повний список', () => {
+    const schedule = {
+      days: [{ date: '2026-11-09', lessons: [lesson({ discipline: ref('КМ') }), lesson({ pair: 2, discipline: ref('ФВ'), kind: 'SUBSTITUTED' })] }],
+    } as unknown as ScheduleDto;
+    expect(roomDisciplinesLine(schedule)).toBe('Найчастіше тут: КМ');
+  });
+
+  it('порожній тиждень — без рядка', () => {
+    expect(roomDisciplinesLine(undefined)).toBeUndefined();
   });
 });

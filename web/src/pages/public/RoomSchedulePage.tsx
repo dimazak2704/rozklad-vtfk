@@ -8,7 +8,7 @@ import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/s
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
-import { mainDisciplines, roomDetails } from '@/components/public/schedule/schedule-utils';
+import { roomDetails, roomDisciplinesLine } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
 import type { PublicRoomDto } from '@/api/types';
 import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
@@ -34,7 +34,7 @@ export default function RoomSchedulePage() {
   const room = rooms.data?.find((r) => r.id === id);
   const name = room?.name ?? query.data?.owner.label;
   const loaded = query.isPlaceholderData ? undefined : query.data;
-  const disciplines = useMemo(() => mainDisciplines(loaded).join(', '), [loaded]);
+  const disciplines = useMemo(() => roomDisciplinesLine(loaded), [loaded]);
 
   const missing = (isApiError(query.error) && query.error.isNotFound) || (rooms.isSuccess && !room);
   if (missing) {
@@ -63,7 +63,7 @@ export default function RoomSchedulePage() {
   const heading = roomHeading(name, room);
   // рядок контексту: що це за приміщення (якщо відомо більше, ніж «аудиторія»), інакше — що тут ведуть цього тижня
   const facts = room && roomDetails(room) !== 'Аудиторія' ? roomDetails(room) : null;
-  const details = facts ?? (disciplines ? `Цього тижня тут ${disciplines}` : undefined);
+  const details = facts ?? disciplines;
   const activeProfile = profiles.data?.profiles?.find((p) => p.id === profiles.data.profile.id);
 
   return (

@@ -73,6 +73,23 @@ export function mainDisciplines(schedule: ScheduleDto | undefined, limit = 3, fo
     .map(([name]) => name);
 }
 
+/**
+ * Рядок контексту аудиторії: «Цього тижня тут КМ, АСД», коли це справді всі дисципліни тижня, і
+ * «Найчастіше тут: КМ, АСД, КБ», коли в сітці є й інші (заміни, рідші пари) — інакше рядок читався б як повний список.
+ */
+export function roomDisciplinesLine(schedule: ScheduleDto | undefined): string | undefined {
+  const top = mainDisciplines(schedule);
+  if (top.length === 0) return undefined;
+  const all = new Set(
+    (schedule?.days ?? [])
+      .flatMap((day) => day.lessons)
+      .filter((lesson) => lesson.kind !== 'CANCELLED')
+      .map((lesson) => lesson.discipline.shortName || lesson.discipline.name)
+      .filter(Boolean),
+  );
+  return all.size > top.length ? `Найчастіше тут: ${top.join(', ')}` : `Цього тижня тут ${top.join(', ')}`;
+}
+
 export interface ChangedLesson {
   day: DayDto;
   lesson: LessonView;
