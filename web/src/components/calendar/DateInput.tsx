@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { IconButton, Input, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, isIsoDate, isoWeekday, parseIsoDate, todayInKyiv, toIsoDate } from '@/lib/date';
@@ -73,7 +73,8 @@ export function DateInput({ value, onChange, onBlur, min, max, className, ...res
           <PopoverTrigger asChild>
             <IconButton label="Вибрати в календарі" size="sm" disabled={rest.disabled} icon={<CalendarDays aria-hidden="true" className="size-4" />} />
           </PopoverTrigger>
-          <PopoverContent width="auto" align="end">
+          {/* фокус — на вибраному дні, а не на «‹ місяць»: стрілки одразу рухають дату */}
+          <PopoverContent width="auto" align="end" onOpenAutoFocus={(event) => event.preventDefault()}>
             <MonthGrid
               value={isIsoDate(value) ? value : null}
               min={min}
@@ -102,6 +103,11 @@ function MonthGrid({ value, min, max, onPick }: { value: string | null; min?: st
   const days = Array.from({ length: 42 }, (_, index) => addDays(start, index));
   const weeks = days[35] && parseIsoDate(days[35]).month === month ? 6 : 5;
   const outOfRange = (iso: string) => Boolean((min && iso < min) || (max && iso > max));
+
+  useEffect(() => {
+    gridRef.current?.querySelector<HTMLButtonElement>('button[tabindex="0"]')?.focus();
+    // лише при відкритті
+  }, []);
 
   const move = (next: string) => {
     const target = clamp(next, min, max);

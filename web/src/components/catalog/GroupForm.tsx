@@ -104,13 +104,19 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
       submitLabel={group ? 'Зберегти' : 'Додати групу'}
       pending={save.isPending}
       dirty={isDirty}
-      size="lg"
+      size="md"
     >
       <form id={formId} noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <FormAlert message={formError} />
         <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
           {/* без прикладу в полі: «4КІ1» з автофокусом читали як уже введене значення */}
-          <Field label="Код групи" required error={errors.code?.message} hint={group ? undefined : 'Як у розкладі, напр. 4КІ1'}>
+          {/* одна підказка під полем, яке вона пояснює, — а не другий рядок збоку на іншій висоті */}
+          <Field
+            label="Код групи"
+            required
+            error={errors.code?.message}
+            hint={group || canonical ? undefined : 'Як у розкладі, напр. 4КІ1'}
+          >
             <Input
               {...form.register('code', {
                 onChange: (event: { target: { value: string } }) => {
@@ -125,7 +131,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
               className="text-heading font-semibold"
             />
           </Field>
-          <div className="flex min-h-full flex-col justify-end gap-1 pb-1" aria-live="polite">
+          <div className="flex min-h-full flex-col justify-end gap-1 pb-1 empty:hidden" aria-live="polite">
             {canonical ? (
               <>
                 <p className="flex flex-wrap items-center gap-2 text-ui text-secondary">
@@ -151,9 +157,7 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
                   <p className="text-caption text-muted">Збережемо як «{canonical}» (латиницю й пробіли виправлено).</p>
                 ) : null}
               </>
-            ) : (
-              <p className="text-caption text-muted">Курс, спеціальність і номер візьмемо з коду.</p>
-            )}
+            ) : null}
           </div>
         </div>
         <Controller

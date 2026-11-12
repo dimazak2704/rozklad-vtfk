@@ -9,10 +9,9 @@ import type { ControlForm, LessonKind, RoomType } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { ROOM_TYPE_OPTIONS } from '@/components/catalog/labels';
-import { Checkbox, Combobox, Field, NumberInput, RadioGroup, Select, Textarea, notify } from '@/components/ui';
+import { Checkbox, Combobox, Field, NumberInput, Select, Textarea, notify } from '@/components/ui';
 import { CONTROL_FORM_LABEL, LESSON_KIND_OPTIONS } from './labels';
 import { DEFAULT_HOURS_PER_PAIR, formatHours, loadPattern, patternDescription } from './pattern';
-import { WeeklyPatternView } from './WeeklyPatternView';
 
 const loadSchema = z
   .object({
@@ -161,11 +160,12 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
       submitLabel={item ? 'Зберегти' : 'Додати навантаження'}
       pending={save.isPending}
       dirty={isDirty}
-      size="xl"
+      // форма — 640 px і одна-дві колонки (DESIGN §11.5): поля читаються згори вниз, без дірок праворуч
+      size="md"
     >
       <form id={formId} noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <FormAlert message={formError} />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[10rem_minmax(0,1fr)_12rem]">
+        <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
           <Field label="Група" required error={errors.groupId?.message} hint={item ? 'Групу не змінюють: створіть новий запис' : undefined}>
             <Controller
               control={form.control}
@@ -199,16 +199,9 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
               )}
             />
           </Field>
-          <Field label="Вид занять" error={errors.lessonKind?.message}>
-            <Controller
-              control={form.control}
-              name="lessonKind"
-              render={({ field }) => <Select<LessonKind> value={field.value} onValueChange={field.onChange} options={LESSON_KIND_OPTIONS} />}
-            />
-          </Field>
         </div>
 
-        <div className="grid gap-4 rounded-panel border border-default bg-sunken p-4 sm:grid-cols-[11rem_11rem_minmax(0,1fr)]">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Годин на тиждень" required error={errors.hoursPerWeek?.message}>
             <Controller
               control={form.control}
@@ -229,14 +222,10 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
               render={({ field }) => <NumberInput value={field.value} onValueChange={field.onChange} min={0} max={2000} unit="год" />}
             />
           </Field>
-          <div className="flex min-w-0 flex-col gap-1.5" aria-live="polite">
-            <span className="text-ui font-semibold text-primary">У розкладі</span>
-            <WeeklyPatternView pattern={pattern} size="md" />
-            <p className="text-caption text-secondary">
-              {patternDescription(pattern)}{' '}
-              <span className="text-muted">Розраховано для {DEFAULT_HOURS_PER_PAIR} академічних годин на пару.</span>
-            </p>
-          </div>
+          {/* як години лягають у тиждень — одним реченням під полями, без схеми з квадратиків */}
+          <p className="text-caption text-secondary sm:col-span-2" aria-live="polite" title={`Розраховано для ${DEFAULT_HOURS_PER_PAIR} академічних годин на пару`}>
+            У розкладі: {patternDescription(pattern).toLocaleLowerCase('uk')}
+          </p>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -259,7 +248,7 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
               />
             )}
           />
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={split && subgroupNumbers.length > 0 ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4'}>
             {split && subgroupNumbers.length > 0
               ? subgroupNumbers.map((number) => teacherField(number, `Викладач ${number} підгрупи`))
               : teacherField(0, 'Викладач')}
@@ -267,6 +256,28 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
           {teachersError ? <p className="text-caption font-medium text-danger">{teachersError}</p> : null}
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Вид занять" error={errors.lessonKind?.message}>
+            <Controller
+              control={form.control}
+              name="lessonKind"
+              render={({ field }) => <Select<LessonKind> value={field.value} onValueChange={field.onChange} options={LESSON_KIND_OPTIONS} />}
+            />
+          </Field>
+          <Field label="Форма контролю">
+            <Controller
+              control={form.control}
+              name="controlForm"
+              render={({ field }) => (
+                <Select<ControlForm>
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  options={(['EXAM', 'CREDIT', 'NONE'] as const).map((value) => ({ value, label: CONTROL_FORM_LABEL[value] }))}
+                />
+              )}
+            />
+          </Field>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Потрібен тип аудиторії" hint="Генератор не поставить пару в інший тип">
             <Controller
@@ -299,19 +310,6 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
             />
           </Field>
         </div>
-        <Controller
-          control={form.control}
-          name="controlForm"
-          render={({ field }) => (
-            <RadioGroup<ControlForm>
-              legend="Форма контролю"
-              orientation="horizontal"
-              value={field.value}
-              onValueChange={field.onChange}
-              options={(['EXAM', 'CREDIT', 'NONE'] as const).map((value) => ({ value, label: CONTROL_FORM_LABEL[value] }))}
-            />
-          )}
-        />
         <Field label="Примітка" error={errors.note?.message}>
           <Textarea {...form.register('note')} rows={2} placeholder="Звідки години: програма, план, домовленість" />
         </Field>
