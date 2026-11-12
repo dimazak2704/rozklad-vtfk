@@ -34,7 +34,8 @@ test.describe('імпорт', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Розклад 2025-2026 (ІІ).xlsx' })).toBeVisible();
     await expect(page).toHaveURL(/job=/);
     const applyPanel = page.getByRole('region', { name: 'Застосування імпорту' });
-    await expect(applyPanel).toContainText('вирішіть 5 рядків', { timeout: 30_000 });
+    // завдання відкривається на вкладці «Рішення», тож панель лише коротко каже, що робити
+    await expect(applyPanel).toContainText('Застосувати можна, коли виправите позначене нижче.', { timeout: 30_000 });
 
     // звіт показує й автоматично виправлений код групи
     await page.getByRole('tab', { name: /Звіт/ }).click();
@@ -71,7 +72,8 @@ test.describe('імпорт', () => {
 
   test('фото розпорядження: розпізнані рядки й примітки на аркуші', async ({ page }) => {
     await openImport(page);
-    await page.getByRole('rowheader', { name: /розпорядження-35\.jpg/ }).click();
+    // на ноутбуці завдання — рядки таблиці, на телефоні — кнопки-рядки з назвою файла
+    await page.getByRole('rowheader', { name: /розпорядження-35\.jpg/ }).or(page.getByRole('button', { name: /^розпорядження-35\.jpg/ })).click();
     await page.getByRole('tab', { name: 'Чернетка' }).click();
     const sheet = page.getByRole('article', { name: 'Розпізнане РОЗПОРЯДЖЕННЯ №35' });
     await expect(sheet).toContainText('ПОНЕДІЛОК - ЗНАМЕННИК');

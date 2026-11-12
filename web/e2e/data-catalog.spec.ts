@@ -57,6 +57,6 @@ test.describe('довідник аудиторій', () => {
     await expect(blocked).toContainText('вона є в розкладі, навантаженні або закріплена за групою');
     await blocked.getByRole('button', { name: 'Позначити неактивною' }).click();
     await expect(blocked).toBeHidden();
-    await expect(row).toContainText('Неактивна');
+    await expect(row).toContainText('неактивна');
   });
 });

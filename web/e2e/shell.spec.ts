@@ -13,8 +13,8 @@ test.describe('оболонка публічного сайту', () => {
   test('головна має шапку зі знаком і вибір теми', async ({ page }) => {
     await openApp(page, '/');
     await expect(page).toHaveTitle(/Розклад ВТФК/);
-    // тема — одна на сайті: перемикач у підвалі на будь-якій ширині
-    await expect(page.getByRole('radiogroup', { name: 'Тема оформлення' })).toBeVisible();
+    // тема — одна на сайті: тихе меню «Тема: як у системі» у підвалі на будь-якій ширині
+    await expect(page.getByRole('button', { name: 'Тема: як у системі' })).toBeVisible();
   });
 
   test('на сторінці групи активний розділ «Розклад» — рівно один у шапці й у вкладках', async ({ page }, testInfo) => {
@@ -46,10 +46,12 @@ test.describe('оболонка публічного сайту', () => {
 
   test('вибір теми зберігається після перезавантаження', async ({ page }) => {
     await openApp(page, '/');
-    await page.getByRole('radiogroup', { name: 'Тема оформлення' }).getByRole('radio', { name: 'Темна' }).click();
+    await page.getByRole('button', { name: /^Тема:/ }).click();
+    await page.getByRole('menuitemradio', { name: 'Темна' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.getByRole('button', { name: 'Тема: темна' })).toBeVisible();
   });
 
   test('захищений розділ без входу веде на сторінку входу з поверненням', async ({ page }) => {

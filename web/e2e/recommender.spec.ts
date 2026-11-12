@@ -51,9 +51,9 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: join(OUT, `${name}.png`) });
 }
 
-/** Панель варіантів: на ноутбуці — бічна колонка, на телефоні — шторка. */
+/** Панель варіантів: на ноутбуці — бічна колонка «Рішення», на телефоні — шторка з назвою пари («2Ф, 7 пара»). */
 function optionsRegion(page: Page, isMobile: boolean): Locator {
-  return isMobile ? page.getByRole('dialog', { name: 'Варіанти рішення' }) : page.getByRole('complementary', { name: 'Варіанти рішення' });
+  return isMobile ? page.getByRole('dialog', { name: /^\S+, \d пара$/ }) : page.getByRole('complementary', { name: 'Рішення' });
 }
 
 test('варіанти: три видно, «Ще варіанти», вибір не надсилає, «Інший викладач…», план дня', async ({ page, isMobile }, info) => {

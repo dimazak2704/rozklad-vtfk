@@ -26,8 +26,9 @@ test.describe('кабінет викладача', () => {
 
     await expect(page.getByRole('article', { name: label, exact: true })).toHaveCount(0);
     await expect(cards).toHaveCount(1);
-    await expect(page.getByText('Заміну підтверджено')).toBeVisible();
-    await expect(mine).toHaveCount(1);
+    await expect(page.getByText(/^Підтверджено: /)).toBeVisible();
+    // відповідь іде на сервер, коли мине час на «Скасувати» (REPLY_UNDO_MS = 8 с), тож «Мої заміни» — трохи згодом
+    await expect(mine).toHaveCount(1, { timeout: 15_000 });
     await expect(page.getByRole('region', { name: 'Мої заміни' })).toContainText('Підтверджено');
   });
 
@@ -39,7 +40,7 @@ test.describe('кабінет викладача', () => {
     await page.getByRole('textbox').last().fill('Маю пару в іншому корпусі');
     await page.getByRole('button', { name: 'Відмовитися' }).click();
     await expect(cards).toHaveCount(1);
-    await expect(page.getByText('Ви відмовилися від заміни')).toBeVisible();
+    await expect(page.getByText(/^Ви відмовилися: /)).toBeVisible();
   });
 
   test('нова відсутність: валідація, повідомлення і поява в списку', async ({ page }) => {
@@ -49,7 +50,8 @@ test.describe('кабінет викладача', () => {
     await expect(page.getByText('Оберіть причину')).toBeVisible();
 
     await page.getByRole('radio', { name: 'Окремі пари' }).click();
-    await page.getByRole('button', { name: '3 пара' }).click();
+    // пари дня — прапорці з часом і групою, а не кнопки з номером
+    await page.getByRole('checkbox', { name: /^3 пара/ }).click();
     await page.getByRole('radio', { name: 'Відрядження' }).click();
     await page.getByRole('button', { name: 'Повідомити диспетчера' }).click();
     await expect(page.getByText('Відсутність повідомлено')).toBeVisible();
