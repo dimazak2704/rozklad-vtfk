@@ -22,6 +22,7 @@ import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.core.calendar.Semester;
@@ -403,16 +404,16 @@ class NotifyApprovalIT {
     }
 
     /**
-     * Known gap (docs/modules/substitution-order-accounting.md §9): a CONFIRM request the teacher already
-     * confirmed is not sent again when its room changes. A repeated request would ask him to confirm a
-     * second time (and read as a reminder), a notice would turn his request into a NOTIFY one; until the
-     * owner decides, the new room reaches him through the cabinet (SSE) and the published order.
+     * A CONFIRM request the teacher already confirmed gets a new room: core publishes
+     * {@code substitution.details-changed} (information only, with the new room) and no
+     * {@code confirmation-requested}, which would ask him to confirm a second time. The change stays CONFIRMED
+     * with the teacher's answer; picking the room he already sees sends nothing.
      */
     @Test
-    void newRoomOfAConfirmedRequestIsNotAskedAgain() {
+    void newRoomOfAConfirmedRequestIsAnInfoOnlyUpdate() {
         fixture.setting("substitution.approvalMode", "CONFIRM");
         EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
-                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED, RozkladEvents.SUBSTITUTION_DETAILS_CHANGED);
         ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.MUTUAL), "admin");
         assertThat(probe.await(SubstitutionConfirmationRequested.class,
                 event -> event.changeId().equals(created.id()), 1, WAIT)).singleElement()
@@ -421,12 +422,34 @@ class NotifyApprovalIT {
                 null);
         assertThat(confirmed.status()).isEqualTo(ChangeStatus.CONFIRMED);
 
-        ChangeDto moved = commands.update(created.id(), new UpdateChangeRequest(fixture.room("304").getId(),
-                ReasonCode.MUTUAL, null, confirmed.version()), "admin");
+        Room room304 = fixture.room("304");
+        ChangeDto moved = commands.update(created.id(), new UpdateChangeRequest(room304.getId(), ReasonCode.MUTUAL,
+                null, confirmed.version()), "admin");
 
         assertThat(moved.status()).isEqualTo(ChangeStatus.CONFIRMED);
         assertThat(moved.replacement().room().name()).isEqualTo("304");
+        assertThat(probe.await(SubstitutionDetailsChanged.class,
+                event -> event.changeId().equals(created.id()), 1, WAIT)).singleElement().satisfies(event -> {
+                    assertThat(event.teacherId()).isEqualTo(nepyivoda.getId());
+                    assertThat(event.roomName()).isEqualTo("304");
+                    assertThat(event.date()).isEqualTo(MONDAY);
+                    assertThat(event.pair()).isEqualTo(2);
+                    assertThat(event.groupCode()).isEqualTo("4КІ1");
+                    assertThat(event.disciplineName()).isEqualTo(ndks.getName());
+                    assertThat(event.originalDisciplineName()).isEqualTo(stp.getName());
+                    assertThat(event.kind()).isEqualTo(ChangeKind.REPLACE_DISCIPLINE);
+                    assertThat(event.reasonCode()).isEqualTo("MUTUAL");
+                });
         assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+        assertThat(changes.findById(created.id())).get().satisfies(change -> {
+            assertThat(change.getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+            assertThat(change.getApprovalMode()).isEqualTo(ApprovalMode.CONFIRM);
+        });
+
+        commands.update(created.id(), new UpdateChangeRequest(room304.getId(), ReasonCode.ABSENT, null,
+                moved.version()), "admin");
+        assertThat(probe.await(SubstitutionDetailsChanged.class,
                 event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
     }
 

@@ -16,6 +16,7 @@ import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.events.TimetableVersionPublished;
@@ -43,6 +44,7 @@ public class EventExternalizationConfig {
             SubstitutionConfirmationRequested.class,
             SubstitutionStatusChanged.class,
             SubstitutionTeacherReplied.class,
+            SubstitutionDetailsChanged.class,
             AbsenceReported.class,
             OrderPublished.class);
 

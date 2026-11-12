@@ -185,6 +185,9 @@ public class ChangeCommands {
         if (roomChanged && teacherWasTold(change)) {
             // викладач уже отримав прохання чи повідомлення з аудиторією: надсилаємо його ще раз з новою
             notifications.confirmationRequested(change);
+        } else if (roomChanged && confirmedRequest(change)) {
+            // прохання вже підтверджене: лише повідомляємо про нову аудиторію, не просимо підтвердити ще раз
+            notifications.detailsChanged(change);
         }
         return finish(change);
     }
@@ -197,13 +200,21 @@ public class ChangeCommands {
     /**
      * The assigned teacher has a request (PENDING) or a notice (NOTIFY, CONFIRMED) that names the
      * room; AUTO changes and changes without a teacher told nobody. A CONFIRM request he already
-     * confirmed is not sent again: that would ask him to confirm twice (known gap and owner question in
-     * docs/modules/substitution-order-accounting.md §9).
+     * confirmed is not sent again: that would ask him to confirm twice ({@link #confirmedRequest}).
      */
     private static boolean teacherWasTold(Change change) {
         return change.getNewTeacherId() != null
                 && (change.getStatus() == ChangeStatus.PENDING_CONFIRMATION
                 || change.getStatus() == ChangeStatus.CONFIRMED && change.getApprovalMode() == ApprovalMode.NOTIFY);
+    }
+
+    /**
+     * A CONFIRM request already confirmed (by the teacher, or by the dispatcher for him): the teacher read the
+     * room in it and gets an info-only {@code substitution.details-changed}, nothing to answer.
+     */
+    private static boolean confirmedRequest(Change change) {
+        return change.getNewTeacherId() != null && change.getStatus() == ChangeStatus.CONFIRMED
+                && change.getApprovalMode() == ApprovalMode.CONFIRM;
     }
 
     /** DELETE: cancels the change; cancelling a cancelled change is a no-op. */

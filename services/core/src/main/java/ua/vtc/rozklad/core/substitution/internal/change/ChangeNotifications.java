@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
@@ -57,6 +59,30 @@ public class ChangeNotifications {
      * A reminder repeats the event with the same change id and the original (already passed) deadline.
      */
     public void confirmationRequested(Change change) {
+        Seen seen = seen(change);
+        SubstitutionRequestMode mode = change.getApprovalMode() == ApprovalMode.NOTIFY
+                ? SubstitutionRequestMode.NOTIFY : SubstitutionRequestMode.CONFIRM;
+        events.publishEvent(new SubstitutionConfirmationRequested(EventEnvelope.create(clock), change.getId(),
+                seen.teacherId(), change.getDate(), change.getPairFrom(), seen.startsAt(), seen.endsAt(),
+                seen.groupCode(), seen.subgroup(), seen.disciplineName(), seen.originalTeacherName(), seen.roomName(),
+                change.getConfirmDeadline(), mode, change.getKind(), seen.originalDisciplineName(),
+                seen.reasonCode()));
+    }
+
+    /**
+     * {@code substitution.details-changed}: what the teacher of a CONFIRM request he already confirmed reads
+     * changed (a new room). Information only, the same details as {@link #confirmationRequested}.
+     */
+    public void detailsChanged(Change change) {
+        Seen seen = seen(change);
+        events.publishEvent(new SubstitutionDetailsChanged(EventEnvelope.create(clock), change.getId(),
+                seen.teacherId(), change.getDate(), change.getPairFrom(), seen.startsAt(), seen.endsAt(),
+                seen.groupCode(), seen.subgroup(), seen.disciplineName(), seen.originalTeacherName(), seen.roomName(),
+                change.getKind(), seen.originalDisciplineName(), seen.reasonCode()));
+    }
+
+    /** What the assigned teacher reads about the change in Telegram. */
+    private Seen seen(Change change) {
         Teacher teacher = catalog.teacher(change.getNewTeacherId());
         UUID disciplineId = change.getNewDisciplineId() != null ? change.getNewDisciplineId()
                 : change.getOrigDisciplineId();
@@ -69,19 +95,20 @@ public class ChangeNotifications {
         Map<Integer, PairTime> times = calendar.pairTimes(change.getDate());
         PairTime first = times.get(change.getPairFrom());
         PairTime last = times.get(change.getPairTo());
-        SubstitutionRequestMode mode = change.getApprovalMode() == ApprovalMode.NOTIFY
-                ? SubstitutionRequestMode.NOTIFY : SubstitutionRequestMode.CONFIRM;
-        events.publishEvent(new SubstitutionConfirmationRequested(EventEnvelope.create(clock), change.getId(),
-                teacher.getId(), change.getDate(), change.getPairFrom(),
-                first == null ? null : first.startsAt(), last == null ? null : last.endsAt(),
-                // після об'єднання підгруп викладач веде всю групу
+        return new Seen(teacher.getId(), first == null ? null : first.startsAt(), last == null ? null : last.endsAt(),
                 catalog.group(change.getGroupId()).getCode(),
+                // після об'єднання підгруп викладач веде всю групу
                 change.getKind() == ChangeKind.MERGE_SUBGROUPS ? 0 : change.getSubgroupNumber(),
                 discipline == null ? null : discipline.getName(),
                 original == null ? null : original.getShortName(),
-                room == null ? null : room.getName(), change.getConfirmDeadline(), mode, change.getKind(),
+                room == null ? null : room.getName(),
                 originalDiscipline == null ? null : originalDiscipline.getName(),
-                change.getReasonCode() == null ? null : change.getReasonCode().name()));
+                change.getReasonCode() == null ? null : change.getReasonCode().name());
+    }
+
+    private record Seen(UUID teacherId, LocalTime startsAt, LocalTime endsAt, String groupCode, int subgroup,
+                        String disciplineName, String originalTeacherName, String roomName,
+                        String originalDisciplineName, String reasonCode) {
     }
 
     /** {@code substitution.teacher-replied}: a NOTIFY answer that kept the status (DOMAIN §7). */
