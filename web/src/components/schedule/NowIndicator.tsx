@@ -13,6 +13,11 @@ export interface NowIndicatorProps {
   bells: readonly BellSlotDto[];
   /** Пари, які в людини справді є: доріжка йде від першої до останньої з них. */
   lessonPairs?: readonly number[];
+  /**
+   * Пари запамʼятованої групи на головній: відлік і доріжка лишаються загальними (дзвінки коледжу), а смуги,
+   * де в групи пари немає, позначено вікном — і підказка не каже «минула» про пару, якої не було.
+   */
+  groupPairs?: readonly number[];
   /** День на екрані; живий стан — лише для сьогодні. */
   date?: IsoDate | null;
   /**
@@ -59,8 +64,8 @@ function inlineText(status: PairStatus): string {
 }
 
 /**
- * Відлік, що «котиться»: коли хвилина змінюється, стара цифра йде вгору на 4 px і гасне, а нова заходить
- * знизу (200 мс, ease-out). Рухаються лише ті цифри, що змінилися (ключ — позиція від кінця й цифра).
+ * Відлік, що «котиться»: коли хвилина змінюється, стара цифра йде вгору на 0,12em і гасне (150 мс, ease-in),
+ * а нова заходить знизу (200 мс, ease-out). Рухаються лише ті цифри, що змінилися (ключ — позиція від кінця й цифра).
  * Без руху стара цифра не показується, а нова стає на місце одразу.
  */
 export function Countdown({ value, className }: { value: number; className?: string }) {
@@ -285,9 +290,11 @@ export function DayTrack({
                   <span
                     className={cn(
                       'block h-2 overflow-hidden rounded-full',
-                      state === 'past' && 'bg-[var(--fill-track-past)]',
+                      // вікно — порожня пунктирна смуга і в минулому, і попереду: заняття тут не було й не буде
+                      isWindow && state !== 'current' && 'border border-dashed border-default',
+                      !isWindow && state === 'past' && 'bg-[var(--fill-track-past)]',
                       state === 'current' && 'bg-selected',
-                      state === 'future' && (isWindow ? 'border border-dashed border-default' : 'bg-[var(--fill-track-future)]'),
+                      !isWindow && state === 'future' && 'bg-[var(--fill-track-future)]',
                     )}
                   >
                     {state === 'current' ? (
@@ -375,6 +382,7 @@ function PairBar({ status }: { status: PairStatus }) {
 export function NowIndicator({
   bells,
   lessonPairs,
+  groupPairs,
   date = null,
   variant = 'strip',
   dateLine,
@@ -384,6 +392,7 @@ export function NowIndicator({
   className,
 }: NowIndicatorProps) {
   const ownPairs = useMemo(() => (lessonPairs ? new Set(lessonPairs) : null), [lessonPairs]);
+  const groupSet = useMemo(() => (groupPairs ? new Set(groupPairs) : null), [groupPairs]);
   const live = useNow(at === undefined ? bells : null, { date, onlyPairs: ownPairs });
   const status: PairStatus | null = at !== undefined ? pairStatus(bells, at, ownPairs) : live.status;
   const minutes = at ?? live.clock.minutes + live.clock.seconds / 60;
@@ -436,7 +445,7 @@ export function NowIndicator({
   const track =
     slots.length > 0 ? (
       <div role="img" aria-label={label}>
-        <DayTrack slots={slots} status={shown} minutes={minutes} ownPairs={ownPairs} />
+        <DayTrack slots={slots} status={shown} minutes={minutes} ownPairs={ownPairs ?? groupSet} />
       </div>
     ) : null;
 

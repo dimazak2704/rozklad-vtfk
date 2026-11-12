@@ -117,16 +117,17 @@
       animation: strike-draw 200ms var(--ease-out) backwards;
     }
 
-    /* Відлік: нова цифра заходить знизу на 4 px, коли змінюється хвилина */
+    /* Відлік: нова цифра заходить знизу, коли змінюється хвилина */
     .anim-digit {
       display: inline-block;
-      animation: digit-in 200ms var(--ease-out) backwards;
+      animation: digit-in var(--duration-base) var(--ease-out) backwards;
     }
 
-    /* …а стара йде вгору на 4 px і гасне (лише на місці цифри, що змінилась) */
+    /* …а стара йде вгору й гасне (лише на місці цифри, що змінилась). Вихід коротший (0,75×) і з ease-in:
+       стара цифра майже зникає, поки нова сідає, тож дві не зливаються в пляму */
     .anim-digit-out {
       display: inline-block;
-      animation: digit-out 200ms var(--ease-out) both;
+      animation: digit-out calc(var(--duration-base) * 0.75) var(--ease-in) both;
     }
 
     /* Почалася пара: ореол крапки «зараз» розходиться двічі й затихає (батько позиціонований) */
@@ -252,10 +253,11 @@
   }
 }
 
+/* Хід цифри — частка кегля (0,12em): на великому відліку 4 px не читалися б як рух */
 @keyframes digit-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(0.12em);
   }
 }
 
@@ -266,7 +268,7 @@
   }
   to {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-0.12em);
   }
 }
 

@@ -36,6 +36,12 @@ describe('prefers-reduced-motion у motion.css', () => {
     }
   });
 
+  it('відлік котиться на частку кегля, а стара цифра йде швидше й з ease-in (не зливається з новою)', () => {
+    expect(motionCss).toMatch(/@keyframes digit-in\s*\{[^}]*translateY\(0\.12em\)/);
+    expect(motionCss).toMatch(/@keyframes digit-out\s*\{[\s\S]*?translateY\(-0\.12em\)/);
+    expect(motionCss).toMatch(/animation:\s*digit-out calc\(var\(--duration-base\) \* 0\.75\) var\(--ease-in\)/);
+  });
+
   it('без руху цифра, що йде, не показується зовсім', () => {
     expect(outside).toMatch(/\.anim-digit-out\s*\{\s*display:\s*none;/);
   });
