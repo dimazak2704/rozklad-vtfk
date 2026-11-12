@@ -128,6 +128,8 @@ services:
       AUTH_SESSION_IDLE: ${AUTH_SESSION_IDLE:-1h}
       AUTH_SESSION_MAX: ${AUTH_SESSION_MAX:-10h}
       AUTH_LOCKOUT_MAX_FAILURES: ${AUTH_LOCKOUT_MAX_FAILURES:-5}
+      # AUTH_TRUSTED_PROXIES stays as in the base file (the ip_range of the compose network, so Caddy and
+      # not the network gateway): auth takes the client IP of its lockout from Caddy's X-Forwarded-For only
       AUTH_COOKIE_NAME: __Secure-RZ_AUTH
       AUTH_COOKIE_SECURE: "true"
       AUTH_TEMPLATE_CACHE: "true"

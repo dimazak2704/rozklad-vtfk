@@ -34,6 +34,18 @@ compose() {
   docker compose "${env_args[@]}" "${compose_files[@]}" --profile app "$@"
 }
 
+# The compose network has a fixed ip_range (auth trusts X-Forwarded-For only from it). A network created
+# before that cannot be changed in place, and compose cannot remove it while containers use it: stop the
+# stack once (data stays in volumes) so the next `up` creates the network anew.
+recreate_old_network() {
+  local ranges
+  ranges="$(docker network inspect rozklad_default --format '{{range .IPAM.Config}}{{.IPRange}} {{end}}' 2>/dev/null)"     || return 0
+  if [[ "$ranges" != *172.29.1.0/24* ]]; then
+    echo "== the compose network has no fixed ip_range: stopping the stack once to recreate it"
+    docker compose "${env_args[@]}" "${compose_files[@]}" --profile app --profile infra down
+  fi
+}
+
 python_cmd() {
   if command -v python >/dev/null 2>&1; then echo python; else echo python3; fi
 }
@@ -109,6 +121,7 @@ cmd_up() {
   ((web)) && targets+=(web)
   ((google_mock)) || stop_google_mock
 
+  recreate_old_network
   echo "== infrastructure"
   # --remove-orphans: containers of services that are no longer in the compose files
   docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d --remove-orphans

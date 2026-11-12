@@ -84,8 +84,10 @@ TOKEN=$(python scripts/rozklad_auth.py token --user admin)      # or krentsin, n
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/me
 ```
 
-`AUTH_URL=http://127.0.0.1:8085/auth` reaches the service directly when the web container is not running. Ten
-wrong passwords in a row lock a username for a while (`Забагато спроб…`); a successful sign-in resets the count.
+`AUTH_URL=http://127.0.0.1:8085/auth` reaches the service directly when the web container is not running (the port
+is published on 127.0.0.1 only, and `X-Forwarded-For` sent there is ignored). Ten wrong passwords in a row lock a
+username for a while (`Забагато спроб…`); a successful sign-in resets the count. A browser that already signed in as
+that username keeps its own count (device cookie `RZ_DEVICE`), so others' failures do not lock it.
 
 **Google without Google.** `scripts/dev-stack.sh up --google-mock` adds `infra/docker-compose.google-mock.yml`:
 `mock-oauth2-server` on `http://localhost:8090/google` and the Google button on the sign-in page. On the mock's

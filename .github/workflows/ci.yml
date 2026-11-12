@@ -1,5 +1,5 @@
 # CI: backend (Maven verify: unit tests + Testcontainers integration tests), web (lint, tests,
-# build) and the production deployment config (compose overlay, Caddyfile, scripts, realm JSON).
+# build) and the production deployment config (compose overlay, Caddyfile, scripts).
 #
 # Runs on pull requests and on pushes to branches other than main. For main the Deploy workflow
 # calls this one (workflow_call) and rolls out only when it passes, so main is tested exactly once.
@@ -89,6 +89,27 @@ jobs:
           published = {n: [p.get("published") for p in s.get("ports", [])] for n, s in services.items() if s.get("ports")}
           print("published ports:", published)
           sys.exit(0 if set(published) == {"caddy"} else 1)'
+
+      - name: Auth trusts forwarding headers only from containers, never from the network gateway
+        run: |
+          check() {
+            docker compose "$@" --profile app config --format json | python3 -c '
+          import ipaddress, json, sys
+          config = json.load(sys.stdin)
+          ipam = config["networks"]["default"]["ipam"]["config"][0]
+          trusted = [ipaddress.ip_network(n.strip()) for n in
+                     config["services"]["auth"]["environment"]["AUTH_TRUSTED_PROXIES"].split(",")]
+          gateway = ipaddress.ip_address(ipam["gateway"])
+          containers = ipaddress.ip_network(ipam["ip_range"])
+          ports = config["services"]["auth"].get("ports", [])
+          print("trusted:", trusted, "gateway:", gateway, "containers:", containers, "auth ports:", ports)
+          ok = (not any(gateway in n for n in trusted)
+                and all(n.subnet_of(containers) for n in trusted)
+                and all(p.get("host_ip") == "127.0.0.1" for p in ports))
+          sys.exit(0 if ok else 1)'
+          }
+          check -f infra/docker-compose.yml
+          check -f infra/docker-compose.yml -f infra/deploy/compose.prod.yml --env-file infra/deploy/.env.example
 
       - name: Caddyfile
         run: |

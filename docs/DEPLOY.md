@@ -486,7 +486,8 @@ A started service that never becomes ready has no admin who can sign in: set
 address than `https://DOMAIN` (the IP, `www.`): `auth` knows only the redirect URIs of `DOMAIN`.
 
 **After sign-in the browser lands on `http://…` or on a port.** `auth` builds its redirects from Caddy's
-`X-Forwarded-Proto` and `Host`; it trusts them only from private addresses (the compose network). The
+`X-Forwarded-Proto` and `Host`; it trusts them only from the containers of the compose network
+(`AUTH_TRUSTED_PROXIES` = its `ip_range` 172.29.1.0/24; the network gateway is outside it). The
 smoke check «an authorize request without a session goes to https://DOMAIN/auth/login» covers it.
 
 **Every API call returns 401 after a successful login (issuer mismatch).** Services accept only tokens

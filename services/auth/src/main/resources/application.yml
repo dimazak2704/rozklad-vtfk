@@ -36,10 +36,14 @@ spring:
 server:
   port: ${SERVER_PORT:8085}
   shutdown: graceful
-  # схема, хост, порт і IP клієнта — з X-Forwarded-* від nginx/Caddy (RemoteIpValve).
-  # Довірені проксі: SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES (типово — приватні мережі).
+  # схема, хост, порт і IP клієнта — з X-Forwarded-* від nginx/Caddy (RemoteIpValve), але лише від
+  # довірених проксі: AUTH_TRUSTED_PROXIES (CIDR через кому). Типово — тільки loopback; compose ставить
+  # діапазон адрес контейнерів (без шлюзу мережі, через який приходять з'єднання на опубліковані порти),
+  # інакше будь-хто з приватної мережі підставив би собі IP і обійшов блокування входу (DESIGN §4.3)
   forward-headers-strategy: native
   tomcat:
+    remoteip:
+      internal-proxies: ${AUTH_TRUSTED_PROXIES:127.0.0.0/8, ::1/128}
     # Location відносні (/auth/login): переадресації в межах auth не залежать від заголовків проксі
     use-relative-redirects: true
   servlet:

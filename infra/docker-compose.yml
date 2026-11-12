@@ -85,8 +85,8 @@ services:
       retries: 20
 
   # Сервіс входу: OIDC-провайдер (Spring Authorization Server), сторінка входу /auth/login.
-  # Браузер бачить його лише через nginx контейнера web (http://localhost:8088/auth); 8085 опубліковано для
-  # сервісів, запущених на хості. Actuator — на 8086, лише для healthcheck.
+  # Браузер бачить його лише через nginx контейнера web (http://localhost:8088/auth); 8085 опубліковано лише
+  # на 127.0.0.1 для сервісів, запущених на хості. Actuator — на 8086, лише для healthcheck.
   auth:
     <<: *java-service
     build: ../services/auth
@@ -116,10 +116,14 @@ services:
       IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:-dev-importer-secret}
       CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:-dev-core-auth-secret}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      # X-Forwarded-* приймаються лише від контейнерів (nginx web, у prod — Caddy): діапазон ip_range мережі
+      # default нижче. Шлюз мережі (172.29.0.1), через який приходять з'єднання на опубліковані порти, у нього
+      # не входить, тож клієнт з хоста не підставить собі IP для блокування входу
+      AUTH_TRUSTED_PROXIES: 172.29.1.0/24
       JAVA_TOOL_OPTIONS: -Xmx${AUTH_HEAP:-256m}
     mem_limit: ${AUTH_MEM_LIMIT:-512m}
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
     depends_on:
       postgres:
         condition: service_healthy
@@ -285,6 +289,16 @@ services:
         condition: service_started
       auth:
         condition: service_started
+
+# Фіксована мережа: контейнери отримують адреси лише з ip_range, а шлюз лишається поза ним
+# (AUTH_TRUSTED_PROXIES сервісу auth довіряє саме ip_range)
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+          ip_range: 172.29.1.0/24
+          gateway: 172.29.0.1
 
 volumes:
   pgdata:

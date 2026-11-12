@@ -15,6 +15,11 @@ public class Browsers {
         return new Browser("http://127.0.0.1:" + environment.getRequiredProperty("local.server.port"));
     }
 
+    /** A browser that reaches the server at another address of this machine (e.g. its LAN address). */
+    public Browser openAt(String host) {
+        return new Browser("http://" + host + ":" + environment.getRequiredProperty("local.server.port"));
+    }
+
     public Browser open(String clientIp) {
         Browser browser = open();
         browser.forwardedFor(clientIp);
