@@ -2,15 +2,14 @@ import { useBells } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
 import { DayList } from '@/components/schedule';
 import { EmptyState, ErrorState, useErrorCovered } from '@/components/ui';
-import { formatWeekdayDateAfterNa } from '@/lib/date';
 import { MoreLink } from '../MoreLink';
 import { ScheduleSkeleton } from '../schedule/ScheduleSkeleton';
 import { useStalled } from '../useStalled';
-import { useHomeDay } from './useHomeDay';
+import { homeDayWords, useHomeDay } from './useHomeDay';
 import { useRememberedGroup } from './useRememberedGroup';
 
 /**
- * «4КІ1 сьогодні» — розклад групи, яку людина відкривала останньою, одразу на головній. Без рамки:
+ * «4КІ1 сьогодні» (увечері — «4КІ1 завтра») — розклад групи, яку людина відкривала останньою, одразу на головній. Без рамки:
  * рядки лежать на тлі сторінки (одна панель на екран — і на головній її немає взагалі).
  */
 export function LastViewedDay() {
@@ -23,13 +22,14 @@ export function LastViewedDay() {
 
   if (!group || (query.isError && !query.data && covered) || (query.isPending && stall)) return null;
   const day = query.data?.days[0];
-  const when = home.isToday ? 'сьогодні' : `на ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
+  // після останнього дзвінка — уже наступний день: «4КІ1 завтра», «4КІ1 на понеділок, 16 листопада»
+  const { when, dated } = homeDayWords(home);
 
   let body;
   if (day && day.lessons.length > 0) {
     body = <DayList day={day} bells={bells.data?.slots} perspective="group" today={home.today} showHeader={false} />;
   } else if (day) {
-    body = <EmptyState size="sm" title={`У ${group.label} ${when} пар немає.`} className="py-2" />;
+    body = <EmptyState size="sm" title={`У ${group.label} ${when}${dated ? ',' : ''} пар немає.`} className="py-2" />;
   } else if (query.isError) {
     body = (
       <ErrorState

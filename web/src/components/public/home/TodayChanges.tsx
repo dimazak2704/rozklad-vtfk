@@ -3,14 +3,13 @@ import { Link } from 'react-router';
 import { usePublicChanges } from '@/api/public';
 import { ErrorState, Skeleton, useErrorCovered } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatWeekdayDateAfterNa } from '@/lib/date';
-import { countLabel } from '@/lib/labels';
+import { capitalize, countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 import { GroupHint } from '../GroupHint';
 import { MoreLink } from '../MoreLink';
 import { useStalled } from '../useStalled';
 import { isMyGroup } from '../changes/changes-filter';
-import { useHomeDay } from './useHomeDay';
+import { homeDayWords, useHomeDay } from './useHomeDay';
 
 const CHANGE_FORMS = ['заміна', 'заміни', 'замін'] as const;
 const GROUP_FORMS = ['групі', 'групах', 'групах'] as const;
@@ -27,7 +26,10 @@ export function TodayChanges({ className }: { className?: string }) {
   const favorites = useFavoritesStore((state) => state.favorites);
   const recent = useFavoritesStore((state) => state.recent);
   const mine = new Set([...favorites, ...recent].filter((t) => t.type === 'GROUP').map((t) => t.id));
-  const day = home.isToday ? 'Сьогодні' : `На ${formatWeekdayDateAfterNa(home.date).replace(/,.*$/, '')}`;
+  // «Сьогодні» / «Завтра» / «На пʼятницю, 13 листопада,» — після дати з числом речення йде через кому
+  const words = homeDayWords(home);
+  const day = `${capitalize(words.when)}${words.dated ? ',' : ''}`;
+  const onDay = `${words.onDay}${words.dated ? ',' : ''}`;
   const changesLink = home.isToday ? '/changes' : `/changes?date=${home.date}`;
   const stall = useStalled([changes]);
 
@@ -57,7 +59,7 @@ export function TodayChanges({ className }: { className?: string }) {
         {changes.data.order
           ? `${day} замін немає — заняття за розкладом.`
           : changes.data.studyDay
-            ? 'Розпорядження ще не опубліковано. Поки що діє звичайний розклад.'
+            ? `Розпорядження ${onDay} ще не опубліковано. Поки що діє звичайний розклад.`
             : `${day} занять немає.`}
       </p>
     );

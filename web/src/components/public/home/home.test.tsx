@@ -50,7 +50,12 @@ describe('«Усі групи» на головній', () => {
 });
 
 describe('«Заміни» на головній', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('каже реченням, скільки замін, і веде до своєї групи', async () => {
+    // посеред дня: після останнього дзвінка головна вже говорила б про завтра
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
     server.use(
       http.get(apiPath('/public/changes'), () =>
         HttpResponse.json({
