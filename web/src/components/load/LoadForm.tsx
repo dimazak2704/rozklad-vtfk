@@ -11,7 +11,7 @@ import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { ROOM_TYPE_OPTIONS } from '@/components/catalog/labels';
 import { Checkbox, Combobox, Field, NumberInput, Select, Textarea } from '@/components/ui';
-import { track } from '@/lib/undo/actions';
+import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 import { loadRequest } from './request';
 import { CONTROL_FORM_LABEL, LESSON_KIND_OPTIONS } from './labels';
 import { DEFAULT_HOURS_PER_PAIR, formatHours, loadPattern, patternDescription } from './pattern';
@@ -107,24 +107,17 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
    */
   const journalLoad = (before: LoadItem | null, after: LoadItemRequest, saved: LoadItem) => {
     const what = `${saved.group.code} · ${saved.discipline.shortName}`;
-    const invalidate = [qk.admin.load()];
-    if (!before) {
-      let id = saved.id;
-      track({
-        label: `Додано навантаження ${what}`,
-        invalidate,
-        undo: () => remove.mutateAsync(id),
-        redo: async () => {
-          id = (await save.mutateAsync({ body: { ...after, version: undefined } })).id;
-        },
-      });
-      return;
-    }
-    let version = saved.version;
-    const put = async (body: LoadItemRequest) => {
-      version = (await save.mutateAsync({ id: saved.id, body: { ...body, version } })).version;
-    };
-    track({ label: `Змінено навантаження ${what}`, invalidate, undo: () => put(loadRequest(before)), redo: () => put(after) });
+    trackSavedRecord<LoadItemRequest>({
+      kind: 'load',
+      label: before ? `Змінено навантаження ${what}` : `Додано навантаження ${what}`,
+      invalidate: [qk.admin.load()],
+      before: before ? loadRequest(before) : null,
+      after,
+      saved,
+      create: (body) => save.mutateAsync({ body }),
+      update: (id, body) => save.mutateAsync({ id, body }),
+      remove: (id) => remove.mutateAsync(id),
+    });
   };
 
   const submit = form.handleSubmit(async (values) => {
@@ -148,6 +141,7 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
         note: blankToNull(values.note),
         version: item?.version,
       };
+      if (skipUnchanged(item ? loadRequest(item) : null, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: item?.id, body });
       journalLoad(item, body, saved);
       onOpenChange(false);

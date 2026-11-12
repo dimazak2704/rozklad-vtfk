@@ -50,9 +50,11 @@ export function DepartmentFormDialog({ item, open, onOpenChange }: DialogProps<C
         version: item?.version,
       });
       const body = toBody(values);
+      const before = item ? toBody(item) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: item?.id, body });
       journal.saved({
-        before: item ? toBody(item) : null,
+        before,
         after: body,
         saved,
         label: item ? `Змінено відділення «${saved.name}»` : `Додано відділення «${saved.name}»`,
@@ -128,9 +130,11 @@ export function SpecialtyFormDialog({ item, open, onOpenChange }: DialogProps<Ca
         version: item?.version,
       });
       const body = toBody(values);
+      const before = item ? toBody(item) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: item?.id, body });
       journal.saved({
-        before: item ? toBody(item) : null,
+        before,
         after: body,
         saved,
         label: item ? `Змінено спеціальність ${saved.letters}` : `Додано спеціальність ${saved.letters}`,
@@ -216,9 +220,11 @@ export function NamedFormDialog({ entity, item, open, onOpenChange }: NamedDialo
     setFormError(null);
     try {
       const body: NameRequest = { name: values.name.trim(), version: item?.version };
+      const before = item ? { name: item.name, version: item.version } : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: item?.id, body });
       journal.saved({
-        before: item ? { name: item.name, version: item.version } : null,
+        before,
         after: body,
         saved,
         label: item ? text.saved(saved.name) : text.added(saved.name),

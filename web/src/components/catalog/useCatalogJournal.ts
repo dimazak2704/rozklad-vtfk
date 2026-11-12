@@ -1,6 +1,6 @@
 import { useDeleteCatalogItem, useSaveCatalogItem, type CatalogEntity, type CatalogRequest, type CatalogRow } from '@/api/catalog';
 import { qk } from '@/api/queryKeys';
-import { track } from '@/lib/undo/actions';
+import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 
 export interface SavedInput<E extends CatalogEntity> {
   /** Тіло запиту до правки (null — запис створено). Збирається тим самим кодом, що й тіло правки. */
@@ -13,38 +13,31 @@ export interface SavedInput<E extends CatalogEntity> {
   label: string;
 }
 
-const withVersion = <B,>(body: B, version: number | undefined): B => ({ ...body, version });
-
 /**
  * Журнал для довідників: створення скасовується видаленням (повтор створює запис знову, з новим id),
- * правка — поверненням попереднього тіла з версією, яку дав сервер після правки. Якщо хтось змінив
- * запис після вас, сервер відповість 409, і журнал скаже про це, а не перезапише чужу правку.
+ * правка — поверненням попереднього тіла з версією, яку дав сервер після правки. Усі дії над одним
+ * записом ділять його поточний id і версію (`lib/undo/records`), тож повтор створення не ламає
+ * подальші правки. Якщо хтось змінив запис після вас, сервер відповість 409, і журнал скаже про це.
  */
 export function useCatalogJournal<E extends CatalogEntity>(entity: E) {
   const save = useSaveCatalogItem(entity);
   const remove = useDeleteCatalogItem(entity);
-  const invalidate = [qk.admin.catalog.all];
 
   return {
+    /** Правку збережено без змін — закрити форму без запиту й без запису в журналі (див. `skipUnchanged`). */
+    skipUnchanged: (before: CatalogRequest<E> | null, after: CatalogRequest<E>, close: () => void) => skipUnchanged(before, after, close),
     saved({ before, after, saved, label }: SavedInput<E>) {
-      if (before === null) {
-        let id = saved.id;
-        return track({
-          label,
-          invalidate,
-          undo: () => remove.mutateAsync(id),
-          redo: async () => {
-            const again = await save.mutateAsync({ body: withVersion(after, undefined) });
-            id = again.id;
-          },
-        });
-      }
-      let version = saved.version;
-      const put = async (body: CatalogRequest<E>) => {
-        const result = await save.mutateAsync({ id: saved.id, body: withVersion(body, version) });
-        version = result.version;
-      };
-      return track({ label, invalidate, undo: () => put(before), redo: () => put(after) });
+      return trackSavedRecord<CatalogRequest<E>>({
+        kind: entity,
+        label,
+        invalidate: [qk.admin.catalog.all],
+        before,
+        after,
+        saved,
+        create: (body) => save.mutateAsync({ body }),
+        update: (id, body) => save.mutateAsync({ id, body }),
+        remove: (id) => remove.mutateAsync(id),
+      });
     },
   };
 }

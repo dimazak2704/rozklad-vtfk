@@ -9,6 +9,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { queryClient } from '@/api/queryClient';
 import { notify } from '@/components/ui/toast';
+import { JournalBlockedError } from './errors';
 import { useJournal, type JournalEntry, type RecordInput, type UndoOutcome } from './journal';
 
 export interface TrackInput extends RecordInput {
@@ -57,15 +58,17 @@ function report(outcome: UndoOutcome, direction: 'undo' | 'redo'): UndoOutcome {
     case 'ok': {
       const { entry } = outcome;
       if (direction === 'redo') {
-        notify.undo(`Повернуто: ${lowerFirst(entry.label)}`, { id: entry.id, onUndo: () => void undoEntry(entry.id) });
+        notify.undo(`Повернуто: ${lowerFirst(entry.label)}`, { id: entry.id, description: undefined, onUndo: () => void undoEntry(entry.id) });
       } else if (entry.canRedo) {
         notify.undo(`Скасовано: ${lowerFirst(entry.label)}`, {
           id: entry.id,
+          // тост з тим самим id лишав би опис попереднього («Спершу збережіть…»)
+          description: undefined,
           undoLabel: 'Повернути',
           onUndo: () => void redoEntry(entry.id),
         });
       } else {
-        notify.info(`Скасовано: ${lowerFirst(entry.label)}`, { id: entry.id });
+        notify.info(`Скасовано: ${lowerFirst(entry.label)}`, { id: entry.id, description: undefined });
       }
       return outcome;
     }
@@ -73,7 +76,9 @@ function report(outcome: UndoOutcome, direction: 'undo' | 'redo'): UndoOutcome {
       const { entry } = outcome;
       refresh(entry);
       const title = direction === 'undo' ? `Не скасовано: ${lowerFirst(entry.label)}` : `Не повернуто: ${lowerFirst(entry.label)}`;
-      if (entry.status === 'failed' || (direction === 'redo' && entry.status === 'undone')) {
+      // журнал сам зупинив дію (незбережена форма) — це підказка, а не збій
+      const blocked = outcome.error instanceof JournalBlockedError;
+      if (!blocked && (entry.status === 'failed' || (direction === 'redo' && entry.status === 'undone'))) {
         notify.error(title, undefined, { id: entry.id, description: entry.reason });
       } else {
         notify.warning(title, { id: entry.id, description: entry.reason });

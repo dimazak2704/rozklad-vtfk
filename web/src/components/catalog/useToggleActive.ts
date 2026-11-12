@@ -1,6 +1,7 @@
 import { useSaveCatalogItem, type CatalogRequest, type CatalogRow } from '@/api/catalog';
 import { qk } from '@/api/queryKeys';
 import { track } from '@/lib/undo/actions';
+import { assertPresent, recordRef } from '@/lib/undo/records';
 
 type Toggleable = 'rooms' | 'disciplines' | 'teachers' | 'groups';
 
@@ -19,10 +20,12 @@ export function useToggleActive<E extends Toggleable>(
   return async (row: CatalogRow<E>) => {
     const next = !row.active;
     const updated = await save.mutateAsync({ id: row.id, body: toRequest(row, { active: next }) });
-    let version = updated.version;
+    // id і версія — спільні з іншими діями журналу над цим записом
+    const ref = recordRef(entity, row.id, updated.version);
     const put = async (active: boolean) => {
-      const result = await save.mutateAsync({ id: row.id, body: toRequest(updated, { active, version }) });
-      version = result.version;
+      assertPresent(ref);
+      const result = await save.mutateAsync({ id: ref.id, body: toRequest(updated, { active, version: ref.version }) });
+      ref.version = result.version;
     };
     track({
       label: message(row, next),

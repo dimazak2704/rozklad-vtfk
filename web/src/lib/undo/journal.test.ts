@@ -111,6 +111,17 @@ describe('журнал дій', () => {
     expect(latestRedoable(journal(), '/admin/catalog/rooms')?.id).toBe(entry.id);
   });
 
+  it('запамʼятовує, що не вдалося — скасування чи повтор', async () => {
+    const entry = journal().record({
+      label: 'a',
+      undo: vi.fn().mockResolvedValue(undefined),
+      redo: vi.fn().mockRejectedValue(new ApiError({ status: 404 })),
+    });
+    await journal().undo(entry.id);
+    await journal().redo(entry.id);
+    expect(journal().entries[0]).toMatchObject({ status: 'stale', failedOn: 'redo' });
+  });
+
   it('поки одна дія скасовується, друга чекає', async () => {
     let release = () => {};
     const slow = vi.fn(() => new Promise<void>((resolve) => (release = resolve)));

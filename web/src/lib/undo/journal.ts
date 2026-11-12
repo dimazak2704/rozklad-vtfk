@@ -43,6 +43,8 @@ export interface JournalEntry {
   status: JournalStatus;
   /** Чому не скасовано / чому не можна. */
   reason?: string;
+  /** Що саме не вдалося: скасування чи повтор («Не скасовано» / «Не повернуто»). */
+  failedOn?: 'undo' | 'redo';
   /** Наслідок поза системою: «Викладач отримав повідомлення в Telegram». */
   note?: string;
   canUndo: boolean;
@@ -144,7 +146,7 @@ export const useJournal = create<JournalState>()(
     if (get().busy) return { kind: 'busy' };
     set({ busy: true });
     const previous = entry.status;
-    patch(id, { status: 'pending', reason: undefined });
+    patch(id, { status: 'pending', reason: undefined, failedOn: undefined });
     try {
       await fn();
       set((state) => {
@@ -158,8 +160,8 @@ export const useJournal = create<JournalState>()(
     } catch (error) {
       const verdict = classifyUndoError(error);
       // невдалий повтор лишає дію скасованою: стан на сервері не змінився
-      if (direction === 'redo' && verdict.status === 'failed') patch(id, { status: previous, reason: verdict.reason });
-      else patch(id, { status: verdict.status, reason: verdict.reason });
+      if (direction === 'redo' && verdict.status === 'failed') patch(id, { status: previous, reason: verdict.reason, failedOn: direction });
+      else patch(id, { status: verdict.status, reason: verdict.reason, failedOn: direction });
       if (verdict.status !== 'failed') {
         set((state) => ({
           redoStacks: { ...state.redoStacks, [entry.scope]: (state.redoStacks[entry.scope] ?? []).filter((x) => x !== id) },

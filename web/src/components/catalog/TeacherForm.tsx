@@ -101,9 +101,11 @@ export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDi
     setFormError(null);
     try {
       const body = toBody(values);
+      const before = teacher ? toBody(defaults) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: teacher?.id, body });
       journal.saved({
-        before: teacher ? toBody(defaults) : null,
+        before,
         after: body,
         saved,
         label: teacher ? `Змінено дані викладача ${saved.shortName}` : `Додано викладача ${saved.shortName}`,

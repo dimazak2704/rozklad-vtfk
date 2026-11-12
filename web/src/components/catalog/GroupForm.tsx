@@ -83,9 +83,11 @@ export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogPr
     setFormError(null);
     try {
       const body = toBody(values);
+      const before = group ? toBody(defaults) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: group?.id, body });
       journal.saved({
-        before: group ? toBody(defaults) : null,
+        before,
         after: body,
         saved,
         label: group ? `Змінено групу ${saved.code}` : `Додано групу ${saved.code}`,

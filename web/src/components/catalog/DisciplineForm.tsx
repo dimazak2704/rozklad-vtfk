@@ -52,9 +52,11 @@ export function DisciplineFormDialog({ discipline, open, onOpenChange }: Discipl
     setFormError(null);
     try {
       const body = toBody(values);
+      const before = discipline ? toBody(defaults) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: discipline?.id, body });
       journal.saved({
-        before: discipline ? toBody(defaults) : null,
+        before,
         after: body,
         saved,
         label: discipline ? `Змінено дисципліну ${saved.shortName}` : `Додано дисципліну ${saved.shortName}`,

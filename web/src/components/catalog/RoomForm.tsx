@@ -66,9 +66,11 @@ export function RoomFormDialog({ room, open, onOpenChange }: RoomFormDialogProps
     setFormError(null);
     try {
       const body = toBody(values);
+      const before = room ? toBody(defaults) : null;
+      if (journal.skipUnchanged(before, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: room?.id, body });
       journal.saved({
-        before: room ? toBody(defaults) : null,
+        before,
         after: body,
         saved,
         label: room ? `Змінено аудиторію ${saved.name}` : `Додано аудиторію ${saved.name}`,

@@ -11,7 +11,7 @@ import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
-import { track } from '@/lib/undo/actions';
+import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 import { PERIOD_KIND_EFFECT, PERIOD_KIND_OPTIONS, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
 import { DateInput } from './DateInput';
 import { composeOrderNote } from './notes';
@@ -96,24 +96,17 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
 
   /** Період — у журнал дій: доданий скасовує видалення, змінений — попередні значення з новою версією. */
   const journalPeriod = (before: CalendarPeriod | null, after: CalendarPeriodRequest, saved: CalendarPeriod) => {
-    const invalidate = [qk.admin.calendar.all];
-    if (!before) {
-      let id = saved.id;
-      track({
-        label: `Додано період «${saved.title}»`,
-        invalidate,
-        undo: () => remove.mutateAsync(id),
-        redo: async () => {
-          id = (await save.mutateAsync({ body: { ...after, version: undefined } })).id;
-        },
-      });
-      return;
-    }
-    let version = saved.version;
-    const put = async (body: CalendarPeriodRequest) => {
-      version = (await save.mutateAsync({ id: saved.id, body: { ...body, version } })).version;
-    };
-    track({ label: `Змінено період «${saved.title}»`, invalidate, undo: () => put(periodRequest(before)), redo: () => put(after) });
+    trackSavedRecord<CalendarPeriodRequest>({
+      kind: 'periods',
+      label: before ? `Змінено період «${saved.title}»` : `Додано період «${saved.title}»`,
+      invalidate: [qk.admin.calendar.all],
+      before: before ? periodRequest(before) : null,
+      after,
+      saved,
+      create: (body) => save.mutateAsync({ body }),
+      update: (id, body) => save.mutateAsync({ id, body }),
+      remove: (id) => remove.mutateAsync(id),
+    });
   };
 
   const submit = form.handleSubmit(async (data) => {
@@ -132,6 +125,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
         orderNote: blankToNull(data.orderNote),
         version: period?.version,
       };
+      if (skipUnchanged(period ? periodRequest(period) : null, body, () => onOpenChange(false))) return;
       const saved = await save.mutateAsync({ id: period?.id, body });
       journalPeriod(period, body, saved);
       onOpenChange(false);
