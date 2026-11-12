@@ -114,13 +114,15 @@ export const LessonChip = memo(function LessonChip({
           {...lineAttr(lesson.discipline)}
           className={cn(
             'group/chip @container relative flex min-h-0 min-w-0 flex-col justify-center gap-0.5 overflow-hidden rounded-tag border px-1.5 text-start',
-            'transition-[background-color,border-color,opacity] duration-100 ease-out',
+            'transition-[background-color,border-color,opacity] duration-150 ease-out',
             'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-focus',
             oneLine ? 'py-0.5' : 'py-1',
             editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+            // у спокої пара — текст на клітинці без власної рамки (межі вже дає сітка); половинки підгрупи тримають
+            // волосяну лінію, щоб «Інф. | Інф.» не злились. Наведення — нейтральне тоновання, колір несе лише крапка
             hasHard
               ? 'border-danger bg-danger-subtle'
-              : 'border-separator bg-surface hover:border-default hover:bg-[var(--line-tint)]',
+              : cn('bg-surface', !selected && 'hover:border-default hover:bg-hover', narrow ? 'border-separator' : 'border-transparent'),
             selected && 'border-[var(--border-color-accent)] bg-selected ring-1 ring-[var(--border-color-accent)] ring-inset',
             travelling && 'border-dashed border-[var(--border-color-strong)] bg-sunken opacity-45',
             landed && 'motion-safe:animate-[live-flash_1.4s_var(--ease-out)]',
@@ -128,7 +130,13 @@ export const LessonChip = memo(function LessonChip({
         >
           <span className="flex min-w-0 items-center gap-1">
             {/* у вузькій половинці підгрупи крапку дисципліни ховаємо: місце — назві («Ін.мов.», а не «Ін.мо…») */}
-            <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full bg-[var(--line-dot)]', narrow && 'hidden @[5.5rem]:block')} />
+            <span
+              aria-hidden="true"
+              className={cn(
+                'size-1.5 shrink-0 rounded-full bg-[var(--line-dot)] transition-transform duration-150 ease-out motion-reduce:transition-none pointer-fine:group-hover/chip:scale-125',
+                narrow && 'hidden @[5.5rem]:block',
+              )}
+            />
             {/* у половинці назва стискається останньою: спершу ховається викладач/аудиторія */}
             <span
               className={cn(

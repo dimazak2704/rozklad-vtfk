@@ -125,7 +125,12 @@ export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWa
             .
           </>
         ) : (
-          <span>{publishable ? 'Конфліктів немає — версію можна публікувати.' : 'Конфліктів немає.'}</span>
+          // попередження (вікна, рвані дні) лишаються в панелі «Конфлікти», тож тут кажемо саме про жорсткі —
+          // інакше «Конфліктів немає» поруч із «Попередження · 160» звучить як суперечність
+          <span>
+            {softWarnings ? 'Жорстких конфліктів немає' : 'Конфліктів немає'}
+            {publishable ? ' — версію можна публікувати.' : '.'}
+          </span>
         )}
         {recentKeys.length > 0 ? (
           <span key={JSON.stringify(recent)} className="ms-2 inline-flex flex-wrap items-center gap-2 text-caption motion-safe:animate-[fade-in_200ms_var(--ease-out)]">
