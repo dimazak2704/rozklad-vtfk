@@ -1,11 +1,11 @@
 import { act, render, renderHook, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LessonView, ScheduleDto } from '@/api/types';
-import { DEMO_WEEK } from '@/pages/dev/demo-data';
+import { BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
 import { renderWithProviders } from '@/test/render';
 import { LessonCell } from './LessonCell';
 import { LessonDetails } from './LessonDetails';
-import { Countdown } from './NowIndicator';
+import { Countdown, NowIndicator } from './NowIndicator';
 import { segmentHint } from './track-hint';
 import { ARRIVAL_MS, useArrivedChanges } from './useArrivedChanges';
 import { enterKeyframes, navEnter, SKELETON_DELAY_MS, useNavTransition, type NavKey } from './useNavTransition';
@@ -199,6 +199,22 @@ describe('Деталі при наведенні', () => {
     expect(segmentHint(slot, 'past')).toBe('3 пара · 11:00–12:00 · минула');
     expect(segmentHint(slot, 'future')).toBe('3 пара · 11:00–12:00');
     expect(segmentHint(slot, 'future', true)).toBe('3 пара · 11:00–12:00 · пари немає');
+    // вікно в минулому — не «минула»: пари не було, а не вона відбулася
+    expect(segmentHint(slot, 'past', true)).toBe('3 пара · 11:00–12:00 · пари не було');
+    // вікно, що триває, — теж не «іде зараз»
+    expect(segmentHint(slot, 'current', true)).toBe('3 пара · 11:00–12:00 · пари немає');
+  });
+
+  it('головна з запамʼятованою групою: доріжка загальна, а пари, якої в групи не було, — порожня пунктирна смуга', () => {
+    // 4КІ1 без першої пари; зараз 10:00, тобто 2 пара (09:40–10:40)
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} groupPairs={[2, 3]} at={10 * 60} variant="strip" />);
+    const segments = [...document.querySelectorAll<HTMLElement>('[data-track-segment] > span')];
+    // відлік і доріжка — за дзвінками коледжу: усі пари дня, а не лише пари групи
+    expect(segments).toHaveLength(BELLS_MON_THU.length);
+    expect(segments[0]!.className).toMatch(/border-dashed/);
+    expect(segments[0]!.className).not.toMatch(/fill-track-past/);
+    expect(segments[1]!.className).toMatch(/bg-selected/);
+    expect(segments[2]!.className).not.toMatch(/border-dashed/);
   });
 
   it('картка заняття: повна назва, хто, де, коли, що було й чому — без повтору «ауд. · аудиторія»', () => {

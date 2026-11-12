@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useBells, usePublicMeta } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
 import type { DayDto, IsoDate, LessonView } from '@/api/types';
+import { activePairs } from '@/components/public/schedule/schedule-utils';
 import { NowIndicator } from '@/components/schedule';
 import { ErrorState, ParityBadge, Skeleton, useErrorCovered } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
@@ -182,6 +183,7 @@ export function NowPanel({ className }: { className?: string }) {
     <NowIndicator
       variant="hero"
       bells={studyToday ? (slots ?? []) : []}
+      groupPairs={group && groupToday ? activePairs(groupToday) : undefined}
       date={data.today}
       dateLine={dateLine}
       aside={aside}
