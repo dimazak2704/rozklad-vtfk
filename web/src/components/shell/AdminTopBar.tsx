@@ -26,14 +26,14 @@ export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
   const { pathname } = useLocation();
   const dated = routeForPath(pathname)?.usesWorkingDate === true;
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-separator bg-canvas px-2 sm:gap-3 sm:px-4 lg:h-16 lg:px-8 xl:px-10">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-1 border-b border-separator bg-canvas px-2 sm:gap-3 sm:px-4 lg:h-16 lg:px-8 xl:px-10">
       <div className="flex shrink-0 items-center lg:hidden">
         <IconButton label="Меню розділів" icon={<Menu aria-hidden="true" className="size-5" />} size="lg" onClick={onOpenMenu} />
         <Wordmark to="/admin" compact className={cn(dated ? 'hidden sm:inline-flex' : 'inline-flex', 'px-1.5')} />
       </div>
       {dated ? <WorkingDateSwitcher /> : null}
-      <div className="ms-auto flex shrink-0 items-center gap-1 sm:gap-2">
-        {/* стан звʼязку — у власному слоті: зʼявившись, він не стискає дату */}
+      <div className="ms-auto flex shrink-0 items-center sm:gap-2">
+        {/* стан звʼязку — у власному слоті; на телефоні це крапка-кнопка 44 px, і дата поруч лишається цілою */}
         <LiveStatus state={live} className="shrink-0" />
         <IconButton
           label="Пошук і команди"

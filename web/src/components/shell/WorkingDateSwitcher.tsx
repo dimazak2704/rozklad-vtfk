@@ -1,17 +1,9 @@
 import { usePublicMeta } from '@/api/meta';
 import type { IsoDate, WeekParity } from '@/api/types';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
-import { diffDays, isoWeekday, shiftStudyDay, startOfWeek } from '@/lib/date';
-import { capitalize, weekdayName } from '@/lib/labels';
+import { diffDays, startOfWeek } from '@/lib/date';
 import { DateNav } from '../ui/DateNav';
 import { ParityBadge } from '../ui/ParityBadge';
-import { SegmentedControl } from '../ui/SegmentedControl';
-
-type Quick = 'today' | 'next' | 'other';
-
-/** ≥1024 px: поруч із датою стоїть «Сьогодні | Завтра», тож сама мітка дати — без відносного слова. */
-const WIDE = '(min-width: 1024px)';
 
 /**
  * Парність і номер тижня для робочої дати від сьогоднішніх з /public/meta: тижні чергуються.
@@ -50,46 +42,17 @@ function WorkingParity({ date }: { date: IsoDate }) {
 }
 
 /**
- * Перемикач робочої дати диспетчера: «Сьогодні | Завтра» і будь-яка дата з календаря.
- * У пʼятницю й на вихідних друга кнопка — найближчий навчальний день («Понеділок»).
- * Для іншої дати жоден сегмент не вибраний. Дата живе в `?date=` — посиланням можна поділитися з колегою.
+ * Перемикач робочої дати диспетчера — один контрол замість двох: ‹ [Сьогодні · чт, 12 листопада] ›.
+ * Стрілки перескакують вихідні (з пʼятниці › веде в понеділок), мітка відкриває календар, а кнопка
+ * «Сьогодні» зʼявляється лише тоді, коли вибрано інший день. Дата живе в `?date=` — посиланням можна
+ * поділитися з колегою.
  */
 export function WorkingDateSwitcher() {
   const { date, today, setDate } = useWorkingDate();
-  const next = shiftStudyDay(today, 1);
-  const nextLabel = diffDays(today, next) === 1 ? 'Завтра' : capitalize(weekdayName(isoWeekday(next)));
-  const quick: Quick = date === today ? 'today' : date === next ? 'next' : 'other';
-  const wide = useMediaQuery(WIDE, true);
 
   return (
     <div className="flex min-w-0 items-center gap-2 lg:gap-3">
-      <SegmentedControl<Quick>
-        aria-label="Робоча дата"
-        value={quick}
-        onValueChange={(value) => {
-          if (value === 'today') setDate(null);
-          if (value === 'next') setDate(next);
-        }}
-        options={[
-          { value: 'today', label: 'Сьогодні' },
-          { value: 'next', label: nextLabel },
-        ]}
-        className="hidden shrink-0 lg:inline-flex"
-      />
-      {/*
-        «Сьогодні» — лише одним словом на екрані: на широкому його несе перемикач, а мітка між стрілками —
-        абсолютна дата «нд, 8 листопада»; на вужчому перемикача немає, тож мітка відносна, а для іншої дати
-        зʼявляється кнопка «Сьогодні».
-      */}
-      <DateNav
-        value={date}
-        onChange={(value) => setDate(value)}
-        today={today}
-        size="sm"
-        hotkeys
-        showRelative={!wide}
-        showTodayButton={!wide}
-      />
+      <DateNav value={date} onChange={(value) => setDate(value === today ? null : value)} today={today} size="sm" hotkeys />
       <WorkingParity date={date} />
     </div>
   );
