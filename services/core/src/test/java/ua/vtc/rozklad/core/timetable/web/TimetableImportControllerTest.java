@@ -54,7 +54,7 @@ class TimetableImportControllerTest {
         given(imports.importTimetable(any(), any())).willReturn(new ImportTimetableResult(VERSION, "Розклад 2025/26 (Excel)",
                 1, 0, 0));
 
-        mockMvc.perform(post("/api/admin/import/timetable").with(TestJwts.service())
+        mockMvc.perform(post("/api/admin/import/timetable").with(TestJwts.importerService())
                         .header("Idempotency-Key", "import-job:42:timetable")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isCreated())
@@ -64,6 +64,16 @@ class TimetableImportControllerTest {
         verify(imports).importTimetable(new ImportTimetableCommand(SEMESTER, "Розклад 2025/26 (Excel)", List.of(
                 new ImportTimetableCommand.Lesson(1, 2, Parity.BOTH, "4КІ1", 0, "СТП", "Кренцін М.Д.", "6", false))),
                 "import-job:42:timetable");
+    }
+
+    /** Least privilege: the bot's account cannot import a timetable. */
+    @Test
+    void notificationServiceAccountCannotImport() throws Exception {
+        mockMvc.perform(post("/api/admin/import/timetable").with(TestJwts.service())
+                        .header("Idempotency-Key", "import-job:42:timetable")
+                        .contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isForbidden());
+        verify(imports, never()).importTimetable(any(), any());
     }
 
     @Test

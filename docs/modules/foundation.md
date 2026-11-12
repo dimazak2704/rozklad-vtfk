@@ -88,7 +88,8 @@ each user can connect only to its own database. Superuser `postgres` / `postgres
 ## 4. Sign-in service `auth`
 
 Issuer `http://localhost:8088/auth` (nginx of the `web` container); containers fetch keys from
-`http://auth:8085/auth/oauth2/jwks` (`AUTH_JWKS_URI`). Roles: `ADMIN`, `TEACHER`, `SERVICE`. Clients,
+`http://auth:8085/auth/oauth2/jwks` (`AUTH_JWKS_URI`). Roles: `ADMIN`, `TEACHER`, `SERVICE` (+ `SERVICE_NOTIFICATION`,
+`SERVICE_IMPORTER`). Clients,
 token claims, seeds and the internal API: `docs/modules/auth.md`.
 
 | User | Role | Fixed id (`sub`) |
@@ -120,8 +121,9 @@ curl -s -u rozklad-notification:dev-notification-secret -d grant_type=client_cre
   The flat `roles` claim → `ROLE_<NAME>` (`TokenRoles`).
 * Deny by default (`anyRequest().denyAll()`); `ASYNC`/`ERROR` dispatches are permitted (SSE, error
   pages). Health/info and OpenAPI are open (`API_DOCS_ENABLED=false` hides the docs).
-* core: `/api/public/**` open; `/api/admin/import/**` ADMIN or SERVICE; `/api/admin/**` ADMIN;
-  `/api/me`, `/api/me/**` TEACHER or ADMIN; `/api/internal/**` SERVICE; `/api/events/stream` ADMIN or
+* core: `/api/public/**` open; `/api/admin/import/**` ADMIN or SERVICE_IMPORTER; `/api/admin/**` ADMIN;
+  `/api/me`, `/api/me/**` TEACHER or ADMIN; `/api/internal/changes|absences|teachers` SERVICE_NOTIFICATION,
+  `/api/internal/catalog/**` SERVICE_IMPORTER, other `/api/internal/**` denied; `/api/events/stream` ADMIN or
   TEACHER; other actuator endpoints ADMIN.
 * importer: `POST /api/import/ai/parse-absence` ADMIN or SERVICE, other `/api/import/**` ADMIN.
 * notification: `GET /api/documents/orders/*` open (serve only PUBLISHED orders!),
@@ -294,7 +296,7 @@ reconnects) · `messaging.*` (topology, outbox config, ProcessedEvents) · `AppP
   containers), `@CoreJpaTest` (JPA slice on real PostgreSQL with Flyway, auditing, Jackson),
   `TestcontainersConfiguration` (postgres:18-alpine, rabbitmq:4.4-management-alpine, redis:8.8-alpine
   via `@ServiceConnection`), `WebSliceTestConfiguration` for `@WebMvcTest` (+ `@MockitoBean JwtDecoder`),
-  `TestJwts.admin()/teacher()/service()` (MockMvc tokens with the demo user ids),
+  `TestJwts.admin()/teacher()/service()/importerService()` (MockMvc tokens with the demo user ids; `service()` is the bot),
   `ConsumerQueuesConfiguration` (part of `@CoreIntegrationTest`: a one-message queue bound to `#` stands in for
   the consumer queues, since core publishes `mandatory`). `OutboxRedeliveryIT` has its own context with RabbitMQ
   on a fixed host port: it stops and starts the broker and checks FAILED → re-delivered → COMPLETED.

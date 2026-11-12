@@ -169,18 +169,20 @@ Sign-in service `auth` (`services/auth`, details in `docs/modules/auth.md`):
   `http://auth:8085/auth/oauth2/jwks` (`AUTH_JWKS_URI`), so resource servers configure the JWKS URI and
   validate `iss` against `AUTH_ISSUER` explicitly (custom `JwtDecoder` with
   `JwtValidators.createDefaultWithIssuer`) plus `aud` ∋ `AUTH_AUDIENCE` (`rozklad-api`).
-- Roles: `ADMIN` (dispatcher / deputy director), `TEACHER`, `SERVICE`, in the flat `roles` claim;
+- Roles: `ADMIN` (dispatcher / deputy director), `TEACHER`, `SERVICE` (+ the service's own `SERVICE_NOTIFICATION` or
+  `SERVICE_IMPORTER`), in the flat `roles` claim;
   `TokenRoles` maps them to `ROLE_<NAME>` authorities. `sub` is the account UUID, `preferred_username` the
   actor name (`service-account-<client>` for services).
 - Clients: `rozklad-web` (public, PKCE S256, redirect `<origin>/login/callback` and
   `<origin>/login/silent.html` for 5180, 5181 and 8088 in development), `rozklad-cli` (public, loopback,
-  development only), `rozklad-notification` and `rozklad-importer` (`client_credentials`, role `SERVICE`),
+  development only), `rozklad-notification` and `rozklad-importer` (`client_credentials`, roles `SERVICE` + `SERVICE_NOTIFICATION` / `SERVICE_IMPORTER`),
   `rozklad-core` (`client_credentials`, scope `accounts.manage` for the internal accounts API).
 - The SPA has no refresh token: it renews in a hidden iframe with `prompt=none` while the sign-in session lives.
 - Demo users (development, fixed ids so core can link teachers): `admin` (ADMIN), `krentsin` and
   `nepyivoda` (TEACHER); passwords in `infra/dev/demo-users.env`.
 - Authorization: `/api/public/**` permitAll; `/api/admin/**` → ADMIN; `/api/me/**` → TEACHER or ADMIN;
-  `/api/internal/**` → SERVICE; actuator health permitAll. Ownership: a teacher may read/modify only
+  `/api/internal/**` → the calling service's own role (bot endpoints SERVICE_NOTIFICATION, catalog snapshot
+  SERVICE_IMPORTER, the rest denied); `/api/admin/import/**` → ADMIN or SERVICE_IMPORTER; actuator health permitAll. Ownership: a teacher may read/modify only
   their own absences, preferences and assigned changes (checked in services, not only by role).
 - Registration = invite: admin creates a teacher → `POST /api/admin/invites` → link `/invite/{token}`
   → teacher sets username/password → core creates or updates the account in `auth` through the internal

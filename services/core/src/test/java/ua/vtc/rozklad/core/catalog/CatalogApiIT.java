@@ -180,7 +180,7 @@ class CatalogApiIT {
                               {"type": "DISCIPLINE", "alias": "Вс.спц.", "target": "Вст.спц."}]
                 }""";
 
-        mvc.perform(post("/api/admin/import/catalog").with(TestJwts.service())
+        mvc.perform(post("/api/admin/import/catalog").with(TestJwts.importerService())
                         .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.created").value(16))

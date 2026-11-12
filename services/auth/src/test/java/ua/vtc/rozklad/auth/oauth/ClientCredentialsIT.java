@@ -34,10 +34,21 @@ class ClientCredentialsIT {
 
         assertThat(claims.path("sub").asString()).isEqualTo("rozklad-notification");
         assertThat(claims.path("preferred_username").asString()).isEqualTo("service-account-rozklad-notification");
-        assertThat(claims.path("roles").valueStream().map(JsonNode::asString).toList()).containsExactly("SERVICE");
+        assertThat(claims.path("roles").valueStream().map(JsonNode::asString).toList())
+                .containsExactlyInAnyOrder("SERVICE", "SERVICE_NOTIFICATION");
         assertThat(claims.path("aud").valueStream().map(JsonNode::asString).toList())
                 .containsExactlyInAnyOrder("rozklad-notification", "rozklad-api");
         assertThat(claims.path("exp").asLong() - claims.path("iat").asLong()).isEqualTo(300);
+    }
+
+    /** Each service has its own role besides SERVICE, so core can tell the importer from the bot. */
+    @Test
+    void importerGetsItsOwnRoleAndNotTheBots() {
+        JsonNode claims = OidcClient.jwtPart(token("rozklad-importer", AuthIntegrationTest.IMPORTER_SECRET, null), 1);
+
+        assertThat(claims.path("sub").asString()).isEqualTo("rozklad-importer");
+        assertThat(claims.path("roles").valueStream().map(JsonNode::asString).toList())
+                .containsExactlyInAnyOrder("SERVICE", "SERVICE_IMPORTER");
     }
 
     @Test

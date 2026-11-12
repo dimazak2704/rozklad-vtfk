@@ -28,7 +28,7 @@ Every protected call carries `Authorization: Bearer <access token>` issued by `a
 | `iss` | the one issuer of the environment: `http://localhost:8088/auth` (development), `https://<DOMAIN>/auth` (server) |
 | `aud` | contains `rozklad-api` (every resource server checks it) |
 | `sub` | the account id (UUID) for people; the client id for services |
-| `roles` | flat list of `ADMIN`, `TEACHER`, `SERVICE` → authorities `ROLE_<NAME>` |
+| `roles` | flat list of `ADMIN`, `TEACHER`, `SERVICE` → authorities `ROLE_<NAME>`; a service token also has its own role: `SERVICE_NOTIFICATION` (`rozklad-notification`), `SERVICE_IMPORTER` (`rozklad-importer`) |
 | `preferred_username` | the username (else the e-mail) for people; `service-account-<client_id>` for services; written to the actor columns |
 
 Keys: `<issuer>/oauth2/jwks` (RS256, `kid` in the header). Service tokens: `client_credentials` at
@@ -130,7 +130,7 @@ displayName?, roles, teacherId?}` → 201, `PATCH /{accountId}`, `POST /{account
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
 `GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
 
-Import apply (role ADMIN or SERVICE): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
+Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
 `POST /api/admin/import/timetable` `{semesterId, name, lessons:[{weekday,pair,parity,groupCode,subgroup,disciplineShortName,teacherShortName?,roomName?,online}]}` → draft version id;
 `POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values; absent `splitSubgroups` updates the one item of group × discipline × lesson kind whatever its split, 400 `items[i].splitSubgroups` when both a whole-group and a split item exist); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import).
@@ -146,7 +146,11 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 `GET /api/me/changes?status` → changes where I am the new teacher; `POST /api/me/changes/{id}/confirm|decline` `{comment?}`;
 `GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`.
 
-## 4. Core — internal (role SERVICE, client credentials)
+## 4. Core — internal (service roles, client credentials)
+
+Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SERVICE_NOTIFICATION (the bot);
+`catalog/snapshot` → SERVICE_IMPORTER; any other `/api/internal/**` → 403. The plain SERVICE role opens none of them.
+
 
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;

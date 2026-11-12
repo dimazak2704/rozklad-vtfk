@@ -77,13 +77,14 @@ app:
       service-access: 5m
       authorization-code: 60s
     # сервісні клієнти client_credentials: секрет порожній = клієнт не реєструється
+    # кожен сервіс має ще й власну роль: core пускає бота й імпортер лише до їхніх ендпоінтів
     service-clients:
       rozklad-notification:
         secret: ${NOTIFICATION_CLIENT_SECRET:}
-        roles: [SERVICE]
+        roles: [SERVICE, SERVICE_NOTIFICATION]
       rozklad-importer:
         secret: ${IMPORTER_CLIENT_SECRET:}
-        roles: [SERVICE]
+        roles: [SERVICE, SERVICE_IMPORTER]
       rozklad-core:
         secret: ${CORE_AUTH_CLIENT_SECRET:}
         scopes: [accounts.manage]

@@ -260,7 +260,7 @@ class HistoricOrderImportIT {
     }
 
     private ResultActions importOrder(String body) throws Exception {
-        return mvc.perform(post("/api/admin/import/changes").with(TestJwts.service())
+        return mvc.perform(post("/api/admin/import/changes").with(TestJwts.importerService())
                 .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 }

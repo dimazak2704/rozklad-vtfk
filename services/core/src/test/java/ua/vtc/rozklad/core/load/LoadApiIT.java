@@ -293,18 +293,18 @@ class LoadApiIT {
                   {"groupCode":"4ki1","disciplineShortName":"СТП","hoursPerWeek":2,"source":"CURRICULUM",
                    "teachers":[{"subgroup":0,"teacherShortName":"Кренцін М. Д."}]}]}""".formatted(semester);
 
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.created").value(1))
                 .andExpect(jsonPath("$.ids['4КІ1 | СТП | MIXED | whole']").exists());
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(jsonPath("$.created").value(0))
                 .andExpect(jsonPath("$.unchanged").value(1));
         assertThat(loadQueries.teachesInSemester(krentsin, stp, semester)).isTrue();
 
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"semesterId":"%s","items":[{"groupCode":"9ЖЖ9","disciplineShortName":"СТП",
                                  "hoursPerWeek":2,"source":"CURRICULUM"}]}""".formatted(semester)))
@@ -323,7 +323,7 @@ class LoadApiIT {
                  "preferredRoomId":"%s","controlForm":"EXAM","note":"з розкладу"}"""
                 .formatted(semester, group, stp, krentsin, room)).andReturn());
 
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"СТП",
                                  "lessonKind":"MIXED","hoursPerWeek":3,"plannedHours":60,"source":"PROGRAM"}]}"""
@@ -342,7 +342,7 @@ class LoadApiIT {
                 .andExpect(jsonPath("$.note").value("з розкладу"));
 
         // явний порожній список — свідоме зняття викладачів
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"СТП",
                                  "hoursPerWeek":3,"plannedHours":60,"source":"PROGRAM","teachers":[]}]}"""
@@ -367,7 +367,7 @@ class LoadApiIT {
                  "lessonKind":"MIXED","hoursPerWeek":2,"plannedHours":44,"controlForm":"CREDIT",
                  "source":"CURRICULUM"}]}""".formatted(semester);
 
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content(curriculumRow))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.created").value(0))
@@ -384,12 +384,12 @@ class LoadApiIT {
                 .andExpect(jsonPath("$[0].teachers", hasSize(2)));
 
         // a repeated import changes nothing
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content(curriculumRow))
                 .andExpect(jsonPath("$.unchanged").value(1));
 
         // an explicit split = false still means the whole-group item, which is created next to the split one
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Ін.мова",
                                  "hoursPerWeek":1,"splitSubgroups":false,"source":"MANUAL"}]}""".formatted(semester)))
@@ -397,7 +397,7 @@ class LoadApiIT {
                 .andExpect(jsonPath("$.ids['4КІ1 | Ін.мова | MIXED | whole']").exists());
 
         // with both a whole-group and a split item a row without the split is ambiguous: refused, nothing written
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content(curriculumRow.replace("\"plannedHours\":44", "\"plannedHours\":40")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("items[0].splitSubgroups"));
@@ -408,7 +408,7 @@ class LoadApiIT {
     /** Without any item of the group × discipline a row without the split creates a whole-group item. */
     @Test
     void importWithoutSplitCreatesAWholeGroupItem() throws Exception {
-        mvc.perform(post("/api/admin/import/load").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Матем.",
                                  "hoursPerWeek":2,"source":"PROGRAM"}]}""".formatted(semester)))

@@ -151,6 +151,21 @@ class ChangeReplyControllersTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** Least privilege: only the bot's account relays teacher answers, not the importer or a bare SERVICE token. */
+    @Test
+    void otherServiceAccountsCannotAnswerForATeacher() throws Exception {
+        String body = "{\"teacherId\":\"%s\",\"decision\":\"CONFIRM\"}".formatted(UUID.randomUUID());
+
+        mockMvc.perform(post("/api/internal/changes/{id}/reply", ChangeDtos.ID).with(TestJwts.importerService())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/internal/changes/{id}/reply", ChangeDtos.ID)
+                        .with(TestJwts.user(UUID.randomUUID(), "service-account-legacy", "SERVICE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(replies);
+    }
+
     @Test
     void onlyServicesUseTheInternalApi() throws Exception {
         mockMvc.perform(post("/api/internal/changes/{id}/reply", ChangeDtos.ID).with(TestJwts.admin())

@@ -16,6 +16,7 @@ public final class TestJwts {
     public static final UUID KRENTSIN_ID = UUID.fromString("a0000000-0000-4000-8000-000000000002");
     public static final UUID NEPYIVODA_ID = UUID.fromString("a0000000-0000-4000-8000-000000000003");
     public static final UUID NOTIFICATION_SERVICE_ID = UUID.fromString("a0000000-0000-4000-8000-000000000011");
+    public static final UUID IMPORTER_SERVICE_ID = UUID.fromString("a0000000-0000-4000-8000-000000000012");
 
     private TestJwts() {
     }
@@ -28,8 +29,15 @@ public final class TestJwts {
         return user(KRENTSIN_ID, "krentsin", "TEACHER");
     }
 
+    /** The Telegram bot's service account (notification), as auth issues it. */
     public static JwtRequestPostProcessor service() {
-        return user(NOTIFICATION_SERVICE_ID, "service-account-rozklad-notification", "SERVICE");
+        return user(NOTIFICATION_SERVICE_ID, "service-account-rozklad-notification", "SERVICE",
+                "SERVICE_NOTIFICATION");
+    }
+
+    /** The importer's service account, as auth issues it. */
+    public static JwtRequestPostProcessor importerService() {
+        return user(IMPORTER_SERVICE_ID, "service-account-rozklad-importer", "SERVICE", "SERVICE_IMPORTER");
     }
 
     public static JwtRequestPostProcessor user(UUID id, String username, String... roles) {

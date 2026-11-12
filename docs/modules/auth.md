@@ -25,7 +25,7 @@ The proxies pass `/auth/**` unchanged and close `/auth/internal/**` (404). `auth
 |---|---|---|
 | `rozklad-web` | public, code + PKCE S256 | the SPA; redirect URIs `<origin>/login/callback` and `<origin>/login/silent.html`, post-logout `<origin>/` for every origin of `AUTH_WEB_ORIGINS` |
 | `rozklad-cli` | public, code + PKCE, loopback redirect `http://127.0.0.1:<port>/cli-callback` | `scripts/rozklad_auth.py` and `web/e2e-real`; exists only with `AUTH_CLI_ENABLED=true` (development) |
-| `rozklad-notification`, `rozklad-importer` | `client_credentials` | service tokens with the role `SERVICE` |
+| `rozklad-notification`, `rozklad-importer` | `client_credentials` | service tokens with the roles `SERVICE` + `SERVICE_NOTIFICATION` / `SERVICE_IMPORTER` (core checks the own one) |
 | `rozklad-core` | `client_credentials`, scope `accounts.manage` | the internal accounts API |
 
 Clients are written to the database at every start from `app.auth.*` (`RegisteredClientSynchronizer`); a
@@ -35,7 +35,7 @@ There is no password grant and no refresh token for the SPA.
 ## Tokens
 
 - **Access token** (JWT, RS256, `kid` of the signing key): `iss`, `sub` = account id (UUID; for services the
-  client id), `aud` = `[<client>, rozklad-api]`, `roles` (flat list: `ADMIN`, `TEACHER`, `SERVICE`),
+  client id), `aud` = `[<client>, rozklad-api]`, `roles` (flat list: `ADMIN`, `TEACHER`, `SERVICE`, `SERVICE_NOTIFICATION`, `SERVICE_IMPORTER`),
   `preferred_username` (username, else e-mail; services: `service-account-<client>`), `scope`. Lifetimes:
   SPA 15 min in development, 5 min on the server (`AUTH_ACCESS_TOKEN_TTL`); services 5 min.
 - **ID token:** `sub`, `preferred_username`, `name`, `email`, `sid`; no roles.

@@ -167,6 +167,15 @@ class AbsenceControllersTest {
     }
 
     @Test
+    void importerCannotReportAbsences() throws Exception {
+        mockMvc.perform(post("/api/internal/absences").with(TestJwts.importerService())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("2026-11-10", "2026-11-10", "null").replace("}", ",\"source\":\"BOT\"}")))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(absences);
+    }
+
+    @Test
     void teacherCannotUseTheInternalApi() throws Exception {
         mockMvc.perform(post("/api/internal/absences").with(TestJwts.teacher()).contentType(MediaType.APPLICATION_JSON)
                         .content(body("2026-11-10", "2026-11-10", "null")))

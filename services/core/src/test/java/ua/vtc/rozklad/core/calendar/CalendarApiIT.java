@@ -349,11 +349,13 @@ class CalendarApiIT {
     void snapshotIsForServicesOnly() throws Exception {
         create("/api/admin/semesters", SEMESTER_I);
 
-        mvc.perform(get("/api/internal/catalog/snapshot").with(TestJwts.service()))
+        mvc.perform(get("/api/internal/catalog/snapshot").with(TestJwts.importerService()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.groups").isArray())
                 .andExpect(jsonPath("$.semesters[0].name").value("I семестр 2026/2027"));
         mvc.perform(get("/api/internal/catalog/snapshot").with(TestJwts.admin())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/internal/catalog/snapshot").with(TestJwts.service())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/internal/unknown").with(TestJwts.importerService())).andExpect(status().isForbidden());
     }
 
     private ResultActions create(String path, String json) throws Exception {
