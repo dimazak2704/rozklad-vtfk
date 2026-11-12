@@ -11,6 +11,7 @@ import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, S
 import { LIMITS, settingsSchema, type SettingsFormValues } from './schema';
 import { qk } from '@/api/queryKeys';
 import { track } from '@/lib/undo/actions';
+import { JournalBlockedError } from '@/lib/undo/errors';
 
 const SERIF = '"Times New Roman", "Liberation Serif", Tinos, "Noto Serif", Times, serif';
 
@@ -104,6 +105,8 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
       // у журнал дій: Ctrl+Z повертає попередні налаштування з версією після збереження
       let version = saved.version;
       const put = async (next: SettingsDto) => {
+        // скасування перезаписує всю форму — незбережене в інших полях не викидаємо мовчки
+        if (form.formState.isDirty) throw new JournalBlockedError('Спершу збережіть або скасуйте зміни у формі', 'failed');
         const result = await update.mutateAsync({ ...next, version });
         version = result.version;
         setEditedVersion(result.version);

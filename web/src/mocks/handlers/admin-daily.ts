@@ -37,7 +37,7 @@ import { findTemplateLesson, templateLessons } from './admin-daily/lessons';
 import { draftFor, listOrders, publishOrder, updateNotes } from './admin-daily/order-commands';
 import { nextOrderNumber } from './admin-daily/orders';
 import { affectedLessons, declinedFor, isAbsent, isCovered, optionsFor, teacherSlots } from './admin-daily/rules';
-import { getOrder, world } from './admin-daily/state';
+import { getChange, getOrder, world } from './admin-daily/state';
 import { changesOn, toChangeDto, toOrderDto } from './admin-daily/world';
 
 const UK = new Intl.Collator('uk');
@@ -207,6 +207,9 @@ export const handlers = [
     const created = await createChangesBatch(body.changes, new Date());
     return HttpResponse.json(created.map(toChangeDto), { status: 201 });
   }),
+
+  // свіжий стан однієї зміни: журнал дій перевіряє його перед скасуванням рішення
+  http.get(apiPath('/admin/changes/:id'), ({ params }) => HttpResponse.json(toChangeDto(getChange(String(params.id))))),
 
   http.put(apiPath('/admin/changes/:id'), async ({ params, request }) =>
     HttpResponse.json(toChangeDto(updateChange(String(params.id), await readJson<Partial<UpdateChangeRequest>>(request)))),

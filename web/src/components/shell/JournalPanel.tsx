@@ -11,6 +11,7 @@ import { submitFocusedForm } from '@/lib/submitForm';
 import { Button } from '../ui/Button';
 import { Drawer, DrawerContent } from '../ui/Drawer';
 import { Spinner } from '../ui/Spinner';
+import { notify } from '../ui/toast';
 
 const TIME = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit' });
 
@@ -19,9 +20,17 @@ function JournalRow({ entry, redoable }: { entry: JournalEntry; redoable: boolea
   const busy = useJournal((state) => state.busy);
   const undone = entry.status === 'undone';
   let state: React.ReactNode = null;
+  const notDone = entry.failedOn === 'redo' ? 'Не повернуто' : 'Не скасовано';
   switch (entry.status) {
     case 'undone':
-      state = <span className="text-muted">Скасовано</span>;
+      state =
+        entry.failedOn === 'redo' && entry.reason ? (
+          <span className="text-muted">
+            Скасовано. <span className="text-danger">Не повернуто: {entry.reason}</span>
+          </span>
+        ) : (
+          <span className="text-muted">Скасовано</span>
+        );
       break;
     case 'pending':
       state = (
@@ -31,10 +40,18 @@ function JournalRow({ entry, redoable }: { entry: JournalEntry; redoable: boolea
       );
       break;
     case 'failed':
-      state = <span className="text-danger">Не скасовано: {entry.reason}</span>;
+      state = (
+        <span className="text-danger">
+          {notDone}: {entry.reason}
+        </span>
+      );
       break;
     case 'stale':
-      state = <span className="text-change">Не скасовано: {entry.reason}</span>;
+      state = (
+        <span className="text-change">
+          {notDone}: {entry.reason}
+        </span>
+      );
       break;
     case 'final':
       state = (
@@ -51,13 +68,13 @@ function JournalRow({ entry, redoable }: { entry: JournalEntry; redoable: boolea
   let action: React.ReactNode = null;
   if (entry.canUndo && (entry.status === 'done' || entry.status === 'failed')) {
     action = (
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => void undoEntry(entry.id)} aria-label={`Скасувати: ${entry.label}`}>
+      <Button data-journal-action variant="ghost" size="sm" disabled={busy} onClick={() => void undoEntry(entry.id)} aria-label={`Скасувати: ${entry.label}`}>
         {entry.status === 'failed' ? 'Ще раз' : 'Скасувати'}
       </Button>
     );
   } else if (undone && redoable) {
     action = (
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => void redoEntry(entry.id)} aria-label={`Повернути: ${entry.label}`}>
+      <Button data-journal-action variant="ghost" size="sm" disabled={busy} onClick={() => void redoEntry(entry.id)} aria-label={`Повернути: ${entry.label}`}>
         Повернути
       </Button>
     );
@@ -87,7 +104,17 @@ export function JournalPanel() {
 
   return (
     <Drawer direction="right" open={open} onOpenChange={setOpen}>
-      <DrawerContent side="right" title="Журнал дій" aria-describedby={undefined}>
+      <DrawerContent
+        side="right"
+        title="Журнал дій"
+        aria-describedby={undefined}
+        // фокус — у шторку: на першу дію запису («Скасувати» / «Повернути»), інакше на саму шторку
+        onOpenAutoFocus={(event) => {
+          const content = event.currentTarget as HTMLElement | null;
+          const target = content?.querySelector<HTMLElement>('[data-journal-action]:not([disabled])') ?? content;
+          target?.focus({ preventScroll: true });
+        }}
+      >
         {entries.length === 0 ? (
           <p className="pt-2 text-body text-secondary">Тут будуть ваші дії в цій вкладці: що додали, змінили чи скасували.</p>
         ) : (
@@ -126,19 +153,24 @@ export function JournalHost() {
 
   useHotkeys([
     { keys: 'mod+z', handler: () => void undoLatest(), description: 'Скасувати останню дію на сторінці', group: 'Дії' },
-    { keys: 'mod+shift+z', handler: () => void redoLatest(), description: 'Повернути скасоване', group: 'Дії' },
+    { keys: 'mod+shift+z', handler: () => void redoLatest(), description: 'Повернути скасоване', helpKeys: 'mod+shift+z,mod+y', group: 'Дії' },
     { keys: 'mod+y', handler: () => void redoLatest() },
     { keys: 'mod+shift+h', handler: togglePanel, description: 'Журнал дій', group: 'Дії', allowInModal: true },
     {
       keys: 'mod+s',
-      handler: () => submitFocusedForm('save'),
+      // у панелі Ctrl+S ніколи не відкриває браузерне «Зберегти сторінку як…»
+      handler: () => {
+        const outcome = submitFocusedForm('save');
+        if (outcome === 'nothing' || outcome === 'none') notify.info('Немає що зберігати', { id: 'nothing-to-save', duration: 2000 });
+        return true;
+      },
       description: 'Зберегти форму',
       group: 'Форми й вікна',
       allowInInputs: true,
     },
     {
       keys: 'mod+enter',
-      handler: () => submitFocusedForm('confirm'),
+      handler: () => submitFocusedForm('confirm') !== 'none',
       description: 'Зберегти з багаторядкового поля чи підтвердити',
       group: 'Форми й вікна',
       allowInInputs: true,
@@ -151,7 +183,7 @@ export function JournalHost() {
   ]);
   useShortcutHints([
     { keys: 'enter', description: 'Зберегти форму з поля вводу', group: 'Форми й вікна' },
-    { keys: 'escape', description: 'Закрити вікно чи меню, очистити пошук', group: 'Форми й вікна' },
+    { keys: 'escape', description: 'Закрити вікно чи меню; у пошуку — очистити, ще раз — вийти з поля', group: 'Форми й вікна' },
   ]);
 
   return <JournalPanel />;

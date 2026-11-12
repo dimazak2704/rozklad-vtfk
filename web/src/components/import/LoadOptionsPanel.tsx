@@ -48,7 +48,7 @@ export function LoadOptionsPanel({ job }: { job: ImportJob }) {
   };
 
   return (
-    <section aria-label="Параметри застосування" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
+    <section data-save-region aria-label="Параметри застосування" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
       <div className="flex flex-col gap-0.5">
         <h3 className="text-heading font-semibold text-primary">Параметри застосування</h3>
         <p className="text-caption text-secondary">
@@ -84,6 +84,7 @@ export function LoadOptionsPanel({ job }: { job: ImportJob }) {
       <FormAlert message={problem} />
       {editable ? (
         <Button
+          data-save-action
           variant="secondary"
           className="self-start"
           loading={save.isPending}

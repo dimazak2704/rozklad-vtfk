@@ -7,11 +7,13 @@ import {
   useResendConfirmation,
   type ChangeOption,
 } from '@/api/admin-daily';
+import { api } from '@/api/client';
 import { isApiError } from '@/api/errors';
 import { qk } from '@/api/queryKeys';
 import type { AbsenceDto, ChangeDto, CreateChangeRequest, ReasonCode, TeacherRef, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
 import { track, trackFinal } from '@/lib/undo/actions';
+import { JournalBlockedError } from '@/lib/undo/errors';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 import { manualTeacherRequest, optionKey, reasonForOption, requestForOption, type LessonEntry, type PickContext, type PlanChoice } from '../model';
@@ -45,6 +47,23 @@ function decidedMessage(created: ChangeDto, where: string): string {
 function sideEffect(created: readonly ChangeDto[]): string | undefined {
   const told = created.some((c) => c.status === 'PENDING_CONFIRMATION' || c.status === 'CONFIRMED' || c.approvalMode === 'NOTIFY');
   return told ? 'Якщо скасувати, бот повідомить викладача про скасування.' : undefined;
+}
+
+/** Чому рішення вже не скасувати з журналу: зміна пішла далі, ніж була після рішення. */
+export function movedReason(change: Pick<ChangeDto, 'status'>): string {
+  switch (change.status) {
+    case 'CONFIRMED':
+      return 'Викладач уже підтвердив — скасуйте рішення вручну.';
+    case 'DECLINED':
+      return 'Викладач уже відмовився — пара знову чекає рішення.';
+    case 'APPLIED':
+      return 'Заміну вже внесено в розпорядження.';
+    case 'CANCELLED':
+      return 'Рішення вже скасовано.';
+    case 'DRAFT':
+    case 'PENDING_CONFIRMATION':
+      return 'Стан рішення змінився після вас. Перевірте пару й вирішіть вручну.';
+  }
 }
 
 function conflictText(error: unknown): string | null {
@@ -105,6 +124,11 @@ export function useDecisionActions() {
         note: sideEffect(created),
         invalidate: [qk.admin.all],
         undo: async () => {
+          // спершу свіжий стан: якщо викладач уже відповів чи зміну внесли в розпорядження,
+          // наосліп не скасовуємо — це робиться вручну, з підтвердженням
+          const fresh = await Promise.all(created.map((change) => api.get<ChangeDto>(`/admin/changes/${change.id}`)));
+          const moved = fresh.find((change, index) => change.status !== created[index]?.status);
+          if (moved) throw new JournalBlockedError(movedReason(moved), 'stale');
           for (const change of created) {
             markOwn(change.id);
             await cancel.mutateAsync(change.id);

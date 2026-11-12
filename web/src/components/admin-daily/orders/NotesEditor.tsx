@@ -1,10 +1,11 @@
 import { Plus, X } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useUpdateOrderNotes } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
 import type { OrderDto } from '@/api/types';
 import { Button, IconButton, notify, Textarea } from '@/components/ui';
 import { track } from '@/lib/undo/actions';
+import { JournalBlockedError } from '@/lib/undo/errors';
 
 const MAX_NOTE = 500;
 
@@ -20,8 +21,22 @@ export function NotesEditor({ order }: { order: OrderDto }) {
   const baseId = useId();
 
   const dirty = notes.length !== order.notes.length || notes.some((note, index) => note !== order.notes[index]);
+  // скасування з журналу оновить розпорядження й перемалює редактор — незбережене не губимо мовчки
+  const dirtyRef = useRef(dirty);
+  useLayoutEffect(() => {
+    dirtyRef.current = dirty;
+  });
 
-  const save = async () => {
+  const addNote = () => {
+    setNotes((prev) => [...prev, '']);
+    // фокус — у нове поле: пробіл чи Enter далі пишуть текст, а не додають ще порожніх приміток
+    const nextId = `${baseId}-note-${notes.length}`;
+    requestAnimationFrame(() => document.getElementById(nextId)?.focus());
+  };
+
+  const save = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!dirty || update.isPending) return;
     const local: Record<number, string> = {};
     notes.forEach((note, index) => {
       if (note.trim().length > MAX_NOTE) local[index] = `Не довше ${MAX_NOTE} символів`;
@@ -35,6 +50,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
       // у журнал дій: Ctrl+Z повертає попередні примітки з версією після збереження
       let version = saved.version;
       const put = async (next: string[]) => {
+        if (dirtyRef.current) throw new JournalBlockedError('Спершу збережіть або скасуйте зміни в примітках', 'failed');
         version = (await update.mutateAsync({ id: order.id, notes: next, version })).version;
       };
       track({ label: 'Змінено примітки розпорядження', undo: () => put(before), redo: () => put(after) });
@@ -52,7 +68,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <form noValidate aria-label="Примітки розпорядження" onSubmit={(event) => void save(event)} className="flex flex-col gap-3">
       {notes.length === 0 ? (
         <p className="text-caption text-muted">Приміток немає. Календарні (практика, дистанційне навчання) зʼявляються самі.</p>
       ) : (
@@ -87,7 +103,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
         </ol>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="ghost" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={() => setNotes((prev) => [...prev, ''])}>
+        <Button size="sm" variant="ghost" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={addNote}>
           Додати примітку
         </Button>
         {dirty ? (
@@ -95,12 +111,12 @@ export function NotesEditor({ order }: { order: OrderDto }) {
             <Button size="sm" variant="secondary" onClick={() => setNotes(order.notes)} disabled={update.isPending}>
               Скасувати зміни
             </Button>
-            <Button size="sm" variant="secondary" loading={update.isPending} onClick={() => void save()}>
+            <Button type="submit" size="sm" variant="secondary" loading={update.isPending}>
               Зберегти примітки
             </Button>
           </>
         ) : null}
       </div>
-    </div>
+    </form>
   );
 }

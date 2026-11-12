@@ -89,7 +89,7 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div data-save-region className="flex min-w-0 flex-col gap-4">
       <FormAlert message={formError} />
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <Field label="Назва профілю" required error={nameError} id={nameId} className="w-full sm:w-72">
@@ -234,7 +234,7 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
           </Badge>
         ) : null}
         <span className="ms-auto text-caption text-muted">{dirty ? 'Є незбережені зміни' : 'Збережено'}</span>
-        <Button variant="primary" loading={save.isPending} disabled={!dirty} onClick={() => void submit()}>
+        <Button data-save-action variant="primary" loading={save.isPending} disabled={!dirty} onClick={() => void submit()}>
           {profile ? 'Зберегти дзвінки' : 'Створити профіль'}
         </Button>
       </div>

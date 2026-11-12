@@ -158,7 +158,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
   };
 
   return (
-    <section aria-label="Звірка рядків розпорядження" className="flex flex-col gap-3">
+    <section data-save-region aria-label="Звірка рядків розпорядження" className="flex flex-col gap-3">
       <p className="text-ui text-secondary">
         Порівняйте кожен рядок з фото: виправте групу, пару, прізвища й аудиторії, видаліть зайве. Тип «За текстом» сервер
         визначить за правилами розпорядження («Вичит.» без заміни — вичитано, діапазон пар — блок); коли ви правите текст
@@ -265,7 +265,7 @@ export function OrderDraftEditor({ jobId, version, draft, onDone }: { jobId: Uui
         <Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
       </label>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" loading={save.isPending} onClick={() => void submit()} iconStart={<Save aria-hidden="true" className="size-4" />}>
+        <Button data-save-action variant="primary" loading={save.isPending} onClick={() => void submit()} iconStart={<Save aria-hidden="true" className="size-4" />}>
           Зберегти звірені рядки
         </Button>
         <Button variant="secondary" disabled={save.isPending} onClick={onDone} iconStart={<Undo2 aria-hidden="true" className="size-4" />}>

@@ -134,7 +134,7 @@ function MappingForm({ job }: { job: ImportJob }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div data-save-region className="flex flex-col gap-4">
       <Disclosure summary="Як це працює?">
         <p className="max-w-prose ps-5.5 text-ui text-secondary">
           Тут назви з файлу, яких немає в каталозі. «Так» зіставляє назву зі схожим записом і запамʼятовує написання —
@@ -164,7 +164,7 @@ function MappingForm({ job }: { job: ImportJob }) {
                 ? 'Рішення не збережено'
                 : 'Рішення збережено'}
           </span>
-          <Button variant="primary" loading={save.isPending} disabled={!dirty && undecided.length === 0} onClick={() => void submit()}>
+          <Button data-save-action variant="primary" loading={save.isPending} disabled={!dirty && undecided.length === 0} onClick={() => void submit()}>
             Зберегти рішення
           </Button>
         </div>
