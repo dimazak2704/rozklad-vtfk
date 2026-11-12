@@ -1,4 +1,5 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { Toaster as Sonner } from 'sonner';
 import { useResolvedTheme } from '@/hooks/useResolvedTheme';
 import { Spinner } from './Spinner';
@@ -17,6 +18,8 @@ export function Toaster() {
       position="bottom-right"
       offset={{ bottom: `calc(var(${TOAST_CLEARANCE_VAR}, 0px) + 16px)`, right: 16, left: 16, top: 16 }}
       mobileOffset={{ bottom: `calc(var(--tabbar-height) + var(${TOAST_CLEARANCE_VAR}, 0px) + 12px)`, left: 12, right: 12 }}
+      // один рядок тексту з «Скасувати» поруч (DESIGN §11.6): 416 px вміщують «Підтверджено: 4КІ2, завтра 1 пара»
+      style={{ '--width': '26rem' } as CSSProperties}
       visibleToasts={2}
       duration={4000}
       closeButton={false}
@@ -32,8 +35,8 @@ export function Toaster() {
         unstyled: true,
         classNames: {
           toast:
-            'group flex w-full items-start gap-3 rounded-popover border border-default bg-raised px-4 py-3 text-primary shadow-popover sm:w-[22rem]',
-          title: 'text-ui font-[650]',
+            'group flex w-full items-start gap-3 rounded-popover border border-default bg-raised px-4 py-3 text-primary shadow-popover sm:w-(--width)',
+          title: 'text-ui font-[550]',
           description: 'mt-0.5 text-caption text-secondary',
           icon: 'mt-0.5 flex size-4 shrink-0 items-center justify-center',
           content: 'flex min-w-0 flex-1 flex-col',

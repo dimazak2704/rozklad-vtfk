@@ -52,7 +52,9 @@ describe('SubstitutionRequests', () => {
     expect(requests).toHaveLength(2);
     await user.click(within(requests[0] as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
     expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
-    expect(undo).toHaveBeenCalledWith('Заміну підтверджено', expect.objectContaining({ duration: REPLY_UNDO_MS }));
+    // один рядок без опису (DESIGN §11.6): що зроблено і з якою парою
+    expect(undo).toHaveBeenCalledWith(expect.stringMatching(/^Підтверджено: \S+, .+ \d\u00a0пара$/), expect.objectContaining({ duration: REPLY_UNDO_MS }));
+    expect(undo.mock.calls[0]?.[1]).not.toHaveProperty('description');
     expect(sent).toEqual([]);
 
     act(() => undo.mock.calls[0]?.[1].onUndo());
@@ -95,7 +97,7 @@ describe('SubstitutionRequests', () => {
     await user.click(within(request as HTMLElement).getByRole('button', { name: 'Не можу' }));
     await user.type(await screen.findByLabelText(/Коментар для диспетчера/), 'Маю пару');
     await user.click(screen.getByRole('button', { name: 'Відмовитися' }));
-    expect(undo).toHaveBeenCalledWith('Ви відмовилися від заміни', expect.objectContaining({ duration: REPLY_UNDO_MS }));
+    expect(undo).toHaveBeenCalledWith(expect.stringMatching(/^Ви відмовилися: /), expect.objectContaining({ duration: REPLY_UNDO_MS }));
     expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
   });
 

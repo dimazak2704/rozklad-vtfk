@@ -3,24 +3,33 @@ import { useServerEvent } from '@/api/live';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
-import { todayInKyiv } from '@/lib/date';
+import { formatDayMonth, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
-import { awaitingAnswer, changeTitle, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
+import { awaitingAnswer, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
 import { SubstitutionCard } from './SubstitutionCard';
 
 const REQUEST_FORMS = ['заміна чекає', 'заміни чекають', 'замін чекають'] as const;
 
-/** Що сказати після відповіді — до того, як вона піде на сервер (сповіщення з «Скасувати»). */
-function replyToast(change: ChangeDto, decision: ReplyVariables['decision']): { message: string; description: string } {
-  const title = changeTitle(change);
+/** Коротко, про яку пару: «4КІ2, завтра 1 пара» або «4КІ2, 16 листопада, 1 пара». */
+function shortTitle(change: ChangeDto): string {
+  const relative = relativeDayLabel(change.date, todayInKyiv());
+  return relative
+    ? `${change.group.code}, ${relative.toLocaleLowerCase('uk')} ${change.pairFrom}\u00a0пара`
+    : `${change.group.code}, ${formatDayMonth(change.date)}, ${change.pairFrom}\u00a0пара`;
+}
+
+/**
+ * Що сказати після відповіді — до того, як вона піде на сервер: один рядок і «Скасувати» (DESIGN §11.6).
+ * Решту каже сам список: рядок зник, пара зʼявиться в розкладі.
+ */
+function replyToast(change: ChangeDto, decision: ReplyVariables['decision']): string {
+  const title = shortTitle(change);
   if (decision === 'CONFIRM') {
-    return change.approvalMode === 'NOTIFY'
-      ? { message: 'Дякуємо, відповідь надіслано', description: `${title}. Пара вже у вашому розкладі.` }
-      : { message: 'Заміну підтверджено', description: `${title}. Пара зʼявиться у вашому розкладі.` };
+    return change.approvalMode === 'NOTIFY' ? `Надіслано: ${title}` : `Підтверджено: ${title}`;
   }
   return change.approvalMode === 'NOTIFY' && change.status === 'APPLIED'
-    ? { message: 'Диспетчера повідомлено', description: 'Заміна вже в розпорядженні — диспетчер внесе доповнення.' }
-    : { message: 'Ви відмовилися від заміни', description: 'Диспетчер побачить відповідь і обере інший варіант.' };
+    ? `Диспетчера повідомлено: ${title}`
+    : `Ви відмовилися: ${title}`;
 }
 
 /**
@@ -64,9 +73,7 @@ function useDeferredReply() {
       send(variables);
     }, REPLY_UNDO_MS);
     pending.current.set(change.id, { timer, variables });
-    const { message, description } = replyToast(change, decision);
-    notify.undo(message, {
-      description,
+    notify.undo(replyToast(change, decision), {
       duration: REPLY_UNDO_MS,
       onUndo: () => {
         const entry = pending.current.get(change.id);
@@ -97,7 +104,7 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
     const notice = isUnansweredNotice(change, todayInKyiv()) && change.history.length === 1;
     if (!request && !notice) return;
     setFresh((current) => new Set(current).add(change.id));
-    notify.info(notice ? 'Вам поставили заміну' : 'Новий запит на заміну', { description: changeTitle(change) });
+    notify.info(`${notice ? 'Вам поставили заміну' : 'Новий запит на заміну'}: ${shortTitle(change)}`);
   });
 
   const waiting = awaitingAnswer(changes.data ?? [], todayInKyiv()).filter((change) => !held.has(change.id));
