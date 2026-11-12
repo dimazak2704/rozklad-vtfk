@@ -21,6 +21,8 @@ import org.springframework.validation.annotation.Validated;
  * @param effortVision output effort for photos and scans (orders, curriculum)
  * @param maxTokens    output token cap per call (thinking included)
  * @param prices       USD per million tokens by model id; {@code defaultPrice} for unknown models
+ * @param interactiveTimeout timeout of a call someone waits for (parse-absence from the bot, which
+ *                     gives up after 20 s); such calls are not retried. Default {@link #DEFAULT_INTERACTIVE_TIMEOUT}
  */
 @Validated
 @ConfigurationProperties("app.ai")
@@ -37,13 +39,24 @@ public record AiProperties(
         @NotBlank String effortVision,
         @Min(1024) long maxTokens,
         Map<String, @Valid ModelPrice> prices,
-        @NotNull @Valid ModelPrice defaultPrice) {
+        @NotNull @Valid ModelPrice defaultPrice,
+        Duration interactiveTimeout) {
 
     public static final String PROVIDER_ANTHROPIC = "anthropic";
     public static final String PROVIDER_FAKE = "fake";
+    public static final Duration DEFAULT_INTERACTIVE_TIMEOUT = Duration.ofSeconds(10);
 
     public AiProperties {
         prices = prices == null ? Map.of() : Map.copyOf(prices);
+        interactiveTimeout = interactiveTimeout == null ? DEFAULT_INTERACTIVE_TIMEOUT : interactiveTimeout;
+    }
+
+    /** Settings with the default interactive timeout. */
+    public AiProperties(String apiKey, String provider, String baseUrl, String modelText, String modelVision,
+                        BigDecimal dailyBudgetUsd, Duration timeout, int maxRetries, String effortText,
+                        String effortVision, long maxTokens, Map<String, ModelPrice> prices, ModelPrice defaultPrice) {
+        this(apiKey, provider, baseUrl, modelText, modelVision, dailyBudgetUsd, timeout, maxRetries, effortText,
+                effortVision, maxTokens, prices, defaultPrice, null);
     }
 
     /**

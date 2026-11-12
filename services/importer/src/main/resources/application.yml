@@ -82,6 +82,8 @@ app:
     daily-budget-usd: ${AI_DAILY_BUDGET_USD:2.00}
     timeout: ${AI_TIMEOUT:180s}
     max-retries: ${AI_MAX_RETRIES:2}
+    # parse-absence: бот чекає 20 с, тож виклик здається раніше й без повторів (тоді — відповідь за правилами)
+    interactive-timeout: ${AI_INTERACTIVE_TIMEOUT:10s}
     effort-text: ${AI_EFFORT_TEXT:low}
     effort-vision: ${AI_EFFORT_VISION:medium}
     max-tokens: ${AI_MAX_TOKENS:16000}

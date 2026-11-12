@@ -226,7 +226,9 @@ The text is never logged (absence reasons are private).
   side over 8000 px (the API limit) are decoded with subsampling and downscaled to JPEG ≤ 2000 px. API rejections are
   reported in plain words (the file could not be read / the service settings), details only in the log.
 * **Models** `AI_MODEL_TEXT` (default `claude-haiku-5-5`, effort `low`) and `AI_MODEL_VISION` (default
-  `claude-sonnet-5-5`, effort `medium`); `AI_MAX_TOKENS` 16000; `AI_TIMEOUT` 180 s; `AI_MAX_RETRIES` 2.
+  `claude-sonnet-5-5`, effort `medium`); `AI_MAX_TOKENS` 16000; `AI_TIMEOUT` 180 s; `AI_MAX_RETRIES` 2. The
+  parse-absence call (`ABSENCE_TEXT`) is interactive: the bot's importer client gives up after 20 s, so it uses
+  `AI_INTERACTIVE_TIMEOUT` (10 s) and no retries; on a timeout the rule-based answer is returned in time.
 * **Usage and budget**: table `ai_usage` (Kyiv date, purpose, model, tokens, cost, outcome, job). Cost =
   configurable price table `app.ai.prices` (USD per million tokens; Haiku 5.5 0.10/0.50 with the long-context tier
   0.50/2.50 above 100k input tokens, Sonnet 5.5 2/10, Opus 5.5 4/20; unknown models use `app.ai.default-price`
@@ -249,6 +251,7 @@ The text is never logged (absence reasons are private).
 | `AI_EFFORT_TEXT` / `AI_EFFORT_VISION` | `low` / `medium` | |
 | `AI_DAILY_BUDGET_USD` | `2.00` | |
 | `AI_TIMEOUT`, `AI_MAX_RETRIES`, `AI_MAX_TOKENS` | `180s`, `2`, `16000` | |
+| `AI_INTERACTIVE_TIMEOUT` | `10s` | parse-absence only, never retried (the bot waits 20 s) |
 | `IMPORT_MAX_FILE_SIZE` | `20MB` | the servlet limit is `UPLOAD_MAX_FILE_SIZE` 21MB so the service answers 413 itself |
 | `IMPORT_STORAGE` | `DATABASE` | or `FILESYSTEM` with `IMPORT_STORAGE_DIR` (a volume; atomic writes) |
 | `IMPORT_WORKERS`, `IMPORT_QUEUE_CAPACITY` | `2`, `50` | full queue → job FAILED «Черга обробки переповнена» |
@@ -273,7 +276,8 @@ Entities use Jackson 3 for JSON columns (foundation's `Jackson3JsonFormatMapper`
 * Orders are imported as text snapshots (`/api/admin/import/changes`), so their entity matching is informative.
 * Apply is asynchronous (202) with per-step checkpoints and idempotency keys; parse is never retried
   automatically after a crash (cost and poison files).
-* parse-absence never fails because of AI; 429 for the budget is returned where AI is mandatory (uploads).
+* parse-absence never fails because of AI; 429 for the budget is returned where AI is mandatory (uploads); its
+  AI call has its own short timeout and no retries so the fallback reaches the bot before the bot gives up.
 * `\b` is not used in regexes: since JDK 19 it is ASCII-only and never matches next to Cyrillic.
 
 ## 8. Requests expected by core (for the core import agent)

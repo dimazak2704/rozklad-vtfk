@@ -2,6 +2,7 @@ package ua.vtc.rozklad.importer.ai;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +41,7 @@ public class AiConfig {
         AnthropicClient client = builder.build();
         log.info("AI extraction via Anthropic: text model {}, vision model {}", properties.modelText(),
                 properties.modelVision());
-        return new ClosingAnthropicAdapter(client);
+        return new ClosingAnthropicAdapter(client, properties.interactiveTimeout());
     }
 
     /** Closes the SDK client (HTTP pool) together with the context. */
@@ -48,8 +49,8 @@ public class AiConfig {
 
         private final AnthropicClient client;
 
-        ClosingAnthropicAdapter(AnthropicClient client) {
-            super(client);
+        ClosingAnthropicAdapter(AnthropicClient client, Duration interactiveTimeout) {
+            super(client, interactiveTimeout);
             this.client = client;
         }
 

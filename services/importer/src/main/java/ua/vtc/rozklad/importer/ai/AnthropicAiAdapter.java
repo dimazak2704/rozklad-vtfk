@@ -16,6 +16,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.Usage;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -28,15 +29,25 @@ import org.slf4j.LoggerFactory;
  * left at the model default (adaptive). Documents go as base64 PDF/image blocks before the text
  * instruction. The response is read by block type (thinking blocks are skipped) and checked for a
  * refusal or a cut-off before use. Nothing of the documents or the API key is logged.
+ * Interactive calls ({@link AiPurpose#ABSENCE_TEXT}: the bot waits 20 s for the answer) use a short
+ * timeout and no retries, so a stalled API falls back to the rule-based answer in time; document
+ * reading keeps the client's long timeout and retries.
  */
 public class AnthropicAiAdapter implements AiExtractionPort {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicAiAdapter.class);
 
     private final AnthropicClient client;
+    private final AnthropicClient interactiveClient;
 
     public AnthropicAiAdapter(AnthropicClient client) {
+        this(client, ua.vtc.rozklad.importer.config.AiProperties.DEFAULT_INTERACTIVE_TIMEOUT);
+    }
+
+    public AnthropicAiAdapter(AnthropicClient client, Duration interactiveTimeout) {
         this.client = client;
+        // той самий пул з'єднань, інші тайм-аут і кількість повторів
+        this.interactiveClient = client.withOptions(options -> options.timeout(interactiveTimeout).maxRetries(0));
     }
 
     @Override
@@ -48,7 +59,8 @@ public class AnthropicAiAdapter implements AiExtractionPort {
     public AiResponse complete(AiRequest request) {
         Message message;
         try {
-            message = client.messages().create(params(request));
+            AnthropicClient target = request.purpose() == AiPurpose.ABSENCE_TEXT ? interactiveClient : client;
+            message = target.messages().create(params(request));
         } catch (AnthropicServiceException e) {
             throw translate(request, e);
         } catch (AnthropicIoException e) {

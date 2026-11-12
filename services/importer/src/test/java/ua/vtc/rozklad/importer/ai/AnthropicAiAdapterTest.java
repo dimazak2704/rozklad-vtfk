@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,8 @@ class AnthropicAiAdapterTest {
     private final JsonMapper json = JsonMapper.builder().build();
     private final AtomicReference<String> requestBody = new AtomicReference<>();
     private final AtomicReference<String> apiKey = new AtomicReference<>();
+    private final AtomicInteger calls = new AtomicInteger();
+    private volatile long delayMillis;
     private volatile int status = 200;
     private volatile String responseBody;
     private HttpServer server;
@@ -40,7 +43,15 @@ class AnthropicAiAdapterTest {
     void startStub() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/messages", exchange -> {
+            calls.incrementAndGet();
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            if (delayMillis > 0) {
+                try {
+                    Thread.sleep(delayMillis);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             // SDK сам обирає схему автентифікації (x-api-key або Bearer) — перевіряємо лише, що ключ передано
             apiKey.set(exchange.getRequestHeaders().entrySet().stream()
                     .filter(header -> header.getKey().equalsIgnoreCase("x-api-key")
@@ -54,6 +65,7 @@ class AnthropicAiAdapterTest {
                 out.write(body);
             }
         });
+        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         server.start();
         client = AnthropicOkHttpClient.builder()
                 .apiKey("sk-ant-api03-test-only")
@@ -124,6 +136,45 @@ class AnthropicAiAdapterTest {
                 + "\"message\":\"messages.0.content.0.image.source.base64.data: Could not process image\"}}";
         assertThatThrownBy(() -> adapter.complete(request())).isInstanceOf(AiExtractionException.class)
                 .hasMessageContaining("не зміг прочитати цей файл").hasMessageNotContaining("HTTP");
+    }
+
+    /**
+     * The bot waits 20 s for parse-absence: a stalled text call must give up well before that and
+     * must not be retried, so the teacher still gets the rule-based answer. Document reading keeps the
+     * long timeout.
+     */
+    @Test
+    void absenceTextGivesUpQuicklyWithoutRetriesWhileDocumentsKeepTheLongTimeout() {
+        AnthropicClient patient = AnthropicOkHttpClient.builder()
+                .apiKey("sk-ant-api03-test-only")
+                .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                .maxRetries(2)
+                .timeout(Duration.ofSeconds(30))
+                .build();
+        try {
+            AnthropicAiAdapter quick = new AnthropicAiAdapter(patient, Duration.ofMillis(700));
+            responseBody = message("end_turn", "{}");
+            // первий виклик SDK у JVM довго ініціалізується; міряємо вже «теплий» клієнт
+            quick.complete(absenceRequest());
+            calls.set(0);
+            delayMillis = 3000;
+
+            long start = System.nanoTime();
+            assertThatThrownBy(() -> quick.complete(absenceRequest())).isInstanceOf(AiUnavailableException.class);
+            assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(2500));
+            assertThat(calls.get()).as("no retry for an interactive call").isEqualTo(1);
+
+            delayMillis = 1200;
+            assertThat(quick.complete(request()).stop()).as("a document call waits longer")
+                    .isEqualTo(AiResponse.Stop.COMPLETE);
+        } finally {
+            patient.close();
+        }
+    }
+
+    private static AiRequest absenceRequest() {
+        return new AiRequest(AiPurpose.ABSENCE_TEXT, "claude-haiku-5-5", "система", List.of(), "мене не буде",
+                AiSchemas.order(), 1000, "low");
     }
 
     private static AiRequest request() {
