@@ -26,10 +26,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String incoming = request.getHeader(HEADER);
-        String requestId = incoming != null && SAFE_ID.matcher(incoming).matches()
-                ? incoming
-                : UUID.randomUUID().toString();
+        String requestId = resolve(request.getHeader(HEADER));
         MDC.put(MDC_KEY, requestId);
         response.setHeader(HEADER, requestId);
         try {
@@ -37,5 +34,10 @@ public class RequestIdFilter extends OncePerRequestFilter {
         } finally {
             MDC.remove(MDC_KEY);
         }
+    }
+
+    /** A safe incoming id as is, otherwise a new UUID. */
+    public static String resolve(String incoming) {
+        return incoming != null && SAFE_ID.matcher(incoming).matches() ? incoming : UUID.randomUUID().toString();
     }
 }

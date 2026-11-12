@@ -199,6 +199,12 @@ The payload type comes from the routing key. Unreadable messages are rejected to
 retried 3× and then dead-lettered (1 s, 2 s backoff; with notification's database down each attempt also waits for
 Hikari's 30 s connection timeout, so an event is lost to the DLQ only after about a minute of outage).
 
+**Request id** (CONTRACTS §7): the listener factory (`config.MessagingConfig`, `RequestIdMessages`) puts the
+message's `X-Request-Id` header and `message_id` into the MDC (`requestId`, `eventId`) for the whole handling,
+retries included; a message without the header gets a new id. Calls a handler makes to core or importer forward
+it (`ServiceClientsConfig`). A replayed dead letter keeps its original headers. Messages queued for Telegram are
+sent later by `DeliveryWorker` on its own thread and do not carry the id.
+
 **Dead letters** (`DeadLetters`, kept simple on purpose): nothing consumes the DLQ by itself. Every minute the
 service reads its depth into the gauge `notification.events.dead_letters` and logs a WARN when it grew. After the
 cause is fixed an admin calls `POST /api/notify/events/dead-letters/replay` (runbook: RUNNING.md §7): each message

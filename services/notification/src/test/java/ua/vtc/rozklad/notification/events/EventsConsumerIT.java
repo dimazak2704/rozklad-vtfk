@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +25,7 @@ import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.ScheduleChangeReason;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
+import ua.vtc.rozklad.notification.config.RequestIdMessages;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
 import ua.vtc.rozklad.notification.support.IntegrationTest;
 
@@ -38,6 +40,8 @@ class EventsConsumerIT extends IntegrationTest {
     private AmqpAdmin amqpAdmin;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory;
 
     @BeforeEach
     void admins() {
@@ -89,6 +93,14 @@ class EventsConsumerIT extends IntegrationTest {
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("🧩 <b>Генерацію розкладу завершено</b>")
                 .contains("Жорсткі порушення: 0 · штраф м’яких обмежень: 35")
                 .contains("• Вікна в групи — 3\n• Пізні пари — 1");
+    }
+
+    @Test
+    void listenersRunWithTheRequestIdOfTheMessage() {
+        // перша порада — MDC (RequestIdMessages), за нею retry з application.yml
+        assertThat(rabbitListenerContainerFactory.getAdviceChain()).hasSize(2);
+        assertThat(rabbitListenerContainerFactory.getAdviceChain()[0].getClass().getName())
+                .startsWith(RequestIdMessages.class.getName());
     }
 
     @Test
