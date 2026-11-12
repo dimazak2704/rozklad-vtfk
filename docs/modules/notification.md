@@ -132,6 +132,17 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   teacher's tap failed) confirms it here: the request messages are edited to «Ви підтвердили заміну» with the new
   room and the teacher gets the same info-only update; the late CONFIRMED event then changes nothing
   (`roomEditOfARequestConfirmedInCoreButPendingHereIsAnInfoOnlyUpdate`).
+  **Events out of order:** core re-sends a failed publication a minute later, so a status event can arrive after
+  a newer one. The local copy only moves forward along core's transitions (`SubstitutionRequest.canMoveTo`,
+  DOMAIN §7): APPLIED and CANCELLED take nothing more; CONFIRMED takes only APPLIED, CANCELLED and, for a NOTIFY
+  notice, DECLINED; a declined notice takes only CANCELLED. A step back changes nothing and edits no message, so a
+  late CONFIRMED after «скасовано» or «внесено до розпорядження» leaves the request and the info-only update as
+  they are; a `teacher-replied` «Добре» arriving after APPLIED records the answer and keeps APPLIED. A
+  `confirmation-requested` for a cancelled or published change (a late reminder) is ignored
+  (`SubstitutionRequestTest`, `SubstitutionFlowIT.lateConfirmationAfterTheCancellationLeavesBothMessagesCancelled`,
+  `lateConfirmationAfterThePublicationChangesNothing`, `lateReminderOfACancelledRequestIsNotSent`). Not covered:
+  a late CONFIRMED of an earlier NOTIFY round that reaches a request asked again and still pending, and an older
+  `details-changed` re-sent after a newer one (the events carry no per-change sequence).
   Deadline passed without an answer → one reminder to the teacher and one notice to admin
   chats (not for requests that never reached a teacher without Telegram, not for past lessons). core's
   `ConfirmationReminders` re-sends the request with the same, already passed deadline, and the every-minute job
@@ -252,7 +263,7 @@ this module.
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder; «✏️ Заміну змінено» when the details he sees changed); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
 | `substitution.details-changed` | a CONFIRM request already confirmed got a new room: info-only «✏️ Заміну змінено» to the teacher's chat, no buttons, no deadline; the stored request takes the new details, status and answer stay; a copy still pending here is confirmed (§3) |
-| `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
+| `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); a late event that would move the copy back is ignored (§3); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
 | `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
 | `generation.completed` | admin chats: SOLVED (hard/soft, top penalties) / FAILED (error) / CANCELLED |

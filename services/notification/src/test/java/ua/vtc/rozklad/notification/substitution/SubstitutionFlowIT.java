@@ -744,6 +744,70 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.editsIn(TEACHER)).hasSize(1);
     }
 
+    /**
+     * core re-sends a failed publication a minute later, so the delayed CONFIRMED can come after the change was
+     * cancelled (or published): it never moves the copy back, both messages keep «скасовано».
+     */
+    @Test
+    void lateConfirmationAfterTheCancellationLeavesBothMessagesCancelled() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        Sent request = telegram.lastSentTo(TEACHER);
+        handlers.handle(detailsChanged("214"));
+        worker.drain();
+        Sent update = telegram.lastSentTo(TEACHER);
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        worker.drain();
+        int editsBefore = telegram.editsIn(TEACHER).size();
+
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+
+        assertThat(telegram.editsIn(TEACHER)).hasSize(editsBefore);
+        for (long messageId : new long[] {request.messageId(), update.messageId()}) {
+            assertThat(telegram.editsIn(TEACHER)).filteredOn(edit -> edit.messageId() == messageId).last()
+                    .extracting(Edit::text).asString()
+                    .endsWith("🚫 <b>Заміну скасовано.</b> Нічого робити не потрібно.");
+        }
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus)
+                .isEqualTo(ChangeStatus.CANCELLED);
+    }
+
+    /** A late CONFIRMED after the order was published changes nothing either. */
+    @Test
+    void lateConfirmationAfterThePublicationChangesNothing() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(detailsChanged("214"));
+        handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        worker.drain();
+        int editsBefore = telegram.editsIn(TEACHER).size();
+
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+
+        assertThat(telegram.editsIn(TEACHER)).hasSize(editsBefore);
+        assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("📄 <b>Заміну внесено до розпорядження.</b> Дякуємо!");
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus)
+                .isEqualTo(ChangeStatus.APPLIED);
+    }
+
+    /** A reminder core re-sends after the cancellation does not reopen the request or reach the teacher. */
+    @Test
+    void lateReminderOfACancelledRequestIsNotSent() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        worker.drain();
+
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).singleElement().extracting(Sent::text).asString().startsWith("🙋");
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus)
+                .isEqualTo(ChangeStatus.CANCELLED);
+    }
+
     /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
     @Test
     void eventHandlersDoNotCallCoreInsideTheTransaction() {

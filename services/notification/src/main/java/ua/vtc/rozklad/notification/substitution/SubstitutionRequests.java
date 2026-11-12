@@ -126,6 +126,11 @@ public class SubstitutionRequests implements OutboundRelevance {
             informOfNewDetails(existing.get(), SubstitutionRequest.Details.of(event), event.eventId());
             return;
         }
+        if (existing.isPresent() && existing.get().isFinal()) {
+            // скасовану чи опубліковану заміну core більше не надсилає: це запізніла подія (нагадування,
+            // перевідправлене після скасування) — запит не відкриваємо знову
+            return;
+        }
         // the teacher already holds a message of this change that still waits for him
         boolean told = sameTeacher && existing.get().getMode() == event.effectiveMode()
                 && (notice ? existing.get().isNoticeInForce() : existing.get().isPending())
@@ -232,7 +237,8 @@ public class SubstitutionRequests implements OutboundRelevance {
 
     /**
      * {@code substitution.status-changed}: final states edit the request messages (a notice of a published
-     * change keeps its buttons until the teacher answers); a refusal goes to admins.
+     * change keeps its buttons until the teacher answers); a refusal goes to admins. A late event that would move
+     * the copy back ({@link SubstitutionRequest#canMoveTo}) changes and edits nothing.
      *
      * <p>{@code teacherName}: looked up by {@link #adminNameFor(RozkladEvent)} before the transaction (null ⇒ now).
      */

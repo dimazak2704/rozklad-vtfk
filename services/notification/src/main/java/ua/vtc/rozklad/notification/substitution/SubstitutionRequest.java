@@ -166,23 +166,48 @@ public class SubstitutionRequest implements Persistable<UUID> {
      * @return true when the answer or the status really changed
      */
     boolean recordAnswer(ConfirmationDecision answer, ChangeStatus newStatus, Instant now) {
-        if (answer == teacherAnswer && newStatus == status) {
+        // «Добре» given before the order still counts once the order is out (the event came after APPLIED)
+        ChangeStatus next = status == ChangeStatus.APPLIED && newStatus == ChangeStatus.CONFIRMED ? status : newStatus;
+        if (answer == teacherAnswer && next == status || next != status && !canMoveTo(next)) {
             return false;
         }
         this.teacherAnswer = answer;
+        this.status = next;
+        this.updatedAt = now;
+        return true;
+    }
+
+    /** @return true when the status really changed (a step back of a late event changes nothing) */
+    boolean changeStatus(ChangeStatus newStatus, Instant now) {
+        if (status == newStatus || !canMoveTo(newStatus)) {
+            return false;
+        }
         this.status = newStatus;
         this.updatedAt = now;
         return true;
     }
 
-    /** @return true when the status really changed */
-    boolean changeStatus(ChangeStatus newStatus, Instant now) {
-        if (status == newStatus) {
-            return false;
-        }
-        this.status = newStatus;
-        this.updatedAt = now;
-        return true;
+    /**
+     * Whether core can have moved the change from the local status to {@code next} (DOMAIN §7). core delivers its
+     * events out of order (a failed publication is re-sent a minute later), so an event that would step back is an
+     * older one and changes nothing: APPLIED and CANCELLED are final; a CONFIRMED change only gets published or
+     * cancelled, and only a notice's teacher can still decline it; a declined notice is only cancelled (asking
+     * again comes as a CONFIRM request, {@link #refresh}). A declined request takes anything: core asked again and
+     * that request is still on its way.
+     */
+    boolean canMoveTo(ChangeStatus next) {
+        return switch (status) {
+            case APPLIED, CANCELLED -> false;
+            case CONFIRMED -> next == ChangeStatus.APPLIED || next == ChangeStatus.CANCELLED
+                    || next == ChangeStatus.DECLINED && isNotice();
+            case DECLINED -> !isNotice() || next == ChangeStatus.CANCELLED;
+            case DRAFT, PENDING_CONFIRMATION -> true;
+        };
+    }
+
+    /** core never leaves APPLIED or CANCELLED: no later event reopens the request. */
+    boolean isFinal() {
+        return status == ChangeStatus.APPLIED || status == ChangeStatus.CANCELLED;
     }
 
     void markReminded(Instant now) {
