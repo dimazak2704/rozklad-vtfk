@@ -44,9 +44,10 @@ public final class StudyCalendar {
                 .filter(period -> period.covers(date) && period.appliesTo(group))
                 .toList();
         boolean closed = active.stream().anyMatch(StudyPeriod::closesLessons);
-        boolean online = active.stream().anyMatch(StudyPeriod::marksOnline);
+        // періоди форми навчання не додаються: вирішує найконкретніший (група > курс > усі)
+        Optional<StudyPeriod> studyMode = StudyPeriod.decidingStudyMode(active).filter(StudyPeriod::marksOnline);
         return new DayInfo(date, weekday, semester.parity(date), semester.weekNumber(date),
-                weekday <= 5 && !closed, online, note(active), semester.semesterId());
+                weekday <= 5 && !closed, studyMode.isPresent(), note(active, studyMode), semester.semesterId());
     }
 
     /** Monday–Friday dates of {@code [from, to]} inside a semester that a global holiday does not close. */
@@ -60,14 +61,14 @@ public final class StudyCalendar {
         return dates;
     }
 
-    private static String note(List<StudyPeriod> active) {
+    private static String note(List<StudyPeriod> active, Optional<StudyPeriod> online) {
         if (active.isEmpty()) {
             return null;
         }
         // спершу те, що скасовує заняття, далі форма навчання й сесія
         Set<String> titles = new LinkedHashSet<>();
         active.stream().filter(StudyPeriod::closesLessons).map(StudyPeriod::title).forEach(titles::add);
-        active.stream().filter(StudyPeriod::marksOnline).map(StudyPeriod::title).forEach(titles::add);
+        online.map(StudyPeriod::title).ifPresent(titles::add);
         active.stream().filter(period -> period.kind() == CalendarPeriodKind.EXAM_SESSION)
                 .map(StudyPeriod::title).forEach(titles::add);
         return titles.isEmpty() ? null : String.join(NOTE_SEPARATOR, titles);

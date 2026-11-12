@@ -39,4 +39,15 @@ public final class CalendarFixtures {
         return new StudyPeriod(CalendarPeriodKind.STUDY_MODE, title, from, to, StudyMode.ONLINE, PeriodScope.COURSES,
                 Set.of(courses), Set.of());
     }
+
+    public static StudyPeriod studyModeForGroups(String title, LocalDate from, LocalDate to, StudyMode mode,
+                                                 UUID... groups) {
+        return new StudyPeriod(CalendarPeriodKind.STUDY_MODE, title, from, to, mode, PeriodScope.GROUPS, Set.of(),
+                Set.of(groups));
+    }
+
+    public static StudyPeriod studyModeForAll(String title, LocalDate from, LocalDate to, StudyMode mode) {
+        return new StudyPeriod(CalendarPeriodKind.STUDY_MODE, title, from, to, mode, PeriodScope.ALL, Set.of(),
+                Set.of());
+    }
 }

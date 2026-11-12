@@ -26,8 +26,11 @@ and bells; the internal catalog snapshot for the importer.
 
 Value types for bulk rules (moved here from the timetable module at integration): `StudyCalendar`
 (`day(date, GroupScope)` → `DayInfo {parity, weekNumber, studyDay, online, note, semesterId}`,
-`studyDates`), `StudySemester`, `StudyPeriod` (`closesLessons`, `marksOnline`, `appliesTo`), `GroupScope`,
-`BellTimes`, `ShiftWindows`. Every module (timetable, substitution, order, accounting) reads the
+`studyDates`), `StudySemester`, `StudyPeriod` (`closesLessons`, `marksOnline`, `appliesTo`,
+`decidingStudyMode`), `GroupScope`, `BellTimes`, `ShiftWindows`. STUDY_MODE periods do not add up: `DayInfo.online`
+comes from the one deciding period (groups > courses > all, then the later start, then the id), the same
+rule as `studyModeFor`. So a group OFFLINE period inside a course ONLINE period brings that group back to its
+rooms (its dated lessons are offline and room-exclusive), and the note shows only the deciding online period. Every module (timetable, substitution, order, accounting) reads the
 calendar only through `CalendarQueries` and these types; their former private parity calculators and
 bell/period readers were removed.
 

@@ -5,6 +5,8 @@ import static ua.vtc.rozklad.core.calendar.CalendarFixtures.calendar;
 import static ua.vtc.rozklad.core.calendar.CalendarFixtures.holiday;
 import static ua.vtc.rozklad.core.calendar.CalendarFixtures.onlineForCourses;
 import static ua.vtc.rozklad.core.calendar.CalendarFixtures.practice;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.studyModeForAll;
+import static ua.vtc.rozklad.core.calendar.CalendarFixtures.studyModeForGroups;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -67,6 +69,43 @@ class StudyCalendarTest {
         assertThat(calendar.day(LocalDate.of(2026, 10, 20), GROUP_2KI3).online()).isFalse();
         assertThat(calendar.day(LocalDate.of(2026, 10, 27), GROUP_4KI1).note())
                 .isEqualTo("Осінні канікули; Групи 4КІ навчаються дистанційно");
+    }
+
+    @Test
+    void groupOfflinePeriodInsideCourseOnlinePeriodBringsTheGroupBackToClasses() {
+        GroupScope group3x1 = new GroupScope(UUID.randomUUID(), 3);
+        GroupScope group3x2 = new GroupScope(UUID.randomUUID(), 3);
+        StudyCalendar withException = calendar(List.of(
+                onlineForCourses("3 курс навчається дистанційно", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 31),
+                        3),
+                studyModeForGroups("3Х1 повертається на заняття", LocalDate.of(2026, 10, 19),
+                        LocalDate.of(2026, 10, 31), StudyMode.OFFLINE, group3x1.groupId())));
+
+        assertThat(withException.day(LocalDate.of(2026, 10, 20), group3x1)).satisfies(day -> {
+            assertThat(day.online()).isFalse();
+            assertThat(day.note()).isNull();
+        });
+        assertThat(withException.day(LocalDate.of(2026, 10, 16), group3x1).online()).isTrue();
+        assertThat(withException.day(LocalDate.of(2026, 10, 20), group3x2)).satisfies(day -> {
+            assertThat(day.online()).isTrue();
+            assertThat(day.note()).isEqualTo("3 курс навчається дистанційно");
+        });
+    }
+
+    @Test
+    void laterCollegeWideDecisionOverridesTheEarlierOneButNotACourseException() {
+        GroupScope group = new GroupScope(UUID.randomUUID(), 4);
+        StudyCalendar decisions = calendar(List.of(
+                studyModeForAll("Усі дистанційно", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31),
+                        StudyMode.ONLINE),
+                studyModeForAll("Усі повертаються", LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 31),
+                        StudyMode.OFFLINE),
+                onlineForCourses("4 курс дистанційно", LocalDate.of(2026, 10, 26), LocalDate.of(2026, 10, 30), 4)));
+
+        assertThat(decisions.day(LocalDate.of(2026, 10, 14), group).online()).isTrue();
+        assertThat(decisions.day(LocalDate.of(2026, 10, 20), group).online()).isFalse();
+        assertThat(decisions.day(LocalDate.of(2026, 10, 27), group).online()).isTrue();
+        assertThat(decisions.day(LocalDate.of(2026, 10, 20), null).online()).isFalse();
     }
 
     @Test

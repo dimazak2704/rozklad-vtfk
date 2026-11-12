@@ -406,6 +406,86 @@ class TimetablePublicationIT {
                 data.group4ki2.getId(), day)).isZero();
     }
 
+    /**
+     * The most specific study mode wins (DOMAIN §2): a group OFFLINE period inside the course ONLINE period
+     * brings the group back to its rooms, at publication and when added or removed later.
+     */
+    @Test
+    void groupOfflinePeriodInsideCourseOnlinePeriodBringsItsLessonsBackToTheirRooms() {
+        UUID group = data.group4ki1.getId();
+        LocalDate week7 = data.monday(7);
+        LocalDate week8 = data.monday(8);
+        periods.create(period(CalendarPeriodKind.STUDY_MODE, week8, StudyMode.OFFLINE, PeriodScope.GROUPS,
+                List.of(group)));
+
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND NOT online AND room_exclusive",
+                group, week8)).as("published offline under the group period").isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND online AND NOT room_exclusive",
+                group, week7)).isEqualTo(2);
+
+        UUID offline = periods.create(period(CalendarPeriodKind.STUDY_MODE, week7, StudyMode.OFFLINE,
+                PeriodScope.GROUPS, List.of(group))).id();
+
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND NOT online AND room_exclusive",
+                group, week7)).as("refreshed back to the rooms").isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND online",
+                data.group4ki2.getId(), week7)).as("other 4th-course groups stay online").isOne();
+
+        periods.delete(offline);
+
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND online AND NOT room_exclusive",
+                group, week7)).as("online again without the exception").isEqualTo(2);
+    }
+
+    /**
+     * A calendar edit on a date before a newer version's effectiveFrom re-materializes that date from the
+     * older, now archived version (the one published last among those effective by the date).
+     */
+    @Test
+    void calendarEditBeforeTheNewerVersionStartsFollowsTheOlderVersion() {
+        UUID first = imports.importTimetable(importCommand()).versionId();
+        publication.publish(first, data.semester.getStartsOn(), "admin");
+        UUID second = imports.importTimetable(withDenominatorWednesday()).versionId();
+        publication.publish(second, data.monday(6), "admin");
+        UUID group = data.group4ki1.getId();
+        LocalDate wednesday4 = data.monday(4).plusDays(2);
+        LocalDate wednesday6 = data.monday(6).plusDays(2);
+        assertThat(lessonsOf(group, wednesday4)).as("denominator Wednesday of the first version").isZero();
+        assertThat(lessonsOf(group, wednesday6)).as("denominator КМ of the second version").isOne();
+
+        UUID holiday = periods.create(new CalendarDtos.CalendarPeriodRequest(data.semester.getId(),
+                CalendarPeriodKind.HOLIDAY, "Тиждень без занять", data.monday(4), data.monday(4).plusDays(4), null,
+                null, PeriodScope.ALL, null, null, null)).id();
+        assertThat(lessonsOf(group, data.monday(4))).isZero();
+        periods.delete(holiday);
+
+        assertThat(jdbc.queryForList("SELECT DISTINCT version_id FROM lesson WHERE date BETWEEN ? AND ?", UUID.class,
+                data.monday(4), data.monday(4).plusDays(4))).containsExactly(first);
+        assertThat(lessonsOf(group, data.monday(4))).isEqualTo(2);
+        assertThat(lessonsOf(group, wednesday4)).as("still the first version").isZero();
+        assertThat(lessonsOf(group, wednesday6)).isOne();
+    }
+
+    /** A later semester end adds the new week's lessons of the published version. */
+    @Test
+    void extendingTheSemesterMaterializesTheNewDates() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        UUID group = data.group4ki1.getId();
+        LocalDate newMonday = data.monday(11);
+        assertThat(lessonsOf(group, newMonday)).isZero();
+        CalendarDtos.SemesterDto semester = semesters.get(data.semester.getId());
+
+        semesters.update(semester.id(), new CalendarDtos.SemesterRequest(semester.academicYear(), semester.number(),
+                semester.name(), semester.startsOn(), newMonday.plusDays(4), semester.firstWeekParity(),
+                semester.weeksCount(), semester.bellProfileId(), semester.version()));
+
+        assertThat(lessonsOf(group, newMonday)).isEqualTo(2);
+        assertThat(lessonsOf(data.group4ki2.getId(), newMonday)).isOne();
+        assertThat(lessonsOf(group, newMonday.plusDays(7))).as("after the new end").isZero();
+    }
+
     /** A practice over a pair with an open decision would strand the decision's lesson: refused, nothing changes. */
     @Test
     void practiceOverADayWithAnOpenDecisionIsRefused() {

@@ -3,8 +3,8 @@ package ua.vtc.rozklad.core.calendar.internal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
@@ -12,6 +12,7 @@ import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
 import ua.vtc.rozklad.core.calendar.SemesterCalendar;
 import ua.vtc.rozklad.core.calendar.StudyMode;
+import ua.vtc.rozklad.core.calendar.StudyPeriod;
 
 /**
  * Study-day rules of DOMAIN §2. A date has lessons if it is Mon–Fri, inside the semester and not
@@ -56,24 +57,14 @@ final class PeriodRules {
 
     /**
      * The most specific STUDY_MODE period wins (groups over courses over everybody); between
-     * equally specific ones the later started decision wins.
+     * equally specific ones the later started decision wins. Same rule as {@link ua.vtc.rozklad.core.calendar.StudyCalendar#day}.
      */
     static StudyMode studyMode(LocalDate date, Collection<CalendarPeriod> periods, UUID groupId, int course) {
-        return periods.stream()
+        List<StudyPeriod> active = periods.stream()
                 .filter(period -> period.getKind() == CalendarPeriodKind.STUDY_MODE && period.covers(date)
                         && appliesTo(period, groupId, course))
-                .max(Comparator.comparingInt((CalendarPeriod period) -> specificity(period.getScope()))
-                        .thenComparing(CalendarPeriod::getStartsOn)
-                        .thenComparing(CalendarPeriod::getId))
-                .map(CalendarPeriod::getStudyMode)
-                .orElse(StudyMode.OFFLINE);
-    }
-
-    private static int specificity(PeriodScope scope) {
-        return switch (scope) {
-            case ALL -> 1;
-            case COURSES -> 2;
-            case GROUPS -> 3;
-        };
+                .map(StudyPeriod::of)
+                .toList();
+        return StudyPeriod.decidingStudyMode(active).map(StudyPeriod::studyMode).orElse(StudyMode.OFFLINE);
     }
 }
