@@ -23,6 +23,9 @@ public interface TemplateLessonRepository extends JpaRepository<TemplateLesson, 
 
     long countByVersionId(UUID versionId);
 
+    /** Template lessons of any version taught to the subgroup (the catalog asks before deleting it). */
+    long countByGroupIdAndSubgroupNumber(UUID groupId, int subgroupNumber);
+
     @Modifying
     @Query("delete from TemplateLesson t where t.versionId = :versionId")
     int deleteAllInVersion(UUID versionId);

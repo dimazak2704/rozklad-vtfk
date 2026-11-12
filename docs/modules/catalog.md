@@ -17,7 +17,7 @@ catalog import used by the importer.
 | `UkrainianOrder.NATURAL` | display order (Ukrainian alphabet, numbers by value) |
 | `CatalogLabels` | Ukrainian labels (room types, «ауд. 6») |
 | `CatalogImported` | in-process event after an import commits (the demo seed listens to it) |
-| `SubgroupUsage` (SPI) | modules that store subgroup numbers say whether a subgroup is used (load implements it) |
+| `SubgroupUsage` (SPI) | modules that store subgroup numbers say whether a subgroup is used (load and timetable implement it) |
 
 Entities and repositories stay in the base package (foundation rule).
 
@@ -45,7 +45,8 @@ Public: `GET /api/public/groups`, `/teachers`, `/rooms`, `/search?q=&limit=10` (
 - **Specialty letters cannot change** while groups use them (they are part of the codes).
 - **Delete = delete + flush**; a foreign key violation becomes 409 with a message naming the record
   (`EntityGuards.deleteOrConflict`). The database knows every reference, also from other modules.
-  Subgroups have no FK (rows store numbers), so deletion asks the `SubgroupUsage` beans.
+  Subgroups have no FK (rows store numbers), so deletion and renumbering ask the `SubgroupUsage` beans: load
+  (a load teacher of the subgroup) and timetable (template lessons of any version, dated lessons from today on).
 - **Search** mirrors `web/src/lib/search.ts`: query variants (as typed, group code with look-alikes
   and phonetic transliteration, English keyboard layout), tiers 100 exact key > 90 key prefix >
   80 word prefix > 75 whole number word («6» finds «ауд. 6», not «16») > 60 contains > 40 typo

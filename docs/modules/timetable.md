@@ -128,6 +128,9 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
 - **SSE** is pushed after commit (`shared.sse.SseAfterCommit`), not through the outbox: `generation.progress`
   `{jobId, elapsedMs, hardScore, softScore}` and `generation.completed` (job DTO) to ADMIN, `schedule.changed`
   `{dates, groupIds, teacherIds, reason}` to everybody.
+- **Subgroups in use** (`internal.version.TimetableSubgroupUsage`, catalog SPI): a subgroup taught in a template
+  lesson of any version (an archived one still governs its dates) or in a dated lesson from today on cannot be
+  deleted or renumbered in the catalog (409 «Підгрупу N групи … використано: розклад …»).
 
 ## 4. Configuration
 

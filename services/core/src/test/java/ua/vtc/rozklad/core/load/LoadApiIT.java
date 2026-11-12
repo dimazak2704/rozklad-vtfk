@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static ua.vtc.rozklad.core.catalog.ApiTestSupport.id;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +28,9 @@ import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.core.catalog.ApiTestSupport;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.support.TestJwts;
+import ua.vtc.rozklad.core.timetable.Lesson;
+import ua.vtc.rozklad.core.timetable.LessonOrigin;
+import ua.vtc.rozklad.core.timetable.LessonRepository;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.TemplateLessonRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
@@ -50,6 +55,12 @@ class LoadApiIT {
 
     @Autowired
     private TemplateLessonRepository templateLessons;
+
+    @Autowired
+    private LessonRepository datedLessons;
+
+    @Autowired
+    private Clock clock;
 
     private MockMvc mvc;
     private UUID semester;
@@ -151,6 +162,37 @@ class LoadApiIT {
         mvc.perform(delete("/api/admin/groups/{id}/subgroups/{sub}", group, subgroup2).with(TestJwts.admin()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("навантаження")));
+    }
+
+    /**
+     * The Excel import stores no load teachers per subgroup: the timetable alone keeps a subgroup in use,
+     * by its template lessons (any version) or its dated lessons from today on.
+     */
+    @Test
+    void subgroupTaughtInTheTimetableCannotBeDeletedOrRenumbered() throws Exception {
+        String subgroups = "/api/admin/groups/{id}/subgroups";
+        UUID subgroup1 = UUID.fromString(ApiTestSupport.read(mvc.perform(get(subgroups, group)
+                .with(TestJwts.admin())).andReturn(), "$[0].id"));
+        UUID subgroup2 = UUID.fromString(ApiTestSupport.read(mvc.perform(get(subgroups, group)
+                .with(TestJwts.admin())).andReturn(), "$[1].id"));
+        TimetableVersion version = versions.save(new TimetableVersion(semester, "Імпорт Excel", VersionSource.IMPORT));
+        lesson(version, 3, 3, Parity.BOTH, 2, english, mozharovska);
+        Lesson dated = new Lesson(semester, LocalDate.now(clock).plusDays(1), 2, group, 1, english, LessonOrigin.TEMPLATE);
+        datedLessons.save(dated);
+
+        mvc.perform(delete(subgroups + "/{sub}", group, subgroup2).with(TestJwts.admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("розклад (версії), занять: 1")));
+        mvc.perform(put(subgroups + "/{sub}", group, subgroup2).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"number\":3,\"version\":0}"))
+                .andExpect(status().isConflict());
+        mvc.perform(delete(subgroups + "/{sub}", group, subgroup1).with(TestJwts.admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("від сьогодні, занять: 1")));
+
+        datedLessons.delete(dated);
+        mvc.perform(delete(subgroups + "/{sub}", group, subgroup1).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
     }
 
     @Test

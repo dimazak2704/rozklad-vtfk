@@ -29,6 +29,9 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
     /** Whether the group's timetable uses the subgroup on any date (the Excel import stores no subgroup rows). */
     boolean existsByGroupIdAndSubgroupNumber(UUID groupId, int subgroupNumber);
 
+    /** Dated lessons of the subgroup from {@code from} on (the catalog asks before deleting it). */
+    long countByGroupIdAndSubgroupNumberAndDateGreaterThanEqual(UUID groupId, int subgroupNumber, LocalDate from);
+
     /**
      * Locks all lessons of a group on a date ({@code SELECT … FOR UPDATE}) so that concurrent
      * changes cannot create a whole-group / subgroup overlap (DOMAIN §3). Call inside a transaction.
