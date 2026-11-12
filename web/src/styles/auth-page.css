@@ -405,71 +405,74 @@ body.auth {
   --len: 32.7;
 }
 
-/* Контур ≈ 2 px (при кільці ~440 px; одиниця viewBox ≈ 17 px): чорнило теми з дещицею кольору знака,
-   щоб шпиль був частиною бренду, а не сірим водяним знаком. --auth-spire-k вирівнює товщину між розмірами. */
+/* Контур ≈ 2,2 px (при кільці ~440 px; одиниця viewBox ≈ 17 px): чорнило теми з помітною часткою кольору
+   знака, щоб шпиль був частиною бренду, а не блідим олівцевим водяним знаком.
+   --auth-spire-k вирівнює товщину між розмірами. */
 .auth-spire {
   --auth-spire-k: 1;
 }
 
 .auth-spire-line {
   stroke: var(--text-color-primary);
-  stroke-opacity: 0.2;
-  stroke-width: calc(0.115px * var(--auth-spire-k));
+  stroke-opacity: 0.3;
+  stroke-width: calc(0.13px * var(--auth-spire-k));
 }
 
 [data-theme='dark'] .auth-spire-line {
-  stroke-opacity: 0.28;
+  stroke-opacity: 0.36;
 }
 
-/* сума часток < 100 % дає прозорість: 22 + 6 = 28 % (у темній 20 + 8 = 28 %:
-   світле чорнило на темному полотні при тій самій частці вже контрастніше, тож на око обидві теми рівні) */
+/* сума часток < 100 % дає прозорість: 22 + 12 = 34 % (у темній 22 + 14 = 36 %:
+   синій на темному полотні темніший за чорнило, тож йому потрібна трохи більша частка) */
 @supports (color: color-mix(in oklab, red 20%, blue 6%)) {
   .auth-spire-line {
-    stroke: color-mix(in oklab, var(--text-color-primary) 22%, var(--fill-brand) 6%);
+    stroke: color-mix(in oklab, var(--text-color-primary) 22%, var(--fill-brand) 12%);
     stroke-opacity: 1;
   }
 
   [data-theme='dark'] .auth-spire-line {
-    stroke: color-mix(in oklab, var(--text-color-primary) 20%, var(--fill-brand) 8%);
+    stroke: color-mix(in oklab, var(--text-color-primary) 22%, var(--fill-brand) 14%);
     stroke-opacity: 1;
   }
 }
 
-/* Світло: чотири штрихи з однаковою передньою точкою (--auth-trace-head), від довгого блідого
-   хвоста до короткої яскравої голови ≈ 3,5 px. Градієнт уздовж кривої SVG не вміє, тож хвіст складено
-   з шарів; голова ширша за тіло, тож читається як яскрава точка попереду, без фільтрів. */
+/* Світло: чотири штрихи з однаковою передньою точкою (--auth-trace-head). Хвіст — три чверті фігури,
+   тож світиться майже весь контур, а попереду голови лишається короткий темний проміжок; голова ≈ 4 px.
+   Градієнт уздовж кривої SVG не вміє, тож хвіст складено з шарів (довжини — частки --len фігури);
+   голова ширша за тіло, тож читається як яскрава точка попереду, без фільтрів.
+   Період пунктиру 2 × --len + 4: поки голова йде від −1 до 1,75 × --len + 1, друга риска на фігуру не лягає. */
 .auth-trace {
   display: none;
   stroke: var(--stroke-now);
 }
 
 .auth-trace use {
-  stroke-dasharray: calc(var(--d) * 1px) calc((var(--len) + 16 - var(--d)) * 1px);
+  stroke-dasharray: calc(var(--d) * 1px) calc((var(--len) * 2 + 4 - var(--d)) * 1px);
   stroke-dashoffset: calc((var(--d) - var(--auth-trace-head)) * 1px);
   stroke-width: calc(var(--w) * var(--auth-spire-k) * 1px);
 }
 
 .auth-trace-tail {
-  --d: 12;
-  --w: 0.14;
-  stroke-opacity: 0.12;
+  --d: calc(var(--len) * 0.75);
+  --w: 0.15;
+  stroke-opacity: 0.2;
 }
 
 .auth-trace-fade {
-  --d: 8;
-  --w: 0.155;
-  stroke-opacity: 0.26;
+  --d: calc(var(--len) * 0.45);
+  --w: 0.165;
+  stroke-opacity: 0.3;
 }
 
 .auth-trace-body {
-  --d: 4.5;
-  --w: 0.17;
-  stroke-opacity: 0.55;
+  --d: calc(var(--len) * 0.18);
+  --w: 0.19;
+  stroke-opacity: 0.6;
 }
 
 .auth-trace-head {
-  --d: 2;
-  --w: 0.205;
+  --d: 2.5;
+  --w: 0.24;
 }
 
 /* Розмір рахується від місця праворуч від колонки (400 px по центру): кільце (--ring) цілком на екрані,
@@ -551,8 +554,9 @@ body.auth {
     stroke-dashoffset: calc((var(--len) + 1) * (1 - var(--auth-spire-draw)) * 1px);
   }
 
-  /* Цикл 6 с, швидкість стала: кільце → шпиль → мале кільце, далі 0,9 с паузи.
-     Наступна фігура стартує, коли голова попередньої дійшла до її кінця (усі стики вгорі по центру). */
+  /* Цикл 6 с, швидкість стала (≈ 36 одиниць/с): кільце → шпиль → мале кільце, далі 0,9 с паузи.
+     Наступна фігура стартує, коли голова попередньої дійшла до її кінця (усі стики вгорі по центру),
+     а хвіст попередньої тим часом стікає, тож світло переходить з фігури на фігуру одним штрихом. */
   .auth-trace {
     display: inline;
     /* довгими властивостями: скорочення без імені мініфікатор згортає в «animation: none» */
@@ -563,13 +567,13 @@ body.auth {
     animation-fill-mode: both;
   }
 
-  /* поки людина вводить логін і пароль, світло тихо гасне (цикл іде далі й повертається після) */
+  /* поки людина вводить логін і пароль, світло тихо пригасає до 40 % (не зникає: цикл видно й далі) */
   .auth-trace {
     transition: opacity var(--duration-slow) var(--auth-ease-out);
   }
 
   body:has(.auth-form:focus-within) .auth-trace {
-    opacity: 0;
+    opacity: 0.4;
   }
 
   .auth-trace.auth-spire-outer {
@@ -609,36 +613,38 @@ body.auth {
   }
 }
 
-/* Голова проходить від −1 (ще до початку фігури) до --len + 13 (хвіст 12 повністю зійшов) */
+/* Голова проходить від −1 (ще до початку фігури) до 1,75 × --len + 1 (хвіст 0,75 × --len повністю зійшов).
+   Шлях голови за цикл: 74 (кільце до стику) + 50,3 (шпиль до стику) + 59,2 (мале кільце й хвіст) = 183,5
+   одиниці на 85 % циклу, тобто 0,4632 % на одиницю; кожен кадр — початок фігури й кінець її хвоста. */
 @keyframes auth-trace-outer {
   0% {
     --auth-trace-head: -1;
   }
-  43.8%,
+  60.1%,
   100% {
-    --auth-trace-head: 86;
+    --auth-trace-head: 128.75;
   }
 }
 
 @keyframes auth-trace-tower {
   0%,
-  36.7% {
+  34.28% {
     --auth-trace-head: -1;
   }
-  68.6%,
+  75.17%,
   100% {
-    --auth-trace-head: 62.3;
+    --auth-trace-head: 87.28;
   }
 }
 
 @keyframes auth-trace-inner {
   0%,
-  61.5% {
+  57.58% {
     --auth-trace-head: -1;
   }
   85%,
   100% {
-    --auth-trace-head: 45.7;
+    --auth-trace-head: 58.23;
   }
 }
 
