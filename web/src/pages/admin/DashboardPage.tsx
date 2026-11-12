@@ -225,10 +225,10 @@ export default function DashboardPage() {
                 dashboard.isError || workspace.error ? (
                   <ErrorState error={dashboard.error ?? workspace.error} size="sm" inset />
                 ) : (
-                  <LoadingRegion label="Завантажуємо, що потребує рішення…" className="flex flex-col gap-2 px-3 py-2">
-                    {[0, 1, 2].map((key) => (
-                      <Skeleton key={key} className="h-11 w-full rounded-popover" />
-                    ))}
+                  // один рядок висотою спокійного речення (py-1 + рядок 24 px): здебільшого тут саме воно,
+                  // тож три високі смуги не схлопуються в один рядок, коли дані приїдуть
+                  <LoadingRegion label="Завантажуємо, що потребує рішення…" className="flex h-8 items-center">
+                    <Skeleton className="h-4 w-3/4 max-w-md" />
                   </LoadingRegion>
                 )
               ) : (

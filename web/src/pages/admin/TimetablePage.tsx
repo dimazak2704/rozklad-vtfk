@@ -5,6 +5,7 @@ import { usePublicMeta } from '@/api/meta';
 import { useTimetableVersions, useVersionConflicts } from '@/api/timetable';
 import type { TemplateLessonDto, Uuid } from '@/api/types';
 import { Button, buttonClass, EmptyState, LoadingRegion, PageErrorBanner, PageHeader, Skeleton, Tooltip, type MoreMenuItem } from '@/components/ui';
+import { BoardSkeleton } from '@/components/timetable/board/BoardSkeleton';
 import { CreateVersionDialog } from '@/components/timetable/dialogs/CreateVersionDialog';
 import { PublishDialog } from '@/components/timetable/dialogs/PublishDialog';
 import { DiffView } from '@/components/timetable/DiffView';
@@ -146,7 +147,16 @@ export default function TimetablePage() {
   const header = (
     <PageHeader
       title="Базовий розклад"
-      meta={selected && !phone ? versionSentence(selected) : undefined}
+      meta={
+        phone ? undefined : selected ? (
+          versionSentence(selected)
+        ) : versions.isPending ? (
+          // місце під «Опублікована, діє з …», поки версії їдуть: заголовок не підстрибує
+          <span aria-hidden="true" className="flex h-[1.375rem] items-center">
+            <Skeleton className="h-3 w-48" />
+          </span>
+        ) : undefined
+      }
       controls={
         selected ? (
           <>
@@ -179,10 +189,17 @@ export default function TimetablePage() {
     return (
       <div className="flex flex-col gap-6">
         {header}
+        {/* та сама будова, що в редакторі: речення якості, панель інструментів, сітки і праворуч бічна колонка, —
+            тож коли версії приїдуть, силует не стрибає з однієї суцільної плити в сітку */}
         <LoadingRegion label="Завантажуємо версії розкладу…" className="flex flex-col gap-4">
           <Skeleton className="h-5 w-2/3 max-w-xl" />
-          <Skeleton className="h-11 w-full max-w-2xl rounded-control" />
-          <Skeleton className="h-96 w-full rounded-panel" />
+          <div className="grid items-start gap-4 min-[1440px]:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="flex min-w-0 flex-col gap-4">
+              <Skeleton className="h-11 w-full max-w-2xl rounded-control" />
+              <BoardSkeleton />
+            </div>
+            <Skeleton className="hidden h-80 rounded-panel min-[1440px]:block" />
+          </div>
         </LoadingRegion>
       </div>
     );

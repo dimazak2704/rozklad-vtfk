@@ -10,10 +10,11 @@ import {
 } from '@/api/timetable';
 import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
-import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, Skeleton, type MoreMenuItem } from '@/components/ui';
+import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, type MoreMenuItem } from '@/components/ui';
 import { isModalOpen, useHotkeys, useShortcutHints } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import { useRegisterCommands } from '@/stores/commands';
+import { BoardSkeleton } from './board/BoardSkeleton';
 import { TimetableBoard, type BoardFocus } from './board/TimetableBoard';
 import { LessonDialog } from './dialogs/LessonDialog';
 import { MoveDialog } from './dialogs/MoveDialog';
@@ -332,7 +333,9 @@ export function TimetableEditor({
               }}
             />
           ) : loading ? (
-            <BoardSkeleton />
+            <LoadingRegion label="Завантажуємо сітку розкладу…">
+              <BoardSkeleton />
+            </LoadingRegion>
           ) : (
             <>
               {lessons.length === 0 ? (
@@ -450,26 +453,5 @@ export function TimetableEditor({
         onMove={editing.moveLesson}
       />
     </div>
-  );
-}
-
-/** Силует дошки: дві сітки з рядками пар, поки вантажаться довідники й заняття. */
-function BoardSkeleton() {
-  return (
-    <LoadingRegion label="Завантажуємо сітку розкладу…" className="flex flex-col gap-4">
-      {[0, 1].map((grid) => (
-        <div key={grid} className="rounded-panel border border-default bg-surface">
-          <div className="flex items-center gap-3 border-b border-separator px-3 py-2.5">
-            <Skeleton className="h-6 w-14" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="grid grid-cols-[2.75rem_repeat(5,minmax(0,1fr))] gap-1 p-1">
-            {Array.from({ length: 24 }, (_, cell) => (
-              <Skeleton key={cell} className={cn('h-14', cell % 6 === 0 && 'w-8 justify-self-center')} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </LoadingRegion>
   );
 }
