@@ -34,33 +34,45 @@ function writeOpenCourses(courses: readonly number[]) {
 }
 
 /**
- * Коди груп курсу — сіткою з однаковими колонками (ціль 44 px, без рамок), тож рядки рівні й ніде не
- * лишається «сирота» на окремому рядку. Своя група — тонованим тлом. Підказка до коду — лише коли курсор
- * затримався на ньому: без пропуску затримки прогін мишею по сітці не «блимає» назвою на кожному коді.
+ * Коди груп курсу — сіткою з однаковими колонками (без рамок), тож рядки рівні й ніде не лишається «сирота»
+ * на окремому рядку. Ціль — 44 px заввишки, але видимий відгук обіймає лише сам код: мишею код синіє й під
+ * ним проїжджає риска (без плями тла на всю клітинку), фокус — контур навколо коду. Своя група — тісною
+ * тонованою «пігулкою». Підказка до коду — лише коли курсор затримався на ньому: без пропуску затримки
+ * прогін мишею по сітці не «блимає» назвою на кожному коді.
  */
 function CourseGrid({ list, ownId }: { list: readonly PublicGroupDto[]; ownId: string | null }) {
   return (
     <TooltipProvider skipDelayDuration={0}>
-      <ul className="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))]">
-        {list.map((group) => (
-          <li key={group.id}>
-            {/* мишею — повна назва групи; на дотик вона є на сторінці групи */}
-            <Tooltip content={groupTooltipText(group)} align="start">
-              <Link
-                to={paths.group(group.code)}
-                aria-current={group.id === ownId ? 'true' : undefined}
-                className={cn(
-                  'flex h-11 items-center rounded-control px-2 text-ui font-semibold text-primary figures',
-                  'transition-[background-color,color] duration-150 hover:bg-hover hover:text-accent',
-                  'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                  group.id === ownId && 'bg-selected text-accent hover:bg-selected',
-                )}
-              >
-                {group.code}
-              </Link>
-            </Tooltip>
-          </li>
-        ))}
+      <ul className="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))]">
+        {list.map((group) => {
+          const own = group.id === ownId;
+          return (
+            <li key={group.id}>
+              {/* мишею — повна назва групи; на дотик вона є на сторінці групи */}
+              <Tooltip content={groupTooltipText(group)} align="start">
+                <Link
+                  to={paths.group(group.code)}
+                  aria-current={own ? 'true' : undefined}
+                  className={cn(
+                    'group/code inline-flex h-11 min-w-11 items-center outline-none',
+                    'font-display text-cell font-semibold tracking-[0.01em] figures',
+                    own ? 'text-accent' : 'text-primary transition-colors duration-150 hover-fine:text-accent focus-visible:text-accent',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-flex h-8 items-center rounded-control px-2',
+                      'group-focus-visible/code:outline-2 group-focus-visible/code:outline-offset-0 group-focus-visible/code:outline-focus',
+                      own && 'bg-selected',
+                    )}
+                  >
+                    <span className="u-line">{group.code}</span>
+                  </span>
+                </Link>
+              </Tooltip>
+            </li>
+          );
+        })}
       </ul>
     </TooltipProvider>
   );
@@ -87,12 +99,18 @@ function CourseDisclosure({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={onToggle}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-control text-start text-ui font-semibold text-primary hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+        className="group/course flex min-h-11 w-full items-center justify-between gap-3 rounded-control text-start text-ui font-semibold text-primary transition-colors duration-150 hover-fine:text-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
       >
         <span>
           {course} курс <span className="font-normal text-muted">· {countLabel(list.length, ['група', 'групи', 'груп'])}</span>
         </span>
-        <ChevronDown aria-hidden="true" className={cn('size-4 text-muted motion-safe:transition-transform motion-safe:duration-200', open && 'rotate-180')} />
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            'size-4 text-muted motion-safe:transition-[rotate,color] motion-safe:duration-200 group-hover/course:text-accent',
+            open && 'rotate-180',
+          )}
+        />
       </button>
       <div id={panelId} hidden={!open} className="anim-reveal pb-3">
         <CourseGrid list={list} ownId={ownId} />
@@ -153,7 +171,7 @@ export function GroupsDirectory({ className }: { className?: string }) {
 
   return (
     <section aria-labelledby="groups-heading" className={cn('flex flex-col gap-1', className)}>
-      <h2 id="groups-heading" className="text-heading font-bold text-primary">
+      <h2 id="groups-heading" className="font-display text-title font-semibold text-primary">
         Усі групи
       </h2>
       {body}

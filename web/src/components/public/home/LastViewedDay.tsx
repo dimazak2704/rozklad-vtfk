@@ -48,8 +48,8 @@ export function LastViewedDay() {
   return (
     <section aria-labelledby="last-viewed-heading" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="last-viewed-heading" className="text-heading font-bold text-primary">
-          <span className="font-display font-semibold figures">{group.label}</span> {when}
+        <h2 id="last-viewed-heading" className="font-display text-title font-semibold text-primary">
+          <span className="figures">{group.label}</span> {when}
         </h2>
         <MoreLink to={`${group.url}?view=week`}>Тиждень</MoreLink>
       </div>

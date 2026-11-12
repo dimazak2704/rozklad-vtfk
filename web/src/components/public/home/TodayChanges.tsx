@@ -71,9 +71,9 @@ export function TodayChanges({ className }: { className?: string }) {
                 <GroupHint code={group.code}>
                   <Link
                     to={`/g/${encodeURIComponent(group.code)}?date=${changes.data.date}&view=day`}
-                    className="rounded-tag font-[650] text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    className="rounded-tag font-[650] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                   >
-                    {group.code}
+                    <span className="u-line">{group.code}</span>
                   </Link>
                 </GroupHint>
               </span>
@@ -87,7 +87,7 @@ export function TodayChanges({ className }: { className?: string }) {
 
   return (
     <section aria-labelledby={headingId} className={cn('flex flex-col gap-2', className)}>
-      <h2 id={headingId} className="text-heading font-bold text-primary">
+      <h2 id={headingId} className="font-display text-title font-semibold text-primary">
         Заміни
       </h2>
       {body}
