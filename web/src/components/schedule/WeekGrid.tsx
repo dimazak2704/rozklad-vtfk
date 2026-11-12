@@ -265,10 +265,14 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
             const line = nowRow === pair;
             return (
               <tr key={pair}>
+                {/* клітинка рядка з лінією «зараз» стоїть на шар вище за сусідні липкі клітинки: інакше в останні
+                    хвилини пари наступний рядок (той самий z, але пізніше в DOM) накрив би нижню половину пігулки */}
                 <th
                   scope="row"
+                  data-now-row={line || undefined}
                   className={cn(
-                    'sticky left-0 z-[5] h-[6.5rem] bg-surface px-4 py-3 text-start align-top font-normal',
+                    'sticky left-0 h-[6.5rem] bg-surface px-4 py-3 text-start align-top font-normal',
+                    line ? 'z-[6]' : 'z-[5]',
                     !lastRow && 'border-b border-separator',
                   )}
                 >

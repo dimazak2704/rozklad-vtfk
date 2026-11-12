@@ -59,6 +59,15 @@ describe('WeekGrid', () => {
     expect(secondRow).toHaveTextContent('10:00');
   });
 
+  it('у останні хвилини пари пігулку «зараз» не накриває колонка часу наступного рядка', () => {
+    // 10:39 — пігулка на межі 2 і 3 рядків: її рядок має стояти шаром вище за сусідні липкі клітинки
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60 + 39.8} />);
+    const rowHeaders = within(screen.getByRole('table', { name: /Розклад 4КІ1/ })).getAllByRole('rowheader');
+    expect(rowHeaders[1]).toHaveAttribute('data-now-row');
+    expect(rowHeaders[1]!.className).toMatch(/(^|\s)z-\[6\]/);
+    expect(rowHeaders[2]!.className).toMatch(/(^|\s)z-\[5\]/);
+  });
+
   it('лінія «зараз» не йде через текст заняття: лежить під вмістом, а в зайнятій клітинці — лише крапка на краю', () => {
     renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);
     const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
