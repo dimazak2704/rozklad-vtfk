@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReasonCode } from '@/api/types';
 import { Input, SegmentedControl, Tooltip } from '@/components/ui';
 import { REASON_CODE_HINT, REASON_CODE_LABEL } from '@/lib/labels';
+import { reasonWords } from '../format';
 
 /** Причини, які диспетчер обирає сам (FINISHED ставить лише «Вичитано», його не пропонуємо). */
 const REASON_CHOICES: readonly ReasonCode[] = ['ABSENT', 'MUTUAL', 'BUSINESS_TRIP', 'OTHER'];
@@ -12,7 +13,7 @@ interface ReasonPickerProps {
   onCodeChange: (code: ReasonCode) => void;
   onTextChange: (text: string) => void;
   /**
-   * Згорнуто: одне речення «У розпорядженні: «Зв.зам.»» і «змінити». Причину підставлено правильно в 9
+   * Згорнуто: одне речення «Причина: взаємна заміна» і «змінити». Причину підставлено правильно в 9
    * випадках з 10, тож перемикач потрібен рідко — показуємо його на вимогу.
    */
   collapsible?: boolean;
@@ -21,12 +22,12 @@ interface ReasonPickerProps {
 /** Причина, яку надрукують у колонці «Причина заміни». */
 export function ReasonPicker({ code, text, onCodeChange, onTextChange, collapsible = false }: ReasonPickerProps) {
   const [open, setOpen] = useState(!collapsible);
-  const shown = code === 'OTHER' ? text.trim() || REASON_CODE_LABEL.OTHER : REASON_CODE_LABEL[code];
+  const shown = reasonWords(code, text);
 
   if (!open) {
     return (
       <p className="text-caption text-secondary">
-        У розпорядженні: <span className="font-semibold text-primary">«{shown}»</span>{' '}
+        Причина: <span className="font-semibold text-primary">{shown}</span>{' '}
         <button
           type="button"
           onClick={() => setOpen(true)}

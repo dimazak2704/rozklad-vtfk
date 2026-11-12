@@ -9,8 +9,8 @@ import { Button, buttonClass, MoreMenu, notify, type MoreMenuItem } from '@/comp
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatDayMonth, formatInstantTime } from '@/lib/date';
-import { REASON_CODE_LABEL } from '@/lib/labels';
 import { ChangeTimeline } from '../ChangeTimeline';
+import { reasonWords } from '../format';
 import { noticeAnswer, pendingInfo, type LessonState } from '../model';
 import { StateText } from '../StateBadge';
 import { ReasonPicker } from './ReasonPicker';
@@ -117,7 +117,6 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
   const pending = state === 'pending' && !undelivered ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
   const substitute = change.new.teacher?.shortName ?? 'Викладач';
   const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled' || state === 'substituteAbsent';
-  const reason = change.reasonCode === 'OTHER' ? (change.reasonText ?? REASON_CODE_LABEL.OTHER) : REASON_CODE_LABEL[change.reasonCode];
   const [editingReason, setEditingReason] = useState(false);
   // core дозволяє правити відкриті й відхилені рішення; «вичитано» має лише одну причину
   const canEditReason = state !== 'applied' && state !== 'objected' && state !== 'uncovered' && change.kind !== 'DISCIPLINE_FINISHED';
@@ -221,7 +220,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
       ) : null}
 
       <p className="text-caption text-muted">
-        У розпорядженні: <span className="text-secondary">«{change.printedReason ?? reason}»</span>
+        Причина: <span className="text-secondary">{reasonWords(change.reasonCode, change.reasonText)}</span>
       </p>
       {editingReason ? <ReasonEditor change={change} onDone={() => setEditingReason(false)} /> : null}
 

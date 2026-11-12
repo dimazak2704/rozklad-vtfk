@@ -1,7 +1,7 @@
 /** Підписи для екранів щоденної роботи: пари, періоди відсутності, джерела, суми. */
-import type { AbsenceDto, AbsenceSource, ChangeDto } from '@/api/types';
+import type { AbsenceDto, AbsenceSource, ChangeDto, ReasonCode } from '@/api/types';
 import { formatDateRange } from '@/lib/date';
-import { countLabel, PAIR_FORMS_GEN } from '@/lib/labels';
+import { countLabel, PAIR_FORMS_GEN, REASON_CODE_HINT } from '@/lib/labels';
 
 const PAIRS_FORMS = ['пара', 'пари', 'пар'] as const;
 
@@ -23,6 +23,15 @@ export function pairsText(pairs: readonly number[] | null | undefined): string {
   }
   const single = sorted.length === 1;
   return `${parts.join(', ')} ${single ? 'пара' : 'пари'}`;
+}
+
+/**
+ * Причина заміни словами для диспетчера: «взаємна заміна». Друковане скорочення («Зв.зам.») — мова аркуша,
+ * його видно в самому розпорядженні.
+ */
+export function reasonWords(code: ReasonCode, text: string | null | undefined): string {
+  if (code === 'OTHER') return text?.trim() || REASON_CODE_HINT.OTHER.toLocaleLowerCase('uk');
+  return REASON_CODE_HINT[code].toLocaleLowerCase('uk');
 }
 
 export function absencePeriod(absence: Pick<AbsenceDto, 'dateFrom' | 'dateTo' | 'pairs'>): string {
