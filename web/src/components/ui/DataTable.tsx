@@ -268,7 +268,7 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => changeSort(column.id)}
                         className={cn(
-                          'group/sort -mx-1 inline-flex items-center gap-1 rounded-tag px-1 hover:text-primary',
+                          'group/sort -mx-1 inline-flex items-center gap-1 rounded-tag px-1 hover-fine:text-primary',
                           'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
                           active && 'text-primary',
                           column.numeric && 'flex-row-reverse',
@@ -283,7 +283,7 @@ export function DataTable<T>({
                             <ArrowUp
                               className={cn(
                                 'size-3.5',
-                                !active && 'opacity-0 transition-opacity duration-100 group-hover/th:opacity-60 group-focus-visible/sort:opacity-60',
+                                !active && 'opacity-0 transition-opacity duration-100 pointer-fine:group-hover/th:opacity-60 group-focus-visible/sort:opacity-60',
                               )}
                             />
                           )}
@@ -347,9 +347,13 @@ export function DataTable<T>({
                       tabIndex={selected ? -1 : undefined}
                       onClick={onRowClick ? () => onRowClick(row) : undefined}
                       className={cn(
-                        'group transition-[background-color] duration-100',
+                        // тло рядка Chrome малює по клітинках, і на дробових межах колонок лишаються світлі шви;
+                        // inset-тінь на всьому <tr> лягає поверх них суцільно, а фон — запас для рушіїв без тіні рядка
+                        'group shadow-[inset_0_0_0_100vmax_transparent] transition-[background-color,box-shadow] duration-100',
                         onRowClick && 'cursor-pointer',
-                        selected ? 'bg-selected' : 'hover:bg-hover',
+                        selected
+                          ? 'bg-selected shadow-[inset_0_0_0_100vmax_var(--background-color-selected)]'
+                          : 'hover-fine:bg-hover hover-fine:shadow-[inset_0_0_0_100vmax_var(--background-color-hover)]',
                         'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
                         loading && 'text-muted',
                         stack?.row,
