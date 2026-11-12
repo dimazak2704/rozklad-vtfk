@@ -8,9 +8,12 @@ import org.springframework.context.annotation.Configuration;
 import reactor.core.publisher.Mono;
 
 /**
- * Key of the Redis token bucket for {@code /api/public/**}: the client IP address. The gateway is
- * the edge (no trusted proxy in front), so {@code X-Forwarded-For} is deliberately ignored —
- * a client could forge it to escape the limit.
+ * Key of the Redis token bucket for {@code /api/public/**}: the client IP address as the server sees it.
+ * Without a forward-headers strategy that is the socket address and forwarding headers are ignored (a
+ * client could forge them). In production Caddy is the only client and the gateway runs with
+ * {@code SERVER_FORWARD_HEADERS_STRATEGY=native}: the address comes from the {@code X-Forwarded-For} Caddy
+ * sets, so the bucket is per browser; Caddy strips a client's {@code Forwarded}, which Reactor Netty would
+ * prefer ({@code ForwardedClientRateLimitIT}).
  */
 @Configuration(proxyBeanMethods = false)
 public class RateLimitConfig {
