@@ -135,7 +135,8 @@ public class OkHttpTelegramApi implements TelegramApi {
                 .inlineQueryId(inlineQueryId)
                 .results(results)
                 .cacheTime(cacheSeconds)
-                .isPersonal(false)
+                // відповідь залежить від того, хто питає (BOUND_ONLY): Telegram не віддає її іншим із кешу
+                .isPersonal(true)
                 .build();
         call(() -> client.execute(method));
     }

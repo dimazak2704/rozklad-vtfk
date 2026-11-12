@@ -82,9 +82,19 @@ public class BotReplies {
         answer(callbackId, text, true);
     }
 
+    /** Inline results, cached by Telegram for this user for a minute. */
     public void answerInline(String queryId, List<InlineArticle> articles) {
+        answerInline(queryId, articles, INLINE_CACHE_SECONDS);
+    }
+
+    /** An answer Telegram must not cache: access denied or core down (a later query may get results). */
+    public void answerInlineUncached(String queryId, List<InlineArticle> articles) {
+        answerInline(queryId, articles, 0);
+    }
+
+    private void answerInline(String queryId, List<InlineArticle> articles, int cacheSeconds) {
         try {
-            telegram.answerInlineQuery(queryId, articles, INLINE_CACHE_SECONDS);
+            telegram.answerInlineQuery(queryId, articles, cacheSeconds);
         } catch (TelegramApiFailure failure) {
             log.warn("Inline answer failed: {}", failure.getMessage());
         }

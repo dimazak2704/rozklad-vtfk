@@ -54,7 +54,7 @@ public class FakeTelegramClient implements TelegramApi {
     public record CallbackAnswer(String callbackId, String text, boolean alert) implements Call {
     }
 
-    public record InlineAnswer(String queryId, List<InlineArticle> articles) implements Call {
+    public record InlineAnswer(String queryId, List<InlineArticle> articles, int cacheSeconds) implements Call {
     }
 
     public record Other(String method) implements Call {
@@ -181,7 +181,7 @@ public class FakeTelegramClient implements TelegramApi {
 
     @Override
     public void answerInlineQuery(String inlineQueryId, List<InlineArticle> articles, int cacheSeconds) {
-        calls.add(new InlineAnswer(inlineQueryId, List.copyOf(articles)));
+        calls.add(new InlineAnswer(inlineQueryId, List.copyOf(articles), cacheSeconds));
     }
 
     @Override

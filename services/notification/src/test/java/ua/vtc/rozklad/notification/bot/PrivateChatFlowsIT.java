@@ -250,8 +250,19 @@ class PrivateChatFlowsIT extends IntegrationTest {
         assertThat(answer.articles().getFirst().description()).isEqualTo("2 пари · змін: 2");
         assertThat(answer.articles().getFirst().html()).startsWith("👥 <b>4КІ1</b> · понеділок, 19 жовтня");
 
+        assertThat(answer.cacheSeconds()).isEqualTo(60);
+
         dispatcher.dispatch(new InlineRequest(2, "q-2", STRANGER, "4КІ1"));
         assertThat(telegram.inlineAnswers().getLast().articles()).isEmpty();
+        // порожню відповідь незнайомцю Telegram не повинен віддавати іншим із кешу
+        assertThat(telegram.inlineAnswers().getLast().cacheSeconds()).isZero();
+
+        // core недоступний: порожня відповідь теж не кешується
+        flushCaches();
+        core.setUnavailable(true);
+        dispatcher.dispatch(new InlineRequest(3, "q-3", OWNER_CHAT, "4КІ1"));
+        assertThat(telegram.inlineAnswers().getLast().articles()).isEmpty();
+        assertThat(telegram.inlineAnswers().getLast().cacheSeconds()).isZero();
     }
 
     @Test

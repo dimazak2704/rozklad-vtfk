@@ -64,6 +64,14 @@ class OkHttpTelegramApiTest {
                 .contains("\"callback_data\":\"sr:c:1\"").contains("\"chat_id\":\"42\"");
     }
 
+    /** Results depend on who asks (BOUND_ONLY), so Telegram must not serve one user's answer to another. */
+    @Test
+    void inlineAnswersArePersonal() {
+        api.answerInlineQuery("q-1", List.of(new TelegramApi.InlineArticle("a1", "4КІ1", "2 пари", "<b>4КІ1</b>")), 60);
+        assertThat(requests.getFirst()).startsWith("answerinlinequery").contains("\"is_personal\":true")
+                .contains("\"cache_time\":60");
+    }
+
     @Test
     void identifiesTheBot() {
         responses.put("getme", "{\"ok\":true,\"result\":{\"id\":7,\"is_bot\":true,\"first_name\":\"Розклад\","

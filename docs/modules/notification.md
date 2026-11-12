@@ -17,7 +17,7 @@ internal REST, schedules are read from core's public REST.
 | `orders` | `OrderDistribution` (order.published), `OrderRows` (rows per group/teacher), `OrderTexts` (compact HTML) |
 | `substitution` | `SubstitutionRequests` (request, reply, edits, deadline reminders), `SubstitutionTexts` |
 | `documents` | `OrderDocxRenderer` (POI, college layout), `LibreOfficeConverter`, `PdfPngRenderer` (PDFBox), `OrderDocuments` (cache, media for photos), `PublishedOrders`, `DocumentPrerenderer`, `web/DocumentsController` |
-| `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache), error mapping |
+| `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache: meta 30 s, groups/teachers 1 h — an id missing from the cached list reloads it once, so a teacher or group created a minute ago gets a binding code; schedules 10 min under a generation counter), error mapping |
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
 | `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
 
@@ -153,7 +153,9 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   and Telegram is not asked. Bot removed/blocked (`my_chat_member`) → the chat's bindings are
   deleted; group → supergroup migration moves bindings.
 * **Inline mode**: `@scheduler_vtfk_bot 4КІ1` → cards of the nearest study day and the next one (up to two
-  owners), `cache_time` 60 s. Needs inline mode switched on in @BotFather (`/setinline`).
+  owners), `cache_time` 60 s with `is_personal` (the answer depends on who asks, so Telegram never serves one
+  user's cached results to another); an empty answer to an unknown user or while core is down is not cached
+  (`cache_time` 0). Needs inline mode switched on in @BotFather (`/setinline`).
 * **Morning digest**: 07:30 Mon–Fri (`app.bot.digest-cron`), only when core says `studyDay`, only groups with
   lessons, once per (date, chat); recipients = SUBSCRIBER and GROUP_CHAT bindings with `digestEnabled` (one query).
   Before round 7 group chats never got it; existing GROUP_CHAT bindings keep their stored flag (it was always

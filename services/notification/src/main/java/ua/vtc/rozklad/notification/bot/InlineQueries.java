@@ -45,7 +45,7 @@ public class InlineQueries {
         String query = request.query().strip();
         // приватний чат користувача має той самий id, що й користувач
         if (!access.mayTalkTo(request.fromUserId()) || query.isEmpty() || query.length() > MAX_QUERY) {
-            replies.answerInline(request.queryId(), List.of());
+            replies.answerInlineUncached(request.queryId(), List.of());
             return;
         }
         List<InlineArticle> articles = new ArrayList<>();
@@ -66,6 +66,8 @@ public class InlineQueries {
             }
         } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
             log.warn("Inline query without results: core unavailable ({})", e.getMessage());
+            replies.answerInlineUncached(request.queryId(), articles);
+            return;
         }
         replies.answerInline(request.queryId(), articles);
     }
