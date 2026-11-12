@@ -14,7 +14,7 @@ import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
 import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
-import { endSentence, lessonPhrase, nextDaySentence } from './my-day';
+import { endSentence, lessonPhrase, nextDaySentence, nextRequest, withRequest } from './my-day';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
@@ -268,6 +268,27 @@ describe('SubstitutionRequests', () => {
     expect(within(card).getByRole('button', { name: 'Не можу' })).toBeInTheDocument();
     await user.click(within(card).getByRole('button', { name: 'Підтверджую' }));
     await waitFor(() => expect(screen.queryAllByRole('article', { name: /^Нова заміна/ })).toHaveLength(0));
+  });
+
+  it('пара вже минула: лишається тільки «Підтверджую», бо відмовитися від неї нічого не дасть', async () => {
+    // 10:05 за Києвом — перша пара 9 листопада вже скінчилася, друга ще попереду
+    const notice = changesForTeacher(krentsin.id, new Date()).find((change) => change.approvalMode === 'NOTIFY');
+    if (!notice) throw new Error('у фікстурах немає повідомлення NOTIFY');
+    server.use(
+      http.get(apiPath('/me/changes'), () =>
+        Response.json([
+          { ...notice, id: 'over', date: '2026-11-09', pairFrom: 1, pairTo: 1, status: 'APPLIED', teacherAnswer: null, supersededBy: null },
+          { ...notice, id: 'ahead', date: '2026-11-09', pairFrom: 4, pairTo: 4, status: 'APPLIED', teacherAnswer: null, supersededBy: null },
+        ]),
+      ),
+    );
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const over = await screen.findByRole('article', { name: /1 пара$/ });
+    await waitFor(() => expect(within(over).getByText('Вам поставили заміну · пара вже минула')).toBeInTheDocument());
+    expect(within(over).queryByRole('button', { name: 'Не можу' })).not.toBeInTheDocument();
+    expect(within(over).getByRole('button', { name: 'Підтверджую' })).toBeInTheDocument();
+    const ahead = screen.getByRole('article', { name: /4 пара$/ });
+    expect(within(ahead).getByRole('button', { name: 'Не можу' })).toBeInTheDocument();
   });
 
   it('без запитів блоку немає, а «Мої заміни» кажуть одним реченням, що буде далі', async () => {
@@ -709,6 +730,40 @@ describe('мій день реченням', () => {
     expect(nextDaySentence([day('2026-11-16', [gym])], '2026-11-13', 'me')).toMatch(/^У понеділок, 16\sлистопада, перша о 08:30 — ФВ, 4КІ2, с\.з\.$/);
     expect(nextDaySentence([day('2026-11-12', [gym])], '2026-11-11', 'me')).toBe('Завтра перша о 08:30 — ФВ, 4КІ2, с.з.');
     expect(endSentence('ауд. 14')).toBe('ауд. 14.');
+  });
+
+  it('запит на заміну, що чекає відповіді, — у реченні «що далі», а не поруч із «завтра пар немає»', () => {
+    const request = { id: 'r', status: 'PENDING_CONFIRMATION', supersededBy: null, date: '2026-11-13', pairFrom: 1 } as unknown as ChangeDto;
+    const monday = 'Завтра пар немає. У понеділок, 16\u00a0листопада, перша о 09:40 — СТП, 4КІ1, ауд. 301.';
+    expect(withRequest(monday, request, '2026-11-12', '2026-11-16', '08:30')).toBe(
+      'Завтра пар немає, але є запит на заміну\u00a0— 1\u00a0пара о\u00a008:30. У понеділок, 16\u00a0листопада, перша о 09:40 — СТП, 4КІ1, ауд. 301.',
+    );
+    // завтра є й мої пари: запит — окремим реченням після них
+    expect(withRequest('Завтра перша о 09:40 — СТП, 4КІ1, ауд. 301.', request, '2026-11-12', '2026-11-13', '08:30')).toBe(
+      'Завтра перша о 09:40 — СТП, 4КІ1, ауд. 301. Ще є запит на заміну\u00a0— 1\u00a0пара о\u00a008:30.',
+    );
+    // дзвінки ще не прийшли — без часу; попереду пар немає — лише запит
+    expect(withRequest(null, request, '2026-11-12', null)).toBe('Завтра є запит на заміну\u00a0— 1\u00a0пара.');
+    // запит пізніше за мою наступну пару не згадуємо, раніше — так
+    const later = { ...request, date: '2026-11-17' };
+    expect(withRequest(monday, later, '2026-11-12', '2026-11-16', '08:30')).toBe(monday);
+    expect(withRequest('Наступного тижня пар у вас немає.', later, '2026-11-12', null, '08:30')).toBe(
+      'Наступного тижня пар у вас немає. Є запит на заміну на вівторок, 17\u00a0листопада\u00a0— 1\u00a0пара о\u00a008:30.',
+    );
+    expect(withRequest(monday, null, '2026-11-12', '2026-11-16')).toBe(monday);
+  });
+
+  it('найближчий запит: лише прохання без відповіді, не з минулих днів і не передане доповненням', () => {
+    const base = { status: 'PENDING_CONFIRMATION', supersededBy: null } as unknown as ChangeDto;
+    const list = [
+      { ...base, id: 'past', date: '2026-11-11', pairFrom: 1 },
+      { ...base, id: 'notice', date: '2026-11-12', pairFrom: 1, status: 'CONFIRMED' },
+      { ...base, id: 'gone', date: '2026-11-12', pairFrom: 2, supersededBy: { changeId: 'c2', kind: 'CANCEL', orderId: null } },
+      { ...base, id: 'late', date: '2026-11-13', pairFrom: 3 },
+      { ...base, id: 'first', date: '2026-11-13', pairFrom: 1 },
+    ] as ChangeDto[];
+    expect(nextRequest(list, '2026-11-12')?.id).toBe('first');
+    expect(nextRequest(list.slice(0, 3), '2026-11-12')).toBeNull();
   });
 });
 

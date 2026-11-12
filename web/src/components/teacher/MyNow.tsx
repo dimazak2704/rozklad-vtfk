@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
-import { useMySchedule } from '@/api/me';
+import { useBells } from '@/api/meta';
+import { useMyChanges, useMySchedule } from '@/api/me';
 import type { BellSlotDto, DayDto, IsoDate } from '@/api/types';
 import { studyWeek } from '@/components/public/schedule/schedule-params';
 import { activePairs } from '@/components/public/schedule/schedule-utils';
 import { NowIndicator } from '@/components/schedule';
 import { useNow } from '@/hooks/useNow';
 import { addDays, formatWeekdayDate, isWeekend } from '@/lib/date';
-import { lessonPhrase, nextDaySentence, ownLessons } from './my-day';
+import { lessonPhrase, nextDaySentence, nextOwnDay, nextRequest, ownLessons, withRequest } from './my-day';
 
 interface MyNowProps {
   teacherId: string;
@@ -34,7 +35,8 @@ function DayDone({ title, dateLine, next }: { title: string; dateLine: string; n
 /**
  * «Зараз» для викладача: відлік до дзвінка, доріжка його власних пар і одне речення про те, що він веде
  * зараз або далі. Єдине, що рухається на сторінці. Після останньої пари й у дні без пар — що буде далі:
- * перша пара наступного дня з парами (за потреби дивимося й наступний тиждень).
+ * перша пара наступного дня з парами (за потреби дивимося й наступний тиждень) і запит на заміну, якщо він
+ * чекає відповіді раніше: його пари ще немає в розкладі, а «Завтра пар немає» поруч із ним заплутує.
  */
 export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   const day = days.find((d) => d.date === today);
@@ -48,12 +50,20 @@ export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   // у цьому тижні моїх пар більше немає — перша пара наступного тижня
   const nextWeek = studyWeek(addDays(studyWeek(today).from, 7));
   const later = useMySchedule(nextWeek.from, nextWeek.to, { enabled: done && thisWeek === null });
+  // той самий кеш, що й у списку запитів нижче: окремого запиту до сервера немає
+  const changes = useMyChanges();
+  const request = done && changes.data ? nextRequest(changes.data, today) : null;
+  const requestBells = useBells(request?.date);
+  const requestStart = requestBells.data?.slots.find((slot) => slot.pair === request?.pairFrom)?.startsAt;
 
   if (done) {
     const laterData = later.data && !later.isPlaceholderData ? later.data : null;
-    const next =
+    const own =
       thisWeek ??
       (laterData ? (nextDaySentence(laterData.days, today, teacherId) ?? 'Наступного тижня пар у вас немає.') : null);
+    const ownDay = nextOwnDay(days, today, teacherId) ?? (laterData ? nextOwnDay(laterData.days, today, teacherId) : null);
+    // поки наступний тиждень вантажиться, речення немає зовсім: запит до нього не чіпляємо, щоб текст не «стрибав»
+    const next = own === null ? null : withRequest(own, request, today, ownDay?.day.date ?? null, requestStart);
     const title = status?.kind === 'after-day' ? 'На сьогодні все' : isWeekend(today) ? 'Сьогодні вихідний' : 'Сьогодні пар немає';
     return <DayDone title={title} dateLine={formatWeekdayDate(today)} next={next} />;
   }

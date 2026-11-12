@@ -4,7 +4,7 @@ import type { ChangeDto } from '@/api/types';
 import { Button, Popover, PopoverClose, PopoverContent, PopoverTrigger, Textarea } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { formatInstantTime, todayInKyiv } from '@/lib/date';
+import { compareIsoDates, formatInstantTime, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { subgroupLabel } from '@/lib/labels';
 import { changeDay, changeDisciplineTitle, changeReplaced, changeRoom, changeWhen, deadlineDay } from './change-text';
@@ -29,7 +29,7 @@ interface SubstitutionCardProps {
  */
 export function SubstitutionCard({ change, onConfirm, onDecline, primary = false, fresh = false }: SubstitutionCardProps) {
   const bells = useBells(change.date);
-  const { now } = useNow();
+  const { now, clock } = useNow();
   const [comment, setComment] = useState('');
   const commentId = useId();
   const today = todayInKyiv(now);
@@ -41,6 +41,11 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
   const replaced = changeReplaced(change);
   const notice = change.approvalMode === 'NOTIFY';
   const subgroup = change.subgroup > 0 ? subgroupLabel(change.subgroup) : null;
+  // пара вже скінчилася: «Не можу» нічого не змінить, лишається тільки сказати, що бачили
+  const lastSlot = bells.data?.slots.find((s) => s.pair === change.pairTo);
+  const past =
+    compareIsoDates(change.date, today) < 0 ||
+    (change.date === today && lastSlot !== undefined && clock.minutes >= timeToMinutes(lastSlot.endsAt));
 
   // одне речення про стан замість трьох табличок: що це, до коли відповісти; строк — одним шматком, без переносу
   const due = deadline ? (
@@ -49,7 +54,13 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
       {deadlineDay(deadline, today)}
     </span>
   ) : null;
-  const state = notice ? (
+  const state = past ? (
+    notice ? (
+      'Вам поставили заміну · пара вже минула'
+    ) : (
+      'Просять замінити · пара вже минула'
+    )
+  ) : notice ? (
     change.status === 'APPLIED' ? (
       'Вам поставили заміну, вона вже в розпорядженні'
     ) : (
@@ -124,43 +135,45 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
         <Button variant={primary ? 'primary' : 'secondary'} onClick={onConfirm}>
           Підтверджую
         </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost">Не можу</Button>
-          </PopoverTrigger>
-          <PopoverContent width="md" title={notice ? 'Не можете провести цю пару?' : 'Відмовитися від заміни?'}>
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onDecline(comment);
-              }}
-            >
-              <label htmlFor={commentId} className="text-caption font-[650] text-primary">
-                Коментар для диспетчера <span className="font-[500] text-muted">(необовʼязково)</span>
-              </label>
-              <Textarea
-                id={commentId}
-                value={comment}
-                maxLength={COMMENT_MAX}
-                placeholder="Наприклад: маю пару в іншому корпусі"
-                onChange={(event) => setComment(event.target.value)}
-                rows={2}
-              />
-              <div className="flex justify-end gap-2">
-                <PopoverClose asChild>
-                  <Button variant="ghost" size="sm">
-                    Скасувати
+        {past ? null : (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost">Не можу</Button>
+            </PopoverTrigger>
+            <PopoverContent width="md" title={notice ? 'Не можете провести цю пару?' : 'Відмовитися від заміни?'}>
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onDecline(comment);
+                }}
+              >
+                <label htmlFor={commentId} className="text-caption font-[650] text-primary">
+                  Коментар для диспетчера <span className="font-[500] text-muted">(необовʼязково)</span>
+                </label>
+                <Textarea
+                  id={commentId}
+                  value={comment}
+                  maxLength={COMMENT_MAX}
+                  placeholder="Наприклад: маю пару в іншому корпусі"
+                  onChange={(event) => setComment(event.target.value)}
+                  rows={2}
+                />
+                <div className="flex justify-end gap-2">
+                  <PopoverClose asChild>
+                    <Button variant="ghost" size="sm">
+                      Скасувати
+                    </Button>
+                  </PopoverClose>
+                  {/* відмова — не втрата даних: звичайна кнопка, а передумати можна в сповіщенні */}
+                  <Button type="submit" variant="secondary" size="sm">
+                    {notice ? 'Повідомити диспетчера' : 'Відмовитися'}
                   </Button>
-                </PopoverClose>
-                {/* відмова — не втрата даних: звичайна кнопка, а передумати можна в сповіщенні */}
-                <Button type="submit" variant="secondary" size="sm">
-                  {notice ? 'Повідомити диспетчера' : 'Відмовитися'}
-                </Button>
-              </div>
-            </form>
-          </PopoverContent>
-        </Popover>
+                </div>
+              </form>
+            </PopoverContent>
+          </Popover>
+        )}
       </div>
     </article>
   );
