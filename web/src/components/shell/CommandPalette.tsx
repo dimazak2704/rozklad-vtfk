@@ -174,6 +174,21 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
     (t) => [t.label, 'тема', 'оформлення'],
   );
 
+  const groupResults = results.filter((result) => result.type === 'GROUP');
+  const teacherResults = results.filter((result) => result.type === 'TEACHER');
+  const roomResults = results.filter((result) => result.type === 'ROOM');
+  const renderResult = (result: (typeof results)[number]) => (
+    <Item
+      key={`${result.type}-${result.id}`}
+      value={`${result.type}-${result.id}`}
+      icon={ENTITY_ICON[result.type]}
+      onSelect={() => go(result.url)}
+      sublabel={result.sublabel}
+    >
+      <span className="font-semibold">{result.label}</span>
+    </Item>
+  );
+
   const searching = trimmed.length > 0 && (search.isFetching || debounced !== query);
   const nothing =
     trimmed.length > 0 &&
@@ -204,8 +219,9 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
           </p>
         ) : null}
 
-        {directCodes.length > 0 || results.length > 0 ? (
-          <Command.Group heading="Розклад" className={GROUP_HEADING}>
+        {/* результати — за типом, як у пошуку на головній: одразу видно, що «Кренцін» — викладач */}
+        {directCodes.length > 0 || groupResults.length > 0 ? (
+          <Command.Group heading="Групи" className={GROUP_HEADING}>
             {directCodes.map((code) => (
               <Item
                 key={`code-${code}`}
@@ -219,17 +235,17 @@ function PaletteBody({ initialQuery, onClose }: { initialQuery: string; onClose:
                 </Plate>
               </Item>
             ))}
-            {results.map((result) => (
-              <Item
-                key={`${result.type}-${result.id}`}
-                value={`${result.type}-${result.id}`}
-                icon={ENTITY_ICON[result.type]}
-                onSelect={() => go(result.url)}
-                sublabel={result.sublabel}
-              >
-                <span className="font-semibold">{result.label}</span>
-              </Item>
-            ))}
+            {groupResults.map(renderResult)}
+          </Command.Group>
+        ) : null}
+        {teacherResults.length > 0 ? (
+          <Command.Group heading="Викладачі" className={GROUP_HEADING}>
+            {teacherResults.map(renderResult)}
+          </Command.Group>
+        ) : null}
+        {roomResults.length > 0 ? (
+          <Command.Group heading="Аудиторії" className={GROUP_HEADING}>
+            {roomResults.map(renderResult)}
           </Command.Group>
         ) : null}
 
