@@ -16,11 +16,17 @@ function toRouteObject(route: AppRoute): RouteObject {
   return { path: route.path, handle, lazy };
 }
 
-const notFound: RouteObject = {
-  path: '*',
-  handle: { title: 'Сторінку не знайдено' },
-  lazy: async () => ({ Component: (await import('@/pages/system/NotFoundPage')).default }),
-};
+/**
+ * «Такої сторінки немає» у своєму макеті: невідома адреса кабінету чи панелі лишає людину в її розділі
+ * (бічна панель, пошук), а не викидає в публічну шапку з вкладками студента.
+ */
+function notFound(path: string): RouteObject {
+  return {
+    path,
+    handle: { title: 'Сторінку не знайдено' },
+    lazy: async () => ({ Component: (await import('@/pages/system/NotFoundPage')).default }),
+  };
+}
 
 /**
  * Межа помилок сторінок усередині макета: помилка сторінки (зокрема частина коду, що не завантажилась
@@ -45,7 +51,7 @@ export const routeTree: RouteObject[] = [
       {
         element: <PublicLayout />,
         errorElement: <RouteErrorPage />,
-        children: [withinLayout([...routesFor('public').map(toRouteObject), notFound])],
+        children: [withinLayout([...routesFor('public').map(toRouteObject), notFound('*')])],
       },
       {
         element: (
@@ -57,7 +63,7 @@ export const routeTree: RouteObject[] = [
           {
             lazy: async () => ({ Component: (await import('@/layouts/TeacherLayout')).TeacherLayout }),
             errorElement: <RouteErrorPage />,
-            children: [withinLayout(routesFor('teacher').map(toRouteObject))],
+            children: [withinLayout([...routesFor('teacher').map(toRouteObject), notFound('/me/*')])],
           },
         ],
       },
@@ -75,6 +81,7 @@ export const routeTree: RouteObject[] = [
               withinLayout([
                 ...routesFor('admin').map(toRouteObject),
                 { path: '/admin/catalog', element: <Navigate to="/admin/catalog/groups" replace /> },
+                notFound('/admin/*'),
               ]),
             ],
           },

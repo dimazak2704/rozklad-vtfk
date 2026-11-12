@@ -14,19 +14,28 @@ function safeDecode(value: string): string {
   }
 }
 
+/** Куди веде «‹ …»: на головну свого розділу — панелі диспетчера, кабінету чи публічного розкладу. */
+function homeOf(pathname: string): { to: string; label: string } {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return { to: '/admin', label: 'Сьогодні' };
+  if (pathname === '/me' || pathname.startsWith('/me/')) return { to: '/me', label: 'Мій розклад' };
+  return { to: '/', label: 'Розклад' };
+}
+
 /**
  * 404 — одне речення і шлях далі, без велетенського «404». Людина, найімовірніше, шукала розклад:
- * даємо пошук, а якщо в адресі схоже на код групи — пряме посилання на неї. Шлях додому один — «‹ Розклад».
+ * даємо пошук, а якщо в адресі схоже на код групи — пряме посилання на неї. Шлях додому один — на
+ * головну свого розділу («‹ Розклад», у панелі — «‹ Сьогодні», у кабінеті — «‹ Мій розклад»).
  */
 export default function NotFoundPage() {
   const location = useLocation();
+  const home = homeOf(location.pathname);
   const openSearch = useCommandStore((state) => state.setOpen);
   const lastSegment = safeDecode(location.pathname.split('/').filter(Boolean).pop() ?? '');
   const guessedGroup = canonicalGroupCode(lastSegment);
 
   return (
     <section className="flex max-w-xl flex-col gap-4 py-2 sm:py-8">
-      <BackLink to="/" label="Розклад" />
+      <BackLink to={home.to} label={home.label} />
       <h1 className="font-display text-[1.5rem] leading-[1.875rem] font-semibold tracking-[-0.02em] text-primary sm:text-headline">
         Такої сторінки немає
       </h1>
