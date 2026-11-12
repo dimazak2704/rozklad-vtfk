@@ -6,7 +6,7 @@ import { useMe, useMyPreferences, useMySchedule, useSavePreferences } from '@/ap
 import { useBellProfiles } from '@/api/public';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { studyWeek } from '@/components/public/schedule/schedule-params';
-import { PreferenceGrid } from '@/components/teacher/PreferenceGrid';
+import { PreferenceGrid, PreferenceLegend } from '@/components/teacher/PreferenceGrid';
 import { cellKey, changedCells, toList, toMap, type CellKey } from '@/components/teacher/preferences';
 import { Button, EmptyState, LoadingRegion, PageErrorScope, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -129,10 +129,13 @@ export default function MyPreferencesPage() {
           </LoadingRegion>
         ) : (
           <div className="flex flex-col gap-5">
-            {/* одне речення замість легенди: слова «небажано» й «неможливо» в клітинках пояснюють себе самі */}
-            <p id="preferences-hint" className="max-w-prose text-body text-secondary">
-              Натисніть пару, яка вам незручна, а ще раз — якщо прийти тоді не можете зовсім.
-            </p>
+            {/* одне речення, як користуватися, і ключ до значків: на телефоні в клітинці лише значок */}
+            <div className="flex flex-col gap-2">
+              <p id="preferences-hint" className="max-w-prose text-body text-secondary">
+                Натисніть пару, яка вам незручна, а ще раз — якщо прийти тоді не можете зовсім.
+              </p>
+              <PreferenceLegend />
+            </div>
 
             <PreferenceGrid value={current} onCellChange={onCellChange} slotsByWeekday={slotsByWeekday} lessons={lessons} describedBy="preferences-hint" />
 

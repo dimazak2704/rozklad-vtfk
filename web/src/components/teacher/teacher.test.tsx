@@ -15,8 +15,8 @@ import { AbsenceList } from './AbsenceList';
 import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, mostUrgent, REPLY_UNDO_MS } from './change-text';
 import { endSentence, lessonPhrase, nextDaySentence } from './my-day';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
-import { PreferenceGrid } from './PreferenceGrid';
-import { cellKey, changedCells, nextKind, toList, toMap, type CellKey } from './preferences';
+import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
+import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
 import { answered } from '@/api/me';
 
@@ -224,7 +224,29 @@ describe('побажання', () => {
     await act(async () => user.keyboard('1'));
     expect(screen.getByRole('button', { name: /^Вівторок, 2 пара/ })).toHaveAccessibleName(/небажано/);
     expect(screen.queryByRole('button', { name: /^Пʼятниця, 7 пара/ })).toBeNull();
+    // зайві клітинки заштриховані без тексту на екрані, а пояснення — одним реченням під сіткою
+    expect(screen.getAllByText('пари немає').every((element) => element.classList.contains('sr-only'))).toBe(true);
     expect(screen.getAllByText('пари немає')).toHaveLength(2);
+    expect(screen.getByText(/^У пʼятницю лише 6\sпар\.$/)).toBeInTheDocument();
+  });
+});
+
+describe('ключ і примітка до сітки побажань', () => {
+  const slots = (counts: Record<number, number>) =>
+    new Map<Weekday, BellSlotDto[]>(
+      Object.entries(counts).map(([day, count]) => [Number(day) as Weekday, Array.from({ length: count }, (_, i) => ({ pair: i + 1, startsAt: '08:30', endsAt: '09:30' }))]),
+    );
+
+  it('ключ: значок і слово для кожного стану', () => {
+    renderWithProviders(<PreferenceLegend />);
+    expect(screen.getByText('небажано')).toBeInTheDocument();
+    expect(screen.getByText('неможливо')).toBeInTheDocument();
+  });
+
+  it('коротші дні — одним реченням; однакові дні — без примітки', () => {
+    expect(shorterDaysNote(slots({ 1: 8, 2: 8, 3: 8, 4: 6, 5: 6 }), 8)).toBe('У четвер і пʼятницю лише 6 пар.');
+    expect(shorterDaysNote(slots({ 1: 8, 2: 8, 3: 7, 4: 8, 5: 6 }), 8)).toBe('У середу лише 7 пар. У пʼятницю лише 6 пар.');
+    expect(shorterDaysNote(slots({ 1: 6, 2: 6, 3: 6, 4: 6, 5: 6 }), 6)).toBeNull();
   });
 });
 

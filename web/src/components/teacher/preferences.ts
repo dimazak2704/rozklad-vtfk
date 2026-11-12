@@ -2,7 +2,10 @@
  * Побажання до розкладу як сітка «день × пара»: небажано (мʼяке обмеження генератора) або неможливо
  * (жорстке, DOMAIN §5). Чиста логіка без React — для тестів.
  */
-import type { PreferenceDto, PreferenceKind, Weekday } from '@/api/types';
+import type { BellSlotDto, PreferenceDto, PreferenceKind, Weekday } from '@/api/types';
+import { countLabel, PAIR_FORMS, WEEKDAY_ACCUSATIVE } from '@/lib/labels';
+
+export const WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5];
 
 export type CellKey = `${number}:${number}`;
 export type PreferenceMap = ReadonlyMap<CellKey, PreferenceKind>;
@@ -54,3 +57,20 @@ export const KIND_CELL: Record<PreferenceKind, string> = {
   UNWANTED: 'bg-change-subtle text-change',
   UNAVAILABLE: 'bg-cancel-subtle text-cancel',
 };
+
+/** «У пʼятницю лише 6 пар.» — один раз під сіткою замість «пари немає» в кожній зайвій клітинці. */
+export function shorterDaysNote(slotsByWeekday: ReadonlyMap<Weekday, readonly BellSlotDto[]>, maxPairs: number): string | null {
+  const byCount = new Map<number, Weekday[]>();
+  for (const weekday of WEEKDAYS) {
+    const count = slotsByWeekday.get(weekday)?.length ?? 0;
+    if (count > 0 && count < maxPairs) byCount.set(count, [...(byCount.get(count) ?? []), weekday]);
+  }
+  if (byCount.size === 0) return null;
+  return [...byCount]
+    .map(([count, days]) => {
+      const names = days.map((day) => WEEKDAY_ACCUSATIVE[day] ?? '');
+      const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} і ${names.at(-1) ?? ''}` : (names[0] ?? '');
+      return `У ${list} лише ${countLabel(count, PAIR_FORMS)}.`;
+    })
+    .join(' ');
+}

@@ -3,14 +3,29 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
-import { cellKey, KIND_CELL, KIND_TEXT, nextKind, type CellKey, type PreferenceMap } from './preferences';
-
-const WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5];
+import { cellKey, KIND_CELL, KIND_TEXT, nextKind, shorterDaysNote, WEEKDAYS, type CellKey, type PreferenceMap } from './preferences';
 
 /** Значок стану: на телефоні замість слова, ширше — поруч зі словом. */
 function KindIcon({ kind, className }: { kind: PreferenceKind; className?: string }) {
   const Icon = kind === 'UNWANTED' ? ThumbsDown : Ban;
   return <Icon aria-hidden="true" className={cn('size-4 shrink-0', className)} />;
+}
+
+/**
+ * Ключ до станів одним рядком: значок і слово. На телефоні в клітинці лише значок, тож без ключа
+ * «небажано» від «неможливо» не відрізнити.
+ */
+export function PreferenceLegend({ className }: { className?: string }) {
+  return (
+    <p className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-caption font-[600]', className)}>
+      {(['UNWANTED', 'UNAVAILABLE'] as const).map((kind) => (
+        <span key={kind} className={cn('inline-flex items-center gap-1.5', kind === 'UNWANTED' ? 'text-change' : 'text-cancel')}>
+          <KindIcon kind={kind} />
+          {KIND_TEXT[kind]}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 interface PreferenceGridProps {
@@ -79,97 +94,103 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
     event.preventDefault();
   };
 
+  const note = shorterDaysNote(slotsByWeekday, maxPairs);
+
   return (
-    <div className="overflow-x-auto rounded-panel border border-default bg-surface">
-      <table className="w-full min-w-[18rem] table-fixed border-separate border-spacing-0 sm:min-w-[34rem]">
-        <caption className="sr-only">Побажання: дні тижня й пари</caption>
-        <colgroup>
-          <col className="w-11 sm:w-[5.5rem]" />
-          {WEEKDAYS.map((weekday) => (
-            <col key={weekday} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col" className="h-12 border-b border-separator px-2 sm:px-4">
-              <span className="sr-only">Пара</span>
-            </th>
+    <div className="flex flex-col gap-2">
+      <div className="overflow-x-auto rounded-panel border border-default bg-surface">
+        <table className="w-full min-w-[18rem] table-fixed border-separate border-spacing-0 sm:min-w-[34rem]">
+          <caption className="sr-only">Побажання: дні тижня й пари</caption>
+          <colgroup>
+            <col className="w-11 sm:w-[5.5rem]" />
             {WEEKDAYS.map((weekday) => (
-              <th key={weekday} scope="col" className="h-12 border-b border-separator px-2 text-start text-ui font-[600] text-primary sm:px-3">
-                <span className="lg:hidden">{weekdayShort(weekday)}</span>
-                <span className="hidden lg:inline">{capitalize(weekdayName(weekday))}</span>
-              </th>
+              <col key={weekday} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pairs.map((pair, index) => {
-            const rowTime = slotsByWeekday.get(1)?.find((s) => s.pair === pair);
-            // як у сітці тижня: лише лінії між рядками, без рамки довкола кожної клітинки
-            const line = index < pairs.length - 1 ? 'border-b border-separator' : '';
-            return (
-              <tr key={pair}>
-                <th scope="row" className={cn('px-2 py-2 text-start align-top sm:px-4', line)}>
-                  <span className="block text-title leading-7 font-semibold text-primary figures">{pair}</span>
-                  {rowTime ? <span className="text-caption font-normal text-secondary figures">{rowTime.startsAt}</span> : null}
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col" className="h-12 border-b border-separator px-2 sm:px-4">
+                <span className="sr-only">Пара</span>
+              </th>
+              {WEEKDAYS.map((weekday) => (
+                <th key={weekday} scope="col" className="h-12 border-b border-separator px-2 text-start text-ui font-[600] text-primary sm:px-3">
+                  <span className="lg:hidden">{weekdayShort(weekday)}</span>
+                  <span className="hidden lg:inline">{capitalize(weekdayName(weekday))}</span>
                 </th>
-                {WEEKDAYS.map((weekday) => {
-                  if (!exists(weekday, pair)) {
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pairs.map((pair, index) => {
+              const rowTime = slotsByWeekday.get(1)?.find((s) => s.pair === pair);
+              // як у сітці тижня: лише лінії між рядками, без рамки довкола кожної клітинки
+              const line = index < pairs.length - 1 ? 'border-b border-separator' : '';
+              return (
+                <tr key={pair}>
+                  <th scope="row" className={cn('px-2 py-2 text-start align-top sm:px-4', line)}>
+                    <span className="block text-title leading-7 font-semibold text-primary figures">{pair}</span>
+                    {rowTime ? <span className="text-caption font-normal text-secondary figures">{rowTime.startsAt}</span> : null}
+                  </th>
+                  {WEEKDAYS.map((weekday) => {
+                    if (!exists(weekday, pair)) {
+                      return (
+                        <td key={weekday} className={cn('p-1', line)}>
+                          {/* у цей день стільки пар за дзвінками немає: заштриховане місце, а пояснення — один раз під сіткою */}
+                          <span aria-hidden="true" className="block h-14 rounded-cell hatch" />
+                          <span className="sr-only">пари немає</span>
+                        </td>
+                      );
+                    }
+                    const key = cellKey(weekday, pair);
+                    const kind = value.get(key) ?? null;
+                    const slot = slotsByWeekday.get(weekday)?.find((s) => s.pair === pair);
+                    const mine = lessons?.get(key) ?? [];
+                    const state = kind ? KIND_TEXT[kind] : 'без побажань';
                     return (
                       <td key={weekday} className={cn('p-1', line)}>
-                        {/* у цей день стільки пар за дзвінками немає — так і пишемо, щоб сіре місце не було загадкою */}
-                        <span className="flex h-14 items-center px-1.5 text-meta font-[500] text-muted sm:px-2">пари немає</span>
+                        <button
+                          ref={(element) => {
+                            if (element) buttons.current.set(key, element);
+                            else buttons.current.delete(key);
+                          }}
+                          type="button"
+                          tabIndex={key === active ? 0 : -1}
+                          aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Зараз тут: ${mine.join('; ')}` : ''}`}
+                          aria-describedby={describedBy}
+                          // код групи в клітинці пояснює підказка, а не окрема примітка під сіткою
+                          title={mine.length > 0 ? `Ваша пара тут за поточним розкладом: ${mine.join('; ')}` : undefined}
+                          onFocus={() => setActive(key)}
+                          onClick={() => onCellChange(key, nextKind(kind))}
+                          onKeyDown={(event) => onKeyDown(event, weekday, pair)}
+                          className={cn(
+                            'flex h-14 w-full flex-col items-start justify-start gap-0.5 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
+                            'transition-[background-color] duration-100 ease-out',
+                            'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+                            kind ? KIND_CELL[kind] : 'hover:bg-hover active:bg-active',
+                          )}
+                        >
+                          {kind ? (
+                            <span className="inline-flex max-w-full items-center gap-1 text-caption font-[650]">
+                              <KindIcon kind={kind} />
+                              <span className="hidden truncate sm:inline">{KIND_TEXT[kind]}</span>
+                            </span>
+                          ) : null}
+                          {mine.length > 0 ? (
+                            <span className="max-w-full truncate text-caption font-[500] text-secondary figures">
+                              {mine.map((label) => label.split(' · ')[0]).join(', ')}
+                            </span>
+                          ) : null}
+                        </button>
                       </td>
                     );
-                  }
-                  const key = cellKey(weekday, pair);
-                  const kind = value.get(key) ?? null;
-                  const slot = slotsByWeekday.get(weekday)?.find((s) => s.pair === pair);
-                  const mine = lessons?.get(key) ?? [];
-                  const state = kind ? KIND_TEXT[kind] : 'без побажань';
-                  return (
-                    <td key={weekday} className={cn('p-1', line)}>
-                      <button
-                        ref={(element) => {
-                          if (element) buttons.current.set(key, element);
-                          else buttons.current.delete(key);
-                        }}
-                        type="button"
-                        tabIndex={key === active ? 0 : -1}
-                        aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Зараз тут: ${mine.join('; ')}` : ''}`}
-                        aria-describedby={describedBy}
-                        // код групи в клітинці пояснює підказка, а не окрема примітка під сіткою
-                        title={mine.length > 0 ? `Ваша пара тут за поточним розкладом: ${mine.join('; ')}` : undefined}
-                        onFocus={() => setActive(key)}
-                        onClick={() => onCellChange(key, nextKind(kind))}
-                        onKeyDown={(event) => onKeyDown(event, weekday, pair)}
-                        className={cn(
-                          'flex h-14 w-full flex-col items-start justify-start gap-0.5 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
-                          'transition-[background-color] duration-100 ease-out',
-                          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-                          kind ? KIND_CELL[kind] : 'hover:bg-hover active:bg-active',
-                        )}
-                      >
-                        {kind ? (
-                          <span className="inline-flex max-w-full items-center gap-1 text-caption font-[650]">
-                            <KindIcon kind={kind} />
-                            <span className="hidden truncate sm:inline">{KIND_TEXT[kind]}</span>
-                          </span>
-                        ) : null}
-                        {mine.length > 0 ? (
-                          <span className="max-w-full truncate text-caption font-[500] text-secondary figures">
-                            {mine.map((label) => label.split(' · ')[0]).join(', ')}
-                          </span>
-                        ) : null}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {note ? <p className="text-caption text-secondary">{note}</p> : null}
     </div>
   );
 }
