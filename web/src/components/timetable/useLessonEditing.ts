@@ -83,8 +83,11 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
   }
   const book = ledger;
   const queryClient = useQueryClient();
-  // пари, про чужу правку яких диспетчер уже знає (тост після 409): наступна дія — зі свіжою версією
-  const [outdated] = useState(() => new Set<Uuid>());
+  /**
+   * Пари, про чужу правку яких диспетчера щойно попередили (тост після 409): версія знімка, що отримав
+   * відмову, і саме та свіжа пара, яку сервер дав після неї. Повтор із тим самим знімком іде від неї.
+   */
+  const [outdated] = useState(() => new Map<Uuid, { stale: number | undefined; fresh: TemplateLessonDto }>());
   const scope = timetableScope(versionId);
   useJournalScope(scope);
   const lastUndo = useJournal((state) => latestUndoable(state.entries, scope));
@@ -95,12 +98,14 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
   const versioned = <T extends { version?: number }>(lessonId: Uuid, body: T): T => ({ ...body, version: book.version(lessonId) });
 
   /**
-   * Пара, з якою діє диспетчер. Діалог тримає знімок з моменту відкриття; якщо після 409 його вже
-   * попередили й кеш перечитано, беремо свіжу пару з кешу — інакше повтор знову отримав би 409.
+   * Пара, з якою діє диспетчер. Діалог тримає знімок з моменту відкриття; якщо саме цей знімок щойно
+   * отримав 409 і диспетчера попередили, повтор іде від пари, яку тоді перечитали, — інакше він знову
+   * отримав би 409. Не від найсвіжішого кешу: третю правку, про яку ніхто не попереджав, перезаписали б
+   * мовчки. Інший знімок (діалог відкрили знову, пару взяли з сітки) несе власну версію.
    */
   const current = (lesson: TemplateLessonDto): TemplateLessonDto => {
-    if (!outdated.has(lesson.id)) return lesson;
-    return queryClient.getQueryData<TemplateLessonDto[]>(qk.admin.timetable.lessons(versionId, {}))?.find((l) => l.id === lesson.id) ?? lesson;
+    const entry = outdated.get(lesson.id);
+    return entry && entry.stale === lesson.version ? entry.fresh : lesson;
   };
 
   /** Дія диспетчера над парою, яку тим часом змінив хтось інший: попередні записи журналу вже не наші. */
@@ -118,16 +123,27 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
     };
   };
 
-  /** 409/404: пару вже змінили чи видалили — кеш перечитується (api/timetable), пояснюємо без паніки. */
-  const reportOutdated = (lesson: TemplateLessonDto, error: unknown): boolean => {
+  /**
+   * 409/404: пару вже змінили чи видалили — кеш перечитується (api/timetable), пояснюємо без паніки.
+   * `snapshot` — пара, з якою прийшов диспетчер (знімок діалогу чи пара з сітки): повтор з ним піде від
+   * пари, перечитаної тут, і лише від неї.
+   */
+  const reportOutdated = async (snapshot: TemplateLessonDto, error: unknown): Promise<boolean> => {
     if (!isLessonOutdated(error)) return false;
-    outdated.add(lesson.id);
-    book.fork(lesson.id);
+    book.fork(snapshot.id);
     if (isApiError(error) && error.isNotFound) {
+      outdated.delete(snapshot.id);
       notify.warning('Цієї пари вже немає', { description: 'Її щойно видалив хтось інший. Розклад оновлено.' });
-    } else {
-      notify.warning('Пару щойно змінив хтось інший', { description: STALE_DATA_MESSAGE });
+      return true;
     }
+    notify.warning('Пару щойно змінив хтось інший', { description: STALE_DATA_MESSAGE });
+    // дочікуємося перечитування, яке почав onError мутації, і запам'ятовуємо саме цю свіжу пару
+    const key = qk.admin.timetable.lessons(versionId, {});
+    await queryClient.refetchQueries({ queryKey: key, exact: true }, { cancelRefetch: false }).catch(() => undefined);
+    const fresh = queryClient.getQueryData<TemplateLessonDto[]>(key)?.find((l) => l.id === snapshot.id);
+    // перечитати не вдалося або версія та сама: повтор піде зі знімком і чесно отримає 409 ще раз
+    if (fresh && fresh.version !== snapshot.version) outdated.set(snapshot.id, { stale: snapshot.version, fresh });
+    else outdated.delete(snapshot.id);
     return true;
   };
 
@@ -171,7 +187,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
       });
       return true;
     } catch (error) {
-      if (reportOutdated(lesson, error)) return false;
+      if (await reportOutdated(picked, error)) return false;
       notify.error(error, 'Пару не перенесено', { description: conflictDescription(error) ?? (isApiError(error) ? error.message : undefined) });
       return false;
     }
@@ -220,7 +236,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
       });
       return after;
     } catch (error) {
-      if (!reportOutdated(before, error)) notify.error(error, 'Зміни не збережено');
+      if (!(await reportOutdated(snapshot, error))) notify.error(error, 'Зміни не збережено');
       throw error;
     }
   }
@@ -238,7 +254,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
       });
       return true;
     } catch (error) {
-      if (reportOutdated(lesson, error)) return false;
+      if (await reportOutdated(lesson, error)) return false;
       notify.error(error, 'Пару не видалено');
       return false;
     }

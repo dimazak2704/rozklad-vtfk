@@ -10,7 +10,7 @@ import { api } from '@/api/client';
 import { STALE_DATA_MESSAGE } from '@/api/errors';
 import { qk } from '@/api/queryKeys';
 import { useVersionLessons } from '@/api/timetable';
-import type { TemplateLessonDto } from '@/api/types';
+import type { LessonKind, TemplateLessonDto } from '@/api/types';
 import { DEMO_DRAFT_ID } from '@/mocks/handlers/timetable';
 import { useJournal } from '@/lib/undo/journal';
 import { toLessonRequest } from './model/history';
@@ -57,6 +57,16 @@ async function foreignEdit(lesson: TemplateLessonDto, change: Partial<TemplateLe
   const body = toLessonRequest({ ...lesson, ...change });
   await api.put(`${lessonsPath}/${lesson.id}`, body);
 }
+
+/** Два різні види заняття, відмінні від поточного: правка C і правка A мають бути помітні. */
+function otherKinds(lesson: TemplateLessonDto): [LessonKind, LessonKind] {
+  const [c, a] = (['LECTURE', 'PRACTICE', 'LAB', 'SEMINAR'] as const).filter((k) => k !== lesson.lessonKind);
+  if (!c || !a) throw new Error('замало видів заняття');
+  return [c, a];
+}
+
+const serverLesson = async (id: string) => (await api.get<TemplateLessonDto[]>(lessonsPath)).find((l) => l.id === id);
+const staleWarnings = () => toast.warning.mock.calls.filter(([title]) => title === 'Пару щойно змінив хтось інший').length;
 
 beforeEach(() => {
   useJournal.getState().clear();
@@ -153,5 +163,102 @@ describe('редактор розкладу: 409 stale-data', () => {
     const lessons = await api.get<TemplateLessonDto[]>(lessonsPath);
     // чужа правка (online) на місці, а наша перша (pinned) — теж: її ніхто наосліп не відкотив
     expect(lessons.find((l) => l.id === lesson.id)).toMatchObject({ online: !lesson.online, pinned: !lesson.pinned });
+  });
+
+  it('діалог, відкритий знову після 409: третя чужа правка дає новий 409, а не тихий перезапис', async () => {
+    const { queryClient, hook } = await setup();
+    await waitFor(() => expect(hook.result.current.lessons.data).toBeDefined());
+    const snapshot = plainLesson(hook.result.current.lessons.data ?? []);
+    const [kindC, kindA] = otherKinds(snapshot);
+
+    // B змінює пару, A зберігає зі старого діалогу й отримує 409
+    await foreignEdit(snapshot, { online: !snapshot.online });
+    await act(async () => {
+      await expect(
+        hook.result.current.editing.updateLesson(snapshot, { ...toLessonRequest(snapshot), pinned: !snapshot.pinned }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+    expect(staleWarnings()).toBe(1);
+
+    // A закриває діалог і відкриває знову: новий знімок — пара з кешу
+    const reopened = cached(queryClient, snapshot.id);
+    if (!reopened) throw new Error('пари немає в кеші');
+    expect(reopened.version).toBe((snapshot.version ?? 0) + 1);
+
+    // C змінює вид заняття, а кеш A перечитується (повернення у вкладку), поки діалог відкритий
+    await foreignEdit(reopened, { lessonKind: kindC });
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: qk.admin.timetable.lessons(DEMO_DRAFT_ID, {}) });
+    });
+    expect(cached(queryClient, snapshot.id)?.lessonKind).toBe(kindC);
+
+    // A зберігає свій вид заняття: правку C він не бачив — сервер має відмовити, а A — дізнатися
+    await act(async () => {
+      await expect(
+        hook.result.current.editing.updateLesson(reopened, { ...toLessonRequest(reopened), lessonKind: kindA }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+    expect(staleWarnings()).toBe(2);
+    expect(await serverLesson(snapshot.id)).toMatchObject({ lessonKind: kindC, online: !snapshot.online });
+  });
+
+  it('діалог лишився відкритим після 409: повтор іде від пари, про яку попередили, а не від новішого кешу', async () => {
+    const { queryClient, hook } = await setup();
+    await waitFor(() => expect(hook.result.current.lessons.data).toBeDefined());
+    const snapshot = plainLesson(hook.result.current.lessons.data ?? []);
+    const [kindC] = otherKinds(snapshot);
+    const body = { ...toLessonRequest(snapshot), pinned: !snapshot.pinned };
+
+    await foreignEdit(snapshot, { online: !snapshot.online });
+    await act(async () => {
+      await expect(hook.result.current.editing.updateLesson(snapshot, body)).rejects.toMatchObject({ status: 409 });
+    });
+    const warned = cached(queryClient, snapshot.id);
+    if (!warned) throw new Error('пари немає в кеші');
+
+    // до повтору C встигає ще раз змінити пару, і кеш її вже має
+    await foreignEdit(warned, { lessonKind: kindC });
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: qk.admin.timetable.lessons(DEMO_DRAFT_ID, {}) });
+    });
+
+    // повтор з того самого діалогу: правку C диспетчер не бачив — новий 409 і нове попередження
+    await act(async () => {
+      await expect(hook.result.current.editing.updateLesson(snapshot, body)).rejects.toMatchObject({ status: 409 });
+    });
+    expect(staleWarnings()).toBe(2);
+    expect(await serverLesson(snapshot.id)).toMatchObject({ lessonKind: kindC, pinned: snapshot.pinned });
+
+    // тепер попереджено і про неї: свідомий повтор зберігає лише змінене поле, правки B і C на місці
+    let saved: TemplateLessonDto | null = null;
+    await act(async () => {
+      saved = await hook.result.current.editing.updateLesson(snapshot, body);
+    });
+    expect(saved).toMatchObject({ pinned: !snapshot.pinned, online: !snapshot.online, lessonKind: kindC });
+    expect(staleWarnings()).toBe(2);
+  });
+
+  it('після вдалого повтору той самий старий знімок знову перевіряється сервером', async () => {
+    const { queryClient, hook } = await setup();
+    await waitFor(() => expect(hook.result.current.lessons.data).toBeDefined());
+    const snapshot = plainLesson(hook.result.current.lessons.data ?? []);
+    const body = { ...toLessonRequest(snapshot), pinned: !snapshot.pinned };
+
+    await foreignEdit(snapshot, { online: !snapshot.online });
+    await act(async () => {
+      await expect(hook.result.current.editing.updateLesson(snapshot, body)).rejects.toMatchObject({ status: 409 });
+    });
+    await act(async () => {
+      await hook.result.current.editing.updateLesson(snapshot, body);
+    });
+    expect(cached(queryClient, snapshot.id)?.pinned).toBe(!snapshot.pinned);
+
+    // попередження використано: ще одна спроба зі старим знімком не підхоплює кеш, а отримує 409
+    await act(async () => {
+      await expect(
+        hook.result.current.editing.updateLesson(snapshot, { ...toLessonRequest(snapshot), online: snapshot.online }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+    expect(await serverLesson(snapshot.id)).toMatchObject({ online: !snapshot.online, pinned: !snapshot.pinned });
   });
 });
