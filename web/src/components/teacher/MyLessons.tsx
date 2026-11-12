@@ -8,7 +8,7 @@ import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton'
 import { WeekDayTabs } from '@/components/public/schedule/WeekDayTabs';
 import { WeekNav } from '@/components/public/schedule/WeekNav';
 import { DayList, WeekGrid } from '@/components/schedule';
-import { Button, DateNav, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@/components/ui';
+import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 
@@ -27,7 +27,8 @@ interface MyLessonsProps {
 /**
  * «Мої пари»: день або тиждень викладача з урахуванням замін. Заміни видно в самих клітинках
  * (слово «Заміна», закреслене старе) — окремою смугою над сіткою їх не повторюємо.
- * Парність і номер тижня — один раз, біля перемикача тижня.
+ * Парність і номер тижня — один раз, біля перемикача тижня. Навігатор один на обидва подання — тиждень;
+ * у поданні «День» день обирають вкладки Пн–Пт (сьогоднішня позначена в них самих).
  */
 export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const { date, today, homeDate, view, week, setDate, setView } = params;
@@ -101,16 +102,20 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
         </div>
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
-          {view === 'day' ? (
-            <DateNav value={date} onChange={setDate} today={today} hotkeys />
-          ) : (
-            <WeekNav value={date} onChange={setDate} today={today} hotkeys />
-          )}
+          {/* як на публічній сторінці: перемикач завжди гортає тиждень, а день обирають вкладки під ним */}
+          <WeekNav value={date} onChange={setDate} today={today} hotkeys />
         </div>
       </div>
 
       {view === 'day' ? (
-        <WeekDayTabs weekStart={week.from} value={date} today={today} onChange={setDate} className="max-w-3xl" />
+        <WeekDayTabs
+          weekStart={week.from}
+          days={placeholder ? undefined : schedule?.days}
+          value={date}
+          today={today}
+          onChange={setDate}
+          className="max-w-3xl"
+        />
       ) : null}
 
       {query.isError && schedule ? (
