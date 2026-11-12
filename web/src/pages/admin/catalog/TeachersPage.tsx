@@ -35,6 +35,12 @@ import { useRegisterCommands } from '@/stores/commands';
 const NOUN = ['викладач', 'викладачі', 'викладачів'] as const;
 const ALL = 'all';
 
+/** Повне ПІБ, коли воно більше за саме прізвище; інакше нічого — прізвище вже є в назві рядка. */
+function fullName(t: CatalogTeacher): string | null {
+  const parts = [t.lastName, t.firstName, t.middleName].filter(Boolean);
+  return parts.length > 1 ? parts.join(' ') : null;
+}
+
 /** Довідник викладачів: імена для розкладу й сайту, комісії, псевдоніми з таблиць, дисципліни для замін. */
 export default function TeachersPage() {
   const navigate = useNavigate();
@@ -86,9 +92,7 @@ export default function TeachersPage() {
               {t.active ? null : <span className="text-caption font-normal text-muted">неактивний</span>}
               {t.needsReview ? <span className="text-caption font-normal text-change">перевірити дані</span> : null}
             </span>
-            {[t.lastName, t.firstName, t.middleName].filter(Boolean).length > 1 ? (
-              <span className="text-caption font-normal text-muted">{[t.lastName, t.firstName, t.middleName].filter(Boolean).join(' ')}</span>
-            ) : null}
+            {fullName(t) ? <span className="text-caption font-normal text-muted">{fullName(t)}</span> : null}
           </span>
         ),
       },
@@ -195,6 +199,16 @@ export default function TeachersPage() {
           setEditing(t);
         }}
         rowClassName={(t) => (t.active ? undefined : 'text-muted')}
+        // на телефоні — рядок списку: «⋯» по центру поруч з іменем, без порожніх рядків сітки стосу
+        mobileRow={(t) => ({
+          title: t.shortName,
+          caption: fullName(t) ?? t.cycleCommission?.label ?? null,
+          status: t.needsReview ? (
+            <span className="text-change">перевірити дані</span>
+          ) : t.active ? null : (
+            <span className="text-muted">неактивний</span>
+          ),
+        })}
         rowActions={(t) => (
           <RowActions
             rowLabel={t.shortName}

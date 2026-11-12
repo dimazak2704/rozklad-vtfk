@@ -33,13 +33,25 @@ import {
 } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
-import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
+import { capitalize, countLabel, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
 
 const NOUN = ['аудиторія', 'аудиторії', 'аудиторій'] as const;
 const ALL = 'all';
+const SEATS = ['місце', 'місця', 'місць'] as const;
+
+/** Підпис рядка на телефоні — лише з колонок, що щось кажуть: тип, місткість, корпус. */
+function roomCaption(room: CatalogRoom, columns: ReadonlyArray<DataTableColumn<CatalogRoom>>): string | null {
+  const shown = new Set(columns.map((column) => column.id));
+  const parts = [
+    shown.has('type') ? capitalize(ROOM_TYPE_LABEL[room.type]) : null,
+    shown.has('capacity') && room.capacity != null ? countLabel(room.capacity, SEATS) : null,
+    shown.has('building') ? room.building?.label : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
 
 /** Довідник аудиторій: тип, корпус, місткість і скільки груп можуть займатися одночасно. */
 export default function RoomsPage() {
@@ -202,6 +214,12 @@ export default function RoomsPage() {
           setEditing(room);
         }}
         rowClassName={(room) => (room.active ? undefined : 'text-muted')}
+        // на телефоні — рядок списку: «⋯» по центру поруч із назвою, без порожніх рядків сітки стосу
+        mobileRow={(room) => ({
+          title: <span className="figures">{room.name}</span>,
+          caption: roomCaption(room, visibleColumns),
+          status: room.active ? null : <span className="text-muted">неактивна</span>,
+        })}
         rowActions={(room) => (
           <RowActions
             rowLabel={`аудиторія ${room.name}`}
