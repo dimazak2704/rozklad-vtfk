@@ -114,13 +114,13 @@
 
     /* Зміна прийшла наживо: лінія закреслення проводиться по старому значенню один раз (200 мс) */
     .anim-strike {
-      animation: strike-draw 200ms var(--ease-out) both;
+      animation: strike-draw 200ms var(--ease-out) backwards;
     }
 
     /* Відлік: нова цифра заходить знизу на 4 px, коли змінюється хвилина */
     .anim-digit {
       display: inline-block;
-      animation: digit-in 200ms var(--ease-out) both;
+      animation: digit-in 200ms var(--ease-out) backwards;
     }
 
     /* …а стара йде вгору на 4 px і гасне (лише на місці цифри, що змінилась) */
@@ -141,13 +141,16 @@
       animation: live-pulse var(--duration-live) var(--ease-out) 2;
     }
 
-    /* Зміна прийшла наживо: спершу лінія закреслення (anim-strike), потім тло й слово стану — один раз */
+    /*
+     * Зміна прийшла наживо: спершу лінія закреслення (anim-strike), потім тло й слово стану — один раз.
+     * Кінцевий кадр = звичайний стан, тож fill — backwards: після появи анімація більше не «тримає» шар.
+     */
     .anim-wash-in::before {
-      animation: fade-in 200ms var(--ease-out) 200ms both;
+      animation: fade-in 200ms var(--ease-out) 200ms backwards;
     }
 
     .anim-word-in {
-      animation: word-in 200ms var(--ease-out) 200ms both;
+      animation: word-in 200ms var(--ease-out) 200ms backwards;
     }
 
     /* Новий рядок у списку (запит на заміну): ледь тоноване тло з'являється й тихо сходить — один раз */
@@ -160,7 +163,7 @@
       background-color: var(--background-color-selected);
       opacity: 0;
       pointer-events: none;
-      animation: arrive-wash 1600ms var(--ease-out) 200ms both;
+      animation: arrive-wash 1600ms var(--ease-out) 200ms backwards;
     }
 
     /* Розгортка: вміст спускається на 4 px і проявляється; висота змінюється одразу (без перерахунку макета щокадру) */
