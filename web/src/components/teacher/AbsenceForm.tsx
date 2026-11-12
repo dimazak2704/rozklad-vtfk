@@ -28,6 +28,8 @@ import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type 
 
 const FIELDS: ReadonlyArray<keyof AbsenceFormValues> = ['dateFrom', 'dateTo', 'pairs', 'reasonCategory', 'comment'];
 const STUDY_DAY_FORMS = ['навчальний день', 'навчальні дні', 'навчальних днів'] as const;
+/** Найдовший діапазон, який віддає GET /me/schedule (core і мок: «не більше 31 дня від from»). */
+const PREVIEW_MAX_DAYS = 31;
 
 /** Остання обрана причина: наступного разу вона вже обрана (зазвичай людина хворіє чи їде у відрядження знову так само). */
 const REASON_STORAGE_KEY = 'rozklad.absenceReason';
@@ -119,11 +121,17 @@ function OtherPairs({
   selected,
   open: forced,
   onToggle,
+  label = 'Інша пара',
+  caption = 'Інша пара — за номером:',
 }: {
   pairs: readonly number[];
   selected: readonly number[];
   open: boolean;
   onToggle: (pair: number, on: boolean) => void;
+  /** Назва групи кнопок для зчитувача екрана. */
+  label?: string;
+  /** Підпис над кнопками; null — без підпису (його вже каже речення вище). */
+  caption?: string | null;
 }) {
   const [opened, setOpened] = useState(false);
   if (pairs.length === 0) return null;
@@ -135,8 +143,8 @@ function OtherPairs({
     );
   }
   return (
-    <div role="group" aria-label="Інша пара" className="flex flex-col gap-2 pt-2">
-      <p className="text-caption text-secondary">Інша пара — за номером:</p>
+    <div role="group" aria-label={label} className="flex flex-col gap-2 pt-2">
+      {caption ? <p className="text-caption text-secondary">{caption}</p> : null}
       <div className="flex flex-wrap gap-1.5">
         {pairs.map((pair) => {
           const on = selected.includes(pair);
@@ -194,8 +202,11 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   const reasonErrorId = useId();
   const reasonHelpId = useId();
   const [dateFrom, dateTo, wholeDay] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay'] });
-  const rangeValid = isIsoDate(dateFrom) && isIsoDate(dateTo) && compareIsoDates(dateFrom, dateTo) <= 0 && diffDays(dateFrom, dateTo) < 31;
-  const preview = useMySchedule(rangeValid ? dateFrom : today, rangeValid ? dateTo : today, { enabled: rangeValid });
+  const rangeValid = isIsoDate(dateFrom) && isIsoDate(dateTo) && compareIsoDates(dateFrom, dateTo) <= 0;
+  // GET /me/schedule віддає щонайбільше 31 день: довшу відсутність (core приймає до року) не перевіряємо
+  const tooLong = rangeValid && diffDays(dateFrom, dateTo) >= PREVIEW_MAX_DAYS;
+  const previewable = rangeValid && !tooLong;
+  const preview = useMySchedule(previewable ? dateFrom : today, previewable ? dateTo : today, { enabled: previewable });
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -204,7 +215,10 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   }, [autoFocus]);
 
   // useMySchedule тримає попередню відповідь, поки вантажиться нова: її дні — не ті, що обрано
-  const previewData = rangeValid && !preview.isPlaceholderData ? preview.data : undefined;
+  const previewData = previewable && !preview.isPlaceholderData ? preview.data : undefined;
+  // перевірити розклад не вийде: номери пар 1–8 і чесне речення замість «Перевіряємо…»
+  const previewFailed = previewable && preview.isError && !preview.isPlaceholderData;
+  const unchecked = tooLong || previewFailed;
   const own = useMemo(() => {
     if (!previewData) return [];
     return previewData.days.flatMap((day) =>
@@ -339,9 +353,20 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
                     field.onChange(on ? [...new Set([...field.value, pair])].sort((a, b) => a - b) : field.value.filter((p) => p !== pair));
                   if (!previewData) {
                     return (
-                      <p className="text-ui text-secondary" aria-live="polite">
-                        {preview.isError ? 'Не вдалося перевірити ваш розклад — оберіть номери пар нижче.' : 'Перевіряємо ваші пари на ці дні…'}
-                      </p>
+                      <div className="flex flex-col gap-1" data-pairs>
+                        <p className="text-ui text-secondary" aria-live="polite">
+                          {tooLong
+                            ? 'Розклад перевіряємо лише на 31 день — оберіть номери пар нижче.'
+                            : previewFailed
+                              ? 'Не вдалося перевірити ваш розклад — оберіть номери пар нижче.'
+                              : rangeValid
+                                ? 'Перевіряємо ваші пари на ці дні…'
+                                : 'Спершу оберіть дні в календарі.'}
+                        </p>
+                        {unchecked ? (
+                          <OtherPairs pairs={ALL_PAIRS} selected={field.value} open onToggle={toggle} label="Номери пар" caption={null} />
+                        ) : null}
+                      </div>
                     );
                   }
                   const listed = new Set(choices.map((choice) => choice.pair));
@@ -389,10 +414,12 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
               </p>
             ) : null}
             {rangeValid && wholeDay ? (
-              <div className="rounded-popover bg-sunken px-3.5 py-3 text-caption" aria-live="polite" aria-busy={!previewData && !preview.isError}>
+              <div className="rounded-popover bg-sunken px-3.5 py-3 text-caption" aria-live="polite" aria-busy={!previewData && !unchecked}>
                 {previewData ? (
                   <AffectedPreview own={own} />
-                ) : preview.isError && !preview.isPlaceholderData ? (
+                ) : tooLong ? (
+                  <p className="text-secondary">Розклад перевіряємо лише на 31 день, тож пар тут не покажемо. Відсутність можна повідомити й так.</p>
+                ) : previewFailed ? (
                   <p className="text-secondary">Не вдалося перевірити ваш розклад на ці дні. Відсутність можна повідомити й так.</p>
                 ) : (
                   <p className="text-secondary">Перевіряємо ваші пари на ці дні…</p>

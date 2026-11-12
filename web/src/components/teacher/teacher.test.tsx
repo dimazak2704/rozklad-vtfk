@@ -417,6 +417,65 @@ describe('AbsenceForm: які пари зачепить', () => {
     expect(screen.getAllByRole('button', { name: /^\d пара$/ })).toHaveLength(8);
   });
 
+  function trackAbsences() {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(apiPath('/me/absences'), async ({ request }) => {
+        bodies.push(await request.json());
+        return problem({ status: 422, detail: 'Тест' });
+      }),
+    );
+    return bodies;
+  }
+
+  it('розклад не відповів — окремі пари все одно можна обрати за номером і надіслати', async () => {
+    server.use(http.get(apiPath('/me/schedule'), () => problem({ status: 503, detail: 'Сервіс недоступний' })));
+    const bodies = trackAbsences();
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
+    await user.click(screen.getByRole('radio', { name: 'Окремі пари' }));
+    await user.click(screen.getByRole('button', { name: /четвер, 19/ }));
+    expect(await screen.findByText('Не вдалося перевірити ваш розклад — оберіть номери пар нижче.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^\d пара$/ })).toHaveLength(8);
+
+    await user.click(screen.getByRole('button', { name: '2 пара' }));
+    await user.click(screen.getByRole('radio', { name: 'Лікарняний' }));
+    await user.click(screen.getByRole('button', { name: 'Повідомити диспетчера' }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ dateFrom: '2026-11-19', dateTo: '2026-11-19', pairs: [2] });
+  });
+
+  it('понад 31 день — розклад не перевіряємо й кажемо про це, а не «Перевіряємо…» без кінця', async () => {
+    const requested: string[] = [];
+    // лише записує запит; відповідає обробник describe (без return MSW іде до наступного)
+    server.use(
+      http.get(apiPath('/me/schedule'), ({ request }) => {
+        requested.push(request.url);
+      }),
+    );
+    const bodies = trackAbsences();
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
+    await user.click(screen.getByRole('button', { name: /вівторок, 10/ }));
+    await user.click(screen.getByRole('button', { name: /наступн/i }));
+    await user.click(screen.getByRole('button', { name: /вівторок, 15/ }));
+    // підсумок під календарем — обраний діапазон, а не «Оберіть день»
+    expect(screen.getAllByRole('status').at(-1)?.textContent).toMatch(/^10.+15\sгрудня/);
+    expect(screen.getByText(/Розклад перевіряємо лише на 31 день/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Окремі пари' }));
+    expect(screen.queryByText(/Перевіряємо/)).not.toBeInTheDocument();
+    expect(screen.getByText('Розклад перевіряємо лише на 31 день — оберіть номери пар нижче.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^\d пара$/ })).toHaveLength(8);
+    await user.click(screen.getByRole('button', { name: '1 пара' }));
+    await user.click(screen.getByRole('button', { name: '5 пара' }));
+    await user.click(screen.getByRole('radio', { name: 'Відрядження' }));
+    await user.click(screen.getByRole('button', { name: 'Повідомити диспетчера' }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ dateFrom: '2026-11-10', dateTo: '2026-12-15', pairs: [1, 5], reasonCategory: 'BUSINESS_TRIP' });
+    expect(requested.filter((url) => url.includes('to=2026-12-15'))).toEqual([]);
+  });
+
   it('поки вантажиться новий діапазон, не показує пари попереднього', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={nepyivoda.id} today="2026-11-09" />);
