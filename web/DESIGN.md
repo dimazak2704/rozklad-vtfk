@@ -530,7 +530,13 @@ the table above is inside sRGB). Text pairs need at least 4.5:1, non-text pairs 
 
 Animate only `transform` and `opacity`, plus `clip-path` for the strike line. Buttons press to
 `scale(0.98)`. Popovers enter with fade, a 4 px rise and 0.98 → 1 scale. Nothing loops forever
-except the spinner. This is the repo's existing rule; keep `--animate-live` at 2 iterations.
+except the spinner and the sign-in emblem trace (§10.5, the owner's request). This is the repo's
+existing rule; keep `--animate-live` at 2 iterations.
+
+Hover styles apply only with a fine pointer that can hover. `theme.css` redefines the built-in
+`hover:` variant as `@media (hover: hover) and (pointer: fine)` and keeps `hover-fine:` as the same
+thing for new code, so a tap on a phone never leaves a tint or an underline behind. Keyboard focus
+gets an equivalent `focus-visible` state.
 
 **Signature motions (the "alive" layer)**
 
@@ -897,8 +903,19 @@ These rules come from the admin audit:
    - the row «Забули пароль?» (link) and «Увійти» (**secondary**, because Google stays the primary).
 7. Footer row: «← До розкладу» · «Вінницький технічний фаховий коледж» (caption, muted).
 
-**≥ 1024:** an optional decorative spire mark, 480 px, 1 px stroke in `border-default`, bottom-right
-and `aria-hidden` (the toned-down nod from). Nothing else: no blue panel, no photo.
+**≥ 1024:** the decorative spire mark (ring, inner ring, spire), bottom-right and `aria-hidden`.
+Nothing else: no blue panel, no photo.
+- Size comes from the free space right of the 400 px form column:
+  ring diameter `min(34rem, 50vw − 12.5rem − 3.5rem − 2rem, 100dvh − 4rem)`, so at least ~56 px stay
+  between the ring and the form from 1024×768 up, and the whole ring stays on screen (2rem from the edges).
+- Outline about 2 px, tinted slightly toward the brand
+  (`color-mix(in oklab, text 22%, brand 6%)` light, `text 20%, brand 8%` dark).
+- It draws itself in once. From 1.6 s, a short light (four stacked dashes in `--color-now`, the head
+  widest) runs along the outer ring, the spire and the inner ring as one stroke, in a 6 s linear cycle
+  with a ~0.9 s pause. This is the only decorative loop in the product.
+- The light fades while the form has focus. With `prefers-reduced-motion` or forced colours it is
+  hidden and the emblem is static.
+- Styles live in `src/styles/auth-page.css` (`--auth-spire-k` keeps the line weight even across sizes).
 
 **Sign-in service page:** `/auth/login` is a Thymeleaf page of `services/auth` on the same origin. It
 links `/brand/auth.css`, which the web build emits from `src/styles/auth-page.css` with these tokens, so
@@ -1084,7 +1101,8 @@ their column, not the viewport.
 - Show KPI tile rows, `0` counts or the same parity more than once per screen.
 - Use discipline colour as a fill, as text colour or as a side bar on a rounded card.
 - Use more than one filled button in an area, or icon-only buttons without a label or tooltip.
-- Use looping decorative motion, shimmer skeletons, parallax, glassmorphism, gradients, glows or emoji.
+- Use looping decorative motion (the sign-in emblem trace is the one exception), shimmer skeletons,
+  parallax, glassmorphism, gradients, glows or emoji.
 - Use `light-dark()` in semantic tokens (§3.1).
 - Use Unbounded or any face where «4КІ1» can read as «4КП».
 

@@ -63,7 +63,9 @@ describe('interaction.css: риска наведення', () => {
     expect(css).toMatch(/\.nav-link::after\s*\{[^}]*background-color: var\(--border-color-strong\)/);
   });
 
-  it('варіант hover-fine у темі вимагає миші (hover і pointer: fine)', () => {
+  it('варіанти hover і hover-fine у темі вимагають миші (hover і pointer: fine)', () => {
     expect(theme).toMatch(/@custom-variant hover-fine\s*\{\s*@media \(hover: hover\) and \(pointer: fine\)/);
+    // вбудований hover: перевизначено, тож старі класи hover: на телефоні теж не «залипають»
+    expect(theme).toMatch(/@custom-variant hover\s*\{\s*@media \(hover: hover\) and \(pointer: fine\)/);
   });
 });

@@ -16,7 +16,16 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-/* Наведення лише мишею: на дотику :hover «залипає» після тапу, тож тонування й риски — тільки з точним вказівником */
+/* Наведення лише мишею: на дотику :hover «залипає» після тапу, тож тонування й риски — тільки з точним вказівником.
+   Вбудований `hover:` перевизначено так само (Tailwind 4 сам перевіряє лише hover: hover, а деякі телефони
+   кажуть, що вміють наводити), тож `hover:` і `hover-fine:` — одне й те саме; нові правила пишіть через `hover-fine:` */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 @custom-variant hover-fine {
   @media (hover: hover) and (pointer: fine) {
     &:hover {
