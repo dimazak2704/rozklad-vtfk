@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useBells, usePublicMeta } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
@@ -8,8 +9,8 @@ import { ErrorState, ParityBadge, Skeleton, useErrorCovered } from '@/components
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { compareIsoDates, formatLongDate, formatWeekdayDate, formatWeekdayDateAfterNa, relativeDayLabel } from '@/lib/date';
-import { capitalize } from '@/lib/labels';
-import { roomLabel } from '@/lib/schedule';
+import { capitalize, LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
+import { LESSON_TONE, roomLabel } from '@/lib/schedule';
 import type { ScheduleTarget } from '@/stores/favorites';
 import { useStalled } from '../useStalled';
 import { nowPanelRange } from './now-range';
@@ -37,6 +38,58 @@ function GroupLink({ group }: { group: ScheduleTarget }) {
     >
       <span className="u-line">{group.label}</span>
     </Link>
+  );
+}
+
+/** Аудиторія й викладач заняття: «ауд. 16 · Крисак Л.В.»; номер аудиторії — головне, чорнилом. */
+const STATE_TONE = { change: 'text-change', add: 'text-add', room: 'text-room' } as const;
+
+function placeLine(lesson: LessonView): ReactNode {
+  const room = roomLabel(lesson.room?.name);
+  const roomNode = room?.startsWith('ауд.') ? (
+    <>
+      ауд.&nbsp;<span className="font-[650] text-primary figures">{room.replace(/^ауд\.\u00a0/, '')}</span>
+    </>
+  ) : (
+    room
+  );
+  const tone = LESSON_TONE[lesson.kind];
+  // заміна чи інша аудиторія — словом у кольорі стану на початку рядка: свою зміну видно одразу
+  const state =
+    tone === 'change' || tone === 'add' || tone === 'room' ? (
+      <span className={cn('font-[650]', STATE_TONE[tone])}>{LESSON_VIEW_KIND_LABEL[lesson.kind]}</span>
+    ) : null;
+  const parts: ReactNode[] = [state, lesson.subgroup > 0 ? `${lesson.subgroup}\u00a0п/г` : null, roomNode, lesson.teacher?.shortName].filter(Boolean);
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 ? ' · ' : null}
+      {part}
+    </Fragment>
+  ));
+}
+
+/**
+ * Що в запамʼятованої групи зараз чи далі — окремим блоком героя: назва заняття (повна, рівнем заголовка),
+ * під нею аудиторія й викладач. Це найкорисніше після відліку («куди йти»), тож не ховається дрібним рядком.
+ */
+function GroupFocus({ group, lessons, when }: { group: ScheduleTarget; lessons: readonly LessonView[]; when: 'зараз' | 'далі' }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-caption text-secondary">
+        У <GroupLink group={group} /> {when}
+      </p>
+      {/* підгрупи з тією самою дисципліною — одна назва й по рядку місця на кожну */}
+      {lessons.map((lesson, index) => {
+        const name = lesson.discipline.name || lesson.discipline.shortName;
+        const repeated = index > 0 && lessons[index - 1]?.discipline.id === lesson.discipline.id;
+        return (
+          <Fragment key={lesson.id}>
+            {repeated ? null : <p className="text-heading font-bold text-balance text-primary">{name}</p>}
+            <p className="text-ui text-secondary">{placeLine(lesson)}</p>
+          </Fragment>
+        );
+      })}
+    </div>
   );
 }
 
@@ -152,17 +205,18 @@ export function NowPanel({ className }: { className?: string }) {
   const groupToday = days.find((d) => d.date === data.today);
   const groupNextDay = nextDay ? days.find((d) => d.date === nextDay) : undefined;
 
-  // «У 4КІ1 зараз Прогр., ауд. 301, Стець» — лише коли в групи справді є пара зараз чи наступна
-  let aside = null;
+  // «У 4КІ1 зараз / Іноземна мова / ауд. 16 · Крисак Л.В.» — лише коли в групи справді є пара зараз чи наступна
+  let focus = null;
   const status = live.status;
   if (group && groupToday && status && (status.kind === 'in-pair' || status.kind === 'break' || status.kind === 'before-day')) {
     const pair = status.kind === 'in-pair' ? status.current.pair : status.next.pair;
-    const lesson = groupToday.lessons.find((l) => l.pair === pair && l.kind !== 'CANCELLED');
-    if (lesson) {
-      aside = (
-        <>
-          У <GroupLink group={group} /> {status.kind === 'in-pair' ? 'зараз' : 'далі'} {lessonLine(lesson)}
-        </>
+    const lessons = groupToday.lessons
+      .filter((l) => l.pair === pair && l.kind !== 'CANCELLED')
+      .sort((a, b) => a.subgroup - b.subgroup)
+      .slice(0, 2);
+    if (lessons.length > 0) {
+      focus = (
+        <GroupFocus group={group} lessons={lessons} when={status.kind === 'in-pair' ? 'зараз' : 'далі'} />
       );
     }
   }
@@ -186,7 +240,7 @@ export function NowPanel({ className }: { className?: string }) {
       groupPairs={group && groupToday ? activePairs(groupToday) : undefined}
       date={data.today}
       dateLine={dateLine}
-      aside={aside}
+      focus={focus}
       afterDay={afterDay}
       className={className}
     />

@@ -29,8 +29,13 @@ export interface NowIndicatorProps {
   variant?: 'hero' | 'strip' | 'compact' | 'inline';
   /** Рядок дати над заголовком героя: «Середа, 11 листопада · ◐ чисельник». */
   dateLine?: ReactNode;
-  /** Додатковий рядок у герої: «У 4КІ1 зараз Прогр., ауд. 301, Стець». */
+  /** Додатковий рядок у герої: «Зараз у вас СТП, 4КІ1, ауд. 301». */
   aside?: ReactNode;
+  /**
+   * Блок героя праворуч (на вузькому — під заголовком): що саме в запамʼятованої групи зараз чи далі —
+   * назва заняття, аудиторія, викладач. Найкорисніше після відліку, тож воно стоїть окремо, а не дрібним рядком.
+   */
+  focus?: ReactNode;
   /** Речення, коли пари скінчилися або їх немає: «Завтра перша о 09:40, ЕУ, ауд. 22». */
   afterDay?: ReactNode;
   /** Зафіксований момент (хвилини від півночі) — для демо й тестів. */
@@ -102,6 +107,8 @@ export function Countdown({ value, className }: { value: number; className?: str
 /** Заголовок не рветься «Перша пара о / 08:30»: рядки вирівнюються, а прийменник тримається часу (о 08:30). */
 const DISPLAY = 'font-display text-[2.125rem] leading-[2.375rem] font-semibold tracking-[-0.025em] text-balance md:text-display';
 const NUMERAL = 'font-display text-[4rem] leading-[3.75rem] font-light tracking-[-0.04em] md:text-numeral';
+/** Одиниця біля числа — помітна, але не більша за чверть цифри (88 → 18 px), щільно біля неї. */
+const UNIT = 'text-body font-medium text-secondary md:text-heading md:font-medium';
 
 /** Заголовок дня одним рядком на спільній базовій лінії: «4 пара  38 хв до дзвінка». */
 function Headline({ status, afterDay, compact }: { status: PairStatus; afterDay?: ReactNode; compact: boolean }) {
@@ -111,10 +118,10 @@ function Headline({ status, afterDay, compact }: { status: PairStatus; afterDay?
       return (
         <p className={wrap}>
           <span className={cn(DISPLAY, 'text-primary')}>{status.current.pair} пара</span>
-          <span className="inline-flex items-baseline gap-2.5">
+          <span className="inline-flex items-baseline gap-2">
             <Countdown value={status.minutesLeft} className={cn(NUMERAL, 'text-accent')} />
             <span className="sr-only">{status.minutesLeft} </span>
-            <span className="text-body text-secondary">хв до дзвінка</span>
+            <span className={UNIT}>хв до дзвінка</span>
           </span>
         </p>
       );
@@ -122,10 +129,10 @@ function Headline({ status, afterDay, compact }: { status: PairStatus; afterDay?
       return (
         <p className={wrap}>
           <span className={cn(DISPLAY, 'text-primary')}>Перерва</span>
-          <span className="inline-flex items-baseline gap-2.5">
+          <span className="inline-flex items-baseline gap-2">
             <Countdown value={status.minutesLeft} className={cn(NUMERAL, 'text-accent')} />
             <span className="sr-only">{status.minutesLeft} </span>
-            <span className="text-body text-secondary">хв до {pairOrdinalGenitive(status.next.pair)} пари</span>
+            <span className={UNIT}>хв до {pairOrdinalGenitive(status.next.pair)} пари</span>
           </span>
         </p>
       );
@@ -292,7 +299,8 @@ export function DayTrack({
                       'block h-2 overflow-hidden rounded-full',
                       // вікно — порожня пунктирна смуга і в минулому, і попереду: заняття тут не було й не буде
                       isWindow && state !== 'current' && 'border border-dashed border-default',
-                      !isWindow && state === 'past' && 'bg-[var(--fill-track-past)]',
+                      // минула пара — тонка смуга (половина висоти); під мишею стає повною, підказка каже час
+                      !isWindow && state === 'past' && 'track-past bg-[var(--fill-track-past)]',
                       state === 'current' && 'bg-selected',
                       !isWindow && state === 'future' && 'bg-[var(--fill-track-future)]',
                     )}
@@ -387,6 +395,7 @@ export function NowIndicator({
   variant = 'strip',
   dateLine,
   aside,
+  focus,
   afterDay,
   at,
   className,
@@ -470,9 +479,13 @@ export function NowIndicator({
     >
       <div className="flex flex-col gap-2">
         {dateLine ? <p className="text-body text-secondary">{dateLine}</p> : null}
-        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
-          <Headline status={shown} afterDay={afterDay} compact={false} />
-          {hasSentence ? <p className="hidden text-body text-secondary md:block lg:max-w-60 lg:text-end">{sentence}</p> : null}
+        {/* речення «що далі» — одразу під відліком, а не на іншому краї; праворуч — що саме в групи зараз */}
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Headline status={shown} afterDay={afterDay} compact={false} />
+            {hasSentence ? <p className="hidden text-body text-secondary md:block">{sentence}</p> : null}
+          </div>
+          {focus ? <div className="min-w-0 lg:max-w-[22rem]">{focus}</div> : null}
         </div>
         {aside ? <p className="text-caption text-secondary">{aside}</p> : null}
       </div>
