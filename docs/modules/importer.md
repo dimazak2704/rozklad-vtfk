@@ -44,7 +44,9 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
 * **Upload** checks size (≤ `app.import.max-file-size`, 20 MB), sniffs the real type by magic bytes / OOXML
   entries / OLE2 `WordDocument` stream (never the extension), validates `options`, checks AI availability and
   the daily budget when the kind needs AI, stores the bytes (DB `bytea` or a volume directory) and publishes
-  `ImportJobQueued`; after commit the job runs on a bounded pool (`app.import.workers`, default 2).
+  `ImportJobQueued`; after commit the job runs on a bounded pool (`app.import.workers`, default 2) with the
+  MDC of the request that queued it (MDC `requestId` and `importJob`), so its calls to core forward the same
+  `X-Request-Id`; jobs re-queued after a restart get none.
 * **Parse** (no transaction held): handler → draft + parse remarks; then catalog snapshot from core
   (`GET /api/internal/catalog/snapshot`) → matching rows. If core is down the report gets one blocking
   `CATALOG` row and matching is repeated by saving mappings (even an empty list).

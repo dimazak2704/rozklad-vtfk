@@ -1,5 +1,7 @@
 package ua.vtc.rozklad.importer.job;
 
+import java.util.Map;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -23,6 +25,24 @@ public class ImportExecutorConfig {
         executor.setThreadNamePrefix("import-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
+        executor.setTaskDecorator(ImportExecutorConfig::withSubmitterMdc);
         return executor;
+    }
+
+    /** The job runs with the MDC of the request that queued it: its log lines and calls to core keep the request id. */
+    static Runnable withSubmitterMdc(Runnable task) {
+        Map<String, String> submitted = MDC.getCopyOfContextMap();
+        return () -> {
+            if (submitted == null) {
+                MDC.clear();
+            } else {
+                MDC.setContextMap(submitted);
+            }
+            try {
+                task.run();
+            } finally {
+                MDC.clear();
+            }
+        };
     }
 }
