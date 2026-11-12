@@ -17,7 +17,12 @@ interface SemesterTimelineProps {
   onOpenPeriod: (period: CalendarPeriod) => void;
 }
 
-/** Смуга періоду кольором його дії: зняті пари — червоний, практика — бурштин, форма навчання — блакитний. */
+/**
+ * Смуга періоду кольором його дії: зняті пари — червоний, практика — бурштин, форма навчання — блакитний.
+ * Тло — низькохроматичний «wash» (у темній темі C ≤ 0,03), колір несуть рамка 1 px і слово.
+ */
+const PARITY_SHORT_WORD = { NUMERATOR: 'чис', DENOMINATOR: 'знам' } as const;
+
 const BAR_TONE: Record<CalendarPeriodKind, string> = {
   HOLIDAY: 'border-cancel bg-cancel-subtle text-cancel',
   NO_CLASSES: 'border-cancel bg-cancel-subtle text-cancel',
@@ -159,8 +164,10 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 )}
               >
                 <span className="text-heading leading-none font-bold figures text-primary">{week.weekNumber}</span>
-                {/* номер і диск парності; дата й слово «чисельник» — у підказці */}
-                <ParityMark parity={week.parity} className={cn('h-3 w-2.5', week.overridden ? 'text-accent' : 'text-secondary')} />
+                {/* номер і коротке слово парності — читається з першого погляду; дата — у підказці */}
+                <span aria-hidden="true" className={cn('text-meta leading-none font-[550]', week.overridden ? 'text-accent' : 'text-secondary')}>
+                  {PARITY_SHORT_WORD[week.parity]}
+                </span>
                 {week.overridden ? (
                   <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-[var(--background-color-surface)] bg-accent" />
                 ) : null}
@@ -168,19 +175,6 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
             </Tooltip>
           );
         })}
-        {/* коротка смуга (1–2 тижні) не вміщує назву — підпис стоїть праворуч від неї в тому ж рядку */}
-        {bars.map(({ period, first, last }, row) =>
-          last - first < 2 && last + 2 <= weeks.length ? (
-            <span
-              key={`${period.id}-label`}
-              aria-hidden="true"
-              style={{ gridRow: row + 3, gridColumn: `${last + 2} / -1` }}
-              className="flex h-7 min-w-0 items-center truncate text-caption text-secondary"
-            >
-              {period.title}
-            </span>
-          ) : null,
-        )}
         {bars.map(({ period, first, last }, row) => (
           <HoverDetails
             key={period.id}
@@ -209,8 +203,8 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 BAR_TONE[period.kind],
               )}
             >
-              {/* кому діє — у підказці; коротка смуга без тексту — назва стоїть поруч, а не двічі */}
-              <span className={last - first < 2 && last + 2 <= weeks.length ? 'sr-only' : 'truncate'}>{period.title}</span>
+              {/* назва — завжди всередині смуги (обрізана); повна назва, кому й коли — у підказці */}
+              <span className="truncate">{period.title}</span>
             </button>
           </HoverDetails>
         ))}
