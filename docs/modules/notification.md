@@ -101,7 +101,18 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   final state (no buttons). 409 → «Цей запит уже неактуальний» (the message keeps a known final state; a
   repeated tap of the answer core already holds gets the same success reply), 403 → «адресовано іншому
   викладачу», core down → alert, buttons stay. A repeated `confirmation-requested` for a pending change is sent
-  as «⏰ Нагадування». Deadline passed without an answer → one reminder to the teacher and one notice to admin
+  as «⏰ Нагадування». **Changed details:** core re-sends the request with the same change id, mode and deadline
+  when the dispatcher edits the room of a pending request or of a NOTIFY notice in force. If the teacher already
+  holds a message of the change and the details he reads differ from the stored ones (room, date, pair, time,
+  group, discipline, whom he replaces), he gets «✏️ Заміну змінено» with one line on what changed («Нова
+  аудиторія: 214 (була 6)», «Змінено: пару», both joined by «; змінено також:»), the usual details and the
+  mode's buttons (CONFIRM: ✅/❌ and the unchanged deadline; NOTIFY: 👍/❌). The stored request takes the new
+  details, so later final-state edits of the old and the new messages show the new room. Such an update is
+  sent per event (never under the `reminder:` key), so a reminder of the same round cannot swallow it; a pure
+  repeat keeps the reminder (CONFIRM) or the notice (NOTIFY) as before
+  (`SubstitutionFlowIT.roomEditOfAPendingRequestIsAnUpdateNotAReminder`,
+  `roomEditOfANoticeIsAnUpdateWithTheNoticeButtons`, `newRoomAfterTheDeadlineReminderIsStillSent`). A request
+  or notice with the old room that is still queued when the update arrives is sent as it is. Deadline passed without an answer → one reminder to the teacher and one notice to admin
   chats (not for requests that never reached a teacher without Telegram, not for past lessons). core's
   `ConfirmationReminders` re-sends the request with the same, already passed deadline, and the every-minute job
   reminds too: such a re-send keeps `reminded_at` and both use one dedup key per deadline round
@@ -219,7 +230,7 @@ this module.
 | Event | Effect |
 |---|---|
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
-| `substitution.confirmation-requested` | request to the teacher's chat (or reminder); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
+| `substitution.confirmation-requested` | request to the teacher's chat (or reminder; «✏️ Заміну змінено» when the details he sees changed); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
 | `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
@@ -350,7 +361,7 @@ mvn -q -pl services/notification -am verify          # 83 unit tests + 108 Testc
 * Integration (`*IT`, one shared context, Postgres/RabbitMQ/Redis in Docker, `FakeTelegramClient`, fake core/importer,
   PDFBox stand-in for LibreOffice, controllable clock): every private/group/inline flow with exact texts and
   keyboards, the absence wizard (buttons, calendar, AI, core errors), substitution requests (confirm, decline,
-  cancel, reminder, reassignment, foreign teacher, 409/outage), order distribution (rows per chat, photo,
+  cancel, reminder, update on a new room, reassignment, foreign teacher, 409/outage), order distribution (rows per chat, photo,
   admin summary, idempotency, documents API, no LibreOffice), events through the real broker (duplicate,
   cache invalidation, DLQ), the delivery worker (per-chat order, 429, backoff, max attempts, 403, migration,
   stale/unbound, split, log API, test message), Redis token buckets, REST (codes, bindings, status, webhook),

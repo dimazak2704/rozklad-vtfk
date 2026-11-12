@@ -122,7 +122,8 @@ teacher gets 403 on `/api/me/*`.
   change, so the teacher who was asked gets «скасовано»), optimistic locking with `version`; a new room of a
   change whose teacher was already told (PENDING request, or NOTIFY and CONFIRMED) publishes
   `substitution.confirmation-requested` again (same change id, mode and deadline) with the new room — the
-  notification service currently shows a repeated pending request as «⏰ Нагадування» (owner question below);
+  notification service sees that the details changed and sends «✏️ Заміну змінено» with the new room and the
+  same deadline instead of a reminder (`docs/modules/notification.md` §3);
   a CONFIRM request the teacher already confirmed is not sent again (known gap, §9);
   `DELETE` cancels (idempotent; APPLIED → 422).
 * **Reminders** — `ConfirmationReminders` runs every `app.substitution.reminder-check-interval`
@@ -261,9 +262,6 @@ Manual run: own database on the shared PostgreSQL, port 38081.
   service recognising a reminder (same change id, deadline before `occurredAt`).
 * Calendar helpers, `LessonView` mapping and settings keys duplicate what the calendar, timetable and
   settings modules are building in parallel; reconcile at merge.
-* Owner question (audit 12.11.2026): when the dispatcher changes the room of a pending CONFIRM request, the
-  teacher receives the request again with the new room, worded as a reminder (the notification service has no
-  «оновлено» text yet). Should it say that the room changed, and should the deadline restart?
 * Known gap and owner question (review 12.11.2026): a new room of a CONFIRM request that the teacher already
   confirmed publishes no `substitution.*` event. Re-sending the request would ask him to confirm again (and the
   notification service would reopen it as pending); sending it as a NOTIFY notice would turn his request into a
