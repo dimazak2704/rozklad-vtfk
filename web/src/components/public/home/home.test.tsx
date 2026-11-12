@@ -2,6 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockId } from '@/mocks/ids';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import HomePage from '@/pages/public/HomePage';
@@ -17,20 +18,31 @@ beforeEach(() => {
 });
 
 describe('«Усі групи» на головній', () => {
-  it('закрито — одне речення; відкрито — коди посиланнями; вибір памʼятається', async () => {
+  it('курси — рядками, курс розкривається на місці, і відкриті курси памʼятаються', async () => {
     const user = userEvent.setup();
     const { unmount } = renderWithProviders(<GroupsDirectory />);
-    expect(await screen.findByText(/груп(и|а)?, (один|два|три|чотири|пʼять|шість) курс/)).toBeInTheDocument();
+    const fourth = await screen.findByRole('button', { name: /^4 курс · \d+\sгруп/ });
+    // перший візит: жоден курс не відкритий, стіни з кодів немає
+    expect(fourth).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('link', { name: '4КІ1' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Відкрити список' }));
+    await user.click(fourth);
     expect(screen.getByRole('link', { name: '4КІ1' })).toHaveAttribute('href', expect.stringContaining('/g/'));
+    expect(screen.queryByRole('link', { name: '1КІ2' })).not.toBeInTheDocument();
     unmount();
 
-    // наступного разу список уже відкритий
+    // наступного разу 4 курс уже відкритий
     renderWithProviders(<GroupsDirectory />);
     expect(await screen.findByRole('link', { name: '4КІ1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Згорнути список' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^4 курс/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('поки людина нічого не відкривала, відкритий курс її групи', async () => {
+    useFavoritesStore.setState({ favorites: [], recent: [], lastViewed: { type: 'GROUP', id: mockId('group', '4КІ1'), label: '4КІ1', url: '/g/4КІ1' } });
+    renderWithProviders(<GroupsDirectory />);
+    const own = await screen.findByRole('link', { name: '4КІ1' });
+    expect(own).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^1 курс/ })).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
@@ -79,14 +91,6 @@ describe('Головна без сервера', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Розклад зараз не завантажується');
     // пошук лишається — ним можна скористатися, щойно сервер оживе
     expect(screen.getByRole('combobox', { name: /Знайти розклад/ })).toBeInTheDocument();
-  });
-});
-
-describe('Перший візит', () => {
-  it('без своєї групи список груп відкритий одразу, без перемикача', async () => {
-    renderWithProviders(<GroupsDirectory expanded />);
-    expect(await screen.findByRole('link', { name: '4КІ1' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /список/ })).not.toBeInTheDocument();
   });
 });
 
