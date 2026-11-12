@@ -250,6 +250,21 @@ describe('схема відсутності', () => {
 });
 
 describe('AbsenceForm: дні', () => {
+  it('без причини: помилка стає на місце підказки, описує групу, а фокус іде на першу причину', async () => {
+    window.localStorage.removeItem('rozklad.absenceReason');
+    const user = userEvent.setup();
+    renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
+    expect(screen.getByText('Причину й коментар бачить лише диспетчер.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Повідомити диспетчера' }));
+
+    const error = await screen.findByText('Оберіть причину');
+    expect(screen.queryByText('Причину й коментар бачить лише диспетчер.')).not.toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Причина' });
+    expect(group).toHaveAttribute('aria-describedby', error.id);
+    expect(within(group).getAllByRole('radio')[0]).toHaveFocus();
+  });
+
   it('два кліки в календарі обирають кілька днів, третій починає новий вибір', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);

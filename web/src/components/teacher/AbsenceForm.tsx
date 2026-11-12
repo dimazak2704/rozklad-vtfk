@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleExclamationPoint, Send } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type BaseSyntheticEvent } from 'react';
 import { DayPicker, type DateRange } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import { useCreateAbsence, useMySchedule } from '@/api/me';
 import type { DayDto, IsoDate, LessonView, Uuid } from '@/api/types';
@@ -190,6 +190,9 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
     defaultValues: { dateFrom: first, dateTo: first, wholeDay: true, pairs: [], comment: '', reasonCategory: storedReason() },
   });
   const { errors, isSubmitting } = form.formState;
+  const reasonError = errors.reasonCategory?.message;
+  const reasonErrorId = useId();
+  const reasonHelpId = useId();
   const [dateFrom, dateTo, wholeDay] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay'] });
   const rangeValid = isIsoDate(dateFrom) && isIsoDate(dateTo) && compareIsoDates(dateFrom, dateTo) <= 0 && diffDays(dateFrom, dateTo) < 31;
   const preview = useMySchedule(rangeValid ? dateFrom : today, rangeValid ? dateTo : today, { enabled: rangeValid });
@@ -210,6 +213,20 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   }, [previewData, teacherId]);
   const choices = useMemo(() => pairChoices(own), [own]);
   const oneDay = dateFrom === dateTo;
+
+  // перше поле з помилкою отримує фокус: Controller-поля (календар, пари, причина) самі цього не вміють
+  const focusFirstError = (invalid: FieldErrors<AbsenceFormValues>, event?: BaseSyntheticEvent) => {
+    const root = event?.target instanceof HTMLFormElement ? event.target : null;
+    if (!root) return;
+    const target = invalid.dateFrom || invalid.dateTo
+      ? root.querySelector<HTMLElement>('[data-autofocus]')
+      : invalid.pairs
+        ? root.querySelector<HTMLElement>('[data-pairs] button')
+        : invalid.reasonCategory
+          ? root.querySelector<HTMLElement>('[data-reasons] [role="radio"]')
+          : null;
+    target?.focus();
+  };
 
   const submit = form.handleSubmit(async (values) => {
     try {
@@ -235,7 +252,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
       }
       if (!mapped) form.setError('root.server', { message: error.message });
     }
-  });
+  }, focusFirstError);
 
   // перший клік обирає початок: календар має бачити діапазон без кінця, щоб другий клік його завершив
   // (форма тим часом уже має один день, і підсумок показує «навчальних днів: 1»)
@@ -330,7 +347,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
                   const listed = new Set(choices.map((choice) => choice.pair));
                   const others = ALL_PAIRS.filter((pair) => !listed.has(pair));
                   return (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1" data-pairs>
                       {choices.length > 0 ? (
                         <div role="group" aria-label="Ваші пари в ці дні" className="flex flex-col">
                           {choices.map((choice) => (
@@ -388,21 +405,25 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             control={form.control}
             name="reasonCategory"
             render={({ field }) => (
-              <div className="flex flex-col gap-2">
+              // помилка стає на місце підказки, а не над нею (DESIGN §11.4); групу описує те, що зараз видно
+              <fieldset className="flex flex-col gap-2" data-reasons aria-describedby={reasonError ? reasonErrorId : reasonHelpId}>
+                <legend className="mb-2 text-ui font-[650] text-primary">Причина</legend>
                 <RadioGroup
-                  legend="Причина"
                   value={field.value ?? null}
                   onValueChange={field.onChange}
                   options={REASONS.map((reason) => ({ value: reason, label: ABSENCE_REASON_LABEL[reason] }))}
                 />
-                {errors.reasonCategory?.message ? (
-                  <p className="flex items-start gap-1.5 text-caption font-medium text-danger">
+                {reasonError ? (
+                  <p id={reasonErrorId} className="flex items-start gap-1.5 text-caption font-medium text-danger">
                     <CircleExclamationPoint aria-hidden="true" className="mt-px size-3.5" />
-                    {errors.reasonCategory.message}
+                    {reasonError}
                   </p>
-                ) : null}
-                <p className="text-caption text-muted">Причину й коментар бачить лише диспетчер.</p>
-              </div>
+                ) : (
+                  <p id={reasonHelpId} className="text-caption text-muted">
+                    Причину й коментар бачить лише диспетчер.
+                  </p>
+                )}
+              </fieldset>
             )}
           />
 
