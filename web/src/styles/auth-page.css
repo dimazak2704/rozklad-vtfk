@@ -383,21 +383,95 @@ body.auth {
   outline: none;
 }
 
-/* ---------- Декоративний шпиль (≥ 1024 px) ---------- */
+/* ---------- Декоративний шпиль (≥ 1024 px) ----------
+ * Три фігури (login.html, <defs>) малюються через <use>: спокійний контур і чотири шари світла на кожну
+ * фігуру. Розміри в одиницях viewBox (1 одиниця ≈ 16–23 px), без vector-effect: non-scaling-stroke —
+ * з ним Chromium міряє штрихи в пікселях екрана, і світло розсипається на крапки. pathLength кожної
+ * фігури дорівнює її справжній довжині (--len), тож ціна одиниці штриха однакова на всьому знаку.
+ */
 .auth-spire {
   display: none;
+}
+
+.auth-spire-outer {
+  --len: 73;
+}
+
+.auth-spire-tower {
+  --len: 49.3;
+}
+
+.auth-spire-inner {
+  --len: 32.7;
+}
+
+/* Контур ≈ 2 px: чорнило теми, 18 % у світлій і 26 % у темній (знак читається, а не тоне як водяний) */
+.auth-spire-line {
+  stroke: var(--text-color-primary);
+  stroke-opacity: 0.18;
+  stroke-width: 0.095px;
+}
+
+[data-theme='dark'] .auth-spire-line {
+  stroke-opacity: 0.26;
+}
+
+/* Світло: чотири штрихи з однаковою передньою точкою (--auth-trace-head), від довгого блідого
+   хвоста до короткої яскравої голови. Градієнт уздовж кривої SVG не вміє, тож хвіст складено з шарів. */
+.auth-trace {
+  display: none;
+  stroke: var(--stroke-now);
+}
+
+.auth-trace use {
+  stroke-dasharray: calc(var(--d) * 1px) calc((var(--len) + 16 - var(--d)) * 1px);
+  stroke-dashoffset: calc((var(--d) - var(--auth-trace-head)) * 1px);
+}
+
+.auth-trace-tail {
+  --d: 12;
+  stroke-width: 0.13px;
+  stroke-opacity: 0.1;
+}
+
+.auth-trace-fade {
+  --d: 8;
+  stroke-width: 0.14px;
+  stroke-opacity: 0.22;
+}
+
+.auth-trace-body {
+  --d: 4.5;
+  stroke-width: 0.15px;
+  stroke-opacity: 0.5;
+}
+
+.auth-trace-head {
+  --d: 2;
+  stroke-width: 0.165px;
 }
 
 @media (min-width: 1024px) {
   .auth-spire {
     display: block;
     position: fixed;
-    right: -4rem;
-    bottom: -6rem;
-    width: 30rem;
-    height: 30rem;
-    color: var(--border-color-default);
+    right: -3rem;
+    bottom: -5rem;
+    width: clamp(30rem, 40vw, 38rem);
+    height: clamp(30rem, 40vw, 38rem);
     pointer-events: none;
+    /* перемальовування світла лишається в межах знака */
+    contain: strict;
+  }
+}
+
+/* 1024–1279: поруч із колонкою лише ~300 px, тож знак менший і зсунутий, щоб не лягати на форму */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .auth-spire {
+    right: -6rem;
+    bottom: -6rem;
+    width: 26rem;
+    height: 26rem;
   }
 }
 
@@ -407,11 +481,70 @@ body.auth {
   }
 }
 
-/* ---------- Рух: знак малює себе один раз ---------- */
+/* ---------- Рух: знаки малюють себе один раз, потім по шпилю біжить світло ----------
+ * Єдиний нескінченний рух інтерфейсу (DESIGN.md §6, виняток для сторінки входу). Одночасно рухаються
+ * не більше двох речей: 0–1,4 с малий знак і контур шпиля, з 1,6 с лише світло.
+ * Анімуються зареєстровані числа (@property): штрихи шарів перераховуються з них, тож усі три шари
+ * однієї фігури мають спільну передню точку. Ключові кадри з var() у stroke-dashoffset не інтерполюються.
+ */
+@property --auth-spire-draw {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --auth-trace-head {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: -1;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .auth-mark .auth-stroke {
     stroke-dasharray: 1;
     animation: auth-mark-draw 1400ms var(--auth-ease-out) both;
+  }
+
+  .auth-spire-line {
+    animation: auth-spire-draw 1400ms var(--auth-ease-out) both;
+  }
+
+  .auth-spire-line use {
+    stroke-dasharray: calc((var(--len) + 1) * 1px);
+    stroke-dashoffset: calc((var(--len) + 1) * (1 - var(--auth-spire-draw)) * 1px);
+  }
+
+  /* Цикл 6 с, швидкість стала: кільце → шпиль → мале кільце, далі 0,9 с паузи.
+     Наступна фігура стартує, коли голова попередньої дійшла до її кінця (усі стики вгорі по центру). */
+  .auth-trace {
+    display: inline;
+    /* довгими властивостями: скорочення без імені мініфікатор згортає в «animation: none» */
+    animation-duration: 6s;
+    animation-timing-function: linear;
+    animation-delay: 1.6s;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+  }
+
+  /* поки людина вводить логін і пароль, світло тихо гасне (цикл іде далі й повертається після) */
+  .auth-trace {
+    transition: opacity var(--duration-slow) var(--auth-ease-out);
+  }
+
+  body:has(.auth-form:focus-within) .auth-trace {
+    opacity: 0;
+  }
+
+  .auth-trace.auth-spire-outer {
+    animation-name: auth-trace-outer;
+  }
+
+  .auth-trace.auth-spire-tower {
+    animation-name: auth-trace-tower;
+  }
+
+  .auth-trace.auth-spire-inner {
+    animation-name: auth-trace-inner;
   }
 
   .auth-password[open] .auth-form {
@@ -428,6 +561,48 @@ body.auth {
   }
 }
 
+@keyframes auth-spire-draw {
+  from {
+    --auth-spire-draw: 0;
+  }
+  to {
+    --auth-spire-draw: 1;
+  }
+}
+
+/* Голова проходить від −1 (ще до початку фігури) до --len + 13 (хвіст 12 повністю зійшов) */
+@keyframes auth-trace-outer {
+  0% {
+    --auth-trace-head: -1;
+  }
+  43.8%,
+  100% {
+    --auth-trace-head: 86;
+  }
+}
+
+@keyframes auth-trace-tower {
+  0%,
+  36.7% {
+    --auth-trace-head: -1;
+  }
+  68.6%,
+  100% {
+    --auth-trace-head: 62.3;
+  }
+}
+
+@keyframes auth-trace-inner {
+  0%,
+  61.5% {
+    --auth-trace-head: -1;
+  }
+  85%,
+  100% {
+    --auth-trace-head: 45.7;
+  }
+}
+
 @keyframes auth-reveal {
   from {
     opacity: 0;
@@ -439,5 +614,10 @@ body.auth {
   .auth-button,
   .auth-input {
     border: 1px solid ButtonText;
+  }
+
+  /* у примусових кольорах лише статичний контур */
+  .auth-trace {
+    display: none;
   }
 }
