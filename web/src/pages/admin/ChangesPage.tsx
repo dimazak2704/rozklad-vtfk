@@ -36,6 +36,7 @@ import {
   Drawer,
   DrawerContent,
   EmptyState,
+  LoadingRegion,
   PageErrorBanner,
   PageHeader,
   SegmentedControl,
@@ -128,8 +129,9 @@ export default function ChangesPage() {
   const explicit = lessonParam ? (workspace.entries.find((e) => e.item.lesson.id === lessonParam) ?? null) : null;
   // відсутній: з адреси → відсутній обраної пари → на широкому екрані перший, у кого є що вирішувати
   const explicitAbsence = workspace.absences.find((a) => a.id === absenceParam) ?? explicit?.absence ?? null;
+  // поки пари їдуть, не вгадуємо: інакше виділення перескочило б з першого на того, у кого є що вирішувати
   const fallbackAbsence =
-    panes > 1
+    panes > 1 && !workspace.loading
       ? (workspace.entries.find((e) => LESSON_STATE[e.state].needsAction)?.absence ?? workspace.absences[0] ?? null)
       : null;
   const selectedAbsence = explicitAbsence ?? fallbackAbsence;
@@ -318,6 +320,28 @@ export default function ChangesPage() {
     ) : null;
 
   const showDates = period === 'week' || workspace.absences.some((a) => a.dateFrom !== a.dateTo);
+  // пари обраного відсутнього ще в дорозі (чи не прийшли) — не порожня колонка, а силует чи пояснення
+  const selectedLessons = selectedAbsenceId ? workspace.lessonsStatus.get(selectedAbsenceId) : undefined;
+  const lessonsPlaceholder = (before?: ReactNode) =>
+    selectedAbsence || workspace.loading ? (
+      <div className="flex flex-col gap-3">
+        {before}
+        {!selectedAbsence || selectedLessons === 'pending' ? (
+          <LoadingRegion label="Завантажуємо пари…" className="flex flex-col gap-2 px-2">
+            <Skeleton className="h-5 w-1/2" />
+            {[0, 1, 2].map((key) => (
+              <Skeleton key={key} className="h-16 w-full rounded-popover" />
+            ))}
+          </LoadingRegion>
+        ) : (
+          <p className="px-3 py-2 text-body text-secondary">
+            {selectedLessons === 'failed'
+              ? `Пари ${selectedAbsence.teacher.shortName} не вдалося завантажити.`
+              : `У ${selectedAbsence.teacher.shortName} пар у цей період немає.`}
+          </p>
+        )}
+      </div>
+    ) : null;
   const lessons = (before?: ReactNode) =>
     group ? (
       <LessonList
@@ -330,12 +354,15 @@ export default function ChangesPage() {
         onCancelAbsence={(absence) => void cancelAbsenceFlow(absence)}
         before={before}
       />
-    ) : null;
+    ) : (
+      lessonsPlaceholder(before)
+    );
 
   const absenceList = (drill: boolean) => (
     <AbsenceList
       absences={workspace.absences}
       entries={workspace.entries}
+      lessonsStatus={workspace.lessonsStatus}
       selectedId={selectedAbsenceId}
       onSelect={(id) => selectAbsence(id)}
       onAdd={openNewAbsence}
@@ -378,7 +405,7 @@ export default function ChangesPage() {
         }
       />
     );
-  } else if (workspace.loading && workspace.entries.length === 0) {
+  } else if (workspace.loading && workspace.absences.length === 0) {
     body = (
       <div className="rounded-panel border border-default bg-surface">
         <WorkspaceSkeleton columns={panes} />
@@ -405,6 +432,7 @@ export default function ChangesPage() {
         <AbsenceStrip
           absences={workspace.absences}
           entries={workspace.entries}
+          lessonsStatus={workspace.lessonsStatus}
           selectedId={selectedAbsenceId}
           onSelect={(id) => selectAbsence(id)}
           onAdd={openNewAbsence}
@@ -421,7 +449,7 @@ export default function ChangesPage() {
     // телефон і вузький планшет: по рівнях, і з кожного видно дорогу назад
     body = (
       <div className="rounded-panel border border-default bg-surface p-2 pt-3">
-        {group
+        {selectedAbsence
           ? lessons(
               <button
                 type="button"
@@ -437,11 +465,26 @@ export default function ChangesPage() {
     );
   }
 
+  // відсутні вже є, а пари чи рішення не прийшли — одна смуга з повтором над робочою панеллю
+  const partialError =
+    workspace.error && workspace.absences.length > 0 && !weekend ? (
+      <PageErrorBanner error={workspace.error} title="Не вдалося завантажити пари відсутніх" onRetry={workspace.retry} retrying={workspace.loading} />
+    ) : null;
+
   return (
     <div ref={rootRef} className="flex flex-col gap-6">
       <PageHeader
         title="Заміни"
-        meta={workspace.entries.length > 0 && !weekend ? <ResolvedProgress done={done} total={workspace.entries.length} /> : null}
+        meta={
+          weekend || workspace.absences.length === 0 ? null : workspace.loading ? (
+            // поки пари й рішення їдуть, лічильник збрехав би («1 з 3» замість «4 з 8») — тримаємо місце
+            <span aria-hidden="true" className="flex h-[1.375rem] items-center">
+              <Skeleton className="h-3 w-48" />
+            </span>
+          ) : workspace.entries.length > 0 ? (
+            <ResolvedProgress done={done} total={workspace.entries.length} />
+          ) : null
+        }
         controls={
           <>
             <SegmentedControl<Period>
@@ -462,13 +505,14 @@ export default function ChangesPage() {
         // `⋯` тримає лише те, чого на екрані немає: «Додати відсутність» видно в списку відсутніх, тож у меню
         // вона потрібна тільки на телефоні на рівні пар; кнопка «Розпорядження» ховається на вузькому
         more={[
-          ...(panes === 1 && group && !weekend
+          ...(panes === 1 && selectedAbsence && !weekend
             ? [{ label: 'Нова відсутність', icon: <CalendarPlus aria-hidden="true" />, onSelect: openNewAbsence }]
             : []),
           ...(narrow ? [{ label: 'Розпорядження', icon: <FileText aria-hidden="true" />, to: `/admin/orders?date=${date}` }] : []),
         ]}
       />
 
+      {partialError}
       {body}
 
       {panes === 1 ? (

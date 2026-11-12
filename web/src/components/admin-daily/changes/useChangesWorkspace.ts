@@ -22,6 +22,9 @@ function studyDates(from: IsoDate, to: IsoDate): IsoDate[] {
 
 const NO_ABSENCES: AbsenceDto[] = [];
 
+/** Пари відсутності ще не відомі: запит у дорозі (`pending`) чи впав (`failed`). Відомі — ключа немає. */
+export type LessonsStatus = 'pending' | 'failed';
+
 export interface ChangesWorkspace {
   from: IsoDate;
   to: IsoDate;
@@ -31,6 +34,11 @@ export interface ChangesWorkspace {
   changesById: ReadonlyMap<Uuid, ChangeDto>;
   /** Перше завантаження ще триває (силуети). */
   loading: boolean;
+  /**
+   * Відсутності, чиї пари (чи стани рішень) ще не відомі. Поки ключ є, «пар немає» і «вирішено 0 з 0» —
+   * неправда: показуємо силует або «не вдалося завантажити».
+   */
+  lessonsStatus: ReadonlyMap<Uuid, LessonsStatus>;
   /** Даних періоду ще немає, а запити чекають мережі: замість силуетів — стан «немає зв'язку». */
   offline: boolean;
   error: unknown;
@@ -69,6 +77,16 @@ export function useChangesWorkspace(date: IsoDate, period: Period): ChangesWorks
 
   const groups = useMemo(() => groupByTeacher(entries), [entries]);
 
+  const lessonsStatus = useMemo(() => {
+    const map = new Map<Uuid, LessonsStatus>();
+    absences.forEach((absence, index) => {
+      // без змін дати стани пар ще невідомі: «вирішено» порахувалося б неправильно
+      if ((affected.data[index] === undefined && affected.pending) || changes.pending) map.set(absence.id, 'pending');
+      else if (affected.data[index] === undefined) map.set(absence.id, 'failed');
+    });
+    return map;
+  }, [absences, affected.data, affected.pending, changes.pending]);
+
   const retry = useCallback(() => {
     void queryClient.refetchQueries({ queryKey: qk.admin.absences.all });
     void queryClient.refetchQueries({ queryKey: qk.admin.changes.all });
@@ -82,6 +100,7 @@ export function useChangesWorkspace(date: IsoDate, period: Period): ChangesWorks
     groups,
     changesById,
     loading: absencesQuery.isPending || affected.pending || changes.pending,
+    lessonsStatus,
     // відсутності попередньої дати (keepPreviousData) — не дані цього періоду
     offline:
       (absencesQuery.fetchStatus === 'paused' && (absencesQuery.isPending || absencesQuery.isPlaceholderData)) ||

@@ -6,6 +6,7 @@ import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { pairsText } from '../format';
 import { formatDateRange } from '@/lib/date';
 import { LESSON_STATE, type LessonEntry } from '../model';
+import type { LessonsStatus } from './useChangesWorkspace';
 
 /** «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». */
 function absenceCaption(absence: AbsenceDto): string {
@@ -17,7 +18,17 @@ function absenceCaption(absence: AbsenceDto): string {
  * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, решта — нейтральні) і підпис
  * словами. Червоного тут немає: незроблене — це ще не помилка.
  */
-export function AbsenceProgress({ entries }: { entries: readonly LessonEntry[] }) {
+export function AbsenceProgress({ entries, status }: { entries: readonly LessonEntry[]; status?: LessonsStatus }) {
+  // пари ще їдуть — тиха смужка тієї ж висоти, а не хибне «пар немає» чи «вирішено 1 з 3»
+  if (status === 'pending') {
+    return (
+      <span className="flex h-[1.125rem] items-center">
+        <Skeleton className="h-2.5 w-28" />
+        <span className="sr-only">завантажуємо пари</span>
+      </span>
+    );
+  }
+  if (status === 'failed') return <span className="text-caption text-muted">пари не вдалося завантажити</span>;
   if (entries.length === 0) return <span className="text-caption text-muted">пар у цей період немає</span>;
   const done = entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
   const all = done === entries.length;
@@ -54,6 +65,8 @@ export function AbsenceProgress({ entries }: { entries: readonly LessonEntry[] }
 interface AbsenceListProps {
   absences: readonly AbsenceDto[];
   entries: readonly LessonEntry[];
+  /** Відсутності, чиї пари ще не відомі (`useChangesWorkspace`). */
+  lessonsStatus?: ReadonlyMap<Uuid, LessonsStatus>;
   selectedId: Uuid | null;
   onSelect: (id: Uuid) => void;
   onAdd: () => void;
@@ -63,7 +76,7 @@ interface AbsenceListProps {
 }
 
 /** Колонка «Відсутні»: хто, коли й чому, і скільки пар уже вирішено. Вибір показує пари цього викладача. */
-export function AbsenceList({ absences, entries, selectedId, onSelect, onAdd, loading, drill = false }: AbsenceListProps) {
+export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, loading, drill = false }: AbsenceListProps) {
   if (loading && absences.length === 0) {
     return (
       <div className="flex flex-col gap-1 px-1" aria-hidden="true">
@@ -98,7 +111,7 @@ export function AbsenceList({ absences, entries, selectedId, onSelect, onAdd, lo
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-cell font-[650] text-primary">{absence.teacher.shortName}</span>
                   <span className="text-caption text-secondary">{absenceCaption(absence)}</span>
-                  <AbsenceProgress entries={own} />
+                  <AbsenceProgress entries={own} status={lessonsStatus?.get(absence.id)} />
                 </span>
                 {drill ? <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted rtl:rotate-180" /> : null}
               </button>
