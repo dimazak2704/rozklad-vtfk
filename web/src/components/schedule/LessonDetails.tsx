@@ -43,7 +43,7 @@ function reasonInWords(text: string): string {
 }
 
 const LINK =
-  'inline-flex min-h-8 items-center rounded-control text-ui font-[650] text-accent hover:underline pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+  'inline-flex min-h-8 items-center rounded-control text-ui font-[650] text-accent pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
 
 /**
  * Повні відомості про заняття для картки при наведенні чи шторки на телефоні: повна назва з крапкою
@@ -137,12 +137,12 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
         <div className="flex flex-wrap gap-x-4 border-t border-separator pt-2">
           {lesson.teacher ? (
             <Link to={paths.teacher(lesson.teacher.id)} className={LINK}>
-              Розклад викладача
+              <span className="u-line">Розклад викладача</span>
             </Link>
           ) : null}
           {lesson.room ? (
             <Link to={paths.room(lesson.room.id)} className={LINK}>
-              {/^\d/.test(lesson.room.name) ? `Аудиторія ${lesson.room.name}` : capitalize(lesson.room.name)}
+              <span className="u-line">{/^\d/.test(lesson.room.name) ? `Аудиторія ${lesson.room.name}` : capitalize(lesson.room.name)}</span>
             </Link>
           ) : null}
         </div>

@@ -153,8 +153,8 @@ export default function AboutPage() {
           <Block title="Про проєкт" id="about-project">
             <p className="max-w-prose text-body text-secondary">
               Систему створено як курсовий проєкт. Офіційні новини й документи коледжу —{' '}
-              <a href="https://vtc.vn.ua" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent underline-offset-4 hover:underline">
-                vtc.vn.ua
+              <a href="https://vtc.vn.ua" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent">
+                <span className="u-line">vtc.vn.ua</span>
                 <ExternalLink aria-hidden="true" className="size-3.5" />
               </a>
               .

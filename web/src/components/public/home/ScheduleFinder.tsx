@@ -20,12 +20,12 @@ function TargetLink({ target }: { target: ScheduleTarget }) {
     <Link
       to={target.url}
       className={cn(
-        'inline-flex min-h-6 items-center rounded-tag font-[650] text-accent underline-offset-4 hover:underline pointer-coarse:min-h-11',
+        'inline-flex min-h-6 items-center rounded-tag font-[650] text-accent pointer-coarse:min-h-11',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         target.type !== 'TEACHER' && 'figures',
       )}
     >
-      {target.label}
+      <span className="u-line">{target.label}</span>
     </Link>
   );
 }

@@ -289,10 +289,10 @@ export default function ChangesPage() {
       <HoverDetails content={sourceDetails} label="Джерело замін" side="top">
         <button
           type="button"
-          className="-mx-1 inline-flex min-h-7 items-center gap-1 rounded-control px-1 font-semibold text-secondary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+          className="-mx-1 inline-flex min-h-7 items-center gap-1 rounded-control px-1 font-semibold text-secondary focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:min-h-11"
         >
           <Info aria-hidden="true" className="size-3.5" />
-          Джерело
+          <span className="u-line">Джерело</span>
         </button>
       </HoverDetails>
     </p>

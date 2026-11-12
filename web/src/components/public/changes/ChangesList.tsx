@@ -117,9 +117,9 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
               <Link
                 to={`/g/${encodeURIComponent(group.code)}?date=${date}&view=day`}
                 aria-label={`${group.code}${own ? ', ваша група' : ''}: розклад на цей день`}
-                className="-ms-1 inline-flex h-11 w-fit items-center self-start rounded-control px-1 font-display text-title font-semibold text-primary figures underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:mt-1"
+                className="-ms-1 inline-flex h-11 w-fit items-center self-start rounded-control px-1 font-display text-title font-semibold text-primary figures transition-colors duration-150 hover-fine:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:mt-1"
               >
-                {group.code}
+                <span className="u-line">{group.code}</span>
               </Link>
             </GroupHint>
             <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">

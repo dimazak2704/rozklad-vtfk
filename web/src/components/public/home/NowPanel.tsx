@@ -33,9 +33,9 @@ function GroupLink({ group }: { group: ScheduleTarget }) {
   return (
     <Link
       to={group.url}
-      className="rounded-tag font-[650] text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className="rounded-tag font-[650] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
     >
-      {group.label}
+      <span className="u-line">{group.label}</span>
     </Link>
   );
 }

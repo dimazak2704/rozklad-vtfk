@@ -50,13 +50,13 @@ export function ChangesNote({ items, view, onOpenDay, className }: ChangesNotePr
       type="button"
       onClick={go}
       className={cn(
-        'inline-flex min-h-8 w-fit items-center gap-2 rounded-tag text-ui font-[650] text-change underline-offset-4 hover:underline pointer-coarse:min-h-11',
+        'inline-flex min-h-8 w-fit items-center gap-2 rounded-tag text-ui font-[650] text-change pointer-coarse:min-h-11',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         className,
       )}
     >
       <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-change" />
-      {countLabel(items.length, CHANGE_FORMS)} цього тижня
+      <span className="u-line">{countLabel(items.length, CHANGE_FORMS)} цього тижня</span>
     </button>
   );
 }
