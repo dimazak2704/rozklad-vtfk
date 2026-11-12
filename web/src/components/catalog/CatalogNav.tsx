@@ -61,9 +61,11 @@ export function CatalogNav() {
  * не повторюється двічі поспіль), для читача екрана — «Довідники: Групи».
  */
 export function CatalogTitle({ section }: { section: string }) {
+  // приховану частину не дописуємо окремим span: Chromium відділяє позиціонований span пробілом («Довідники : Групи»)
   return (
     <>
-      Довідники<span className="sr-only">: {section}</span>
+      <span aria-hidden="true">Довідники</span>
+      <span className="sr-only">Довідники: {section}</span>
     </>
   );
 }
