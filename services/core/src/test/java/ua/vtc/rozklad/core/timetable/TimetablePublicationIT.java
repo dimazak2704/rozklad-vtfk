@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,6 +122,9 @@ class TimetablePublicationIT {
 
     @Autowired
     private ChangeReplies changeReplies;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     private TimetableItData data;
 
@@ -484,6 +490,21 @@ class TimetablePublicationIT {
         assertThat(lessonsOf(group, newMonday)).isEqualTo(2);
         assertThat(lessonsOf(data.group4ki2.getId(), newMonday)).isOne();
         assertThat(lessonsOf(group, newMonday.plusDays(7))).as("after the new end").isZero();
+    }
+
+    /** The governing version is read once per edit, not once per date (no N+1 over a long period). */
+    @Test
+    void calendarEditOverTwoWeeksCostsNoMoreStatementsThanOverOneDay() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate from = data.monday(4);
+
+        long oneDay = statements(() -> periods.create(new CalendarDtos.CalendarPeriodRequest(data.semester.getId(),
+                CalendarPeriodKind.HOLIDAY, "Один день", from, from, null, null, PeriodScope.ALL, null, null, null)));
+        long twoWeeks = statements(() -> periods.create(new CalendarDtos.CalendarPeriodRequest(data.semester.getId(),
+                CalendarPeriodKind.HOLIDAY, "Два тижні", from.plusWeeks(1), from.plusWeeks(2).plusDays(4), null, null,
+                PeriodScope.ALL, null, null, null)));
+
+        assertThat(twoWeeks).as("statements of a 10-day edit vs a 1-day edit (%d)", oneDay).isLessThanOrEqualTo(oneDay);
     }
 
     /** A practice over a pair with an open decision would strand the decision's lesson: refused, nothing changes. */
@@ -902,6 +923,19 @@ class TimetablePublicationIT {
     private int lessonsOf(UUID groupId, LocalDate date) {
         return count("SELECT count(*) FROM lesson WHERE group_id = ? AND date = ? AND status = 'SCHEDULED'", groupId,
                 date);
+    }
+
+    private long statements(Runnable call) {
+        Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean enabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            call.run();
+            return statistics.getPrepareStatementCount();
+        } finally {
+            statistics.setStatisticsEnabled(enabled);
+        }
     }
 
     private int count(String sql, Object... args) {

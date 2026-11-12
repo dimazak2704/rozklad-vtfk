@@ -132,12 +132,13 @@ class LessonRefresher implements DatedLessonRefresh {
         List<ConflictDto> clashes = new ArrayList<>();
         List<ModeUpdate> modeUpdates = new ArrayList<>();
         Map<UUID, VersionTemplate> templates = new HashMap<>();
+        PublishedVersions published = new PublishedVersions();
         for (LocalDate day : days) {
             Optional<StudySemester> semester = study.semesterOf(day);
             if (semester.isEmpty()) {
                 continue;
             }
-            Optional<TimetableVersion> version = governingVersion(semester.get().semesterId(), day);
+            Optional<TimetableVersion> version = published.governing(semester.get().semesterId(), day);
             if (version.isEmpty()) {
                 untouched.add(day);
                 continue;
@@ -152,7 +153,8 @@ class LessonRefresher implements DatedLessonRefresh {
                     semester.get().semesterId(), version.get().getId(), template.lessons(), study, template.facts(),
                     modes.kept(), day, day));
             planned.addAll(plan.lessons());
-            Set<ClashKey> earlier = before == null ? Set.of() : clashesBefore(before, day, keptNow, groups, templates);
+            Set<ClashKey> earlier = before == null ? Set.of()
+                    : clashesBefore(before, day, keptNow, groups, templates, published);
             plan.found().stream()
                     .filter(clash -> !earlier.contains(new ClashKey(clash.subjectId(), clash.date())))
                     .map(MaterializationPlanner.Clash::conflict)
@@ -237,12 +239,13 @@ class LessonRefresher implements DatedLessonRefresh {
 
     /** Hard conflicts of the day as the planner finds them with the calendar before the edit. */
     private Set<ClashKey> clashesBefore(StudyCalendar before, LocalDate day, List<KeptLesson> keptNow,
-                                        Set<UUID> groups, Map<UUID, VersionTemplate> templates) {
+                                        Set<UUID> groups, Map<UUID, VersionTemplate> templates,
+                                        PublishedVersions published) {
         Optional<StudySemester> semester = before.semesterOf(day);
         if (semester.isEmpty()) {
             return Set.of();
         }
-        Optional<TimetableVersion> version = governingVersion(semester.get().semesterId(), day);
+        Optional<TimetableVersion> version = published.governing(semester.get().semesterId(), day);
         if (version.isEmpty()) {
             return Set.of();
         }
@@ -291,12 +294,21 @@ class LessonRefresher implements DatedLessonRefresh {
         return conflicts;
     }
 
-    /** The version published last among those effective by {@code date}. */
-    private Optional<TimetableVersion> governingVersion(UUID semesterId, LocalDate date) {
-        return versions.findAllBySemesterIdOrderByCreatedAtDesc(semesterId).stream()
-                .filter(version -> version.getPublishedAt() != null && version.getEffectiveFrom() != null)
-                .filter(version -> !version.getEffectiveFrom().isAfter(date))
-                .max(Comparator.comparing(TimetableVersion::getPublishedAt));
+    /** Published versions of each semester, read once per reconcile (not once per date). */
+    private final class PublishedVersions {
+
+        private final Map<UUID, List<TimetableVersion>> bySemester = new HashMap<>();
+
+        /** The version published last among those effective by {@code date}. */
+        Optional<TimetableVersion> governing(UUID semesterId, LocalDate date) {
+            return bySemester.computeIfAbsent(semesterId, id -> versions.findAllBySemesterIdOrderByCreatedAtDesc(id)
+                            .stream()
+                            .filter(version -> version.getPublishedAt() != null && version.getEffectiveFrom() != null)
+                            .toList())
+                    .stream()
+                    .filter(version -> !version.getEffectiveFrom().isAfter(date))
+                    .max(Comparator.comparing(TimetableVersion::getPublishedAt));
+        }
     }
 
     private VersionTemplate template(UUID semesterId, UUID versionId, Set<UUID> groups) {
