@@ -67,7 +67,10 @@ test.describe('імпорт', () => {
     // переходимо посиланням, а не goto: перезавантаження сторінки скинуло б стан моків
     await page.getByRole('link', { name: 'Перевірити викладачів' }).click();
     await page.getByRole('searchbox', { name: 'Пошук викладача' }).fill('Грабол');
-    await expect(page.getByRole('rowheader', { name: 'Гарболінська' })).toBeVisible({ timeout: 30_000 });
+    // на ноутбуці — заголовок рядка таблиці, на телефоні — кнопка-рядок списку
+    await expect(
+      page.getByRole('rowheader', { name: 'Гарболінська' }).or(page.getByRole('button', { name: /^Гарболінська/ })),
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   test('фото розпорядження: розпізнані рядки й примітки на аркуші', async ({ page }) => {

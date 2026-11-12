@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { loginWithMockRoles } from './support/mock-auth';
+
+/** Рядок аудиторії: на ноутбуці — рядок таблиці, на телефоні — пункт списку з кнопкою-назвою. */
+function roomRow(page: Page, name: string): Locator {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name }) })
+    .or(page.getByRole('listitem').filter({ has: page.getByRole('button', { name: new RegExp(`^${name}(\\s|$)`) }) }));
+}
 
 // Dev-сервер компілює сторінки на льоту: перший запуск буває повільним
 test.describe.configure({ timeout: 60_000 });
@@ -9,7 +17,7 @@ test.describe('довідник аудиторій', () => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin/catalog/rooms');
     await expect(page.getByRole('heading', { level: 1, name: 'Довідники: Аудиторії' })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('rowheader', { name: '301' })).toBeVisible();
+    await expect(roomRow(page, '301')).toBeVisible();
   });
 
   test('нова аудиторія: помилки форми й сервера, потім успіх', async ({ page }) => {
@@ -42,13 +50,13 @@ test.describe('довідник аудиторій', () => {
 
     await page.getByRole('searchbox', { name: 'Пошук аудиторії' }).fill('512');
     await expect(page).toHaveURL(/q=512/);
-    const row = page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: '512' }) });
+    const row = roomRow(page, '512');
     await expect(row).toContainText('30');
   });
 
   test('використану аудиторію не видаляє, пояснює чому й пропонує вимкнути', async ({ page }) => {
     await page.getByRole('searchbox', { name: 'Пошук аудиторії' }).fill('301');
-    const row = page.getByRole('row').filter({ has: page.getByRole('rowheader', { name: '301' }) });
+    const row = roomRow(page, '301');
     await row.getByRole('button', { name: 'Дії: аудиторія 301' }).click();
     await page.getByRole('menuitem', { name: 'Видалити' }).click();
     await page.getByRole('alertdialog', { name: 'Видалити аудиторію?' }).getByRole('button', { name: 'Видалити' }).click();
