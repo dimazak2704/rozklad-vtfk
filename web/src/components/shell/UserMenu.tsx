@@ -32,8 +32,9 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
       <Link
         to={to}
         className={cn(
-          'inline-flex h-10 items-center rounded-control px-3 text-ui font-[650] whitespace-nowrap text-primary',
-          'transition-colors duration-150 hover:bg-hover active:bg-active pointer-coarse:h-11',
+          // та сама нейтральна риска наведення, що й у розділів шапки (interaction.css, `.nav-link`)
+          'nav-link relative inline-flex h-10 items-center rounded-control px-3 text-ui font-[650] whitespace-nowrap text-primary',
+          'active:bg-active pointer-coarse:h-11',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         )}
       >

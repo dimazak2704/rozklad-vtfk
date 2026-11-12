@@ -7,9 +7,10 @@ import { ThemeMenu } from './ThemeToggle';
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/scheduler_vtfk_bot';
 const COLLEGE_URL = 'https://vtc.vn.ua';
 
+/** Тихе посилання підвалу; під текстом проїжджає риска (interaction.css, `.u-line`). */
 const LINK = cn(
   'inline-flex min-h-11 items-center gap-1 rounded-control text-ui text-secondary transition-colors duration-150',
-  'hover:text-primary sm:min-h-8 pointer-coarse:min-h-11',
+  'hover-fine:text-primary sm:min-h-8 pointer-coarse:min-h-11',
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
 );
 
@@ -26,7 +27,7 @@ function AccountLink() {
   return (
     <li>
       <Link to={to} className={LINK}>
-        {isTeacher ? 'Кабінет викладача' : 'Панель диспетчера'}
+        <span className="u-line">{isTeacher ? 'Кабінет викладача' : 'Панель диспетчера'}</span>
       </Link>
     </li>
   );
@@ -53,18 +54,18 @@ export function PublicFooter({ className }: { className?: string }) {
             <ul className="flex flex-col sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
               <li>
                 <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className={LINK}>
-                  Telegram&#8209;бот
+                  <span className="u-line">Telegram&#8209;бот</span>
                   <span className="sr-only">(відкриється в новій вкладці)</span>
                 </a>
               </li>
               <li>
                 <Link to="/about" className={LINK}>
-                  Про систему
+                  <span className="u-line">Про систему</span>
                 </Link>
               </li>
               <li>
                 <a href={COLLEGE_URL} target="_blank" rel="noreferrer" className={LINK}>
-                  Сайт коледжу
+                  <span className="u-line">Сайт коледжу</span>
                   <ArrowUpRight aria-hidden="true" className="size-3.5" />
                   <span className="sr-only">(відкриється в новій вкладці)</span>
                 </a>

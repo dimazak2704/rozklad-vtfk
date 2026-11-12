@@ -31,7 +31,7 @@ export function BottomTabBar({ layout }: { layout: Extract<LayoutKind, 'public' 
                   'group/tab flex min-w-0 flex-1 flex-col items-center justify-center gap-1 pt-1 pb-1.5 outline-none',
                   'transition-colors duration-150 active:bg-active',
                   'focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
-                  active ? 'text-accent' : 'text-secondary hover:text-primary',
+                  active ? 'text-accent' : 'text-secondary hover-fine:text-primary',
                 )}
               >
                 <Icon aria-hidden="true" className="size-[1.375rem]" />

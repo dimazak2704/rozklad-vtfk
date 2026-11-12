@@ -11,22 +11,20 @@ import { UserMenu } from './UserMenu';
 import { Wordmark } from './Wordmark';
 
 const LINK = cn(
-  'relative inline-flex h-10 items-center rounded-control px-3 text-ui whitespace-nowrap transition-colors duration-150',
+  'nav-link relative inline-flex h-10 items-center rounded-control px-3 text-ui whitespace-nowrap transition-colors duration-150',
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
 );
 
-/** Текстове посилання шапки: активне — чорнилом з рискою 2 px акценту на 6 px нижче тексту. */
+/**
+ * Текстове посилання шапки: активне — чорнилом з рискою 2 px акценту на 6 px нижче тексту. Мишею під
+ * пунктом проїжджає та сама риска, але нейтральна (interaction.css, `.nav-link`); фокус показує її одразу.
+ */
 function HeaderLink({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
     <Link
       to={to}
       aria-current={active ? 'page' : undefined}
-      className={cn(
-        LINK,
-        active
-          ? 'font-[650] text-primary after:absolute after:inset-x-3 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent'
-          : 'font-[550] text-secondary hover:text-primary',
-      )}
+      className={cn(LINK, active ? 'font-[650] text-primary' : 'font-[550] text-secondary hover-fine:text-primary focus-visible:text-primary')}
     >
       {/* невидимий жирний дублікат тримає ширину, щоб сусіди не «стрибали» при переході */}
       <span className="inline-grid">
