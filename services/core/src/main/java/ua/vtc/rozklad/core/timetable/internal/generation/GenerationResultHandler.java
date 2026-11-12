@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -18,8 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
+import ua.vtc.rozklad.core.catalog.Discipline;
+import ua.vtc.rozklad.core.catalog.DisciplineRepository;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
+import ua.vtc.rozklad.core.catalog.StudentGroup;
+import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
+import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.catalog.TeacherRepository;
+import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.shared.messaging.ProcessedEvents;
 import ua.vtc.rozklad.core.shared.security.Roles;
 import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
@@ -39,7 +47,9 @@ import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
  * Applies scheduler results to jobs, idempotently: every event id is processed once (duplicates
  * from redelivery are ignored), events of finished or unknown jobs are ignored. A SOLVED result
  * becomes a DRAFT version (source GENERATED) with metrics «було / стало». Realtime updates go to
- * admins over SSE after commit.
+ * admins over SSE after commit. The catalog and the load may change during a run: a room, teacher
+ * or load item deleted meanwhile is left out of its lessons (with a note), a deleted group or
+ * discipline fails the job, so the result never breaks a foreign key and is never lost silently.
  */
 @Component
 class GenerationResultHandler {
@@ -48,12 +58,18 @@ class GenerationResultHandler {
     private static final DateTimeFormatter NAME_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
             .withZone(TimeConfig.KYIV);
     private static final int MAX_ERROR_LENGTH = 2000;
+    static final String REFERENCES_DELETED = "Під час генерації з каталогу видалили групу або дисципліну, для якої "
+            + "складався розклад. Запустіть генерацію ще раз.";
 
     private final ProcessedEvents processedEvents;
     private final GenerationJobRepository jobs;
     private final TimetableVersionRepository versions;
     private final TemplateLessonRepository templateLessons;
     private final RoomRepository rooms;
+    private final TeacherRepository teachers;
+    private final StudentGroupRepository groups;
+    private final DisciplineRepository disciplines;
+    private final LoadItemRepository loadItems;
     private final VersionAnalysis analysis;
     private final GenerationJobMapper mapper;
     private final SseAfterCommit sse;
@@ -61,13 +77,18 @@ class GenerationResultHandler {
 
     GenerationResultHandler(ProcessedEvents processedEvents, GenerationJobRepository jobs,
                             TimetableVersionRepository versions, TemplateLessonRepository templateLessons,
-                            RoomRepository rooms, VersionAnalysis analysis, GenerationJobMapper mapper,
-                            SseAfterCommit sse, Clock clock) {
+                            RoomRepository rooms, TeacherRepository teachers, StudentGroupRepository groups,
+                            DisciplineRepository disciplines, LoadItemRepository loadItems, VersionAnalysis analysis,
+                            GenerationJobMapper mapper, SseAfterCommit sse, Clock clock) {
         this.processedEvents = processedEvents;
         this.jobs = jobs;
         this.versions = versions;
         this.templateLessons = templateLessons;
         this.rooms = rooms;
+        this.teachers = teachers;
+        this.groups = groups;
+        this.disciplines = disciplines;
+        this.loadItems = loadItems;
         this.analysis = analysis;
         this.mapper = mapper;
         this.sse = sse;
@@ -143,17 +164,22 @@ class GenerationResultHandler {
                     truncate("Планувальник повернув некоректний результат: " + invalid.getMessage()));
             return;
         }
-        Set<UUID> knownRooms = rooms.findAllById(result.placements().stream()
-                        .map(GeneratedLessonsBuilder.Placement::roomId).filter(Objects::nonNull)
-                        .collect(Collectors.toSet()))
-                .stream().map(Room::getId).collect(Collectors.toSet());
+        Known known = known(result);
+        Set<UUID> missingGroups = missing(result, PlanUnit::groupId, known.groups());
+        Set<UUID> missingDisciplines = missing(result, PlanUnit::disciplineId, known.disciplines());
+        if (!missingGroups.isEmpty() || !missingDisciplines.isEmpty()) {
+            log.warn("Generation job {}: groups {} and disciplines {} were deleted during the run", job.getId(),
+                    missingGroups, missingDisciplines);
+            job.finish(GenerationStatus.FAILED, now, REFERENCES_DELETED);
+            return;
+        }
         TimetableVersion version = new TimetableVersion(job.getSemesterId(), "Згенеровано " + NAME_TIME.format(now),
                 VersionSource.GENERATED);
         version.setGenerationJobId(job.getId());
-        version.setNotes(notes(result, knownRooms));
+        version.setNotes(notes(result, known));
         versions.save(version);
         List<TemplateLesson> lessons = result.placements().stream()
-                .map(placement -> toLesson(version.getId(), placement, knownRooms))
+                .map(placement -> toLesson(version.getId(), placement, known))
                 .toList();
         templateLessons.saveAll(lessons);
 
@@ -170,17 +196,54 @@ class GenerationResultHandler {
         job.finish(GenerationStatus.SOLVED, now, null);
     }
 
-    private static TemplateLesson toLesson(UUID versionId, GeneratedLessonsBuilder.Placement placement,
-                                           Set<UUID> knownRooms) {
+    /**
+     * Which referenced rows still exist. Load items are share-locked, so a delete that starts now waits
+     * for this transaction instead of breaking its insert.
+     */
+    private Known known(GeneratedLessonsBuilder.Result result) {
+        List<PlanUnit> units = result.placements().stream().map(GeneratedLessonsBuilder.Placement::unit).toList();
+        Set<UUID> roomIds = result.placements().stream()
+                .map(GenerationResultHandler::roomOf).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<UUID> loadItemIds = ids(units, PlanUnit::loadItemId);
+        return new Known(
+                rooms.findAllById(roomIds).stream().map(Room::getId).collect(Collectors.toSet()),
+                teachers.findAllById(ids(units, PlanUnit::teacherId)).stream().map(Teacher::getId)
+                        .collect(Collectors.toSet()),
+                groups.findAllById(ids(units, PlanUnit::groupId)).stream().map(StudentGroup::getId)
+                        .collect(Collectors.toSet()),
+                disciplines.findAllById(ids(units, PlanUnit::disciplineId)).stream().map(Discipline::getId)
+                        .collect(Collectors.toSet()),
+                loadItemIds.isEmpty() ? Set.of() : Set.copyOf(loadItems.lockExisting(loadItemIds)));
+    }
+
+    private static Set<UUID> ids(List<PlanUnit> units, Function<PlanUnit, UUID> id) {
+        return units.stream().map(id).filter(Objects::nonNull).collect(Collectors.toSet());
+    }
+
+    private static Set<UUID> missing(GeneratedLessonsBuilder.Result result, Function<PlanUnit, UUID> id,
+                                     Set<UUID> known) {
+        return result.placements().stream().map(placement -> id.apply(placement.unit()))
+                .filter(value -> value != null && !known.contains(value))
+                .collect(Collectors.toSet());
+    }
+
+    /** The room a lesson gets: a stream follower was sent without one and takes the stream's room from the base. */
+    private static UUID roomOf(GeneratedLessonsBuilder.Placement placement) {
+        PlanUnit unit = placement.unit();
+        return placement.roomId() == null && unit.streamId() != null && unit.pinned() != null
+                ? unit.pinned().roomId() : placement.roomId();
+    }
+
+    private static TemplateLesson toLesson(UUID versionId, GeneratedLessonsBuilder.Placement placement, Known known) {
         PlanUnit unit = placement.unit();
         TemplateLesson lesson = new TemplateLesson(versionId, placement.weekday(), placement.pair(), placement.parity(),
                 unit.groupId(), unit.subgroup(), unit.disciplineId());
-        lesson.setTeacherId(unit.teacherId());
+        // рядок, видалений під час генерації, не потрапляє в заняття (про це пише примітка версії)
+        lesson.setTeacherId(existing(unit.teacherId(), known.teachers()));
         // учасник потоку надсилався без аудиторії (PlanUnit.toStreamFollowerUnit): аудиторія потоку з бази
-        UUID room = placement.roomId() == null && unit.streamId() != null && unit.pinned() != null
-                ? unit.pinned().roomId() : placement.roomId();
-        lesson.setRoomId(room != null && knownRooms.contains(room) ? room : null);
-        lesson.setLoadItemId(unit.loadItemId());
+        UUID room = roomOf(placement);
+        lesson.setRoomId(existing(room, known.rooms()));
+        lesson.setLoadItemId(existing(unit.loadItemId(), known.loadItems()));
         lesson.setLessonKind(unit.lessonKind());
         lesson.setStreamId(unit.streamId());
         lesson.setOnline(unit.online());
@@ -188,16 +251,33 @@ class GenerationResultHandler {
         return lesson;
     }
 
-    private static String notes(GeneratedLessonsBuilder.Result result, Set<UUID> knownRooms) {
+    private static UUID existing(UUID id, Set<UUID> known) {
+        return id != null && known.contains(id) ? id : null;
+    }
+
+    private static String notes(GeneratedLessonsBuilder.Result result, Known known) {
         List<String> notes = new ArrayList<>();
         if (!result.unplaced().isEmpty()) {
             notes.add("Не розміщено занять: " + result.unplaced().size() + ".");
         }
         long unknownRooms = result.placements().stream()
-                .filter(placement -> placement.roomId() != null && !knownRooms.contains(placement.roomId()))
+                .filter(placement -> roomOf(placement) != null && !known.rooms().contains(roomOf(placement)))
                 .count();
         if (unknownRooms > 0) {
             notes.add("Аудиторій, яких уже немає в каталозі (заняття без аудиторії): " + unknownRooms + ".");
+        }
+        long unknownTeachers = result.placements().stream().map(placement -> placement.unit().teacherId())
+                .filter(teacher -> teacher != null && !known.teachers().contains(teacher))
+                .count();
+        if (unknownTeachers > 0) {
+            notes.add("Викладачів, яких уже немає в каталозі (заняття без викладача): " + unknownTeachers + ".");
+        }
+        long unknownLoad = result.placements().stream().map(placement -> placement.unit().loadItemId())
+                .filter(item -> item != null && !known.loadItems().contains(item))
+                .count();
+        if (unknownLoad > 0) {
+            notes.add("Занять, чиє навантаження видалили під час генерації (без зв'язку з навантаженням): "
+                    + unknownLoad + ".");
         }
         return notes.isEmpty() ? null : String.join(" ", notes);
     }
@@ -222,6 +302,11 @@ class GenerationResultHandler {
 
     private static String truncate(String text) {
         return text.length() <= MAX_ERROR_LENGTH ? text : text.substring(0, MAX_ERROR_LENGTH);
+    }
+
+    /** Ids of the referenced rows that still exist when the result is applied. */
+    private record Known(Set<UUID> rooms, Set<UUID> teachers, Set<UUID> groups, Set<UUID> disciplines,
+                         Set<UUID> loadItems) {
     }
 
     /** SSE data of {@code generation.progress}. */

@@ -118,6 +118,10 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   - SOLVED → DRAFT «Згенеровано dd.MM.yyyy HH:mm» (WHOLE → BOTH, HALF → returned parity; a pinned unit left out stays
     at its pin; unplaced units are noted in the version notes); an invalid answer (unknown/duplicate unit, off-grid
     slot, HALF without week) fails the job instead of being repaired;
+  - the load and the catalog may change during a run: a room, teacher or load item deleted meanwhile is left out of its
+    lessons (null) and counted in the version notes; load items are read `FOR SHARE`, so a delete that starts while the
+    result is applied waits for it; a deleted group or discipline fails the job with «Під час генерації з каталогу
+    видалили групу або дисципліну…» (the result is never dead-lettered for a broken foreign key);
   - cancel marks the job CANCELLED at once and sends `generation.cancel`; the watchdog fails QUEUED jobs after
     time limit + grace and RUNNING jobs after grace without progress (`app.timetable.generation.timeout-grace`,
     default 10 min) and tells the scheduler to stop.

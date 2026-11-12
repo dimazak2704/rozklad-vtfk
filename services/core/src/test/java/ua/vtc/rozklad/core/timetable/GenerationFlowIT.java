@@ -343,6 +343,61 @@ class GenerationFlowIT {
         }));
     }
 
+    /**
+     * The admin deleted a load item (or re-derived the load) while the solver ran: the result is still
+     * applied, the lessons of that item lose only the link to it, and the version notes say so.
+     */
+    @Test
+    void loadItemDeletedDuringTheRunIsLeftOutOfItsLessons() {
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+        GenerationJobDto job = generation.start(command(), "admin");
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        UUID stpItem = jdbc.queryForObject("SELECT id FROM load_item WHERE discipline_id = ?", UUID.class,
+                data.stp.getId());
+        jdbc.update("DELETE FROM load_item WHERE id = ?", stpItem);
+
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.SOLVED, 0, -12, assignments(request.problem()), List.of(), null));
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.SOLVED));
+        TimetableVersion generated = versions.findById(generation.get(job.id()).resultVersionId()).orElseThrow();
+        assertThat(generated.getNotes()).contains("навантаження видалили під час генерації");
+        List<TemplateLesson> lessons = templateLessons.findAllByVersionId(generated.getId());
+        assertThat(lessons).filteredOn(lesson -> lesson.getDisciplineId().equals(data.stp.getId())).hasSize(2)
+                .allSatisfy(lesson -> {
+                    assertThat(lesson.getLoadItemId()).isNull();
+                    assertThat(lesson.getTeacherId()).isEqualTo(data.krentsin.getId());
+                });
+        assertThat(lessons).filteredOn(lesson -> lesson.getDisciplineId().equals(data.km.getId()))
+                .allSatisfy(lesson -> assertThat(lesson.getLoadItemId()).isNotNull());
+    }
+
+    /** A discipline the result needs was deleted during the run: the job fails with a clear reason at once. */
+    @Test
+    void disciplineDeletedDuringTheRunFailsTheJobWithItsReason() {
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+        GenerationJobDto job = generation.start(command(), "admin");
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        jdbc.update("DELETE FROM load_item WHERE discipline_id = ?", data.stp.getId());
+        jdbc.update("DELETE FROM discipline WHERE id = ?", data.stp.getId());
+
+        GenerationCompleted completed = new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.SOLVED, 0, -12, assignments(request.problem()), List.of(), null);
+        send(RozkladEvents.GENERATION_COMPLETED, completed);
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id())).satisfies(failed -> {
+            assertThat(failed.status()).isEqualTo(GenerationStatus.FAILED);
+            assertThat(failed.error()).contains("видалили групу або дисципліну");
+            assertThat(failed.resultVersionId()).isNull();
+        }));
+        assertThat(processed(completed.eventId())).as("handled, not dead-lettered").isTrue();
+    }
+
     @Test
     void failedSolverReportsItsError() {
         GenerationJobDto job = generation.start(command(), "admin");
