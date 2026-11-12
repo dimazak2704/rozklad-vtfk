@@ -1,0 +1,110 @@
+/*
+ * Відгук на наведення й фокус (DESIGN.md §6, «Hover»): один словник на весь публічний сайт.
+ * - Текстове посилання: тонка риска під текстом «проїжджає» — заходить зліва, виходить праворуч.
+ * - Пункт навігації шапки: та сама риска на місці риски активного розділу, але нейтральна (не акцент).
+ * - Стрілка «далі» (→) зсувається на 3 px.
+ * Лише transform. Наведення — тільки миша (hover + pointer: fine): на дотику не «залипає».
+ * Фокус з клавіатури показує ту саму риску одразу, без руху, плюс звичайний контур фокусу.
+ * Без вподобання руху риска зʼявляється на місці (переходи лише в блоці no-preference, решту гасить base.css).
+ */
+
+@layer components {
+  /* ---------- Риска під текстом посилання ---------- */
+  .u-line {
+    position: relative;
+  }
+
+  .u-line::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: -0.1875rem;
+    height: 1.5px;
+    border-radius: 999px;
+    background-color: currentColor;
+    transform: scaleX(0);
+    transform-origin: right center;
+    pointer-events: none;
+  }
+
+  /* ---------- Пункт навігації шапки (Розклад · Заміни · Дзвінки) ---------- */
+  .nav-link::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0.75rem;
+    bottom: 0.125rem;
+    height: 2px;
+    border-radius: 999px;
+    /* нейтральна риска наведення: синій лишається за активним розділом */
+    background-color: var(--border-color-strong);
+    transform: scaleX(0);
+    transform-origin: right center;
+    pointer-events: none;
+  }
+
+  .nav-link[aria-current='page']::after {
+    background-color: var(--background-color-accent);
+    transform: scaleX(1);
+  }
+
+  /* ---------- Стрілка «далі» ---------- */
+  .more-arrow {
+    transform: translateX(0);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* вихід: коротший і з ease-in (0,75× не дотягує до 100 мс — беремо 120) */
+    .u-line::after,
+    .nav-link::after {
+      transition: transform 120ms var(--ease-in);
+    }
+
+    .more-arrow {
+      transition: transform var(--duration-fast) var(--ease-in);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .u-line:hover::after,
+    :is(a, button, summary):hover .u-line::after,
+    .nav-link:hover::after {
+      transform: scaleX(1);
+      transform-origin: left center;
+    }
+
+    :is(a, button):hover .more-arrow {
+      transform: translateX(3px);
+    }
+
+    :is(a, button):hover .more-arrow:dir(rtl) {
+      transform: translateX(-3px);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .u-line:hover::after,
+    :is(a, button, summary):hover .u-line::after,
+    .nav-link:hover::after {
+      transition: transform var(--duration-base) var(--ease-out);
+    }
+
+    :is(a, button):hover .more-arrow {
+      transition: transform var(--duration-base) var(--ease-out);
+    }
+  }
+
+  /* Фокус з клавіатури: та сама риска, одразу на місці */
+  :is(a, button, summary):focus-visible .u-line::after,
+  .u-line:focus-visible::after,
+  .nav-link:focus-visible::after {
+    transform: scaleX(1);
+    transition: none;
+  }
+
+  @media (forced-colors: active) {
+    .u-line::after,
+    .nav-link::after {
+      background-color: LinkText;
+    }
+  }
+}

@@ -16,6 +16,15 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
+/* Наведення лише мишею: на дотику :hover «залипає» після тапу, тож тонування й риски — тільки з точним вказівником */
+@custom-variant hover-fine {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 /* ---------- Не кольори ---------- */
 :root {
   /* Тривалості й криві (утиліти duration-* беруть числа; ці змінні — для JS і власних правил) */
