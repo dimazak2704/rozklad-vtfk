@@ -54,8 +54,11 @@ describe('«Заміни»: імпортоване паперове розпор
       ),
     );
 
+    const user = userEvent.setup();
     renderWithProviders(<ChangesPage />, { route: '/changes?date=2026-06-04' });
 
+    // номер і походження розпорядження — у картці «Джерело», а не в тексті сторінки
+    await user.click(await screen.findByRole('button', { name: 'Джерело' }));
     expect(await screen.findByText(/паперове, внесене в систему/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /PDF/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /PNG/ })).not.toBeInTheDocument();
@@ -99,8 +102,14 @@ describe('«Заміни»: розпорядження з доповненням
     expect(await screen.findByRole('heading', { level: 1, name: /Заміни на вівторок, 22/ })).toBeInTheDocument();
     // рядок основного розпорядження без позначки, рядок доповнення — з нею
     expect(await screen.findByText(/з доповнення №49/)).toBeInTheDocument();
-    // джерело — тихою приміткою під списком
-    expect(screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'доповнення №45, №49')).toBeInTheDocument();
+    // підзаголовок — лише дата й парність, підсумок — окремим рядком над списком
+    expect(screen.getByRole('heading', { level: 2, name: /^2\sзаміни у 1\sгрупі$/ })).toBeInTheDocument();
+    expect(screen.queryByText(/№43/)).not.toBeInTheDocument();
+    // номери документів — у картці «Джерело» під списком
+    await user.click(screen.getByRole('button', { name: 'Джерело' }));
+    expect(await screen.findByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'доповнення №45, №49')).toBeInTheDocument();
+    expect(screen.getByText(/опубліковано/)).toHaveTextContent('Розпорядження №43, опубліковано');
+    await user.keyboard('{Escape}');
     expect(screen.queryByText(/з доповнення №43/)).not.toBeInTheDocument();
     // «Пари не буде» — один раз на рядок, а не значок і ще рядок
     expect(screen.getAllByText('Пари не буде')).toHaveLength(2);

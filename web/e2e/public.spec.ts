@@ -65,7 +65,10 @@ test.describe('заміни', () => {
   test('пошук групи й «лише мої»; файли розпорядження — у «⋯»', async ({ page }) => {
     await open(page, '/changes?date=2026-10-19');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('19 жовтня');
-    await expect(page.getByText(/розпорядження\s*№35/)).toBeVisible();
+    // номер розпорядження — у картці «Джерело» під списком, а не в тексті сторінки
+    await page.getByRole('button', { name: 'Джерело' }).click();
+    await expect(page.getByText(/Розпорядження\s*№35/)).toBeVisible();
+    await page.keyboard.press('Escape');
     const group = (code: string) => page.getByRole('link', { name: new RegExp(`^${code}`) });
     for (const code of ['1КІ2', '1ТК1', '4КІ1']) await expect(group(code)).toBeVisible();
 

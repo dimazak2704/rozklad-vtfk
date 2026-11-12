@@ -1,10 +1,11 @@
-import { FileImage, FileText, Search, WifiOff, X } from 'lucide-react';
+import { FileImage, FileText, Info, Search, WifiOff, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { orderDocumentUrl, usePublicChanges } from '@/api/public';
 import type { IsoDate } from '@/api/types';
 import { ChangesDatePicker } from '@/components/public/changes/ChangesDatePicker';
 import { ChangesList } from '@/components/public/changes/ChangesList';
+import { HeaderParity } from '@/components/public/HeaderParity';
 import { dominantReason, filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
 import { useOnline } from '@/components/public/useOnline';
@@ -12,11 +13,11 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  HoverDetails,
   Input,
   LoadingRegion,
   PageErrorScope,
   PageHeader,
-  ParityBadge,
   SegmentedControl,
   Skeleton,
   StatusDot,
@@ -71,8 +72,9 @@ function ChangesSkeleton() {
 }
 
 /**
- * «Заміни»: сьогодні, наступний день чи будь-яка дата. Заголовок — слово «Заміни», дата — у перемикачі,
- * один рядок підсумку; файли розпорядження — у «⋯», джерело — тихою приміткою під списком.
+ * «Заміни»: сьогодні, наступний день чи будь-яка дата. Під заголовком — лише дата й парність; над списком —
+ * один рядок підсумку («4 заміни у 4 групах»); файли розпорядження — у «⋯»; номер і час публікації —
+ * у картці «Джерело» під списком, поруч зі спільною причиною.
  */
 export default function ChangesPage() {
   const [params, setParams] = useSearchParams();
@@ -226,36 +228,35 @@ export default function ChangesPage() {
 
   const totalRows = groups.reduce((sum, g) => sum + g.items.length, 0);
   const updated = changes.dataUpdatedAt > 0 ? formatInstantTime(new Date(changes.dataUpdatedAt).toISOString()) : null;
+  // один рядок підсумку над списком: скільки замін (і «наживо», коли це сьогодні); час оновлення — у «Джерелі»
   const summary =
     groups.length > 0 ? (
-      <span className="inline-flex flex-wrap items-center gap-x-2" aria-live="polite">
-        {/* кольорова лише крапка «наживо», вона ж і розділювач; інакше — той самий « · », що між датою й парністю */}
-        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : <span aria-hidden="true">·</span>}
-        <span>
-          {filtering
-            ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(totalRows, ROW_FORMS_GEN)}`
-            : `${countLabel(totalRows, ROW_FORMS)} у ${countLabel(groups.length, GROUP_FORMS_LOC)}`}
-          {updated ? <span className="text-muted">, оновлено о {updated}</span> : null}
-        </span>
-      </span>
+      <h2 className="flex flex-wrap items-center gap-x-2 text-ui font-semibold text-primary" aria-live="polite">
+        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : null}
+        {filtering
+          ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(totalRows, ROW_FORMS_GEN)}`
+          : `${countLabel(totalRows, ROW_FORMS)} у ${countLabel(groups.length, GROUP_FORMS_LOC)}`}
+      </h2>
     ) : null;
 
-  // джерело — тихою приміткою під списком: номери документів потрібні тим, хто звіряє з папером
-  const source = order ? (
-    <p className="text-caption text-muted">
-      Джерело: розпорядження{order.number !== null ? <span className="figures"> №{order.number}</span> : null}
-      {/* паперове розпорядження внесене в систему пізніше: час імпорту — не час видання */}
-      {order.imported ? (
-        <> (паперове, внесене в систему)</>
-      ) : order.publishedAt ? (
-        <>
-          , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
-        </>
-      ) : null}
+  // номери документів і час публікації потрібні тим, хто звіряє з папером: вони в картці «Джерело», не в тексті
+  const sourceDetails = order ? (
+    <div className="flex flex-col gap-1 text-ui text-secondary">
+      <p>
+        Розпорядження{order.number !== null ? <span className="figures"> №{order.number}</span> : null}
+        {/* паперове розпорядження внесене в систему пізніше: час імпорту — не час видання */}
+        {order.imported ? (
+          <> (паперове, внесене в систему)</>
+        ) : order.publishedAt ? (
+          <>
+            , опубліковано <span className="figures">{formatInstant(order.publishedAt)}</span>
+          </>
+        ) : null}
+        .
+      </p>
       {/* рядки доповнень надруковані в їхніх власних документах, не в основному розпорядженні */}
       {amendments.length > 0 ? (
-        <>
-          ;{' '}
+        <p>
           <span>
             доповнення{' '}
             {amendments.map((amendment, index) => (
@@ -264,9 +265,29 @@ export default function ChangesPage() {
               </span>
             ))}
           </span>
-        </>
+          .
+        </p>
       ) : null}
-      .{commonReason ? ` Причина замін, якщо біля рядка не сказано інше, — ${commonReason.toLocaleLowerCase('uk')}.` : null}
+      {updated ? (
+        <p className="text-muted">
+          Сторінка оновлена о <span className="figures">{updated}</span>.
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+
+  const source = order ? (
+    <p className="flex flex-wrap items-center gap-x-2 text-caption text-muted">
+      {commonReason ? <span>Причина — {commonReason.toLocaleLowerCase('uk')}, якщо біля рядка не сказано інше.</span> : null}
+      <HoverDetails content={sourceDetails} label="Джерело замін" side="top">
+        <button
+          type="button"
+          className="-mx-1 inline-flex min-h-7 items-center gap-1 rounded-control px-1 font-semibold text-secondary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+        >
+          <Info aria-hidden="true" className="size-3.5" />
+          Джерело
+        </button>
+      </HoverDetails>
     </p>
   ) : null;
 
@@ -289,10 +310,9 @@ export default function ChangesPage() {
             {changes.data?.parity ? (
               <>
                 <span aria-hidden="true">·</span>
-                <ParityBadge parity={changes.data.parity} size="sm" />
+                <HeaderParity parity={changes.data.parity} />
               </>
             ) : null}
-            {summary}
           </>
         }
         controls={
@@ -352,6 +372,7 @@ export default function ChangesPage() {
       ) : null}
 
       <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined} className="flex flex-col gap-3">
+        {summary}
         {content}
         {source}
       </div>
