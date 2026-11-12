@@ -23,8 +23,9 @@ import ua.vtc.rozklad.auth.account.AccountRuleException.Rule;
  *   <li>revocation is sticky (D11): only {@code enable(clearRevocation=true)} clears {@code REVOKED};</li>
  *   <li>passwords pass {@link PasswordPolicy}; identifiers are unique and lower case.</li>
  * </ul>
- * Revoke and delete also end the account's sign-in sessions and drop its OAuth2 authorizations, so the next
- * silent renew fails; access tokens already issued live until {@code exp}.
+ * Revoke, delete and a new password also end the account's sign-in sessions and drop its OAuth2
+ * authorizations, so the next silent renew fails (ASVS V3.3.3: a password reset logs out whoever knew the old
+ * one); access tokens already issued live until {@code exp}.
  */
 @Service
 public class AccountAdministration {
@@ -116,12 +117,18 @@ public class AccountAdministration {
         }
     }
 
-    /** Sets a new password; never changes {@code enabled}. */
+    /**
+     * Sets a new password and ends every sign-in of the account, so a session opened with the old password
+     * cannot renew; never changes {@code enabled}.
+     */
     @Transactional
     public void setPassword(UUID id, String password, String actor) {
         Account account = require(id);
         checkPassword(password, account.username(), account.email());
         accounts.setPassword(id, passwordEncoder.encode(password), clock.instant(), actor(actor));
+        int[] ended = endSignIns(id);
+        log.info("password of account {} set by {}: {} sessions and {} authorizations removed", id, actor(actor),
+                ended[0], ended[1]);
     }
 
     /** Disables the account as {@code REVOKED} and ends its sessions and authorizations. */

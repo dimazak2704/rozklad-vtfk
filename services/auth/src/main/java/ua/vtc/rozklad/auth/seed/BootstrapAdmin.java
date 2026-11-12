@@ -25,8 +25,8 @@ import ua.vtc.rozklad.auth.config.AuthServerProperties;
  * The first admin and the break-glass repair (DESIGN §4.10). Runs only while no usable admin exists (an
  * enabled ADMIN with a password or a Google binding), so it is naturally one-shot; with
  * {@code AUTH_BOOTSTRAP_FORCE=1} it repairs the named account even when other admins exist. A matching
- * account (by username or e-mail) gets the password, the ADMIN role and is enabled, revocation included;
- * otherwise a new admin is created. The password must pass {@link PasswordPolicy}.
+ * account (by username or e-mail) gets the password, the ADMIN role and is enabled, revocation included, and
+ * loses its existing sign-in sessions and authorizations; otherwise a new admin is created. The password must pass {@link PasswordPolicy}.
  */
 @Component
 public class BootstrapAdmin implements ApplicationRunner, Ordered {
@@ -93,6 +93,8 @@ public class BootstrapAdmin implements ApplicationRunner, Ordered {
             accounts.setPassword(id, hash, now, ACTOR);
             accounts.addRole(id, Roles.ADMIN);
             accounts.enableClearingReason(id, now, ACTOR);
+            // новий пароль: сесії й авторизації зі старим паролем більше не діють
+            accounts.deleteSignIns(id);
             log.warn("bootstrap: account {} repaired as an admin with a new password; remove "
                     + "AUTH_BOOTSTRAP_ADMIN_PASSWORD{} after the first sign-in", id,
                     config.force() ? " and AUTH_BOOTSTRAP_FORCE" : "");

@@ -50,6 +50,7 @@ public final class PropertiesFixture {
         private AuthServerProperties.SigningKey signingKey = new AuthServerProperties.SigningKey(null, "dev", null, null);
         private boolean demoSeed;
         private List<AuthServerProperties.DemoAccount> demoAccounts = List.of();
+        private AuthServerProperties.Bootstrap bootstrap = new AuthServerProperties.Bootstrap(null, null, null, false);
 
         public Builder issuer(String value) {
             this.issuer = URI.create(value);
@@ -96,6 +97,11 @@ public final class PropertiesFixture {
             return this;
         }
 
+        public Builder bootstrap(AuthServerProperties.Bootstrap value) {
+            this.bootstrap = value;
+            return this;
+        }
+
         public AuthServerProperties build() {
             return new AuthServerProperties(issuer, publicWebUrl, webOrigins, corsOrigins, cliEnabled,
                     new AuthServerProperties.Tokens(Duration.ofMinutes(15), Duration.ofMinutes(15),
@@ -105,7 +111,7 @@ public final class PropertiesFixture {
                             Duration.ofMinutes(15), 50, Duration.ofHours(24), Duration.ofSeconds(2), 20,
                             Duration.ofMinutes(15)),
                     new AuthServerProperties.Password(12),
-                    new AuthServerProperties.Bootstrap(null, null, null, false),
+                    bootstrap,
                     new AuthServerProperties.DemoSeed(demoSeed, null, demoAccounts));
         }
     }

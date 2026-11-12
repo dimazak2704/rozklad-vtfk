@@ -18,7 +18,7 @@ import ua.vtc.rozklad.auth.support.TestAccounts;
 /**
  * The write side of the internal accounts API as core uses it (DESIGN §1.3): who may call it, idempotent
  * create, the conflicts and password reasons core maps to Ukrainian texts, sticky revocation and what revoke
- * does to sessions and authorizations.
+ * and a new password do to sessions and authorizations.
  */
 @AuthIntegrationTest
 class InternalAccountsApiIT {
@@ -150,6 +150,30 @@ class InternalAccountsApiIT {
         JsonNode account = OidcClient.json(core.get(path(teacher.id()), "Authorization", bearer).body());
         assertThat(account.path("enabled").asBoolean()).isFalse();
         assertThat(account.path("disabledReason").asString()).isEqualTo("REVOKED");
+    }
+
+    @Test
+    void aNewPasswordEndsTheSignInsOpenedWithTheOldOne() {
+        TestAccounts.Created teacher = accounts.teacher();
+        Browser stolen = browsers.open();
+        OidcClient.signIn(stolen, teacher.username(), TestAccounts.PASSWORD);
+        assertThat(count("SELECT count(*) FROM spring_session WHERE principal_name = ?", teacher.id().toString()))
+                .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM oauth2_authorization WHERE principal_name = ?",
+                teacher.id().toString())).isEqualTo(1);
+
+        HttpResponse<String> changed = core.json("PUT", path(teacher.id()) + "/password",
+                "{\"password\":\"%s\"}".formatted(STRONG), "Authorization", bearer, "X-Actor", "admin");
+
+        assertThat(changed.statusCode()).isEqualTo(204);
+        assertThat(count("SELECT count(*) FROM spring_session WHERE principal_name = ?", teacher.id().toString()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM oauth2_authorization WHERE principal_name = ?",
+                teacher.id().toString())).isZero();
+        HttpResponse<String> silent = stolen.get(OidcClient.authorizeUrl(OidcClient.verifier(), "r1", "prompt=none"),
+                "Accept", "text/html");
+        assertThat(Browser.location(silent)).contains("error=login_required");
+        assertThat(OidcClient.signIn(browsers.open(), teacher.username(), STRONG).accessToken()).isNotBlank();
     }
 
     @Test
