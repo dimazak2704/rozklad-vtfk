@@ -32,7 +32,10 @@ export function Switch({ label, description, labelPosition = 'end', className, i
     >
       <RadixSwitch.Thumb
         className={cn(
-          'block size-5 rounded-full bg-[var(--grey-0)] shadow-[0_1px_2px_oklch(0%_0_0/0.25)]',
+          // ручка видна в обох станах і темах: світла тема — біла; темна — світла на сірій доріжці
+          // й темна (колір тексту на акценті) на світло-синій, щоб «увімкнено» читалося не лише кольором
+          'block size-5 rounded-full bg-surface shadow-[0_1px_2px_oklch(0%_0_0/0.25)]',
+          'dark:bg-[var(--text-color-primary)] dark:data-[state=checked]:bg-[var(--text-color-on-accent)]',
           'translate-x-0.5 transition-transform duration-150 ease-out data-[state=checked]:translate-x-[1.375rem]',
           'rtl:-translate-x-0.5 rtl:data-[state=checked]:-translate-x-[1.375rem]',
         )}
