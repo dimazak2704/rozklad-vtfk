@@ -137,7 +137,7 @@ export function RoomFormDialog({ room, open, onOpenChange }: RoomFormDialogProps
               buildings.items && buildingOptions.length === 0 ? (
                 <>
                   Корпусів ще немає — додайте їх у розділі{' '}
-                  <Link to="/admin/catalog/structure?tab=buildings" className="font-semibold text-accent underline-offset-2 hover:underline">
+                  <Link to="/admin/catalog/structure?tab=buildings" className="font-semibold text-accent underline-offset-2 hover-fine:underline">
                     «Структура коледжу»
                   </Link>
                   .

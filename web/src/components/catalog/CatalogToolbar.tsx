@@ -102,7 +102,7 @@ export function CatalogToolbar({
           <button
             type="button"
             onClick={onReset}
-            className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+            className="rounded-tag font-[650] text-accent hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
           >
             Показати всі
           </button>

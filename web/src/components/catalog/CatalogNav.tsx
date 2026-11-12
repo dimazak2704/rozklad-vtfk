@@ -42,7 +42,7 @@ export function CatalogNav() {
                     'relative -mb-px inline-flex h-10 items-center border-b-2 px-3 text-ui font-semibold whitespace-nowrap pointer-coarse:h-11',
                     'transition-[color,border-color] duration-100 ease-out',
                     'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                    isActive ? 'border-accent text-primary' : 'border-transparent text-secondary hover:text-primary',
+                    isActive ? 'border-accent text-primary' : 'border-transparent text-secondary hover-fine:text-primary',
                   )
                 }
               >

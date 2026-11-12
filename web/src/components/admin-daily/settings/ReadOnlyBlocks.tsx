@@ -29,7 +29,7 @@ export function NumberingInfo({ semester }: { semester: { id: Uuid } | undefined
         {next.isPending ? (
           <SkeletonText lines={1} />
         ) : last !== null ? (
-          <Link to="/admin/orders" className="font-semibold text-accent underline-offset-4 hover:underline">
+          <Link to="/admin/orders" className="font-semibold text-accent underline-offset-4 hover-fine:underline">
             №{last}
           </Link>
         ) : (

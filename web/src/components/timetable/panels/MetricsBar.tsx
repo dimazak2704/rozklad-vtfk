@@ -118,7 +118,7 @@ export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWa
               type="button"
               onClick={onShowConflicts}
               aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
-              className="rounded-tag font-[650] text-primary underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+              className="rounded-tag font-[650] text-primary underline decoration-1 underline-offset-4 hover-fine:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
             >
               показати
             </button>

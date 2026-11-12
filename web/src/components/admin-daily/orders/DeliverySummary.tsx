@@ -33,7 +33,7 @@ export function DeliverySummary({ orderId }: { orderId: Uuid }) {
           Пораховано останні {list.length} з {deliveries.data.total} повідомлень.
         </p>
       ) : null}
-      <Link to="/admin/telegram#deliveries" className="mt-1 text-caption font-semibold text-accent underline-offset-4 hover:underline">
+      <Link to="/admin/telegram#deliveries" className="mt-1 text-caption font-semibold text-accent underline-offset-4 hover-fine:underline">
         Журнал розсилки
       </Link>
     </div>

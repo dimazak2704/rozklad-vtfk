@@ -107,7 +107,7 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
               'grid w-full grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-x-3 rounded-popover px-3 py-2.5 text-start',
               'transition-[background-color,box-shadow] duration-150 ease-out',
               'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-              selected ? 'bg-selected' : 'hover:bg-hover',
+              selected ? 'bg-selected' : 'hover-fine:bg-hover',
               pulsing && 'ring-2 ring-[var(--border-color-accent-subtle)] motion-safe:animate-[live-flash_1.8s_var(--ease-out)]',
             )}
           >

@@ -36,7 +36,7 @@ export function WeightSlider({ label, hint, value, max, defaultValue, onValueCha
                 onClick={() => onValueChange(defaultValue)}
                 disabled={disabled}
                 aria-label={`Скинути «${label}» до типового ${defaultValue}`}
-                className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:text-disabled pointer-coarse:min-h-11"
+                className="rounded-tag font-[650] text-accent hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:text-disabled pointer-coarse:min-h-11"
               >
                 скинути
               </button>
@@ -60,7 +60,7 @@ export function WeightSlider({ label, hint, value, max, defaultValue, onValueCha
         </Slider.Track>
         <Slider.Thumb
           aria-label={label}
-          className="relative block size-4 rounded-full border-2 before:absolute before:-inset-3.5 before:content-[''] pointer-coarse:size-6 border-[var(--border-color-accent)] bg-[var(--fill-surface)] shadow-[0_1px_2px_oklch(0%_0_0/0.2)] transition-transform duration-100 ease-out hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none"
+          className="relative block size-4 rounded-full border-2 before:absolute before:-inset-3.5 before:content-[''] pointer-coarse:size-6 border-[var(--border-color-accent)] bg-[var(--fill-surface)] shadow-[0_1px_2px_oklch(0%_0_0/0.2)] transition-transform duration-100 ease-out hover-fine:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none"
         />
       </Slider.Root>
       <span id={`${id}-hint`} className="sr-only">

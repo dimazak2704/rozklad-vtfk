@@ -327,9 +327,9 @@ function SuggestionLink({ row, hideAtRest = false }: { row: AccountingRow; hideA
       to={link}
       aria-label={`${suggestionAction(row.suggestion)}: ${row.group.code}, ${row.discipline.shortName} — у замінах`}
       className={cn(
-        'inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11',
+        'inline-flex min-h-6 items-center gap-1 rounded-tag text-caption font-[650] text-accent underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11',
         hideAtRest &&
-          'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100',
+          'opacity-0 transition-opacity duration-150 pointer-fine:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100',
       )}
     >
       {suggestionAction(row.suggestion)}

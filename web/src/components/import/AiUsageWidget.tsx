@@ -56,7 +56,7 @@ export function AiUsageWidget({ className }: { className?: string }) {
         >
           <button
             type="button"
-            className="rounded-tag text-caption font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="rounded-tag text-caption font-semibold text-accent underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
             Моделі
           </button>

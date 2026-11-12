@@ -174,7 +174,7 @@ export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDi
               commissions.items && commissions.items.length === 0 ? (
                 <>
                   Комісій ще немає — додайте їх у{' '}
-                  <Link to="/admin/catalog/structure?tab=commissions" className="font-semibold text-accent underline-offset-2 hover:underline">
+                  <Link to="/admin/catalog/structure?tab=commissions" className="font-semibold text-accent underline-offset-2 hover-fine:underline">
                     «Структурі коледжу»
                   </Link>
                   .

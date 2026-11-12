@@ -37,7 +37,7 @@ export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onS
             className={cn(
               'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',
               'transition-[background-color,border-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-              selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover:bg-hover hover:text-primary',
+              selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover-fine:bg-hover hover-fine:text-primary',
             )}
           >
             {absence.teacher.shortName}

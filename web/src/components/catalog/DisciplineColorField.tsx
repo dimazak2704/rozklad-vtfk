@@ -41,7 +41,7 @@ export function DisciplineColorField({ value, onChange, disciplineId, shortName,
             className={cn(
               'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-caption font-semibold select-none',
               'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus',
-              selected === AUTO ? 'border-accent bg-selected text-accent' : 'border-default text-secondary hover:bg-hover hover:text-primary',
+              selected === AUTO ? 'border-accent bg-selected text-accent' : 'border-default text-secondary hover-fine:bg-hover hover-fine:text-primary',
             )}
           >
             <input
@@ -64,7 +64,7 @@ export function DisciplineColorField({ value, onChange, disciplineId, shortName,
                 className={cn(
                   'relative grid size-8 cursor-pointer place-items-center rounded-full border-2 transition-[border-color] duration-100',
                   'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus',
-                  checked ? 'border-[var(--line-dot)]' : 'border-transparent hover:border-strong',
+                  checked ? 'border-[var(--line-dot)]' : 'border-transparent hover-fine:border-strong',
                 )}
               >
                 <input

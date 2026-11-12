@@ -22,7 +22,7 @@ export function Disclosure({ summary, children, defaultOpen = false, className, 
     <details className={cn('group/disclosure flex flex-col', className)} open={defaultOpen || undefined}>
       <summary
         className={cn(
-          'flex min-h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-control text-ui font-[650] text-secondary select-none hover:text-primary',
+          'flex min-h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-control text-ui font-[650] text-secondary select-none hover-fine:text-primary',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden',
         )}
       >

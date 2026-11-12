@@ -176,9 +176,9 @@ function MonthGrid({ value, min, max, onPick }: { value: string | null; min?: st
                       'flex size-9 w-full items-center justify-center rounded-control text-ui figures pointer-coarse:size-11',
                       'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
                       m === month ? 'text-primary' : 'text-muted',
-                      selected ? 'bg-accent font-semibold text-on-accent' : 'hover:bg-hover',
+                      selected ? 'bg-accent font-semibold text-on-accent' : 'hover-fine:bg-hover',
                       iso === today && !selected && 'font-semibold ring-1 ring-[var(--border-color-default)] ring-inset',
-                      disabled && 'cursor-not-allowed text-disabled hover:bg-transparent',
+                      disabled && 'cursor-not-allowed text-disabled hover-fine:bg-transparent',
                     )}
                   >
                     {day}

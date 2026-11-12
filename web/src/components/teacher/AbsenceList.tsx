@@ -126,7 +126,7 @@ function AbsenceRow({ absence, today, onDelete }: { absence: AbsenceDto; today: 
           icon={<Trash2 aria-hidden="true" className="size-4" />}
           onClick={onDelete}
           // у спокої рядок без кнопок; при наведенні чи фокусі — видно, на дотику — завжди
-          className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          className="opacity-0 transition-opacity duration-150 pointer-fine:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         />
       ) : null}
     </li>
@@ -183,7 +183,7 @@ export function AbsenceList({ today }: { today: IsoDate }) {
         <details className="group/past flex flex-col">
           <summary
             className={cn(
-              'flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-control text-ui font-[650] text-secondary hover:text-primary',
+              'flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-control text-ui font-[650] text-secondary hover-fine:text-primary',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden',
             )}
           >

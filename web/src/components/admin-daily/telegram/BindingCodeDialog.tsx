@@ -84,7 +84,7 @@ function Result({ type, result }: { type: CodeType; result: BindingCodeDto }) {
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-caption text-muted">Посилання</span>
           <span className="flex min-w-0 items-center gap-1 rounded-control border border-default bg-sunken ps-2.5">
-            <a href={link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover:underline">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover-fine:underline">
               {link}
             </a>
             <CopyButton value={link} label="Копіювати посилання" />

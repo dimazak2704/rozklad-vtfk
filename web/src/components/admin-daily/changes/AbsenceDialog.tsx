@@ -300,7 +300,7 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
                               'flex h-11 min-w-14 flex-col items-center justify-center rounded-control border px-2 leading-tight',
                               'transition-[background-color,border-color,color] duration-100 ease-out',
                               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                              on ? 'border-accent bg-selected text-accent' : 'border-control bg-surface text-primary hover:border-strong',
+                              on ? 'border-accent bg-selected text-accent' : 'border-control bg-surface text-primary hover-fine:border-strong',
                             )}
                           >
                             <span className="font-condensed text-heading font-bold figures">{pair}</span>

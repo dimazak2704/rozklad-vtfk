@@ -158,7 +158,7 @@ function OtherPairs({
               className={cn(
                 'inline-flex size-10 items-center justify-center rounded-control border text-cell font-[650] figures pointer-coarse:size-11',
                 'transition-[background-color,border-color,color] duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                on ? 'border-accent bg-selected text-primary' : 'border-control bg-surface text-primary hover:border-strong hover:bg-hover',
+                on ? 'border-accent bg-selected text-primary' : 'border-control bg-surface text-primary hover-fine:border-strong hover-fine:bg-hover',
               )}
             >
               {pair}

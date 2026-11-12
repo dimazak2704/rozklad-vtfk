@@ -44,7 +44,7 @@ function SectionLink({ to, children }: { to: string; children: string }) {
   return (
     <Link
       to={to}
-      className="group/link -my-1 inline-flex min-h-9 items-center gap-0.5 rounded-control px-1 text-ui font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-2.5 pointer-coarse:min-h-11"
+      className="group/link -my-1 inline-flex min-h-9 items-center gap-0.5 rounded-control px-1 text-ui font-semibold text-accent underline-offset-4 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-2.5 pointer-coarse:min-h-11"
     >
       {children}
       {/* та сама мова, що й «Усі заміни →» на головній: під мишею стрілка підʼїжджає на 3 px */}

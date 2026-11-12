@@ -31,7 +31,7 @@ export function ReasonPicker({ code, text, onCodeChange, onTextChange, collapsib
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-tag font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          className="rounded-tag font-semibold text-accent underline-offset-4 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
         >
           змінити
         </button>

@@ -23,17 +23,17 @@ const SEVERITY_DOT: Record<DashboardAlert['severity'], string> = {
 // рядок виходить за край колонки на 12 px (`-mx-3` у списку): текст стоїть на одній лінії з заголовком розділу,
 // а тоновання наведення виступає назовні, як у Linear чи Notion
 const ROW =
-  'group/row grid min-h-14 items-center gap-x-3 px-3 py-2.5 rounded-popover transition-[background-color] duration-150 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus';
+  'group/row grid min-h-14 items-center gap-x-3 px-3 py-2.5 rounded-popover transition-[background-color] duration-150 ease-out hover-fine:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus';
 
 /**
  * Стрілка «перейти»: на дотику видно завжди; мишею — проступає й підʼїжджає на 4 px лише під наведенням чи фокусом,
  * щоб у спокої список не був парканом із шевронів.
  */
 const ARROW =
-  'size-4 text-muted rtl:rotate-180 transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:-translate-x-1 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100';
+  'size-4 text-muted rtl:rotate-180 transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:-translate-x-1 pointer-fine:group-hover/row:translate-x-0 pointer-fine:group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100';
 
 function Row({ to, children, className }: { to: string | null; children: ReactNode; className?: string }) {
-  if (!to) return <div className={cn(ROW, 'hover:bg-transparent', className)}>{children}</div>;
+  if (!to) return <div className={cn(ROW, 'hover-fine:bg-transparent', className)}>{children}</div>;
   return (
     <Link to={to} className={cn(ROW, className)}>
       {children}
@@ -132,7 +132,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
       {open.length > MAX_PAIRS ? (
         <Link
           to={`/admin/changes?date=${date}`}
-          className="self-start rounded-control px-3 py-2 text-ui font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+          className="self-start rounded-control px-3 py-2 text-ui font-semibold text-accent underline-offset-4 hover-fine:underline focus-visible:outline-2 focus-visible:outline-focus"
         >
           Ще {open.length - MAX_PAIRS} — до замін
         </Link>

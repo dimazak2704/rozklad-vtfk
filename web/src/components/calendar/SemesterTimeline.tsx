@@ -94,7 +94,7 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                       key={period.id}
                       type="button"
                       onClick={() => onOpenPeriod(period)}
-                      className="truncate rounded-tag text-start text-caption text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      className="truncate rounded-tag text-start text-caption text-secondary hover-fine:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                     >
                       {period.title} — до {formatNumericDate(period.endsOn).slice(0, 5)}
                     </button>
@@ -158,8 +158,8 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                   'transition-[background-color,border-color] duration-150 ease-out',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                   week.parity === 'DENOMINATOR' ? 'bg-sunken' : 'bg-surface',
-                  week.overridden ? 'border-accent' : 'border-default hover:border-strong',
-                  onToggleWeek ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
+                  week.overridden ? 'border-accent' : 'border-default hover-fine:border-strong',
+                  onToggleWeek ? 'cursor-pointer hover-fine:bg-hover' : 'cursor-default',
                   isCurrent && 'ring-2 ring-[var(--border-color-accent)] ring-offset-1 ring-offset-[var(--background-color-surface)]',
                 )}
               >

@@ -317,7 +317,7 @@ function BellsSection() {
                   className={cn(
                     'flex w-full flex-col items-start gap-1 rounded-control border px-3 py-2 text-start',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                    isSelected ? 'border-accent bg-selected' : 'border-default bg-surface hover:bg-hover',
+                    isSelected ? 'border-accent bg-selected' : 'border-default bg-surface hover-fine:bg-hover',
                   )}
                 >
                   <span className="text-ui font-semibold text-primary">{profile.name}</span>

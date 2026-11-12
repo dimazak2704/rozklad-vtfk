@@ -105,7 +105,7 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
                 className={cn(
                   'flex w-full items-center gap-3 rounded-popover px-3 py-2.5 text-start pointer-coarse:min-h-14',
                   'transition-[background-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                  selected ? 'bg-selected' : 'hover:bg-hover',
+                  selected ? 'bg-selected' : 'hover-fine:bg-hover',
                 )}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">

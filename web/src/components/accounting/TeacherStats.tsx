@@ -29,7 +29,7 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         cell: (s) => (
           <Link
             to={paths.teacher(s.teacher.id)}
-            className="rounded-tag font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="rounded-tag font-semibold text-primary underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
             {s.teacher.shortName}
           </Link>

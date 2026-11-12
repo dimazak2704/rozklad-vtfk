@@ -45,9 +45,9 @@ export function JobHistory({ jobs, selectedId, onSelect }: JobHistoryProps) {
                 aria-current={job.id === selectedId ? 'true' : undefined}
                 onClick={() => onSelect(job.id)}
                 className={cn(
-                  'flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-start transition-colors duration-100 hover:bg-hover',
+                  'flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-start transition-colors duration-100 hover-fine:bg-hover',
                   'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                  job.id === selectedId && 'bg-selected hover:bg-selected',
+                  job.id === selectedId && 'bg-selected hover-fine:bg-selected',
                 )}
               >
                 <span className="inline-flex w-24 items-center gap-2 text-ui font-[550] text-primary">

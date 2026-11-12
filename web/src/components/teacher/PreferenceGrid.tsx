@@ -166,7 +166,7 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                             'flex h-14 w-full flex-col items-start justify-start gap-0.5 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
                             'transition-[background-color] duration-100 ease-out',
                             'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-                            kind ? KIND_CELL[kind] : 'hover:bg-hover active:bg-active',
+                            kind ? KIND_CELL[kind] : 'hover-fine:bg-hover active:bg-active',
                           )}
                         >
                           {kind ? (

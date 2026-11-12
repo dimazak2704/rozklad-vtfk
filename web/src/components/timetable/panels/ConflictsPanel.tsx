@@ -101,7 +101,7 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
                 <button
                   type="button"
                   onClick={() => onFocusConflict(conflict)}
-                  className="group/conflict flex w-full items-start gap-2 px-3 py-2 text-start transition-colors duration-100 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                  className="group/conflict flex w-full items-start gap-2 px-3 py-2 text-start transition-colors duration-100 hover-fine:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
                 >
                   <span
                     aria-hidden="true"
@@ -113,7 +113,7 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
                   </span>
                   <Crosshair
                     aria-hidden="true"
-                    className="mt-1 size-3.5 shrink-0 text-muted opacity-0 transition-opacity duration-100 group-hover/conflict:opacity-100 group-focus-visible/conflict:opacity-100"
+                    className="mt-1 size-3.5 shrink-0 text-muted opacity-0 transition-opacity duration-100 pointer-fine:group-hover/conflict:opacity-100 group-focus-visible/conflict:opacity-100"
                   />
                   <span className="sr-only">Показати в сітці</span>
                 </button>

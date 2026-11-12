@@ -246,7 +246,7 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
               'group flex w-full flex-col items-center gap-2 rounded-panel border-2 border-dashed px-6 py-8 text-center',
               'transition-[background-color,border-color] duration-150 ease-out',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-              dragging ? 'border-accent bg-selected' : 'border-strong bg-surface hover:border-accent hover:bg-hover',
+              dragging ? 'border-accent bg-selected' : 'border-strong bg-surface hover-fine:border-accent hover-fine:bg-hover',
             )}
           >
             <Upload aria-hidden="true" className={cn('size-6 text-muted transition-transform duration-150', dragging && 'text-accent motion-safe:-translate-y-0.5')} />

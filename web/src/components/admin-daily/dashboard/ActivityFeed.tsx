@@ -82,7 +82,7 @@ export function ActivityFeed({ items, fresh, today = todayInKyiv() }: ActivityFe
                     to={item.href}
                     className={cn(
                       rowClass,
-                      'transition-[background-color] duration-150 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                      'transition-[background-color] duration-150 ease-out hover-fine:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
                     )}
                   >
                     {body}

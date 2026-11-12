@@ -200,7 +200,7 @@ export function OrderSheet({ order, parentNumber = null, changes, fresh, classNa
                 <tr
                   key={item.id}
                   className={cn(
-                    change && 'cursor-help transition-[background-color] duration-100 hover:bg-[var(--background-color-selected)]',
+                    change && 'cursor-help transition-[background-color] duration-100 hover-fine:bg-[var(--background-color-selected)]',
                     item.changeId && fresh?.has(item.changeId) && 'motion-safe:animate-[live-flash_2.4s_var(--ease-out)]',
                   )}
                 >

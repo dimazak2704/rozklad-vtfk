@@ -143,7 +143,7 @@ export function EditorToolbar({
       <button
         type="button"
         onClick={() => onFiltersChange(EMPTY_FILTERS)}
-        className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+        className="rounded-tag font-[650] text-accent hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
       >
         Показати всіх
       </button>

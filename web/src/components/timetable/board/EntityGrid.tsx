@@ -332,7 +332,7 @@ const SlotCell = memo(function SlotCell({
             style={{ gridRow: parity === 'BOTH' ? '1 / span 2' : parity === 'NUMERATOR' ? '1' : '2', gridColumn: '1 / -1' }}
             className={cn(
               'group/add relative z-[1] flex min-h-0 items-center justify-center rounded-tag text-transparent',
-              'transition-[background-color,color] duration-100 ease-out hover:bg-hover hover:text-muted',
+              'transition-[background-color,color] duration-100 ease-out hover-fine:bg-hover hover-fine:text-muted',
               'focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
             )}
           >

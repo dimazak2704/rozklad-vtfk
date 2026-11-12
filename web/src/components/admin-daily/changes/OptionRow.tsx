@@ -94,7 +94,7 @@ export function OptionRow({ option, selectId, hotkey, selected, best = false, bu
       className={cn(
         'relative flex flex-col gap-1.5 rounded-popover px-3.5 py-3',
         'transition-[background-color] duration-150 ease-out',
-        selected ? 'bg-selected' : 'hover:bg-hover',
+        selected ? 'bg-selected' : 'hover-fine:bg-hover',
       )}
     >
       <button

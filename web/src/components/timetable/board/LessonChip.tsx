@@ -122,7 +122,7 @@ export const LessonChip = memo(function LessonChip({
             // волосяну лінію, щоб «Інф. | Інф.» не злились. Наведення — нейтральне тоновання, колір несе лише крапка
             hasHard
               ? 'border-danger bg-danger-subtle'
-              : cn('bg-surface', !selected && 'hover:border-default hover:bg-hover', narrow ? 'border-separator' : 'border-transparent'),
+              : cn('bg-surface', !selected && 'hover-fine:border-default hover-fine:bg-hover', narrow ? 'border-separator' : 'border-transparent'),
             selected && 'border-[var(--border-color-accent)] bg-selected ring-1 ring-[var(--border-color-accent)] ring-inset',
             travelling && 'border-dashed border-[var(--border-color-strong)] bg-sunken opacity-45',
             landed && 'motion-safe:animate-[live-flash_1.4s_var(--ease-out)]',

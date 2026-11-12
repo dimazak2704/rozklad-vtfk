@@ -169,7 +169,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
       text: (
         <>
           Потрапить у розпорядження на {formatDayMonth(change.date)}.{' '}
-          <Link to={`/admin/orders?date=${change.date}`} className="font-semibold text-accent underline-offset-4 hover:underline">
+          <Link to={`/admin/orders?date=${change.date}`} className="font-semibold text-accent underline-offset-4 hover-fine:underline">
             Переглянути чернетку
           </Link>
         </>

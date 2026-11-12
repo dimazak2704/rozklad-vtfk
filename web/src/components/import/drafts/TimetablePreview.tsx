@@ -172,7 +172,7 @@ function LessonChip({ lesson, names }: { lesson: TimetableDraftLesson; names: Re
         data-line={line}
         className={cn(
           'flex w-full min-w-0 flex-col items-start rounded-tag px-2 py-1 text-start',
-          'hover:bg-[var(--line-tint)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
+          'hover-fine:bg-[var(--line-tint)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
         )}
       >
         <span className="flex w-full min-w-0 items-center gap-1.5">
