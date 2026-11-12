@@ -22,6 +22,7 @@ import { initialForm, toJobRequest, validateForm, type GenerationFormState } fro
 import { publishedVersion } from '@/components/timetable/model/versions';
 import { Button, EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
+import { useHotkeys } from '@/hooks/useHotkeys';
 
 /**
  * Генератор розкладу: параметри (групи, базова версія, ліміт часу, ваги), запуск, хід розвʼязання
@@ -97,7 +98,18 @@ export default function GenerationPage() {
       label: 'Запустити генерацію розкладу',
       group: 'Генератор',
       icon: Cpu,
+      shortcut: 'mod+enter',
       perform: () => void launch(),
+    },
+  ]);
+  useHotkeys([
+    {
+      keys: 'mod+enter',
+      handler: () => void launch(),
+      description: 'Запустити генерацію',
+      group: 'Генератор',
+      allowInInputs: true,
+      enabled: !start.isPending,
     },
   ]);
 
