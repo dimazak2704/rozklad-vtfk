@@ -25,6 +25,7 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.substitution.Absence;
 import ua.vtc.rozklad.core.substitution.AbsenceRepository;
+import ua.vtc.rozklad.core.substitution.ApprovalMode;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
 import ua.vtc.rozklad.core.substitution.internal.effect.AbsentSubstitutes;
@@ -173,12 +174,27 @@ public class ChangeCommands {
         }
         changes.lockDecisionsOf(change.getDate());
         lessons.lockGroupDay(change.getGroupId(), change.getDate());
+        boolean roomChanged = !Objects.equals(change.getNewRoomId(), request.newRoomId());
         change.setReplacement(change.getNewDisciplineId(), change.getNewTeacherId(), request.newRoomId());
         change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
         if (change.isOpen()) {
             requireFreeSlot(change, planner.plan(change));
         }
+        if (roomChanged && teacherWasTold(change)) {
+            // викладач уже отримав прохання чи повідомлення з аудиторією: надсилаємо його ще раз з новою
+            notifications.confirmationRequested(change);
+        }
         return finish(change);
+    }
+
+    /**
+     * The assigned teacher has a request (PENDING) or a notice (NOTIFY, CONFIRMED) that names the
+     * room; AUTO changes and changes without a teacher told nobody.
+     */
+    private static boolean teacherWasTold(Change change) {
+        return change.getNewTeacherId() != null
+                && (change.getStatus() == ChangeStatus.PENDING_CONFIRMATION
+                || change.getStatus() == ChangeStatus.CONFIRMED && change.getApprovalMode() == ApprovalMode.NOTIFY);
     }
 
     /** DELETE: cancels the change; cancelling a cancelled change is a no-op. */

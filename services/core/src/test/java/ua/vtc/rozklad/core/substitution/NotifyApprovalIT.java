@@ -43,6 +43,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeReplies;
 import ua.vtc.rozklad.core.substitution.internal.change.ConfirmationReminders;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
+import ua.vtc.rozklad.core.substitution.internal.change.UpdateChangeRequest;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -348,6 +349,35 @@ class NotifyApprovalIT {
                 assertThat(after.getTeacherAnswer()).isEqualTo(ConfirmationDecision.DECLINE);
             }
         }
+    }
+
+    /**
+     * The informed substitute hears about a new room: editing the room of an assigned change sends
+     * the notice again (same change id, mode and deadline). A reason edit sends nothing.
+     */
+    @Test
+    void newRoomOfAnAssignedChangeIsSentToTheTeacherAgain() {
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+        ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.MUTUAL), "admin");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, WAIT)).hasSize(1);
+
+        ChangeDto reasonOnly = commands.update(created.id(),
+                new UpdateChangeRequest(null, ReasonCode.ABSENT, null, created.version()), "admin");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+
+        commands.update(created.id(), new UpdateChangeRequest(fixture.room("304").getId(), ReasonCode.ABSENT, null,
+                reasonOnly.version()), "admin");
+
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, WAIT)).singleElement().satisfies(event -> {
+                    assertThat(event.roomName()).isEqualTo("304");
+                    assertThat(event.mode()).isEqualTo(SubstitutionRequestMode.NOTIFY);
+                    assertThat(event.teacherId()).isEqualTo(nepyivoda.getId());
+                    assertThat(event.deadline()).isNull();
+                });
     }
 
     private Lesson stpLesson(LocalDate date, int pair) {
