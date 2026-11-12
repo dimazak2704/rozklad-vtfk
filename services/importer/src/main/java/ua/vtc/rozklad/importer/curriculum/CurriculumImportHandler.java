@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -197,16 +198,31 @@ public class CurriculumImportHandler implements ImportHandler {
         return ELECTIVE_PLACEHOLDER.matcher(TextNormalizer.key(name)).find();
     }
 
-    /** Groups must be given; a discipline name with characters the model could not read is not created. */
+    /**
+     * Groups must be given; a discipline name with characters the model could not read is not created;
+     * two rows that resolve to one discipline block applying, because core takes one load item per
+     * group and discipline (and nothing here decides whether such rows should be summed).
+     */
     @Override
     public List<ReportRow> readiness(JsonNode draftJson, JobOptions options, NormalizationResult normalization) {
         CurriculumDraft draft = jsonMapper.treeToValue(draftJson, CurriculumDraft.class);
         List<ReportRow> rows = new ArrayList<>(LoadApplier.readiness(options));
+        Map<String, Integer> firstRowOf = new HashMap<>();
         int index = 0;
         for (CurriculumDraft.Row row : draft.rows()) {
             index++;
-            boolean mapped = normalization.find(EntityType.DISCIPLINE, row.discipline()).map(Resolution::existing)
-                    .orElse(false);
+            Optional<Resolution> resolution = normalization.find(EntityType.DISCIPLINE, row.discipline());
+            Optional<LoadTarget> target = resolution.flatMap(found -> LoadTarget.of(found, row.discipline()));
+            if (target.isPresent()) {
+                Integer first = firstRowOf.putIfAbsent(target.get().key(), index);
+                if (first != null) {
+                    rows.add(ReportRow.of(Severity.ERROR, RowType.CURRICULUM, row.discipline(), "рядок " + index,
+                            "Рядки " + first + " і " + index + " стануть однією дисципліною «" + target.get().label()
+                                    + "», а в навантаженні групи вона може бути лише раз. Зіставте один із рядків з іншою "
+                                    + "дисципліною; якщо план справді повторює рядок, завантажте файл ще раз."));
+                }
+            }
+            boolean mapped = resolution.map(Resolution::existing).orElse(false);
             if (row.discipline().indexOf('\uFFFD') >= 0 && !mapped) {
                 rows.add(ReportRow.of(Severity.ERROR, RowType.DISCIPLINE, row.discipline(), "рядок " + index,
                         "У назві є нерозпізнані символи «\uFFFD» — зіставте дисципліну з каталогом на вкладці «Рішення» "
@@ -214,6 +230,24 @@ public class CurriculumImportHandler implements ImportHandler {
             }
         }
         return rows;
+    }
+
+    /**
+     * The discipline a row's load item will name: an existing one by id, a new one by the name it is
+     * created with; none while the admin has not decided.
+     */
+    private record LoadTarget(String key, String label) {
+
+        static Optional<LoadTarget> of(Resolution resolution, String raw) {
+            if (resolution.existing() && resolution.matched() != null) {
+                return Optional.of(new LoadTarget("id:" + resolution.matched().id(), resolution.matched().label()));
+            }
+            if (resolution.createsNew()) {
+                String name = CatalogKeys.override(resolution, "shortName").orElse(raw);
+                return Optional.of(new LoadTarget("new:" + TextNormalizer.key(name), name));
+            }
+            return Optional.empty();
+        }
     }
 
     @Override

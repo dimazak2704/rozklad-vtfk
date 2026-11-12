@@ -183,7 +183,10 @@ skipped, no rows → ERROR. See `importer-ai-samples.md` for the live run on `se
 A plan names disciplines in full while the catalog holds the timetable's short forms, so a plan discipline that is not
 in the catalog is never created on its own: until the admin maps it or confirms `createNew`, its row is an ERROR
 (`createNeedsConfirmation`). Elective placeholders («Вибірковий освітній компонент 1», «ВК 2», «… за вибором») get
-their own message: map them to the elective the group actually studies.
+their own message: map them to the elective the group actually studies. Two rows that resolve to one discipline
+(both mapped to the same catalog entry, two new ones with the same name, or one row read twice) are a blocking ERROR
+naming both rows: core keeps one load item per group and discipline and rejects the pair at apply. Whether such
+rows should instead be merged by summing their hours is an owner question; until it is answered nothing is summed.
 
 ### parse-absence
 

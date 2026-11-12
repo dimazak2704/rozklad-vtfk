@@ -55,7 +55,7 @@ class CurriculumNewDisciplinesTest {
     @Test
     void mappingOrConfirmingCreationUnblocks() {
         JobNormalizer.Normalized normalized = normalize(List.of(
-                new MappingDecision(EntityType.DISCIPLINE, ELECTIVE, TestCatalogs.STP, null, false),
+                new MappingDecision(EntityType.DISCIPLINE, ELECTIVE, TestCatalogs.NDEKSM, null, false),
                 new MappingDecision(EntityType.DISCIPLINE, SOCIOLOGY, null, JSON.createObjectNode(), false)));
 
         Map<String, ReportRow> rows = byRaw(normalized);
@@ -63,6 +63,39 @@ class CurriculumNewDisciplinesTest {
         assertThat(rows.get(ELECTIVE).severity()).isEqualTo(Severity.OK);
         assertThat(rows.get(SOCIOLOGY).severity()).isEqualTo(Severity.INFO);
         assertThat(rows.get(SOCIOLOGY).message()).isEqualTo("Буде створено новий запис за рішенням адміністратора.");
+    }
+
+    /**
+     * Core takes one load item per group and discipline: two plan rows that end up as one catalog
+     * discipline would be rejected at apply, so review blocks them and names both rows.
+     */
+    @Test
+    void twoRowsResolvedToOneDisciplineBlockApplying() {
+        JobNormalizer.Normalized normalized = normalize(List.of(
+                new MappingDecision(EntityType.DISCIPLINE, ELECTIVE, TestCatalogs.STP, null, false),
+                new MappingDecision(EntityType.DISCIPLINE, SOCIOLOGY, null, JSON.createObjectNode(), false)));
+
+        assertThat(normalized.blocking()).isTrue();
+        assertThat(normalized.rows()).filteredOn(row -> row.severity() == Severity.ERROR).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.raw()).isEqualTo(ELECTIVE);
+                    assertThat(row.location()).isEqualTo("рядок 3");
+                    assertThat(row.message()).contains("Рядки 1 і 3", "«СТП — Сучасні технології проєктування»",
+                            "лише раз");
+                });
+    }
+
+    @Test
+    void twoNewRowsCreatingOneDisciplineBlockApplying() {
+        JobNormalizer.Normalized normalized = normalize(List.of(
+                new MappingDecision(EntityType.DISCIPLINE, ELECTIVE, null,
+                        JSON.createObjectNode().put("shortName", "Соціологія"), false),
+                new MappingDecision(EntityType.DISCIPLINE, SOCIOLOGY, null,
+                        JSON.createObjectNode().put("shortName", "соціологія "), false)));
+
+        assertThat(normalized.blocking()).isTrue();
+        assertThat(normalized.rows()).filteredOn(row -> row.severity() == Severity.ERROR)
+                .extracting(ReportRow::message).singleElement().asString().contains("Рядки 2 і 3", "«Соціологія»");
     }
 
     @Test
