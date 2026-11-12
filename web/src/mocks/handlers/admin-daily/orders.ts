@@ -15,7 +15,8 @@ import type {
 } from '@/api/types';
 import { compareIsoDates, formatLongDate } from '@/lib/date';
 import { REASON_CODE_LABEL } from '@/lib/labels';
-import { ACTIVE_SEMESTER, CALENDAR_PERIODS, parityOn, weekdayLabel } from '../../fixtures';
+import { ACTIVE_SEMESTER, CALENDAR_PERIODS, weekdayLabel } from '../../fixtures';
+import { activeSemester, parityOfDate } from '../calendar';
 import { mockId } from '../../ids';
 import { changesOn, type ChangeRecord, type OrderRecord, type World } from './world';
 
@@ -311,7 +312,8 @@ export function buildDraft(world: World, date: IsoDate, settings: SettingsDto, n
     status: 'DRAFT',
     title: orderTitle(main ? 'AMENDMENT' : 'ORDER', null, main?.number ?? null),
     weekdayLabel: weekdayLabel(date),
-    parityLabel: PARITY_UPPER[parityOn(date)],
+    // як OrderTexts.parityLabel(calendar.parity(date)) у core: ручне перевизначення тижня виграє
+    parityLabel: PARITY_UPPER[parityOfDate(activeSemester(), date)],
     items,
     roomChanges,
     // у доповненні календарні примітки вже були в основному розпорядженні

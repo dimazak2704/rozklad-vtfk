@@ -8,7 +8,7 @@ import { http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import type { CalendarWeek } from '@/api/calendar';
-import type { PublicMetaDto } from '@/api/types';
+import type { OrderDto, PublicMetaDto } from '@/api/types';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
@@ -57,6 +57,9 @@ describe('WorkingDateSwitcher', () => {
     renderWithProviders(<WorkingDateSwitcher />, { route: '/admin/changes?date=2026-11-18' });
     await waitFor(() => expect(screen.getAllByText('Чисельник').length).toBeGreaterThan(0));
     expect(screen.queryByText('Знаменник')).toBeNull();
+    // та сама парність, що в шапці розпорядження на цю дату
+    const draft = await api.get<OrderDto>('/admin/orders/draft', { date: '2026-11-18' });
+    expect(draft.parityLabel).toBe('ЧИСЕЛЬНИК');
   });
 
   it('тижні недоступні (збій) — лишається чергування від сьогодні', async () => {
