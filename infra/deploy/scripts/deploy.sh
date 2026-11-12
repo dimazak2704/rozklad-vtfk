@@ -9,8 +9,8 @@
 # Images: IMAGE_PREFIX/IMAGE_TAG from the environment (the GitHub workflow), else from .env, else
 # the ones the last deploy recorded in infra/deploy/.env.images, else localhost/rozklad:prod (built
 # here). A registry prefix (ghcr.io/<user>/rozklad) means pulling. The images it starts are recorded
-# in .env.images, so compose.sh and restore-db.sh keep using them. After the stack is healthy it
-# reloads Caddy, syncs Keycloak and the demo accounts with .env and runs smoke checks. docs/DEPLOY.md
+# in .env.images, so compose.sh and restore-db.sh keep using them. After the stack is healthy (auth is
+# ready only once an admin can sign in) it reloads Caddy and runs smoke checks. docs/DEPLOY.md
 set -Eeuo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +33,7 @@ while (($#)); do
   shift
 done
 
-app_services=(core scheduler importer notification gateway web)
+app_services=(auth core scheduler importer notification gateway web)
 
 version_ge() { [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" == "$2" ]]; }
 
@@ -46,7 +46,7 @@ preflight() {
     die "the Docker Compose plugin is missing: sudo apt-get install docker-compose-plugin"
   compose_version=${compose_version#v}
   version_ge "${compose_version%%-*}" 2.24.4 ||
-    die "Docker Compose $compose_version is too old: 2.24.4 or newer is needed (!reset/!override tags)"
+    die "Docker Compose $compose_version is too old: 2.24.4 or newer is needed (!reset tag)"
 
   [[ -f $ROZKLAD_ENV_FILE ]] ||
     die "$ROZKLAD_ENV_FILE is missing: run infra/deploy/scripts/gen-secrets.sh, then fill it in"
@@ -57,7 +57,7 @@ preflight() {
   placeholders=$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=change-me$' "$ROZKLAD_ENV_FILE" | cut -d= -f1 | tr '\n' ' ' || true)
   [[ -z $placeholders ]] || die "still 'change-me' in .env: ${placeholders}- run infra/deploy/scripts/gen-secrets.sh"
 
-  local domain email extra flag
+  local domain email key
   domain=$(env_get DOMAIN)
   [[ $domain =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && $domain == *.* ]] ||
     die "DOMAIN must be a host name such as rozklad.example.org (no https://, no path), got '$domain'"
@@ -65,13 +65,18 @@ preflight() {
   email=$(env_get ACME_EMAIL)
   [[ $email == ?*@?*.?* ]] || die "ACME_EMAIL must be an e-mail address, got '$email'"
   [[ $email != *@example.com ]] || die "Let's Encrypt refuses example.com addresses: set ACME_EMAIL"
-  extra=$(env_get EXTRA_WEB_ORIGIN)
-  # exact origin: CORS compares it character by character with the browser's Origin header
-  [[ -z $extra ]] || is_origin "$extra" ||
-    die "EXTRA_WEB_ORIGIN must look like https://name.netlify.app (no path, no trailing slash), got '$extra'"
-  for flag in KC_ADMIN_ALLOWED API_SITE_ENABLED; do
-    [[ $(env_get "$flag" 0) =~ ^[01]$ ]] || die "$flag must be 0 or 1"
-  done
+
+  # the token signing key of auth (a bind-mounted file: a missing one would become an empty directory)
+  key="$ROZKLAD_DEPLOY_DIR/secrets/auth-signing-key.pem"
+  [[ -f $key ]] || die "$key is missing: run infra/deploy/scripts/gen-secrets.sh"
+  grep -q -- '-----BEGIN PRIVATE KEY-----' "$key" ||
+    die "$key is not a PKCS#8 PEM key; move it away and run infra/deploy/scripts/gen-secrets.sh"
+  if [[ $(env_get AUTH_BOOTSTRAP_FORCE false) == true ]]; then
+    warn "AUTH_BOOTSTRAP_FORCE=true resets the password of $(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin) at every start:
+     set it back to false after you have signed in"
+  elif [[ -n $(env_get AUTH_BOOTSTRAP_ADMIN_PASSWORD) ]]; then
+    log "AUTH_BOOTSTRAP_ADMIN_PASSWORD is set: once you have signed in as $(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin), empty it in .env"
+  fi
 
   compose config --quiet || die "the compose configuration is invalid (see above)"
 
@@ -147,9 +152,8 @@ reload_caddy() {
 probe() { curl -sS --max-time 20 --resolve "$1:443:127.0.0.1" "${@:3}" "https://$1$2"; }
 
 smoke_checks() {
-  local domain auth status headers discovery csp index asset body found rate burst count limited
+  local domain status headers discovery location rate burst count limited
   domain=$(env_get DOMAIN)
-  auth="auth.$domain"
   log "Smoke checks through Caddy"
 
   status=$(probe "$domain" / -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
@@ -189,54 +193,33 @@ smoke_checks() {
     warn "API          https://$domain/api/... -> ${status:-no answer}; see: compose.sh logs gateway core"
   fi
 
-  discovery=$(probe "$auth" /realms/rozklad/.well-known/openid-configuration -k 2>/dev/null || true)
-  if [[ $discovery == *"\"issuer\":\"https://$auth/realms/rozklad\""* ]]; then
-    ok "Keycloak     issuer https://$auth/realms/rozklad"
+  # the sign-in service: fixed issuer, sign-in redirect on this origin, internal API closed
+  discovery=$(probe "$domain" /auth/.well-known/openid-configuration -k 2>/dev/null || true)
+  if [[ $discovery == *"\"issuer\":\"https://$domain/auth\""* ]]; then
+    ok "Sign-in      issuer https://$domain/auth"
   else
-    warn "Keycloak discovery at https://$auth/realms/rozklad does not show the expected issuer; see: compose.sh logs keycloak"
+    warn "discovery at https://$domain/auth does not show the issuer https://$domain/auth; see: compose.sh logs auth caddy"
   fi
-
-  # VITE_OIDC_AUTHORITY is baked into the SPA when the web image is built. It has to be the issuer
-  # the services validate, or the login goes to another host and every API call returns 401.
-  index=$(probe "$domain" / -k 2>/dev/null || true)
-  if [[ -n $index ]]; then
-    found=0
-    while IFS= read -r asset; do
-      body=$(probe "$domain" "$asset" -k 2>/dev/null || true)
-      if [[ $body == *"https://$auth/realms/rozklad"* ]]; then
-        found=1
-        break
-      fi
-    done < <(grep -oE '/assets/[A-Za-z0-9._-]+\.js' <<<"$index" | sort -u)
-    if ((found)); then
-      ok "SPA          logs in at https://$auth/realms/rozklad"
-    else
-      warn "the SPA was built for another Keycloak than https://$auth/realms/rozklad (VITE_OIDC_AUTHORITY),
-     so the login will fail. GitHub-built images: set the repository variable DOMAIN to '$domain' and
-     run the Deploy workflow again. Images built here: run deploy.sh --build."
-    fi
-  fi
-
-  status=$(probe "$auth" /admin/ -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
-  if [[ $(env_get KC_ADMIN_ALLOWED 0) == 0 ]]; then
-    if [[ $status == 404 ]]; then
-      ok "Keycloak     /admin is closed (404)"
-    else
-      warn "Keycloak /admin answered ${status:-nothing}, expected 404"
-    fi
-  fi
-
-  csp=$(probe "$domain" / -k -I 2>/dev/null | grep -i '^content-security-policy:' || true)
-  if [[ -n $csp && $csp != *"https://$auth"* ]]; then
-    warn "the SPA's Content-Security-Policy does not allow https://$auth, so the login will be blocked.
-     The Caddyfile rewrites http://localhost:8180 from web/nginx.conf: update the rewrite if nginx.conf changed."
-  fi
-
-  if probe "$domain" / -o /dev/null 2>/dev/null && probe "$auth" /realms/rozklad -o /dev/null 2>/dev/null; then
-    ok "TLS          trusted certificates for $domain and $auth"
+  location=$(probe "$domain" "/auth/oauth2/authorize?response_type=code&client_id=rozklad-web&scope=openid&state=smoke&redirect_uri=https%3A%2F%2F$domain%2Flogin%2Fcallback&code_challenge=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU&code_challenge_method=S256" \
+    -k -H 'Accept: text/html' -o /dev/null -w '%{redirect_url}' 2>/dev/null || true)
+  if [[ $location == "https://$domain/auth/login" ]]; then
+    ok "Sign-in      an authorize request without a session goes to https://$domain/auth/login"
   else
-    warn "TLS certificates are not trusted (yet). DNS of $domain and $auth must point to this server and
-     ports 80/443 must be open in the cloud firewall; Caddy retries by itself. See: compose.sh logs caddy"
+    warn "an authorize request without a session redirects to '${location:-nothing}', expected
+     https://$domain/auth/login (forwarded headers between Caddy and auth); see: compose.sh logs auth"
+  fi
+  status=$(probe "$domain" /auth/internal/accounts -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
+  if [[ $status == 404 ]]; then
+    ok "Sign-in      /auth/internal is closed (404)"
+  else
+    warn "https://$domain/auth/internal answered ${status:-nothing}, expected 404 (Caddyfile, auth_routes)"
+  fi
+
+  if probe "$domain" / -o /dev/null 2>/dev/null; then
+    ok "TLS          trusted certificate for $domain"
+  else
+    warn "the TLS certificate is not trusted (yet). DNS of $domain must point to this server and ports
+     80/443 must be open in the cloud firewall; Caddy retries by itself. See: compose.sh logs caddy"
   fi
   if [[ $(env_get ACME_CA) == *staging* ]]; then
     warn "ACME_CA is the Let's Encrypt staging CA: browsers will not trust the certificates"
@@ -267,12 +250,13 @@ summary() {
   printf '\n'
   log "Done"
   printf '  App:       https://%s\n' "$domain"
-  printf '  Login:     https://auth.%s (realm rozklad)\n' "$domain"
-  if [[ $(env_get API_SITE_ENABLED 0) == 1 ]]; then
-    printf '  API host:  https://api.%s/api\n' "$domain"
-  fi
+  printf '  Sign-in:   https://%s/auth/login\n' "$domain"
   printf '  Images:    %s/<service>:%s (recorded in %s)\n' "$prefix" "$tag" "$ROZKLAD_IMAGES_FILE"
-  printf '  Accounts:  admin, krentsin, nepyivoda (passwords: DEMO_*_PASSWORD in %s)\n' "$ROZKLAD_ENV_FILE"
+  printf '  Admin:     %s (first password: AUTH_BOOTSTRAP_ADMIN_PASSWORD in %s)\n' \
+    "$(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin)" "$ROZKLAD_ENV_FILE"
+  if [[ -n $(env_get DEMO_TEACHER_PASSWORD) ]]; then
+    printf '  Demo:      krentsin, nepyivoda (password: DEMO_TEACHER_PASSWORD)\n'
+  fi
   printf '  Logs:      infra/deploy/scripts/compose.sh logs -f --tail=100 <service>\n'
   if [[ -n $(env_get TELEGRAM_BOT_TOKEN) ]]; then
     printf '  Telegram:  the bot now polls from this server; stop every other instance using the same token\n'
@@ -311,7 +295,7 @@ if [[ $mode == build ]]; then
   build_jars
   log "Building the images for $(uname -m) as $prefix/<service>:$tag"
   compose build --pull
-  # patch releases of the pinned third-party images (Caddy, PostgreSQL, RabbitMQ, Redis, Keycloak)
+  # patch releases of the pinned third-party images (Caddy, PostgreSQL, RabbitMQ, Redis)
   compose pull --ignore-buildable --quiet
 elif [[ $tag =~ ^[0-9a-f]{40}$ ]] && app_images_present; then
   # a commit tag never changes: no registry login needed to deploy it again
@@ -323,16 +307,13 @@ else
 fi
 record_images
 
-log "Starting the stack (the first start takes a few minutes: Keycloak builds itself and imports the realm)"
+log "Starting the stack (auth is ready once an admin can sign in: AUTH_BOOTSTRAP_ADMIN_* on the first start)"
 if ! compose up -d --no-build --remove-orphans --wait --wait-timeout "${DEPLOY_WAIT_TIMEOUT:-900}"; then
   compose ps
   die "not every service became healthy; see: infra/deploy/scripts/compose.sh logs --tail=200 <service>"
 fi
 
 reload_caddy
-bash "$here/keycloak-sync.sh"
-# always: an empty DEMO_*_PASSWORD disables the account (after the defense)
-bash "$here/create-demo-users.sh"
 
 smoke_checks
 compose ps --format 'table {{.Service}}\t{{.Status}}'

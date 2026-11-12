@@ -4,8 +4,8 @@
 #
 # Steps: check that the running images are on this server (infra/deploy/.env.images, written by
 # deploy.sh), stop everything except PostgreSQL, load the dump, set the service passwords from the
-# current infra/deploy/.env again (the dump carries the old ones), start the same images again, sync
-# Keycloak clients and demo accounts with .env.
+# current infra/deploy/.env again (the dump carries the old ones), start the same images again. auth
+# applies the client secrets and the demo accounts of .env when it starts.
 set -Eeuo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +21,7 @@ gzip -t "$dump" || die "$dump is not a valid gzip file"
 require_images
 
 log "Stopping the services (PostgreSQL keeps running)"
-compose stop caddy web gateway core scheduler importer notification keycloak
+compose stop caddy web gateway core scheduler importer notification auth
 compose up -d --no-build --wait postgres
 
 log "Loading $dump"
@@ -34,7 +34,4 @@ compose exec -T postgres bash /docker-entrypoint-initdb.d/20-prod-passwords.sh
 
 log "Starting the stack"
 compose up -d --no-build --wait --wait-timeout "${DEPLOY_WAIT_TIMEOUT:-900}"
-bash "$here/keycloak-sync.sh"
-# always: the dump may bring back demo accounts that .env disables (empty password)
-bash "$here/create-demo-users.sh"
 ok "restored from $dump"

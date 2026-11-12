@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dumps the whole PostgreSQL cluster (all service databases, Keycloak, roles) into
+# Dumps the whole PostgreSQL cluster (all service databases incl. auth, roles) into
 # $BACKUP_DIR/rozklad-YYYYmmdd-HHMMSS.sql.gz and deletes dumps older than BACKUP_KEEP_DAYS days.
 #   infra/deploy/scripts/backup-db.sh
 #
@@ -8,7 +8,7 @@
 #
 # Restore: infra/deploy/scripts/restore-db.sh <file> --yes. A dump is useless without the matching
 # infra/deploy/.env: keep that file in a password manager, not next to the dumps. A dump holds every
-# account, Keycloak's client secrets and password hashes: encrypt it before it leaves this server
+# account with its password hash and the sign-in sessions of auth: encrypt it before it leaves this server
 # (docs/DEPLOY.md, section 12).
 set -Eeuo pipefail
 

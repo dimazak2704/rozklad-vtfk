@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# ключ підпису токенів сервісу auth на сервері (infra/deploy/scripts/gen-secrets.sh)
+infra/deploy/secrets/
 
 # Збірка (target-*/ — окремі каталоги паралельних збірок: -Dbuild.dir='${project.basedir}/target-<name>')
 target/

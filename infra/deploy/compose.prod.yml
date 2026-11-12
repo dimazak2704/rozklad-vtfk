@@ -11,8 +11,8 @@
 # - Every secret comes from infra/deploy/.env (gitignored). `${VAR:?}` stops compose when a required
 #   value is missing. `env_file: !reset []` keeps the development ../.env out of the containers.
 # - Relative paths are resolved against infra/ (the directory of the first compose file).
-# - Needs Docker Compose 2.24.4+ for the !reset / !override tags.
-# - Memory: the mem_limit values are caps, not reservations; they add up to about 6 GB. A 4 GB VPS
+# - Needs Docker Compose 2.24.4+ for the !reset tag.
+# - Memory: the mem_limit values are caps, not reservations; they add up to about 5.6 GB. A 4 GB VPS
 #   with 2 GB of swap is best effort and has not been measured; 8 GB or more is recommended.
 #   Bigger values for a 24 GB VM are in .env.example.
 # - Images: deploy.sh records the IMAGE_PREFIX/IMAGE_TAG it started in deploy/.env.images, and
@@ -31,11 +31,10 @@ x-prod-java-env: &prod-java-env
   RABBIT_PASSWORD: ${RABBIT_PASSWORD:?}
   # Spring Boot binds SPRING_DATA_REDIS_PASSWORD to spring.data.redis.password
   SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
-  # Browsers get tokens from https://auth.<domain>, so that is the issuer to validate.
-  # The signing keys are still fetched inside the network.
-  AUTH_ISSUER: https://auth.${DOMAIN:?}/realms/rozklad
-  AUTH_JWKS_URI: http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs
-  KEYCLOAK_URL: http://keycloak:8080
+  # Browsers get tokens from the sign-in service at https://<domain>/auth, so that is the issuer to
+  # validate. Keys and service tokens come from auth inside the network (AUTH_JWKS_URI, AUTH_TOKEN_URI
+  # and AUTH_AUDIENCE stay as in the base file).
+  AUTH_ISSUER: https://${DOMAIN:?}/auth
   # services are not reachable from the internet; keep their Swagger UI off anyway
   API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
   LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
@@ -54,8 +53,6 @@ services:
       DOMAIN: ${DOMAIN:?}
       ACME_EMAIL: ${ACME_EMAIL:?}
       ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
-      KC_ADMIN_ALLOWED: ${KC_ADMIN_ALLOWED:-0}
-      API_SITE_ENABLED: ${API_SITE_ENABLED:-0}
       WEB_UPSTREAM: web:${WEB_CONTAINER_PORT:-80}
     volumes:
       # the directory, not the file: a single-file bind mount keeps the old inode after git pull
@@ -82,7 +79,7 @@ services:
       SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?}
       IMPORTER_DB_PASSWORD: ${IMPORTER_DB_PASSWORD:?}
       NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?}
-      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?}
     volumes:
       # runs after 10-init.sql and replaces its development passwords
       - ./deploy/postgres/20-prod-passwords.sh:/docker-entrypoint-initdb.d/20-prod-passwords.sh:ro
@@ -111,41 +108,51 @@ services:
     mem_limit: ${REDIS_MEM_LIMIT:-160m}
     logging: *logging
 
-  # --- Identity ----------------------------------------------------------------------------------------
-  keycloak:
+  # --- Sign-in service (services/auth; Caddy serves it at https://<domain>/auth) ---------------------
+  auth:
+    image: ${IMAGE_PREFIX:-localhost/rozklad}/auth:${IMAGE_TAG:-prod}
+    env_file: !reset [] # also drops the development demo passwords of infra/dev/demo-users.env
     ports: !reset []
-    # production mode; the realm is imported only if it does not exist yet
-    command: !override ["start", "--import-realm"]
     environment:
-      KC_HOSTNAME: https://auth.${DOMAIN:?}
-      KC_HOSTNAME_STRICT: "true"
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true" # services use http://keycloak:8080 inside the network
-      KC_PROXY_HEADERS: xforwarded # Caddy overwrites X-Forwarded-* (it trusts no client values)
-      KC_HTTP_ENABLED: "true" # TLS ends at Caddy; port 8080 is not published
-      KC_HEALTH_ENABLED: "true"
-      KC_CACHE: local # single node: no cluster discovery
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
-      # heap relative to mem_limit (Keycloak's default is 70 %, which leaves too little for metaspace)
-      JAVA_OPTS_KC_HEAP: -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25
-      # values for the ${...} placeholders of rozklad-realm.prod.json (first import only;
-      # later changes are applied by scripts/keycloak-sync.sh)
-      ROZKLAD_WEB_ORIGIN: https://${DOMAIN:?}
-      ROZKLAD_WEB_ORIGIN_EXTRA: ${EXTRA_WEB_ORIGIN:-https://${DOMAIN:?}}
-      CORE_ADMIN_CLIENT_SECRET: ${CORE_ADMIN_CLIENT_SECRET:?}
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:?}
+      # one fixed issuer; with https the service refuses development settings at startup (ProdGuard)
+      AUTH_ISSUER: https://${DOMAIN:?}/auth
+      PUBLIC_WEB_URL: https://${DOMAIN:?}
+      AUTH_WEB_ORIGINS: https://${DOMAIN:?}
+      # the SPA is on the same origin: no CORS
+      AUTH_CORS_ORIGINS: ""
+      # rozklad-cli (scripts) only for a one-off run on the server (docs/DEPLOY.md)
+      AUTH_CLI_ENABLED: ${AUTH_CLI_ENABLED:-false}
+      AUTH_DEMO_SEED: "false"
+      AUTH_ACCESS_TOKEN_TTL: ${AUTH_ACCESS_TOKEN_TTL:-5m}
+      AUTH_SESSION_IDLE: ${AUTH_SESSION_IDLE:-1h}
+      AUTH_SESSION_MAX: ${AUTH_SESSION_MAX:-10h}
+      AUTH_LOCKOUT_MAX_FAILURES: ${AUTH_LOCKOUT_MAX_FAILURES:-5}
+      AUTH_COOKIE_NAME: __Secure-RZ_AUTH
+      AUTH_COOKIE_SECURE: "true"
+      AUTH_TEMPLATE_CACHE: "true"
+      # PKCS#8 PEM made by gen-secrets.sh; a new key only makes the services fetch the JWKS again
+      AUTH_SIGNING_KEY_FILE: /run/secrets/auth-signing-key.pem
+      AUTH_SIGNING_KEY_ID: ${AUTH_SIGNING_KEY_ID:?}
       NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?}
       IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:?}
-    volumes: !override
-      - ./deploy/keycloak/rozklad-realm.prod.json:/opt/keycloak/data/import/rozklad-realm.json:ro
-    healthcheck:
-      # HTTP status instead of `grep UP`: while Keycloak is still starting, /health/ready answers
-      # 503 with {"status":"DOWN","checks":[{..."status":"UP"}...]}, which `grep UP` takes for ready
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
-      start_period: 120s # the first start also builds the server and imports the realm
-      retries: 60
+      CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:?}
+      # the first admin; applied only while no admin can sign in (docs/DEPLOY.md, "First admin")
+      AUTH_BOOTSTRAP_ADMIN_USERNAME: ${AUTH_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      AUTH_BOOTSTRAP_ADMIN_EMAIL: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:-}
+      AUTH_BOOTSTRAP_ADMIN_PASSWORD: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-}
+      AUTH_BOOTSTRAP_FORCE: ${AUTH_BOOTSTRAP_FORCE:-false}
+      # demo teachers krentsin and nepyivoda for the defense; empty = off
+      DEMO_TEACHER_PASSWORD: ${DEMO_TEACHER_PASSWORD:-}
+      AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+      AUTH_GOOGLE_CLIENT_SECRET: ${AUTH_GOOGLE_CLIENT_SECRET:-}
+      AUTH_GOOGLE_HOSTED_DOMAIN: ${AUTH_GOOGLE_HOSTED_DOMAIN:-}
+      JAVA_TOOL_OPTIONS: -Xmx${AUTH_HEAP:-256m}
+    volumes:
+      # one file, mode 644 inside the 700 directory infra/deploy/secrets (the container user reads it)
+      - ./deploy/secrets/auth-signing-key.pem:/run/secrets/auth-signing-key.pem:ro
     stop_grace_period: 30s
-    mem_limit: ${KEYCLOAK_MEM_LIMIT:-1g}
+    mem_limit: ${AUTH_MEM_LIMIT:-512m}
     logging: *logging
 
   # --- Application services ---------------------------------------------------------------------------
@@ -224,8 +231,8 @@ services:
     ports: !reset []
     environment:
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
-      # the SPA is same-origin with /api; the extra origin is the optional Netlify-hosted copy
-      CORS_ALLOWED_ORIGINS: https://${DOMAIN:?}${EXTRA_WEB_ORIGIN:+,${EXTRA_WEB_ORIGIN}}
+      # the SPA is same-origin with /api and /auth
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:?}
       PUBLIC_RATE_LIMIT_PER_SECOND: ${PUBLIC_RATE_LIMIT_PER_SECOND:-20}
       PUBLIC_RATE_LIMIT_BURST: ${PUBLIC_RATE_LIMIT_BURST:-40}
       # Only Caddy can reach the gateway. Caddy replaces X-Forwarded-For with the real client address
@@ -241,10 +248,10 @@ services:
   web:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/web:${IMAGE_TAG:-prod}
     build:
-      # Vite reads VITE_* at build time, so the production URLs are baked into the image
+      # Vite reads VITE_* at build time. No VITE_OIDC_AUTHORITY: the SPA signs in at its own origin
+      # (https://<domain>/auth), so one image fits every domain.
       args:
         VITE_API_BASE: /api
-        VITE_OIDC_AUTHORITY: https://auth.${DOMAIN:?}/realms/rozklad
         VITE_OIDC_CLIENT_ID: rozklad-web
         VITE_TELEGRAM_BOT_URL: https://t.me/${TELEGRAM_BOT_USERNAME:-scheduler_vtfk_bot}
     environment: !reset {} # the base file's runtime variables are not read by the image

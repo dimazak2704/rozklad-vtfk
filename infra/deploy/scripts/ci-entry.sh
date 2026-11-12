@@ -29,8 +29,8 @@ main() {
   [[ $user =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\[bot\])?$ ]] || die "unexpected GitHub user name '$user'"
   [[ -n $token && $token != *[[:space:]]* ]] || die "no GHCR token on stdin"
 
-  # The web image has the OIDC authority of the repository variable DOMAIN baked in; Keycloak and
-  # the services take theirs from DOMAIN in .env. Different values break every login.
+  # The workflow names https://<DOMAIN> as the deployment URL; the server serves DOMAIN of .env.
+  # Different values mean the job deploys to a server it does not expect.
   expected=$(env_get DOMAIN)
   [[ $domain == "$expected" ]] ||
     die "the repository variable DOMAIN is '$domain', but DOMAIN in $ROZKLAD_ENV_FILE is '$expected'.

@@ -4,7 +4,8 @@
 # Inert until configured: without the repository secrets VPS_HOST, VPS_USER and VPS_SSH_KEY only
 # CI runs. Settings (docs/DEPLOY.md, "GitHub Actions"):
 #   secrets   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), VPS_KNOWN_HOSTS, optional VPS_PORT
-#   variables DOMAIN (required for images), optional IMAGE_PLATFORMS, VPS_APP_DIR, TELEGRAM_BOT_USERNAME
+#   variables DOMAIN (required: the deployment URL, checked against the server), optional
+#             IMAGE_PLATFORMS, VPS_APP_DIR, TELEGRAM_BOT_USERNAME
 # Only main is deployed: a manual run on another branch runs CI and nothing else.
 name: Deploy
 
@@ -99,10 +100,10 @@ jobs:
       matrix:
         service: [core, scheduler, importer, notification, gateway, auth, web]
     env:
-      # Vite reads these at build time; the SPA talks to /api on its own origin
+      # Vite reads these at build time; the SPA talks to /api and signs in at /auth on its own origin,
+      # so the image does not depend on the domain
       WEB_BUILD_ARGS: |
         VITE_API_BASE=/api
-        VITE_OIDC_AUTHORITY=https://auth.${{ vars.DOMAIN }}/realms/rozklad
         VITE_OIDC_CLIENT_ID=rozklad-web
         VITE_TELEGRAM_BOT_URL=https://t.me/${{ vars.TELEGRAM_BOT_USERNAME || 'scheduler_vtfk_bot' }}
     steps:

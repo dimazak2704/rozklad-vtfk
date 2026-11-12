@@ -3,10 +3,13 @@
 #   infra/deploy/scripts/gen-secrets.sh [path/to/.env]
 #
 # Never overwrites a value you have set. It fills:
-#   - required secrets (database, RabbitMQ, Redis, Keycloak admin, client secrets) that are missing,
-#     empty or "change-me";
-#   - optional ones (demo passwords, Telegram webhook secret) that are missing or "change-me";
-#     an empty optional value means "off" and is kept.
+#   - required secrets (database, RabbitMQ, Redis, client secrets of the sign-in service) that are
+#     missing, empty or "change-me";
+#   - optional ones (first admin password, demo password, Telegram webhook secret) that are missing or
+#     "change-me"; an empty optional value means "off" and is kept.
+# It also creates the token signing key of auth, infra/deploy/secrets/auth-signing-key.pem (RSA 2048,
+# PKCS#8), when it is missing, and then gives AUTH_SIGNING_KEY_ID a new value. The directory gets mode
+# 700, the key 644 (the container user of auth has another uid and reads the bind-mounted file).
 # Prints only the names of the generated keys, never the values. The file gets mode 600.
 set -Eeuo pipefail
 
@@ -20,11 +23,11 @@ placeholder='change-me'
 
 required=(
   POSTGRES_PASSWORD CORE_DB_PASSWORD SCHEDULER_DB_PASSWORD IMPORTER_DB_PASSWORD
-  NOTIFICATION_DB_PASSWORD KEYCLOAK_DB_PASSWORD RABBIT_PASSWORD REDIS_PASSWORD
-  KEYCLOAK_ADMIN_PASSWORD CORE_ADMIN_CLIENT_SECRET NOTIFICATION_CLIENT_SECRET IMPORTER_CLIENT_SECRET
-  CORE_AUTH_CLIENT_SECRET
+  NOTIFICATION_DB_PASSWORD AUTH_DB_PASSWORD RABBIT_PASSWORD REDIS_PASSWORD
+  NOTIFICATION_CLIENT_SECRET IMPORTER_CLIENT_SECRET CORE_AUTH_CLIENT_SECRET AUTH_SIGNING_KEY_ID
 )
-optional=(DEMO_ADMIN_PASSWORD DEMO_TEACHER_PASSWORD TELEGRAM_WEBHOOK_SECRET)
+optional=(AUTH_BOOTSTRAP_ADMIN_PASSWORD DEMO_TEACHER_PASSWORD TELEGRAM_WEBHOOK_SECRET)
+signing_key="$ROZKLAD_DEPLOY_DIR/secrets/auth-signing-key.pem"
 
 # 32 characters from [A-Za-z0-9]: safe in URLs, JDBC, YAML and shell without quoting
 random_secret() {
@@ -44,9 +47,21 @@ random_demo_password() {
   printf '%s-%s-%s' "${value:0:4}" "${value:4:4}" "${value:8:4}"
 }
 
+# xxxx-xxxx-xxxx-xxxx from [a-z0-9]: typed once at the first sign-in, about 82 bits
+random_admin_password() {
+  local value=''
+  while ((${#value} < 16)); do
+    value+=$(head -c 48 /dev/urandom | base64 | LC_ALL=C tr -dc 'a-z0-9')
+  done
+  printf '%s-%s-%s-%s' "${value:0:4}" "${value:4:4}" "${value:8:4}" "${value:12:4}"
+}
+
 new_value() {
   case $1 in
     DEMO_*) random_demo_password ;;
+    AUTH_BOOTSTRAP_ADMIN_PASSWORD) random_admin_password ;;
+    # the kid of the signing key: its date and a random suffix, e.g. 2026-11-12-k3f9
+    AUTH_SIGNING_KEY_ID) printf '%s-%s' "$(date -u +%Y-%m-%d)" "$(random_secret | LC_ALL=C tr -dc 'a-z0-9' | head -c 4)" ;;
     *) random_secret ;;
   esac
 }
@@ -61,6 +76,10 @@ contains() {
 # needs_value KEY VALUE: should gen-secrets replace this value?
 needs_value() {
   local key=$1 value=$2
+  # a new signing key needs a new kid, or the services would keep the old key cached under the old one
+  if [[ $key == AUTH_SIGNING_KEY_ID ]] && ((new_key)); then
+    return 0
+  fi
   if contains "$key" "${required[@]}"; then
     [[ -z $value || $value == "$placeholder" ]]
   elif contains "$key" "${optional[@]}"; then
@@ -71,6 +90,17 @@ needs_value() {
 }
 
 umask 077
+new_key=0
+if [[ ! -f $signing_key ]]; then
+  command -v openssl >/dev/null || die "openssl is needed for the signing key: sudo apt-get install openssl"
+  install -d -m 700 "$(dirname "$signing_key")"
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$signing_key.tmp" 2>/dev/null
+  chmod 644 "$signing_key.tmp"
+  mv "$signing_key.tmp" "$signing_key"
+  new_key=1
+  log "created the signing key $signing_key"
+fi
+
 if [[ ! -f $env_file ]]; then
   [[ -f $example ]] || die "$example not found"
   cp "$example" "$env_file"

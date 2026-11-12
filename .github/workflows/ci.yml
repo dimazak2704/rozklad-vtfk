@@ -92,19 +92,12 @@ jobs:
 
       - name: Caddyfile
         run: |
-          # every snippet once: both toggles off, then both on
-          for toggle in 0 1; do
-            docker run --rm -e DOMAIN=rozklad.example.org -e ACME_EMAIL=ci@rozklad.example.org \
-              -e KC_ADMIN_ALLOWED="$toggle" -e API_SITE_ENABLED="$toggle" \
-              -v "$PWD/infra/deploy/caddy:/etc/caddy:ro" caddy:2.11-alpine \
-              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-          done
+          docker run --rm -e DOMAIN=rozklad.example.org -e ACME_EMAIL=ci@rozklad.example.org \
+            -v "$PWD/infra/deploy/caddy:/etc/caddy:ro" caddy:2.11-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Shell scripts
         run: |
           for f in infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh; do bash -n "$f"; done
           command -v shellcheck >/dev/null || sudo apt-get install -y -qq shellcheck
           shellcheck -x -P infra/deploy/scripts infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh
-
-      - name: Keycloak JSON
-        run: for f in infra/deploy/keycloak/*.json; do python3 -m json.tool "$f" >/dev/null && echo "ok $f"; done

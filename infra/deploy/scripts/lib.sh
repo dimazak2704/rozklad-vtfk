@@ -89,29 +89,3 @@ require_images() {
     die "these images are not on this server: ${missing[*]}
        Run infra/deploy/scripts/deploy.sh first; it records the images it starts in $ROZKLAD_IMAGES_FILE."
 }
-
-# kc_run CODE: runs bash CODE inside the keycloak container. CODE can call `kc ...` (kcadm.sh
-# logged in as the bootstrap admin of the master realm) and add temporary files to `tmp_files`.
-# Pass secrets through stdin: the container's stdin is the caller's stdin.
-kc_run() {
-  local prelude
-  # shellcheck disable=SC2016 # expanded inside the container, not here
-  prelude='set -euo pipefail
-cfg="/tmp/kcadm-$$.config"
-tmp_files=("$cfg")
-trap '\''rm -f "${tmp_files[@]}"'\'' EXIT
-kc() { /opt/keycloak/bin/kcadm.sh "$@" --config "$cfg"; }
-if ! login_out=$(kc config credentials --server http://localhost:8080 --realm master \
-    --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" 2>&1); then
-  printf "%s\n" "$login_out" >&2
-  echo "kcadm: cannot log in as the bootstrap admin. KEYCLOAK_ADMIN_USER/KEYCLOAK_ADMIN_PASSWORD are applied on the very first start only; if you changed them later, put the old values back." >&2
-  exit 1
-fi
-'
-  compose exec -T keycloak bash -c "$prelude$1"
-}
-
-# is_origin VALUE: https://host[:port] without a path (the shape Keycloak and CORS expect)
-is_origin() {
-  [[ $1 =~ ^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$ ]]
-}

@@ -9,11 +9,13 @@
 #                                  (infra/docker-compose.google-mock.yml, http://localhost:8090/google);
 #                                  GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua turns the domain rule on
 #   scripts/dev-stack.sh down      stop the app services (infrastructure and data stay)
-#   scripts/dev-stack.sh down --all   stop everything incl. postgres/rabbitmq/redis/keycloak (data kept in volumes)
+#   scripts/dev-stack.sh down --all   stop everything incl. postgres/rabbitmq/redis (data kept in volumes)
 #   scripts/dev-stack.sh status    containers, health, memory, URLs
 #   scripts/dev-stack.sh seed [step ...]   real data through the API (scripts/seed_demo.py)
 #   scripts/dev-stack.sh reset-data --yes  empty the core/importer/scheduler/notification databases
-#                                  (auth, Keycloak and its realm stay); then `up` and `seed` again
+#                                  (accounts in auth stay); then `up` and `seed` again
+#   scripts/dev-stack.sh reset-auth --yes  drop and recreate the auth database (accounts, sessions);
+#                                  the next `up` creates the demo accounts again
 #   scripts/dev-stack.sh logs <service>    follow the logs of one service
 #
 # Telegram: by default notification polls the bot of TELEGRAM_BOT_TOKEN from .env. One token can be
@@ -50,36 +52,6 @@ wait_healthy() {
       sleep 3
     done
   done
-}
-
-# Realms imported before the fix lack the scope kc-admin-api on rozklad-core-admin; without it Keycloak
-# 26.8 answers 401 to core's admin calls (invites, linking accounts). Idempotent.
-keycloak_admin_scope() {
-  MSYS_NO_PATHCONV=1 docker exec rozklad-keycloak-1 bash -c '
-    set -euo pipefail
-    cfg=$(mktemp); trap "rm -f $cfg" EXIT
-    kc() { /opt/keycloak/bin/kcadm.sh "$@" --config "$cfg"; }
-    kc config credentials --server http://localhost:8080 --realm master \
-      --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1
-    scope=$(kc get client-scopes -r rozklad --fields id,name --format csv --noquotes | sed -n "s/^\([^,]*\),kc-admin-api$/\1/p")
-    client=$(kc get clients -r rozklad -q clientId=rozklad-core-admin --fields id --format csv --noquotes)
-    kc update "clients/$client/default-client-scopes/$scope" -r rozklad'
-  echo "  keycloak: rozklad-core-admin has the scope kc-admin-api"
-}
-
-# The user profile of infra/keycloak/user-profile.json: e-mail and first name are optional, so a teacher
-# invited without them (most teachers of the Excel have initials only) signs in right after accepting
-# the invite instead of stopping at «Update account information». Realms imported before 08.11.2026 have
-# the Keycloak default (both required). Idempotent.
-keycloak_user_profile() {
-  MSYS_NO_PATHCONV=1 docker exec -i rozklad-keycloak-1 bash -c '
-    set -euo pipefail
-    cfg=$(mktemp); trap "rm -f $cfg" EXIT
-    kc() { /opt/keycloak/bin/kcadm.sh "$@" --config "$cfg"; }
-    kc config credentials --server http://localhost:8080 --realm master \
-      --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1
-    kc update users/profile -r rozklad -f - >/dev/null' < "$root/infra/keycloak/user-profile.json"
-  echo "  keycloak: user profile without required e-mail and first name"
 }
 
 # Databases added after the postgres volume was created: init.sql runs only on an empty volume. Idempotent.
@@ -138,11 +110,10 @@ cmd_up() {
   ((google_mock)) || stop_google_mock
 
   echo "== infrastructure"
-  docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d
-  wait_healthy postgres rabbitmq redis keycloak
+  # --remove-orphans: containers of services that are no longer in the compose files
+  docker compose "${env_args[@]}" "${compose_files[@]}" --profile infra up -d --remove-orphans
+  wait_healthy postgres rabbitmq redis
   ensure_databases
-  keycloak_admin_scope
-  keycloak_user_profile
 
   if ((build)); then
     echo "== jars (mvn package, tests skipped)"
@@ -188,7 +159,6 @@ core            http://localhost:8081/swagger-ui.html      scheduler :8082  impo
 Site            http://localhost:8088
 Sign-in         http://localhost:8088/auth/login   (service auth; host-run services: http://localhost:8085/auth)
 Token (scripts) python scripts/rozklad_auth.py token --user admin
-Keycloak        http://localhost:8180   (no longer used for sign-in; removed soon)
 RabbitMQ UI     http://localhost:15672  (rozklad / rozklad)    PostgreSQL localhost:5433 (postgres / postgres)
 Demo users      infra/dev/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER)
 EOF
@@ -210,12 +180,21 @@ cmd_reset_data() {
   echo "Done. Next: scripts/dev-stack.sh up --no-build && scripts/dev-stack.sh seed"
 }
 
+cmd_reset_auth() {
+  [[ ${1:-} == --yes ]] || { echo "reset-auth deletes every account, session and sign-in of auth; add --yes" >&2; exit 2; }
+  compose stop auth
+  docker exec rozklad-postgres-1 psql -q -U postgres -d postgres -c "DROP DATABASE IF EXISTS auth WITH (FORCE);"
+  ensure_databases
+  echo "Done. Next: scripts/dev-stack.sh up --no-build (the demo accounts are created again)"
+}
+
 case ${1:-} in
   up) shift; cmd_up "$@" ;;
   down) shift; cmd_down "$@" ;;
   status) cmd_status ;;
   seed) shift; PYTHONIOENCODING=utf-8 "$(python_cmd)" "$root/scripts/seed_demo.py" "$@" ;;
   reset-data) shift; cmd_reset_data "$@" ;;
+  reset-auth) shift; cmd_reset_auth "$@" ;;
   logs) shift; compose logs -f --tail=200 "${1:?service}" ;;
-  *) sed -n '2,18p' "$0"; exit 2 ;;
+  *) sed -n '2,20p' "$0"; exit 2 ;;
 esac

@@ -1,11 +1,11 @@
 # Edge proxy of «Розклад ВТФК» in production (infra/deploy/compose.prod.yml, docs/DEPLOY.md).
 #
-#   https://{$DOMAIN}        SPA (web:80) + /api/* -> gateway:8080 (same origin, no CORS needed)
-#   https://auth.{$DOMAIN}   Keycloak: only the paths a browser needs; /admin is closed
-#   https://api.{$DOMAIN}    optional (API_SITE_ENABLED=1): API for the Netlify-hosted SPA
+#   https://{$DOMAIN}        SPA (web:80), /api/* -> gateway:8080, /auth/* -> auth:8085 (sign-in, OIDC)
+#                            One origin for everything, so no CORS is needed.
 #
-# Caddy gets and renews Let's Encrypt certificates for every name above by itself; the names must
-# resolve to this server and ports 80/443 must be open. {$VAR} values come from the container
+# Caddy gets and renews the Let's Encrypt certificate by itself; the name must resolve to this server
+# and ports 80/443 must be open. There is no access log (no `log` directive), so the codes and tokens
+# in the query strings of /auth/* are not written anywhere. {$VAR} values come from the container
 # environment (set in compose.prod.yml) and are substituted when the file is loaded.
 # compose.prod.yml mounts this directory, not the file: after `git pull` the container sees the new
 # file, and deploy.sh runs `caddy reload` (a bind-mounted single file would keep the old inode).
@@ -21,7 +21,7 @@
 		# one year; no includeSubDomains, so other hosts of the domain are not affected
 		>Strict-Transport-Security "max-age=31536000"
 		>X-Content-Type-Options "nosniff"
-		# only if the upstream did not set a stricter one (Keycloak sends no-referrer)
+		# only if the upstream did not set its own
 		?Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
 		-X-Powered-By
@@ -60,31 +60,17 @@
 	}
 }
 
-# Keycloak admin console and the master realm: closed unless KC_ADMIN_ALLOWED=1
-(keycloak_admin_0) {
-	@kc_admin path /admin /admin/* /realms/master /realms/master/*
-	handle @kc_admin {
+# The sign-in service with its own context path /auth (paths pass unchanged). Caddy sets
+# X-Forwarded-Proto/-Host/-For itself, so auth builds its redirects for https://{$DOMAIN}. The internal
+# accounts API is for core inside the network only; the actuator listens on another port (8086).
+(auth_routes) {
+	@auth_private path /auth/internal /auth/internal/*
+	handle @auth_private {
 		respond "Not found" 404
 	}
-}
-(keycloak_admin_1) {
-	@kc_admin path /admin /admin/* /realms/master /realms/master/*
-	handle @kc_admin {
-		reverse_proxy keycloak:8080
-	}
-}
-
-# Optional API host for the "SPA on Netlify, API on the VPS" layout
-(api_site_0) {
-}
-(api_site_1) {
-	api.{$DOMAIN} {
-		import strip_client_forwarding
-		import security_headers
-		import api_routes
-		handle {
-			respond "Not found" 404
-		}
+	handle /auth/* {
+		import compress
+		reverse_proxy auth:8085
 	}
 }
 
@@ -94,40 +80,11 @@
 	import strip_client_forwarding
 	import security_headers
 	import api_routes
+	import auth_routes
 
-	# SPA: nginx in the web container (static files, SPA fallback to index.html, cache headers)
+	# SPA: nginx in the web container (static files, SPA fallback to index.html, cache headers, CSP)
 	handle {
 		import compress
-		reverse_proxy {$WEB_UPSTREAM:web:80} {
-			# The image's Content-Security-Policy allows the development Keycloak
-			# (http://localhost:8180); the browser has to reach https://auth.{$DOMAIN} instead.
-			header_down Content-Security-Policy "http://localhost:8180" "https://auth.{$DOMAIN}"
-		}
+		reverse_proxy {$WEB_UPSTREAM:web:80}
 	}
 }
-
-auth.{$DOMAIN} {
-	import strip_client_forwarding
-	import security_headers
-	import compress
-
-	import keycloak_admin_{$KC_ADMIN_ALLOWED:0}
-
-	# What a browser and the services' OIDC clients need: the application realm, static resources
-	# of the login pages and RFC 8414 metadata. The Keycloak docs recommend exposing nothing else.
-	@kc_public path /realms/* /resources/* /.well-known/*
-	handle @kc_public {
-		reverse_proxy keycloak:8080
-	}
-
-	handle / {
-		redir https://{$DOMAIN}/ 302
-	}
-
-	# /metrics, /health and everything else stay internal
-	handle {
-		respond "Not found" 404
-	}
-}
-
-import api_site_{$API_SITE_ENABLED:0}

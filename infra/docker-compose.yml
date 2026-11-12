@@ -1,5 +1,5 @@
 # Розклад ВТФК — локальний стенд.
-#   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis (і keycloak до його видалення)
+#   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis
 #   docker compose -f infra/docker-compose.yml --profile app up -d --build    # + усі сервіси, auth та web
 # Перед --profile app зберіть jar-и: mvn -q -DskipTests package (Dockerfile копіює target/app.jar).
 # Секрети (TELEGRAM_*, ANTHROPIC_API_KEY, *_CLIENT_SECRET) беруться з ../.env, якщо він є.
@@ -83,38 +83,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.8.2
-    profiles: [infra, app]
-    restart: unless-stopped
-    # --import-realm пропускає реалм, якщо він уже є в БД: після зміни JSON видаліть реалм або том pgdata
-    command: ["start-dev", "--import-realm"]
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
-      KC_HOSTNAME: http://localhost:8180
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-      KC_HTTP_ENABLED: "true"
-      KC_HEALTH_ENABLED: "true"
-    ports:
-      - "8180:8080"
-    volumes:
-      - ./keycloak/rozklad-realm.json:/opt/keycloak/data/import/rozklad-realm.json:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      # в образі Keycloak немає curl: HTTP-запит через /dev/tcp до management-порту 9000
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
 
   # Сервіс входу: OIDC-провайдер (Spring Authorization Server), сторінка входу /auth/login.
   # Браузер бачить його лише через nginx контейнера web (http://localhost:8088/auth); 8085 опубліковано для
