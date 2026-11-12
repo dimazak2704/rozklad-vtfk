@@ -198,7 +198,7 @@ describe('рішення щодо пари: зміна причини з version
     renderWithProviders(
       <DecisionCard change={change} state="confirmed" busy={null} onResend={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />,
     );
-    expect(screen.getByText('«Відп.»')).toBeInTheDocument();
+    expect(screen.getByText('викладач відсутній')).toBeInTheDocument();
     // «Змінити причину» живе в меню «⋯» картки рішення
     await user.click(screen.getByRole('button', { name: 'Ще дії з рішенням' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Змінити причину' }));
