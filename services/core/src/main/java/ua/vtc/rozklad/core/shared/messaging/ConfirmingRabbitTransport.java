@@ -21,7 +21,8 @@ import ua.vtc.rozklad.contracts.events.RozkladEvent;
  * (no consumer queue bound yet) or no confirm within {@code confirmTimeout} fail the future, so Spring
  * Modulith marks the publication FAILED instead of COMPLETED and {@link OutboxResubmitter} sends it
  * again. Needs {@code publisher-confirm-type: correlated}, {@code publisher-returns: true} and
- * {@code template.mandatory: true}.
+ * {@code template.mandatory: true}. The message carries the event id as {@code message_id} and the
+ * request id of the publishing thread ({@link RequestIdMessages}).
  */
 class ConfirmingRabbitTransport implements EventExternalizationTransport, AutoCloseable {
 
@@ -46,6 +47,8 @@ class ConfirmingRabbitTransport implements EventExternalizationTransport, AutoCl
         // збій з'єднання кидає виняток тут же: Modulith позначить публікацію FAILED
         rabbit.convertAndSend(target.getTarget(), target.getKey(), event, message -> {
             headers.forEach(message.getMessageProperties()::setHeader);
+            // X-Request-Id: MDC приходить сюди з потоку запиту через TaskDecorator (RequestIdPropagationConfig)
+            RequestIdMessages.stamp(message.getMessageProperties(), id);
             return message;
         }, correlation);
         return correlation.getFuture()

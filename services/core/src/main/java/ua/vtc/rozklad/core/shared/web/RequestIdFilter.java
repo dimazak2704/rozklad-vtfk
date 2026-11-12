@@ -52,7 +52,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
         return false;
     }
 
-    static String resolve(String incoming) {
+    /** A safe incoming id as is, otherwise a new UUID. */
+    public static String resolve(String incoming) {
         if (incoming != null && SAFE_ID.matcher(incoming).matches()) {
             return incoming;
         }
