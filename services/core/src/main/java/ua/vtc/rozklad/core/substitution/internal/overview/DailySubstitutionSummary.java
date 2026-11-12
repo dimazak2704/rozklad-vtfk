@@ -111,16 +111,21 @@ class DailySubstitutionSummary implements SubstitutionOverview {
         return found;
     }
 
-    /** A later live decision about the same lesson (or the same slot for changes without a lesson). */
+    /**
+     * Another live decision about the same lesson, of any age (as in {@code LessonDecisions}: an older
+     * change asked again after a newer one was declined is the lesson's decision), or a later one about
+     * the same slot for changes without a lesson.
+     */
     private static boolean replaces(Change other, Change declined) {
         if (other.getId().equals(declined.getId()) || other.getStatus() == ChangeStatus.CANCELLED
-                || other.getStatus() == ChangeStatus.DECLINED || other.getCreatedAt().isBefore(declined.getCreatedAt())) {
+                || other.getStatus() == ChangeStatus.DECLINED) {
             return false;
         }
         if (declined.getOriginalLessonId() != null) {
             return declined.getOriginalLessonId().equals(other.getOriginalLessonId());
         }
-        return other.getGroupId().equals(declined.getGroupId()) && other.getPairFrom() == declined.getPairFrom()
+        return !other.getCreatedAt().isBefore(declined.getCreatedAt())
+                && other.getGroupId().equals(declined.getGroupId()) && other.getPairFrom() == declined.getPairFrom()
                 && other.getSubgroupNumber() == declined.getSubgroupNumber();
     }
 

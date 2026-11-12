@@ -18,8 +18,10 @@ import ua.vtc.rozklad.core.substitution.internal.effect.PlannedLesson;
 import ua.vtc.rozklad.core.timetable.Lesson;
 
 /**
- * The current decision about each lesson: the latest not cancelled change made for it, or a block
- * that covers its pair. DECLINED as the latest decision means the lesson needs a decision again.
+ * The current decision about each lesson: the not cancelled change made for it, or a block that
+ * covers its pair. A live decision (open or applied) wins over declined ones whatever their age: a
+ * declined change asked again is the decision even when a newer change was declined meanwhile.
+ * Only a lesson whose changes are all declined needs a decision again (the newest decline is shown).
  */
 @Component
 public class LessonDecisions {
@@ -39,7 +41,7 @@ public class LessonDecisions {
         Map<UUID, Change> decisions = new HashMap<>();
         changes.findAllByOriginalLessonIdIn(lessons.stream().map(Lesson::getId).toList()).stream()
                 .filter(change -> LIVE.contains(change.getStatus()))
-                .forEach(change -> decisions.merge(change.getOriginalLessonId(), change, LessonDecisions::latest));
+                .forEach(change -> decisions.merge(change.getOriginalLessonId(), change, LessonDecisions::current));
 
         LocalDate from = lessons.stream().map(Lesson::getDate).min(Comparator.naturalOrder()).orElseThrow();
         LocalDate to = lessons.stream().map(Lesson::getDate).max(Comparator.naturalOrder()).orElseThrow();
@@ -68,7 +70,12 @@ public class LessonDecisions {
                 .max(Comparator.comparing(Change::getCreatedAt));
     }
 
-    private static Change latest(Change first, Change second) {
+    /** The live one of two decisions about a lesson, else the newer one. */
+    private static Change current(Change first, Change second) {
+        boolean firstDeclined = first.getStatus() == ChangeStatus.DECLINED;
+        if (firstDeclined != (second.getStatus() == ChangeStatus.DECLINED)) {
+            return firstDeclined ? second : first;
+        }
         return first.getCreatedAt().isAfter(second.getCreatedAt()) ? first : second;
     }
 }

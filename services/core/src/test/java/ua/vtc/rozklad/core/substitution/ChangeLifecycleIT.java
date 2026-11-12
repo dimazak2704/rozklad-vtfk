@@ -55,6 +55,7 @@ import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceDto;
 import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceRequests;
 import ua.vtc.rozklad.core.substitution.internal.absence.AbsenceService;
+import ua.vtc.rozklad.core.substitution.internal.absence.AffectedLessons;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeReplies;
@@ -62,6 +63,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeStatusMachine;
 import ua.vtc.rozklad.core.substitution.internal.change.ConfirmationReminders;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.substitution.internal.change.UpdateChangeRequest;
+import ua.vtc.rozklad.core.substitution.internal.options.LessonOptions;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -88,6 +90,12 @@ class ChangeLifecycleIT {
 
     @Autowired
     private ConfirmationReminders reminders;
+
+    @Autowired
+    private AffectedLessons affectedLessons;
+
+    @Autowired
+    private LessonOptions lessonOptions;
 
     @Autowired
     private ChangeRepository changes;
@@ -410,6 +418,32 @@ class ChangeLifecycleIT {
         commands.cancel(cancel.id(), "admin");
         assertThat(commands.requestConfirmation(declined.id(), "admin").status())
                 .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+    }
+
+    /**
+     * Two teachers declined the lesson one after the other, then the dispatcher asked the first one
+     * again: the re-asked (older) change is the lesson's decision, not the newer declined one.
+     */    @Test
+    void olderChangeAskedAgainIsTheDecisionOverANewerDeclinedOne() {
+        AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY,
+                List.of(2), AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin");
+        Teacher stets = fixture.teacher("Стець О.В.", "Стець");
+        ChangeDto first = commands.create(replaceTeacher(nepyivoda), "admin");
+        replies.replyFromBot(first.id(), nepyivoda.getId(), ConfirmationDecision.DECLINE, null);
+        ChangeDto second = commands.create(replaceTeacher(stets), "admin");
+        replies.replyFromBot(second.id(), stets.getId(), ConfirmationDecision.DECLINE, null);
+
+        assertThat(commands.requestConfirmation(first.id(), "admin").status())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+
+        assertThat(affectedLessons.of(absence.id())).singleElement().satisfies(item -> {
+            assertThat(item.decision().changeId()).isEqualTo(first.id());
+            assertThat(item.decision().status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+        });
+        SubstitutionDaySummary summary = overview.summarize(MONDAY);
+        assertThat(summary.uncoveredLessons()).isZero();
+        assertThat(summary.declined()).as("the lesson is decided again: no decline alert").isZero();
+        assertThat(lessonOptions.plan(absence.id(), MONDAY).lessons()).as("nothing to propose").isEmpty();
     }
 
     /**
