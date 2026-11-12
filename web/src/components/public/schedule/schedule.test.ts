@@ -277,4 +277,28 @@ describe('mainDisciplines', () => {
     expect(mainDisciplines(schedule, 2, 'full')).toEqual(['СТП повна', 'ДК повна']);
     expect(mainDisciplines(undefined)).toEqual([]);
   });
+
+  it('заміна не робить дисципліну «його»: рахуються лише пари за розкладом', () => {
+    const schedule = {
+      days: [
+        {
+          date: '2026-11-09',
+          lessons: [
+            lesson({ discipline: ref('СТП') }),
+            lesson({ pair: 2, discipline: ref('СТП'), kind: 'ROOM_CHANGED' }),
+            lesson({ pair: 3, discipline: ref('ФВ'), kind: 'SUBSTITUTED' }),
+            lesson({ pair: 4, discipline: ref('ФВ'), kind: 'ADDITIONAL' }),
+          ],
+        },
+      ],
+    } as unknown as ScheduleDto;
+    expect(mainDisciplines(schedule)).toEqual(['СТП']);
+  });
+
+  it('тиждень самих замін — тоді підзаголовок бере їх, а не мовчить', () => {
+    const schedule = {
+      days: [{ date: '2026-11-09', lessons: [lesson({ discipline: ref('ФВ'), kind: 'SUBSTITUTED' })] }],
+    } as unknown as ScheduleDto;
+    expect(mainDisciplines(schedule)).toEqual(['ФВ']);
+  });
 });

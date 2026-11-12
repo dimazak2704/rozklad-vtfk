@@ -55,16 +55,17 @@ export function withoutOwnRoom(schedule: ScheduleDto, roomId: string): ScheduleD
 
 /**
  * Що викладач веде найчастіше: «СТП, ДК» — рядок контексту під прізвищем, щоб сторінка викладача не була
- * голим словом. Скасовані пари не рахуються; не більше `limit` дисциплін; `full` — повні назви.
+ * голим словом. Рахуються лише заняття за розкладом (і в іншій аудиторії): заміна, додаткова пара чи перенесення
+ * не робить дисципліну «його» — одна заміна з ФВ не означає, що він веде ФВ. Лише коли інших занять немає
+ * (тиждень самих замін), беруться вони. Скасовані пари не рахуються; не більше `limit` дисциплін; `full` — повні назви.
  */
 export function mainDisciplines(schedule: ScheduleDto | undefined, limit = 3, form: 'short' | 'full' = 'short'): string[] {
+  const lessons = (schedule?.days ?? []).flatMap((day) => day.lessons).filter((lesson) => lesson.kind !== 'CANCELLED');
+  const own = lessons.filter((lesson) => lesson.kind === 'REGULAR' || lesson.kind === 'ROOM_CHANGED');
   const counts = new Map<string, number>();
-  for (const day of schedule?.days ?? []) {
-    for (const lesson of day.lessons) {
-      if (lesson.kind === 'CANCELLED') continue;
-      const name = form === 'full' ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName || lesson.discipline.name;
-      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
+  for (const lesson of own.length > 0 ? own : lessons) {
+    const name = form === 'full' ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName || lesson.discipline.name;
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'uk'))
