@@ -15,7 +15,8 @@ export function CommandPaletteHost() {
 
   useHotkeys([
     { keys: 'mod+k', handler: toggle, description: 'Пошук і команди', group: 'Загальні', allowInInputs: true },
-    { keys: '/', handler: () => setOpen(true), description: 'Знайти розклад', group: 'Загальні' },
+    // «/» — запасна дія: на сторінці з власним пошуком (таблиця, редактор) клавіша дістається йому
+    { keys: '/', handler: () => setOpen(true), description: 'Знайти розклад', group: 'Загальні', priority: -1 },
   ]);
 
   if (!open) return null;

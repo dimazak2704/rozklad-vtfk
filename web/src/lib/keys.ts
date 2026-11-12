@@ -16,6 +16,9 @@ const KEY_LABELS: Record<string, string> = {
   arrowdown: '↓',
   space: 'Пробіл',
   backspace: '⌫',
+  delete: 'Delete',
+  tab: 'Tab',
+  f2: 'F2',
 };
 
 /** Людська назва клавіші: `mod` → Ctrl/⌘, `arrowleft` → ←. */
