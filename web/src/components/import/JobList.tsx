@@ -88,10 +88,25 @@ export function JobList({ onOpen }: JobListProps) {
         error={jobs.error}
         onRetry={() => void jobs.refetch()}
         onRowClick={onOpen}
+        // на телефоні назва файлу — головне: вона займає всю ширину й переноситься на 2 рядки, стан — рядком
+        // під нею, дата — підписом; праворуч стан лишається лише від 640 px, де назві вистачає місця
         mobileRow={(job) => ({
-          title: <span className="block truncate">{job.fileName}</span>,
+          title: (
+            <span className="flex flex-col gap-0.5">
+              <span className="line-clamp-2 [overflow-wrap:anywhere]" title={job.fileName}>
+                {job.fileName}
+              </span>
+              <span className="text-caption font-normal sm:hidden">
+                <JobStatusBadge status={job.status} />
+              </span>
+            </span>
+          ),
           caption: `${IMPORT_KIND_LABEL[job.kind]} · ${when(job.createdAt)}`,
-          status: <JobStatusBadge status={job.status} />,
+          status: (
+            <span className="max-sm:hidden">
+              <JobStatusBadge status={job.status} />
+            </span>
+          ),
         })}
         pagination={
           data && data.total > IMPORT_JOBS_PAGE_SIZE
