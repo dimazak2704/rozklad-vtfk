@@ -68,7 +68,7 @@ describe('InviteForm', () => {
     await user.type(screen.getByLabelText(/Повторіть пароль/), 'password1');
     await user.click(screen.getByRole('button', { name: 'Створити обліковий запис' }));
     expect(await screen.findByText('Щонайменше 3 символи')).toBeInTheDocument();
-    expect(screen.getByText('Додайте хоча б одну цифру')).toBeInTheDocument();
+    expect(screen.getByText('Щонайменше 12 символів')).toBeInTheDocument();
     expect(screen.getByText('Паролі не збігаються')).toBeInTheDocument();
   });
 
@@ -76,8 +76,8 @@ describe('InviteForm', () => {
     const user = userEvent.setup();
     renderWithProviders(<InviteForm token="demo" onAccepted={() => {}} onGone={() => {}} />);
     await user.type(screen.getByLabelText(/^Логін/), 'krentsin');
-    await user.type(screen.getByLabelText(/^Пароль/), 'secret-123');
-    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-123');
+    await user.type(screen.getByLabelText(/^Пароль/), 'secret-1234567');
+    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-1234567');
     await user.click(screen.getByRole('button', { name: 'Створити обліковий запис' }));
     expect(await screen.findByText('Цей логін уже зайнятий — оберіть інший')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Логін/)).toHaveValue('krentsin');
@@ -91,8 +91,8 @@ describe('InviteForm', () => {
       <InviteForm token="demo" onAccepted={(u) => accepted.push(u)} onGone={(m) => gone.push(m)} />,
     );
     await user.type(screen.getByLabelText(/^Логін/), 'kolesnyk');
-    await user.type(screen.getByLabelText(/^Пароль/), 'secret-123');
-    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-123');
+    await user.type(screen.getByLabelText(/^Пароль/), 'secret-1234567');
+    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-1234567');
     await user.click(screen.getByRole('button', { name: 'Створити обліковий запис' }));
     await waitFor(() => expect(accepted).toEqual(['kolesnyk']));
     unmount();
@@ -100,8 +100,8 @@ describe('InviteForm', () => {
     server.use(http.post(apiPath('/public/invites/:token/accept'), () => problem({ status: 410, detail: 'Термін дії запрошення минув.' })));
     renderWithProviders(<InviteForm token="demo" onAccepted={(u) => accepted.push(u)} onGone={(m) => gone.push(m)} />);
     await user.type(screen.getByLabelText(/^Логін/), 'kolesnyk2');
-    await user.type(screen.getByLabelText(/^Пароль/), 'secret-123');
-    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-123');
+    await user.type(screen.getByLabelText(/^Пароль/), 'secret-1234567');
+    await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-1234567');
     await user.click(screen.getByRole('button', { name: 'Створити обліковий запис' }));
     await waitFor(() => expect(gone).toEqual(['Термін дії запрошення минув.']));
   });

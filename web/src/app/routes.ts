@@ -18,6 +18,7 @@ import {
   DoorOpen,
   FileText,
   Info,
+  KeyRound,
   LayoutDashboard,
   Layers,
   Send,
@@ -170,6 +171,15 @@ export const ROUTES: readonly AppRoute[] = [
     description: 'Вхід для викладачів і диспетчерів через обліковий запис коледжу.',
     layout: 'public',
     page: () => import('@/pages/auth/LoginPage'),
+  },
+  {
+    id: 'password',
+    parent: 'home',
+    path: '/password/:token',
+    title: 'Новий пароль',
+    description: 'Пароль для входу за одноразовим посиланням від диспетчера.',
+    layout: 'public',
+    page: () => import('@/pages/auth/PasswordLinkPage'),
   },
   {
     id: 'auth-callback',
@@ -407,6 +417,17 @@ export const ROUTES: readonly AppRoute[] = [
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/SettingsPage'),
     nav: { label: 'Налаштування', icon: Settings, section: 'Планування', order: 15 },
+  },
+  {
+    id: 'admin-access',
+    parent: 'admin',
+    path: '/admin/access',
+    title: 'Доступи',
+    description: 'Хто може увійти: адміністратори й викладачі, вхід через Google, посилання для пароля.',
+    layout: 'admin',
+    roles: ADMIN_ROLES,
+    page: () => import('@/pages/admin/AccessPage'),
+    nav: { label: 'Доступи', icon: KeyRound, section: 'Планування', order: 17, keywords: ['доступ', 'облікові записи', 'google', 'пароль'] },
   },
 
 ];

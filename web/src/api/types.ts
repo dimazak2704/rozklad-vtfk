@@ -380,11 +380,17 @@ export interface PublicChangesDto {
   groups: Array<{ group: Omit<GroupRef, 'id'> & { id: Nullable<Uuid> }; items: ChangeView[] }>;
 }
 
-/** GET /api/public/invites/{token} */
+/** GET /api/public/invites/{token} — і запрошення викладача, і посилання для пароля (`kind`). */
 export interface InviteInfoDto {
   valid: boolean;
+  /** Ім'я людини: викладача (запрошення) або власника облікового запису (посилання для пароля). */
   teacherName: string;
   expiresAt: IsoInstant;
+  status?: 'ACTIVE' | 'USED' | 'EXPIRED' | 'REVOKED';
+  /** INVITE — реєстрація викладача; PASSWORD — новий пароль наявного облікового запису. */
+  kind?: 'INVITE' | 'PASSWORD';
+  /** Логін облікового запису для посилання пароля (сторінка показує його без змін); інакше null. */
+  username?: Nullable<string>;
 }
 
 /** POST /api/public/invites/{token}/accept → 201 */

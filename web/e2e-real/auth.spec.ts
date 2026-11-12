@@ -70,7 +70,8 @@ test.describe('вхід через сервіс входу', () => {
       if ((await alert.textContent())?.includes('Забагато спроб')) break;
       await expect(alert).toHaveText('Неправильний логін або пароль.');
     }
-    await expect(alert).toHaveText('Забагато спроб. Спробуйте пізніше.');
+    // з увімкненим Google (--google-mock) текст ще підказує вхід через Google
+    await expect(alert).toHaveText(/^\s*Забагато спроб\. Спробуйте пізніше(\.| або увійдіть через Google\.)\s*$/);
   });
 });
 

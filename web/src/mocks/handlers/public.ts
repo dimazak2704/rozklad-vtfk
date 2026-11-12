@@ -798,7 +798,7 @@ interface MockInvite {
 
 interface InviteState {
   invites: Map<string, MockInvite>;
-  /** Логіни, вже зайняті в Keycloak: демо-користувачі realm (ARCHITECTURE §6) і щойно зареєстровані. */
+  /** Логіни, вже зайняті в сервісі входу: демо-акаунти (ARCHITECTURE §6) і щойно зареєстровані. */
   usernames: Set<string>;
 }
 
@@ -828,10 +828,15 @@ function invitesAt(now: Date): InviteState {
 }
 
 function inviteInfo(invite: MockInvite, now: Date): InviteInfoDto {
+  const expired = new Date(invite.expiresAt).getTime() <= now.getTime();
+  const status = invite.usedAt !== null ? 'USED' : expired ? 'EXPIRED' : 'ACTIVE';
   return {
-    valid: invite.usedAt === null && new Date(invite.expiresAt).getTime() > now.getTime(),
+    valid: status === 'ACTIVE',
     teacherName: invite.teacher.shortName,
     expiresAt: invite.expiresAt,
+    status,
+    kind: 'INVITE',
+    username: null,
   };
 }
 
@@ -944,7 +949,7 @@ export const handlers = [
       ...(USERNAME_RE.test(username)
         ? []
         : [{ field: 'username', message: 'Від 3 до 32 символів: латинські малі літери, цифри, крапка, дефіс, підкреслення; першою — літера' }]),
-      ...(password.length >= 8 && password.length <= 128 ? [] : [{ field: 'password', message: 'Пароль — від 8 до 128 символів' }]),
+      ...(password.length >= 12 && password.length <= 64 ? [] : [{ field: 'password', message: 'Пароль — від 12 до 64 символів' }]),
     ];
     if (errors.length > 0) return badRequest('Перевірте логін і пароль.', errors);
     if (state.usernames.has(username)) {
