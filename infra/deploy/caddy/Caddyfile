@@ -44,7 +44,7 @@
 	request_header -X-Real-IP
 }
 
-# /api/* -> gateway. Used by the main site and by the optional api.{$DOMAIN} site.
+# /api/* -> gateway.
 (api_routes) {
 	# Server-sent events: no compression, every event is flushed at once, no timeout
 	handle /api/events/stream {
