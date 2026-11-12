@@ -42,8 +42,8 @@ export function RoomNowStatus({ schedule, roomId, profile, today, className }: R
       : 'Зараз вільна до кінця дня';
 
   return (
+    // кольорова крапка сама відділяє речення від парності, як у «1 заміна цього тижня»: окремий « · » зайвий
     <span className={cn('inline-flex items-center gap-2', className)}>
-      <span aria-hidden="true">·</span>
       <StatusDot tone={busyNow ? 'live' : 'neutral'} label={busyNow ? 'Зайнята' : 'Вільна'} />
       {text}
     </span>
