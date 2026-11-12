@@ -60,6 +60,8 @@ public class LoadImportService {
     public LoadImportResult apply(LoadImportRequest request) {
         SemesterInfo semester = calendar.semester(request.semesterId())
                 .orElseThrow(() -> FieldValidationException.of("semesterId", "Семестр не знайдено."));
+        // повтор імпортера після тайм-ауту чи паралельне виведення з версії чекають на цю транзакцію
+        items.lockSemesterLoad(semester.id());
         List<LoadItem> existing = new java.util.ArrayList<>(items.findAllBySemesterId(semester.id()));
         FieldErrors errors = new FieldErrors();
         List<Resolved> resolved = new java.util.ArrayList<>();

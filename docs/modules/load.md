@@ -43,8 +43,14 @@ per subgroup, weekly pattern; derivation from a timetable version; import by nat
 - **Template lessons are read with SQL** (`TemplateLessonReader`), not through the timetable module: the
   timetable module depends on load (generation), so a Java dependency back would be a module cycle.
 - `LoadSubgroupUsage` implements the catalog SPI: a subgroup with a load teacher cannot be deleted.
+- **One item per natural key**: semester × group × discipline × lesson kind × split is a unique index
+  (`uq_load_item_natural_key`, V1_301, which first merged existing copies into the oldest item). Create, update,
+  import and derivation take a per-semester advisory lock (`LoadItemRepository.lockSemesterLoad`) before they
+  read, so a double-clicked derive or an importer retry racing another writer waits and then updates the
+  stored item instead of adding a copy that would double the planned hours; a writer that skips the check
+  gets the generic 409 «Конфлікт даних».
 
 ## How to test
 
 `LoadPatternTest`, `LoadDerivationTest`, `LoadApiIT` (CRUD and pattern, split validation, weekly units,
-subgroup guard, derivation incl. skip and idempotency, import).
+subgroup guard, derivation incl. skip, idempotency and two derivations at once, the unique key, import).

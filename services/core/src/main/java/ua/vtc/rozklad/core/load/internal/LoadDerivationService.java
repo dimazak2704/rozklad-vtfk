@@ -58,6 +58,8 @@ public class LoadDerivationService {
                 .orElseThrow(() -> NotFoundException.of("Семестр", version.semesterId()));
         List<Draft> drafts = LoadDerivation.derive(version.lessons(), settings.hoursPerPair());
 
+        // подвійне натискання чи паралельний імпорт чекають, а потім бачать уже збережені записи
+        items.lockSemesterLoad(semester.id());
         List<LoadItem> existing = items.findAllBySemesterId(semester.id());
         Map<Key, LoadItem> derived = existing.stream()
                 .filter(item -> item.getSource() == LoadSource.TIMETABLE_DERIVED)

@@ -64,6 +64,9 @@ public class LoadService {
 
     @Transactional
     public LoadItemDto create(LoadItemRequest request) {
+        if (request.semesterId() != null) {
+            items.lockSemesterLoad(request.semesterId());
+        }
         Context context = validate(request, null);
         LoadItem item = new LoadItem(request.semesterId(), request.groupId(), request.disciplineId(),
                 request.hoursPerWeek(), plannedHours(request, context.semester()));
@@ -84,6 +87,7 @@ public class LoadService {
             errors.add("groupId", "Групу навантаження змінити не можна: створіть новий запис.");
         }
         errors.throwIfAny();
+        items.lockSemesterLoad(item.getSemesterId());
         Context context = validate(request, id);
         item.setDisciplineId(request.disciplineId());
         item.setHours(request.hoursPerWeek(), plannedHours(request, context.semester()));

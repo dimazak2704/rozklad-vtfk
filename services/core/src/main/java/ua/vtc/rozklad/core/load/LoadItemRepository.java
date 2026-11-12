@@ -25,6 +25,17 @@ public interface LoadItemRepository extends JpaRepository<LoadItem, UUID> {
     @EntityGraph(attributePaths = "teachers")
     Optional<LoadItem> findWithTeachersById(UUID id);
 
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:key, 0))", nativeQuery = true)
+    Integer acquireAdvisoryLock(String key);
+
+    /**
+     * Serializes the writers of one semester's load (create, update, import, derive) until the end of the
+     * transaction, so the duplicate check of one sees what the other committed. Call it before reading.
+     */
+    default void lockSemesterLoad(UUID semesterId) {
+        acquireAdvisoryLock("load:" + semesterId);
+    }
+
     @Query("""
             select count(i) > 0 from LoadItem i join i.teachers t
             where i.semesterId = :semesterId and i.disciplineId = :disciplineId and t.teacherId = :teacherId

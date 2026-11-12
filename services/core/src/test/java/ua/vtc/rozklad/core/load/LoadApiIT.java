@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.load;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,14 +11,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static ua.vtc.rozklad.core.catalog.ApiTestSupport.id;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +35,7 @@ import org.springframework.web.context.WebApplicationContext;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.core.catalog.ApiTestSupport;
+import ua.vtc.rozklad.core.load.internal.LoadDerivationService;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -58,6 +68,12 @@ class LoadApiIT {
 
     @Autowired
     private LessonRepository datedLessons;
+
+    @Autowired
+    private LoadDerivationService derivation;
+
+    @Autowired
+    private LoadItemRepository loadItems;
 
     @Autowired
     private Clock clock;
@@ -193,6 +209,52 @@ class LoadApiIT {
         datedLessons.delete(dated);
         mvc.perform(delete(subgroups + "/{sub}", group, subgroup1).with(TestJwts.admin()))
                 .andExpect(status().isNoContent());
+    }
+
+    /**
+     * A double-clicked «derive from version» (or derive racing the importer): both calls succeed, each
+     * load item exists once, so the plan hours are not doubled.
+     */
+    @Test
+    void concurrentDerivationsCreateEachItemOnce() throws Exception {
+        TimetableVersion version = versions.save(new TimetableVersion(semester, "Імпорт Excel", VersionSource.IMPORT));
+        lesson(version, 1, 1, Parity.BOTH, 0, stp, krentsin);
+        lesson(version, 3, 3, Parity.BOTH, 1, english, krysak);
+        lesson(version, 3, 3, Parity.BOTH, 2, english, mozharovska);
+        lesson(version, 4, 1, Parity.DENOMINATOR, 0, math, null);
+        CyclicBarrier start = new CyclicBarrier(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<?>> runs = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                runs.add(pool.submit(() -> {
+                    start.await(10, TimeUnit.SECONDS);
+                    return derivation.derive(version.getId());
+                }));
+            }
+            for (Future<?> run : runs) {
+                run.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM (SELECT 1 FROM load_item WHERE semester_id = ?
+                                      GROUP BY group_id, discipline_id, lesson_kind, split_subgroups
+                                      HAVING count(*) > 1) duplicates
+                """, Integer.class, semester)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM load_item WHERE semester_id = ?", Integer.class,
+                semester)).isEqualTo(3);
+    }
+
+    /** The natural key is a unique index: a writer that skips the service check still cannot add a copy. */
+    @Test
+    void databaseRefusesASecondItemWithTheSameKey() {
+        loadItems.saveAndFlush(new LoadItem(semester, group, stp, BigDecimal.valueOf(2), 36));
+
+        assertThatThrownBy(() -> loadItems.saveAndFlush(new LoadItem(semester, group, stp, BigDecimal.valueOf(4), 72)))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
