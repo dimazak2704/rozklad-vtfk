@@ -171,6 +171,43 @@ class SubstituteRoomIT {
         assertThat(cover(km, nepyivoda, null).replacement().room()).isNull();
     }
 
+    /**
+     * A shared room (sports hall, max_parallel 3) is full with three groups: the options must not
+     * suggest it, because POST /changes would refuse it (DatedSlotChecker counts every group in it).
+     */
+    @Test
+    void fullSharedRoomIsNotSuggested() {
+        sharedRoom304(3);
+
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("6");
+        assertThat(cover(km, nepyivoda, null).replacement().room()).isNull();
+    }
+
+    /** A shared room with a place left (two groups, one more promised by an open change) is suggested. */
+    @Test
+    void sharedRoomWithAPlaceLeftIsSuggested() {
+        sharedRoom304(1);
+        StudentGroup third = fixture.group("4КІ4", 4);
+        Lesson thirdLesson = fixture.lesson(semester, MONDAY, 2, third, 0, opcz, fixture.teacher("Стець О.В.",
+                "Стець"), fixture.room("5"));
+        commands.create(new CreateChangeRequest(ChangeKind.ROOM_CHANGE, MONDAY, 2, null, third.getId(), null,
+                thirdLesson.getId(), null, null, room304.getId(), null, ReasonCode.OTHER, null, null), "admin");
+
+        assertThat(suggestedRoom(nepyivoda)).isEqualTo("304");
+        assertThat(cover(km, nepyivoda, null).replacement().room().name()).isEqualTo("304");
+    }
+
+    /** Room 304 becomes a shared room (max_parallel 3) with {@code groups} lessons of other groups at pair 2. */
+    private void sharedRoom304(int groups) {
+        jdbc.update("UPDATE room SET max_parallel = 3 WHERE id = ?", room304.getId());
+        for (int index = 1; index <= groups; index++) {
+            StudentGroup other = fixture.group("3КІ" + index, 3);
+            Lesson occupant = fixture.lesson(semester, MONDAY, 2, other, 0, opcz,
+                    fixture.teacher("Викладач " + index, "Викладач" + index), room304);
+            jdbc.update("UPDATE lesson SET room_exclusive = false WHERE id = ?", occupant.getId());
+        }
+    }
+
     private String suggestedRoom(Teacher teacher) {
         OptionDto option = lessonOptions.of(stp.getId()).options().stream()
                 .filter(candidate -> candidate.kind() == ChangeKind.REPLACE_DISCIPLINE

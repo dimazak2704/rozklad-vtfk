@@ -189,7 +189,7 @@ class OptionsGatherer {
             inputs.put(target.getId(), new RankingInput(described,
                     groupLessons(groupDay, decided, freed, disciplines, teachers),
                     pool(target, items, progress, usualRooms, rooms, groups.get(target.getGroupId()), day, open,
-                            freed, disciplines, teachers),
+                            disciplines, teachers),
                     teacherPairs(day, open, freed),
                     busyByPair(target, day, open, freed, dayById),
                     absentByPair(absent, date),
@@ -311,7 +311,7 @@ class OptionsGatherer {
     private static List<GroupDiscipline> pool(Lesson target, List<LoadItem> items,
                                               Map<UUID, DisciplineProgress> progress, TeacherRooms usualRooms,
                                               Map<UUID, Room> rooms, StudentGroup group,
-                                              List<Lesson> day, List<Change> open, Set<UUID> freed,
+                                              List<Lesson> day, List<Change> open,
                                               Map<UUID, Discipline> disciplines, Map<UUID, Teacher> teachers) {
         int cohort = target.getSubgroupNumber();
         Map<String, GroupDiscipline> result = new LinkedHashMap<>();
@@ -329,7 +329,7 @@ class OptionsGatherer {
             }
             UUID ownRoom = usualRooms.forGroup(teacherId, item.getDisciplineId(), target.getGroupId())
                     .filter(roomId -> suits(rooms.get(roomId), item, target, group))
-                    .filter(roomId -> roomFree(roomId, target, day, open, freed))
+                    .filter(roomId -> roomFree(rooms.get(roomId), target, day, open))
                     .orElse(null);
             result.put(key, new GroupDiscipline(item.getDisciplineId(), shortName(disciplines, item.getDisciplineId()),
                     teacherId, teacherName(teachers, teacherId),
@@ -354,15 +354,21 @@ class OptionsGatherer {
                 || group.getSize() == null || room.getCapacity() >= group.getSize();
     }
 
-    /** No exclusive lesson (other than a freed one or the target) and no open change uses the room at the pair. */
-    private static boolean roomFree(UUID roomId, Lesson target, List<Lesson> day, List<Change> open, Set<UUID> freed) {
+    /**
+     * The room has a place at the pair, counted as {@code DatedSlotChecker.roomConflicts} counts on
+     * create: every lesson in the room that is not online (except the target; a lesson another open
+     * change replaces still sits there until publication) plus every open change that moves a pair
+     * into the room, against {@code maxParallel} (1 for an ordinary room, 3 for the sports hall).
+     */
+    private static boolean roomFree(Room room, Lesson target, List<Lesson> day, List<Change> open) {
         int pair = target.getPairNumber();
-        boolean taken = day.stream().anyMatch(lesson -> lesson.getPairNumber() == pair
-                && roomId.equals(lesson.getRoomId()) && lesson.isRoomExclusive() && !lesson.isOnline()
-                && !lesson.getId().equals(target.getId()) && !freed.contains(lesson.getId()));
-        boolean promised = open.stream().anyMatch(change -> change.coversPair(pair)
-                && roomId.equals(change.getNewRoomId()));
-        return !taken && !promised;
+        UUID roomId = room.getId();
+        long occupants = day.stream().filter(lesson -> lesson.getPairNumber() == pair
+                && roomId.equals(lesson.getRoomId()) && !lesson.isOnline()
+                && !lesson.getId().equals(target.getId())).count();
+        long promised = open.stream().filter(change -> change.coversPair(pair)
+                && roomId.equals(change.getNewRoomId()) && !roomId.equals(change.getOrigRoomId())).count();
+        return occupants + promised < room.getMaxParallel();
     }
 
     private static Progress progressOf(DisciplineProgress progress, List<LoadItem> items, UUID disciplineId,
