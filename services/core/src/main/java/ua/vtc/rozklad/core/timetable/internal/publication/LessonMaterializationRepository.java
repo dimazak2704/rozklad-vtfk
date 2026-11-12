@@ -98,13 +98,17 @@ class LessonMaterializationRepository {
      * or refers to (DOMAIN.md §6); everything else is kept. A change refers to a lesson as its
      * original or as the lesson a SWAP moves. A cancelled or declined change is not a live decision
      * and pins nothing: its link to a deleted lesson is cleared by the foreign key (V1_502).
+     *
+     * @param heldPairs pairs {@code 1..heldPairs} of the date {@code from} already began and are kept
+     *                  (0 keeps none)
      */
-    public int deleteReplaceable(UUID semesterId, LocalDate from) {
+    public int deleteReplaceable(UUID semesterId, LocalDate from, int heldPairs) {
         return jdbc.update("""
                 DELETE FROM lesson l
                 WHERE l.semester_id = ? AND l.date >= ? AND l.origin = 'TEMPLATE' AND l.change_id IS NULL
+                  AND NOT (l.date = ? AND l.pair_number <= ?)
                   AND NOT EXISTS (%s)
-                """.formatted(LIVE_DECISION), semesterId, from);
+                """.formatted(LIVE_DECISION), semesterId, from, from, heldPairs);
     }
 
     /**

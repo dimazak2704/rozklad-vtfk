@@ -95,7 +95,7 @@ public class PublicationService {
         });
 
         LessonMaterializer.Outcome outcome = materializer.materialize(version, semester, template, result.facts(),
-                effectiveFrom);
+                effectiveFrom, previous.isPresent());
         version.markPublished(effectiveFrom, clock.instant(), actor);
         version.setMetrics(jsonMapper.valueToTree(result.metrics()));
         announce(version, effectiveFrom, outcome.dates(), template, previousLessons);
@@ -112,6 +112,7 @@ public class PublicationService {
         }
         LocalDate today = LocalDate.now(clock);
         // минулі заняття вже відбулися й рахуються в обліку годин: переписувати їх не можна
+        // (з датою «сьогодні» пари, що вже почалися, лишаються зі старої версії: LessonMaterializer)
         if (replacesPublished && effectiveFrom.isBefore(today)) {
             throw new BusinessRuleException(EFFECTIVE_FROM_IN_PAST,
                     "Опублікований розклад не можна змінити заднім числом: оберіть дату не раніше %s."

@@ -83,6 +83,9 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   - serialized per semester (advisory lock) and per version (row lock; edits take the same lock);
   - `effectiveFrom` must be inside the semester; when a version is already published it must not be in the past
     (past lessons happened and count in accounting); the first publication may start in the past (seed);
+    a republication effective **today** keeps today's pairs that already began by the bell (Kyiv clock): their
+    lessons stay from the old version and the new one starts with the next pair (`LessonMaterializer`), the same
+    pair-level rule accounting uses for «already held»;
   - deleted: TEMPLATE lessons from `effectiveFrom` without `change_id` and not referenced by `change.original_lesson_id`;
     everything else is kept;
   - a template occurrence whose cohort slot holds a kept lesson (scheduled or cancelled) is left to the change
