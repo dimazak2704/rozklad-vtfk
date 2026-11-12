@@ -88,12 +88,21 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
         ) : error ? (
           <ErrorState size="sm" error={error} onRetry={onRetry} title="Конфлікти не завантажились" />
         ) : filtered.length === 0 ? (
-          <p className="flex items-start gap-2 px-3 py-6 text-ui text-secondary">
-            <CircleCheck aria-hidden="true" className="mt-0.5 size-4 text-add" />
-            {tab === 'HARD'
-              ? 'Жорстких конфліктів немає — версію можна публікувати.'
-              : 'Попереджень немає: без вікон, рваних днів і перевантажених днів.'}
-          </p>
+          // чи можна публікувати, каже речення якості над сіткою (і лише для чернетки); тут — що саме перевірено,
+          // без повтору «Жорстких конфліктів немає» і без поради публікувати вже опубліковану версію
+          <div className="flex flex-col items-start gap-2 px-3 py-6">
+            <p className="flex items-start gap-2 text-ui text-secondary">
+              <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-add" />
+              {tab === 'HARD'
+                ? 'Накладок і порушень правил немає.'
+                : 'Попереджень немає: без вікон, рваних днів і перевантажених днів.'}
+            </p>
+            {tab === 'HARD' && soft && soft.length > 0 ? (
+              <Button size="sm" variant="ghost" className="ms-4" onClick={() => switchTab('SOFT')}>
+                Переглянути попередження
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <ul className="divide-y divide-[var(--border-color-separator)]">
             {filtered.slice(0, limit).map((conflict, index) => (
