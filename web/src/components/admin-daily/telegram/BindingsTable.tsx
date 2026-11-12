@@ -106,7 +106,8 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
       cell: (row) => (
         <span className="flex min-w-0 flex-col">
           {/* особистий чат викладача названий так само, як і він сам: не дублюємо імʼя в двох колонках */}
-          <span className="truncate">{row.type === 'TEACHER' && row.title === target(row) ? 'Особистий чат' : row.title}</span>
+          {/* назва чату — головне в рядку: жирніше за дату й тип, що стоять поруч */}
+          <span className="truncate font-[600]">{row.type === 'TEACHER' && row.title === target(row) ? 'Особистий чат' : row.title}</span>
           <span className="text-meta font-normal text-muted figures">{row.chatId}</span>
         </span>
       ),

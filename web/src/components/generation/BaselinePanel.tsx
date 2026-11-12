@@ -1,4 +1,5 @@
 import type { TimetableVersionDto } from '@/api/types';
+import { cn } from '@/lib/cn';
 import { baselineSentence } from './model';
 
 /** Стан базової версії до запуску. */
@@ -8,7 +9,8 @@ export function BaselinePanel({ version }: { version: TimetableVersionDto }) {
       <h2 id="baseline-title" className="text-heading font-bold text-primary">
         Зараз у «{version.name}»
       </h2>
-      <p className="text-body text-secondary">{baselineSentence(version)}</p>
+      {/* жорсткі конфлікти — саме те, заради чого запускають генератор: тоді речення в кольорі скасування */}
+      <p className={cn('text-body', version.hardConflicts > 0 ? 'font-[600] text-cancel' : 'text-secondary')}>{baselineSentence(version)}</p>
     </section>
   );
 }

@@ -86,7 +86,7 @@ export default function GroupsPage() {
         width: '7.5rem',
         cell: (g) => (
           <span className="flex items-baseline gap-2">
-            <span className="figures font-semibold">{g.code}</span>
+            <span className="text-cell font-semibold tracking-[0.01em] figures">{g.code}</span>
             {g.active ? null : <span className="text-caption text-muted">неактивна</span>}
           </span>
         ),
@@ -100,7 +100,8 @@ export default function GroupsPage() {
         cell: (g) =>
           g.specialty ? (
             <span className="flex flex-col">
-              <span className="font-semibold">{g.specialty.label}</span>
+              {/* код групи — головне в рядку; абревіатура спеціальності його не перекрикує */}
+              <span className="font-[550]">{g.specialty.label}</span>
               {g.specialtyId && specialtyName.get(g.specialtyId) && specialtyName.get(g.specialtyId) !== g.specialty.label ? (
                 <span className="text-caption text-muted">{specialtyName.get(g.specialtyId)}</span>
               ) : null}
