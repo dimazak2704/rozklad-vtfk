@@ -385,7 +385,7 @@ body.auth {
 
 /* ---------- Декоративний шпиль (≥ 1024 px) ----------
  * Три фігури (login.html, <defs>) малюються через <use>: спокійний контур і чотири шари світла на кожну
- * фігуру. Розміри в одиницях viewBox (1 одиниця ≈ 16–23 px), без vector-effect: non-scaling-stroke —
+ * фігуру. Розміри в одиницях viewBox (1 одиниця ≈ 9–23 px), без vector-effect: non-scaling-stroke —
  * з ним Chromium міряє штрихи в пікселях екрана, і світло розсипається на крапки. pathLength кожної
  * фігури дорівнює її справжній довжині (--len), тож ціна одиниці штриха однакова на всьому знаку.
  */
@@ -405,19 +405,39 @@ body.auth {
   --len: 32.7;
 }
 
-/* Контур ≈ 2 px: чорнило теми, 18 % у світлій і 26 % у темній (знак читається, а не тоне як водяний) */
+/* Контур ≈ 2 px (при кільці ~440 px; одиниця viewBox ≈ 17 px): чорнило теми з дещицею кольору знака,
+   щоб шпиль був частиною бренду, а не сірим водяним знаком. --auth-spire-k вирівнює товщину між розмірами. */
+.auth-spire {
+  --auth-spire-k: 1;
+}
+
 .auth-spire-line {
   stroke: var(--text-color-primary);
-  stroke-opacity: 0.18;
-  stroke-width: 0.095px;
+  stroke-opacity: 0.2;
+  stroke-width: calc(0.115px * var(--auth-spire-k));
 }
 
 [data-theme='dark'] .auth-spire-line {
-  stroke-opacity: 0.26;
+  stroke-opacity: 0.28;
+}
+
+/* сума часток < 100 % дає прозорість: 22 + 6 = 28 % (у темній 20 + 8 = 28 %:
+   світле чорнило на темному полотні при тій самій частці вже контрастніше, тож на око обидві теми рівні) */
+@supports (color: color-mix(in oklab, red 20%, blue 6%)) {
+  .auth-spire-line {
+    stroke: color-mix(in oklab, var(--text-color-primary) 22%, var(--fill-brand) 6%);
+    stroke-opacity: 1;
+  }
+
+  [data-theme='dark'] .auth-spire-line {
+    stroke: color-mix(in oklab, var(--text-color-primary) 20%, var(--fill-brand) 8%);
+    stroke-opacity: 1;
+  }
 }
 
 /* Світло: чотири штрихи з однаковою передньою точкою (--auth-trace-head), від довгого блідого
-   хвоста до короткої яскравої голови. Градієнт уздовж кривої SVG не вміє, тож хвіст складено з шарів. */
+   хвоста до короткої яскравої голови ≈ 3,5 px. Градієнт уздовж кривої SVG не вміє, тож хвіст складено
+   з шарів; голова ширша за тіло, тож читається як яскрава точка попереду, без фільтрів. */
 .auth-trace {
   display: none;
   stroke: var(--stroke-now);
@@ -426,52 +446,61 @@ body.auth {
 .auth-trace use {
   stroke-dasharray: calc(var(--d) * 1px) calc((var(--len) + 16 - var(--d)) * 1px);
   stroke-dashoffset: calc((var(--d) - var(--auth-trace-head)) * 1px);
+  stroke-width: calc(var(--w) * var(--auth-spire-k) * 1px);
 }
 
 .auth-trace-tail {
   --d: 12;
-  stroke-width: 0.13px;
-  stroke-opacity: 0.1;
+  --w: 0.14;
+  stroke-opacity: 0.12;
 }
 
 .auth-trace-fade {
   --d: 8;
-  stroke-width: 0.14px;
-  stroke-opacity: 0.22;
+  --w: 0.155;
+  stroke-opacity: 0.26;
 }
 
 .auth-trace-body {
   --d: 4.5;
-  stroke-width: 0.15px;
-  stroke-opacity: 0.5;
+  --w: 0.17;
+  stroke-opacity: 0.55;
 }
 
 .auth-trace-head {
   --d: 2;
-  stroke-width: 0.165px;
+  --w: 0.205;
 }
 
+/* Розмір рахується від місця праворуч від колонки (400 px по центру): кільце (--ring) цілком на екрані,
+   2 rem від країв і щонайменше 3,5 rem від колонки (запас на смугу прокрутки, ≥ 48 px до форми).
+   Кільце — 23,2 з 26 одиниць viewBox, тож svg = кільце × 26/23,2, а поле svg навколо кільця 1,4 одиниці. */
 @media (min-width: 1024px) {
   .auth-spire {
+    --ring: min(34rem, calc(50vw - 12.5rem - 3.5rem - 2rem), calc(100dvh - 4rem));
     display: block;
     position: fixed;
-    right: -3rem;
-    bottom: -5rem;
-    width: clamp(30rem, 40vw, 38rem);
-    height: clamp(30rem, 40vw, 38rem);
+    right: calc(2rem - var(--ring) * 1.4 / 23.2);
+    bottom: calc(2rem - var(--ring) * 1.4 / 23.2);
+    width: calc(var(--ring) * 26 / 23.2);
+    height: calc(var(--ring) * 26 / 23.2);
     pointer-events: none;
     /* перемальовування світла лишається в межах знака */
     contain: strict;
   }
 }
 
-/* 1024–1279: поруч із колонкою лише ~300 px, тож знак менший і зсунутий, щоб не лягати на форму */
+/* 1024–1279: кільце менше (≈ 230–350 px), тож лінії товстішають, щоб важити так само */
 @media (min-width: 1024px) and (max-width: 1279.98px) {
   .auth-spire {
-    right: -6rem;
-    bottom: -6rem;
-    width: 26rem;
-    height: 26rem;
+    --auth-spire-k: 1.3;
+  }
+}
+
+/* ≥ 1680: кільце найбільше (≈ 540 px), лінії трохи тоншають, щоб не важчати */
+@media (min-width: 1680px) {
+  .auth-spire {
+    --auth-spire-k: 0.85;
   }
 }
 
