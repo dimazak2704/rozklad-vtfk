@@ -107,4 +107,90 @@ test.describe('клавіатура й журнал дій', () => {
     await pressUkrainian(page, 'т', 'KeyN');
     await expect(page.getByRole('dialog', { name: 'Нова аудиторія' })).toBeVisible();
   });
+
+  test('«/» і набір по літері: жодна не губиться; Esc очищає, ще раз — виводить з поля', async ({ page }) => {
+    const search = page.getByRole('searchbox', { name: 'Пошук аудиторії' });
+    await focusPage(page);
+    await page.keyboard.press('/');
+    await expect(search).toBeFocused();
+    await search.pressSequentially('301', { delay: 50 });
+    await expect(search).toHaveValue('301');
+    await expect(page).toHaveURL(/[?&]q=301/);
+
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(search).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#main')).toBeFocused();
+    // літерні клавіші знову працюють
+    await page.keyboard.press('n');
+    await expect(page.getByRole('dialog', { name: 'Нова аудиторія' })).toBeVisible();
+  });
+
+  test('навантаження: «/» і набір по літері', async ({ page }) => {
+    await page.goto('/admin/load');
+    const search = page.getByRole('searchbox', { name: 'Пошук у навантаженні' });
+    await expect(search).toBeVisible({ timeout: 30_000 });
+    await focusPage(page);
+    await page.keyboard.press('/');
+    await search.pressSequentially('Коваль', { delay: 50 });
+    await expect(search).toHaveValue('Коваль');
+  });
+
+  test('створити, змінити, двічі скасувати й двічі повернути — правка лягає на відновлений запис', async ({ page }) => {
+    const writes: string[] = [];
+    page.on('response', (response) => {
+      const method = response.request().method();
+      if (/\/api\/admin\/rooms/.test(response.url()) && method !== 'GET') writes.push(`${method} ${response.status()}`);
+    });
+    await focusPage(page);
+    await page.keyboard.press('n');
+    const create = page.getByRole('dialog', { name: 'Нова аудиторія' });
+    await create.getByRole('textbox', { name: /Назва/ }).fill('991');
+    await page.keyboard.press('Enter');
+    await expect(create).toBeHidden();
+    await page.getByRole('searchbox', { name: 'Пошук аудиторії' }).fill('99');
+    await page.getByRole('rowheader', { name: '991' }).click();
+    const edit = page.getByRole('dialog', { name: 'Аудиторія 991' });
+    await edit.getByRole('textbox', { name: /Назва/ }).fill('992');
+    await page.keyboard.press('Enter');
+    await expect(edit).toBeHidden();
+
+    await focusPage(page);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.getByText('Скасовано: змінено аудиторію 992')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.getByText('Скасовано: додано аудиторію 991')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+y');
+    await expect(page.getByText('Повернуто: додано аудиторію 991')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+y');
+    await expect(page.getByText('Повернуто: змінено аудиторію 992')).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: '992' })).toBeVisible();
+    expect(writes).toEqual(['POST 201', 'PUT 200', 'PUT 200', 'DELETE 204', 'POST 201', 'PUT 200']);
+
+    await page.keyboard.press('ControlOrMeta+Shift+h');
+    const journal = page.getByRole('dialog', { name: 'Журнал дій' });
+    // фокус — у шторці, на першій дії
+    await expect(journal.getByRole('button', { name: 'Скасувати: Змінено аудиторію 992' })).toBeFocused();
+    await expect(journal).not.toContainText('Не скасовано');
+    await expect(journal).not.toContainText('Не повернуто');
+  });
+
+  test('збереження без змін не надсилає запиту й не пише в журнал; Ctrl+S без форми — підказка', async ({ page }) => {
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (/\/api\/admin\/rooms/.test(request.url()) && request.method() !== 'GET') writes.push(request.method());
+    });
+    await page.getByRole('rowheader', { name: '301' }).click();
+    const edit = page.getByRole('dialog', { name: 'Аудиторія 301' });
+    await expect(edit).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+s');
+    await expect(edit).toBeHidden();
+    await expect(page.getByText('Змін немає — нічого не збережено')).toBeVisible();
+    expect(writes).toEqual([]);
+
+    await focusPage(page);
+    await page.keyboard.press('ControlOrMeta+s');
+    await expect(page.getByText('Немає що зберігати')).toBeVisible();
+  });
 });
