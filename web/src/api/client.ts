@@ -7,6 +7,7 @@
 import { noteUnsavedChange } from '@/auth/unsavedChange';
 import { getAccessToken } from '@/auth/userManager';
 import { ApiError, errorFromResponse } from './errors';
+import { noteResponseSource } from './saved-copy';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '');
 
@@ -139,6 +140,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
     throw error;
   }
+  // відповідь могла прийти з кешу Service Worker, а не з сервера: сторінка має це сказати
+  if (method === 'GET') noteResponseSource(buildUrl(path, query), response.headers);
 
   if (response.status === 204 || response.status === 205) return undefined as T;
   if (responseType === 'blob') return (await response.blob()) as T;

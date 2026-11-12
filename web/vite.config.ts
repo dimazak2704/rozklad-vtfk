@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
@@ -15,7 +16,8 @@ const AUTH_CSS_ENTRY = 'brand-auth';
 /**
  * PWA для публічних сторінок (UI.md §4.13): встановлюється на телефон, оболонка кешується заздалегідь,
  * а частини коду й публічні відповіді API — під час перегляду. Розклад береться з мережі (NetworkFirst),
- * без неї — з кешу: останні переглянуті тижні відкриваються офлайн. Service Worker лише в production-збірці:
+ * без неї — з кешу: останні переглянуті тижні відкриваються офлайн, а копію з кешу позначає savedCopyPlugin.
+ * Service Worker лише в production-збірці:
  * у dev працює Service Worker мок-API (MSW), і два воркери на одному scope заважали б один одному.
  */
 function pwa(): Plugin[] {
@@ -73,6 +75,9 @@ function pwa(): Plugin[] {
             networkTimeoutSeconds: 5,
             expiration: { maxEntries: 120, maxAgeSeconds: 21 * DAY_SECONDS },
             cacheableResponse: { statuses: [200] },
+            // копія з кешу (сервер мовчить понад 5 с чи недоступний) отримує позначку з датою:
+            // сторінка каже «показано збережений розклад», навіть коли браузер вважає, що мережа є
+            plugins: [savedCopyPlugin],
           },
         },
       ],

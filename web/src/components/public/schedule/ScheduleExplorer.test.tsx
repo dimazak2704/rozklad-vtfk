@@ -1,7 +1,14 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { usePublicSchedule } from '@/api/public';
+import { resetSavedCopies } from '@/api/saved-copy';
+import { SAVED_COPY_HEADER } from '@/api/saved-copy-plugin';
 import type { ScheduleDto } from '@/api/types';
+import { apiPath } from '@/mocks/kit';
+import { server } from '@/mocks/server';
 import { DEMO_WEEK } from '@/pages/dev/demo-data';
 import { renderWithProviders } from '@/test/render';
 import type { ScheduleParams } from './schedule-params';
@@ -99,5 +106,54 @@ describe('ScheduleExplorer: тиждень без пар', () => {
     expect(screen.getByText('Цього тижня занять немає')).toBeInTheDocument();
     expect(screen.getByText(/Електрорадіомонтажна практика 2КІ3\. Розклад на інші тижні/)).toBeInTheDocument();
     expect(screen.queryByText(/канікули або дні поза семестром/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ScheduleExplorer: копія з кешу Service Worker, коли мережа є', () => {
+  afterEach(() => resetSavedCopies());
+
+  /** Справжній запит розкладу: клієнт API бачить позначку Service Worker у відповіді. */
+  function LiveSchedule() {
+    const p = params('2026-11-09', '2026-11-09', '2026-11-13');
+    const schedule = usePublicSchedule('GROUP', DEMO_WEEK.owner.id, p.week.from, p.week.to);
+    return <ScheduleExplorer query={schedule} params={p} perspective="group" ownerLabel="4КІ1" />;
+  }
+
+  it('сервер не відповів і Service Worker віддав стару копію: кажемо про це з датою копії, свіжа відповідь прибирає примітку', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    let fromCache = true;
+    server.use(
+      http.get(apiPath('/public/schedule/:type/:id'), () =>
+        HttpResponse.json(DEMO_WEEK, {
+          headers: fromCache ? { [SAVED_COPY_HEADER]: new Date('2026-11-05T06:15:00Z').toUTCString() } : {},
+        }),
+      ),
+    );
+    renderWithProviders(<LiveSchedule />);
+
+    const note = (await screen.findByText(/Сервер не відповів/)).closest('[role="status"]');
+    expect(note).toHaveTextContent(
+      // toHaveTextContent зводить нерозривний пробіл до звичайного
+      'Сервер не відповів. Показано розклад, збережений 5 листопада о 08:15 — заміни могли змінитися.',
+    );
+
+    fromCache = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Оновити' }));
+    await vi.waitFor(() => expect(screen.queryByText(/Сервер не відповів/)).not.toBeInTheDocument());
+  });
+
+  it('звичайна відповідь сервера — без примітки', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    let served = false;
+    server.use(
+      http.get(apiPath('/public/schedule/:type/:id'), () => {
+        served = true;
+        return HttpResponse.json(DEMO_WEEK);
+      }),
+    );
+    renderWithProviders(<LiveSchedule />);
+    await vi.waitFor(() => expect(served).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(/Показано/)).not.toBeInTheDocument();
   });
 });

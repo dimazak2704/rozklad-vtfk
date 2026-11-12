@@ -1,8 +1,11 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { RotateCcw, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
+import { buildUrl } from '@/api/client';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
+import { publicSchedulePath } from '@/api/public';
+import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
 import type { ScheduleDto } from '@/api/types';
 import { DayList, NowIndicator, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
@@ -135,6 +138,16 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
 
   // без мережі запит цього тижня стоїть на паузі: дані на екрані (якщо є) — від іншого тижня, їх не показуємо
   const unavailableOffline = query.fetchStatus === 'paused' && (!schedule || placeholder);
+  // сервер не відповів за 5 с чи недоступний, а Service Worker віддав збережену копію: кажемо про це й онлайн
+  const owner = placeholder ? undefined : query.data?.owner;
+  const savedCopy = useSavedCopy(
+    owner ? buildUrl(publicSchedulePath(owner.type, owner.id), { from: week.from, to: week.to }) : undefined,
+  );
+  const showSavedNote = !unavailableOffline && Boolean(schedule) && (!online || savedCopy.fromCache);
+  const savedWhat =
+    savedCopy.fromCache && savedCopy.savedAt !== null
+      ? `розклад, збережений ${savedCopyTimeLabel(savedCopy.savedAt)}`
+      : 'збережений розклад';
 
   let content;
   if (unavailableOffline) {
@@ -251,10 +264,27 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
         />
       ) : null}
 
-      {!online && !unavailableOffline ? (
-        <p className="flex items-start gap-2 rounded-control border border-default bg-sunken px-3 py-2 text-caption text-secondary">
+      {showSavedNote ? (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-control border border-default bg-sunken px-3 py-2 text-caption text-secondary"
+        >
           <WifiOff aria-hidden="true" className="mt-px size-4 shrink-0 text-muted" />
-          Немає інтернету. Показано збережений розклад — заміни могли змінитися.
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>
+              {online ? 'Сервер не відповів.' : 'Немає інтернету.'} Показано {savedWhat} — заміни могли змінитися.
+            </span>
+            {online ? (
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => void query.refetch()}
+                iconStart={<RotateCcw aria-hidden="true" className="size-3.5" />}
+              >
+                Оновити
+              </Button>
+            ) : null}
+          </span>
         </p>
       ) : null}
 

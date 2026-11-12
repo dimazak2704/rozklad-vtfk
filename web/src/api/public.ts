@@ -61,6 +61,11 @@ export function usePublicRooms() {
   });
 }
 
+/** `/public/schedule/{group|teacher|room}/{id}` — шлях розкладу відносно API. */
+export function publicSchedulePath(owner: EntityType, id: Uuid): string {
+  return `/public/schedule/${OWNER_SEGMENT[owner]}/${encodeURIComponent(id)}`;
+}
+
 /** Ключ розкладу: [..., owner, id, {from, to}] — id на позиції 3. */
 function sameOwnerKey(key: QueryKey | undefined, owner: EntityType, id: Uuid | undefined): boolean {
   return Array.isArray(key) && key[2] === owner && key[3] === id;
@@ -81,11 +86,7 @@ export function usePublicSchedule(
   return useQuery({
     queryKey: qk.public.schedule(owner, id ?? '', from, to),
     queryFn: ({ signal }) =>
-      api.get<ScheduleDto>(
-        `/public/schedule/${OWNER_SEGMENT[owner]}/${encodeURIComponent(id ?? '')}`,
-        { from, to },
-        { signal, auth: false },
-      ),
+      api.get<ScheduleDto>(publicSchedulePath(owner, id ?? ''), { from, to }, { signal, auth: false }),
     enabled: enabled && Boolean(id && from && to),
     placeholderData: (previous, previousQuery) => (sameOwnerKey(previousQuery?.queryKey, owner, id) ? previous : undefined),
     networkMode: 'offlineFirst',
