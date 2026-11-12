@@ -28,6 +28,7 @@ public final class RozkladEvents {
     public static final String SUBSTITUTION_CONFIRMATION_REQUESTED = "substitution.confirmation-requested";
     public static final String SUBSTITUTION_STATUS_CHANGED = "substitution.status-changed";
     public static final String SUBSTITUTION_TEACHER_REPLIED = "substitution.teacher-replied";
+    public static final String SUBSTITUTION_DETAILS_CHANGED = "substitution.details-changed";
     public static final String ABSENCE_REPORTED = "absence.reported";
     public static final String ORDER_PUBLISHED = "order.published";
 
@@ -41,6 +42,7 @@ public final class RozkladEvents {
             Map.entry(SubstitutionConfirmationRequested.class, SUBSTITUTION_CONFIRMATION_REQUESTED),
             Map.entry(SubstitutionStatusChanged.class, SUBSTITUTION_STATUS_CHANGED),
             Map.entry(SubstitutionTeacherReplied.class, SUBSTITUTION_TEACHER_REPLIED),
+            Map.entry(SubstitutionDetailsChanged.class, SUBSTITUTION_DETAILS_CHANGED),
             Map.entry(AbsenceReported.class, ABSENCE_REPORTED),
             Map.entry(OrderPublished.class, ORDER_PUBLISHED));
 
@@ -85,7 +87,7 @@ public final class RozkladEvents {
                 CORE_SCHEDULER_RESULTS, List.of(GENERATION_PROGRESS, GENERATION_COMPLETED),
                 NOTIFICATION_EVENTS, List.of(TIMETABLE_VERSION_PUBLISHED, SCHEDULE_CHANGED,
                         SUBSTITUTION_CONFIRMATION_REQUESTED, SUBSTITUTION_STATUS_CHANGED, SUBSTITUTION_TEACHER_REPLIED,
-                        ABSENCE_REPORTED, ORDER_PUBLISHED, GENERATION_COMPLETED));
+                        SUBSTITUTION_DETAILS_CHANGED, ABSENCE_REPORTED, ORDER_PUBLISHED, GENERATION_COMPLETED));
 
         private Queues() {
         }

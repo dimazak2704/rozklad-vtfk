@@ -27,6 +27,7 @@ import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
@@ -117,6 +118,12 @@ public class SubstitutionRequests implements OutboundRelevance {
         boolean notice = event.effectiveMode() == SubstitutionRequestMode.NOTIFY;
         Optional<SubstitutionRequest> existing = requests.findForUpdate(event.changeId());
         boolean sameTeacher = existing.map(found -> found.getTeacherId().equals(event.teacherId())).orElse(false);
+        if (sameTeacher && !notice && existing.get().isConfirmedRequest()) {
+            // core не просить підтвердити вдруге: це запізніла подія (нагадування чи нова аудиторія, надіслані
+            // ще до підтвердження) — лише інформуємо про нові деталі, якщо вони є
+            informOfNewDetails(existing.get(), SubstitutionRequest.Details.of(event), event.eventId());
+            return;
+        }
         // the teacher already holds a message of this change that still waits for him
         boolean told = sameTeacher && existing.get().getMode() == event.effectiveMode()
                 && (notice ? existing.get().isNoticeInForce() : existing.get().isPending())
@@ -160,6 +167,49 @@ public class SubstitutionRequests implements OutboundRelevance {
             return;
         }
         request.markNoTelegram(now);
+    }
+
+    /**
+     * {@code substitution.details-changed}: the dispatcher changed what the teacher reads (the room) of a request
+     * already confirmed. He gets «✏️ Заміну змінено» with what changed and the details, without buttons, a deadline
+     * or a request to confirm again; the status and the answer stay, and later edits of the old messages show the
+     * new details. A request still pending here (its CONFIRMED event is on the way) only takes the details: that
+     * event edits the messages to the final state with them. Another teacher's or a notice's copy is left alone.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onDetailsChanged(SubstitutionDetailsChanged event) {
+        requests.findForUpdate(event.changeId())
+                .filter(found -> found.getTeacherId().equals(event.teacherId()) && !found.isNotice())
+                .ifPresent(found -> {
+                    SubstitutionRequest.Details after = SubstitutionRequest.Details.of(event);
+                    if (found.isConfirmedRequest()) {
+                        informOfNewDetails(found, after, event.eventId());
+                    } else if (found.isPending()) {
+                        found.takeDetails(after, clock.instant());
+                    }
+                });
+    }
+
+    /**
+     * The info-only update of a request already confirmed: nothing when the teacher would read the same, never
+     * reached him, or the lesson is over. Its own message per event (purpose SUBSTITUTION_STATUS, no buttons), so
+     * neither the reminder key nor the «no longer waits for an answer» check can swallow it.
+     */
+    private void informOfNewDetails(SubstitutionRequest request, SubstitutionRequest.Details after, UUID eventId) {
+        SubstitutionRequest.Details before = request.details();
+        if (!SubstitutionTexts.differs(before, after)) {
+            return;
+        }
+        request.takeDetails(after, clock.instant());
+        if (messages.findByChangeId(request.getChangeId()).isEmpty() || lessonOver(after.lessonDate(), after.endsAt())) {
+            return;
+        }
+        bindings.teacherChat(request.getTeacherId()).ifPresent(chat -> outbox.enqueue(
+                OutboundDraft.text(Recipient.of(chat), DeliveryPurpose.SUBSTITUTION_STATUS,
+                                SubstitutionTexts.update(request, before))
+                        .withKeyboard(SubstitutionTexts.updateKeyboard(request))
+                        .correlatedWith(request.getChangeId())
+                        .forEvent(eventId, "details")));
     }
 
     /**

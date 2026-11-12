@@ -13,6 +13,7 @@ import ua.vtc.rozklad.contracts.events.OrderPublished;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.events.TimetableVersionPublished;
@@ -63,6 +64,7 @@ public class EventHandlers {
             case SubstitutionConfirmationRequested requested -> substitutions.onConfirmationRequested(requested);
             case SubstitutionStatusChanged changed -> substitutions.onStatusChanged(changed, teacherName);
             case SubstitutionTeacherReplied replied -> substitutions.onTeacherReplied(replied, teacherName);
+            case SubstitutionDetailsChanged changed -> substitutions.onDetailsChanged(changed);
             case AbsenceReported absence -> adminNotices.onAbsenceReported(absence);
             case GenerationCompleted completed -> adminNotices.onGenerationCompleted(completed);
             case ScheduleChanged ignored -> queries.invalidateSchedules();

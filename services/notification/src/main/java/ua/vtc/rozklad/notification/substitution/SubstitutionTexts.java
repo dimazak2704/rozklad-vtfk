@@ -33,6 +33,7 @@ public final class SubstitutionTexts {
     private static final String NOTICE_TITLE = "📌 " + b("Вам поставили заміну");
     private static final String UPDATE_TITLE = "✏️ " + b("Заміну змінено");
     private static final String NOTICE_HINT = "Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.";
+    private static final String CONFIRMED_HINT = "Заміна вже підтверджена, відповідати не потрібно.";
     private static final String MUTUAL = "MUTUAL";
 
     private SubstitutionTexts() {
@@ -48,16 +49,27 @@ public final class SubstitutionTexts {
     /**
      * The request (CONFIRM) or notice (NOTIFY) sent again because the dispatcher changed what the teacher sees
      * (the room): says what changed, then the usual details and the request's deadline, which does not restart.
+     * A request already confirmed only informs: no deadline and nothing to answer.
      */
     public static String update(SubstitutionRequest request, Details before) {
         StringBuilder text = new StringBuilder(UPDATE_TITLE).append('\n').append(whatChanged(before, request.details()))
                 .append("\n\n").append(details(request));
         if (request.isNotice()) {
             text.append("\n\n").append(NOTICE_HINT);
+        } else if (request.isConfirmedRequest()) {
+            text.append("\n\n").append(CONFIRMED_HINT);
         } else {
             appendDeadline(text, request);
         }
         return text.toString();
+    }
+
+    /** Buttons under {@link #update}: the mode's answer buttons; none for a request already confirmed. */
+    public static InlineKeyboard updateKeyboard(SubstitutionRequest request) {
+        if (request.isConfirmedRequest()) {
+            return null;
+        }
+        return request.isNotice() ? noticeButtons(request.getChangeId()) : buttons(request.getChangeId());
     }
 
     /** The message body would read differently with {@code after} than with {@code before}. */

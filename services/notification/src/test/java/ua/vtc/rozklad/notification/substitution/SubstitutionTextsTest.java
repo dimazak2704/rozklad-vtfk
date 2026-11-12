@@ -122,6 +122,32 @@ class SubstitutionTextsTest {
                 Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.""");
     }
 
+    /**
+     * A request already confirmed (by the teacher or for him) only informs: what changed and the details, no
+     * deadline, no request to confirm again and no buttons. A pending request keeps its ✅/❌.
+     */
+    @Test
+    void updateOfAConfirmedRequestOnlyInforms() {
+        SubstitutionRequest.Details before = SubstitutionRequest.from(event(0, "108"), NOW).details();
+        SubstitutionRequest request = SubstitutionRequest.from(event(0, "214"), NOW);
+        assertThat(SubstitutionTexts.updateKeyboard(request)).isNotNull();
+        request.changeStatus(ChangeStatus.CONFIRMED, NOW);
+
+        assertThat(SubstitutionTexts.update(request, before)).isEqualTo("""
+                ✏️ <b>Заміну змінено</b>
+                Нова аудиторія: 214 (була 108)
+
+                📅 Понеділок, 19 жовтня
+                🕘 2 пара · 09:40–10:40
+                👥 4КІ1
+                📘 Надійність, діагностика та експлуатація комп'ютерних систем і мереж
+                🚪 Аудиторія 214
+                👤 Замість: Кренцін М.Д.
+
+                Заміна вже підтверджена, відповідати не потрібно.""");
+        assertThat(SubstitutionTexts.updateKeyboard(request)).isNull();
+    }
+
     @Test
     void whatChangedNamesEveryVisibleDetailInOneLine() {
         SubstitutionRequest.Details base = SubstitutionRequest.from(event(0, "108"), NOW).details();

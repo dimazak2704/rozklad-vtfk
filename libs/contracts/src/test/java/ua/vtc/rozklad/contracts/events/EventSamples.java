@@ -54,7 +54,8 @@ final class EventSamples {
                         ChangeStatus.APPLIED, DATE, 2, "4КІ1"),
                 absenceReported(List.of(1, 2)),
                 absenceReported(null),
-                orderPublished());
+                orderPublished(),
+                substitutionDetailsChanged());
     }
 
     static EventEnvelope envelope() {
@@ -112,6 +113,13 @@ final class EventSamples {
                 "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "6", null,
                 SubstitutionRequestMode.NOTIFY, ChangeKind.REPLACE_DISCIPLINE, "Сучасні технології проєктування",
                 "MUTUAL");
+    }
+
+    /** A confirmed request moved to another room: information only. */
+    private static SubstitutionDetailsChanged substitutionDetailsChanged() {
+        return new SubstitutionDetailsChanged(envelope(), CHANGE, TEACHER_NEPYIVODA, DATE, 2, LocalTime.of(9, 40),
+                LocalTime.of(10, 40), "4КІ1", 0, "Надійність, діагностика та експлуатація комп'ютерних систем і мереж",
+                "Кренцін М.Д.", "214", ChangeKind.REPLACE_DISCIPLINE, "Сучасні технології проєктування", "MUTUAL");
     }
 
     private static AbsenceReported absenceReported(List<Integer> pairs) {

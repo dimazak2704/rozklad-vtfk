@@ -112,7 +112,20 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   repeat keeps the reminder (CONFIRM) or the notice (NOTIFY) as before
   (`SubstitutionFlowIT.roomEditOfAPendingRequestIsAnUpdateNotAReminder`,
   `roomEditOfANoticeIsAnUpdateWithTheNoticeButtons`, `newRoomAfterTheDeadlineReminderIsStillSent`). A request
-  or notice with the old room that is still queued when the update arrives is sent as it is. Deadline passed without an answer → one reminder to the teacher and one notice to admin
+  or notice with the old room that is still queued when the update arrives is sent as it is.
+  **Request already confirmed:** a new room of a CONFIRM request that is CONFIRMED (by the teacher or by the
+  dispatcher for him) comes as `substitution.details-changed`. The teacher gets an info-only «✏️ Заміну змінено»:
+  the what-changed line, the usual details and «Заміна вже підтверджена, відповідати не потрібно.», no buttons,
+  no deadline (purpose `SUBSTITUTION_STATUS`, per event, so neither the `reminder:` key nor the «вже не чекає
+  відповіді» check can swallow it). The answer and the status stay; the stored request takes the new details,
+  so the later final-state edit («Заміну внесено до розпорядження», «скасовано») of the old message shows the new
+  room. Nothing is sent when the details read the same, when the teacher never got a message of the change, or
+  when the lesson is over. A `confirmation-requested` (CONFIRM) for a request held as CONFIRMED or APPLIED is a
+  late event (core never asks again after CONFIRMED): the same details send nothing, other details give the same
+  info-only update; it never reopens the request (`SubstitutionFlowIT.roomEditOfAConfirmedRequestIsAnInfoOnlyUpdate`,
+  `lateRequestForAConfirmedRequestNeverAsksAgain`). A `details-changed` that finds the request still pending here
+  (its CONFIRMED event is on the way) only takes the details; that event then edits the messages with them.
+  Deadline passed without an answer → one reminder to the teacher and one notice to admin
   chats (not for requests that never reached a teacher without Telegram, not for past lessons). core's
   `ConfirmationReminders` re-sends the request with the same, already passed deadline, and the every-minute job
   reminds too: such a re-send keeps `reminded_at` and both use one dedup key per deadline round
@@ -231,6 +244,7 @@ this module.
 |---|---|
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder; «✏️ Заміну змінено» when the details he sees changed); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
+| `substitution.details-changed` | a CONFIRM request already confirmed got a new room: info-only «✏️ Заміну змінено» to the teacher's chat, no buttons, no deadline; the stored request takes the new details, status and answer stay (§3) |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
 | `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
@@ -344,6 +358,7 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 | `GET …/{id}.png` | cropped to the content, not an A4 page (08.11.2026) | Readable on a phone; PDF/DOCX stay A4. |
 | core `GET /api/public/meta` | reads the additive `nextStudyDay` (08.11.2026); an older core without it only loses the «Завтра — …» line | Parity of the next study day comes from core. |
 | `PATCH /api/notify/bindings/{id}` (round 7) | `{digestEnabled}` → 200 `BindingDto`; 422 `digest-not-supported` for TEACHER/ADMIN_CHAT | The dispatcher switches the morning schedule of a chat without Telegram rights. |
+| `substitution.details-changed` (12.11.2026) | consumed: info-only update of a confirmed CONFIRM request; a `confirmation-requested` (CONFIRM) for a request held as CONFIRMED/APPLIED never reopens it (see CHANGELOG «Info-only update of a confirmed request») | The teacher learns the new room without being asked to confirm twice. |
 | Group chats (round 7) | new GROUP_CHAT bindings start with `digestEnabled = false`; `/rozklad_on`, `/rozklad_off` (chat admins), `/status`; the digest includes GROUP_CHAT | Owner: changes after publication always, the morning schedule only if the group wants it. |
 
 ## 11. How to run and test
@@ -405,5 +420,7 @@ image and rasterized by `PdfPngRenderer`; the PNG matches the layout of `seed/or
   60 хв»; the live bot showed «2 змін», so that profile was renamed in the running database. The bot now agrees
   «N зміна/зміни/змін» when it displays the name; the stored name itself is fixed in the web panel (calendar →
   bell profiles), not by notification.
+* The info-only «✏️ Заміну змінено» of a confirmed request is not remembered for later edits: a cancellation edits
+  the original request to «скасовано», the info message keeps its text.
 * «One warning per teacher and date» means a second change of the same teacher on the same date, created after
   the warning, is not announced in Telegram again; the dispatcher sees it as pending in the web panel.

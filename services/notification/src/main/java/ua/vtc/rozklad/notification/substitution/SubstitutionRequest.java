@@ -20,6 +20,7 @@ import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 
 /**
  * A substitution the bot sent to a teacher (keyed by core's change id): a request to confirm (CONFIRM,
@@ -210,6 +211,34 @@ public class SubstitutionRequest implements Persistable<UUID> {
         this.updatedAt = now;
     }
 
+    /**
+     * The details changed while the request keeps its status, mode, deadline and answer (an info-only update of a
+     * request already confirmed).
+     */
+    void takeDetails(Details details, Instant now) {
+        this.lessonDate = details.lessonDate();
+        this.pair = details.pair();
+        this.startsAt = details.startsAt();
+        this.endsAt = details.endsAt();
+        this.groupCode = details.groupCode();
+        this.subgroup = details.subgroup();
+        this.disciplineName = details.disciplineName();
+        this.changeKind = details.changeKind();
+        this.originalDisciplineName = details.originalDisciplineName();
+        this.originalTeacherName = details.originalTeacherName();
+        this.reasonCode = details.reasonCode();
+        this.roomName = details.roomName();
+        this.updatedAt = now;
+    }
+
+    /**
+     * CONFIRM: the request was confirmed (by the teacher or by the dispatcher for him) and may be in a published
+     * order. core never asks again from here, so nothing about it is a question any more.
+     */
+    public boolean isConfirmedRequest() {
+        return !isNotice() && (status == ChangeStatus.CONFIRMED || status == ChangeStatus.APPLIED);
+    }
+
     /** NOTIFY: the change is in force (confirmed or in a published order), whatever the teacher answered. */
     boolean isNoticeInForce() {
         return isNotice() && (status == ChangeStatus.CONFIRMED || status == ChangeStatus.APPLIED);
@@ -337,5 +366,17 @@ public class SubstitutionRequest implements Persistable<UUID> {
     public record Details(LocalDate lessonDate, int pair, LocalTime startsAt, LocalTime endsAt, String groupCode,
                           int subgroup, String disciplineName, ChangeKind changeKind, String originalDisciplineName,
                           String originalTeacherName, String reasonCode, String roomName) {
+
+        public static Details of(SubstitutionConfirmationRequested event) {
+            return new Details(event.date(), event.pair(), event.startsAt(), event.endsAt(), event.groupCode(),
+                    event.subgroup(), event.disciplineName(), event.kind(), event.originalDisciplineName(),
+                    event.originalTeacherName(), event.reasonCode(), event.roomName());
+        }
+
+        public static Details of(SubstitutionDetailsChanged event) {
+            return new Details(event.date(), event.pair(), event.startsAt(), event.endsAt(), event.groupCode(),
+                    event.subgroup(), event.disciplineName(), event.kind(), event.originalDisciplineName(),
+                    event.originalTeacherName(), event.reasonCode(), event.roomName());
+        }
     }
 }

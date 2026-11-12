@@ -133,7 +133,7 @@ for tests. Import never writes core data directly.
 Telegram bot (long polling by default, webhook optional), chat bindings (group chats, teacher private
 chats, admin chat), outbound queue with per-chat and global rate limiting, retries with backoff,
 delivery log; renders orders to DOCX (POI, college layout) → PDF (LibreOffice) → PNG (PDFBox).
-Consumes `order.published`, `substitution.confirmation-requested`, `absence.reported`,
+Consumes `order.published`, `substitution.confirmation-requested`, `substitution.details-changed`, `absence.reported`,
 `schedule.changed`, `generation.completed`. Calls core internal REST for confirmations and absences,
 core public REST for schedule replies, importer for free-text absence parsing.
 

@@ -22,6 +22,7 @@ import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
+import ua.vtc.rozklad.contracts.events.SubstitutionDetailsChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
@@ -572,6 +573,76 @@ class SubstitutionFlowIT extends IntegrationTest {
                 .contains("🚪 Аудиторія 214").endsWith("👍 <b>Добре, заміну прийнято.</b> Дякуємо!"));
     }
 
+    /**
+     * The dispatcher moved a request the teacher already confirmed (substitution.details-changed): one
+     * «✏️ Заміну змінено» with the new room, without buttons, a deadline or a request to confirm again; his answer
+     * stays. A repeat of the same details sends nothing, and the later final state shows the new room.
+     */
+    @Test
+    void roomEditOfAConfirmedRequestIsAnInfoOnlyUpdate() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        Sent request = telegram.lastSentTo(TEACHER);
+        press(TEACHER, request.messageId(), request.callbackOf("✅ Підтверджую").orElseThrow());
+        worker.drain();
+
+        handlers.handle(detailsChanged("214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        Sent update = telegram.lastSentTo(TEACHER);
+        assertThat(update.text()).startsWith("✏️ <b>Заміну змінено</b>\nНова аудиторія: 214 (була 6)\n\n📅")
+                .contains("🚪 Аудиторія 214")
+                .doesNotContain("Аудиторія 6", "дайте відповідь до", "Нагадування", "Прохання")
+                .endsWith("Заміна вже підтверджена, відповідати не потрібно.");
+        assertThat(update.buttons()).isEmpty();
+        assertThat(jdbc.queryForList("select purpose from outbound_message where chat_id = ? and kind = 'TEXT' "
+                + "order by created_at", String.class, TEACHER))
+                .containsExactly("SUBSTITUTION_REQUEST", "SUBSTITUTION_STATUS");
+        assertThat(substitutions.find(CHANGE)).get().satisfies(found -> {
+            assertThat(found.getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+            assertThat(found.getRoomName()).isEqualTo("214");
+        });
+        assertThat(core.replies()).hasSize(1);
+
+        handlers.handle(detailsChanged("214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+
+        handlers.handle(statusChanged(ChangeStatus.APPLIED));
+        worker.drain();
+        assertThat(telegram.lastEditIn(TEACHER).text()).contains("🚪 Аудиторія 214")
+                .endsWith("📄 <b>Заміну внесено до розпорядження.</b> Дякуємо!");
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
+    /**
+     * A confirmation request for a request already confirmed can only be a late one (core never asks again after
+     * CONFIRMED): a plain repeat sends nothing and keeps the request confirmed; one with a new room is the
+     * info-only update, never a new request.
+     */
+    @Test
+    void lateRequestForAConfirmedRequestNeverAsksAgain() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(1);
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus)
+                .isEqualTo(ChangeStatus.CONFIRMED);
+
+        handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "214"));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("✏️ <b>Заміну змінено</b>")
+                .endsWith("Заміна вже підтверджена, відповідати не потрібно.");
+        assertThat(telegram.lastSentTo(TEACHER).buttons()).isEmpty();
+        assertThat(substitutions.find(CHANGE)).get().extracting(SubstitutionRequest::getStatus)
+                .isEqualTo(ChangeStatus.CONFIRMED);
+    }
+
     /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
     @Test
     void eventHandlersDoNotCallCoreInsideTheTransaction() {
@@ -912,6 +983,14 @@ class SubstitutionFlowIT extends IntegrationTest {
                 CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
                 "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", room,
                 notice ? null : Instant.parse("2026-10-19T07:00:00Z"), mode, null, null, null);
+    }
+
+    /** core: {@link #CHANGE}, already confirmed, moved to another room (information only). */
+    private static SubstitutionDetailsChanged detailsChanged(String room) {
+        return new SubstitutionDetailsChanged(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
+                CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
+                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", room, null,
+                null, null);
     }
 
     private static SubstitutionConfirmationRequested requested(UUID teacherId) {
