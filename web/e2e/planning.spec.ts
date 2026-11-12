@@ -41,7 +41,7 @@ test.describe('редактор базового розкладу', () => {
     await expect(preview).toContainText('Вільно — можна ставити');
     await page.mouse.up();
 
-    await expect(page.getByText(/Пару перенесено: СТП · 4КІ3: вт 4 → ср 4/)).toBeVisible();
+    await expect(page.getByText(/Перенесено пару СТП · 4КІ3: вт 4 → ср 4/)).toBeVisible();
     await expect(cell(grid, 3, 4).getByRole('button', { name: /Сучасні технології проєктування/ })).toBeVisible();
     await expect(cell(grid, 2, 4).getByRole('button', { name: /Сучасні технології проєктування/ })).toHaveCount(0);
 

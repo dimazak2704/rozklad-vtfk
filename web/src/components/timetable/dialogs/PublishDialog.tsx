@@ -8,6 +8,7 @@ import { DateInput } from '@/components/calendar/DateInput';
 import { Button, buttonClass, Dialog, DialogClose, DialogContent, Field, notify } from '@/components/ui';
 import { compareIsoDates, formatLongDate, formatNumericDate, isIsoDate } from '@/lib/date';
 import { defaultEffectiveFrom } from '../model/versions';
+import { trackFinal } from '@/lib/undo/actions';
 
 interface PublishDialogProps {
   version: TimetableVersionDto | null;
@@ -73,6 +74,7 @@ function PublishForm({
     setFieldError(null);
     try {
       const result = await publish.mutateAsync({ versionId: version.id, effectiveFrom });
+      trackFinal(`Опубліковано версію розкладу «${version.name}»`, 'Опубліковану версію не скасувати: опублікуйте іншу');
       const kept = result.keptLessons > 0 ? ` Лишилось занять із чинних замін: ${result.keptLessons.toLocaleString('uk-UA')}.` : '';
       const description = `Діє з ${formatLongDate(effectiveFrom)}. Перебудовано занять на дати: ${result.materializedLessons.toLocaleString('uk-UA')}.${kept}`;
       const pending = result.pendingDecisions ?? [];

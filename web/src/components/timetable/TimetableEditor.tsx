@@ -166,9 +166,7 @@ export function TimetableEditor({
   };
 
   useHotkeys([
-    { keys: 'mod+z', handler: () => void editing.undo(), description: 'Скасувати останню правку', group: 'Базовий розклад', enabled: editable },
-    { keys: 'mod+shift+z', handler: () => void editing.redo(), description: 'Повторити скасовану правку', group: 'Базовий розклад', enabled: editable },
-    { keys: 'mod+y', handler: () => void editing.redo(), enabled: editable },
+    // Ctrl+Z / Ctrl+Shift+Z — спільні для панелі (JournalHost): журнал знає, що це правки саме цієї версії
     { keys: 'n', handler: () => openAdd(), description: 'Додати пару', group: 'Базовий розклад', enabled: editable },
     {
       keys: 'e',

@@ -1,24 +1,18 @@
 /**
- * Правки чернетки з історією: перенесення, додавання, зміна, видалення — з оптимістичним показом,
- * тостами (із «Скасувати») і стеком Ctrl+Z / Ctrl+Shift+Z. Помилки сервера не ховаємо: кеш
- * повертається як був, а тост пояснює причину словами сервера.
+ * Правки чернетки: перенесення, додавання, зміна, видалення — з оптимістичним показом і записом у
+ * спільний журнал дій (тост «Скасувати», Ctrl+Z / Ctrl+Shift+Z, панель «Журнал дій»). Журнал
+ * розділяє версії розкладу: Ctrl+Z у версії скасовує лише її правки. Помилки сервера не ховаємо:
+ * кеш повертається як був, а тост пояснює причину словами сервера.
  */
-import { useRef, useState } from 'react';
-import { createStore, useStore } from 'zustand';
+import { useState } from 'react';
 import { isApiError } from '@/api/errors';
+import { qk } from '@/api/queryKeys';
 import { useCreateLesson, useDeleteLesson, useMoveLesson, useUpdateLesson, type TimetableConflict } from '@/api/timetable';
 import type { MoveLessonRequest, PublicRoomDto, RoomRef, TemplateLessonDto, TemplateLessonRequest, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
-import {
-  EMPTY_HISTORY,
-  historyFor,
-  historyReducer,
-  slotOf,
-  toLessonRequest,
-  type HistoryAction,
-  type HistoryEntry,
-  type HistoryState,
-} from './model/history';
+import { lowerFirst, redoLatest, track, undoLatest, useJournalScope } from '@/lib/undo/actions';
+import { latestRedoable, latestUndoable, useJournal } from '@/lib/undo/journal';
+import { LessonLedger, slotOf, toLessonRequest } from './model/history';
 import { lessonShort, slotShort } from './model/text';
 
 /** Перший конфлікт сервера — найкращий опис, чому дію не виконано. */
@@ -39,27 +33,45 @@ function warningsDescription(conflicts: readonly TimetableConflict[]): string | 
 
 const toRoomRef = (room: PublicRoomDto | RoomRef): RoomRef => ({ id: room.id, name: room.name, type: room.type });
 
+/** Сторінка журналу для версії розкладу: Ctrl+Z діє лише на правки цієї версії. */
+export const timetableScope = (versionId: Uuid) => `timetable:${versionId}`;
+
 export function useLessonEditing(versionId: Uuid) {
   const move = useMoveLesson(versionId);
   const create = useCreateLesson(versionId);
   const update = useUpdateLesson(versionId);
   const remove = useDeleteLesson(versionId);
-  // історію читаємо зі сховища в момент виклику: «Скасувати» в тості спрацює і після нових правок
-  const [store] = useState(() => createStore<HistoryState>()(() => EMPTY_HISTORY));
-  const history = historyFor(
-    useStore(store, (state) => state),
-    versionId,
-  );
-  const dispatch = (action: HistoryAction) => store.setState((state) => historyReducer(state, action));
-  const current = () => historyFor(store.getState(), versionId);
-  const busy = useRef(false);
+  // облік id і версій для кожної версії розкладу (живе, поки живуть записи журналу)
+  const [ledgers] = useState(() => new Map<Uuid, LessonLedger>());
+  let ledger = ledgers.get(versionId);
+  if (!ledger) {
+    ledger = new LessonLedger();
+    ledgers.set(versionId, ledger);
+  }
+  const book = ledger;
+  const scope = timetableScope(versionId);
+  useJournalScope(scope);
+  const lastUndo = useJournal((state) => latestUndoable(state.entries, scope));
+  const lastRedo = useJournal((state) => latestRedoable(state, scope));
+  const invalidate = [qk.admin.timetable.lessons(versionId, {})];
 
-  const record = (entry: HistoryEntry) => dispatch({ type: 'push', versionId, entry });
+  /** Тіло з останньою відомою версією заняття — не з кешу (там могла бути вже чужа правка). */
+  const versioned = <T extends { version?: number }>(lessonId: Uuid, body: T): T => ({ ...body, version: book.version(lessonId) });
 
-  // ── дії, що потрапляють в історію
+  const recreate = async (lesson: TemplateLessonDto) => {
+    const result = await create.mutateAsync({ ...toLessonRequest(lesson), version: undefined });
+    book.remap(lesson.id, result.lesson);
+  };
+  const removeCurrent = async (lessonId: Uuid) => {
+    await remove.mutateAsync(book.resolve(lessonId));
+  };
+
+  // ── дії, що потрапляють у журнал
 
   async function moveLesson(lesson: TemplateLessonDto, target: MoveLessonRequest, room: PublicRoomDto | null): Promise<boolean> {
     const toRoom = room ? toRoomRef(room) : (lesson.room ?? null);
+    const fromRoom = lesson.room ?? null;
+    const from = slotOf(lesson);
     try {
       // версія уроку, який диспетчер перетягнув: якщо його щойно змінив інший, сервер відповість 409
       const result = await move.mutateAsync({
@@ -67,9 +79,19 @@ export function useLessonEditing(versionId: Uuid) {
         target: { ...target, version: lesson.version },
         room: room ? toRoomRef(room) : undefined,
       });
-      const label = `${lessonShort(lesson)}: ${slotShort(lesson)} → ${slotShort(target)}`;
-      record({ kind: 'move', lessonId: lesson.id, from: slotOf(lesson), to: target, fromRoom: lesson.room ?? null, toRoom, label });
-      notify.undo(`Пару перенесено: ${label}`, { description: warningsDescription(result.conflicts), onUndo: () => void undo() });
+      book.note(result.lesson);
+      const go = async (slot: MoveLessonRequest, slotRoom: RoomRef | null) => {
+        const id = book.resolve(lesson.id);
+        const moved = await move.mutateAsync({ lessonId: id, target: versioned(id, slot), room: slotRoom ?? undefined });
+        book.note(moved.lesson);
+      };
+      track({
+        label: `Перенесено пару ${lessonShort(lesson)}: ${slotShort(lesson)} → ${slotShort(target)}`,
+        description: warningsDescription(result.conflicts),
+        invalidate,
+        undo: () => go(from, fromRoom),
+        redo: () => go(target, toRoom),
+      });
       return true;
     } catch (error) {
       notify.error(error, 'Пару не перенесено', { description: conflictDescription(error) ?? (isApiError(error) ? error.message : undefined) });
@@ -80,12 +102,16 @@ export function useLessonEditing(versionId: Uuid) {
   async function createLesson(body: TemplateLessonRequest): Promise<TemplateLessonDto | null> {
     try {
       const result = await create.mutateAsync(body);
-      record({ kind: 'create', lesson: result.lesson, label: `додано ${lessonShort(result.lesson)}` });
-      notify.undo(`Пару додано: ${lessonShort(result.lesson)}, ${slotShort(result.lesson)}`, {
+      const created = result.lesson;
+      book.note(created);
+      track({
+        label: `Додано пару ${lessonShort(created)}, ${slotShort(created)}`,
         description: warningsDescription(result.conflicts),
-        onUndo: () => void undo(),
+        invalidate,
+        undo: () => removeCurrent(created.id),
+        redo: () => recreate(created),
       });
-      return result.lesson;
+      return created;
     } catch (error) {
       notify.error(error, 'Пару не додано');
       throw error;
@@ -96,12 +122,21 @@ export function useLessonEditing(versionId: Uuid) {
     try {
       // версія уроку, з якого відкрили форму: чужа правка за цей час не перезапишеться мовчки
       const result = await update.mutateAsync({ lessonId: before.id, body: { ...body, version: before.version } });
-      record({ kind: 'update', before, after: result.lesson, label: `змінено ${lessonShort(result.lesson)}` });
-      notify.undo(`Пару змінено: ${lessonShort(result.lesson)}, ${slotShort(result.lesson)}`, {
+      const after = result.lesson;
+      book.note(after);
+      const put = async (lesson: TemplateLessonDto) => {
+        const id = book.resolve(before.id);
+        const saved = await update.mutateAsync({ lessonId: id, body: versioned(id, toLessonRequest(lesson)) });
+        book.note(saved.lesson);
+      };
+      track({
+        label: `Змінено пару ${lessonShort(after)}, ${slotShort(after)}`,
         description: warningsDescription(result.conflicts),
-        onUndo: () => void undo(),
+        invalidate,
+        undo: () => put(before),
+        redo: () => put(after),
       });
-      return result.lesson;
+      return after;
     } catch (error) {
       notify.error(error, 'Зміни не збережено');
       throw error;
@@ -111,8 +146,12 @@ export function useLessonEditing(versionId: Uuid) {
   async function deleteLesson(lesson: TemplateLessonDto): Promise<boolean> {
     try {
       await remove.mutateAsync(lesson.id);
-      record({ kind: 'delete', lesson, label: `видалено ${lessonShort(lesson)}` });
-      notify.undo(`Пару видалено: ${lessonShort(lesson)}, ${slotShort(lesson)}`, { onUndo: () => void undo() });
+      track({
+        label: `Видалено пару ${lessonShort(lesson)}, ${slotShort(lesson)}`,
+        invalidate,
+        undo: () => recreate(lesson),
+        redo: () => removeCurrent(lesson.id),
+      });
       return true;
     } catch (error) {
       notify.error(error, 'Пару не видалено');
@@ -128,83 +167,18 @@ export function useLessonEditing(versionId: Uuid) {
     });
   }
 
-  // ── скасування й повтор
-
-  /** Виконує зворотну (або повторну) дію через API; відтворене заняття отримує новий id — оновлюємо історію. */
-  async function replay(entry: HistoryEntry, direction: 'undo' | 'redo'): Promise<void> {
-    const back = direction === 'undo';
-    switch (entry.kind) {
-      case 'move': {
-        const room = back ? entry.fromRoom : entry.toRoom;
-        await move.mutateAsync({ lessonId: entry.lessonId, target: back ? entry.from : entry.to, room: room ?? undefined });
-        return;
-      }
-      case 'update':
-        // збережена в історії версія вже не поточна: її бере мутація з кешу
-        await update.mutateAsync({
-          lessonId: entry.before.id,
-          body: { ...toLessonRequest(back ? entry.before : entry.after), version: undefined },
-        });
-        return;
-      case 'create':
-      case 'delete': {
-        const recreate = (entry.kind === 'delete') === back;
-        if (!recreate) {
-          await remove.mutateAsync(entry.lesson.id);
-          return;
-        }
-        const result = await create.mutateAsync(toLessonRequest(entry.lesson));
-        dispatch({ type: 'remap', from: entry.lesson.id, to: result.lesson });
-        return;
-      }
-    }
-  }
-
-  async function undo(): Promise<void> {
-    const entry = current().undo.at(-1);
-    if (!entry || busy.current) return;
-    busy.current = true;
-    try {
-      await replay(entry, 'undo');
-      dispatch({ type: 'undone' });
-      notify.info(`Скасовано: ${entry.label}`);
-    } catch (error) {
-      dispatch({ type: 'discard', from: 'undo' });
-      notify.error(error, 'Не вдалося скасувати', { description: conflictDescription(error) ?? entry.label });
-    } finally {
-      busy.current = false;
-    }
-  }
-
-  async function redo(): Promise<void> {
-    const entry = current().redo.at(-1);
-    if (!entry || busy.current) return;
-    busy.current = true;
-    try {
-      await replay(entry, 'redo');
-      dispatch({ type: 'redone' });
-      notify.info(`Повторено: ${entry.label}`);
-    } catch (error) {
-      dispatch({ type: 'discard', from: 'redo' });
-      notify.error(error, 'Не вдалося повторити', { description: conflictDescription(error) ?? entry.label });
-    } finally {
-      busy.current = false;
-    }
-  }
-
   return {
     moveLesson,
     createLesson,
     updateLesson,
     deleteLesson,
     reportRejected,
-    undo,
-    redo,
-    canUndo: history.undo.length > 0,
-    canRedo: history.redo.length > 0,
-    undoLabel: history.undo.at(-1)?.label ?? null,
-    redoLabel: history.redo.at(-1)?.label ?? null,
+    undo: () => undoLatest(scope),
+    redo: () => redoLatest(scope),
+    canUndo: lastUndo !== undefined,
+    canRedo: lastRedo !== undefined,
+    undoLabel: lastUndo ? lowerFirst(lastUndo.label) : null,
+    redoLabel: lastRedo ? lowerFirst(lastRedo.label) : null,
     pending: move.isPending || create.isPending || update.isPending || remove.isPending,
   };
 }
-

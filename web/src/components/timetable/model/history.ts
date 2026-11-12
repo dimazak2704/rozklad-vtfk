@@ -1,92 +1,44 @@
 /**
- * Історія правок чернетки для Ctrl+Z / Ctrl+Shift+Z. Кожен запис знає, як себе скасувати й повторити
- * через API; стан — чистий редʼюсер (легко тестувати), виконання — у хуку useLessonHistory.
+ * Правки чернетки живуть у спільному журналі дій (`@/lib/undo`): кожна знає, як себе скасувати й
+ * повторити через API. Тут — облік, який ці записи ділять між собою:
+ * - відновлене видалене заняття отримує новий id — старі записи (перенесення, правка) мають
+ *   діяти вже на нього;
+ * - кожна відповідь сервера дає нову версію заняття — скасування надсилає саме її, а не версію з кешу,
+ *   тож чужа правка між вашою дією і скасуванням не перезапишеться мовчки (сервер відповість 409).
  */
-import type { MoveLessonRequest, RoomRef, TemplateLessonDto, TemplateLessonRequest, Uuid } from '@/api/types';
+import type { MoveLessonRequest, TemplateLessonDto, TemplateLessonRequest, Uuid } from '@/api/types';
 
-export type HistoryEntry =
-  | {
-      kind: 'move';
-      lessonId: Uuid;
-      from: MoveLessonRequest;
-      to: MoveLessonRequest;
-      /** Аудиторії до й після — щоб скасування одразу показало стару аудиторію. */
-      fromRoom: RoomRef | null;
-      toRoom: RoomRef | null;
-      label: string;
+export class LessonLedger {
+  private readonly aliases = new Map<Uuid, Uuid>();
+  private readonly versions = new Map<Uuid, number>();
+
+  /** Поточний id заняття, яке колись мало `id` (після відновлень — найновіший). */
+  resolve(id: Uuid): Uuid {
+    let current = id;
+    const seen = new Set<Uuid>();
+    while (this.aliases.has(current) && !seen.has(current)) {
+      seen.add(current);
+      current = this.aliases.get(current) ?? current;
     }
-  | { kind: 'create'; lesson: TemplateLessonDto; label: string }
-  | { kind: 'delete'; lesson: TemplateLessonDto; label: string }
-  | { kind: 'update'; before: TemplateLessonDto; after: TemplateLessonDto; label: string };
-
-export interface HistoryState {
-  versionId: Uuid | null;
-  undo: HistoryEntry[];
-  redo: HistoryEntry[];
-}
-
-export type HistoryAction =
-  /** Інша версія — інша історія. */
-  | { type: 'reset'; versionId: Uuid | null }
-  /** Нова правка: стає останньою, гілка «повторити» зникає. Правка іншої версії починає нову історію. */
-  | { type: 'push'; versionId: Uuid; entry: HistoryEntry }
-  /** Скасування вдалося: запис переходить у «повторити». */
-  | { type: 'undone' }
-  /** Повтор вдався: запис повертається в «скасувати». */
-  | { type: 'redone' }
-  /** Скасування чи повтор не вдалися (слот уже зайнятий): запис прибираємо, щоб не застрягти. */
-  | { type: 'discard'; from: 'undo' | 'redo' }
-  /** Видалене заняття відновлено з новим id — оновлюємо посилання в усіх записах. */
-  | { type: 'remap'; from: Uuid; to: TemplateLessonDto };
-
-export const HISTORY_LIMIT = 50;
-
-export const EMPTY_HISTORY: HistoryState = { versionId: null, undo: [], redo: [] };
-
-function remapEntry(entry: HistoryEntry, from: Uuid, to: TemplateLessonDto): HistoryEntry {
-  switch (entry.kind) {
-    case 'move':
-      return entry.lessonId === from ? { ...entry, lessonId: to.id } : entry;
-    case 'create':
-    case 'delete':
-      return entry.lesson.id === from ? { ...entry, lesson: { ...entry.lesson, id: to.id } } : entry;
-    case 'update':
-      return entry.before.id === from
-        ? { ...entry, before: { ...entry.before, id: to.id }, after: { ...entry.after, id: to.id } }
-        : entry;
+    return current;
   }
-}
 
-export function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
-  switch (action.type) {
-    case 'reset':
-      return state.versionId === action.versionId ? state : { versionId: action.versionId, undo: [], redo: [] };
-    case 'push': {
-      const undo = state.versionId === action.versionId ? state.undo : [];
-      return { versionId: action.versionId, undo: [...undo, action.entry].slice(-HISTORY_LIMIT), redo: [] };
-    }
-    case 'undone': {
-      const entry = state.undo.at(-1);
-      return entry ? { ...state, undo: state.undo.slice(0, -1), redo: [...state.redo, entry] } : state;
-    }
-    case 'redone': {
-      const entry = state.redo.at(-1);
-      return entry ? { ...state, redo: state.redo.slice(0, -1), undo: [...state.undo, entry] } : state;
-    }
-    case 'discard':
-      return action.from === 'undo' ? { ...state, undo: state.undo.slice(0, -1) } : { ...state, redo: state.redo.slice(0, -1) };
-    case 'remap':
-      return {
-        ...state,
-        undo: state.undo.map((entry) => remapEntry(entry, action.from, action.to)),
-        redo: state.redo.map((entry) => remapEntry(entry, action.from, action.to)),
-      };
+  /** Заняття `from` відновлено як `to`. */
+  remap(from: Uuid, to: Pick<TemplateLessonDto, 'id' | 'version'>): void {
+    const resolved = this.resolve(from);
+    if (resolved !== to.id) this.aliases.set(resolved, to.id);
+    this.note(to);
   }
-}
 
-/** Історія саме цієї версії (історія іншої версії для неї порожня). */
-export function historyFor(state: HistoryState, versionId: Uuid | null): HistoryState {
-  return state.versionId === versionId ? state : { versionId, undo: [], redo: [] };
+  /** Запамʼятати версію з відповіді сервера. */
+  note(lesson: Pick<TemplateLessonDto, 'id' | 'version'>): void {
+    if (typeof lesson.version === 'number') this.versions.set(lesson.id, lesson.version);
+  }
+
+  /** Остання відома версія заняття (за будь-яким його колишнім id). */
+  version(id: Uuid): number | undefined {
+    return this.versions.get(this.resolve(id));
+  }
 }
 
 /** Слот заняття як тіло переміщення (з аудиторією, щоб скасування повернуло й її). */

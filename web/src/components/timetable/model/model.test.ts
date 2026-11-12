@@ -12,7 +12,7 @@ import {
   targetParities,
   type BoardEntity,
 } from './grid';
-import { EMPTY_HISTORY, historyFor, historyReducer, HISTORY_LIMIT, slotOf, type HistoryEntry } from './history';
+import { LessonLedger, slotOf } from './history';
 import { SlotIndex } from './occupancy';
 import { defaultEffectiveFrom, pickVersion } from './versions';
 
@@ -184,43 +184,32 @@ describe('попередня перевірка слота', () => {
   });
 });
 
-describe('історія правок', () => {
-  const move = (n: number): Extract<HistoryEntry, { kind: 'move' }> => ({
-    kind: 'move',
-    lessonId: `l${n}`,
-    from: { weekday: 1, pair: 1, parity: 'BOTH' },
-    to: { weekday: 1, pair: 2, parity: 'BOTH' },
-    fromRoom: null,
-    toRoom: null,
-    label: `#${n}`,
+describe('облік правок для журналу', () => {
+  it('відновлене заняття з новим id — старі записи діють на нове', () => {
+    const ledger = new LessonLedger();
+    ledger.remap('l1', { id: 'l1b', version: 0 });
+    ledger.remap('l1', { id: 'l1c', version: 0 });
+    expect(ledger.resolve('l1')).toBe('l1c');
+    expect(ledger.resolve('l1b')).toBe('l1c');
+    expect(ledger.resolve('other')).toBe('other');
   });
 
-  it('скасування переносить запис у «повторити», нова правка її очищає', () => {
-    let state = historyReducer(EMPTY_HISTORY, { type: 'push', versionId: 'v1', entry: move(1) });
-    state = historyReducer(state, { type: 'push', versionId: 'v1', entry: move(2) });
-    state = historyReducer(state, { type: 'undone' });
-    expect(state.undo.map((e) => e.label)).toEqual(['#1']);
-    expect(state.redo.map((e) => e.label)).toEqual(['#2']);
-    state = historyReducer(state, { type: 'push', versionId: 'v1', entry: move(3) });
-    expect(state.redo).toEqual([]);
+  it('версія — з останньої відповіді сервера, за будь-яким колишнім id', () => {
+    const ledger = new LessonLedger();
+    ledger.note({ id: 'l1', version: 3 });
+    expect(ledger.version('l1')).toBe(3);
+    ledger.note({ id: 'l1', version: 4 });
+    expect(ledger.version('l1')).toBe(4);
+    ledger.remap('l1', { id: 'l2', version: 0 });
+    expect(ledger.version('l1')).toBe(0);
+    expect(ledger.version('unknown')).toBeUndefined();
   });
 
-  it('історія тримає не більше 50 правок і належить одній версії', () => {
-    let state = EMPTY_HISTORY;
-    for (let i = 0; i < HISTORY_LIMIT + 5; i += 1) state = historyReducer(state, { type: 'push', versionId: 'v1', entry: move(i) });
-    expect(state.undo).toHaveLength(HISTORY_LIMIT);
-    expect(historyFor(state, 'v2').undo).toEqual([]);
-    state = historyReducer(state, { type: 'push', versionId: 'v2', entry: move(99) });
-    expect(state.undo.map((e) => e.label)).toEqual(['#99']);
-  });
-
-  it('відновлене заняття з новим id оновлює посилання в записах', () => {
-    const deleted = lesson();
-    let state = historyReducer(EMPTY_HISTORY, { type: 'push', versionId: 'v1', entry: { ...move(1), lessonId: deleted.id } });
-    state = historyReducer(state, { type: 'push', versionId: 'v1', entry: { kind: 'delete', lesson: deleted, label: 'del' } });
-    state = historyReducer(state, { type: 'remap', from: deleted.id, to: { ...deleted, id: 'new-id' } });
-    expect(state.undo[0]).toMatchObject({ lessonId: 'new-id' });
-    expect(state.undo[1]).toMatchObject({ lesson: { id: 'new-id' } });
+  it('кільце псевдонімів не зациклює пошук', () => {
+    const ledger = new LessonLedger();
+    ledger.remap('a', { id: 'b', version: 1 });
+    ledger.remap('b', { id: 'a', version: 2 });
+    expect(['a', 'b']).toContain(ledger.resolve('a'));
   });
 
   it('слот пари для скасування містить аудиторію', () => {
