@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { formatWeekdayDateAfterNa } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
+import { GroupHint } from '../GroupHint';
 import { MoreLink } from '../MoreLink';
 import { useStalled } from '../useStalled';
 import { isMyGroup } from '../changes/changes-filter';
@@ -67,12 +68,14 @@ export function TodayChanges({ className }: { className?: string }) {
             {own.map(({ group }, index) => (
               <span key={group.code}>
                 {index > 0 ? ', ' : null}
-                <Link
-                  to={`/g/${encodeURIComponent(group.code)}?date=${changes.data.date}&view=day`}
-                  className="rounded-tag font-[650] text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                >
-                  {group.code}
-                </Link>
+                <GroupHint code={group.code}>
+                  <Link
+                    to={`/g/${encodeURIComponent(group.code)}?date=${changes.data.date}&view=day`}
+                    className="rounded-tag font-[650] text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  >
+                    {group.code}
+                  </Link>
+                </GroupHint>
               </span>
             ))}
           </>

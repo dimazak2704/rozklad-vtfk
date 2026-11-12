@@ -43,4 +43,5 @@ export { Textarea } from './Textarea';
 export { notify } from './toast';
 export { toastClearanceRef } from './toastClearance';
 export { Toaster } from './Toaster';
-export { Tooltip, TooltipProvider } from './Tooltip';
+export { Tooltip, TooltipProvider, TruncatedText } from './Tooltip';
+export { HOVER_DELAY_MS, isTruncated } from './Tooltip.helpers';

@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import type { ChangeView, IsoDate, OrderRowType } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { roomLabel } from '@/lib/schedule';
+import { GroupHint } from '../GroupHint';
 import { reasonHint } from '../schedule/schedule-utils';
 import { changeGroupKey, isMyGroup, type ChangeGroup } from './changes-filter';
 
@@ -112,13 +113,15 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
             key={changeGroupKey(group)}
             className={cn('grid gap-x-6 gap-y-1 px-4 py-4 first:rounded-t-panel last:rounded-b-panel md:grid-cols-[7rem_minmax(0,1fr)] md:px-5', own && 'bg-selected')}
           >
-            <Link
-              to={`/g/${encodeURIComponent(group.code)}?date=${date}&view=day`}
-              aria-label={`${group.code}${own ? ', ваша група' : ''}: розклад на цей день`}
-              className="-ms-1 inline-flex h-11 w-fit items-center self-start rounded-control px-1 font-display text-title font-semibold text-primary figures underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:mt-1"
-            >
-              {group.code}
-            </Link>
+            <GroupHint code={group.code}>
+              <Link
+                to={`/g/${encodeURIComponent(group.code)}?date=${date}&view=day`}
+                aria-label={`${group.code}${own ? ', ваша група' : ''}: розклад на цей день`}
+                className="-ms-1 inline-flex h-11 w-fit items-center self-start rounded-control px-1 font-display text-title font-semibold text-primary figures underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:mt-1"
+              >
+                {group.code}
+              </Link>
+            </GroupHint>
             <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
               {items.map((item, index) => (
                 <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} commonReason={commonReason} />

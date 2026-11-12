@@ -1,6 +1,7 @@
 import { HoverCard as RadixHoverCard, Popover as RadixPopover } from 'radix-ui';
 import { useEffect, useRef, useState, type ComponentProps, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { HOVER_DELAY_MS } from './Tooltip.helpers';
 
 const CARD =
   'z-50 max-w-[min(22rem,calc(100vw-1rem))] rounded-popover border border-default bg-raised p-3.5 text-primary shadow-popover ' +
@@ -41,7 +42,7 @@ export interface HoverDetailsProps {
 }
 
 /**
- * Деталі, доступні всім: мишею — при наведенні (500 мс, а одразу після іншої картки — без затримки),
+ * Деталі, доступні всім: мишею — при наведенні (300 мс, а одразу після іншої картки — без затримки),
  * з клавіатури й на дотик — по Enter/тапу. Так влаштована картка заняття: повна назва, викладач,
  * аудиторія, що змінилося і чому.
  */
@@ -50,7 +51,7 @@ export function HoverDetails({
   content,
   side = 'bottom',
   align = 'start',
-  openDelay = 500,
+  openDelay = HOVER_DELAY_MS,
   closeDelay = 150,
   label,
   contentClassName,
