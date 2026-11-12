@@ -102,23 +102,21 @@ export default function GenerationPage() {
   ]);
 
   const formReady = !(meta.isPending || versions.isPending || catalog.isPending);
-  // головна дія — у заголовку, а не під довгою формою: її видно одразу на будь-якому екрані
-  const header = (
-    <PageHeader
-      title="Генератор розкладу"
-      primaryAction={
-        <Button
-          variant="primary"
-          onClick={() => void launch()}
-          disabled={busy || !formReady || !semesterId}
-          loading={start.isPending}
-          iconStart={<Play aria-hidden="true" className="size-4" />}
-        >
-          Запустити генерацію
-        </Button>
-      }
-    />
+  // головна дія — наприкінці панелі «Параметри», де людина щойно все налаштувала (§11.4);
+  // з будь-якого місця її запускає ще й палітра команд
+  const launchButton = (
+    <Button
+      variant="primary"
+      onClick={() => void launch()}
+      disabled={busy || !formReady || !semesterId}
+      loading={start.isPending}
+      loadingText="Запускаємо…"
+      iconStart={<Play aria-hidden="true" className="size-4" />}
+    >
+      Запустити генерацію
+    </Button>
   );
+  const header = <PageHeader title="Генератор розкладу" />;
 
   const loadError = meta.error ?? versions.error ?? catalog.error;
   if (loadError) {
@@ -157,6 +155,7 @@ export default function GenerationPage() {
             versions={versions.data ?? []}
             busy={busy}
             submitted={submitted}
+            submit={launchButton}
           />
         )}
 

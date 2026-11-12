@@ -112,6 +112,23 @@ describe('Генератор розкладу', () => {
     expect(screen.getByText('Оберіть хоча б один курс')).toBeInTheDocument();
   });
 
+  it('запуск — наприкінці панелі «Параметри»; «типово» не повторюється, змінену вагу скидає її «скинути»', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
+    const panel = (await screen.findByRole('heading', { name: 'Параметри' }, LONG)).closest('section');
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getByRole('button', { name: 'Запустити генерацію' })).toBeInTheDocument();
+    expect(screen.queryByText(/типово/)).not.toBeInTheDocument();
+    const late = screen.getByRole('slider', { name: 'Пізні пари' });
+    const before = late.getAttribute('aria-valuenow');
+    late.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(late).not.toHaveAttribute('aria-valuenow', before);
+    await user.click(screen.getByRole('button', { name: /Скинути «Пізні пари»/ }));
+    expect(late).toHaveAttribute('aria-valuenow', before);
+    expect(screen.queryByRole('button', { name: /Скинути «/ })).not.toBeInTheDocument();
+  });
+
   it('запуск показує задачу в черзі, а потім хід розвʼязання', async () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerationPage />, { route: '/admin/generation' });

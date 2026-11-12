@@ -1,5 +1,5 @@
 import { RotateCcw } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { DEFAULT_WEIGHTS } from '@/api/generation';
 import type { PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
 import { Button, Chip, Combobox, Field, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
@@ -19,15 +19,17 @@ interface GenerationFormProps {
   versions: readonly TimetableVersionDto[];
   /** Задача вже йде — нову не запускаємо, форму блокуємо. */
   busy: boolean;
-  /** Після спроби запуску — показати помилки полів (кнопка запуску в заголовку сторінки). */
+  /** Після спроби запуску — показати помилки полів. */
   submitted: boolean;
+  /** Кнопка «Запустити генерацію» — наприкінці панелі, біля параметрів, до яких вона застосовується. */
+  submit?: ReactNode;
 }
 
 /**
  * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
  * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
  */
-export function GenerationForm({ form, onChange, groups, versions, busy, submitted }: GenerationFormProps) {
+export function GenerationForm({ form, onChange, groups, versions, busy, submitted, submit }: GenerationFormProps) {
   const errors = submitted ? validateForm(form) : {};
   const groupOptions = useMemo(
     () =>
@@ -35,7 +37,8 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
     [groups],
   );
   const groupsById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
-  const weightsChanged = WEIGHT_FIELDS.some(({ key }) => form.weights[key] !== DEFAULT_WEIGHTS[key]);
+  // одну змінену вагу скидає її власне «скинути»; загальна кнопка — коли змінено кілька
+  const weightsChanged = WEIGHT_FIELDS.filter(({ key }) => form.weights[key] !== DEFAULT_WEIGHTS[key]).length > 1;
   const scopeHint =
     form.scope === 'all'
       ? `Усі ${groups.length} груп.`
@@ -56,7 +59,7 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
               { value: 'courses', label: 'Окремі курси' },
               { value: 'groups', label: 'Окремі групи' },
             ]}
-            orientation="horizontal"
+            orientation="vertical"
           />
           {form.scope === 'courses' ? (
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Курси">
@@ -196,6 +199,10 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
           </Disclosure>
         </div>
       </fieldset>
+      {/* підвал панелі липне до низу екрана, поки панель видно: запуск поруч із параметрами й завжди на виду */}
+      {submit ? (
+        <div className="sticky bottom-0 z-10 -mx-5 mt-6 -mb-5 flex rounded-b-panel border-t border-separator bg-surface px-5 py-3">{submit}</div>
+      ) : null}
     </Panel>
   );
 }

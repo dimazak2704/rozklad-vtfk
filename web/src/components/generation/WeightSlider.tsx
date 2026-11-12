@@ -23,9 +23,25 @@ export function WeightSlider({ label, hint, value, max, defaultValue, onValueCha
         <span id={`${id}-label`} className="text-ui font-[550] text-primary">
           {label}
         </span>
-        <span className="text-caption text-muted figures">
+        {/* типове значення нічого не каже — підпис лише біля зміненого: «змінено · скинути» */}
+        <span className="flex items-baseline gap-1 text-caption text-muted figures">
           <span className="text-ui font-semibold text-primary">{value}</span>
-          {value === defaultValue ? ' · типово' : value === 0 ? ' · не враховувати' : null}
+          {value === 0 ? <span>· не враховувати</span> : null}
+          {value !== defaultValue ? (
+            <>
+              {value === 0 ? null : <span>· змінено</span>}
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={() => onValueChange(defaultValue)}
+                disabled={disabled}
+                aria-label={`Скинути «${label}» до типового ${defaultValue}`}
+                className="rounded-tag font-[650] text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:text-disabled pointer-coarse:min-h-11"
+              >
+                скинути
+              </button>
+            </>
+          ) : null}
         </span>
       </div>
       <Slider.Root
