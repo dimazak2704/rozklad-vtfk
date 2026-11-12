@@ -51,6 +51,31 @@ export function useSavedCopy(url: string | undefined): SavedCopy {
   return snapshot === undefined ? { fromCache: false } : { fromCache: true, savedAt: snapshot };
 }
 
+/**
+ * Те саме для кількох запитів сторінки (головна: день, заміни, стан дня): чи хоч один прийшов з кешу.
+ * Дата — найстарішої копії; якщо дата котроїсь невідома, то й загальна невідома.
+ */
+export function useAnySavedCopy(urls: readonly (string | undefined)[]): SavedCopy {
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    // примітив, а не обʼєкт: useSyncExternalStore порівнює знімки через Object.is
+    () => oldestCopy(urls),
+    () => undefined,
+  );
+  return snapshot === undefined ? { fromCache: false } : { fromCache: true, savedAt: snapshot };
+}
+
+function oldestCopy(urls: readonly (string | undefined)[]): number | null | undefined {
+  let oldest: number | null | undefined;
+  for (const url of urls) {
+    if (url === undefined || !copies.has(url)) continue;
+    const savedAt = copies.get(url) ?? null;
+    if (savedAt === null || oldest === null) oldest = null;
+    else oldest = oldest === undefined ? savedAt : Math.min(oldest, savedAt);
+  }
+  return oldest;
+}
+
 /** «сьогодні о 08:15», «вчора о 19:40», «10 листопада о 08:15». */
 export function savedCopyTimeLabel(savedAt: number, now: Date = new Date()): string {
   const instant = new Date(savedAt).toISOString();

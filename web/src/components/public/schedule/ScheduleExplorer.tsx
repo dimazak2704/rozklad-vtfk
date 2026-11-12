@@ -13,6 +13,7 @@ import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import type { Perspective } from '@/lib/schedule';
+import { SavedCopyNote } from '../SavedCopyNote';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
 import { ChangesNote, WEEK_REGION_ID } from './ChangesNote';
@@ -265,27 +266,9 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       ) : null}
 
       {showSavedNote ? (
-        <p
-          role="status"
-          className="flex items-start gap-2 rounded-control border border-default bg-sunken px-3 py-2 text-caption text-secondary"
-        >
-          <WifiOff aria-hidden="true" className="mt-px size-4 shrink-0 text-muted" />
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>
-              {online ? 'Сервер не відповів.' : 'Немає інтернету.'} Показано {savedWhat} — заміни могли змінитися.
-            </span>
-            {online ? (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={() => void query.refetch()}
-                iconStart={<RotateCcw aria-hidden="true" className="size-3.5" />}
-              >
-                Оновити
-              </Button>
-            ) : null}
-          </span>
-        </p>
+        <SavedCopyNote online={online} onRefresh={() => void query.refetch()}>
+          Показано {savedWhat} — заміни могли змінитися.
+        </SavedCopyNote>
       ) : null}
 
       {query.isError && schedule ? (

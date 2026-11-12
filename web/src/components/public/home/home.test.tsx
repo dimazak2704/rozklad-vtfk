@@ -1,7 +1,10 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { noteResponseSource, resetSavedCopies } from '@/api/saved-copy';
+import { SAVED_COPY_HEADER } from '@/api/saved-copy-plugin';
+import { DEMO_WEEK } from '@/pages/dev/demo-data';
 import { mockId } from '@/mocks/ids';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
@@ -103,5 +106,63 @@ describe('Рядок «немає звʼязку»', () => {
   it('коли все завантажилось — мовчить', () => {
     const { container } = renderWithProviders(<StallNote queries={[{ isPending: false, fetchStatus: 'idle', refetch: vi.fn() }]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('Головна: збережена копія Service Worker, коли мережа є', () => {
+  afterEach(() => resetSavedCopies());
+  const SAVED = { [SAVED_COPY_HEADER]: new Date('2026-11-05T06:15:00Z').toUTCString() };
+  const changesOf = (date: string) => ({ date, parity: 'NUMERATOR', studyDay: true, weekdayLabel: 'Четвер', order: null, amendments: [], groups: [] });
+
+  it('заміни прийшли з кешу — рядок з датою копії замість мовчанки; свіжа відповідь його прибирає', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    let fromCache = true;
+    server.use(
+      http.get(apiPath('/public/changes'), ({ request }) =>
+        HttpResponse.json(changesOf(new URL(request.url).searchParams.get('date') ?? ''), { headers: fromCache ? SAVED : {} }),
+      ),
+    );
+    renderWithProviders(<HomePage />);
+
+    const note = (await screen.findByText(/Сервер не відповів/)).closest('[role="status"]');
+    expect(note).toHaveTextContent('Сервер не відповів. Показано розклад, збережений 5 листопада о 08:15 — заміни могли змінитися.');
+
+    fromCache = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Оновити' }));
+    await waitFor(() => expect(screen.queryByText(/Сервер не відповів/)).not.toBeInTheDocument());
+  });
+
+  it('день своєї групи з кешу — теж кажемо', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    useFavoritesStore.setState({ favorites: [], recent: [], lastViewed: { type: 'GROUP', id: mockId('group', '4КІ1'), label: '4КІ1', url: '/g/4КІ1' } });
+    server.use(http.get(apiPath('/public/schedule/:type/:id'), () => HttpResponse.json(DEMO_WEEK, { headers: SAVED })));
+    renderWithProviders(<HomePage />);
+
+    expect(await screen.findByText(/Показано розклад, збережений 5 листопада о 08:15/)).toBeInTheDocument();
+  });
+
+  it('звичайні відповіді сервера — без рядка', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    let served = false;
+    server.use(
+      http.get(apiPath('/public/changes'), ({ request }) => {
+        served = true;
+        return HttpResponse.json(changesOf(new URL(request.url).searchParams.get('date') ?? ''));
+      }),
+    );
+    renderWithProviders(<HomePage />);
+    await waitFor(() => expect(served).toBe(true));
+    await screen.findByRole('heading', { name: 'Знайти розклад' });
+    expect(screen.queryByText(/Сервер не відповів/)).not.toBeInTheDocument();
+  });
+
+  it('копія сторінки без своєї адреси в savedUrls рядка не викликає', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    noteResponseSource('/api/public/changes?date=2026-11-12', new Headers(SAVED));
+    const idle = { isPending: false, fetchStatus: 'idle' as const, refetch: vi.fn() };
+    const { container, rerender } = renderWithProviders(<StallNote queries={[idle]} savedUrls={['/api/public/meta']} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<StallNote queries={[idle]} savedUrls={['/api/public/meta', '/api/public/changes?date=2026-11-12']} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Показано розклад, збережений 5 листопада о 08:15');
   });
 });

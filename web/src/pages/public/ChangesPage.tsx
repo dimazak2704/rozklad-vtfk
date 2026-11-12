@@ -1,11 +1,14 @@
 import { FileImage, FileText, Info, Search, WifiOff, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
+import { buildUrl } from '@/api/client';
 import { orderDocumentUrl, usePublicChanges } from '@/api/public';
+import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
 import type { IsoDate } from '@/api/types';
 import { ChangesDatePicker } from '@/components/public/changes/ChangesDatePicker';
 import { ChangesList } from '@/components/public/changes/ChangesList';
 import { HeaderParity } from '@/components/public/HeaderParity';
+import { SavedCopyNote } from '@/components/public/SavedCopyNote';
 import { dominantReason, filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
 import { useOnline } from '@/components/public/useOnline';
@@ -89,6 +92,10 @@ export default function ChangesPage() {
   const favorites = useFavoritesStore((state) => state.favorites);
   const mine = useMemo(() => myTargets(favorites), [favorites]);
   const changes = usePublicChanges(date, { refetchInterval: date === today ? 60_000 : undefined });
+
+  // сервер не відповів за 5 с чи недоступний, а Service Worker віддав збережену копію: це не «наживо»
+  const savedCopy = useSavedCopy(buildUrl('/public/changes', { date }));
+  const showSavedNote = Boolean(changes.data) && (!online || savedCopy.fromCache);
 
   useDocumentTitle(`Заміни на ${formatShortWeekdayDate(date)}`);
 
@@ -232,7 +239,7 @@ export default function ChangesPage() {
   const summary =
     groups.length > 0 ? (
       <h2 className="flex flex-wrap items-center gap-x-2 text-ui font-semibold text-primary" aria-live="polite">
-        {date === today && online ? <StatusDot tone="live" label="Оновлюється наживо" /> : null}
+        {date === today && online && !savedCopy.fromCache ? <StatusDot tone="live" label="Оновлюється наживо" /> : null}
         {filtering
           ? `Показано ${countLabel(rowCount, ROW_FORMS_ACC)} з ${countLabel(totalRows, ROW_FORMS_GEN)}`
           : `${countLabel(totalRows, ROW_FORMS)} у ${countLabel(groups.length, GROUP_FORMS_LOC)}`}
@@ -372,6 +379,13 @@ export default function ChangesPage() {
       ) : null}
 
       <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined} className="flex flex-col gap-3">
+        {showSavedNote ? (
+          <SavedCopyNote online={online} onRefresh={() => void changes.refetch()}>
+            {savedCopy.fromCache && savedCopy.savedAt !== null
+              ? `Показано заміни, збережені ${savedCopyTimeLabel(savedCopy.savedAt)} — могли змінитися.`
+              : 'Показано збережені заміни — могли змінитися.'}
+          </SavedCopyNote>
+        ) : null}
         {summary}
         {content}
         {source}

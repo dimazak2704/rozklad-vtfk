@@ -3,6 +3,8 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSavedCopies } from '@/api/saved-copy';
+import { SAVED_COPY_HEADER } from '@/api/saved-copy-plugin';
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
@@ -160,5 +162,86 @@ describe('«Заміни» на дату без занять', () => {
 
     expect(await screen.findByText('Розпорядження ще не опубліковано')).toBeInTheDocument();
     expect(screen.getByText(/Поки що діє звичайний розклад/)).toBeInTheDocument();
+  });
+});
+
+describe('«Заміни»: збережена копія Service Worker', () => {
+  // четвер, 10:00 за Києвом: сьогодні навчальний день, і список сьогоднішній
+  const TODAY = '2026-11-12';
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-12T08:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    resetSavedCopies();
+  });
+
+  const todayChanges = {
+    date: TODAY,
+    parity: 'NUMERATOR',
+    studyDay: true,
+    weekdayLabel: 'Четвер',
+    order: { id: 'order-50', number: 50, publishedAt: '2026-11-11T15:00:00Z', imported: false },
+    amendments: [],
+    groups: [
+      {
+        group: { id: 'g-4ki1', code: '4КІ1', course: 4 },
+        items: [
+          {
+            pairLabel: '2',
+            rowType: 'CANCELLATION',
+            from: { discipline: 'Прогр.', teacher: 'Непийвода' },
+            reasonText: 'Відп.',
+            to: { discipline: null, teacher: null },
+            room: null,
+            subgroupNote: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  it('сервер не відповів, а мережа є: не «наживо», а примітка з датою копії; свіжа відповідь її прибирає', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    let fromCache = true;
+    server.use(
+      http.get(apiPath('/public/changes'), () =>
+        HttpResponse.json(todayChanges, {
+          headers: fromCache ? { [SAVED_COPY_HEADER]: new Date('2026-11-05T06:15:00Z').toUTCString() } : {},
+        }),
+      ),
+    );
+    renderWithProviders(<ChangesPage />, { route: '/changes' });
+
+    const note = (await screen.findByText(/Сервер не відповів/)).closest('[role="status"]');
+    expect(note).toHaveTextContent('Сервер не відповів. Показано заміни, збережені 5 листопада о 08:15 — могли змінитися.');
+    expect(screen.getByText('4КІ1')).toBeInTheDocument();
+    expect(screen.queryByText('Оновлюється наживо')).not.toBeInTheDocument();
+
+    fromCache = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Оновити' }));
+    await vi.waitFor(() => expect(screen.queryByText(/Сервер не відповів/)).not.toBeInTheDocument());
+    expect(screen.getByText('Оновлюється наживо')).toBeInTheDocument();
+  });
+
+  it('звичайна відповідь сервера на сьогодні — «наживо» і без примітки', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    server.use(http.get(apiPath('/public/changes'), () => HttpResponse.json(todayChanges)));
+    renderWithProviders(<ChangesPage />, { route: '/changes' });
+
+    expect(await screen.findByText('Оновлюється наживо')).toBeInTheDocument();
+    expect(screen.queryByText(/збережен/)).not.toBeInTheDocument();
+  });
+
+  it('без інтернету список, що вже є, позначено як збережений, без кнопки «Оновити»', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    server.use(http.get(apiPath('/public/changes'), () => HttpResponse.json(todayChanges)));
+    renderWithProviders(<ChangesPage />, { route: '/changes' });
+
+    const note = (await screen.findByText(/Немає інтернету/)).closest('[role="status"]');
+    expect(note).toHaveTextContent('Немає інтернету. Показано збережені заміни — могли змінитися.');
+    expect(screen.queryByRole('button', { name: 'Оновити' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Оновлюється наживо')).not.toBeInTheDocument();
   });
 });

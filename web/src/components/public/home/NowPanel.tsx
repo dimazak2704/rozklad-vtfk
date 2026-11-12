@@ -12,6 +12,7 @@ import { capitalize } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 import type { ScheduleTarget } from '@/stores/favorites';
 import { useStalled } from '../useStalled';
+import { nowPanelRange } from './now-range';
 import { useRememberedGroup } from './useRememberedGroup';
 
 /** Тонований блок героя — і для завантаження, і для спокійних станів без доріжки. */
@@ -53,8 +54,7 @@ export function NowPanel({ className }: { className?: string }) {
   const bells = useBells(studyToday ? today : null);
   const slots = bells.data?.slots ?? null;
   const live = useNow(studyToday ? slots : null, { date: today });
-  // сьогодні й наступний навчальний день групи одним запитом (≤ 31 дня)
-  const range = today ? { from: today, to: nextDay && compareIsoDates(nextDay, today) > 0 ? nextDay : today } : null;
+  const range = nowPanelRange(meta.data);
   const groupSchedule = usePublicSchedule('GROUP', group?.id, range?.from ?? '', range?.to ?? '', {
     enabled: Boolean(group && range),
   });

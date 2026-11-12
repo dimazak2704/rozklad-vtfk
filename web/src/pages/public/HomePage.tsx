@@ -1,8 +1,10 @@
+import { buildUrl } from '@/api/client';
 import { useBells, usePublicMeta } from '@/api/meta';
-import { usePublicChanges, usePublicGroups, usePublicSchedule } from '@/api/public';
+import { publicSchedulePath, usePublicChanges, usePublicGroups, usePublicSchedule } from '@/api/public';
 import { GroupsDirectory } from '@/components/public/home/GroupsDirectory';
 import { LastViewedDay } from '@/components/public/home/LastViewedDay';
 import { NowPanel } from '@/components/public/home/NowPanel';
+import { nowPanelRange } from '@/components/public/home/now-range';
 import { StallNote } from '@/components/public/home/StallNote';
 import { ScheduleFinder } from '@/components/public/home/ScheduleFinder';
 import { TodayChanges } from '@/components/public/home/TodayChanges';
@@ -56,12 +58,20 @@ export default function HomePage() {
   const changes = usePublicChanges(home.date);
   const day = usePublicSchedule('GROUP', group?.id, home.date, home.date, { enabled: Boolean(group) });
   const queries = [meta, bells, groups, changes, group ? day : null];
+  // що з цього могло прийти зі збереженої копії Service Worker (адреси — як у клієнта API)
+  const range = nowPanelRange(meta.data);
+  const savedUrls = [
+    buildUrl('/public/meta'),
+    buildUrl('/public/changes', { date: home.date }),
+    group ? buildUrl(publicSchedulePath('GROUP', group.id), { from: home.date, to: home.date }) : undefined,
+    group && range ? buildUrl(publicSchedulePath('GROUP', group.id), range) : undefined,
+  ];
 
   useDocumentTitle('Розклад ВТФК');
 
   return (
     <PageErrorScope queries={queries} title="Розклад зараз не завантажується" className="gap-8 md:gap-12">
-      <StallNote queries={queries} />
+      <StallNote queries={queries} savedUrls={savedUrls} />
       <NowPanel />
 
       <div className="grid items-start gap-x-12 gap-y-8 md:grid-cols-[minmax(0,1fr)_16rem] lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

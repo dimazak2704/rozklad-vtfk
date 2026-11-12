@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { noteResponseSource, resetSavedCopies, savedCopyTimeLabel, useSavedCopy } from './saved-copy';
+import { noteResponseSource, resetSavedCopies, savedCopyTimeLabel, useAnySavedCopy, useSavedCopy } from './saved-copy';
 import { SAVED_COPY_HEADER, savedCopyPlugin } from './saved-copy-plugin';
 
 type Callback = typeof savedCopyPlugin.cachedResponseWillBeUsed;
@@ -56,6 +56,28 @@ describe('noteResponseSource і useSavedCopy', () => {
     act(() => noteResponseSource(url, new Headers({ [SAVED_COPY_HEADER]: 'unknown' })));
     const { result } = renderHook(() => useSavedCopy(url));
     expect(result.current).toEqual({ fromCache: true, savedAt: null });
+  });
+});
+
+describe('useAnySavedCopy', () => {
+  afterEach(() => resetSavedCopies());
+  const a = '/api/public/changes?date=2026-11-12';
+  const b = '/api/public/schedule/group/g1?from=2026-11-12&to=2026-11-12';
+
+  it('хоч одна копія — так; дата — найстарішої; невідома дата робить невідомою й загальну', () => {
+    const { result } = renderHook(() => useAnySavedCopy([a, undefined, b]));
+    expect(result.current).toEqual({ fromCache: false });
+
+    act(() => noteResponseSource(a, new Headers({ [SAVED_COPY_HEADER]: 'Thu, 12 Nov 2026 06:15:00 GMT' })));
+    act(() => noteResponseSource(b, new Headers({ [SAVED_COPY_HEADER]: 'Tue, 10 Nov 2026 06:15:00 GMT' })));
+    expect(result.current).toEqual({ fromCache: true, savedAt: Date.parse('2026-11-10T06:15:00Z') });
+
+    act(() => noteResponseSource(a, new Headers({ [SAVED_COPY_HEADER]: 'unknown' })));
+    expect(result.current).toEqual({ fromCache: true, savedAt: null });
+
+    act(() => noteResponseSource(a, new Headers()));
+    act(() => noteResponseSource(b, new Headers()));
+    expect(result.current).toEqual({ fromCache: false });
   });
 });
 
