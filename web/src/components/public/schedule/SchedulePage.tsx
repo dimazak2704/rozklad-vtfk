@@ -1,8 +1,9 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { usePublicMeta } from '@/api/meta';
+import { useBells, usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
+import { NowIndicator } from '@/components/schedule';
 import { PageErrorScope, PageHeader } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { Perspective } from '@/lib/schedule';
@@ -19,7 +20,7 @@ import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
 import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
 import type { ScheduleParams } from './schedule-params';
-import { changedLessons, dayOf, dayShareText, filterBySubgroup, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
+import { activePairs, changedLessons, dayOf, dayShareText, filterBySubgroup, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
 
 interface SchedulePageProps {
   /** Ціль для обраного й нещодавніх: тип, id, підпис, маршрут у застосунку. */
@@ -76,6 +77,13 @@ export function SchedulePage({
   const changes = useMemo(() => (placeholder ? [] : changedLessons(visible)), [visible, placeholder]);
   const parity = placeholder ? null : (visible?.days[0]?.parity ?? null);
   const weekNumber = semesterWeekOf(params.date, meta.data?.semester);
+  // тиждень, у якому є сьогодні: стан дня одним тихим рядком у рядку контексту («Зараз 2-га пара · ще 35 хв»,
+  // «Пари закінчилися о 13:10»). Подання «День» показує його над списком, аудиторія має свій рядок стану
+  const today = meta.data?.today ?? null;
+  const todayDay = placeholder || !today || params.view !== 'week' || perspective === 'room' ? undefined : dayOf(visible, today);
+  const liveDate = todayDay?.studyDay ? todayDay.date : null;
+  const todayBells = useBells(liveDate);
+  const todayPairs = useMemo(() => activePairs(todayDay), [todayDay]);
   const printTitle = params.subgroup ? `${target.label} · ${params.subgroup} підгрупа` : target.label;
 
   // на сторінці аудиторії клітинки не повторюють її номер: другий рядок — група й викладач
@@ -110,6 +118,16 @@ export function SchedulePage({
   const headerMeta = (
     <>
       <HeaderParity parity={parity} />
+      {liveDate && todayBells.data && todayBells.data.slots.length > 0 ? (
+        <NowIndicator
+          variant="inline"
+          bells={todayBells.data.slots}
+          lessonPairs={todayPairs}
+          date={liveDate}
+          // розділювач — частина рядка стану: коли стану немає, крапка не повисає
+          className="before:text-muted before:content-['·']"
+        />
+      ) : null}
       {status}
       {subgroupShown !== null ? (
         // обрана підгрупа — тихо в рядку контексту, поки вона не «уся група»: інакше людина не зрозуміє, куди зникли пари

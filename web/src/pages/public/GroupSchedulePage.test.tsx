@@ -1,7 +1,8 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetMockStores } from '@/mocks/store';
 import { useFavoritesStore } from '@/stores/favorites';
 import { renderWithProviders } from '@/test/render';
 import GroupSchedulePage from './GroupSchedulePage';
@@ -65,5 +66,32 @@ describe('Сторінка групи', () => {
     await user.click(screen.getByRole('button', { name: '1 підгрупа — змінити' }));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Уся група' }));
     expect(screen.queryByRole('button', { name: /підгрупа — змінити/ })).not.toBeInTheDocument();
+  });
+
+  describe('тиждень, у якому є сьогодні', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      resetMockStores();
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('рядок контексту каже стан дня: яка пара зараз і скільки лишилося', async () => {
+      vi.setSystemTime(new Date('2026-11-12T10:32:00Z')); // 12:32 у Києві, 4 пара (12:10–13:10)
+      renderGroup('/g/4КІ1?view=week&date=2026-11-12');
+      expect(await screen.findByText(/^Зараз 4-та пара · ще 38/)).toBeInTheDocument();
+    });
+
+    it('після пар — коли вони закінчилися, а не тиша', async () => {
+      vi.setSystemTime(new Date('2026-11-12T14:00:00Z')); // 16:00 у Києві
+      renderGroup('/g/4КІ1?view=week&date=2026-11-12');
+      expect(await screen.findByText(/^Пари закінчилися о/)).toBeInTheDocument();
+    });
+
+    it('в іншому тижні стану дня немає', async () => {
+      vi.setSystemTime(new Date('2026-11-12T10:32:00Z'));
+      renderGroup('/g/4КІ1?view=week&date=2026-11-18');
+      await screen.findByRole('heading', { level: 1, name: /4КІ1/ });
+      expect(screen.queryByText(/^Зараз \d/)).not.toBeInTheDocument();
+    });
   });
 });
