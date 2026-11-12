@@ -36,6 +36,9 @@ public interface IdentityProvider {
     /** The accounts that exist among {@code ids}; unknown ids are skipped. */
     List<Account> findUsers(Collection<UUID> ids);
 
+    /** Every account of {@code auth} (people only: admins and teachers), for «Доступи». */
+    List<Account> listUsers();
+
     /**
      * Sets a new password and enables the account (re-invite). Never clears a revocation.
      *
@@ -48,6 +51,9 @@ public interface IdentityProvider {
 
     /** Gives an account without a username one (an access grant that signs in by password the first time). */
     void setUsername(UUID userId, String username);
+
+    /** The name shown in «Доступи» and in the ID token. */
+    void setDisplayName(UUID userId, String displayName);
 
     /** Idempotent: a role the account already has is not an error. */
     void grantRole(UUID userId, String role);

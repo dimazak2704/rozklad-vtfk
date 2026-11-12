@@ -38,8 +38,19 @@ public final class InviteDtos {
                             Instant revokedAt, Instant createdAt, String createdBy) {
     }
 
-    /** {@code GET /api/public/invites/{token}}: {@code valid} = status ACTIVE. */
-    public record InviteInfoDto(boolean valid, InviteStatus status, String teacherName, Instant expiresAt) {
+    /** What a one-time link is for: a teacher's registration or a new password of an existing account. */
+    public enum InviteKind {
+        INVITE,
+        PASSWORD
+    }
+
+    /**
+     * {@code GET /api/public/invites/{token}}: {@code valid} = status ACTIVE. {@code teacherName} is the name
+     * of the person (the teacher, or the account of a password link). {@code username} is the account's
+     * existing username for a password link (the page shows it read-only), otherwise {@code null}.
+     */
+    public record InviteInfoDto(boolean valid, InviteStatus status, String teacherName, Instant expiresAt,
+                                InviteKind kind, String username) {
     }
 
     public record AcceptInviteRequest(
@@ -58,6 +69,15 @@ public final class InviteDtos {
     }
 
     public record AcceptedInviteDto(String username) {
+    }
+
+    /** {@code POST /api/admin/access/{accountId}/password-link}: shown once, only the hash is stored. */
+    public record PasswordLinkDto(String url, Instant expiresAt) {
+
+        @Override
+        public String toString() {
+            return "PasswordLinkDto[url=***, expiresAt=" + expiresAt + "]";
+        }
     }
 
     /**

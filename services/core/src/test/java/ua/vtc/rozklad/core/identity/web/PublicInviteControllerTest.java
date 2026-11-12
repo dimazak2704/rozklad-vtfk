@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.core.identity.InviteStatus;
 import ua.vtc.rozklad.core.identity.internal.IdentityProblems;
+import ua.vtc.rozklad.core.identity.internal.InviteDtos;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.AcceptedInviteDto;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.InviteInfoDto;
 import ua.vtc.rozklad.core.identity.internal.InviteService;
@@ -44,11 +45,12 @@ class PublicInviteControllerTest {
     @Test
     void inviteInfoIsPublic() throws Exception {
         given(invites.inspect(TOKEN)).willReturn(new InviteInfoDto(true, InviteStatus.ACTIVE, "Кренцін Микола Дмитрович",
-                Instant.parse("2026-11-14T10:00:00Z")));
+                Instant.parse("2026-11-14T10:00:00Z"), InviteDtos.InviteKind.INVITE, null));
 
         mockMvc.perform(get("/api/public/invites/{token}", TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.kind").value("INVITE"))
                 .andExpect(jsonPath("$.teacherName").value("Кренцін Микола Дмитрович"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-11-14T10:00:00Z"));
     }

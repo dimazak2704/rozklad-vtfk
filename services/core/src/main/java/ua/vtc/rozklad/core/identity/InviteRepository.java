@@ -19,7 +19,11 @@ public interface InviteRepository extends JpaRepository<Invite, UUID> {
 
     List<Invite> findAllByTeacherIdOrderByCreatedAtDesc(UUID teacherId);
 
-    List<Invite> findAllByOrderByCreatedAtDesc();
+    /** Teacher invites, newest first (password links are not listed with them). */
+    List<Invite> findAllByTeacherIdIsNotNullOrderByCreatedAtDesc();
 
     List<Invite> findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(UUID teacherId);
+
+    /** Open password links of an account. */
+    List<Invite> findAllByAccountIdAndUsedAtIsNullAndRevokedAtIsNull(UUID accountId);
 }

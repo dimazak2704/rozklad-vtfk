@@ -117,6 +117,35 @@ public class FakeIdentityProvider implements IdentityProvider {
     }
 
     @Override
+    public List<Account> listUsers() {
+        ensureUp();
+        return users.values().stream().map(User::toAccount)
+                .sorted(java.util.Comparator.comparing(Account::displayName)).toList();
+    }
+
+    @Override
+    public void setDisplayName(UUID userId, String displayName) {
+        ensureUp();
+        User user = require(userId);
+        users.put(userId, new User(userId, user.username(), user.email(), displayName, user.password(),
+                user.enabled(), user.disabledReason(), user.roles(), user.googleLinked()));
+    }
+
+    /** An admin who can sign in (password or Google), as {@code auth} counts it. */
+    public UUID usableAdmin(String username) {
+        UUID id = existingUser(username, "Admin-Password-2026", true);
+        require(id).roles().add("ADMIN");
+        return id;
+    }
+
+    /** Marks the account as bound to Google. */
+    public void linkGoogle(UUID userId) {
+        User user = require(userId);
+        users.put(userId, new User(userId, user.username(), user.email(), user.displayName(), user.password(),
+                user.enabled(), user.disabledReason(), user.roles(), true));
+    }
+
+    @Override
     public void restoreAccess(UUID userId, String password) {
         setPassword(userId, password);
         User user = require(userId);
@@ -155,6 +184,9 @@ public class FakeIdentityProvider implements IdentityProvider {
     @Override
     public void setRoles(UUID userId, Set<String> roles) {
         ensureUp();
+        if (!roles.contains("ADMIN")) {
+            requireAnotherUsableAdmin(userId);
+        }
         Set<String> current = require(userId).roles();
         current.clear();
         current.addAll(roles);
@@ -163,6 +195,7 @@ public class FakeIdentityProvider implements IdentityProvider {
     @Override
     public void revoke(UUID userId) {
         ensureUp();
+        requireAnotherUsableAdmin(userId);
         users.put(userId, require(userId).withEnabled(false, Account.REVOKED));
     }
 
@@ -176,6 +209,9 @@ public class FakeIdentityProvider implements IdentityProvider {
     public void unbindGoogle(UUID userId) {
         ensureUp();
         User user = require(userId);
+        if (user.password() == null) {
+            requireAnotherUsableAdmin(userId);
+        }
         users.put(userId, new User(userId, user.username(), user.email(), user.displayName(), user.password(),
                 user.enabled(), user.disabledReason(), user.roles(), false));
     }
@@ -184,6 +220,15 @@ public class FakeIdentityProvider implements IdentityProvider {
     public void deleteUser(UUID userId) {
         ensureUp();
         users.remove(userId);
+    }
+
+    /** The rule of {@code auth}: a change may not remove the last usable admin (DESIGN D12). */
+    private void requireAnotherUsableAdmin(UUID target) {
+        User user = require(target);
+        if (user.usableAdmin() && users.values().stream().noneMatch(other -> !other.id().equals(target)
+                && other.usableAdmin())) {
+            throw new LastAdminException();
+        }
     }
 
     private User require(UUID userId) {
@@ -208,6 +253,10 @@ public class FakeIdentityProvider implements IdentityProvider {
 
     public record User(UUID id, String username, String email, String displayName, String password, boolean enabled,
                        String disabledReason, Set<String> roles, boolean googleLinked) {
+
+        boolean usableAdmin() {
+            return enabled && roles.contains("ADMIN") && (password != null || googleLinked);
+        }
 
         User withEnabled(boolean enabled, String disabledReason) {
             return new User(id, username, email, displayName, password, enabled, disabledReason, roles, googleLinked);

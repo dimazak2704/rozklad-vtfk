@@ -31,8 +31,8 @@ Page<T>       {items:[T], page, size, total}
 | `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
 | `GET /api/public/changes?date=` | `{date, parity, studyDay, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}` |
 | `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` for the semester (published lessons) |
-| `GET /api/public/invites/{token}` | `{valid, teacherName, expiresAt}` |
-| `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired/used/revoked (`inviteStatus`) |
+| `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt, kind: INVITE\|PASSWORD, username?}` (also password links, page `/password/:token`) |
+| `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired/used/revoked or access revoked (`inviteStatus`) |
 
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
@@ -105,7 +105,10 @@ Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipl
 `GET /api/admin/accounting/teachers?month=2026-10` → `[{teacher, substitutionsCount, substitutionsHours, missedCount}]`.
 
 Identity & settings: `POST /api/admin/invites {teacherId}` → `{token, url, expiresAt}`; `GET /api/admin/invites`;
-`GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing Keycloak account → `{teacherId,
+Access («Доступи», CHANGELOG-CONTRACTS «step 4»): `GET /api/admin/access?q&role&status` → `[AccessDto]`, `POST {email,
+displayName?, roles, teacherId?}` → 201, `PATCH /{accountId}`, `POST /{accountId}/revoke|restore|password-link`,
+`DELETE /{accountId}/google`;
+`GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing account of the sign-in service → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
 `GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
 

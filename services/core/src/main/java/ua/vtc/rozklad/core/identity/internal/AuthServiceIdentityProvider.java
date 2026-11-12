@@ -43,6 +43,8 @@ class AuthServiceIdentityProvider implements IdentityProvider {
     static final String ACTOR_HEADER = "X-Actor";
     static final String SYSTEM_ACTOR = "rozklad-core";
     private static final int IDS_PER_REQUEST = 100;
+    /** The largest page of the internal search ({@code MAX_PAGE_SIZE} of {@code auth}). */
+    static final int LIST_PAGE_SIZE = 200;
     private static final ParameterizedTypeReference<List<AccountJson>> ACCOUNT_LIST = new ParameterizedTypeReference<>() {
     };
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -128,6 +130,25 @@ class AuthServiceIdentityProvider implements IdentityProvider {
     }
 
     @Override
+    public List<Account> listUsers() {
+        List<Account> found = new ArrayList<>();
+        for (int page = 0; ; page++) {
+            int current = page;
+            List<AccountJson> batch = call("list accounts", "page " + page, () -> accounts.get()
+                    .uri(uri -> uri.path("/accounts").queryParam("page", current).queryParam("size", LIST_PAGE_SIZE)
+                            .build())
+                    .retrieve().body(ACCOUNT_LIST));
+            if (batch == null || batch.isEmpty()) {
+                return found;
+            }
+            batch.stream().map(AccountJson::toAccount).forEach(found::add);
+            if (batch.size() < LIST_PAGE_SIZE) {
+                return found;
+            }
+        }
+    }
+
+    @Override
     public void restoreAccess(UUID userId, String password) {
         setPassword(userId, password);
         enable(userId, false);
@@ -142,6 +163,11 @@ class AuthServiceIdentityProvider implements IdentityProvider {
     @Override
     public void setUsername(UUID userId, String username) {
         patch(userId, Map.of("username", username), username);
+    }
+
+    @Override
+    public void setDisplayName(UUID userId, String displayName) {
+        patch(userId, Map.of("displayName", displayName), userId.toString());
     }
 
     @Override

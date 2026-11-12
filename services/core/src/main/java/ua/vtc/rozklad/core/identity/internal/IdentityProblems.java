@@ -57,6 +57,23 @@ public final class IdentityProblems {
                 "Не вдалося перевірити обліковий запис: сервер автентифікації не відповідає. Спробуйте пізніше."), cause);
     }
 
+    /** 503 while changing an access grant in «Доступи». */
+    public static ErrorResponseException identityChangeUnavailable(Throwable cause) {
+        return new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE, problem(HttpStatus.SERVICE_UNAVAILABLE,
+                "identity-unavailable", "Сервіс входу недоступний",
+                "Не вдалося змінити доступ: сервер автентифікації не відповідає. Спробуйте пізніше."), cause);
+    }
+
+    /**
+     * 409 of «Доступи» with a stable {@code code} ({@code LAST_ADMIN}, {@code EMAIL_TAKEN},
+     * {@code TEACHER_ALREADY_LINKED}, {@code ACCOUNT_REVOKED}) and a Ukrainian message for the page.
+     */
+    public static ErrorResponseException accessConflict(String code, String detail) {
+        ProblemDetail body = problem(HttpStatus.CONFLICT, "conflict", "Конфлікт", detail);
+        body.setProperty("code", code);
+        return new ErrorResponseException(HttpStatus.CONFLICT, body, null);
+    }
+
     /** 403: a TEACHER token whose account is not linked to any teacher of the catalog. */
     public static ErrorResponseException accountNotLinked() {
         return new ErrorResponseException(HttpStatus.FORBIDDEN, problem(HttpStatus.FORBIDDEN, "forbidden",

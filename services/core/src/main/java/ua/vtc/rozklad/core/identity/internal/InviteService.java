@@ -34,6 +34,8 @@ import ua.vtc.rozklad.core.identity.internal.InviteDtos.AcceptedInviteDto;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.InviteCreatedDto;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.InviteDto;
 import ua.vtc.rozklad.core.identity.internal.InviteDtos.InviteInfoDto;
+import ua.vtc.rozklad.core.identity.internal.InviteDtos.InviteKind;
+import ua.vtc.rozklad.core.identity.internal.InviteDtos.PasswordLinkDto;
 import ua.vtc.rozklad.core.shared.AppProperties;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
@@ -56,6 +58,9 @@ public class InviteService {
 
     private static final Logger log = LoggerFactory.getLogger(InviteService.class);
     static final String NOT_FOUND = "Запрошення не знайдено. Перевірте посилання або попросіть нове.";
+    /** SPA pages of the links: registration and a new password. */
+    static final String INVITE_PATH = "/invite/{token}";
+    static final String PASSWORD_PATH = "/password/{token}";
 
     private final InviteRepository invites;
     private final TeacherRepository teachers;
@@ -97,7 +102,7 @@ public class InviteService {
     @Transactional(readOnly = true)
     public List<InviteDto> list(UUID teacherId) {
         List<Invite> found = teacherId == null
-                ? invites.findAllByOrderByCreatedAtDesc()
+                ? invites.findAllByTeacherIdIsNotNullOrderByCreatedAtDesc()
                 : invites.findAllByTeacherIdOrderByCreatedAtDesc(teacherId);
         Map<UUID, TeacherRef> refs = catalog.teacherRefs(found.stream().map(Invite::getTeacherId)
                 .collect(Collectors.toSet()));
@@ -109,13 +114,60 @@ public class InviteService {
                 .toList();
     }
 
-    /** What the registration page shows before the form. */
+    /** What the registration (or password) page shows before the form. */
     @Transactional(readOnly = true)
     public InviteInfoDto inspect(String token) {
         Invite invite = findByToken(token);
-        Teacher teacher = teachers.findById(invite.getTeacherId()).orElseThrow(() -> new NotFoundException(NOT_FOUND));
         InviteStatus status = invite.status(clock.instant());
-        return new InviteInfoDto(status == InviteStatus.ACTIVE, status, displayName(teacher), invite.getExpiresAt());
+        if (invite.isPasswordLink()) {
+            Account account = linkedAccount(invite);
+            if (account.revoked() && status == InviteStatus.ACTIVE) {
+                status = InviteStatus.REVOKED;
+            }
+            return new InviteInfoDto(status == InviteStatus.ACTIVE, status, account.displayName(),
+                    invite.getExpiresAt(), InviteKind.PASSWORD, account.username());
+        }
+        Teacher teacher = teachers.findById(invite.getTeacherId()).orElseThrow(() -> new NotFoundException(NOT_FOUND));
+        return new InviteInfoDto(status == InviteStatus.ACTIVE, status, displayName(teacher), invite.getExpiresAt(),
+                InviteKind.INVITE, null);
+    }
+
+    /**
+     * A password link for an account (DESIGN §4.6, «Посилання для пароля» in «Доступи»): older open links of the
+     * account are revoked, so only the latest one works. A revoked account gets none.
+     *
+     * @throws NotFoundException no such account in {@code auth}
+     * @throws org.springframework.web.ErrorResponseException 409 {@code ACCOUNT_REVOKED}, 503 sign-in service down
+     */
+    @Transactional
+    public PasswordLinkDto createPasswordLink(UUID accountId, String actor) {
+        Account account;
+        try {
+            account = identityProvider.findUser(accountId)
+                    .orElseThrow(() -> NotFoundException.of("Обліковий запис", accountId));
+        } catch (IdentityProviderException unavailable) {
+            throw IdentityProblems.identityLookupUnavailable(unavailable);
+        }
+        if (account.revoked()) {
+            throw IdentityProblems.accessConflict("ACCOUNT_REVOKED", "Спершу поверніть доступ.");
+        }
+        Instant now = clock.instant();
+        revokePasswordLinks(accountId, now);
+        String token = InviteTokens.newToken();
+        Invite link = invites.save(Invite.forAccount(accountId, InviteTokens.hash(token),
+                now.plus(properties.inviteTtl()), actor));
+        log.info("Password link {} created for account {} by {}", link.getId(), accountId, actor);
+        return new PasswordLinkDto(link(PASSWORD_PATH, token), link.getExpiresAt());
+    }
+
+    /** Revokes the open password links of an account (a newer link, revoked access). */
+    void revokePasswordLinks(UUID accountId, Instant now) {
+        invites.findAllByAccountIdAndUsedAtIsNullAndRevokedAtIsNull(accountId).forEach(old -> old.revoke(now));
+    }
+
+    /** Revokes the open invites of a teacher (revoked access). */
+    void revokeTeacherInvites(UUID teacherId, Instant now) {
+        invites.findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(teacherId).forEach(old -> old.revoke(now));
     }
 
     /**
@@ -133,11 +185,18 @@ public class InviteService {
         Instant now = clock.instant();
         InviteStatus status = invite.status(now);
         if (status != InviteStatus.ACTIVE) {
+            if (status == InviteStatus.REVOKED && targetRevoked(invite)) {
+                // доступ відкликали (D11): людина має знати саме це, а не «надіслали новіше»
+                throw IdentityProblems.accessRevoked();
+            }
             throw IdentityProblems.inviteGone(status);
         }
         String username = rawUsername.strip().toLowerCase(Locale.ROOT);
         if (password.equalsIgnoreCase(username)) {
             new FieldErrors().add("password", "Пароль не може збігатися з ім'ям користувача.").throwIfAny();
+        }
+        if (invite.isPasswordLink()) {
+            return acceptPasswordLink(invite, username, password, now);
         }
         Teacher teacher = teachers.findById(invite.getTeacherId()).orElseThrow(() -> new NotFoundException(NOT_FOUND));
         UUID userId;
@@ -172,6 +231,67 @@ public class InviteService {
                 .forEach(other -> other.revoke(now));
         log.info("Invite {} accepted: teacher {} linked to account {}", invite.getId(), teacher.getId(), userId);
         return new AcceptedInviteDto(username);
+    }
+
+    /**
+     * A password link: the account keeps its username (or gets the chosen one if it has none), gets the new
+     * password and is enabled; a revoked account is not (410, D11).
+     */
+    private AcceptedInviteDto acceptPasswordLink(Invite invite, String username, String password, Instant now) {
+        UUID accountId = invite.getAccountId();
+        try {
+            Account account = linkedAccount(invite);
+            if (account.revoked()) {
+                throw accessRevoked(invite, now);
+            }
+            if (account.username() == null) {
+                identityProvider.setUsername(accountId, username);
+            } else if (!account.username().equalsIgnoreCase(username)) {
+                throw new ConflictException("Ваше ім'я користувача — «%s». Вкажіть саме його."
+                        .formatted(account.username()));
+            }
+            identityProvider.restoreAccess(accountId, password);
+        } catch (AccountRevokedException revoked) {
+            throw accessRevoked(invite, now);
+        } catch (UsernameTakenException taken) {
+            throw new ConflictException("Ім'я користувача «%s» уже зайняте. Виберіть інше.".formatted(username));
+        } catch (PasswordRejectedException rejected) {
+            log.info("auth rejected the password of link {}: {}", invite.getId(), rejected.reason());
+            throw FieldValidationException.of("password", passwordRejected(rejected.reason()));
+        } catch (IdentityProviderException | AccountNotFoundException unavailable) {
+            log.error("Identity provider failed while accepting password link {}", invite.getId(), unavailable);
+            throw IdentityProblems.identityUnavailable(unavailable);
+        }
+        invite.markUsed(now);
+        invites.findAllByAccountIdAndUsedAtIsNullAndRevokedAtIsNull(accountId).stream()
+                .filter(other -> !other.getId().equals(invite.getId()))
+                .forEach(other -> other.revoke(now));
+        log.info("Password link {} used: account {} has a new password", invite.getId(), accountId);
+        return new AcceptedInviteDto(username);
+    }
+
+    /**
+     * Whether the account the link leads to (the teacher's, or the password link's) is revoked. An unreachable
+     * {@code auth} counts as "not known to be revoked": the answer is then the plain «invite revoked».
+     */
+    private boolean targetRevoked(Invite invite) {
+        try {
+            UUID accountId = invite.isPasswordLink() ? invite.getAccountId()
+                    : teachers.findById(invite.getTeacherId()).map(Teacher::getAccountId).orElse(null);
+            return accountId != null && identityProvider.findUser(accountId).map(Account::revoked).orElse(false);
+        } catch (IdentityProviderException unavailable) {
+            log.warn("Could not check the account of revoked invite {}", invite.getId(), unavailable);
+            return false;
+        }
+    }
+
+    /** The account of a password link; 404 when {@code auth} no longer has it, 503 when it cannot be asked. */
+    private Account linkedAccount(Invite invite) {
+        try {
+            return identityProvider.findUser(invite.getAccountId()).orElseThrow(() -> new NotFoundException(NOT_FOUND));
+        } catch (IdentityProviderException unavailable) {
+            throw IdentityProblems.identityLookupUnavailable(unavailable);
+        }
     }
 
     private Invite findByToken(String token) {
@@ -243,8 +363,12 @@ public class InviteService {
     }
 
     private String link(String token) {
+        return link(INVITE_PATH, token);
+    }
+
+    private String link(String path, String token) {
         return UriComponentsBuilder.fromUri(appProperties.publicWebUrl())
-                .path("/invite/{token}")
+                .path(path)
                 .buildAndExpand(token)
                 .toUriString();
     }

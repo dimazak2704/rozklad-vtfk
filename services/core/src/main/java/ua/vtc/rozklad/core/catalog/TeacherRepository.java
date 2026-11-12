@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.catalog;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +12,8 @@ public interface TeacherRepository extends JpaRepository<Teacher, UUID>, JpaSpec
     Optional<Teacher> findByShortName(String shortName);
 
     Optional<Teacher> findByAccountId(UUID accountId);
+
+    List<Teacher> findAllByAccountIdIn(Collection<UUID> accountIds);
 
     List<Teacher> findAllByActiveTrueOrderByShortName();
 }

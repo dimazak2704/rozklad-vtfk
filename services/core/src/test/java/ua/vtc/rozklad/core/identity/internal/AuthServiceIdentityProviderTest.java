@@ -218,6 +218,32 @@ class AuthServiceIdentityProviderTest {
     }
 
     @Test
+    void listUsersReadsEveryPageOfTheSearch() {
+        String full = "[" + String.join(",", java.util.Collections.nCopies(AuthServiceIdentityProvider.LIST_PAGE_SIZE,
+                account(true))) + "]";
+        server.expect(once(), requestTo(BASE + "/accounts?page=0&size=200")).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(full, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(BASE + "/accounts?page=1&size=200"))
+                .andRespond(withSuccess("[" + account(false) + "]", MediaType.APPLICATION_JSON));
+
+        assertThat(provider.listUsers()).hasSize(201).last().satisfies(account -> {
+            assertThat(account.revoked()).isTrue();
+            assertThat(account.googleLinked()).isTrue();
+        });
+        server.verify();
+    }
+
+    @Test
+    void displayNameIsAPatch() {
+        server.expect(once(), requestTo(BASE + "/accounts/" + ID)).andExpect(method(HttpMethod.PATCH))
+                .andExpect(content().json("{\"displayName\":\"Кренцін М. Д.\"}"))
+                .andRespond(withSuccess(account(true), MediaType.APPLICATION_JSON));
+
+        provider.setDisplayName(ID, "Кренцін М. Д.");
+        server.verify();
+    }
+
+    @Test
     void aRoleTheAccountHasNeedsNoWrite() {
         server.expect(once(), requestTo(BASE + "/accounts/" + ID))
                 .andRespond(withSuccess(account(true), MediaType.APPLICATION_JSON));

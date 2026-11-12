@@ -9,17 +9,22 @@ import java.util.UUID;
 import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 
 /**
- * Registration invite of a teacher. Only the SHA-256 hex of the token is stored; the token itself
- * appears once in the invite link ({@code /invite/{token}}). An invite is used at most once,
- * expires, and is revoked when the admin issues a newer one for the same teacher. Optimistic
- * locking prevents a double accept.
+ * Registration invite of a teacher, or a password link of an account ({@link #forAccount}). Only the SHA-256
+ * hex of the token is stored; the token itself appears once in the link ({@code /invite/{token}} or
+ * {@code /password/{token}}). It is used at most once, expires, and is revoked when the admin issues a newer
+ * one for the same target or revokes the access. Optimistic locking prevents a double accept. Exactly one of
+ * {@code teacherId} and {@code accountId} is set.
  */
 @Entity
 @Table(name = "invite")
 public class Invite extends BaseEntity {
 
-    @Column(name = "teacher_id", nullable = false, updatable = false)
+    @Column(name = "teacher_id", updatable = false)
     private UUID teacherId;
+
+    /** Target of a password link: an account of the sign-in service. */
+    @Column(name = "account_id", updatable = false)
+    private UUID accountId;
 
     @Column(name = "token_hash", nullable = false, length = 64, updatable = false)
     private String tokenHash;
@@ -46,8 +51,31 @@ public class Invite extends BaseEntity {
         this.createdBy = createdBy;
     }
 
+    /**
+     * A password link: the person of {@code accountId} sets a (new) password. Same token, lifetime and
+     * revocation rules as an invite.
+     */
+    public static Invite forAccount(UUID accountId, String tokenHash, Instant expiresAt, String createdBy) {
+        Invite link = new Invite();
+        link.accountId = Objects.requireNonNull(accountId, "accountId");
+        link.tokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
+        link.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
+        link.createdBy = createdBy;
+        return link;
+    }
+
+    /** {@code null} for a password link. */
     public UUID getTeacherId() {
         return teacherId;
+    }
+
+    /** {@code null} for a teacher invite. */
+    public UUID getAccountId() {
+        return accountId;
+    }
+
+    public boolean isPasswordLink() {
+        return accountId != null;
     }
 
     public String getTokenHash() {
@@ -101,6 +129,6 @@ public class Invite extends BaseEntity {
 
     @Override
     public String toString() {
-        return "Invite[id=" + getId() + ", teacherId=" + teacherId + "]";
+        return "Invite[id=" + getId() + ", teacherId=" + teacherId + ", accountId=" + accountId + "]";
     }
 }
