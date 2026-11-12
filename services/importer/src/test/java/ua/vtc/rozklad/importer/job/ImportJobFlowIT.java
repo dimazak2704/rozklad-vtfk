@@ -38,6 +38,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.importer.ai.AiExtractionPort;
@@ -90,6 +91,15 @@ class ImportJobFlowIT {
 
     @Autowired
     AiUsageRepository aiUsage;
+
+    @Autowired
+    ImportJobRepository jobs;
+
+    @Autowired
+    ImportJobProcessor processor;
+
+    @Autowired
+    TransactionTemplate transaction;
 
     @BeforeEach
     void setUp() {
@@ -252,6 +262,56 @@ class ImportJobFlowIT {
         assertThat(catalogRequests.getAllValues().getLast().teachers()).extracting(CoreImportPayloads.Teacher::shortName)
                 .contains("Стець");
         verify(core, times(2)).importTimetable(any(), anyString());
+    }
+
+    /**
+     * A restart lands between storing the last step (core already created the timetable version)
+     * and marking the job applied. Review edits would change what that step sends under the same
+     * Idempotency-Key, which core refuses with 409 forever: they are refused, and apply only
+     * finishes the job (without the catalog, which is not needed any more).
+     */
+    @Test
+    void jobWhoseLastStepCoreAcceptedIsFinishedNotEditedAfterARestart() throws Exception {
+        UUID id = UUID.fromString(upload("schedule-2025-26.xlsx", "TIMETABLE_XLSX", TestCatalogs.SEMESTER, null)
+                .get("id").asString());
+        String mapping = """
+                {"mappings":[{"type":"TEACHER","raw":"Стець","createNew":{},"addAlias":false},
+                             {"type":"DISCIPLINE","raw":"НДЕКС","targetId":"%s","addAlias":true}]}
+                """.formatted(TestCatalogs.NDEKSM);
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapping))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"));
+        JsonNode steps = jsonMapper.readTree("""
+                {"catalog":{"created":120},"timetable":{"versionId":"00000000-0000-4000-8000-00000000dddd"}}""");
+        transaction.executeWithoutResult(status -> {
+            ImportJob job = jobs.findById(id).orElseThrow();
+            job.startApplying(TestCatalogs.SEMESTER, Instant.now());
+            job.checkpoint(steps, Instant.now());
+        });
+        processor.recoverAfterRestart();
+        JsonNode interrupted = job(id);
+        assertThat(interrupted.get("status").asString()).isEqualTo("FAILED");
+        assertThat(interrupted.get("canApply").asBoolean()).isTrue();
+
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":%d,\"options\":{\"versionName\":\"Інша назва\"}}"
+                                .formatted(interrupted.get("version").asLong())))
+                .andExpect(status().isConflict());
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapping))
+                .andExpect(status().isConflict());
+
+        when(catalog.snapshot()).thenThrow(new CatalogUnavailableException("Не вдалося отримати каталог з core.", null));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted());
+        JsonNode applied = job(id);
+        assertThat(applied.get("status").asString()).isEqualTo("APPLIED");
+        assertThat(applied.at("/result/timetable/versionId").asString()).isEqualTo("00000000-0000-4000-8000-00000000dddd");
+        assertThat(applied.at("/options/versionName").isMissingNode()).isTrue();
+        verify(core, never()).importCatalog(any(), anyString());
+        verify(core, never()).importTimetable(any(), anyString());
     }
 
     @Test

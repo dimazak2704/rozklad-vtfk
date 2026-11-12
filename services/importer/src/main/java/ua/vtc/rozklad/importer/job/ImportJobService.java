@@ -129,6 +129,7 @@ public class ImportJobService {
      */
     public ImportJob updateMappings(UUID id, List<MappingChange> changes) {
         ImportJob job = get(id);
+        requireNotHeldByCore(job);
         if (!job.acceptsMappings()) {
             throw ProblemException.conflict("Зіставлення можна змінювати, лише коли завдання очікує перевірки "
                     + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
@@ -190,6 +191,7 @@ public class ImportJobService {
      */
     public ImportJob updateOptions(UUID id, long expectedVersion, JsonNode optionsJson) {
         ImportJob job = get(id);
+        requireNotHeldByCore(job);
         if (!job.acceptsMappings()) {
             throw ProblemException.conflict("Параметри можна змінювати, лише коли завдання очікує перевірки "
                     + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
@@ -233,6 +235,7 @@ public class ImportJobService {
         if (job.kind() != kind) {
             throw new BusinessRuleException("DRAFT_NOT_EDITABLE", "Рядки можна редагувати лише в імпорті розпорядження.");
         }
+        requireNotHeldByCore(job);
         if (!job.acceptsMappings()) {
             throw ProblemException.conflict("Чернетку можна змінювати, лише коли завдання очікує перевірки "
                     + "(NEEDS_REVIEW, READY або FAILED після застосування); зараз — " + job.status() + ".");
@@ -293,6 +296,14 @@ public class ImportJobService {
         job.startApplying(effectiveSemester, clock.instant());
         events.publishEvent(new ImportJobQueued(id, ImportJobQueued.Stage.APPLY));
         return job;
+    }
+
+    /** Core already accepted the job's last step: an edit could not reach core, apply only finishes the job. */
+    private static void requireNotHeldByCore(ImportJob job) {
+        if (job.coreHoldsData()) {
+            throw ProblemException.conflict("Сервер розкладу вже прийняв дані цього імпорту, тож змінити їх тут не можна. "
+                    + "Натисніть «Застосувати», щоб завершити імпорт; виправлення робіть на сервері розкладу.");
+        }
     }
 
     /** Why a job in review cannot be applied, in the words of the report. */

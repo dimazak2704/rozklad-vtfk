@@ -97,6 +97,13 @@ public interface ImportHandler {
     /** Checkpoints of applying: a step done by an earlier attempt is not repeated. */
     interface ApplySteps {
 
+        /**
+         * The only step that is not a kind's last one: core's catalog import is an upsert by natural
+         * keys, so it may be sent again with another body. Every other step creates the job's data in
+         * core (a timetable version, an order, the load) and core refuses its key with another body.
+         */
+        String CATALOG = "catalog";
+
         /** Result of a finished step, or {@code null}. */
         JsonNode done(String step);
 

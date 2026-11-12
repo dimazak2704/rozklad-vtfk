@@ -224,14 +224,30 @@ public class ImportJob implements Persistable<UUID> {
 
     /**
      * The admin changed what the apply steps send (mappings, options or the draft): a stored
-     * checkpoint was built from the old inputs, so every step runs again on the next apply
-     * (core's catalog import is an upsert; a later step is stored only when the whole job applies).
-     * Pressing apply again without a change keeps the checkpoints.
+     * checkpoint was built from the old inputs, so every step runs again on the next apply. Edits
+     * are accepted only while at most the catalog step is stored ({@link #acceptsMappings}), and
+     * core's catalog import is an upsert, so sending it again with the new body is safe. Pressing
+     * apply again without a change keeps the checkpoints.
      */
     private void forgetApplySteps() {
-        if (status != ImportJobStatus.APPLIED) {
-            result = null;
+        result = null;
+    }
+
+    /**
+     * A stored checkpoint other than the catalog one: the kind's last step is done, so core already
+     * holds the job's data (a timetable version, an order, the load) and the job only has to be
+     * marked applied. This happens when a restart lands between that step and {@link #applied}.
+     */
+    public boolean coreHoldsData() {
+        if (result == null || !result.isObject()) {
+            return false;
         }
+        for (String step : result.propertyNames()) {
+            if (!ImportHandler.ApplySteps.CATALOG.equals(step)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A step of applying succeeded; its result is kept so a retry skips it. */
@@ -290,10 +306,15 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
-    /** Waiting for review, or failed while applying: the parsed draft is intact and can be corrected. */
+    /**
+     * Waiting for review, or failed while applying: the parsed draft is intact and can be corrected.
+     * Not once core holds the job's data ({@link #coreHoldsData}): a changed last step would reuse
+     * its Idempotency-Key with another body, which core refuses with 409 on every later apply.
+     */
     public boolean acceptsMappings() {
-        return status == ImportJobStatus.NEEDS_REVIEW || status == ImportJobStatus.READY
+        boolean reviewable = status == ImportJobStatus.NEEDS_REVIEW || status == ImportJobStatus.READY
                 || status == ImportJobStatus.FAILED && draft != null && parsedAt != null;
+        return reviewable && !coreHoldsData();
     }
 
     /**

@@ -37,7 +37,7 @@ import ua.vtc.rozklad.importer.web.ProblemException;
 @Component
 public class TimetableImportHandler implements ImportHandler {
 
-    static final String STEP_CATALOG = "catalog";
+    static final String STEP_CATALOG = ApplySteps.CATALOG;
     static final String STEP_TIMETABLE = "timetable";
     private static final int VERSION_NAME_LENGTH = 100;
 

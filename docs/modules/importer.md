@@ -61,6 +61,11 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
   (core's catalog import is an upsert; a new teacher or discipline the admin confirmed after a rejection is
   then really created). Calls carry `Idempotency-Key: import-job:<id>:<step>`. A second apply of an applied
   job changes nothing.
+* **Core already holds the data**: `catalog` is the only step that is not a kind's last one (`timetable`,
+  `changes`, `load`). Once a last step is stored, core has the version, order or load and refuses that key with
+  another body (409), so edits of mappings, options and the draft answer 409 ("press apply to finish") and the
+  next apply only marks the job `APPLIED` with the stored result, without the catalog and without calling core.
+  Fixes after that are made in core (decision: the importer never re-sends data core already accepted).
 * **Restart**: `UPLOADED` jobs are re-queued; `PARSING` → `FAILED` (re-parsing could loop on a poison file and
   re-spend AI money); `APPLYING` → `FAILED` with a "press apply again" message (checkpoints make it safe).
 

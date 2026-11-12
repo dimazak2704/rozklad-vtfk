@@ -177,6 +177,12 @@ public class ImportJobProcessor {
         if (job == null || job.status() != ImportJobStatus.APPLYING) {
             return;
         }
+        if (job.coreHoldsData()) {
+            // останній крок core вже прийняв (перезапуск перед позначкою APPLIED): лише завершуємо
+            update(id, fresh -> fresh.applied(job.result(), clock.instant()));
+            log.info("Import job {} ({}) applied: core already held its data", id, job.kind());
+            return;
+        }
         try {
             ImportHandler handler = handlers.get(job.kind());
             JobOptions options = JobOptions.from(job.options());

@@ -6,6 +6,7 @@ import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
+import ua.vtc.rozklad.importer.job.ImportHandler;
 import ua.vtc.rozklad.importer.job.ImportHandler.ApplyInput;
 import ua.vtc.rozklad.importer.job.JobOptions;
 import ua.vtc.rozklad.importer.normalize.EntityType;
@@ -20,7 +21,7 @@ import ua.vtc.rozklad.importer.report.Severity;
  */
 public final class LoadApplier {
 
-    public static final String STEP_CATALOG = "catalog";
+    public static final String STEP_CATALOG = ImportHandler.ApplySteps.CATALOG;
     public static final String STEP_LOAD = "load";
     /** core {@code discipline.short_name} is varchar(64). */
     public static final int SHORT_NAME_LENGTH = 64;
