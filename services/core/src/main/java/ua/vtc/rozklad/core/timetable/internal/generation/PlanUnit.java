@@ -39,19 +39,27 @@ public record PlanUnit(
 
     /** Pinned at the slot of a base lesson; the unit joins the lesson's stream if it has none of its own. */
     PlanUnit pinnedAt(ProblemSnapshot.PinnedSlot slot, UUID lessonId, UUID lessonStreamId) {
+        return pinnedAt(slot, lessonId, lessonStreamId, online);
+    }
+
+    /** As {@link #pinnedAt(ProblemSnapshot.PinnedSlot, UUID, UUID)}, taking the pinned lesson's online flag. */
+    PlanUnit pinnedAt(ProblemSnapshot.PinnedSlot slot, UUID lessonId, UUID lessonStreamId, boolean lessonOnline) {
         return new PlanUnit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, lessonKind,
-                requiredRoomType, preferredRoomId, streamId != null ? streamId : lessonStreamId, online, slot,
+                requiredRoomType, preferredRoomId, streamId != null ? streamId : lessonStreamId, lessonOnline, slot,
                 lessonId);
     }
 
     /**
+     * A pinned online lesson is sent with {@code online}: its room is kept for reference and occupies
+     * nothing (DOMAIN §5). Free units are always sent in person.
+     *
      * @param teacherRoomId the teacher's usual room for the discipline, or {@code null}
      * @param initial       where the unit stands in the base version (a warm start), or {@code null}
      */
     ProblemSnapshot.Unit toSnapshotUnit(UUID teacherRoomId, ProblemSnapshot.PinnedSlot initial) {
         return new ProblemSnapshot.Unit(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight,
                 requiredRoomType, preferredRoomId, null, pinned, pinned == null ? initial : null,
-                pinned == null ? teacherRoomId : null);
+                pinned == null ? teacherRoomId : null, pinned != null && online);
     }
 
     /**

@@ -193,7 +193,8 @@ class ProblemSnapshotBuilder {
                 }
             }
             if (index >= 0) {
-                result.set(index, result.get(index).pinnedAt(slot, lesson.getId(), lesson.getStreamId()));
+                result.set(index, result.get(index).pinnedAt(slot, lesson.getId(), lesson.getStreamId(),
+                        lesson.isOnline()));
             } else {
                 result.add(pinnedUnit(lesson, requiredTypeOf(lesson, requiredTypes)));
             }
