@@ -381,6 +381,28 @@ class NotifyApprovalIT {
     }
 
     /**
+     * The teacher reads the effective room (the new one, or the lesson's own). Picking the lesson's own room
+     * as the "new" one, or clearing it again, changes nothing he sees, so nothing is sent: a repeat would
+     * read as a reminder or a second notice.
+     */
+    @Test
+    void sameRoomTheTeacherAlreadySeesIsNotSentAgain() {
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+        ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.MUTUAL), "admin");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, WAIT)).hasSize(1);
+
+        ChangeDto ownRoom = commands.update(created.id(),
+                new UpdateChangeRequest(room.getId(), ReasonCode.MUTUAL, null, created.version()), "admin");
+        commands.update(created.id(), new UpdateChangeRequest(null, ReasonCode.MUTUAL, null, ownRoom.version()),
+                "admin");
+
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+    }
+
+    /**
      * Known gap (docs/modules/substitution-order-accounting.md §9): a CONFIRM request the teacher already
      * confirmed is not sent again when its room changes. A repeated request would ask him to confirm a
      * second time (and read as a reminder), a notice would turn his request into a NOTIFY one; until the

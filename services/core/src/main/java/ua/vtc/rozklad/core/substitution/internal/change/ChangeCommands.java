@@ -174,7 +174,9 @@ public class ChangeCommands {
         }
         changes.lockDecisionsOf(change.getDate());
         lessons.lockGroupDay(change.getGroupId(), change.getDate());
-        boolean roomChanged = !Objects.equals(change.getNewRoomId(), request.newRoomId());
+        // порівнюємо аудиторію, яку бачить викладач (нова або, без неї, своя): «нова» = стара нічого не змінює
+        boolean roomChanged = !Objects.equals(seenRoom(change.getNewRoomId(), change),
+                seenRoom(request.newRoomId(), change));
         change.setReplacement(change.getNewDisciplineId(), change.getNewTeacherId(), request.newRoomId());
         change.setReason(request.reasonCode(), blankToNull(request.reasonText()));
         if (change.isOpen()) {
@@ -185,6 +187,11 @@ public class ChangeCommands {
             notifications.confirmationRequested(change);
         }
         return finish(change);
+    }
+
+    /** The room the teacher reads in his message: the new one, or the lesson's own when there is none. */
+    private static UUID seenRoom(UUID newRoomId, Change change) {
+        return newRoomId != null ? newRoomId : change.getOrigRoomId();
     }
 
     /**
