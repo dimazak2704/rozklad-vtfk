@@ -22,7 +22,7 @@ export interface NowIndicatorProps {
   date?: IsoDate | null;
   /**
    * `hero` — головна: тонований блок з відліком-заголовком, реченням «що далі» і доріжкою дня;
-   * `strip` — сторінка дзвінків: відлік і доріжка дня без тла;
+   * `strip` — сторінка дзвінків і огляд диспетчера: відлік, під ним речення «що далі» й доріжка дня, без тла;
    * `compact` — телефон над денним списком: відлік і одна смуга поточної пари;
    * `inline` — один рядок у рядку даних заголовка (десктоп).
    */
@@ -461,7 +461,8 @@ export function NowIndicator({
   if (variant === 'strip') {
     return (
       <section aria-label="Стан навчального дня" className={cn('flex w-full flex-col gap-5', className)}>
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2">
+        {/* як у герої: речення «що далі» — одразу під відліком, а не на іншому краї рядка */}
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Headline status={shown} afterDay={afterDay} compact={false} />
           {hasSentence ? <p className="text-body text-secondary">{sentence}</p> : null}
         </div>
