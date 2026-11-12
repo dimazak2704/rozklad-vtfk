@@ -97,7 +97,7 @@ export function DateNav({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="ghost"
+            variant="quiet"
             size={size}
             static
             aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}

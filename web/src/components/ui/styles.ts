@@ -1,8 +1,12 @@
 /** Спільні класи контролів: кнопки й поля. Окремий файл, щоб компоненти лишалися «чистими» для Fast Refresh. */
 import { cn } from '@/lib/cn';
 
-/** `shell` — застаріле (колишня синя смуга), тепер те саме, що `ghost`. */
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'shell' | 'link';
+/**
+ * `ghost` — вбудована дія текстом акценту («+ Додати відсутність», «Ще 5 подій»): видно, що це можна натиснути.
+ * `quiet` — нейтральна кнопка без рамки для іконок і перемикачів (стрілки дати, меню).
+ * `shell` — застаріле (колишня синя смуга), тепер те саме, що `quiet`.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'danger-ghost' | 'shell' | 'link';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BASE =
@@ -25,7 +29,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   secondary:
     'border border-default bg-surface text-primary hover:border-control hover:bg-hover active:border-control active:bg-active ' +
     'disabled:border-separator disabled:bg-sunken disabled:text-disabled',
-  ghost: 'text-secondary hover:bg-hover hover:text-primary active:bg-active disabled:bg-transparent disabled:text-disabled',
+  ghost: 'text-accent hover:bg-hover active:bg-active disabled:bg-transparent disabled:text-disabled',
+  quiet: 'text-secondary hover:bg-hover hover:text-primary active:bg-active disabled:bg-transparent disabled:text-disabled',
   danger:
     'bg-danger font-[650] text-on-danger hover:bg-danger-hover active:bg-danger-active ' +
     'disabled:border disabled:border-separator disabled:bg-sunken disabled:text-disabled',

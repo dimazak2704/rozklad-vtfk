@@ -34,7 +34,7 @@ export function IconButton({
   ref,
   label,
   icon,
-  variant = 'ghost',
+  variant = 'quiet',
   size = 'md',
   shortcut,
   tooltipSide = 'top',
