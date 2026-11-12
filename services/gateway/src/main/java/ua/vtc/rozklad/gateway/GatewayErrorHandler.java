@@ -47,8 +47,10 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
         }
         Problem problem = classify(error);
         if (problem.status().is5xxServerError()) {
-            log.warn("Gateway error {} on {} {}: {}", problem.status().value(), exchange.getRequest().getMethod(),
-                    exchange.getRequest().getPath(), error.toString());
+            // WebFlux без MDC: id запиту прямо в рядку, як у тілі відповіді й у логах сервісів
+            log.warn("[{}] Gateway error {} on {} {}: {}", exchange.getAttributeOrDefault(RequestIdWebFilter.ATTRIBUTE, "-"),
+                    problem.status().value(), exchange.getRequest().getMethod(), exchange.getRequest().getPath(),
+                    error.toString());
         }
         return write(exchange, response, problem);
     }

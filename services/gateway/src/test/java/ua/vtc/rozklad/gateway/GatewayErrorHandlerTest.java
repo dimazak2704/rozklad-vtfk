@@ -7,11 +7,30 @@ import java.net.NoRouteToHostException;
 import java.net.UnknownHostException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Which gateway failures the client sees as «service unavailable» rather than an internal error. */
+@ExtendWith(OutputCaptureExtension.class)
 class GatewayErrorHandlerTest {
+
+    @Test
+    void theLogLineOfAGatewayErrorNamesTheRequestId(CapturedOutput output) {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/admin/groups"));
+        exchange.getAttributes().put(RequestIdWebFilter.ATTRIBUTE, "req-gw-5");
+
+        new GatewayErrorHandler(JsonMapper.builder().build())
+                .handle(exchange, new ConnectException("Connection refused")).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(output).contains("Gateway error 503 on GET /api/admin/groups").contains("[req-gw-5]");
+    }
 
     @Test
     void stoppedContainerWhoseNameNoLongerResolvesIsUnavailable() {
