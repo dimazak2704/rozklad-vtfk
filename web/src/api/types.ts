@@ -440,7 +440,7 @@ export interface TeacherDto {
   email: Nullable<string>;
   active: boolean;
   needsReview: boolean;
-  /** Чи привʼязаний обліковий запис Keycloak. */
+  /** Чи привʼязаний обліковий запис (сервіс входу auth). */
   linked?: boolean;
   version?: number;
 }

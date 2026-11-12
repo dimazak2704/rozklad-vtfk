@@ -34,8 +34,8 @@ class TeacherAccountServiceTest {
 
     private final TeacherRepository teachers = mock(TeacherRepository.class);
     private final InviteRepository invites = mock(InviteRepository.class);
-    private final FakeIdentityProvider keycloak = new FakeIdentityProvider();
-    private final TeacherAccountService service = new TeacherAccountService(teachers, invites, keycloak,
+    private final FakeIdentityProvider identity = new FakeIdentityProvider();
+    private final TeacherAccountService service = new TeacherAccountService(teachers, invites, identity,
             mock(AccountLinkLocks.class), Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
 
     private Teacher krentsin;
@@ -48,7 +48,7 @@ class TeacherAccountServiceTest {
         given(teachers.existsById(krentsin.getId())).willReturn(true);
         given(teachers.findByAccountId(any())).willReturn(Optional.empty());
         given(invites.findAllByTeacherIdAndUsedAtIsNullAndRevokedAtIsNull(any())).willReturn(List.of());
-        account = keycloak.existingUser("krentsin", "teacher", true);
+        account = identity.existingUser("krentsin", "teacher", true);
     }
 
     @Test
@@ -61,20 +61,20 @@ class TeacherAccountServiceTest {
         assertThat(linked).isEqualTo(new TeacherAccountDto(krentsin.getId(), "Кренцін М.Д.", true, account,
                 "krentsin", true));
         assertThat(krentsin.getAccountId()).isEqualTo(account);
-        assertThat(keycloak.user(account).orElseThrow().roles()).contains(Roles.TEACHER);
+        assertThat(identity.user(account).orElseThrow().roles()).contains(Roles.TEACHER);
         assertThat(open.status(NOW)).isEqualTo(InviteStatus.REVOKED);
         assertThat(service.get(krentsin.getId()).username()).isEqualTo("krentsin");
     }
 
     @Test
     void anAccessGrantWithoutUsernameIsLinkedByItsEmail() {
-        UUID granted = keycloak.grantedByEmail("krentsin@college.example", java.util.Set.of());
+        UUID granted = identity.grantedByEmail("krentsin@college.example", java.util.Set.of());
 
         TeacherAccountDto linked = service.link(krentsin.getId(), " Krentsin@College.Example ", "admin");
 
         assertThat(linked.userId()).isEqualTo(granted);
         assertThat(linked.username()).isEqualTo("krentsin@college.example");
-        assertThat(keycloak.user(granted).orElseThrow().roles()).containsExactly(Roles.TEACHER);
+        assertThat(identity.user(granted).orElseThrow().roles()).containsExactly(Roles.TEACHER);
     }
 
     @Test
@@ -82,12 +82,12 @@ class TeacherAccountServiceTest {
         krentsin.setAccountId(account);
 
         assertThat(service.link(krentsin.getId(), "krentsin", "admin").userId()).isEqualTo(account);
-        assertThat(keycloak.user(account).orElseThrow().roles()).isEmpty();
+        assertThat(identity.user(account).orElseThrow().roles()).isEmpty();
     }
 
     @Test
     void unknownOrDisabledAccountIs422() {
-        keycloak.existingUser("blocked", "secret", false);
+        identity.existingUser("blocked", "secret", false);
 
         assertThatThrownBy(() -> service.link(krentsin.getId(), "nobody", "admin"))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
@@ -110,14 +110,14 @@ class TeacherAccountServiceTest {
 
     @Test
     void anotherLiveAccountMustBeUnlinkedFirstButALostOneIsReplaced() {
-        UUID other = keycloak.existingUser("mkrentsin", "secret", true);
+        UUID other = identity.existingUser("mkrentsin", "secret", true);
         krentsin.setAccountId(other);
 
         assertThatThrownBy(() -> service.link(krentsin.getId(), "krentsin", "admin"))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("Викладач Кренцін М.Д. уже має обліковий запис «mkrentsin». Спершу відв'яжіть його.");
 
-        keycloak.deleteUser(other);
+        identity.deleteUser(other);
         assertThat(service.link(krentsin.getId(), "krentsin", "admin").userId()).isEqualTo(account);
     }
 
@@ -129,16 +129,16 @@ class TeacherAccountServiceTest {
         service.unlink(krentsin.getId(), "admin");
 
         assertThat(krentsin.getAccountId()).isNull();
-        assertThat(keycloak.user(account)).isPresent();
+        assertThat(identity.user(account)).isPresent();
         assertThat(service.get(krentsin.getId()).linked()).isFalse();
     }
 
     @Test
-    void unknownTeacherIs404AndKeycloakOutageIs503() {
+    void unknownTeacherIs404AndIdentityOutageIs503() {
         assertThatThrownBy(() -> service.link(UUID.randomUUID(), "krentsin", "admin"))
                 .isInstanceOf(NotFoundException.class);
 
-        keycloak.goDown();
+        identity.goDown();
         assertThatThrownBy(() -> service.link(krentsin.getId(), "krentsin", "admin"))
                 .isInstanceOfSatisfying(ErrorResponseException.class,
                         failed -> assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));

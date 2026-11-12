@@ -92,7 +92,7 @@ class PublicInviteControllerTest {
     }
 
     @Test
-    void keycloakDownIs503() throws Exception {
+    void identityProviderDownIs503() throws Exception {
         given(invites.accept(TOKEN, "krentsin", "secret-password"))
                 .willThrow(IdentityProblems.identityUnavailable(new IllegalStateException("down")));
 

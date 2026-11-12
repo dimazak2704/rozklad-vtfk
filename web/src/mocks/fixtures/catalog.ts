@@ -101,7 +101,7 @@ export const ROOMS: readonly RoomDto[] = [...roomNames].sort(compareRoomNames).m
 
 // ───────────────────────── Викладачі ─────────────────────────
 
-/** Викладачі, привʼязані до демо-облікових записів Keycloak (DOMAIN §12; користувачі krentsin, nepyivoda). */
+/** Викладачі, привʼязані до демо-облікових записів сервісу входу (DOMAIN §12; користувачі krentsin, nepyivoda). */
 export const LINKED_TEACHER_NAMES: readonly string[] = ['Кренцін', 'Непийвода'];
 
 function surnameOf(shortName: string): string {

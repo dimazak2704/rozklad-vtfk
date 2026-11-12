@@ -80,13 +80,9 @@ public final class InviteDtos {
         }
     }
 
-    /**
-     * {@code GET /api/internal/teachers/{id}}: the teacher and the link to the account.
-     * {@code keycloakUserId} repeats {@code accountId} for old readers and goes away in the next
-     * contract version.
-     */
+    /** {@code GET /api/internal/teachers/{id}}: the teacher and the link to the account ({@code accountId}). */
     public record InternalTeacherDto(UUID id, String lastName, String firstName, String middleName, String shortName,
                                      String displayName, String cycleCommission, boolean active, UUID accountId,
-                                     @Deprecated UUID keycloakUserId, boolean linked) {
+                                     boolean linked) {
     }
 }

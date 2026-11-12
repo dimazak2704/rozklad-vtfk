@@ -2,35 +2,25 @@ package ua.vtc.rozklad.importer.config;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * Roles of an access token: the flat {@code roles} claim of our sign-in service, or Keycloak's
- * {@code realm_access.roles} while a token still comes from Keycloak. Spring authorities are
- * {@code ROLE_<NAME>}.
+ * Roles of an access token: the flat {@code roles} claim of the sign-in service {@code auth}. Spring
+ * authorities are {@code ROLE_<NAME>}.
  */
 public final class TokenRoles {
 
     static final String ROLES = "roles";
-    static final String REALM_ACCESS = "realm_access";
 
     private TokenRoles() {
     }
 
-    /** Roles in their original spelling; empty when neither claim is present. */
+    /** Roles in their original spelling; empty when the claim is missing or malformed. */
     public static Set<String> of(Jwt jwt) {
-        Object flat = jwt.getClaims().get(ROLES);
-        if (flat != null) {
-            return names(flat);
-        }
-        if (jwt.getClaims().get(REALM_ACCESS) instanceof Map<?, ?> realmAccess) {
-            return names(realmAccess.get(ROLES));
-        }
-        return Set.of();
+        return names(jwt.getClaims().get(ROLES));
     }
 
     /** {@code ROLE_<NAME>} authorities; a method reference fits {@code JwtAuthenticationConverter}. */

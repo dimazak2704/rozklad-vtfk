@@ -35,7 +35,7 @@ import ua.vtc.rozklad.core.support.TestJwts;
 /**
  * Invite flow against PostgreSQL. HTTP covers what happens before the identity provider (404, 410,
  * public info, admin list); account creation runs through {@link InviteService} wired with an
- * in-memory Keycloak in a real transaction, so the shared test context needs no Keycloak.
+ * in-memory identity provider in a real transaction, so the shared test context needs no auth service.
  */
 @CoreIntegrationTest
 class InviteFlowIT {
@@ -66,15 +66,15 @@ class InviteFlowIT {
     @Autowired
     private Clock clock;
 
-    private final FakeIdentityProvider keycloak = new FakeIdentityProvider();
-    private InviteService withFakeKeycloak;
+    private final FakeIdentityProvider identity = new FakeIdentityProvider();
+    private InviteService withFakeIdentity;
     private MockMvc mvc;
     private UUID teacher;
 
     @BeforeEach
     void setUp() throws Exception {
         mvc = ApiTestSupport.mockMvc(context);
-        withFakeKeycloak = new InviteService(inviteRepository, teacherRepository, catalog, keycloak,
+        withFakeIdentity = new InviteService(inviteRepository, teacherRepository, catalog, identity,
                 new IdentityProperties(Duration.ofDays(7)), appProperties, clock);
         teacher = id(mvc.perform(post("/api/admin/teachers").with(TestJwts.admin())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -96,10 +96,10 @@ class InviteFlowIT {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.teacherName").value("Кренцін Микола Дмитрович"));
 
-        transaction.executeWithoutResult(status -> withFakeKeycloak.accept(token, "Krentsin", "secret-password"));
+        transaction.executeWithoutResult(status -> withFakeIdentity.accept(token, "Krentsin", "secret-password"));
 
-        UUID account = keycloak.byUsername("krentsin").orElseThrow().id();
-        assertThat(keycloak.user(account).orElseThrow().roles()).containsExactly("TEACHER");
+        UUID account = identity.byUsername("krentsin").orElseThrow().id();
+        assertThat(identity.user(account).orElseThrow().roles()).containsExactly("TEACHER");
         assertThat(teacherRepository.findById(teacher).orElseThrow().getAccountId()).isEqualTo(account);
         mvc.perform(get("/api/me").with(TestJwts.user(account, "krentsin", "TEACHER")))
                 .andExpect(status().isOk())
@@ -118,7 +118,6 @@ class InviteFlowIT {
                 .andExpect(jsonPath("$.linked").value(true));
         mvc.perform(get("/api/internal/teachers/{id}", teacher).with(TestJwts.service()))
                 .andExpect(jsonPath("$.accountId").value(account.toString()))
-                .andExpect(jsonPath("$.keycloakUserId").value(account.toString()))
                 .andExpect(jsonPath("$.linked").value(true));
     }
 
@@ -156,11 +155,11 @@ class InviteFlowIT {
 
     @Test
     void takenUsernameLeavesTheInviteUsable() throws Exception {
-        keycloak.existingUser("krentsin", "someone-else", true);
+        identity.existingUser("krentsin", "someone-else", true);
         String token = createInvite();
 
         assertThatThrownBy(() -> transaction.executeWithoutResult(status ->
-                withFakeKeycloak.accept(token, "krentsin", "secret-password")))
+                withFakeIdentity.accept(token, "krentsin", "secret-password")))
                 .isInstanceOf(ConflictException.class);
 
         mvc.perform(get("/api/public/invites/{token}", token)).andExpect(jsonPath("$.status").value("ACTIVE"));

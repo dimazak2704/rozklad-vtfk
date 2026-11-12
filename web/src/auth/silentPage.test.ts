@@ -43,7 +43,7 @@ describe('тихе оновлення входу (/login/silent.html)', () => {
     expect(nginx).toContain('absolute_redirect off;');
   });
 
-  it('сервіс входу на тому ж походженні: у CSP сайту немає адрес Keycloak', () => {
+  it('сервіс входу на тому ж походженні: у CSP сайту немає сторонніх адрес входу', () => {
     const site = cspIn(nginx);
     expect(site).toContain("connect-src 'self';");
     expect(site).toContain("form-action 'self';");

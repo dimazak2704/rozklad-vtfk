@@ -52,7 +52,7 @@ class AccountLinkIT {
     @Autowired
     private Clock clock;
 
-    private final FakeIdentityProvider keycloak = new FakeIdentityProvider();
+    private final FakeIdentityProvider identity = new FakeIdentityProvider();
     private TeacherAccountService service;
     private UUID stets;
     private UUID hanza;
@@ -60,10 +60,10 @@ class AccountLinkIT {
     @BeforeEach
     void setUp() throws Exception {
         MockMvc mvc = ApiTestSupport.mockMvc(context);
-        service = new TeacherAccountService(teachers, invites, keycloak, new AccountLinkLocks(jdbc), clock);
+        service = new TeacherAccountService(teachers, invites, identity, new AccountLinkLocks(jdbc), clock);
         stets = teacher(mvc, "Стець");
         hanza = teacher(mvc, "Ганза");
-        keycloak.existingUser("r4-stets", "secret-password", true);
+        identity.existingUser("r4-stets", "secret-password", true);
     }
 
     @AfterEach

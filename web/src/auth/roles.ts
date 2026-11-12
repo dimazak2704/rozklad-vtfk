@@ -17,19 +17,9 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
-/**
- * Ролі з access-токена, лише відомі системі: пласке поле `roles` (наш сервіс входу), а якщо його
- * немає — `realm_access.roles` (токен ще від Keycloak).
- */
+/** Ролі з access-токена (пласке поле `roles` сервісу входу), лише відомі системі. */
 export function rolesFromClaims(claims: Record<string, unknown> | null | undefined): Role[] {
-  if (!claims) return [];
-  const realmAccess = claims.realm_access;
-  const roles =
-    'roles' in claims
-      ? claims.roles
-      : typeof realmAccess === 'object' && realmAccess !== null
-        ? (realmAccess as { roles?: unknown }).roles
-        : undefined;
+  const roles = claims?.roles;
   if (!Array.isArray(roles)) return [];
   return roles.filter((role): role is Role => typeof role === 'string' && KNOWN_ROLES.has(role));
 }

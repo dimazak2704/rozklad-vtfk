@@ -32,7 +32,7 @@ class ServiceClientsConfigTest {
     private HttpServer server;
 
     @BeforeEach
-    void startFakeKeycloakAndCore() throws IOException {
+    void startFakeAuthAndCore() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/token", exchange -> {
             tokenRequests.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));

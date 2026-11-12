@@ -16,7 +16,7 @@ import ua.vtc.rozklad.core.support.ReferenceData;
  * Helpers for the API integration tests of catalog, calendar, load and identity. They all run in
  * the shared {@code @CoreIntegrationTest} context (one set of containers); MockMvc is built on that
  * context with the production security filter chain, so {@code TestJwts} tokens work without
- * Keycloak.
+ * the auth service.
  */
 public final class ApiTestSupport {
 

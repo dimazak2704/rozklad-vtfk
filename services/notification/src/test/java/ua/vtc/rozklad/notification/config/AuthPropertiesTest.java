@@ -15,15 +15,7 @@ class AuthPropertiesTest {
     private static final URI JWKS = URI.create("http://auth:8085/auth/oauth2/jwks");
 
     @Test
-    void emptyAudienceChecksOnlyIssuerAndLifetime() {
-        OAuth2TokenValidator<Jwt> validator = new AuthProperties(ISSUER, JWKS, "").tokenValidator();
-
-        assertThat(validator.validate(token(ISSUER, null)).hasErrors()).isFalse();
-        assertThat(validator.validate(token("http://evil.example/auth", null)).hasErrors()).isTrue();
-    }
-
-    @Test
-    void configuredAudienceMustBeInTheToken() {
+    void issuerAndAudienceMustMatch() {
         OAuth2TokenValidator<Jwt> validator = new AuthProperties(ISSUER, JWKS, "rozklad-api").tokenValidator();
 
         assertThat(validator.validate(token(ISSUER, List.of("rozklad-web", "rozklad-api"))).hasErrors()).isFalse();

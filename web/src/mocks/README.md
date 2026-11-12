@@ -1,6 +1,6 @@
 # Мок-API (MSW)
 
-SPA працює без бекенду й Keycloak: Mock Service Worker перехоплює запити до `/api` у браузері
+SPA працює без бекенду й сервісу входу: Mock Service Worker перехоплює запити до `/api` у браузері
 (Service Worker) і у Vitest (`msw/node`) та відповідає даними з реального розкладу коледжу.
 Лише для розробки й тестів: у production-збірці коду MSW, мок-даних і `mockServiceWorker.js` немає.
 
@@ -9,7 +9,7 @@ SPA працює без бекенду й Keycloak: Mock Service Worker пере
 | Де | Як | Користувач |
 |---|---|---|
 | Розробка | `npm run dev:mock` → http://localhost:5180 (налаштування — `web/.env.mock`) | фіктивний ADMIN + TEACHER |
-| Розробка з бекендом | `npm run dev` — без моків, `/api` іде через проксі на gateway :8080 | Keycloak |
+| Розробка з бекендом | `npm run dev` — без моків, `/api` іде через проксі на gateway :8080 | сервіс входу auth (`scripts/dev-stack.sh up`) |
 | Vitest | завжди (`src/test/setup.ts`); запит без обробника — помилка тесту | — |
 | Playwright | сервер стартує сам із `VITE_USE_MOCKS=1` на `PW_PORT` | гість; ролі — `loginWithMockRoles(page, 'ADMIN')` з `e2e/support/mock-auth.ts` до першого `goto` |
 

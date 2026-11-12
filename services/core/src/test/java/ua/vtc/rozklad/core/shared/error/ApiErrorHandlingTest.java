@@ -295,11 +295,11 @@ class ApiErrorHandlingTest {
     }
 
     @Test
-    void keycloakRealmRolesStillBecomeAuthorities() throws Exception {
+    void realmAccessRolesAreNoLongerAuthorities() throws Exception {
         givenAdminToken("realm_access", Map.of("roles", List.of("ADMIN")));
 
         mockMvc.perform(get("/api/admin/probe/not-found").header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
     }
 
     private void givenAdminToken(String rolesClaim, Object roles) {

@@ -39,7 +39,7 @@ export const LIVE_STATUSES: ReadonlySet<ChangeStatus> = new Set<ChangeStatus>([
   'APPLIED',
 ]);
 
-/** Хто діє від імені диспетчера в мок-API (демо-обліковий запис Keycloak, ARCHITECTURE §6). */
+/** Хто діє від імені диспетчера в мок-API (демо-обліковий запис сервісу входу, ARCHITECTURE §6). */
 export const ADMIN_ACTOR = 'admin';
 
 export function toChangeDto(record: ChangeRecord): ChangeDto {

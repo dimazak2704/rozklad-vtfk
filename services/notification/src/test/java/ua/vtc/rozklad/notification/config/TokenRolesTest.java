@@ -19,15 +19,13 @@ class TokenRolesTest {
     }
 
     @Test
-    void keycloakRealmRolesAreReadWhenTheFlatClaimIsMissing() {
-        assertThat(TokenRoles.of(jwt(Map.of("realm_access", Map.of("roles", List.of("TEACHER", 42, " "))))))
-                .containsExactly("TEACHER");
+    void malformedEntriesAndRealmAccessAreIgnored() {
+        assertThat(TokenRoles.of(jwt(Map.of("roles", List.of("TEACHER", 42, " "))))).containsExactly("TEACHER");
+        assertThat(TokenRoles.of(jwt(Map.of("realm_access", Map.of("roles", List.of("ADMIN")))))).isEmpty();
     }
 
     @Test
-    void flatClaimWinsAndMissingClaimsMeanNoRoles() {
-        assertThat(TokenRoles.of(jwt(Map.of("roles", List.of("TEACHER"),
-                "realm_access", Map.of("roles", List.of("ADMIN")))))).containsExactly("TEACHER");
+    void missingOrMalformedClaimMeansNoRoles() {
         assertThat(TokenRoles.of(jwt(Map.of("scope", "openid")))).isEmpty();
         assertThat(TokenRoles.of(jwt(Map.of("roles", "ADMIN")))).isEmpty();
     }

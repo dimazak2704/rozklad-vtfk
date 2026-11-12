@@ -17,25 +17,19 @@ describe('ролі з access-токена', () => {
     expect(rolesFromAccessToken(token)).toEqual(['ADMIN', 'TEACHER']);
   });
 
-  it('без поля roles читає realm_access.roles (токен Keycloak)', () => {
+  it('поле realm_access не дає ролей', () => {
     const token = fakeJwt({
       sub: 'u1',
       name: 'Микола Кренцін',
-      realm_access: { roles: ['TEACHER', 'offline_access', 'uma_authorization'] },
+      realm_access: { roles: ['TEACHER', 'ADMIN'] },
     });
-    expect(rolesFromAccessToken(token)).toEqual(['TEACHER']);
+    expect(rolesFromAccessToken(token)).toEqual([]);
     expect(decodeJwtPayload(token)?.name).toBe('Микола Кренцін');
   });
 
   it('повертає порожній список для зіпсованого токена', () => {
     expect(rolesFromAccessToken('not-a-jwt')).toEqual([]);
-    expect(rolesFromAccessToken(fakeJwt({ realm_access: 'oops' }))).toEqual([]);
     expect(rolesFromAccessToken(fakeJwt({ roles: 'ADMIN' }))).toEqual([]);
-  });
-
-  it('пласке поле roles важливіше за realm_access', () => {
-    const token = fakeJwt({ roles: ['TEACHER'], realm_access: { roles: ['ADMIN'] } });
-    expect(rolesFromAccessToken(token)).toEqual(['TEACHER']);
   });
 
   it('розбирає список ролей для dev-режиму', () => {

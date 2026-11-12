@@ -15,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
  * JPA infrastructure shared by all modules.
  *
  * <p>Hibernate prefers Jackson 2 for JSON columns whenever it is on the classpath (here it comes
- * with keycloak-admin-client), so the Jackson 3 mapper of the application is set explicitly.
+ * with springdoc-openapi), so the Jackson 3 mapper of the application is set explicitly.
  * Slice tests ({@code @DataJpaTest}) must {@code @Import(JpaConfig.class)}.
  */
 @Configuration(proxyBeanMethods = false)

@@ -15,7 +15,7 @@ const QueryDevtools = import.meta.env.DEV && import.meta.env.VITE_QUERY_DEVTOOLS
   ? lazy(() => import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })))
   : () => null;
 
-/** Після повернення з Keycloak: прибираємо code/state з адреси і ведемо за роллю. */
+/** Після повернення зі сторінки входу: прибираємо code/state з адреси і ведемо за роллю. */
 function handleSigninCallback(user: User | undefined): void {
   const roles = rolesFromAccessToken(user?.access_token);
   const target = postLoginPath(roles, returnToFromState(user?.state));
