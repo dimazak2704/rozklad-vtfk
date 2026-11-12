@@ -6,7 +6,9 @@ import { BindingCodeDialog } from '@/components/admin-daily/telegram/BindingCode
 import { BindingsTable } from '@/components/admin-daily/telegram/BindingsTable';
 import { DeliveriesTable } from '@/components/admin-daily/telegram/DeliveriesTable';
 import { Button, notify, PageHeader, Panel, Skeleton, StatusDot, Tabs, TabsContent, TabsList, TabsTrigger, type MoreMenuItem } from '@/components/ui';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
+import { trackFinal } from '@/lib/undo/actions';
 
 type Section = 'chats' | 'log';
 
@@ -26,14 +28,16 @@ export default function TelegramPage() {
   const section: Section = params.get('tab') === 'log' || hash === '#deliveries' ? 'log' : 'chats';
 
   useRegisterCommands([
-    { id: 'binding-code', label: 'Створити код привʼязки Telegram', group: 'Telegram', icon: KeyRound, perform: () => setCodeOpen(true) },
+    { id: 'binding-code', label: 'Створити код привʼязки Telegram', group: 'Telegram', icon: KeyRound, shortcut: 'n', perform: () => setCodeOpen(true) },
   ]);
+  useHotkeys([{ keys: 'n', handler: () => setCodeOpen(true), description: 'Новий код привʼязки', group: 'Telegram' }]);
 
   const sendTest = async () => {
     try {
       const delivery = await test.mutateAsync();
       if (delivery.status === 'SENT') {
         notify.success('Тестове повідомлення надіслано', { description: 'Перевірте чат власника бота в Telegram.' });
+        trackFinal('Надіслано тестове повідомлення в Telegram', 'Повідомлення в Telegram не відкликається');
       } else {
         // RETRYING: Telegram тимчасово недоступний, сервіс повторить сам — це не успіх, але й не відмова
         notify.info('Тестове повідомлення в черзі', {

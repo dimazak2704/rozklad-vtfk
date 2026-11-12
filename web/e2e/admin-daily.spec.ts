@@ -150,7 +150,7 @@ test.describe('щоденна робота диспетчера', () => {
     await timeout.fill('20');
     await timeout.blur();
     await page.getByRole('button', { name: 'Зберегти' }).click();
-    await expect(page.getByText('Налаштування збережено')).toBeVisible();
+    await expect(page.getByText('Змінено налаштування')).toBeVisible();
     await expect(page.getByText('Є незбережені зміни')).toBeHidden();
   });
 });

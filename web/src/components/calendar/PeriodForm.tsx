@@ -3,16 +3,19 @@ import { FileText, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
-import { useSaveCalendarPeriod, type CalendarPeriod, type CalendarSemester } from '@/api/calendar';
+import { useDeleteCalendarPeriod, useSaveCalendarPeriod, type CalendarPeriod, type CalendarPeriodRequest, type CalendarSemester } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
+import { qk } from '@/api/queryKeys';
 import type { CalendarPeriodKind, PeriodScope, StudyMode } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
-import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea, notify } from '@/components/ui';
+import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
+import { track } from '@/lib/undo/actions';
 import { PERIOD_KIND_EFFECT, PERIOD_KIND_OPTIONS, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
 import { DateInput } from './DateInput';
 import { composeOrderNote } from './notes';
+import { periodRequest } from './periods';
 
 const periodSchema = z
   .object({
@@ -59,6 +62,7 @@ interface PeriodFormDialogProps {
 export function PeriodFormDialog({ semester, period, open, onOpenChange }: PeriodFormDialogProps) {
   const formId = useId();
   const save = useSaveCalendarPeriod();
+  const remove = useDeleteCalendarPeriod();
   const groups = useCatalogOptions('groups', { active: true });
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<PeriodValues>({
@@ -90,26 +94,46 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
     studyMode: values.studyMode,
   });
 
+  /** Період — у журнал дій: доданий скасовує видалення, змінений — попередні значення з новою версією. */
+  const journalPeriod = (before: CalendarPeriod | null, after: CalendarPeriodRequest, saved: CalendarPeriod) => {
+    const invalidate = [qk.admin.calendar.all];
+    if (!before) {
+      let id = saved.id;
+      track({
+        label: `Додано період «${saved.title}»`,
+        invalidate,
+        undo: () => remove.mutateAsync(id),
+        redo: async () => {
+          id = (await save.mutateAsync({ body: { ...after, version: undefined } })).id;
+        },
+      });
+      return;
+    }
+    let version = saved.version;
+    const put = async (body: CalendarPeriodRequest) => {
+      version = (await save.mutateAsync({ id: saved.id, body: { ...body, version } })).version;
+    };
+    track({ label: `Змінено період «${saved.title}»`, invalidate, undo: () => put(periodRequest(before)), redo: () => put(after) });
+  };
+
   const submit = form.handleSubmit(async (data) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: period?.id,
-        body: {
-          semesterId: semester.id,
-          kind: data.kind,
-          title: data.title.trim(),
-          startsOn: data.startsOn,
-          endsOn: data.endsOn,
-          studyMode: data.kind === 'STUDY_MODE' ? data.studyMode : null,
-          scope: data.scope,
-          courses: data.scope === 'COURSES' ? data.courses : null,
-          groupIds: data.scope === 'GROUPS' ? data.groupIds : null,
-          orderNote: blankToNull(data.orderNote),
-          version: period?.version,
-        },
-      });
-      notify.success(period ? `Період «${saved.title}» збережено` : `Період «${saved.title}» додано`);
+      const body: CalendarPeriodRequest = {
+        semesterId: semester.id,
+        kind: data.kind,
+        title: data.title.trim(),
+        startsOn: data.startsOn,
+        endsOn: data.endsOn,
+        studyMode: data.kind === 'STUDY_MODE' ? data.studyMode : null,
+        scope: data.scope,
+        courses: data.scope === 'COURSES' ? data.courses : null,
+        groupIds: data.scope === 'GROUPS' ? data.groupIds : null,
+        orderNote: blankToNull(data.orderNote),
+        version: period?.version,
+      };
+      const saved = await save.mutateAsync({ id: period?.id, body });
+      journalPeriod(period, body, saved);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS, { 'groupIds[0]': 'groupIds' }));

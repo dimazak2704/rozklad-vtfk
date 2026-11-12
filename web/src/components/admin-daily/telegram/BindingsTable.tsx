@@ -9,6 +9,7 @@ import { fuzzyFilter } from '@/lib/search';
 import { sortRows, type SortState } from '@/lib/sort';
 import { confirm } from '@/stores/confirm';
 import { BINDING_TYPE_LABEL } from './labels';
+import { track, trackFinal } from '@/lib/undo/actions';
 
 const PAGE_SIZE = 15;
 const TYPES: readonly BindingType[] = ['GROUP_CHAT', 'TEACHER', 'ADMIN_CHAT', 'SUBSCRIBER'];
@@ -76,6 +77,7 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
     try {
       await remove.mutateAsync(row.id);
       notify.success(`Чат «${row.title}» відвʼязано`);
+      trackFinal(`Відвʼязано чат «${row.title}»`, 'Привʼязати знову можна лише новим кодом');
     } catch (cause) {
       notify.error(cause, 'Не вдалося відвʼязати чат');
     }
@@ -84,7 +86,12 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
   const switchDigest = async (row: ChatBindingDto, digestEnabled: boolean) => {
     try {
       await setDigest.mutateAsync({ id: row.id, digestEnabled });
-      notify.success(digestEnabled ? `«${row.title}»: ранковий розклад увімкнено` : `«${row.title}»: ранковий розклад вимкнено`);
+      // перемикач — у журнал дій: «Скасувати» в тості чи Ctrl+Z повертають як було
+      track({
+        label: digestEnabled ? `Увімкнено ранковий розклад для «${row.title}»` : `Вимкнено ранковий розклад для «${row.title}»`,
+        undo: () => setDigest.mutateAsync({ id: row.id, digestEnabled: !digestEnabled }),
+        redo: () => setDigest.mutateAsync({ id: row.id, digestEnabled }),
+      });
     } catch (cause) {
       notify.error(cause, 'Не вдалося змінити ранковий розклад');
     }

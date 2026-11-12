@@ -7,6 +7,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatInstant, formatNumericDate, isoWeekday } from '@/lib/date';
 import { weekdayShort } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
+import { trackFinal } from '@/lib/undo/actions';
 
 const PAGE_SIZE = 10;
 
@@ -52,6 +53,7 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
     try {
       await removeImported.mutateAsync(row.id);
       notify.success(`Імпортоване розпорядження №${row.number ?? '—'} видалено`);
+      trackFinal(`Видалено імпортоване розпорядження №${row.number ?? '—'}`, 'Видалене розпорядження можна лише імпортувати знову');
     } catch (error) {
       notify.error(error, 'Не вдалося видалити розпорядження');
     }

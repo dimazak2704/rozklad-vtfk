@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 import { blockingReason, type ReviewTab } from './decisions';
+import { trackFinal } from '@/lib/undo/actions';
 
 interface ApplyPanelProps {
   job: ImportJob;
@@ -88,7 +89,9 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
       confirmLabel: 'Застосувати',
       onConfirm: () => apply.mutateAsync(),
     });
-    if (ok) notify.info('Застосовуємо імпорт — це може тривати до хвилини');
+    if (!ok) return;
+    notify.info('Застосовуємо імпорт — це може тривати до хвилини');
+    trackFinal(`Застосовано імпорт «${job.fileName}»`, 'Застосований імпорт не скасовується');
   };
 
   if (job.status === 'APPLIED') {

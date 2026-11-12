@@ -2,6 +2,7 @@ import { ExternalLink, Send } from 'lucide-react';
 import { useBotStatus, useSendTestMessage } from '@/api/telegram';
 import type { ChatBindingDto } from '@/api/types';
 import { Button, ErrorState, notify, Panel, SkeletonText, StatusDot } from '@/components/ui';
+import { trackFinal } from '@/lib/undo/actions';
 
 const MODE_TEXT = {
   POLLING: 'Long polling: бот тримає зʼєднання з Telegram і сам забирає нові повідомлення',
@@ -18,6 +19,7 @@ export function BotStatusPanel({ bindings }: { bindings: readonly ChatBindingDto
       const delivery = await test.mutateAsync();
       if (delivery.status === 'SENT') {
         notify.success('Тестове повідомлення надіслано', { description: 'Перевірте чат власника бота в Telegram.' });
+        trackFinal('Надіслано тестове повідомлення в Telegram', 'Повідомлення в Telegram не відкликається');
       } else {
         // RETRYING: Telegram тимчасово недоступний, сервіс повторить сам — це не успіх, але й не відмова
         notify.info('Тестове повідомлення в черзі', {

@@ -1,4 +1,4 @@
-import type { CalendarPeriod } from '@/api/calendar';
+import type { CalendarPeriod, CalendarPeriodRequest } from '@/api/calendar';
 import { SCOPE_LABEL } from './labels';
 
 /** Кого стосується період: «Усі групи», «3 курс», «2КІ3» або «4КІ1, 4КІ2, 4КІ3 та ще 2». */
@@ -12,4 +12,21 @@ export function periodAudience(period: Pick<CalendarPeriod, 'scope' | 'courses' 
     return codes.length > 3 ? `${codes.slice(0, 3).join(', ')} та ще ${codes.length - 3}` : codes.join(', ');
   }
   return SCOPE_LABEL.ALL;
+}
+
+/** Період → тіло PUT (для повернення попередніх значень із журналу дій). */
+export function periodRequest(period: CalendarPeriod): CalendarPeriodRequest {
+  return {
+    semesterId: period.semesterId,
+    kind: period.kind,
+    title: period.title,
+    startsOn: period.startsOn,
+    endsOn: period.endsOn,
+    studyMode: period.studyMode,
+    orderNote: period.orderNote,
+    scope: period.scope,
+    courses: period.courses,
+    groupIds: period.groupIds ?? period.groups.map((g) => g.id),
+    version: period.version,
+  };
 }

@@ -9,6 +9,8 @@ import { useUpdateSettings } from '@/api/settings';
 import type { ApprovalMode, BellProfileDto, SettingsDto } from '@/api/types';
 import { Button, ConfirmDialog, Field, Input, notify, NumberInput, RadioGroup, Select, Switch, toastClearanceRef } from '@/components/ui';
 import { LIMITS, settingsSchema, type SettingsFormValues } from './schema';
+import { qk } from '@/api/queryKeys';
+import { track } from '@/lib/undo/actions';
 
 const SERIF = '"Times New Roman", "Liberation Serif", Tinos, "Noto Serif", Times, serif';
 
@@ -94,14 +96,20 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
     try {
       // версія — та, з якої почали редагувати (а не свіжіша з фонового оновлення): якщо хтось зберіг
       // налаштування раніше, сервер відповість 409 і чужі зміни не перезапишуться мовчки
-      const saved = await update.mutateAsync({
-        ...values,
-        activeBellProfileId: values.activeBellProfileId ?? null,
-        version: editedVersion,
-      });
+      const before = { ...settings, ...(formState.defaultValues as SettingsDto) };
+      const body: SettingsDto = { ...values, activeBellProfileId: values.activeBellProfileId ?? null, version: editedVersion };
+      const saved = await update.mutateAsync(body);
       setEditedVersion(saved.version);
       reset(saved);
-      notify.success('Налаштування збережено');
+      // у журнал дій: Ctrl+Z повертає попередні налаштування з версією після збереження
+      let version = saved.version;
+      const put = async (next: SettingsDto) => {
+        const result = await update.mutateAsync({ ...next, version });
+        version = result.version;
+        setEditedVersion(result.version);
+        reset(result);
+      };
+      track({ label: 'Змінено налаштування', invalidate: [qk.admin.settings()], undo: () => put(before), redo: () => put(body) });
     } catch (error) {
       if (isApiError(error) && error.errors.length > 0) {
         for (const [field, message] of Object.entries(error.fieldErrors())) {

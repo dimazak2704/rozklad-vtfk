@@ -111,7 +111,7 @@ test('варіанти: три видно, «Ще варіанти», вибір
   const plan = page.getByRole('dialog', { name: /^План дня:/ });
   await plan.getByRole('button', { name: /^(Надіслати всі|Призначити всі) \(2\)$/ }).click();
   await expect(plan).toBeHidden();
-  await expect(page.getByText(/^План застосовано: 2\s+рішення/)).toBeVisible();
+  await expect(page.getByText(/^Застосовано план: 2\s+рішення/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Скасувати' }).last()).toBeVisible();
   await shot(page, `${device}-dark-6-plan-applied`);
   const decided = await page.evaluate(async (date) => {

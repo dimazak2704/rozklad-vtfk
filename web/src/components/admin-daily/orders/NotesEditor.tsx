@@ -4,6 +4,7 @@ import { useUpdateOrderNotes } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
 import type { OrderDto } from '@/api/types';
 import { Button, IconButton, notify, Textarea } from '@/components/ui';
+import { track } from '@/lib/undo/actions';
 
 const MAX_NOTE = 500;
 
@@ -28,8 +29,15 @@ export function NotesEditor({ order }: { order: OrderDto }) {
     setErrors(local);
     if (Object.keys(local).length > 0) return;
     try {
-      await update.mutateAsync({ id: order.id, notes: notes.map((n) => n.trim()).filter(Boolean), version: order.version });
-      notify.success('Примітки збережено');
+      const before = order.notes;
+      const after = notes.map((n) => n.trim()).filter(Boolean);
+      const saved = await update.mutateAsync({ id: order.id, notes: after, version: order.version });
+      // у журнал дій: Ctrl+Z повертає попередні примітки з версією після збереження
+      let version = saved.version;
+      const put = async (next: string[]) => {
+        version = (await update.mutateAsync({ id: order.id, notes: next, version })).version;
+      };
+      track({ label: 'Змінено примітки розпорядження', undo: () => put(before), redo: () => put(after) });
     } catch (error) {
       if (isApiError(error)) {
         const server: Record<number, string> = {};

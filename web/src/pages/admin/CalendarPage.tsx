@@ -45,6 +45,9 @@ import { confirm } from '@/stores/confirm';
 import { formatNumericDate, startOfWeek, todayInKyiv } from '@/lib/date';
 import { countLabel, PARITY_LABEL } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
+import { qk } from '@/api/queryKeys';
+import { track, trackFinal } from '@/lib/undo/actions';
+import { useHotkeys } from '@/hooks/useHotkeys';
 
 type Tab = 'weeks' | 'bells';
 type SemesterDialog = { semester: CalendarSemester | null } | null;
@@ -74,7 +77,10 @@ export default function CalendarPage() {
 
   useRegisterCommands([
     { id: 'new-semester', label: 'Створити семестр', group: 'Календар', icon: Plus, perform: () => setSemesterDialog({ semester: null }) },
-    { id: 'new-period', label: 'Додати період календаря', group: 'Календар', icon: Plus, perform: () => setPeriod('new') },
+    { id: 'new-period', label: 'Додати період календаря', group: 'Календар', icon: Plus, shortcut: 'n', perform: () => setPeriod('new') },
+  ]);
+  useHotkeys([
+    { keys: 'n', handler: () => setPeriod('new'), description: 'Новий період календаря', group: 'Календар', enabled: Boolean(selected) && tab === 'weeks' },
   ]);
 
   const makeActive = async (semester: CalendarSemester) => {
@@ -84,7 +90,21 @@ export default function CalendarPage() {
       confirmLabel: 'Зробити активним',
       onConfirm: () => activate.mutateAsync(semester.id),
     });
-    if (ok) notify.success(`Активний семестр: ${semester.name}`);
+    if (!ok) return;
+    notify.success(`Активний семестр: ${semester.name}`);
+    // повернути можна, лише якщо до того був інший активний семестр
+    const previous = semesters.data?.find((s) => s.active && s.id !== semester.id);
+    if (previous) {
+      track({
+        label: `Активним зроблено семестр «${semester.name}»`,
+        invalidate: [qk.admin.calendar.all],
+        silent: true,
+        undo: () => activate.mutateAsync(previous.id),
+        redo: () => activate.mutateAsync(semester.id),
+      });
+    } else {
+      trackFinal(`Активним зроблено семестр «${semester.name}»`);
+    }
   };
 
   // семестр обирають у заголовку; усе, що з ним роблять рідко, — у «⋯»
@@ -204,22 +224,20 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
   const toggle = (week: CalendarWeek) => {
     const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
     const parity = next === week.computedParity ? null : next;
+    const previous = week.overridden ? week.parity : null;
     override.mutate(
       { weekStart: week.weekStart, parity },
       {
+        // парність тижня — у журнал дій: Ctrl+Z чи «Скасувати» повертають попередню
         onSuccess: () =>
-          notify.undo(
-            parity
-              ? `Тиждень ${week.weekNumber} тепер ${PARITY_LABEL[next]} (вручну)`
-              : `Тиждень ${week.weekNumber} знову за чергуванням: ${PARITY_LABEL[next]}`,
-            {
-              onUndo: () =>
-                override.mutate(
-                  { weekStart: week.weekStart, parity: week.overridden ? week.parity : null },
-                  { onError: (error) => notify.error(error, 'Не вдалося повернути парність') },
-                ),
-            },
-          ),
+          track({
+            label: parity
+              ? `Тиждень ${week.weekNumber} позначено як ${PARITY_LABEL[next]} (вручну)`
+              : `Тиждень ${week.weekNumber} повернуто до чергування: ${PARITY_LABEL[next]}`,
+            invalidate: [qk.admin.calendar.all],
+            undo: () => override.mutateAsync({ weekStart: week.weekStart, parity: previous }),
+            redo: () => override.mutateAsync({ weekStart: week.weekStart, parity }),
+          }),
         onError: (error) => notify.error(error, `Не вдалося змінити парність тижня ${week.weekNumber}`),
       },
     );

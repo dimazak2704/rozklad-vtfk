@@ -44,6 +44,7 @@ import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { compareIsoDates, formatInstant, formatLongDate, formatWeekdayDate, formatWeekdayDateAfterDo, formatWeekdayDateAfterNa, isWeekend, shiftStudyDay } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
+import { trackFinal } from '@/lib/undo/actions';
 
 const ROWS = ['рядок', 'рядки', 'рядків'] as const;
 const CHANGES = ['заміна', 'заміни', 'замін'] as const;
@@ -121,7 +122,9 @@ export default function OrdersPage() {
     if (!order) throw new Error('Немає чернетки');
     const published = await publish.mutateAsync(order.id);
     setViewed({ id: published.id, forDate: date });
-    notify.success(`${published.kind === 'AMENDMENT' ? 'Доповнення' : 'Розпорядження'} №${published.number ?? '—'} опубліковано`);
+    const title = `${published.kind === 'AMENDMENT' ? 'Доповнення' : 'Розпорядження'} №${published.number ?? '—'}`;
+    notify.success(`${title} опубліковано`);
+    trackFinal(`Опубліковано: ${title.toLocaleLowerCase('uk')}`, 'Опубліковане розпорядження не скасовується: потрібне доповнення', 'Викладачі й групи отримали його в Telegram.');
     return published;
   };
 

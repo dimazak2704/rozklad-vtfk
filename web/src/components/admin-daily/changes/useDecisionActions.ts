@@ -8,8 +8,10 @@ import {
   type ChangeOption,
 } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
+import { qk } from '@/api/queryKeys';
 import type { AbsenceDto, ChangeDto, CreateChangeRequest, ReasonCode, TeacherRef, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
+import { track, trackFinal } from '@/lib/undo/actions';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 import { manualTeacherRequest, optionKey, reasonForOption, requestForOption, type LessonEntry, type PickContext, type PlanChoice } from '../model';
@@ -26,14 +28,23 @@ function lessonLabel(entry: LessonEntry): string {
   return `${lesson.group.code}, ${lesson.pair} пара`;
 }
 
-/** Тост після рішення: прохання пішло (CONFIRM) чи призначено одразу (інші режими). */
+/**
+ * Речення про рішення для тосту й журналу: прохання пішло (CONFIRM) чи призначено одразу (інші режими).
+ * «Призначено Коваль — 4КІ1, 2 пара».
+ */
 function decidedMessage(created: ChangeDto, where: string): string {
-  if (created.kind === 'CANCEL') return `Пари не буде: ${where}`;
-  const who = created.new.teacher?.shortName ?? created.new.discipline?.shortName ?? 'зміна';
-  const what = created.kind === 'MERGE_SUBGROUPS' ? `${who} — обидві підгрупи` : who;
-  if (created.status === 'PENDING_CONFIRMATION') return `Прохання надіслано в Telegram: ${what}, ${where}`;
-  if (created.kind === 'SWAP') return `Переставлено: ${where}`;
-  return `Призначено: ${what}, ${where}`;
+  if (created.kind === 'CANCEL') return `Знято пару — ${where}`;
+  const who = created.new.teacher?.shortName ?? created.new.discipline?.shortName ?? 'зміну';
+  const what = created.kind === 'MERGE_SUBGROUPS' ? `${who} на обидві підгрупи` : who;
+  if (created.status === 'PENDING_CONFIRMATION') return `Надіслано прохання в Telegram: ${what} — ${where}`;
+  if (created.kind === 'SWAP') return `Переставлено пари — ${where}`;
+  return `Призначено ${what} — ${where}`;
+}
+
+/** Хто вже дізнався про рішення поза системою: тоді скасування теж піде йому повідомленням. */
+function sideEffect(created: readonly ChangeDto[]): string | undefined {
+  const told = created.some((c) => c.status === 'PENDING_CONFIRMATION' || c.status === 'CONFIRMED' || c.approvalMode === 'NOTIFY');
+  return told ? 'Якщо скасувати, бот повідомить викладача про скасування.' : undefined;
 }
 
 function conflictText(error: unknown): string | null {
@@ -82,19 +93,26 @@ export function useDecisionActions() {
     return at !== undefined && Date.now() - at < OWN_ACTION_WINDOW_MS;
   }, []);
 
+  /**
+   * Рішення — у журнал дій: «Скасувати» в тості чи Ctrl+Z скасовують створені зміни (пари знову чекають
+   * рішення). Лише поки зміни не внесено в опубліковане розпорядження — далі сервер відповість 422, і
+   * журнал так і скаже. Повтору немає: він надіслав би викладачу друге повідомлення.
+   */
   const offerUndo = useCallback(
     (message: string, created: readonly ChangeDto[]) => {
-      notify.undo(message, {
-        undoLabel: 'Скасувати',
-        onUndo: () => {
-          void Promise.all(created.map((c) => cancel.mutateAsync(c.id))).then(
-            () => notify.info(created.length > 1 ? 'Рішення скасовано — пари знову чекають рішення' : 'Рішення скасовано — пара знову чекає рішення'),
-            (error: unknown) => notify.error(error, 'Не вдалося скасувати рішення'),
-          );
+      track({
+        label: message,
+        note: sideEffect(created),
+        invalidate: [qk.admin.all],
+        undo: async () => {
+          for (const change of created) {
+            markOwn(change.id);
+            await cancel.mutateAsync(change.id);
+          }
         },
       });
     },
-    [cancel],
+    [cancel, markOwn],
   );
 
   /** Створює одну зміну; true — створено (діалог можна закрити). */
@@ -166,7 +184,7 @@ export function useDecisionActions() {
         const created = await createBatch.mutateAsync({ changes: bodies as CreateChangeRequest[] });
         const pending = created.filter((c) => c.status === 'PENDING_CONFIRMATION').length;
         const decided = countLabel(created.length, DECISION_FORMS);
-        const message = pending > 0 ? `План застосовано: ${decided}, прохань у Telegram — ${pending}` : `План застосовано: ${decided}`;
+        const message = pending > 0 ? `Застосовано план: ${decided}, прохань у Telegram — ${pending}` : `Застосовано план: ${decided}`;
         offerUndo(message, created);
         return true;
       } catch (error) {
@@ -189,9 +207,11 @@ export function useDecisionActions() {
         if (kind === 'resend') {
           await resend.mutateAsync(change.id);
           notify.success(`Нагадування надіслано: ${change.new.teacher?.shortName ?? 'викладачу'}`);
+          trackFinal(`Надіслано нагадування в Telegram: ${change.new.teacher?.shortName ?? 'викладачу'}`, 'Повідомлення в Telegram не відкликається');
         } else {
           await confirmChange.mutateAsync(change.id);
           notify.success(`Заміну підтверджено: ${change.new.teacher?.shortName ?? change.group.code}`);
+          trackFinal(`Підтверджено заміну: ${change.new.teacher?.shortName ?? change.group.code}`, 'Підтвердження не скасовується');
         }
       } catch (error) {
         notify.error(error, kind === 'resend' ? 'Не вдалося надіслати нагадування' : 'Не вдалося підтвердити заміну');
@@ -222,6 +242,7 @@ export function useDecisionActions() {
       try {
         await cancel.mutateAsync(change.id);
         notify.info(`Рішення скасовано: ${lessonLabel(entry)} знову без рішення`);
+        trackFinal(`Скасовано рішення — ${lessonLabel(entry)}${teacher ? `, ${teacher}` : ''}`, 'Скасоване рішення не повертається: оберіть варіант знову');
       } catch (error) {
         notify.error(error, 'Не вдалося скасувати рішення');
       } finally {

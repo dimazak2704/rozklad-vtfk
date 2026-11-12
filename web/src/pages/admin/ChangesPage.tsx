@@ -1,11 +1,12 @@
 import { CalendarPlus, ChevronLeft, FileText, Plus } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { useCancelAbsence, useDailyLiveSync, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
+import { qk } from '@/api/queryKeys';
+import { useCancelAbsence, useDailyLiveSync, useUpdateAbsence, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
 import { useSettings } from '@/api/settings';
-import type { AbsenceDto, ReasonCode, Uuid } from '@/api/types';
+import type { AbsenceDto, AbsenceRequest, ReasonCode, Uuid } from '@/api/types';
 import { AbsenceDialog } from '@/components/admin-daily/changes/AbsenceDialog';
 import { AbsenceList } from '@/components/admin-daily/changes/AbsenceList';
 import { AbsenceStrip } from '@/components/admin-daily/changes/AbsenceStrip';
@@ -50,6 +51,7 @@ import { cn } from '@/lib/cn';
 import { formatWeekdayDate, formatWeekdayDateAfterDo, formatWeekdayDateAfterNa, isWeekend, shiftStudyDay } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 import { confirm } from '@/stores/confirm';
+import { track, trackFinal } from '@/lib/undo/actions';
 
 /** Ширина робочої області, з якої поміщаються дві і три колонки. */
 const TWO_PANES = 760;
@@ -77,6 +79,18 @@ function WorkspaceSkeleton({ columns }: { columns: number }) {
  * Широкий екран — одна панель з трьома колонками; ноутбук — відсутні рядком над двома колонками;
  * телефон і планшет — по рівнях: відсутні → пари → варіанти в шторці, з дорогою назад на кожному.
  */
+/** Відсутність → тіло PUT (без версії: її додає журнал). */
+function absenceRequest(absence: AbsenceDto): AbsenceRequest {
+  return {
+    teacherId: absence.teacher.id,
+    dateFrom: absence.dateFrom,
+    dateTo: absence.dateTo,
+    pairs: absence.pairs,
+    reasonCategory: absence.reasonCategory,
+    comment: absence.comment,
+  };
+}
+
 export default function ChangesPage() {
   const { date, setDate } = useWorkingDate();
   const [params, setParams] = useSearchParams();
@@ -112,6 +126,7 @@ export default function ChangesPage() {
   const workspace = useChangesWorkspace(date, period);
   const actions = useDecisionActions();
   const cancelAbsence = useCancelAbsence();
+  const updateAbsence = useUpdateAbsence();
   // напис дії залежить від режиму погодження; будь-який інший за CONFIRM — «Призначити»
   const approvalMode = useSettings().data?.approvalMode ?? null;
   const [dialog, setDialog] = useState<{ open: boolean; absence: AbsenceDto | null; seq: number }>({ open: false, absence: null, seq: 0 });
@@ -267,6 +282,37 @@ export default function ChangesPage() {
     }
   });
 
+  /**
+   * Відсутність — у журнал дій. Додану скасовує видалення (разом з її рішеннями, ще не внесеними в
+   * розпорядження); змінену — попередні дати й пари з версією після правки. Рішення, які правка вже
+   * скасувала, не повертаються — про це каже примітка.
+   */
+  const journalAbsence = (before: AbsenceDto | null, saved: AbsenceDto) => {
+    const where = `${saved.teacher.shortName}, ${absencePeriod(saved)}`;
+    const invalidate = [qk.admin.all];
+    if (!before) {
+      track({
+        label: `Додано відсутність — ${where}`,
+        note: 'Скасування прибере й рішення за нею, ще не внесені в розпорядження.',
+        invalidate,
+        undo: () => cancelAbsence.mutateAsync(saved.id),
+      });
+      return;
+    }
+    let version = saved.version;
+    const put = async (from: AbsenceDto) => {
+      const result = await updateAbsence.mutateAsync({ id: saved.id, body: { ...absenceRequest(from), version } });
+      version = result.version;
+    };
+    track({
+      label: `Змінено відсутність — ${where}`,
+      note: 'Рішення, які ця правка скасувала, після скасування не повернуться.',
+      invalidate,
+      undo: () => put(before),
+      redo: () => put(saved),
+    });
+  };
+
   const cancelAbsenceFlow = async (absence: AbsenceDto) => {
     const ok = await confirm({
       title: 'Викладач на місці — скасувати відсутність?',
@@ -281,6 +327,7 @@ export default function ChangesPage() {
       await cancelAbsence.mutateAsync(absence.id);
       if (selectedAbsenceId === absence.id) updateParams({ absence: null, lesson: null });
       notify.success(`Відсутність скасовано: ${absence.teacher.shortName}`);
+      trackFinal(`Скасовано відсутність — ${absence.teacher.shortName}, ${absencePeriod(absence)}`, 'Скасовану відсутність не повернути: додайте її знову');
     } catch (error) {
       notify.error(error, 'Не вдалося скасувати відсутність');
     }
@@ -532,7 +579,7 @@ export default function ChangesPage() {
         semester={meta.data?.semester ?? null}
         onSaved={(absence, created) => {
           updateParams({ absence: absence.id, lesson: null });
-          notify.success(`${created ? 'Відсутність додано' : 'Відсутність змінено'}: ${absence.teacher.shortName}, ${absencePeriod(absence)}`);
+          journalAbsence(created ? null : dialog.absence, absence);
         }}
       />
     </div>
