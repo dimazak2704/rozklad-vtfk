@@ -7,6 +7,23 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 
+/**
+ * Сайт оновили, поки вкладка була відкрита: частини коду з новими хешами є, старих уже немає, і перехід на
+ * сторінку, яку ще не відкривали, падає на завантаженні частини. Vite кидає `vite:preloadError` — один раз
+ * перезавантажуємо сторінку, щоб узяти свіжий index.html. Позначка в sessionStorage не дає зациклитись.
+ */
+const RELOADED_KEY = 'rozklad.reloadedAfterUpdate';
+window.addEventListener('vite:preloadError', (event) => {
+  if (sessionStorage.getItem(RELOADED_KEY)) return;
+  sessionStorage.setItem(RELOADED_KEY, '1');
+  event.preventDefault();
+  window.location.reload();
+});
+window.addEventListener('load', () => {
+  // сторінка завантажилась нормально — наступне оновлення сайту знову може перезавантажити її раз
+  window.setTimeout(() => sessionStorage.removeItem(RELOADED_KEY), 10_000);
+});
+
 const container = document.getElementById('root');
 if (!container) throw new Error('Не знайдено елемент #root');
 const root = container;

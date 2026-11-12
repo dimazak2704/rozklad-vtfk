@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { offlineShellPlugin } from './src/api/offline-shell-plugin.ts';
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -52,14 +53,35 @@ function pwa(): Plugin[] {
       ],
     },
     workbox: {
-      // заздалегідь — лише оболонка; сторінки адмінки й кабінету не потрапляють у кеш, поки їх не відкрили
-      // поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html
-      globPatterns: ['index.html', 'assets/index-*.{js,css}', 'assets/modulepreload-polyfill-*.js', 'favicon.svg'],
-      navigateFallback: 'index.html',
-      // /api (ICS, файли розпоряджень), сервіс входу /auth і повернення після входу завжди йдуть у мережу
-      navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/login\/(callback|silent)/],
+      // заздалегідь — лише код оболонки; HTML не тут: збережений index.html після оновлення сайту посилався б
+      // на частини коду, яких на сервері вже немає. Сторінки — NetworkFirst нижче (rozklad-pages).
+      // Поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html
+      globPatterns: ['assets/index-*.{js,css}', 'assets/modulepreload-polyfill-*.js', 'favicon.svg'],
+      // без navigateFallback: збережений index.html після оновлення сайту посилався б на частини коду,
+      // яких на сервері вже немає (порожня сторінка). Переходи — NetworkFirst нижче, оболонка лише офлайн.
+      navigateFallback: undefined,
       cleanupOutdatedCaches: true,
+      // registerSW.js (script-defer) лише реєструє воркер і не шле SKIP_WAITING: без цього новий воркер
+      // чекав би, доки закриються всі вкладки й PWA, а старий і далі віддавав би стару оболонку
+      skipWaiting: true,
+      clientsClaim: true,
       runtimeCaching: [
+        {
+          // /api (ICS, файли розпоряджень), сервіс входу /auth і повернення після входу завжди йдуть у мережу
+          urlPattern: ({ request, url, sameOrigin }) =>
+            sameOrigin &&
+            request.mode === 'navigate' &&
+            !/^\/(api|auth)\//.test(url.pathname) &&
+            !/^\/login\/(callback|silent)/.test(url.pathname),
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'rozklad-pages',
+            networkTimeoutSeconds: 4,
+            expiration: { maxEntries: 40, maxAgeSeconds: 21 * DAY_SECONDS },
+            cacheableResponse: { statuses: [200] },
+            plugins: [offlineShellPlugin],
+          },
+        },
         {
           // файли з хешем у назві не змінюються
           urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
