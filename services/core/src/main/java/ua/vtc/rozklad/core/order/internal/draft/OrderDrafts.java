@@ -60,7 +60,8 @@ public class OrderDrafts {
     /**
      * {@code GET /api/admin/orders/draft?date=}: the draft of the date, created or refreshed. When
      * the date's order is published and nothing new is confirmed, the latest published document of
-     * the date is returned as it is (no empty amendment is created).
+     * the date is returned as it is: no empty amendment is created, and an amendment draft whose
+     * changes were all cancelled or declined meanwhile is dropped (it could not be published).
      */
     public OrderDto draftFor(LocalDate date) {
         SemesterInfo semester = calendar.requireOrderDate(date);
@@ -76,7 +77,13 @@ public class OrderDrafts {
         OrderDocument main = existing.get();
         Optional<OrderDocument> amendmentDraft = orders.findFirstBySemesterIdAndDateAndKindAndStatus(
                 semester.id(), date, OrderKind.AMENDMENT, OrderStatus.DRAFT);
-        if (amendmentDraft.isEmpty() && confirmed.isEmpty()) {
+        if (confirmed.isEmpty()) {
+            // нового нічого: порожнє доповнення не публікується (AMENDMENT_EMPTY), а чернетка — лише вигляд
+            // підтверджених змін, тож її прибираємо і показуємо останній опублікований документ
+            amendmentDraft.ifPresent(empty -> {
+                orders.delete(empty);
+                orders.flush();
+            });
             return OrderViews.toDto(latestPublished(semester, date).orElse(main));
         }
         OrderDocument amendment = amendmentDraft.orElseGet(() -> OrderDocument.amendment(semester.id(), date,
