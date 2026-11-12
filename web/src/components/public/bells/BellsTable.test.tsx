@@ -22,7 +22,7 @@ describe('BellsTable', () => {
   it('пише лише довгу перерву, коротку — ні', () => {
     renderWithProviders(<BellsTable profile={PROFILE} todayWeekday={null} />);
     // текст нормалізується: нерозривний пробіл стає звичайним
-    expect(screen.getByText('перерва 20 хв')).toBeInTheDocument();
+    expect(screen.getByText('потім перерва 20 хв')).toBeInTheDocument();
     expect(screen.queryByText(/перерва 10/)).not.toBeInTheDocument();
   });
 

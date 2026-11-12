@@ -1,13 +1,11 @@
 import type { BellProfileDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { bellColumns, breakAfter, pairMinutes, usualPairMinutes } from './bells-columns';
+import { bellColumns, breakAfter, pairMinutes, usualBreakMinutes, usualPairMinutes } from './bells-columns';
 
 /** Нерозривний пробіл: «20 хв» не розривається між рядками. */
 const NBSP = String.fromCharCode(0xa0);
 
-/** Перерву пишемо лише довгу: короткі випливають із часу пар, а цифри без рішення — шум. */
-export const LONG_BREAK_MINUTES = 20;
 
 interface BellsTableProps {
   profile: BellProfileDto;
@@ -20,12 +18,15 @@ interface BellsTableProps {
 
 /**
  * Дзвінки профілю таблицею: пари рядками, дні з однаковими дзвінками — колонками. Під часом — один тихий
- * рядок, лише коли є що сказати: «зараз»/«далі», незвична тривалість пари, довга перерва (≥ 20 хв).
+ * рядок, лише коли є що сказати: «зараз»/«далі», незвична тривалість пари, довша за звичайну перерва
+ * після пари («потім перерва 20 хв» — слово «потім» каже, що перерва йде після цієї пари, а не перед нею).
+ * Звичайну перерву сторінка називає один раз під таблицею.
  * Сьогоднішня колонка тонована, поточна пара — тлом (без смужок прогресу: доріжку дня показує відлік).
  */
 export function BellsTable({ profile, todayWeekday, live = false, className }: BellsTableProps) {
   const columns = bellColumns(profile);
   const usual = usualPairMinutes(profile);
+  const usualBreak = usualBreakMinutes(profile);
   const todayColumn = columns.find((column) => column.weekdays.some((day) => day === todayWeekday)) ?? null;
   const { status } = useNow(live && todayColumn ? todayColumn.slots : null);
   const currentPair = status?.kind === 'in-pair' ? status.current.pair : null;
@@ -84,7 +85,7 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                 const minutes = pairMinutes(slot);
                 const note = [
                   minutes !== usual ? `${minutes}${NBSP}хв` : null,
-                  gap !== null && gap >= LONG_BREAK_MINUTES ? `перерва ${gap}${NBSP}хв` : null,
+                  gap !== null && usualBreak !== null && gap > usualBreak ? `потім перерва ${gap}${NBSP}хв` : null,
                 ]
                   .filter(Boolean)
                   .join(' · ');

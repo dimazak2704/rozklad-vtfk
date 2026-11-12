@@ -3,9 +3,10 @@ import { usePublicMeta } from '@/api/meta';
 import { useBellProfiles } from '@/api/public';
 import type { Weekday } from '@/api/types';
 import { BellsTable } from '@/components/public/bells/BellsTable';
-import { bellColumns } from '@/components/public/bells/bells-columns';
+import { bellColumns, usualBreakMinutes } from '@/components/public/bells/bells-columns';
+import { HeaderParity } from '@/components/public/HeaderParity';
 import { NowIndicator } from '@/components/schedule';
-import { EmptyState, ErrorState, LoadingRegion, PageErrorScope, PageHeader, ParityBadge, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingRegion, PageErrorScope, PageHeader, Skeleton } from '@/components/ui';
 import { formatWeekdayDate, isoWeekday, todayInKyiv } from '@/lib/date';
 
 function BellsSkeleton() {
@@ -33,6 +34,7 @@ export default function BellsPage() {
   const studyToday = meta.data ? meta.data.studyDay : weekday <= 5;
   const active = profiles.data?.profiles?.find((p) => p.id === profiles.data.profile.id) ?? null;
   const others = profiles.data?.profiles?.filter((p) => p.id !== active?.id) ?? [];
+  const usualBreak = active ? usualBreakMinutes(active) : null;
   const todaySlots =
     active && studyToday ? (bellColumns(active).find((c) => c.weekdays.includes(weekday as Weekday))?.slots ?? null) : null;
 
@@ -47,7 +49,7 @@ export default function BellsPage() {
             {studyToday && meta.data?.parity ? (
               <>
                 <span aria-hidden="true">·</span>
-                <ParityBadge parity={meta.data.parity} size="sm" />
+                <HeaderParity parity={meta.data.parity} />
               </>
             ) : meta.data && !meta.data.studyDay ? (
               <span>· пар немає</span>
@@ -68,6 +70,7 @@ export default function BellsPage() {
         <section aria-label={`Дзвінки: ${active.name}`} className="flex min-w-0 flex-col gap-3">
           <BellsTable profile={active} todayWeekday={studyToday ? weekday : null} live={studyToday} />
           <p className="max-w-prose text-caption text-muted">
+            {usualBreak ? `Звичайна перерва між парами — ${usualBreak}\u00a0хв, довшу видно під парою. ` : null}
             Групи другої зміни починають пізніше — коли саме, видно в розкладі вашої групи.
           </p>
         </section>

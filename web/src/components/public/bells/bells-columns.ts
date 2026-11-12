@@ -72,3 +72,17 @@ export function usualPairMinutes(profile: BellProfileDto): number | null {
   for (const [minutes, count] of counts) if (best === null || count > (counts.get(best) ?? 0)) best = minutes;
   return best;
 }
+
+/** Звичайна перерва профілю (найчастіша, у хвилинах): її пишемо один раз під таблицею, а не біля кожної пари. */
+export function usualBreakMinutes(profile: BellProfileDto): number | null {
+  const counts = new Map<number, number>();
+  for (const column of bellColumns(profile)) {
+    for (const slot of column.slots) {
+      const gap = breakAfter(column.slots, slot.pair);
+      if (gap !== null && gap > 0) counts.set(gap, (counts.get(gap) ?? 0) + column.weekdays.length);
+    }
+  }
+  let best: number | null = null;
+  for (const [minutes, count] of counts) if (best === null || count > (counts.get(best) ?? 0)) best = minutes;
+  return best;
+}
