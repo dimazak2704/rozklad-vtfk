@@ -58,6 +58,9 @@ export function HoverDetails({
 }: HoverDetailsProps) {
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // картку відкрило наведення мишею: при закритті фокус на тригер не повертаємо, інакше Radix
+  // ставить його скриптом і :focus-visible малює кільце на клітинці, якої ніхто не натискав
+  const openedByHover = useRef(false);
 
   const clear = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -70,7 +73,11 @@ export function HoverDetails({
   const schedule = (next: boolean, delay: number) => {
     clear();
     const warm = next && Date.now() - lastClosedAt < WARM_UP_MS;
-    timer.current = setTimeout(() => change(next), warm ? 0 : delay);
+    timer.current = setTimeout(() => {
+      // відкрита картка лишається «від миші», доки її не відкрили заново клавіатурою чи дотиком
+      if (next && !open) openedByHover.current = true;
+      change(next);
+    }, warm ? 0 : delay);
   };
 
   useEffect(() => clear, []);
@@ -89,6 +96,8 @@ export function HoverDetails({
       open={open}
       onOpenChange={(next) => {
         clear();
+        // Enter, тап чи клік: фокус після закриття повертається на тригер, як годиться діалогу
+        if (next) openedByHover.current = false;
         change(next);
       }}
     >
@@ -103,6 +112,10 @@ export function HoverDetails({
           collisionPadding={8}
           aria-label={label}
           onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => {
+            if (openedByHover.current) event.preventDefault();
+            openedByHover.current = false;
+          }}
           className={cn('anim-pop', CARD, contentClassName)}
           {...hoverHandlers}
         >

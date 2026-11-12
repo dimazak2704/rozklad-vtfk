@@ -49,4 +49,57 @@ describe('HoverDetails', () => {
     });
     expect(screen.getByText('Повна назва')).toBeInTheDocument();
   });
+
+  it('картка від наведення, закрившись, не ставить фокус на клітинку: кільця фокусу від миші немає', () => {
+    renderWithProviders(
+      <HoverDetails label="Деталі заняття" content={<p>Повна назва</p>}>
+        <button type="button">Прогр.</button>
+      </HoverDetails>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Прогр.' });
+    const before = document.activeElement;
+    hover(trigger);
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS);
+    });
+    expect(screen.getByText('Повна назва')).toBeInTheDocument();
+    leave(trigger);
+    // закриття, а потім — відкладене повернення фокуса Radix (setTimeout після розмонтування)
+    act(() => {
+      vi.runAllTimers();
+    });
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(screen.queryByText('Повна назва')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(before);
+    expect(trigger).not.toHaveFocus();
+  });
+
+  it('відкрита з клавіатури картка після Escape повертає фокус на тригер', () => {
+    renderWithProviders(
+      <HoverDetails label="Деталі заняття" content={<p>Повна назва</p>}>
+        <button type="button">Прогр.</button>
+      </HoverDetails>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Прогр.' });
+    act(() => {
+      trigger.focus();
+    });
+    fireEvent.click(trigger);
+    expect(screen.getByText('Повна назва')).toBeInTheDocument();
+    act(() => {
+      (document.activeElement as HTMLElement).blur();
+    });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    // закриття, а потім — відкладене повернення фокуса Radix (setTimeout після розмонтування)
+    act(() => {
+      vi.runAllTimers();
+    });
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(screen.queryByText('Повна назва')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });
