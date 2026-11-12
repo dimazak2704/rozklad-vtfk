@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { IsoDate, ScheduleDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
@@ -325,25 +325,28 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                           <span className="sr-only">Пари немає</span>
                         )
                       ) : (
-                        <div className={cn('relative flex h-full flex-col divide-y divide-[var(--border-color-separator)]', cellBg)}>
-                          {lessons.map((lesson) => {
+                        <div className={cn('relative flex h-full flex-col', cellBg)}>
+                          {lessons.map((lesson, index) => {
                             const start = lesson.startsAt ? timeToMinutes(lesson.startsAt) : null;
                             const end = lesson.endsAt ? timeToMinutes(lesson.endsAt) : null;
                             const current = isLiveDay && start !== null && end !== null && nowMinutes >= start && nowMinutes < end;
                             const lessonPast = isLiveDay && end !== null ? nowMinutes >= end : past;
                             return (
-                              <LessonCell
-                                key={lesson.id}
-                                lesson={lesson}
-                                perspective={perspective}
-                                date={day.date}
-                                dayParity={day.parity}
-                                now={current}
-                                past={lessonPast}
-                                arrived={arrived?.has(lesson.id)}
-                                showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
-                                className="flex-1"
-                              />
+                              <Fragment key={lesson.id}>
+                                {/* підгрупи ділить пряма лінія на всю ширину клітинки, а не рамка заокругленої кнопки */}
+                                {index > 0 ? <span aria-hidden="true" className="h-px shrink-0 bg-[var(--border-color-separator)]" /> : null}
+                                <LessonCell
+                                  lesson={lesson}
+                                  perspective={perspective}
+                                  date={day.date}
+                                  dayParity={day.parity}
+                                  now={current}
+                                  past={lessonPast}
+                                  arrived={arrived?.has(lesson.id)}
+                                  showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
+                                  className="flex-1"
+                                />
+                              </Fragment>
                             );
                           })}
                         </div>
