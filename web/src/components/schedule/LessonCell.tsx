@@ -41,12 +41,12 @@ export interface LessonCellProps {
  * перенесена пара — пунктирний контур. Стан читається й у відтінках сірого: слово, закреслення, форма.
  */
 const TONE_SURFACE = {
-  regular: 'before:bg-transparent hover:before:bg-hover',
+  regular: 'before:bg-transparent hover-fine:before:bg-hover',
   // у темній темі тло ледь тоноване, тож стан тримає ще й рамка 1 px кольору заміни (не «бурий брус»)
   change: 'before:bg-change-subtle dark:before:shadow-[inset_0_0_0_1px_var(--border-color-change)]',
-  cancel: 'before:bg-transparent hover:before:bg-hover',
+  cancel: 'before:bg-transparent hover-fine:before:bg-hover',
   add: 'before:bg-add-subtle',
-  room: 'before:bg-transparent hover:before:bg-hover',
+  room: 'before:bg-transparent hover-fine:before:bg-hover',
   block: 'hatch before:bg-transparent',
 } as const;
 
@@ -195,7 +195,17 @@ function LessonCellView({
             tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1',
           )}
         >
-          {counterpart ? <span className="min-w-0 truncate">{counterpart}</span> : null}
+          {counterpart && perspective !== 'group' ? (
+            // викладачу й аудиторії головне, яка група: її код — шрифтом цифр і чорнилом, а не тихим підписом
+            <span className="min-w-0 truncate">
+              <span className={cn('font-display font-semibold tracking-[0.01em]', !past && !cancelled && 'text-primary')}>
+                {lesson.group.code}
+              </span>
+              {perspective === 'room' && lesson.teacher ? ` · ${lesson.teacher.displayName}` : null}
+            </span>
+          ) : counterpart ? (
+            <span className="min-w-0 truncate">{counterpart}</span>
+          ) : null}
           {originalRoom ? (
             <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
               <s className={cn('text-muted', STRUCK, arrived && 'anim-strike')}>{originalRoom}</s>

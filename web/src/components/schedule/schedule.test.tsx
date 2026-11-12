@@ -38,6 +38,20 @@ describe('LessonCell', () => {
     renderWithProviders(<LessonCell lesson={monday.lessons[0]!} perspective="teacher" />);
     expect(screen.getByText('4КІ1')).toBeInTheDocument();
   });
+
+  it('для аудиторії виділяє лише код групи, а викладач лишається звичайним підписом', () => {
+    const lesson = monday.lessons[0]!;
+    renderWithProviders(<LessonCell lesson={lesson} perspective="room" />);
+    const code = screen.getByText('4КІ1');
+    expect(code).toHaveClass('font-display', 'font-semibold');
+    expect(code.parentElement).toHaveTextContent(`4КІ1 · ${lesson.teacher!.displayName}`);
+  });
+
+  it('для групи викладач — тихий підпис без шрифту цифр', () => {
+    const lesson = monday.lessons[0]!;
+    renderWithProviders(<LessonCell lesson={lesson} perspective="group" />);
+    expect(screen.getByText(lesson.teacher!.displayName)).not.toHaveClass('font-display');
+  });
 });
 
 describe('WeekGrid', () => {
