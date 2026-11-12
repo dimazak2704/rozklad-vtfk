@@ -24,6 +24,10 @@ function Harness({ onPublished }: { onPublished: (order: OrderDto) => void }) {
   return (
     <>
       <p data-testid="sheet-rows">{draft.data.items.length}</p>
+      {/* як на сторінці: діалог лишається змонтованим і закритим, кнопка в шапці відкриває його знову */}
+      <button type="button" onClick={() => setOpen(true)}>
+        Опублікувати з шапки
+      </button>
       <PublishDialog
         open={open}
         onOpenChange={setOpen}
@@ -75,5 +79,48 @@ describe('PublishDialog: чернетка застаріла', () => {
     await user.click(within(dialog).getByRole('button', { name: /Опублікувати/ }));
     await waitFor(() => expect(onPublished).toHaveBeenCalledTimes(1));
     expect(onPublished.mock.calls[0]?.[0]).toMatchObject({ status: 'PUBLISHED' });
+  });
+
+  it('після «Переглянути чернетку» знову відкритий діалог не повторює старе попередження', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Harness onPublished={vi.fn()} />);
+    let dialog = await screen.findByRole('dialog');
+
+    const changes = await api.get<ChangeDto[]>('/admin/changes', { date: DAY });
+    const pending = changes.find((c) => c.status === 'PENDING_CONFIRMATION');
+    if (!pending) throw new Error('у демо-ранку немає заміни, що чекає підтвердження');
+    await api.post(`/admin/changes/${pending.id}/confirm`);
+
+    await user.click(within(dialog).getByRole('button', { name: /Опублікувати/ }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(STALE_DRAFT_MESSAGE);
+    await user.click(within(dialog).getByRole('button', { name: 'Переглянути чернетку' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // диспетчер переглянув чернетку й відкриває публікацію знову
+    await user.click(screen.getByRole('button', { name: 'Опублікувати з шапки' }));
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Скасувати' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Опублікувати/ })).not.toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('Esc теж забуває відмову', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Harness onPublished={vi.fn()} />);
+    let dialog = await screen.findByRole('dialog');
+    const changes = await api.get<ChangeDto[]>('/admin/changes', { date: DAY });
+    const pending = changes.find((c) => c.status === 'PENDING_CONFIRMATION');
+    if (!pending) throw new Error('у демо-ранку немає заміни, що чекає підтвердження');
+    await api.post(`/admin/changes/${pending.id}/confirm`);
+
+    await user.click(within(dialog).getByRole('button', { name: /Опублікувати/ }));
+    await within(dialog).findByRole('alert');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Опублікувати з шапки' }));
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Скасувати' })).toBeInTheDocument();
   });
 });

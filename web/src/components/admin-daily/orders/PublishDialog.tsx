@@ -42,6 +42,13 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
   const kind = order.kind === 'AMENDMENT' ? 'доповнення' : 'розпорядження';
   const numberText = nextNumber !== null ? `№${nextNumber}` : null;
 
+  /** Закриття будь-яким шляхом (кнопка, Esc, хрестик) забуває відмову: знову відкритий діалог — чистий. */
+  const close = () => {
+    setError(null);
+    setStale(false);
+    onOpenChange(false);
+  };
+
   const publish = async () => {
     setBusy(true);
     setError(null);
@@ -66,11 +73,8 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
       open={open}
       onOpenChange={(next) => {
         if (busy) return;
-        if (!next) {
-          setError(null);
-          setStale(false);
-        }
-        onOpenChange(next);
+        if (next) onOpenChange(true);
+        else close();
       }}
     >
       <DialogContent
@@ -78,7 +82,7 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
         description="Після публікації документ не змінюється: нові зміни підуть окремим доповненням."
         footer={
           <>
-            <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
+            <Button variant="secondary" onClick={close} disabled={busy}>
               {stale ? 'Переглянути чернетку' : 'Скасувати'}
             </Button>
             <Button
