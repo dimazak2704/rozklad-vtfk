@@ -13,7 +13,10 @@ public final class TimetableResults {
     private TimetableResults() {
     }
 
-    /** Placement of every unit in snapshot order; a pinned unit without a room keeps {@code roomId = null}. */
+    /**
+     * Placement of every unit in snapshot order; a pinned unit without a room keeps {@code roomId = null},
+     * an online pinned unit gets back the room it keeps for reference.
+     */
     public static List<Assignment> assignments(Timetable timetable) {
         if (!timetable.isFullyPlaced()) {
             throw new IllegalStateException("the timetable is not fully placed");
@@ -23,7 +26,7 @@ public final class TimetableResults {
 
     private static Assignment assignment(LessonUnit unit) {
         return new Assignment(unit.getId(), unit.getTimeslot().weekday(), unit.getTimeslot().pair(), unit.getParity(),
-                unit.getRoom().isNone() ? null : unit.getRoom().getId());
+                unit.getRoom().isNone() ? unit.getKeptRoomId() : unit.getRoom().getId());
     }
 
     /**

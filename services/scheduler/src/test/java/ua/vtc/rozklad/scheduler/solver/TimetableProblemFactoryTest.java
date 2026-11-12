@@ -172,6 +172,44 @@ class TimetableProblemFactoryTest {
         assertThat(timetable.getUnits().get(1).getRoom()).isSameAs(Room.NONE);
     }
 
+    /**
+     * A load item may name a room that core no longer sends (deactivated): a desired room is only a
+     * preference, so the unit is placed without it instead of failing the whole generation.
+     */
+    @Test
+    void unknownDesiredRoomsAreIgnoredInsteadOfFailingTheJob() {
+        UUID deactivated = UUID.randomUUID();
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("preferredGone").preferredRoom(deactivated).build(),
+                unit("teacherRoomGone").teacherRoom(deactivated).build(),
+                unit("homeGone").homeRoom(deactivated).teacherRoom(LAB).build())), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits().get(0).getDesiredRoom()).isNull();
+        assertThat(roomIds(timetable.getUnits().get(0))).containsExactly(ROOM_304, LAB);
+        assertThat(timetable.getUnits().get(1).getDesiredRoom()).isNull();
+        assertThat(timetable.getUnits().get(2).getDesiredRoom().getId()).isEqualTo(LAB);
+    }
+
+    /**
+     * DOMAIN §5: an online lesson keeps its room for reference but does not occupy it. Pinned in the
+     * same room and slot as an in-person lesson, it causes no room conflict, and the assignment
+     * returns its room unchanged.
+     */
+    @Test
+    void onlinePinnedUnitsOccupyNoRoomAndKeepItInTheResult() {
+        ProblemSnapshot.PinnedSlot slot = new ProblemSnapshot.PinnedSlot(2, 3, Parity.BOTH, ROOM_SMALL);
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("inPerson").group(SPLIT_GROUP).subgroup(1).pinned(slot).build(),
+                unit("online").pinned(slot).online(true).build())), GenerationWeights.DEFAULT);
+
+        LessonUnit online = timetable.getUnits().get(1);
+        assertThat(online.getRoom()).as("occupies nothing, no capacity or type check").isSameAs(Room.NONE);
+        assertThat(ua.vtc.rozklad.scheduler.support.TestSolvers.solutionManager().update(timetable).hardScore())
+                .as("room 12 is too small for 4КІ1 and already taken, but the lesson is online").isZero();
+        assertThat(TimetableResults.assignments(timetable)).extracting(assignment -> assignment.roomId())
+                .containsExactly(ROOM_SMALL, ROOM_SMALL);
+    }
+
     @Test
     void requestWeightsBecomeConstraintWeightOverrides() {
         Timetable timetable = factory.create(snapshot(List.of(unit("u1").build())),
@@ -195,7 +233,7 @@ class TimetableProblemFactoryTest {
         List<ProblemSnapshot.Unit> units = List.of(
                 unit("u1").group(unknown).build(),
                 unit("u2").teacher(unknown).build(),
-                unit("u3").preferredRoom(unknown).build(),
+                unit("u3").pinned(new ProblemSnapshot.PinnedSlot(1, 2, Parity.BOTH, unknown)).build(),
                 unit("u4").group(SPLIT_GROUP).subgroup(3).build(),
                 unit("u5").pinned(new ProblemSnapshot.PinnedSlot(1, 7, Parity.BOTH, null)).build(),
                 unit("u5").build());
@@ -205,7 +243,7 @@ class TimetableProblemFactoryTest {
                         .containsExactly(
                                 "Заняття u1 посилається на невідому групу " + unknown + ".",
                                 "Заняття u2 посилається на невідомого викладача " + unknown + ".",
-                                "Заняття u3 посилається на невідому аудиторію " + unknown + ".",
+                                "Заняття u3 закріплене в невідомій аудиторії " + unknown + ".",
                                 "Заняття u4: група 1КІ2 не має підгрупи 3.",
                                 "Заняття u5 закріплене у слоті «день 1, пара 7», якого немає в розкладі дзвінків.",
                                 "Заняття u5 повторюється у знімку."))
@@ -313,6 +351,7 @@ class TimetableProblemFactoryTest {
         private UUID teacherRoom;
         private ProblemSnapshot.PinnedSlot pinned;
         private ProblemSnapshot.PinnedSlot initial;
+        private boolean online;
 
         private UnitBuilder(String id) {
             this.id = id;
@@ -368,9 +407,14 @@ class TimetableProblemFactoryTest {
             return this;
         }
 
+        UnitBuilder online(boolean online) {
+            this.online = online;
+            return this;
+        }
+
         ProblemSnapshot.Unit build() {
             return new ProblemSnapshot.Unit(id, UUID.randomUUID(), group, subgroup, DISCIPLINE, teacher, weight,
-                    requiredRoomType, preferredRoom, homeRoom, pinned, initial, teacherRoom);
+                    requiredRoomType, preferredRoom, homeRoom, pinned, initial, teacherRoom, online);
         }
     }
 }

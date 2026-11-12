@@ -159,9 +159,10 @@ misses one it has (`@JsonInclude(NON_NULL)` fields may be absent).
 | `generation.completed.analysis` | All 15 constraints, always in the same order (hard first); `constraint` is the Ukrainian title, ids stay internal; `score` is `HardSoftScore.toString()` with weights applied (a constraint switched off by weight 0 shows its matches with `0hard/0soft`). | Stable UI table; Timefold's `ScoreAnalysis` is Enterprise-only. |
 | CANCELLED | May carry `assignments` (best timetable before the cancel); none when the job was still queued or not every unit was placed. `hardScore`/`softScore` are 0 for FAILED and for CANCELLED without assignments. | Core can offer «apply anyway». |
 | SOLVED | Can still have `hardScore < 0` (infeasible data); the analysis shows which constraints are broken. | Honest result instead of a failure. |
-| Snapshot validation | Strict: unknown group/teacher/room references, a subgroup the group does not have, a shift without `shiftWindows`, a pin outside the timeslots, duplicate ids, no rooms, `timeLimitSeconds` above `app.scheduler.max-time-limit` → FAILED with a Ukrainian list of all problems. | No silent repair of bad input. |
+| Snapshot validation | Strict: unknown group/teacher references, a pin in an unknown room, a subgroup the group does not have, a shift without `shiftWindows`, a pin outside the timeslots, duplicate ids, no rooms, `timeLimitSeconds` above `app.scheduler.max-time-limit` → FAILED with a Ukrainian list of all problems. | No silent repair of bad input. |
 | `generation.progress` | Only for complete timetables, at most every 2 s and only when the score changed; `elapsedMs` = solving time when that score was found. Best effort: may arrive after `generation.completed` (core ignores progress of finished jobs). | Fewer events, meaningful chart. |
-| Pinned units | Without a room they come back with `roomId: null` and occupy no room. | Online/external lessons. |
+| Pinned units | Without a room they come back with `roomId: null` and occupy no room. An `online` pinned unit occupies no room either and comes back with its pinned room. | Online/external lessons. |
+| Desired rooms | An unknown `preferredRoomId`/`teacherRoomId`/`homeRoomId` is ignored with a warning, not a validation error (audit 12.11.2026). | A deactivated room on a load item failed generation for the whole scope. |
 | Streams | Not modelled (no stream id in `ProblemSnapshot`): two units of a stream count as a teacher conflict. | Contract gap, see Integration below. |
 
 ## Importer (copied from docs/modules/importer.md)
@@ -445,3 +446,11 @@ server. Nothing was ever deployed with Keycloak, so there is no account import a
 | Server accounts | The first admin comes from `AUTH_BOOTSTRAP_ADMIN_USERNAME`/`_PASSWORD`; demo teachers `krentsin`, `nepyivoda` from `DEMO_TEACHER_PASSWORD` (`ServerDemoAccounts`, empty = off). `DEMO_ADMIN_PASSWORD` is gone. | Replaces the Keycloak demo-user script. |
 | Server env | New: `AUTH_DB_PASSWORD`, `AUTH_SIGNING_KEY_ID`, `infra/deploy/secrets/auth-signing-key.pem` (`gen-secrets.sh`). Gone: `KEYCLOAK_*`, `KC_ADMIN_ALLOWED`, `CORE_ADMIN_CLIENT_SECRET`, `API_SITE_ENABLED`, `EXTRA_WEB_ORIGIN`. | `docs/DEPLOY.md`. |
 | Development | `scripts/dev-stack.sh up` removes the old container (`--remove-orphans`); `reset-auth --yes` recreates the `auth` database. A Postgres volume created before still holds the unused `keycloak` database: `docker exec rozklad-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS keycloak" -c "DROP ROLE IF EXISTS keycloak"`. | `init.sql` runs only on an empty volume. |
+
+## Audit fixes: scheduler, importer, contracts (12.11.2026)
+
+| Area | Decision | Why |
+|---|---|---|
+| `ProblemSnapshot.Unit.online` (additive, `libs/contracts`) | New last component `Boolean online`; absent or null reads as `false` (a primitive would fail on older snapshots under Jackson 3). The 13-, 12- and 11-argument constructors stay and mean in person. Core sends `true` only for a pinned unit whose template lesson is online (in-scope pins take the flag of the base lesson they are pinned at); free units are sent in person. The scheduler puts an online pinned unit in `Room.NONE` (no occupancy, capacity or room type check) and returns its pinned room in the assignment. | DOMAIN §5: an online lesson keeps its room for reference but does not occupy it; before, the generator reported a room conflict core's own validator does not see, and in-scope pins lost the flag. |
+| Scheduler validation | Desired rooms (`preferredRoomId`, `teacherRoomId`, `homeRoomId`) not in `rooms[]` are ignored with a warning. Pins in an unknown room still fail the job. | A load item naming a deactivated room made every generation of its scope FAILED with an internal id. |
+

@@ -42,6 +42,9 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
   never made.
 * **Pinned units** (`pinned != null`) are `@PlanningPin` with the pinned slot, parity and room; a pin
   without a room uses the placeholder `Room.NONE` (occupies nothing) and comes back with `roomId: null`.
+  An **online** pinned unit (`online: true`, DOMAIN §5) also stands in `Room.NONE` — no room
+  occupancy, capacity or room type is checked for it — and comes back with its pinned room unchanged
+  (`LessonUnit.keptRoomId`), so core keeps the room for reference.
 * **Student cohorts**: a group without subgroups is one cohort; a split group has cohorts = its
   subgroups, and a whole-group lesson belongs to all of them. Up to 8 subgroups per group.
 * **Week arithmetic**: BOTH meets in both week types, a half in one. Penalties count week
@@ -164,6 +167,7 @@ constraint shows its matches with score `0hard/0soft`.
 | `teachers` | every teacher referenced by a unit, with `teacher_preference` UNAVAILABLE / UNWANTED of the semester |
 | `units` | load items split by DOMAIN §4 (whole pairs + at most one HALF), one unit per subgroup for split items with that subgroup's teacher; `requiredRoomType`/`preferredRoomId` from the load item; `teacherRoomId` (round 7) = the teacher's usual room for the discipline in the published version (DOMAIN §5); `homeRoomId` null since round 7 |
 | `units[].pinned` | pinned template lessons of `baseVersionId`, and lessons of groups outside the scope that must stay as they are |
+| `units[].online` | the template lesson's online flag, for pinned units only (`PlanUnit.toSnapshotUnit`); an in-scope unit pinned at a base lesson takes that lesson's flag, so the generated lesson keeps it |
 
 ## 9. Contract notes (no change to `libs/contracts`)
 
@@ -179,9 +183,14 @@ constraint shows its matches with score `0hard/0soft`.
   is the first compatible of `preferredRoomId`, `teacherRoomId`, `homeRoomId`; a GYM/SPORTS_GROUND named there
   joins the unit's room range. Older snapshots without the field read it as null. Measured on the real data
   (2КІ1, 2КІ2, 3КІ1, 3КІ2, 45 s, published base): see CHANGELOG-CONTRACTS «Round 7».
-* Snapshot validation is strict: unknown group/teacher/room references, subgroups the group does not
-  have, a shift without windows, pins outside the timeslots, duplicate ids, no rooms → FAILED with the
-  list of problems.
+* Snapshot validation is strict: unknown group/teacher references, a pin in an unknown room, subgroups
+  the group does not have, a shift without windows, pins outside the timeslots, duplicate ids, no rooms →
+  FAILED with the list of problems. Desired rooms (`preferredRoomId`, `teacherRoomId`, `homeRoomId`) are
+  preferences: one that is not in `rooms[]` (core sends only active rooms, but a load item may still name
+  a deactivated one) is ignored with a log warning, so one stale load item cannot fail generation for
+  the whole scope.
+* Additive `units[].online` (absent = false): an online pinned unit occupies no room and gets its pinned
+  room back in `assignments` (see §2). A free unit is always placed in a room, whatever the flag.
 
 ## 10. How to test
 
@@ -196,7 +205,8 @@ mvn -q -pl services/scheduler -am test -Dtest=RealSizeBenchmarkTest -Dsurefire.f
 * `TimetableConstraintProviderTest` — ConstraintVerifier for every constraint (positive and negative
   cases, parity overlap, subgroups, `maxParallel`, pins without a room) and request weights.
 * `TimetableAnalyzerTest` — analysis = solver, constraint by constraint.
-* `TimetableProblemFactoryTest` — value ranges, warm start, pins, weights, Ukrainian validation errors.
+* `TimetableProblemFactoryTest` — value ranges, warm start, pins, weights, Ukrainian validation errors,
+  unknown desired rooms ignored, online pins occupying no room and keeping it in the result.
 * `TimetableSolverTest` — a synthetic college (24 groups × 16 units, two shifts, subgroups, sports
   hall with 3 places) reaches 0 hard; pins stay; an all-pinned problem is returned unchanged;
   `FULL_ASSERT` run.
@@ -286,7 +296,8 @@ variant).
 7. **Discipline repeat weight** from configuration (the request has no field for it), default 5.
 8. **Special-purpose rooms** (sports hall/ground) only for units that require or name them.
 9. **Own score analysis** (Timefold Community has no ScoreAnalysis); cross-checked against the solver.
-10. **Strict snapshot validation**: a broken snapshot fails fast with every problem listed in Ukrainian.
+10. **Strict snapshot validation**: a broken snapshot fails fast with every problem listed in Ukrainian;
+    desired rooms are preferences and an unknown one is only dropped (audit 12.11.2026).
 11. **Outbox-lite for results**: payload stored with the terminal status, sent with a per-message
     confirm, re-sent with the same event id until confirmed.
 12. **CANCELLED keeps the best timetable** found so far, so «stop and apply» is possible.
@@ -302,3 +313,8 @@ variant).
   the same job (different threads); core should ignore progress of a finished job.
 * Teacher preferences are only UNAVAILABLE (hard) and UNWANTED (soft) slots from the snapshot; daily
   load limits of teachers (> 4 pairs a day) are not modelled.
+* **Online lessons that are not pinned** (owner question): a free unit comes from a load item, which has
+  no online flag, so a regenerated lesson is placed in a room and comes back in person even when the
+  base lesson it replaces was marked online. Pinned lessons keep the flag. Carrying the flag of the
+  matched base lesson to a free unit would need a rule for where such a unit stands (no room at all?),
+  which DOMAIN §5 does not give; the dispatcher marks it online again after generation.

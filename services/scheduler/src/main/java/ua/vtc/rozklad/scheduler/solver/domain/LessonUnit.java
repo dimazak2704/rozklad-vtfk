@@ -44,6 +44,7 @@ public class LessonUnit {
     private UnitWeight weight;
     private RoomType requiredRoomType;
     private Room desiredRoom;
+    private UUID keptRoomId;
     // доріжки «когорта × тип тижня» для кожної парності (індекс — Parity.ordinal())
     private int[][] cohortLanesByParity;
 
@@ -78,6 +79,7 @@ public class LessonUnit {
         this.weight = Objects.requireNonNull(builder.weight, "weight");
         this.requiredRoomType = builder.requiredRoomType;
         this.desiredRoom = builder.desiredRoom;
+        this.keptRoomId = builder.keptRoomId;
         this.timeslotRange = List.copyOf(builder.timeslotRange);
         this.roomRange = List.copyOf(builder.roomRange);
         this.parityRange = List.copyOf(builder.parityRange);
@@ -189,6 +191,14 @@ public class LessonUnit {
 
     public boolean isPinned() {
         return pinned;
+    }
+
+    /**
+     * The room an online pinned lesson keeps for reference (DOMAIN §5): it stands in
+     * {@link Room#NONE} for the solver and gets this room back in the result; otherwise {@code null}.
+     */
+    public UUID getKeptRoomId() {
+        return keptRoomId;
     }
 
     public List<Timeslot> getTimeslotRange() {
@@ -304,6 +314,7 @@ public class LessonUnit {
         private UnitWeight weight = UnitWeight.WHOLE;
         private RoomType requiredRoomType;
         private Room desiredRoom;
+        private UUID keptRoomId;
         private List<Timeslot> timeslotRange = List.of();
         private List<Room> roomRange = List.of();
         private List<Parity> parityRange = List.of();
@@ -345,6 +356,12 @@ public class LessonUnit {
 
         public Builder desiredRoom(Room desiredRoom) {
             this.desiredRoom = desiredRoom;
+            return this;
+        }
+
+        /** Room an online pinned lesson keeps for reference; it occupies {@link Room#NONE}. */
+        public Builder keptRoomId(UUID keptRoomId) {
+            this.keptRoomId = keptRoomId;
             return this;
         }
 

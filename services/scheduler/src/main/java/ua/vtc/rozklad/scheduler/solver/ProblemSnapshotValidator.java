@@ -14,7 +14,10 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 /**
  * Checks a {@link ProblemSnapshot} before solving and lists every problem in Ukrainian (they reach
  * the dispatcher as the error of a FAILED job). The snapshot comes from core, so a broken
- * reference is a data error that must be fixed there, not guessed here.
+ * reference is a data error that must be fixed there, not guessed here. Desired rooms
+ * ({@code preferredRoomId}, {@code teacherRoomId}, {@code homeRoomId}) are preferences, not
+ * references: one that is not in the snapshot (a deactivated room) is ignored by
+ * {@link TimetableProblemFactory}, so it never fails the job.
  */
 final class ProblemSnapshotValidator {
 
@@ -153,11 +156,6 @@ final class ProblemSnapshotValidator {
             }
             if (unit.teacherId() != null && !teachers.contains(unit.teacherId())) {
                 errors.add(label + " посилається на невідомого викладача " + unit.teacherId() + ".");
-            }
-            for (UUID roomId : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId(), unit.homeRoomId()}) {
-                if (roomId != null && !rooms.contains(roomId)) {
-                    errors.add(label + " посилається на невідому аудиторію " + roomId + ".");
-                }
             }
             ProblemSnapshot.PinnedSlot pinned = unit.pinned();
             if (pinned == null) {

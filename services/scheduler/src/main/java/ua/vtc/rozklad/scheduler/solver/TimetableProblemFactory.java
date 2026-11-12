@@ -36,7 +36,9 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * hall and ground — only for units that require them or name them as preferred, teacher's or home
  * room); parity
  * BOTH for WHOLE units, NUMERATOR or DENOMINATOR for HALF units. When a filter leaves nothing, the
- * wider range is used and the matching hard constraint reports the violation.
+ * wider range is used and the matching hard constraint reports the violation. A desired room
+ * that is not in the snapshot is ignored with a warning. An online pinned unit (DOMAIN §5) stands
+ * in {@link Room#NONE} and keeps its room only for the result.
  *
  * <p>Rooms are warm-started: every unit starts in its desired room (preferred room of the load
  * item, else the teacher's usual room, else the group's home room of an older snapshot) or in the
@@ -113,9 +115,11 @@ public final class TimetableProblemFactory {
         Teacher teacher = unit.teacherId() == null ? null : teachers.get(unit.teacherId());
         if (unit.pinned() != null) {
             ProblemSnapshot.PinnedSlot pin = unit.pinned();
-            Room room = pin.roomId() == null ? Room.NONE : rooms.get(pin.roomId());
+            // онлайн-заняття лише пам'ятає аудиторію (DOMAIN §5): не займає її, місткість і тип не перевіряються
+            Room room = pin.roomId() == null || unit.online() ? Room.NONE : rooms.get(pin.roomId());
             return UnitPlan.pinned(unit, group, teacher, new Timeslot(pin.weekday(), pin.pair()), room, pin.parity());
         }
+        warnAboutUnknownDesiredRooms(unit, rooms);
         List<Room> roomRange = roomRange(unit, group, rooms.values());
         Room desired = desiredRoom(unit, rooms, roomRange);
         List<Parity> parities = unit.weight() == UnitWeight.HALF ? HALF_PARITIES : WHOLE_PARITIES;
@@ -151,6 +155,15 @@ public final class TimetableProblemFactory {
             }
         }
         return null;
+    }
+
+    /** A desired room core did not send (deactivated) is a lost preference, not an error. */
+    private static void warnAboutUnknownDesiredRooms(ProblemSnapshot.Unit unit, Map<UUID, Room> rooms) {
+        for (UUID id : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId(), unit.homeRoomId()}) {
+            if (id != null && !rooms.containsKey(id)) {
+                log.warn("Unit {}: desired room {} is not in the snapshot (inactive?), ignored", unit.unitId(), id);
+            }
+        }
     }
 
     private static List<Timeslot> timeslotRange(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
@@ -242,7 +255,9 @@ public final class TimetableProblemFactory {
                     .requiredRoomType(unit.requiredRoomType())
                     .desiredRoom(desiredRoom);
             if (isPinned()) {
-                return builder.pinnedAt(pinnedSlot, pinnedRoom, pinnedParity).build();
+                return builder.pinnedAt(pinnedSlot, pinnedRoom, pinnedParity)
+                        .keptRoomId(unit.online() && unit.pinned() != null ? unit.pinned().roomId() : null)
+                        .build();
             }
             builder.timeslotRange(timeslotRange)
                     .roomRange(roomRange)
