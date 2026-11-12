@@ -89,7 +89,7 @@ function byDateAndPair(a: ChangeDto, b: ChangeDto): number {
   return compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom;
 }
 
-/** Повідомлення NOTIFY, на яке ще не відповіли: заміна вже діє, викладач може сказати «Добре» чи «Не можу». */
+/** Повідомлення NOTIFY, на яке ще не відповіли: заміна вже діє, викладач може відповісти «Підтверджую» чи «Не можу». */
 export function isUnansweredNotice(change: ChangeDto, today: IsoDate): boolean {
   return (
     change.approvalMode === 'NOTIFY' &&
@@ -108,12 +108,13 @@ export function awaitingAnswer(changes: readonly ChangeDto[], today: IsoDate): C
 export const REPLY_UNDO_MS = 8_000;
 
 /**
- * Найтерміновіший рядок — єдиний із заповненою кнопкою: прохання з найближчим строком відповіді,
- * а якщо строків немає — перший у списку (найближча пара). Решта — звичайні кнопки, щоб блок не кричав.
+ * Найтерміновіший рядок — єдиний із заповненою кнопкою: прохання з найближчим строком відповіді (строк
+ * стоїть першим рядком і пояснює, чому саме воно). Немає відкритих строків — немає й заповненої кнопки:
+ * без пояснення вона лише вносила б нерівність між однаковими рядками.
  */
 export function mostUrgent(waiting: readonly ChangeDto[], now: Date): Uuid | null {
   const open = waiting
     .filter((c) => c.status === 'PENDING_CONFIRMATION' && c.confirmDeadline && new Date(c.confirmDeadline).getTime() > now.getTime())
     .sort((a, b) => new Date(a.confirmDeadline ?? 0).getTime() - new Date(b.confirmDeadline ?? 0).getTime());
-  return open[0]?.id ?? waiting[0]?.id ?? null;
+  return open[0]?.id ?? null;
 }

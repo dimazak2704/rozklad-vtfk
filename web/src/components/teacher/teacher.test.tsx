@@ -83,7 +83,7 @@ describe('SubstitutionRequests', () => {
     const user = userEvent.setup();
     const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const [notice] = await screen.findAllByRole('article', { name: /^Нова заміна/ });
-    await user.click(within(notice as HTMLElement).getByRole('button', { name: 'Добре' }));
+    await user.click(within(notice as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
     expect(sent).toEqual([]);
     unmount();
     await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
@@ -101,14 +101,20 @@ describe('SubstitutionRequests', () => {
     expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1);
   });
 
-  it('заповнена кнопка — лише в найтерміновішому рядку', async () => {
+  it('однакові кнопки в усіх рядках; заповнена — лише в найтерміновішому, і її пояснює строк першим рядком', async () => {
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const rows = await screen.findAllByRole('article');
-    const filled = rows.filter((row) => within(row).getByRole('button', { name: /^(Підтверджую|Добре)$/ }).className.includes('bg-accent'));
+    const confirms = rows.map((row) => within(row).getByRole('button', { name: 'Підтверджую' }));
+    expect(confirms).toHaveLength(rows.length);
+    const filled = rows.filter((_, index) => confirms[index]?.className.includes('bg-accent'));
     expect(filled).toHaveLength(1);
+    const urgent = filled[0] as HTMLElement;
+    expect(urgent).toHaveAccessibleName(/^Запит на заміну/);
+    const first = within(urgent).getByText((_, element) => element?.tagName === 'P' && /^Відповісти до \d\d:\d\d/.test(element.textContent ?? ''));
+    expect(first).toHaveClass('text-body');
   });
 
-  it('найтерміновіший — прохання з найближчим строком, інакше перший рядок', () => {
+  it('найтерміновіший — прохання з найближчим відкритим строком, інакше жодного', () => {
     const now = new Date('2026-11-09T08:00:00Z');
     const list = [
       { id: 'notice', status: 'APPLIED', confirmDeadline: null },
@@ -117,18 +123,20 @@ describe('SubstitutionRequests', () => {
       { id: 'overdue', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-09T05:30:00Z' },
     ] as ChangeDto[];
     expect(mostUrgent(list, now)).toBe('soon');
-    expect(mostUrgent(list.slice(0, 1), now)).toBe('notice');
+    // без відкритих строків заповненої кнопки немає: пояснити її нічим
+    expect(mostUrgent(list.slice(0, 1), now)).toBeNull();
+    expect(mostUrgent([list[0], list[3]] as ChangeDto[], now)).toBeNull();
     expect(mostUrgent([], now)).toBeNull();
   });
 
-  it('призначена заміна (NOTIFY): «Добре» чи «Не можу», без строку відповіді', async () => {
+  it('призначена заміна (NOTIFY): «Підтверджую» чи «Не можу», без строку відповіді', async () => {
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const [notice] = await screen.findAllByRole('article', { name: /^Нова заміна/ });
     const card = notice as HTMLElement;
     expect(within(card).queryByText(/відповісти до/)).not.toBeInTheDocument();
     expect(within(card).getByRole('button', { name: 'Не можу' })).toBeInTheDocument();
-    await user.click(within(card).getByRole('button', { name: 'Добре' }));
+    await user.click(within(card).getByRole('button', { name: 'Підтверджую' }));
     await waitFor(() => expect(screen.queryAllByRole('article', { name: /^Нова заміна/ })).toHaveLength(0));
   });
 
@@ -147,10 +155,13 @@ describe('SubstitutionRequests', () => {
   it('заголовок каже, скільки замін чекає, а рядок — строк відповіді реченням, без табличок', async () => {
     renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     expect(await screen.findByRole('heading', { name: /^3\sзаміни чекають вашої відповіді$/ })).toBeInTheDocument();
-    const [request] = screen.getAllByRole('article', { name: /^Запит на заміну/ });
-    expect(within(request as HTMLElement).getByText(/^Просять замінити · відповісти до \d\d:\d\d/)).toBeInTheDocument();
+    const requests = screen.getAllByRole('article', { name: /^Запит на заміну/ });
+    const request = requests[requests.length - 1] as HTMLElement;
+    const state = within(request).getByText((_, element) => element?.tagName === 'P' && /^Просять замінити · відповісти до \d\d:\d\d/.test(element.textContent ?? ''));
+    // строк «до 07:30, 16 листопада» не розривається посередині
+    expect(within(state).getByText(/^до \d\d:\d\d/)).toHaveClass('whitespace-nowrap');
     // скорочення причини з розпорядження («Відп.») викладачу не показуємо
-    expect(within(request as HTMLElement).queryByText(/Відп\./)).not.toBeInTheDocument();
+    expect(within(request).queryByText(/Відп\./)).not.toBeInTheDocument();
   });
 
   it('повідомлення без відповіді не дублюються в «Моїх замінах»', async () => {
@@ -507,7 +518,7 @@ describe('відповідь на заміну (як у core)', () => {
   const base = { status: 'CONFIRMED', approvalMode: 'NOTIFY', teacherAnswer: null } as unknown as ChangeDto;
   const at = '2026-11-09T08:00:00Z';
 
-  it('повідомлення: «Добре» лишає статус, «Не можу» відхиляє неопубліковану й лишає опубліковану', () => {
+  it('повідомлення: «Підтверджую» лишає статус, «Не можу» відхиляє неопубліковану й лишає опубліковану', () => {
     expect(answered(base, 'CONFIRM', at)).toMatchObject({ status: 'CONFIRMED', teacherAnswer: 'CONFIRM', respondedAt: at });
     expect(answered(base, 'DECLINE', at)).toMatchObject({ status: 'DECLINED', teacherAnswer: 'DECLINE' });
     expect(answered({ ...base, status: 'APPLIED' }, 'DECLINE', at)).toMatchObject({ status: 'APPLIED', teacherAnswer: 'DECLINE' });

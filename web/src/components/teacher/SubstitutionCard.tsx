@@ -15,7 +15,7 @@ interface SubstitutionCardProps {
   change: ChangeDto;
   onConfirm: () => void;
   onDecline: (comment: string) => void;
-  /** Найтерміновіший рядок блоку: лише він має заповнену кнопку, решта — звичайні. */
+  /** Прохання з найближчим строком: лише воно має заповнену кнопку, а строк стоїть першим рядком. */
   primary?: boolean;
   /** Щойно прийшов через живе оновлення — коротко підсвітити. */
   fresh?: boolean;
@@ -23,8 +23,8 @@ interface SubstitutionCardProps {
 
 /**
  * Заміна, що чекає відповіді, — один рядок списку: коли, що провести, у якій групі й де, замість кого.
- * Прохання (CONFIRM) має строк і «Підтверджую» / «Не можу»; повідомлення про призначену заміну (NOTIFY) —
- * «Добре» / «Не можу», бо заміна вже діє. «Не можу» — з необовʼязковим коментарем для диспетчера.
+ * Однакові дії в кожному рядку — «Підтверджую» / «Не можу»: для прохання (CONFIRM) це згода, для
+ * повідомлення про призначену заміну (NOTIFY) — що викладач її бачив і проведе. «Не можу» — з необовʼязковим коментарем для диспетчера.
  * Будь-яку відповідь можна скасувати в сповіщенні протягом 8 с, тому підтверджувальних діалогів немає.
  */
 export function SubstitutionCard({ change, onConfirm, onDecline, primary = false, fresh = false }: SubstitutionCardProps) {
@@ -42,16 +42,31 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
   const notice = change.approvalMode === 'NOTIFY';
   const subgroup = change.subgroup > 0 ? subgroupLabel(change.subgroup) : null;
 
-  // одне речення про стан замість трьох табличок: що це, до коли відповісти
-  const state = notice
-    ? change.status === 'APPLIED'
-      ? 'Вам поставили заміну, вона вже в розпорядженні'
-      : 'Вам поставили заміну'
-    : overdue
-      ? 'Просять замінити · термін відповіді минув'
-      : deadline
-        ? `Просять замінити · відповісти до ${formatInstantTime(deadline.toISOString())}${deadlineDay(deadline, today)}`
-        : 'Просять замінити';
+  // одне речення про стан замість трьох табличок: що це, до коли відповісти; строк — одним шматком, без переносу
+  const due = deadline ? (
+    <span className="whitespace-nowrap">
+      до {formatInstantTime(deadline.toISOString())}
+      {deadlineDay(deadline, today)}
+    </span>
+  ) : null;
+  const state = notice ? (
+    change.status === 'APPLIED' ? (
+      'Вам поставили заміну, вона вже в розпорядженні'
+    ) : (
+      'Вам поставили заміну'
+    )
+  ) : overdue ? (
+    'Просять замінити · термін відповіді минув'
+  ) : due ? (
+    primary ? (
+      // найтерміновіший рядок: строк — перший рядок звичайним розміром, він і пояснює заповнену кнопку
+      <>Відповісти {due}</>
+    ) : (
+      <>Просять замінити · відповісти {due}</>
+    )
+  ) : (
+    'Просять замінити'
+  );
 
   return (
     <article
@@ -68,15 +83,18 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
       </p>
 
       <div className="flex min-w-0 flex-col gap-1">
-        <p className={cn('text-meta', overdue ? 'text-cancel' : 'text-change')}>{state}</p>
+        <p className={cn(primary && due && !overdue ? 'text-body font-[650]' : 'text-caption font-[600]', overdue ? 'text-cancel' : 'text-change')}>
+          {state}
+        </p>
         <p className="flex min-w-0 items-baseline gap-2 text-cell text-primary">
           {discipline ? (
             <span {...lineAttr(discipline)} aria-hidden="true" className="relative -top-px size-2 shrink-0 self-center rounded-full bg-[var(--line-dot)]" />
           ) : null}
           <span className="min-w-0">
             {changeDisciplineTitle(change)}
-            <span className="font-[500] text-secondary">
-              {' · '}
+            {/* група тримається за останнє слово назви: рядок не починається з «·» */}
+            <span className="font-[500] whitespace-nowrap text-secondary">
+              {' · '}
               {change.group.code}
               {subgroup ? `, ${subgroup}` : ''}
             </span>
@@ -95,7 +113,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
 
       <div className="flex flex-wrap items-center gap-2 sm:col-start-2 lg:col-start-auto">
         <Button variant={primary ? 'primary' : 'secondary'} onClick={onConfirm}>
-          {notice ? 'Добре' : 'Підтверджую'}
+          Підтверджую
         </Button>
         <Popover>
           <PopoverTrigger asChild>

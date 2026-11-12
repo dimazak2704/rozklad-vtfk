@@ -24,9 +24,7 @@ function shortTitle(change: ChangeDto): string {
  */
 function replyToast(change: ChangeDto, decision: ReplyVariables['decision']): string {
   const title = shortTitle(change);
-  if (decision === 'CONFIRM') {
-    return change.approvalMode === 'NOTIFY' ? `Надіслано: ${title}` : `Підтверджено: ${title}`;
-  }
+  if (decision === 'CONFIRM') return `Підтверджено: ${title}`;
   return change.approvalMode === 'NOTIFY' && change.status === 'APPLIED'
     ? `Диспетчера повідомлено: ${title}`
     : `Ви відмовилися: ${title}`;
