@@ -123,6 +123,7 @@ teacher gets 403 on `/api/me/*`.
   change whose teacher was already told (PENDING request, or NOTIFY and CONFIRMED) publishes
   `substitution.confirmation-requested` again (same change id, mode and deadline) with the new room — the
   notification service currently shows a repeated pending request as «⏰ Нагадування» (owner question below);
+  a CONFIRM request the teacher already confirmed is not sent again (known gap, §9);
   `DELETE` cancels (idempotent; APPLIED → 422).
 * **Reminders** — `ConfirmationReminders` runs every `app.substitution.reminder-check-interval`
   (PT1M): a pending change past its deadline gets `reminded_at` and the confirmation request is sent
@@ -263,3 +264,11 @@ Manual run: own database on the shared PostgreSQL, port 38081.
 * Owner question (audit 12.11.2026): when the dispatcher changes the room of a pending CONFIRM request, the
   teacher receives the request again with the new room, worded as a reminder (the notification service has no
   «оновлено» text yet). Should it say that the room changed, and should the deadline restart?
+* Known gap and owner question (review 12.11.2026): a new room of a CONFIRM request that the teacher already
+  confirmed publishes no `substitution.*` event. Re-sending the request would ask him to confirm again (and the
+  notification service would reopen it as pending); sending it as a NOTIFY notice would turn his request into a
+  notice with a «Не можу» that core refuses for a confirmed CONFIRM change. He sees the new room in the cabinet
+  (SSE `change.updated` goes to the assigned teacher) and in his rows of `order.published`, but his Telegram
+  request still shows the old room. Should a confirmed teacher get a separate «аудиторію змінено» message (a new
+  event or a mode of `substitution.confirmation-requested`, handled by notification)? Test:
+  `NotifyApprovalIT.newRoomOfAConfirmedRequestIsNotAskedAgain`.

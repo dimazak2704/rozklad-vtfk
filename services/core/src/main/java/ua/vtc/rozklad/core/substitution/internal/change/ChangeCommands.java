@@ -189,7 +189,9 @@ public class ChangeCommands {
 
     /**
      * The assigned teacher has a request (PENDING) or a notice (NOTIFY, CONFIRMED) that names the
-     * room; AUTO changes and changes without a teacher told nobody.
+     * room; AUTO changes and changes without a teacher told nobody. A CONFIRM request he already
+     * confirmed is not sent again: that would ask him to confirm twice (known gap and owner question in
+     * docs/modules/substitution-order-accounting.md §9).
      */
     private static boolean teacherWasTold(Change change) {
         return change.getNewTeacherId() != null

@@ -380,6 +380,34 @@ class NotifyApprovalIT {
                 });
     }
 
+    /**
+     * Known gap (docs/modules/substitution-order-accounting.md §9): a CONFIRM request the teacher already
+     * confirmed is not sent again when its room changes. A repeated request would ask him to confirm a
+     * second time (and read as a reminder), a notice would turn his request into a NOTIFY one; until the
+     * owner decides, the new room reaches him through the cabinet (SSE) and the published order.
+     */
+    @Test
+    void newRoomOfAConfirmedRequestIsNotAskedAgain() {
+        fixture.setting("substitution.approvalMode", "CONFIRM");
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+        ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.MUTUAL), "admin");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, WAIT)).singleElement()
+                .satisfies(event -> assertThat(event.mode()).isEqualTo(SubstitutionRequestMode.CONFIRM));
+        ChangeDto confirmed = replies.replyFromBot(created.id(), nepyivoda.getId(), ConfirmationDecision.CONFIRM,
+                null);
+        assertThat(confirmed.status()).isEqualTo(ChangeStatus.CONFIRMED);
+
+        ChangeDto moved = commands.update(created.id(), new UpdateChangeRequest(fixture.room("304").getId(),
+                ReasonCode.MUTUAL, null, confirmed.version()), "admin");
+
+        assertThat(moved.status()).isEqualTo(ChangeStatus.CONFIRMED);
+        assertThat(moved.replacement().room().name()).isEqualTo("304");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+    }
+
     private Lesson stpLesson(LocalDate date, int pair) {
         return fixture.lesson(semester, date, pair, group, 0, stp, krentsin, room);
     }
