@@ -150,13 +150,14 @@ class LessonMaterializationRepository {
     /** Template lessons of the group-days that no change created or keeps (see {@link #deleteReplaceable}). */
     public List<ReplaceableLesson> replaceable(Collection<LocalDate> dates, Collection<UUID> groupIds) {
         return named.query("""
-                SELECT l.id, l.date, l.template_lesson_id, l.online, l.room_exclusive, l.status
+                SELECT l.id, l.date, l.pair_number, l.template_lesson_id, l.online, l.room_exclusive, l.status
                 FROM lesson l
                 WHERE l.date IN (:dates) AND l.group_id IN (:groups) AND l.origin = 'TEMPLATE'
                   AND l.change_id IS NULL AND NOT EXISTS (%s)
                 """.formatted(LIVE_DECISION), Map.of("dates", dates, "groups", groupIds),
                 (rs, rowNum) -> new ReplaceableLesson(rs.getObject("id", UUID.class),
-                        rs.getObject("date", LocalDate.class), rs.getObject("template_lesson_id", UUID.class),
+                        rs.getObject("date", LocalDate.class), rs.getInt("pair_number"),
+                        rs.getObject("template_lesson_id", UUID.class),
                         rs.getBoolean("online"), rs.getBoolean("room_exclusive"),
                         "SCHEDULED".equals(rs.getString("status"))));
     }

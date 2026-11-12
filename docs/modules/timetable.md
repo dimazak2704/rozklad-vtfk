@@ -85,7 +85,9 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
     (past lessons happened and count in accounting); the first publication may start in the past (seed);
     a republication effective **today** keeps today's pairs that already began by the bell (Kyiv clock): their
     lessons stay from the old version and the new one starts with the next pair (`LessonMaterializer`), the same
-    pair-level rule accounting uses for «already held»;
+    pair-level rule accounting uses for «already held»; a later refresh of today (a cancelled or declined change, a
+    calendar edit; `LessonRefresher`) keeps the template lessons at the pairs that began by then as they are, so
+    those old-version lessons are not replaced afterwards either;
   - deleted: TEMPLATE lessons from `effectiveFrom` without `change_id` and not referenced by `change.original_lesson_id`;
     everything else is kept;
   - a template occurrence whose cohort slot holds a kept lesson (scheduled or cancelled) is left to the change

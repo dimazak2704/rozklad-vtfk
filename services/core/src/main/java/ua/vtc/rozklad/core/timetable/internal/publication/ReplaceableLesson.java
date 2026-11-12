@@ -4,6 +4,6 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /** A template lesson a refresh may keep, update or delete (no live change refers to it). */
-record ReplaceableLesson(UUID id, LocalDate date, UUID templateLessonId, boolean online, boolean roomExclusive,
-                         boolean scheduled) {
+record ReplaceableLesson(UUID id, LocalDate date, int pair, UUID templateLessonId, boolean online,
+                         boolean roomExclusive, boolean scheduled) {
 }

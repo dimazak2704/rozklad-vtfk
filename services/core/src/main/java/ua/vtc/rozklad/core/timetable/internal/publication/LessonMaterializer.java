@@ -57,7 +57,7 @@ class LessonMaterializer {
                         ConflictFacts facts, LocalDate from, boolean replacesPublished) {
         // JPA-зміни (архівування попередньої версії) мають бути в БД до масового SQL
         entityManager.flush();
-        int heldPairs = replacesPublished ? pairsBegunOn(from) : 0;
+        int heldPairs = replacesPublished ? pairsBegunOn(calendar, clock, from) : 0;
         BiPredicate<LocalDate, Integer> held = (date, pair) -> date.equals(from) && pair <= heldPairs;
         repository.deleteReplaceable(semester.getId(), from, heldPairs);
         List<KeptLesson> kept = repository.kept(semester.getId(), from);
@@ -88,8 +88,11 @@ class LessonMaterializer {
                 plan.dates());
     }
 
-    /** Pairs {@code 1..n} of {@code date} that already began when it is today; 0 on any other date. */
-    private int pairsBegunOn(LocalDate date) {
+    /**
+     * Pairs {@code 1..n} of {@code date} that already began when it is today; 0 on any other date.
+     * {@link LessonRefresher} holds the same pairs of a day that a republication started.
+     */
+    static int pairsBegunOn(CalendarQueries calendar, Clock clock, LocalDate date) {
         if (!date.equals(LocalDate.now(clock))) {
             return 0;
         }

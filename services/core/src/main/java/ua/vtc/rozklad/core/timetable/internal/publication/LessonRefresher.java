@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -52,7 +53,9 @@ import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
  * one published last among those effective by that date, so a date before a newer version's
  * {@code effectiveFrom} still follows the older one. Lessons the refresh keeps (changed by an order,
  * kept for an open decision) follow the study mode of their day as well. Dates before today and
- * semesters without a published version are left alone.
+ * semesters without a published version are left alone. When the version of today is a
+ * republication effective today, the template lessons at today's pairs that already began stay as
+ * they are, as the publication kept them ({@link LessonMaterializer}).
  */
 @Component
 @Transactional
@@ -121,10 +124,17 @@ class LessonRefresher implements DatedLessonRefresh {
         study.semesters().stream().map(StudySemester::semesterId).sorted().forEach(versions::lockPublication);
         repository.lockGroupDays(days, groups);
 
-        List<ReplaceableLesson> replaceable = repository.replaceable(days, groups);
-        Set<UUID> replaceableIds = replaceable.stream().map(ReplaceableLesson::id).collect(Collectors.toSet());
+        PublishedVersions published = new PublishedVersions();
+        // пари, що почалися до перевидання з датою «сьогодні», лишаються зі старої версії, як у публікації
+        int heldPairs = days.contains(today) ? heldPairsOfToday(study, published, today) : 0;
+        BiPredicate<LocalDate, Integer> held = (date, pair) -> date.equals(today) && pair <= heldPairs;
+        Map<Boolean, List<ReplaceableLesson>> byHeld = repository.replaceable(days, groups).stream()
+                .collect(Collectors.partitioningBy(lesson -> held.test(lesson.date(), lesson.pair())));
+        List<ReplaceableLesson> replaceable = byHeld.get(false);
+        Set<UUID> notKept = byHeld.values().stream().flatMap(List::stream).map(ReplaceableLesson::id)
+                .collect(Collectors.toSet());
         Map<LocalDate, List<KeptLesson>> keptByDate = repository.lessonsOn(days).stream()
-                .filter(lesson -> !replaceableIds.contains(lesson.id()))
+                .filter(lesson -> !notKept.contains(lesson.id()))
                 .collect(Collectors.groupingBy(KeptLesson::date));
 
         Set<LocalDate> untouched = new HashSet<>();
@@ -132,7 +142,6 @@ class LessonRefresher implements DatedLessonRefresh {
         List<ConflictDto> clashes = new ArrayList<>();
         List<ModeUpdate> modeUpdates = new ArrayList<>();
         Map<UUID, VersionTemplate> templates = new HashMap<>();
-        PublishedVersions published = new PublishedVersions();
         for (LocalDate day : days) {
             Optional<StudySemester> semester = study.semesterOf(day);
             if (semester.isEmpty()) {
@@ -152,10 +161,11 @@ class LessonRefresher implements DatedLessonRefresh {
             MaterializationPlanner.Plan plan = planner.plan(new MaterializationPlanner.Input(
                     semester.get().semesterId(), version.get().getId(), template.lessons(), study, template.facts(),
                     modes.kept(), day, day));
-            planned.addAll(plan.lessons());
+            plan.lessons().stream().filter(lesson -> !held.test(lesson.date(), lesson.pair())).forEach(planned::add);
             Set<ClashKey> earlier = before == null ? Set.of()
                     : clashesBefore(before, day, keptNow, groups, templates, published);
             plan.found().stream()
+                    .filter(clash -> !held.test(clash.date(), clash.conflict().pair()))
                     .filter(clash -> !earlier.contains(new ClashKey(clash.subjectId(), clash.date())))
                     .map(MaterializationPlanner.Clash::conflict)
                     .forEach(clashes::add);
@@ -294,6 +304,23 @@ class LessonRefresher implements DatedLessonRefresh {
         return conflicts;
     }
 
+    /**
+     * Pairs of today that a republication effective today kept from the older version: those that
+     * already began (0 when today's version is the first publication or took effect earlier).
+     */
+    private int heldPairsOfToday(StudyCalendar study, PublishedVersions published, LocalDate today) {
+        Optional<StudySemester> semester = study.semesterOf(today);
+        if (semester.isEmpty()) {
+            return 0;
+        }
+        UUID semesterId = semester.get().semesterId();
+        return published.governing(semesterId, today)
+                .filter(version -> version.getEffectiveFrom().equals(today))
+                .filter(version -> published.replacesAnother(semesterId, version))
+                .map(version -> LessonMaterializer.pairsBegunOn(calendar, clock, today))
+                .orElse(0);
+    }
+
     /** Published versions of each semester, read once per reconcile (not once per date). */
     private final class PublishedVersions {
 
@@ -301,13 +328,23 @@ class LessonRefresher implements DatedLessonRefresh {
 
         /** The version published last among those effective by {@code date}. */
         Optional<TimetableVersion> governing(UUID semesterId, LocalDate date) {
-            return bySemester.computeIfAbsent(semesterId, id -> versions.findAllBySemesterIdOrderByCreatedAtDesc(id)
-                            .stream()
-                            .filter(version -> version.getPublishedAt() != null && version.getEffectiveFrom() != null)
-                            .toList())
-                    .stream()
+            return of(semesterId).stream()
                     .filter(version -> !version.getEffectiveFrom().isAfter(date))
                     .max(Comparator.comparing(TimetableVersion::getPublishedAt));
+        }
+
+        /** Another version of the semester was published before {@code version}. */
+        boolean replacesAnother(UUID semesterId, TimetableVersion version) {
+            return of(semesterId).stream()
+                    .anyMatch(other -> !other.getId().equals(version.getId())
+                            && other.getPublishedAt().isBefore(version.getPublishedAt()));
+        }
+
+        private List<TimetableVersion> of(UUID semesterId) {
+            return bySemester.computeIfAbsent(semesterId, id -> versions.findAllBySemesterIdOrderByCreatedAtDesc(id)
+                    .stream()
+                    .filter(version -> version.getPublishedAt() != null && version.getEffectiveFrom() != null)
+                    .toList());
         }
     }
 
