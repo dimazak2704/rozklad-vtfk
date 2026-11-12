@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useServerEvent } from '@/api/live';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
@@ -30,57 +30,92 @@ function replyToast(change: ChangeDto, decision: ReplyVariables['decision']): st
     : `Ви відмовилися: ${title}`;
 }
 
+/** Відповідь, що чекає кінця вікна «Скасувати». */
+interface PendingReply {
+  timer: ReturnType<typeof setTimeout>;
+  variables: ReplyVariables;
+  toast: string | number;
+}
+
 /**
  * Відповідь з можливістю передумати: рядок зникає одразу, а запит іде лише через 8 с, якщо людина не натиснула
  * «Скасувати» (так само, як видалення відсутності). Піти зі сторінки — не передумати: відкладені відповіді
- * йдуть одразу. Якщо сервер відмовив, рядок повертається з поясненням (src/api/me.ts → useReplyToChange).
+ * йдуть одразу — і коли кабінет закривають у застосунку (unmount), і коли ховають чи закривають саму вкладку
+ * або PWA (pagehide, visibilitychange → hidden): тоді таймер уже може не спрацювати. Запит із keepalive
+ * (src/api/me.ts) доходить і після закриття. Кожна відповідь іде рівно раз: хто перший забрав її з черги
+ * (таймер, приховування, unmount), той і шле. Якщо сервер відмовив, рядок повертається з поясненням.
  */
 function useDeferredReply() {
   const reply = useReplyToChange();
   const [held, setHeld] = useState<ReadonlySet<Uuid>>(new Set());
-  const pending = useRef(new Map<Uuid, { timer: ReturnType<typeof setTimeout>; variables: ReplyVariables }>());
+  const pending = useRef(new Map<Uuid, PendingReply>());
   const mutate = reply.mutate;
 
-  const release = (id: Uuid) =>
-    setHeld((current) => {
-      if (!current.has(id)) return current;
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
+  const release = useCallback(
+    (id: Uuid) =>
+      setHeld((current) => {
+        if (!current.has(id)) return current;
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      }),
+    [],
+  );
+
+  /** Забирає відповідь із черги: після цього її вже не надішле ніхто інший і не скасує «Скасувати». */
+  const take = useCallback((id: Uuid): PendingReply | undefined => {
+    const entry = pending.current.get(id);
+    if (!entry) return undefined;
+    pending.current.delete(id);
+    clearTimeout(entry.timer);
+    return entry;
+  }, []);
 
   // рядок лишається схованим, доки кеш не отримає нову відповідь (успіх) чи не повернеться назад (помилка)
-  const send = (variables: ReplyVariables) => mutate(variables, { onSettled: () => release(variables.id) });
+  const send = useCallback(
+    (id: Uuid) => {
+      const entry = take(id);
+      if (entry) mutate(entry.variables, { onSettled: () => release(id) });
+      return entry;
+    },
+    [mutate, release, take],
+  );
 
   useEffect(() => {
     const queue = pending.current;
-    return () => {
-      for (const { timer, variables } of queue.values()) {
-        clearTimeout(timer);
-        mutate(variables);
+    // сторінку ховають або закривають: надсилаємо зараз, «Скасувати» в сповіщенні вже нічого не скасує
+    const flush = () => {
+      for (const id of [...queue.keys()]) {
+        const entry = send(id);
+        if (entry) notify.dismiss(entry.toast);
       }
-      queue.clear();
     };
-  }, [mutate]);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      for (const id of [...queue.keys()]) {
+        const entry = take(id);
+        if (entry) mutate(entry.variables);
+      }
+    };
+  }, [mutate, send, take]);
 
   const answer = (change: ChangeDto, decision: ReplyVariables['decision'], comment?: string) => {
     const variables: ReplyVariables = { id: change.id, decision, comment };
     setHeld((current) => new Set(current).add(change.id));
-    const timer = setTimeout(() => {
-      pending.current.delete(change.id);
-      send(variables);
-    }, REPLY_UNDO_MS);
-    pending.current.set(change.id, { timer, variables });
-    notify.undo(replyToast(change, decision), {
+    const timer = setTimeout(() => send(change.id), REPLY_UNDO_MS);
+    const toast = notify.undo(replyToast(change, decision), {
       duration: REPLY_UNDO_MS,
       onUndo: () => {
-        const entry = pending.current.get(change.id);
-        if (!entry) return;
-        clearTimeout(entry.timer);
-        pending.current.delete(change.id);
-        release(change.id);
+        if (take(change.id)) release(change.id);
       },
     });
+    pending.current.set(change.id, { timer, variables, toast });
   };
 
   return { held, answer };

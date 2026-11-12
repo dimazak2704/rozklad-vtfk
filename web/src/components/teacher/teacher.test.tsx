@@ -90,6 +90,63 @@ describe('SubstitutionRequests', () => {
     await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
   });
 
+  it.each([
+    ['закрили вкладку чи застосунок (pagehide)', () => window.dispatchEvent(new Event('pagehide'))],
+    [
+      'згорнули вкладку (visibilitychange → hidden)',
+      () => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+        document.dispatchEvent(new Event('visibilitychange'));
+      },
+    ],
+  ])('%s — відкладена відповідь іде одразу, з keepalive, і лише один раз', async (_, leave) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+    const sent: string[] = [];
+    const keepalive: boolean[] = [];
+    server.use(
+      http.post(apiPath('/me/changes/:id/:decision'), ({ params, request }) => {
+        sent.push(`${String(params.decision)}:${String(params.id)}`);
+        keepalive.push(request.keepalive);
+        return problem({ status: 409, detail: 'На цей запит уже відповіли.' });
+      }),
+    );
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    expect(sent).toEqual([]);
+    try {
+      act(leave);
+      await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
+      expect(keepalive).toEqual([true]);
+      // ні таймер «Скасувати», ні вихід зі сторінки не шлють її вдруге
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(REPLY_UNDO_MS * 2);
+      });
+      unmount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(sent).toHaveLength(1);
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
+  it('вкладка знову видима — нічого не шле: відповідь іде лише тоді, коли сторінка ховається', async () => {
+    const sent = trackReplies();
+    const user = userEvent.setup();
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(document.visibilityState).toBe('visible');
+    expect(sent).toEqual([]);
+  });
+
   it('заміну, яку доповнення передало іншому, відповісти не просять: у «Моїх замінах» вона як передана', async () => {
     server.use(
       http.get(apiPath('/me/changes'), () =>

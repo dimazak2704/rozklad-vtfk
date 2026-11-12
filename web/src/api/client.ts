@@ -7,6 +7,7 @@
 import { noteUnsavedChange } from '@/auth/unsavedChange';
 import { getAccessToken } from '@/auth/userManager';
 import { ApiError, errorFromResponse } from './errors';
+import { noteResponseSource } from './saved-copy';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '');
 
@@ -29,6 +30,11 @@ export interface RequestOptions {
   responseType?: 'json' | 'blob' | 'text';
   /** Обмеження часу в мс (за замовчуванням 30 с). */
   timeoutMs?: number;
+  /**
+   * Запит доживає до кінця, навіть якщо вкладку закрили (fetch keepalive, тіло до 64 КБ). На відміну від
+   * navigator.sendBeacon, несе й заголовок Authorization.
+   */
+  keepalive?: boolean;
 }
 
 type UnauthorizedHandler = (error: ApiError) => void;
@@ -94,7 +100,7 @@ function combineSignals(timeoutMs: number, external?: AbortSignal): { signal: Ab
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', query, body, signal, auth = true, responseType = 'json', timeoutMs = 30_000 } = options;
+  const { method = 'GET', query, body, signal, auth = true, responseType = 'json', timeoutMs = 30_000, keepalive } = options;
   const headers = new Headers(options.headers);
   if (!headers.has('Accept')) {
     headers.set('Accept', responseType === 'json' ? 'application/json, application/problem+json' : '*/*');
@@ -118,7 +124,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const { signal: combined, timedOut } = combineSignals(timeoutMs, signal);
   let response: Response;
   try {
-    response = await fetch(buildUrl(path, query), { method, headers, body: payload, signal: combined });
+    response = await fetch(buildUrl(path, query), { method, headers, body: payload, signal: combined, ...(keepalive ? { keepalive } : {}) });
   } catch (cause) {
     if (timedOut()) throw new ApiError({ status: 0, kind: 'timeout', cause });
     if (signal?.aborted) throw new ApiError({ status: 0, kind: 'aborted', cause });
@@ -134,6 +140,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
     throw error;
   }
+  // відповідь могла прийти з кешу Service Worker, а не з сервера: сторінка має це сказати
+  if (method === 'GET') noteResponseSource(buildUrl(path, query), response.headers);
 
   if (response.status === 204 || response.status === 205) return undefined as T;
   if (responseType === 'blob') return (await response.blob()) as T;

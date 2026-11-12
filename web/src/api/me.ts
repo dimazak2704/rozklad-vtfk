@@ -70,16 +70,19 @@ export function answered(change: ChangeDto, decision: ReplyDecision, at: string)
 
 /**
  * POST /api/me/changes/{id}/confirm|decline. Оптимістично: картка одразу переходить у новий стан,
- * а якщо сервер відмовив — повертається назад і зʼявляється пояснення.
+ * а якщо сервер відмовив — повертається назад і зʼявляється пояснення. Запит з keepalive: відповідь, надіслана
+ * в момент закриття вкладки (SubstitutionRequests), доходить до сервера.
  */
 export function useReplyToChange() {
   const queryClient = useQueryClient();
   const key = qk.me.changes();
   return useMutation({
     mutationFn: ({ id, decision, comment }: ReplyVariables) =>
-      api.post<ChangeDto>(`/me/changes/${encodeURIComponent(id)}/${decision === 'CONFIRM' ? 'confirm' : 'decline'}`, {
-        comment: comment?.trim() ? comment.trim() : null,
-      }),
+      api.post<ChangeDto>(
+        `/me/changes/${encodeURIComponent(id)}/${decision === 'CONFIRM' ? 'confirm' : 'decline'}`,
+        { comment: comment?.trim() ? comment.trim() : null },
+        { keepalive: true },
+      ),
     onMutate: async ({ id, decision }) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<ChangeDto[]>(key);

@@ -52,6 +52,18 @@ describe('apiRequest', () => {
     expect(init?.body).toBe('{"kind":"CANCEL"}');
   });
 
+  it('keepalive: запит переживає закриття вкладки й несе той самий Bearer-токен', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: 'c1' }));
+    await api.post('/me/changes/c1/confirm', { comment: null }, { keepalive: true });
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.keepalive).toBe(true);
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-123');
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, []));
+    await api.get('/me/changes');
+    expect(fetchMock.mock.calls[1]?.[1]).not.toHaveProperty('keepalive');
+  });
+
   it('не додає токен, коли auth: false', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, []));
     await api.get('/public/groups', undefined, { auth: false });
