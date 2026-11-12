@@ -241,7 +241,8 @@ export default function ChangesPage() {
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
       keys: String(n),
       handler: () => selectNumber(n),
-      description: n === 1 ? 'Обрати варіант 1–9 (дія — Enter на обраному)' : undefined,
+      description: n === 1 ? 'Обрати варіант за номером (дія — Enter на обраному)' : undefined,
+      helpKeys: n === 1 ? '1–9' : undefined,
       group: 'Заміни',
     })),
     { keys: 'n', handler: openNewAbsence, description: 'Нова відсутність', group: 'Заміни' },

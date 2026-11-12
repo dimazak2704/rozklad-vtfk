@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { helpGroups, useShortcutsStore } from '@/stores/shortcuts';
 import { Dialog, DialogContent } from '../ui/Dialog';
@@ -28,8 +28,13 @@ export function ShortcutsDialog() {
                 {items.map((item) => (
                   <div key={item.keys} className="flex items-center justify-between gap-3">
                     <dt className="text-ui text-primary">{item.description}</dt>
-                    <dd>
-                      <KbdCombo keys={item.keys} />
+                    <dd className="flex shrink-0 items-center gap-1.5">
+                      {item.keys.split(',').map((keys, index) => (
+                        <Fragment key={keys}>
+                          {index > 0 ? <span className="text-caption text-muted">або</span> : null}
+                          <KbdCombo keys={keys} />
+                        </Fragment>
+                      ))}
                     </dd>
                   </div>
                 ))}

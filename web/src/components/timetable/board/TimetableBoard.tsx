@@ -47,6 +47,8 @@ import { cardPositionFor, type CardPosition } from './position';
 export interface BoardFocus extends Omit<CellFocus, 'entityId'> {
   entityId: Uuid | null;
   lessonId: Uuid | null;
+  /** Пара, яка зараз зникне (видалення): фокус — на сусіда в слоті чи «Додати», але не на неї. */
+  skipLessonId?: Uuid;
 }
 
 function resolveFocus(focus: BoardFocus | null, entities: readonly BoardEntity[]): (BoardFocus & CellFocus) | null {
@@ -201,16 +203,18 @@ export function TimetableBoard({
     let attempts = 0;
     let frame = 0;
     const tryFocus = () => {
+      const skip = request.skipLessonId ? `:not([data-lesson-id="${request.skipLessonId}"])` : '';
       const selector = request.lessonId
         ? `[data-lesson-id="${request.lessonId}"]`
-        : `[data-cell="${request.entityId}|${request.weekday}|${request.pair}"] [data-roving]`;
+        : `[data-cell="${request.entityId}|${request.weekday}|${request.pair}"] [data-roving]${skip}`;
       const element = listRef.current?.querySelector<HTMLElement>(selector);
       if (element) {
         element.focus({ preventScroll: true });
         return;
       }
       attempts += 1;
-      if (attempts < 20) frame = requestAnimationFrame(tryFocus);
+      // ~1 с: пара, повернена скасуванням, чи слот після видалення зʼявляються не в першому кадрі
+      if (attempts < 60) frame = requestAnimationFrame(tryFocus);
     };
     frame = requestAnimationFrame(tryFocus);
     return () => cancelAnimationFrame(frame);

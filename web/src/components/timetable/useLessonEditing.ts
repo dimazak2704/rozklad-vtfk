@@ -4,7 +4,7 @@
  * розділяє версії розкладу: Ctrl+Z у версії скасовує лише її правки. Помилки сервера не ховаємо:
  * кеш повертається як був, а тост пояснює причину словами сервера.
  */
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { isApiError } from '@/api/errors';
 import { qk } from '@/api/queryKeys';
 import { useCreateLesson, useDeleteLesson, useMoveLesson, useUpdateLesson, type TimetableConflict } from '@/api/timetable';
@@ -36,7 +36,16 @@ const toRoomRef = (room: PublicRoomDto | RoomRef): RoomRef => ({ id: room.id, na
 /** Сторінка журналу для версії розкладу: Ctrl+Z діє лише на правки цієї версії. */
 export const timetableScope = (versionId: Uuid) => `timetable:${versionId}`;
 
-export function useLessonEditing(versionId: Uuid) {
+export interface LessonEditingOptions {
+  /** Скасування видалення повернуло пару (з новим id): сторінка може повернути на неї фокус. */
+  onRestored?: (lesson: TemplateLessonDto) => void;
+}
+
+export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions = {}) {
+  const onRestored = useRef(options.onRestored);
+  useLayoutEffect(() => {
+    onRestored.current = options.onRestored;
+  });
   const move = useMoveLesson(versionId);
   const create = useCreateLesson(versionId);
   const update = useUpdateLesson(versionId);
@@ -61,6 +70,7 @@ export function useLessonEditing(versionId: Uuid) {
   const recreate = async (lesson: TemplateLessonDto) => {
     const result = await create.mutateAsync({ ...toLessonRequest(lesson), version: undefined });
     book.remap(lesson.id, result.lesson);
+    return result.lesson;
   };
   const removeCurrent = async (lessonId: Uuid) => {
     await remove.mutateAsync(book.resolve(lessonId));
@@ -149,7 +159,9 @@ export function useLessonEditing(versionId: Uuid) {
       track({
         label: `Видалено пару ${lessonShort(lesson)}, ${slotShort(lesson)}`,
         invalidate,
-        undo: () => recreate(lesson),
+        undo: async () => {
+          onRestored.current?.(await recreate(lesson));
+        },
         redo: () => removeCurrent(lesson.id),
       });
       return true;

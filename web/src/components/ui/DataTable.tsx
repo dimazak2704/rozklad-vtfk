@@ -198,6 +198,9 @@ export function DataTable<T>({
               <li
                 key={id}
                 data-selected={selectedRowId === id || undefined}
+                // курсор рядків (J/K) переносить сюди фокус: читач екрана чує, на якому рядку дія
+                aria-current={selectedRowId === id || undefined}
+                tabIndex={selectedRowId === id ? -1 : undefined}
                 className={cn(
                   'flex items-center gap-2 border-b border-separator last:border-b-0',
                   rowActions ? 'pe-3' : 'pe-5',
@@ -339,6 +342,9 @@ export function DataTable<T>({
                     <tr
                       key={id}
                       data-selected={selected || undefined}
+                      // курсор рядків (J/K) переносить сюди фокус: читач екрана чує, на якому рядку дія
+                      aria-current={selected || undefined}
+                      tabIndex={selected ? -1 : undefined}
                       onClick={onRowClick ? () => onRowClick(row) : undefined}
                       className={cn(
                         'group transition-[background-color] duration-100',

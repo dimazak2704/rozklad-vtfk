@@ -11,7 +11,7 @@ import {
 import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
 import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, Skeleton, type MoreMenuItem } from '@/components/ui';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { isModalOpen, useHotkeys, useShortcutHints } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import { useRegisterCommands } from '@/stores/commands';
 import { TimetableBoard, type BoardFocus } from './board/TimetableBoard';
@@ -71,7 +71,14 @@ export function TimetableEditor({
   const lessonsQuery = useVersionLessons(version.id);
   const conflictsQuery = useVersionConflicts(version.id);
   const metricsQuery = useVersionMetrics(version.id);
-  const editing = useLessonEditing(version.id);
+  const editing = useLessonEditing(version.id, {
+    // Ctrl+Z повернув видалену пару — фокус і вибір на ній (якщо поверх не відкрите вікно, напр. журнал)
+    onRestored: (lesson) => {
+      if (isModalOpen()) return;
+      setSelectedId(lesson.id);
+      setFocus((prev) => ({ entityId: null, lessonId: lesson.id, weekday: lesson.weekday, pair: lesson.pair, nonce: (prev?.nonce ?? 0) + 1 }));
+    },
+  });
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [selectedId, setSelectedId] = useState<Uuid | null>(initialFocusLessonId);
@@ -130,6 +137,12 @@ export function TimetableEditor({
 
   // без «Ви впевнені?»: видалення з чернетки скасовується зі сповіщення або Ctrl+Z
   const removeLesson = async (lesson: TemplateLessonDto) => {
+    // фокус не губиться на зниклій парі: одразу на її слот (сусідню пару чи «Додати»)
+    const hadFocus = document.activeElement?.closest(`[data-lesson-id="${lesson.id}"]`) != null || selectedId === lesson.id;
+    const entityId = entityIdOf(view, lesson);
+    if (hadFocus && entityId) {
+      setFocus({ entityId, lessonId: null, skipLessonId: lesson.id, weekday: lesson.weekday, pair: lesson.pair, nonce: Date.now() });
+    }
     if (await editing.deleteLesson(lesson)) setSelectedId(null);
   };
 
@@ -191,6 +204,17 @@ export function TimetableEditor({
     },
     { keys: '/', handler: () => searchRef.current?.focus(), description: 'Пошук групи, викладача чи аудиторії', group: 'Базовий розклад' },
   ]);
+
+  // стрілки, Пробіл і F2 обробляє сама сітка — у довідці вони мають бути теж
+  useShortcutHints(
+    editable
+      ? [
+          { keys: '←↑→↓', description: 'Перейти до сусідньої пари чи слота', group: 'Базовий розклад' },
+          { keys: 'space,enter', description: 'Підхопити пару; стрілки — новий слот; ще раз — поставити', group: 'Базовий розклад' },
+          { keys: 'f2', description: 'Змінити пару, на якій фокус', group: 'Базовий розклад' },
+        ]
+      : [],
+  );
 
   useRegisterCommands([
     ...(editable ? [{ id: 'add-lesson', label: 'Додати пару в чернетку', group: 'Базовий розклад', icon: Plus, shortcut: 'n', perform: () => openAdd() }] : []),

@@ -169,6 +169,15 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
       }}
     >
       <DialogContent
+        // фокус — на перше поле (обраний тип чату), а не на хрестик «Закрити» в заголовку
+        onOpenAutoFocus={(event) => {
+          const content = event.currentTarget as HTMLElement | null;
+          const field = content?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], input[type="radio"]:checked, input:not([type="hidden"]):not([disabled])');
+          if (field) {
+            event.preventDefault();
+            field.focus();
+          }
+        }}
         title={result ? 'Код готовий' : 'Новий код привʼязки'}
         description={result ? 'Надішліть посилання або покажіть QR — код одноразовий.' : 'Що привʼязуємо до бота @scheduler_vtfk_bot?'}
         size="lg"

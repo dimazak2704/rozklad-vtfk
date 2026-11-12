@@ -13,18 +13,24 @@ interface RowCursorOptions<T> {
   enabled?: boolean;
 }
 
-/** Enter на кнопці, посиланні чи полі — їхній власний; рядок відкриваємо, лише коли фокус ніде. */
+/** Enter на кнопці, посиланні чи полі — їхній власний; рядок відкриваємо, коли фокус ніде або на самому рядку. */
 function focusIsFree(): boolean {
   const active = document.activeElement;
-  return !active || active === document.body || active.id === 'main';
+  return !active || active === document.body || active.id === 'main' || active.matches('#main [data-selected]');
 }
 
-function scrollToSelected(): void {
+/**
+ * Фокус — на виділений рядок (roving focus): видно кільце фокуса, а читач екрана називає рядок,
+ * тож Enter чи Delete не діють наосліп.
+ */
+function focusSelected(): void {
   requestAnimationFrame(() => {
     const rows = document.querySelectorAll<HTMLElement>('#main [data-selected]');
-    // таблиця й список на телефоні рендеряться обидва; прокручуємо видимий
+    // таблиця й список на телефоні рендеряться обидва; беремо видимий
     const visible = [...rows].find((row) => row.offsetParent !== null);
-    visible?.scrollIntoView({ block: 'nearest' });
+    if (!visible) return;
+    visible.focus({ preventScroll: true });
+    visible.scrollIntoView({ block: 'nearest' });
   });
 }
 
@@ -45,7 +51,7 @@ export function useRowCursor<T>({ rows, getId, onOpen, onDelete, group, enabled 
     const row = list[next];
     if (!row) return;
     setCursor(getId(row));
-    scrollToSelected();
+    focusSelected();
   };
 
   useHotkeys([
@@ -59,6 +65,7 @@ export function useRowCursor<T>({ rows, getId, onOpen, onDelete, group, enabled 
         return true;
       },
       description: 'Відкрити виділений рядок',
+      helpKeys: 'enter,e',
       group,
       enabled,
     },
@@ -87,8 +94,12 @@ export function useRowCursor<T>({ rows, getId, onOpen, onDelete, group, enabled 
       handler: () => {
         if (!current) return false;
         setCursor(null);
+        // фокус був на рядку — лишаємо його на сторінці, а не на <body>
+        if (document.activeElement?.matches('#main [data-selected]')) document.getElementById('main')?.focus({ preventScroll: true });
         return true;
       },
+      description: 'Зняти виділення рядка',
+      group,
       enabled,
     },
   ]);
