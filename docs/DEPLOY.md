@@ -276,9 +276,11 @@ the server, stop the notification service on your PC (or the local `--profile ap
 create a second bot in @BotFather for development and keep its token in your local `.env`.
 
 `TELEGRAM_OWNER_CHAT_ID` is your chat id (write to the bot, then read `chat.id` from
-`https://api.telegram.org/bot<token>/getUpdates` while no instance is polling). Webhook mode, if the
-notification service is configured for it, uses `https://DOMAIN/api/notify/telegram/webhook` and the
-`TELEGRAM_WEBHOOK_SECRET` header check; Caddy already provides the HTTPS endpoint.
+`https://api.telegram.org/bot<token>/getUpdates` while no instance is polling). Webhook mode
+(`TELEGRAM_MODE=WEBHOOK`) registers `https://DOMAIN/api/notify/telegram/webhook` (`compose.prod.yml` derives
+`TELEGRAM_WEBHOOK_URL` from `DOMAIN`; set it in `.env` only to override) and checks the
+`TELEGRAM_WEBHOOK_SECRET` header; Caddy already provides the HTTPS endpoint. Without a URL the bot only sends,
+and `GET /api/notify/bot` reports it in `problem`.
 
 ## 11. Day-to-day operations
 

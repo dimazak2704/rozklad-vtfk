@@ -221,6 +221,8 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-scheduler_vtfk_bot}
       TELEGRAM_MODE: ${TELEGRAM_MODE:-POLLING}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      # WEBHOOK mode registers this URL with Telegram (Caddy routes /api/* through the gateway)
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-https://${DOMAIN:?}/api/notify/telegram/webhook}
       # small heap on purpose: LibreOffice runs in the same container next to the JVM
       JAVA_TOOL_OPTIONS: -Xmx${NOTIFICATION_HEAP:-320m}
     stop_grace_period: 30s
