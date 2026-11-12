@@ -322,11 +322,14 @@ export function buildDraft(world: World, date: IsoDate, settings: SettingsDto, n
     dateLabel: orderDateLabel(date),
     publishedAt: null,
     publishedBy: null,
-    version: existing ? existing.version + 1 : 0,
+    version: existing?.version ?? 0,
     imported: false,
     semesterId: ACTIVE_SEMESTER.id,
     createdAt: existing?.createdAt ?? now.toISOString(),
   };
+  // як @Version у core: читання чернетки без змін версію не рухає (інакше збережена щойно версія
+  // приміток застаріла б від першого ж перечитування), зміна рядків чи підпису — рухає
+  if (existing && JSON.stringify(existing) !== JSON.stringify(draft)) draft.version = existing.version + 1;
   world.orders.set(id, draft);
   return draft;
 }

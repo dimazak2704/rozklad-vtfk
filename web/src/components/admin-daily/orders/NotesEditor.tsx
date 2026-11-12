@@ -1,13 +1,21 @@
 import { Plus, X } from 'lucide-react';
-import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useId, useLayoutEffect, useState, type FormEvent } from 'react';
 import { useUpdateOrderNotes } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
-import type { OrderDto } from '@/api/types';
+import type { OrderDto, Uuid } from '@/api/types';
 import { Button, IconButton, notify, Textarea } from '@/components/ui';
 import { track } from '@/lib/undo/actions';
 import { JournalBlockedError } from '@/lib/undo/errors';
 
 const MAX_NOTE = 500;
+
+/**
+ * Чи є незбережені правки в редакторі, який зараз показує ці примітки. Після збереження батько
+ * перемальовує редактор (новий `key`), тож запис журналу не може питати свій, уже знятий екземпляр:
+ * той назавжди лишився б «зміненим» і блокував скасування. Питаємо той, що на екрані зараз.
+ */
+const unsavedEditors = new Map<Uuid, () => boolean>();
+const hasUnsavedNotes = (orderId: Uuid): boolean => unsavedEditors.get(orderId)?.() ?? false;
 
 /**
  * Примітки внизу розпорядження (практика, дистанційне навчання, аудиторії). Календарні примітки сервер
@@ -22,10 +30,13 @@ export function NotesEditor({ order }: { order: OrderDto }) {
 
   const dirty = notes.length !== order.notes.length || notes.some((note, index) => note !== order.notes[index]);
   // скасування з журналу оновить розпорядження й перемалює редактор — незбережене не губимо мовчки
-  const dirtyRef = useRef(dirty);
   useLayoutEffect(() => {
-    dirtyRef.current = dirty;
-  });
+    const isDirty = () => dirty;
+    unsavedEditors.set(order.id, isDirty);
+    return () => {
+      if (unsavedEditors.get(order.id) === isDirty) unsavedEditors.delete(order.id);
+    };
+  }, [order.id, dirty]);
 
   const addNote = () => {
     setNotes((prev) => [...prev, '']);
@@ -50,7 +61,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
       // у журнал дій: Ctrl+Z повертає попередні примітки з версією після збереження
       let version = saved.version;
       const put = async (next: string[]) => {
-        if (dirtyRef.current) throw new JournalBlockedError('Спершу збережіть або скасуйте зміни в примітках', 'failed');
+        if (hasUnsavedNotes(order.id)) throw new JournalBlockedError('Спершу збережіть або скасуйте зміни в примітках', 'failed');
         version = (await update.mutateAsync({ id: order.id, notes: next, version })).version;
       };
       track({ label: 'Змінено примітки розпорядження', undo: () => put(before), redo: () => put(after) });
