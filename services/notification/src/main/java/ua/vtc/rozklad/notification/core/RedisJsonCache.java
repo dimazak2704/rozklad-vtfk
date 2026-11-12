@@ -47,6 +47,31 @@ public class RedisJsonCache {
         return value;
     }
 
+    /**
+     * Loads a fresh value and only then replaces the cached one: a failed load throws and leaves the
+     * old entry in place (never evict-then-reload).
+     */
+    public <T> T refresh(String key, Duration ttl, Supplier<T> loader) {
+        T value = loader.get();
+        if (value != null) {
+            write(PREFIX + key, json.writeValueAsString(value), ttl);
+        }
+        return value;
+    }
+
+    /**
+     * Claims a marker for {@code ttl}: true for the first caller, false while the marker lives. With Redis
+     * down it answers false — every read already goes to the source then.
+     */
+    public boolean claim(String key, Duration ttl) {
+        try {
+            return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(PREFIX + key, "1", ttl));
+        } catch (DataAccessException e) {
+            log.warn("Redis is unavailable, marker {} not claimed: {}", key, e.getMessage());
+            return false;
+        }
+    }
+
     /** Current value of a counter (0 when absent or Redis is down). */
     public long counter(String key) {
         String value = read(PREFIX + key);

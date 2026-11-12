@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.notification.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -44,5 +45,31 @@ class CoreQueriesIT extends IntegrationTest {
     void unknownIdIsStillEmptyAfterOneReload() {
         assertThat(queries.teacher(NEW_TEACHER)).isEmpty();
         assertThat(queries.group(NEW_GROUP)).isEmpty();
+    }
+
+    @Test
+    void missingIdWhileCoreIsDownKeepsTheCachedCatalog() {
+        assertThat(queries.groups()).isNotEmpty();
+        assertThat(queries.teachers()).isNotEmpty();
+        core.setUnavailable(true);
+
+        assertThatThrownBy(() -> queries.group(NEW_GROUP)).isInstanceOf(UpstreamUnavailableException.class);
+        assertThatThrownBy(() -> queries.teacher(NEW_TEACHER)).isInstanceOf(UpstreamUnavailableException.class);
+
+        assertThat(queries.groups()).extracting(PublicGroup::id).contains(CoreFixtures.GROUP_4KI1);
+        assertThat(queries.group(CoreFixtures.GROUP_4KI1)).isPresent();
+        assertThat(queries.teacher(CoreFixtures.TEACHER_KRENTSIN)).isPresent();
+    }
+
+    @Test
+    void repeatedMissesReloadTheCatalogAtMostOncePerMinute() {
+        assertThat(queries.teachers()).isNotEmpty();
+        int calls = core.teacherCalls();
+
+        for (int i = 0; i < 5; i++) {
+            assertThat(queries.teacher(NEW_TEACHER)).isEmpty();
+        }
+
+        assertThat(core.teacherCalls()).as("one forced reload, the rest served from the cache").isEqualTo(calls + 1);
     }
 }

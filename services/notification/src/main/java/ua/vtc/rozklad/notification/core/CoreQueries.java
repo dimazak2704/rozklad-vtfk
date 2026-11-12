@@ -26,6 +26,8 @@ public class CoreQueries {
 
     static final Duration META_TTL = Duration.ofSeconds(30);
     static final Duration CATALOG_TTL = Duration.ofHours(1);
+    /** At most one forced catalog reload per catalog in this window, however many ids miss. */
+    static final Duration CATALOG_RELOAD_INTERVAL = Duration.ofMinutes(1);
     static final Duration BELLS_TTL = Duration.ofHours(6);
     static final Duration SCHEDULE_TTL = Duration.ofMinutes(10);
     static final Duration SEARCH_TTL = Duration.ofMinutes(10);
@@ -56,12 +58,15 @@ public class CoreQueries {
                 .toList();
     }
 
-    /** A group missing from the cached catalog reloads it once: the dispatcher may have just created it. */
+    /**
+     * A group missing from the cached catalog reloads it (the dispatcher may have just created it), at most
+     * once a minute; the cached catalog is replaced only by a successful reload, so core being down keeps it.
+     */
     public Optional<PublicGroup> group(UUID id) {
-        return findGroup(id).or(() -> {
-            cache.evict("groups");
-            return findGroup(id);
-        });
+        return findGroup(id).or(() -> reloadCatalog("groups")
+                ? cache.refresh("groups", CATALOG_TTL, core::groups).stream()
+                        .filter(group -> group.id().equals(id)).findFirst()
+                : Optional.empty());
     }
 
     private Optional<PublicGroup> findGroup(UUID id) {
@@ -73,12 +78,16 @@ public class CoreQueries {
         }, CATALOG_TTL, core::teachers);
     }
 
-    /** A teacher missing from the cached catalog reloads it once: the dispatcher may have just created him. */
+    /** A teacher missing from the cached catalog reloads it, with the same rules as {@link #group(UUID)}. */
     public Optional<PublicTeacher> teacher(UUID id) {
-        return findTeacher(id).or(() -> {
-            cache.evict("teachers");
-            return findTeacher(id);
-        });
+        return findTeacher(id).or(() -> reloadCatalog("teachers")
+                ? cache.refresh("teachers", CATALOG_TTL, core::teachers).stream()
+                        .filter(teacher -> teacher.id().equals(id)).findFirst()
+                : Optional.empty());
+    }
+
+    private boolean reloadCatalog(String catalog) {
+        return cache.claim(catalog + ":reload", CATALOG_RELOAD_INTERVAL);
     }
 
     private Optional<PublicTeacher> findTeacher(UUID id) {

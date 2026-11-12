@@ -17,7 +17,7 @@ internal REST, schedules are read from core's public REST.
 | `orders` | `OrderDistribution` (order.published), `OrderRows` (rows per group/teacher), `OrderTexts` (compact HTML) |
 | `substitution` | `SubstitutionRequests` (request, reply, edits, deadline reminders), `SubstitutionTexts` |
 | `documents` | `OrderDocxRenderer` (POI, college layout), `LibreOfficeConverter`, `PdfPngRenderer` (PDFBox), `OrderDocuments` (cache, media for photos), `PublishedOrders`, `DocumentPrerenderer`, `web/DocumentsController` |
-| `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache: meta 30 s, groups/teachers 1 h — an id missing from the cached list reloads it once, so a teacher or group created a minute ago gets a binding code; schedules 10 min under a generation counter), error mapping |
+| `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache: meta 30 s, groups/teachers 1 h — an id missing from the cached list reloads it (at most once a minute per catalog, marker `<catalog>:reload`), so a teacher or group created a minute ago gets a binding code; the cached list is replaced only after a successful load, so core being down never empties it; schedules 10 min under a generation counter), error mapping |
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
 | `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
 
