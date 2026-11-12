@@ -206,6 +206,11 @@ export default function LoadPage() {
     [groupId, sorted, table.page],
   );
   const starts = useMemo(() => (sort.columnId === 'group' ? firstOfGroup(pageRows) : null), [pageRows, sort.columnId]);
+  // «Джерело» показує лише винятки; якщо на сторінці їх немає, порожня колонка не займає ширину
+  const visibleColumns = useMemo(
+    () => (pageRows.some((item) => item.source !== DEFAULT_SOURCE || item.note) ? columns : columns.filter((column) => column.id !== 'source')),
+    [columns, pageRows],
+  );
   if (!sameSet(starts, groupStarts)) setGroupStarts(starts);
 
   if (semesters.isPending) {
@@ -317,7 +322,13 @@ export default function LoadPage() {
           </PopoverContent>
         </Popover>
       </div>
-      {semester.id !== activeSemesterOf(semesters.data)?.id ? <p className="-mt-2 text-caption text-secondary">Показано {semester.name}.</p> : null}
+      {/* підказка — одразу під полем «Група», а не під 50 рядками й сторінками */}
+      {!groupId || semester.id !== activeSemesterOf(semesters.data)?.id ? (
+        <p className="-mt-3 text-caption text-muted">
+          {semester.id !== activeSemesterOf(semesters.data)?.id ? `Показано ${semester.name}. ` : null}
+          {!groupId ? 'Оберіть групу, щоб побачити, як заповнено її тиждень.' : null}
+        </p>
+      ) : null}
 
       {summary && group ? (
         <section aria-label={`Тиждень групи ${group.code}`} className="flex max-w-3xl flex-col gap-2">
@@ -349,7 +360,7 @@ export default function LoadPage() {
       <Panel flush>
       <DataTable
         caption={group ? `Навантаження групи ${group.code}` : `Навантаження: ${semester.name}`}
-        columns={columns}
+        columns={visibleColumns}
         rows={items.data ? pageRows : undefined}
         getRowId={(item) => item.id}
         loading={items.isPending}
@@ -406,9 +417,6 @@ export default function LoadPage() {
         }
       />
       </Panel>
-      {items.data && !groupId && filtered.length > 0 ? (
-        <p className="text-caption text-muted">Оберіть групу, щоб побачити, як заповнено її тиждень.</p>
-      ) : null}
 
       {editing ? (
         <LoadFormDialog
