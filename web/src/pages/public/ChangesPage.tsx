@@ -302,7 +302,9 @@ export default function ChangesPage() {
   const showMine = hasMyTargets(mine) && groups.length > 1;
 
   return (
-    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються" className="max-w-4xl">
+    // шапка — на всю ширину сторінки, як на /g/: перемикач днів і календар закінчуються на правому краї контейнера;
+    // фільтри й список — колонкою для читання (max-w-4xl)
+    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються">
       <PageHeader
         size="headline"
         title={
@@ -340,7 +342,7 @@ export default function ChangesPage() {
       />
 
       {showSearch || showMine ? (
-        <section aria-label="Фільтри" className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        <section aria-label="Фільтри" className="flex max-w-4xl flex-wrap items-center gap-x-3 gap-y-2.5">
           {showSearch ? (
             <div className="w-full sm:w-72">
               <Input
@@ -378,7 +380,7 @@ export default function ChangesPage() {
         </section>
       ) : null}
 
-      <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined} className="flex flex-col gap-3">
+      <div aria-busy={changes.isFetching && !changes.isPending ? true : undefined} className="flex max-w-4xl flex-col gap-3">
         {showSavedNote ? (
           <SavedCopyNote online={online} onRefresh={() => void changes.refetch()}>
             {savedCopy.fromCache && savedCopy.savedAt !== null
