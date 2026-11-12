@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowLeftRight, Send } from 'lucide-react';
+import { ArrowLeft, Send } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -25,7 +25,6 @@ import { OrderRows } from '@/components/admin-daily/orders/OrderRows';
 import { OrderSheet } from '@/components/admin-daily/orders/OrderSheet';
 import { OrdersArchive } from '@/components/admin-daily/orders/OrdersArchive';
 import { PublishDialog } from '@/components/admin-daily/orders/PublishDialog';
-import { WeekStrip } from '@/components/admin-daily/orders/WeekStrip';
 import {
   Button,
   buttonClass,
@@ -64,7 +63,7 @@ function SheetSkeleton() {
 }
 
 /**
- * Розпорядження: чернетка на робочу дату у форматі коледжу, примітки, публікація з номером, файли й
+ * Розпорядження: дату обирають у верхній панелі (одна на всі щоденні екрани), тут — чернетка на робочу дату у форматі коледжу, примітки, публікація з номером, файли й
  * розсилка після публікації, архів з пошуком. На телефоні аркуш A4 нечитабельний — там ті самі рядки списком.
  */
 export default function OrdersPage() {
@@ -151,10 +150,8 @@ export default function OrdersPage() {
   ) : (
     files.pdfButton
   );
-  const more: MoreMenuItem[] = [
-    ...files.menu,
-    { label: 'До замін', icon: <ArrowLeftRight aria-hidden="true" />, to: changesLink, separatorBefore: files.menu.length > 0 },
-  ];
+  // «⋯» — лише справжні другорядні дії з документом (файли); «До замін» уже є в реченні про очікування й у меню розділів
+  const more: MoreMenuItem[] = files.menu;
 
   // одна помилка на сторінку: чернетка чи документ дати; повтор перечитує всі списки розпоряджень (і архів)
   const failed = [detailId ? detail : draft, dayOrders].find((query) => query.isError);
@@ -285,8 +282,6 @@ export default function OrdersPage() {
       <PageHeader title="Розпорядження" meta={status} primaryAction={primary} more={more} />
 
       <PageErrorScope queries={[pageQuery]} title="Не вдалося скласти розпорядження">
-        <WeekStrip date={date} onSelect={selectDay} />
-
         {main}
 
         <Section id="archive" title="Архів" className="mt-6">
