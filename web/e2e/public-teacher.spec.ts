@@ -26,10 +26,14 @@ test.describe('кабінет викладача', () => {
 
     await expect(page.getByRole('article', { name: label, exact: true })).toHaveCount(0);
     await expect(cards).toHaveCount(1);
-    await expect(page.getByText(/^Підтверджено: /)).toBeVisible();
+    const toast = page.getByText(/^Підтверджено: /);
+    await expect(toast).toBeVisible();
+    // курсор над сповіщенням ставить його відлік на паузу (Sonner), але «Скасувати» не має пережити надіслану відповідь
+    await toast.hover();
     // відповідь іде на сервер, коли мине час на «Скасувати» (REPLY_UNDO_MS = 8 с), тож «Мої заміни» — трохи згодом
     await expect(mine).toHaveCount(1, { timeout: 15_000 });
     await expect(page.getByRole('region', { name: 'Мої заміни' })).toContainText('Підтверджено');
+    await expect(toast).toBeHidden();
   });
 
   test('відмова з коментарем', async ({ page }) => {

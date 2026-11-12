@@ -71,12 +71,15 @@ function useDeferredReply() {
     return entry;
   }, []);
 
-  // рядок лишається схованим, доки кеш не отримає нову відповідь (успіх) чи не повернеться назад (помилка)
+  // рядок лишається схованим, доки кеш не отримає нову відповідь (успіх) чи не повернеться назад (помилка).
+  // Сповіщення з «Скасувати» закриваємо тут, а не чекаємо його власного відліку: Sonner ставить його на паузу,
+  // поки над ним курсор, і кнопка пережила б уже надіслану відповідь.
   const send = useCallback(
     (id: Uuid) => {
       const entry = take(id);
-      if (entry) mutate(entry.variables, { onSettled: () => release(id) });
-      return entry;
+      if (!entry) return;
+      notify.dismiss(entry.toast);
+      mutate(entry.variables, { onSettled: () => release(id) });
     },
     [mutate, release, take],
   );
@@ -85,10 +88,7 @@ function useDeferredReply() {
     const queue = pending.current;
     // сторінку ховають або закривають: надсилаємо зараз, «Скасувати» в сповіщенні вже нічого не скасує
     const flush = () => {
-      for (const id of [...queue.keys()]) {
-        const entry = send(id);
-        if (entry) notify.dismiss(entry.toast);
-      }
+      for (const id of [...queue.keys()]) send(id);
     };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -100,7 +100,9 @@ function useDeferredReply() {
       document.removeEventListener('visibilitychange', onVisibility);
       for (const id of [...queue.keys()]) {
         const entry = take(id);
-        if (entry) mutate(entry.variables);
+        if (!entry) continue;
+        notify.dismiss(entry.toast);
+        mutate(entry.variables);
       }
     };
   }, [mutate, send, take]);
@@ -113,6 +115,8 @@ function useDeferredReply() {
       duration: REPLY_UNDO_MS,
       onUndo: () => {
         if (take(change.id)) release(change.id);
+        // кнопку встигли натиснути, коли відповідь уже пішла: кажемо чесно, а не мовчки закриваємо
+        else notify.info('Відповідь уже надіслано, скасувати не вийде');
       },
     });
     pending.current.set(change.id, { timer, variables, toast });

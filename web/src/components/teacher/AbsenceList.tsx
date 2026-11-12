@@ -49,7 +49,8 @@ function useDeferredDelete() {
   });
 
   // піти зі сторінки — не те саме, що передумати: відкладені видалення виконуємо одразу
-  const pending = useRef(new Map<Uuid, AbsenceDto>());
+  // сповіщення з «Скасувати» закриваємо, щойно запит пішов: Sonner тримає його, поки над ним курсор
+  const pending = useRef(new Map<Uuid, { absence: AbsenceDto; toast: string | number }>());
   const mutate = remove.mutate;
   useEffect(() => {
     const map = timers.current;
@@ -57,8 +58,10 @@ function useDeferredDelete() {
     return () => {
       for (const [id, timer] of map) {
         clearTimeout(timer);
-        const absence = queue.get(id);
-        if (absence) mutate(absence);
+        const entry = queue.get(id);
+        if (!entry) continue;
+        notify.dismiss(entry.toast);
+        mutate(entry.absence);
       }
       map.clear();
       queue.clear();
@@ -67,16 +70,22 @@ function useDeferredDelete() {
 
   const start = (absence: AbsenceDto) => {
     setHidden((current) => new Set(current).add(absence.id));
-    pending.current.set(absence.id, absence);
     const timer = setTimeout(() => {
+      const entry = pending.current.get(absence.id);
       timers.current.delete(absence.id);
       pending.current.delete(absence.id);
+      if (entry) notify.dismiss(entry.toast);
       mutate(absence);
     }, UNDO_MS);
     timers.current.set(absence.id, timer);
-    notify.undo(`Відсутність ${formatDateRange(absence.dateFrom, absence.dateTo)} видалено`, {
+    const toast = notify.undo(`Відсутність ${formatDateRange(absence.dateFrom, absence.dateTo)} видалено`, {
       duration: UNDO_MS,
       onUndo: () => {
+        if (!pending.current.has(absence.id)) {
+          // запит уже пішов: не вдаємо, що скасували
+          notify.info('Відсутність уже видалено, скасувати не вийде');
+          return;
+        }
         clearTimeout(timers.current.get(absence.id));
         timers.current.delete(absence.id);
         pending.current.delete(absence.id);
@@ -87,6 +96,7 @@ function useDeferredDelete() {
         });
       },
     });
+    pending.current.set(absence.id, { absence, toast });
   };
 
   return { hidden, start };

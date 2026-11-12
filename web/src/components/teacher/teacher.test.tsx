@@ -79,6 +79,52 @@ describe('SubstitutionRequests', () => {
     await waitFor(() => expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(2));
   });
 
+  it('відповідь пішла за таймером — «Скасувати» зникає разом із нею, а пізній клік каже, що вже надіслано', async () => {
+    // Sonner ставить відлік сповіщення на паузу, поки над ним курсор, тож воно могло б пережити наш таймер
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+    const sent: string[] = [];
+    const onRequest = ({ request }: { request: Request }) => {
+      if (request.method === 'POST') sent.push(new URL(request.url).pathname);
+    };
+    server.events.on('request:start', onRequest);
+    const undo = vi.spyOn(notify, 'undo');
+    const dismiss = vi.spyOn(notify, 'dismiss');
+    const info = vi.spyOn(notify, 'info');
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+      const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+      await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+      expect(dismiss).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(REPLY_UNDO_MS);
+      });
+      await waitFor(() => expect(sent).toEqual([expect.stringMatching(/\/me\/changes\/[^/]+\/confirm$/)]));
+      expect(dismiss).toHaveBeenCalledWith(undo.mock.results[0]?.value);
+
+      act(() => undo.mock.calls[0]?.[1].onUndo());
+      expect(info).toHaveBeenCalledWith('Відповідь уже надіслано, скасувати не вийде');
+      await waitFor(() => expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(1));
+      expect(sent).toHaveLength(1);
+    } finally {
+      server.events.removeListener('request:start', onRequest);
+    }
+  });
+
+  it('вихід зі сторінки закриває й сповіщення: «Скасувати» не лишається після надісланої відповіді', async () => {
+    trackReplies();
+    const undo = vi.spyOn(notify, 'undo');
+    const dismiss = vi.spyOn(notify, 'dismiss');
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
+    unmount();
+    expect(dismiss).toHaveBeenCalledWith(undo.mock.results[0]?.value);
+  });
+
   it('піти зі сторінки, не скасувавши, — відповідь іде одразу', async () => {
     const sent = trackReplies();
     const user = userEvent.setup();
@@ -588,6 +634,29 @@ describe('AbsenceList: видалення зі «Скасувати»', () => {
     act(() => undo.mock.calls[0]?.[1].onUndo());
     expect(await screen.findByRole('button', { name: `Видалити відсутність ${range}` })).toBeInTheDocument();
     expect(deleted).toEqual([]);
+  });
+
+  it('видалення пішло за таймером — «Скасувати» зникає, а пізній клік каже, що вже видалено', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+    const deleted = trackDeletes();
+    const undo = vi.spyOn(notify, 'undo');
+    const dismiss = vi.spyOn(notify, 'dismiss');
+    const info = vi.spyOn(notify, 'info');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderWithProviders(<AbsenceList today="2026-11-09" />);
+    await user.click(await screen.findByRole('button', { name: /^Видалити відсутність / }));
+    expect(dismiss).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    await waitFor(() => expect(deleted).toHaveLength(1));
+    expect(dismiss).toHaveBeenCalledWith(undo.mock.results[0]?.value);
+
+    act(() => undo.mock.calls[0]?.[1].onUndo());
+    expect(info).toHaveBeenCalledWith('Відсутність уже видалено, скасувати не вийде');
+    expect(deleted).toHaveLength(1);
   });
 
   it('піти зі сторінки, не скасувавши, — видалення йде одразу', async () => {
