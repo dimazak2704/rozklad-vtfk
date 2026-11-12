@@ -37,7 +37,7 @@ class AiExtractionServiceTest {
     void setUp() {
         AiProperties properties = new AiProperties("", "fake", null, "claude-haiku-5-5", "claude-sonnet-5-5",
                 new BigDecimal("2.00"), Duration.ofSeconds(60), 2, "low", "medium", 16000,
-                Map.of(), new AiProperties.ModelPrice(BigDecimal.TEN, BigDecimal.TEN, null, null, null));
+                Map.of(), new AiProperties.ModelPrice(BigDecimal.TEN, BigDecimal.TEN, null, null, null), null);
         when(usage.record(any(), any(), anyLong(), anyLong(), any(), any()))
                 .thenAnswer(call -> new AiCallInfo(call.getArgument(1), call.getArgument(2), call.getArgument(3),
                         new BigDecimal("0.010000")));
@@ -115,7 +115,7 @@ class AiExtractionServiceTest {
     void disabledAdapterIsReportedAsUnavailable() {
         AiExtractionService disabled = new AiExtractionService(new DisabledAiAdapter(), usage, new AiProperties("",
                 "anthropic", null, "t", "v", BigDecimal.ONE, Duration.ofSeconds(1), 0, "low", "low", 2048, Map.of(),
-                new AiProperties.ModelPrice(BigDecimal.ONE, BigDecimal.ONE, null, null, null)), JsonMapper.builder().build());
+                new AiProperties.ModelPrice(BigDecimal.ONE, BigDecimal.ONE, null, null, null), null), JsonMapper.builder().build());
 
         assertThat(disabled.available()).isFalse();
         assertThatThrownBy(disabled::ensureCanCall).isInstanceOf(AiUnavailableException.class)

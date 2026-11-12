@@ -51,14 +51,6 @@ public record AiProperties(
         interactiveTimeout = interactiveTimeout == null ? DEFAULT_INTERACTIVE_TIMEOUT : interactiveTimeout;
     }
 
-    /** Settings with the default interactive timeout. */
-    public AiProperties(String apiKey, String provider, String baseUrl, String modelText, String modelVision,
-                        BigDecimal dailyBudgetUsd, Duration timeout, int maxRetries, String effortText,
-                        String effortVision, long maxTokens, Map<String, ModelPrice> prices, ModelPrice defaultPrice) {
-        this(apiKey, provider, baseUrl, modelText, modelVision, dailyBudgetUsd, timeout, maxRetries, effortText,
-                effortVision, maxTokens, prices, defaultPrice, null);
-    }
-
     /**
      * Prices in USD per million tokens. Optional long-context tier: prompts longer than
      * {@code longContextThreshold} input tokens use the {@code long*} prices (Claude Haiku 5.5).
