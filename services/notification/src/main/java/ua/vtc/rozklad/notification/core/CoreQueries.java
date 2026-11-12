@@ -56,7 +56,15 @@ public class CoreQueries {
                 .toList();
     }
 
+    /** A group missing from the cached catalog reloads it once: the dispatcher may have just created it. */
     public Optional<PublicGroup> group(UUID id) {
+        return findGroup(id).or(() -> {
+            cache.evict("groups");
+            return findGroup(id);
+        });
+    }
+
+    private Optional<PublicGroup> findGroup(UUID id) {
         return groups().stream().filter(group -> group.id().equals(id)).findFirst();
     }
 
@@ -65,7 +73,15 @@ public class CoreQueries {
         }, CATALOG_TTL, core::teachers);
     }
 
+    /** A teacher missing from the cached catalog reloads it once: the dispatcher may have just created him. */
     public Optional<PublicTeacher> teacher(UUID id) {
+        return findTeacher(id).or(() -> {
+            cache.evict("teachers");
+            return findTeacher(id);
+        });
+    }
+
+    private Optional<PublicTeacher> findTeacher(UUID id) {
         return teachers().stream().filter(teacher -> teacher.id().equals(id)).findFirst();
     }
 

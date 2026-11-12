@@ -35,6 +35,8 @@ public class FakeCoreClient implements CoreClient {
     private final AtomicInteger teacherCalls = new AtomicInteger();
     private final AtomicInteger teacherCallsInTransaction = new AtomicInteger();
     private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final List<PublicGroup> addedGroups = new CopyOnWriteArrayList<>();
+    private final List<PublicTeacher> addedTeachers = new CopyOnWriteArrayList<>();
     private volatile boolean unavailable;
     private volatile RuntimeException replyFailure;
     private volatile RuntimeException absenceFailure;
@@ -48,6 +50,8 @@ public class FakeCoreClient implements CoreClient {
         teacherCalls.set(0);
         teacherCallsInTransaction.set(0);
         holidays.clear();
+        addedGroups.clear();
+        addedTeachers.clear();
         unavailable = false;
         replyFailure = null;
         absenceFailure = null;
@@ -61,6 +65,16 @@ public class FakeCoreClient implements CoreClient {
      */
     public void answerAsNotice(ChangeStatus status) {
         this.noticeStatus = status;
+    }
+
+    /** A group the dispatcher created after the fixtures (core's catalog changed). */
+    public void addGroup(PublicGroup group) {
+        addedGroups.add(group);
+    }
+
+    /** A teacher the dispatcher created after the fixtures (core's catalog changed). */
+    public void addTeacher(PublicTeacher teacher) {
+        addedTeachers.add(teacher);
     }
 
     public void setUnavailable(boolean value) {
@@ -110,7 +124,7 @@ public class FakeCoreClient implements CoreClient {
     @Override
     public List<PublicGroup> groups() {
         available();
-        return CoreFixtures.groups();
+        return java.util.stream.Stream.concat(CoreFixtures.groups().stream(), addedGroups.stream()).toList();
     }
 
     @Override
@@ -120,7 +134,7 @@ public class FakeCoreClient implements CoreClient {
             teacherCallsInTransaction.incrementAndGet();
         }
         available();
-        return CoreFixtures.teachers();
+        return java.util.stream.Stream.concat(CoreFixtures.teachers().stream(), addedTeachers.stream()).toList();
     }
 
     @Override
