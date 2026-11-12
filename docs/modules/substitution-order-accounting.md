@@ -72,7 +72,9 @@ teacher gets 403 on `/api/me/*`.
   of the group (422); one open decision per lesson (409; a block may cover a lesson whose other
   decision only cancels it — order №35 has «1ТК1 1-4 ЗУ» and «1ТК1 1 Пари не буде»); hard conflicts of
   the lessons the change would create (409 `conflicts[]`, `DatedSlotChecker`): teacher, cohort,
-  exclusive room or `maxParallel`, capacity, required room type, UNAVAILABLE; pending/confirmed
+  exclusive room or `maxParallel`, capacity, required room type, UNAVAILABLE (only for a teacher who takes
+  the pair: a teacher who keeps his own pair — ROOM_CHANGE, the partner of MERGE_SUBGROUPS, DISCIPLINE_FINISHED
+  without a substitute — is never refused because of his own grid, also at publication); pending/confirmed
   changes count as occupying their slots, and a lesson another open change takes away (its original or
   moved/merged lesson, not a room change) no longer holds its teacher. Shift windows are not enforced (real orders put extra pairs
   outside them): any pair 1–8, also at publication and when a later timetable republication re-checks the
@@ -85,7 +87,10 @@ teacher gets 403 on `/api/me/*`.
   room type); then it becomes `newRoomId`. Otherwise `newRoomId` stays null and the lesson keeps its room — there is
   no warning field on `ChangeDto`, `new.room` shows the result. Online lessons keep their room. A given `newRoomId`
   wins. The recommender's `suggestedRoom` takes the room from the same `TeacherRooms.forGroup` (one statement for
-  the whole pool), so the room offered in the options is the room `POST /changes` would choose. Test: `SubstituteRoomIT`.
+  the whole pool) and counts its occupancy the way `roomConflicts` does (every lesson in the room that is not
+  online plus every open change moving a pair into it, against `maxParallel`), so the room offered in the
+  options is the room `POST /changes` would choose, also for a shared room such as the sports hall. Test:
+  `SubstituteRoomIT`.
 * **Approval** (`ChangeWorkflow.open`, DOMAIN §7) — `substitution.approvalMode` decides for a change that
   assigns a teacher: NOTIFY (default) DRAFT → CONFIRMED, no deadline, `substitution.status-changed` plus
   `substitution.confirmation-requested` with `mode = NOTIFY` (the teacher is informed); CONFIRM DRAFT →
@@ -114,15 +119,24 @@ teacher gets 403 on `/api/me/*`.
 * **Dispatcher actions** — `confirm` instead of the teacher (DRAFT/PENDING; a declined change must be
   asked again or replaced: 422 `CHANGE_DECLINED`); `request-confirmation` starts a new round;
   `PUT` edits only the room and the reason (another teacher or discipline = cancel and create a new
-  change, so the teacher who was asked gets «скасовано»), optimistic locking with `version`;
+  change, so the teacher who was asked gets «скасовано»), optimistic locking with `version`; a new room of a
+  change whose teacher was already told (PENDING request, or NOTIFY and CONFIRMED) publishes
+  `substitution.confirmation-requested` again (same change id, mode and deadline) with the new room — the
+  notification service currently shows a repeated pending request as «⏰ Нагадування» (owner question below);
   `DELETE` cancels (idempotent; APPLIED → 422).
 * **Reminders** — `ConfirmationReminders` runs every `app.substitution.reminder-check-interval`
   (PT1M): a pending change past its deadline gets `reminded_at` and the confirmation request is sent
   again (same change id, the passed deadline) plus SSE; exactly once per confirmation round
   (column + optimistic lock).
 * **Absences** — overlapping absences of one teacher are rejected (409); cancelling an absence or
-  shrinking it cancels its changes that are no longer needed; `absence.reported` carries no reason or
+  shrinking it cancels its changes that are no longer needed (history «Пара більше не входить у відсутність»,
+  `status-changed`), the others stay; a teacher cancels only his own absence (403) and only before it starts
+  (422 `ABSENCE_STARTED`); `absence.reported` carries no reason or
   comment; SSE `absence.created` / `absence.updated` carry `AbsenceDto.Summary` (no reason/comment).
+* **Decision of a lesson** (`LessonDecisions`: affected lessons, dashboard, day plan) — a live change (open or
+  applied) wins over declined ones whatever their age, so a declined change asked again is the decision even
+  when a newer change of the lesson was declined meanwhile; only a lesson whose changes are all declined needs a
+  decision (the newest decline is shown). The dashboard's decline alert disappears for the same reason.
 
 ## 4. Ranking (`OptionsGatherer` → `OptionRanker`, pure; DOMAIN §7)
 
@@ -170,7 +184,12 @@ teacher gets 403 on `/api/me/*`.
   `schedule.changed` (ORDER_PUBLISHED), SSE `order.published` and `schedule.changed`.
 * **Amendments**: after the main order of a date is published, newly confirmed changes go into one
   draft amendment with only these rows; an amendment without rows is not published (422
-  `AMENDMENT_EMPTY`). With nothing new, `GET /draft` returns the latest published document.
+  `AMENDMENT_EMPTY`). With nothing new, `GET /draft` returns the latest published document; an amendment draft
+  whose changes were all cancelled or declined meanwhile is deleted then (a draft is only a view).
+* **Statement budget**: the conflict check, the SSE views of the applied changes and the absent-substitute
+  check read once per order (load items, preferences, calendar, absences of the date), not per row:
+  `OrderPublicationIT.publicationReadsWithABoundedNumberOfStatements`, order №35 ≤ 100 statements (89 measured,
+  130–160 before).
 * **Public changes**: rows of the published documents of the date (main first), grouped by group.
 
 ## 6. Accounting (DOMAIN §9)
@@ -241,3 +260,6 @@ Manual run: own database on the shared PostgreSQL, port 38081.
   service recognising a reminder (same change id, deadline before `occurredAt`).
 * Calendar helpers, `LessonView` mapping and settings keys duplicate what the calendar, timetable and
   settings modules are building in parallel; reconcile at merge.
+* Owner question (audit 12.11.2026): when the dispatcher changes the room of a pending CONFIRM request, the
+  teacher receives the request again with the new room, worded as a reminder (the notification service has no
+  «оновлено» text yet). Should it say that the room changed, and should the deadline restart?
