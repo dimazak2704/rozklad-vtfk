@@ -161,7 +161,11 @@ DOCX: header paragraphs (number with spaced letters, «ДОПОВНЕННЯ до
 joined with « / »), «ЗАМІНА АУДИТОРІЙ» switches to ROOM_CHANGE rows, paragraphs after the table are notes, the
 last «…директора…<tab>Ім'я ПРІЗВИЩЕ» line is the signature. Row types per DOMAIN §8 (range → BLOCK, «ДОДАТКОВО»
 or empty left → ADDITIONAL, «За розкладом» → AS_SCHEDULED, «Пари не буде» → CANCELLATION, «Вичит.» without a
-replacement → FINISHED, else REPLACEMENT; «Вичит.» without a replacement wins over a pair range). Photos/scans/PDF go
+replacement → FINISHED, a right side «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи» (the system's own
+DOCX) → MERGE_SUBGROUPS with `toDiscipline` «Ін.мова» and `toTeacher` «Можаровська», else REPLACEMENT; «Вичит.»
+without a replacement wins over a pair range). The vision schema and prompt offer MERGE_SUBGROUPS too; an answer or a
+reviewed row that types the merge sentence otherwise follows the text with a WARN, and the sentence is split into
+discipline and teacher. Photos/scans/PDF go
 to the vision model with the same rules in the prompt; the answer is validated (unknown row types re-derived with a
 warning, a FINISHED that contradicts the text — or a «Вичит.» row typed otherwise — replaced with the derived type and a
 warning, dates parsed leniently, group codes canonicalized, model warnings copied into the report). An AI draft

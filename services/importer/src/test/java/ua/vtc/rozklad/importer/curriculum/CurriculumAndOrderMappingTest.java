@@ -71,6 +71,36 @@ class CurriculumAndOrderMappingTest {
                 .anyMatch(message -> message.contains("ШІ позначив рядок як «блок пар», але за текстом це «вичитано»"));
     }
 
+    /** DOMAIN §8 merge rows: the schema offers the type, and a merge sentence typed otherwise follows the text. */
+    @Test
+    void mergeOfSubgroupsIsAnOrderRowType() {
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> rowSchema = (java.util.Map<String, Object>) ((java.util.Map<String, Object>)
+                ((java.util.Map<String, Object>) ua.vtc.rozklad.importer.ai.AiSchemas.order().get("properties"))
+                        .get("rows")).get("items");
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> rowType = (java.util.Map<String, Object>)
+                ((java.util.Map<String, Object>) rowSchema.get("properties")).get("rowType");
+        assertThat(rowType.get("enum")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).contains("MERGE_SUBGROUPS");
+
+        OrderExtraction extraction = new OrderExtraction(36, "ORDER", null, "20.10.2026", "ВІВТОРОК", "ЧИСЕЛЬНИК", List.of(
+                new OrderRow("CHANGES", "1ТК1", "2", "MERGE_SUBGROUPS", "Ін.мова", "Крисак Л. (п.)", "Відп.", "Ін.мова",
+                        "Можаровська", "12"),
+                new OrderRow("CHANGES", "1ТК2", "2", "REPLACEMENT", "Ін.мова", "Крисак Л. (п.)", "Відп.",
+                        "Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи", null, "12")),
+                List.of(), null, null, List.of());
+        Issues issues = new Issues();
+
+        OrderDraft draft = OrderTestAccess.fromAi(extraction, issues);
+
+        assertThat(draft.rows()).extracting(OrderDraft.Row::rowType)
+                .containsExactly(OrderRowType.MERGE_SUBGROUPS, OrderRowType.MERGE_SUBGROUPS);
+        assertThat(draft.rows()).extracting(OrderDraft.Row::toDiscipline, OrderDraft.Row::toTeacher)
+                .containsOnly(org.assertj.core.api.Assertions.tuple("Ін.мова", "Можаровська"));
+        assertThat(issues.rows()).extracting(ReportRow::message)
+                .anyMatch(message -> message.contains("ШІ позначив рядок як «заміна», але за текстом це «об'єднання підгруп»"));
+    }
+
     @Test
     void orderAnswerIsValidatedAndCanonicalized() {
         OrderExtraction extraction = new OrderExtraction(35, "ORDER", null, "19.10.2026", "ПОНЕДІЛОК", "ЗНАМЕННИК", List.of(

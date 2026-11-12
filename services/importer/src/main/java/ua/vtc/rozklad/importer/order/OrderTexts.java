@@ -27,6 +27,12 @@ public final class OrderTexts {
     private static final Pattern DAY_AND_PARITY =
             Pattern.compile("(понеділок|вівторок|середа|четвер|п'ятниця|пятниця)\\s*[-–—]?\\s*(чисельник|знаменник)");
     private static final Pattern PAIR_RANGE = Pattern.compile("^\\d\\s*[-–—]\\s*\\d$");
+    private static final String MERGE_PREFIX = "об'єднання підгруп";
+    /** «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи» (apostrophes unified first). */
+    private static final Pattern MERGED_LESSON = Pattern.compile(
+            "^об'єднання\\s+підгруп\\s*:?\\s*(.*?)\\s*(?:[-–—]\\s*)?(?:обидві\\s+підгрупи)?\\s*$",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern LESSON_WITH_TEACHER = Pattern.compile("^(.*?)\\s*\\(([^()]+)\\)$");
 
     private OrderTexts() {
     }
@@ -107,8 +113,8 @@ public final class OrderTexts {
     /**
      * Row type from the texts of a CHANGES row (DOMAIN §8): «Вичит.» without a replacement is a
      * finished discipline (also over a pair range, «1-3 | … | Вичит.»), a pair range a block,
-     * «ДОДАТКОВО» or an empty left side an additional lesson, «За розкладом» as scheduled,
-     * «Пари не буде» a cancellation.
+     * «Об'єднання підгруп: …» on the right a merge of subgroups, «ДОДАТКОВО» or an empty left side an
+     * additional lesson, «За розкладом» as scheduled, «Пари не буде» a cancellation.
      */
     public static OrderRowType rowType(String pairLabel, String fromDiscipline, String fromTeacher, String reason,
                                        String toDiscipline, String toTeacher) {
@@ -119,6 +125,9 @@ public final class OrderTexts {
         }
         if (PAIR_RANGE.matcher(TextNormalizer.clean(pairLabel)).matches()) {
             return OrderRowType.BLOCK;
+        }
+        if (mergesSubgroups(toDiscipline, toTeacher)) {
+            return OrderRowType.MERGE_SUBGROUPS;
         }
         if (left.contains("додатково") || left.isEmpty() && !right.isEmpty()) {
             return OrderRowType.ADDITIONAL;
@@ -136,6 +145,41 @@ public final class OrderTexts {
     public static boolean finished(String reason, String toDiscipline, String toTeacher) {
         return TextNormalizer.key(join(toDiscipline, toTeacher)).isEmpty()
                 && TextNormalizer.key(reason).startsWith("вичит");
+    }
+
+    /** The right side is the printed merge sentence «Об'єднання підгруп: …» (DOMAIN §8). */
+    public static boolean mergesSubgroups(String toDiscipline, String toTeacher) {
+        return mergeSentence(toDiscipline, toTeacher) != null;
+    }
+
+    /**
+     * Discipline and teacher of a merge row: «Об'єднання підгруп: Ін.мова (Можаровська) — обидві
+     * підгрупи» → [Ін.мова, Можаровська]; text without the sentence is returned as it is.
+     */
+    public static String[] mergedLesson(String toDiscipline, String toTeacher) {
+        String sentence = mergeSentence(toDiscipline, toTeacher);
+        if (sentence == null) {
+            return new String[] {toDiscipline, toTeacher};
+        }
+        Matcher merged = MERGED_LESSON.matcher(sentence);
+        String body = merged.matches() ? merged.group(1).strip() : "";
+        if (body.isEmpty()) {
+            return new String[] {null, null};
+        }
+        Matcher withTeacher = LESSON_WITH_TEACHER.matcher(body);
+        return withTeacher.matches() && !withTeacher.group(1).isBlank()
+                ? new String[] {withTeacher.group(1).strip(), withTeacher.group(2).strip()}
+                : new String[] {body, null};
+    }
+
+    private static String mergeSentence(String toDiscipline, String toTeacher) {
+        for (String text : new String[] {toDiscipline, toTeacher}) {
+            String clean = TextNormalizer.unifyApostrophes(TextNormalizer.clean(text));
+            if (clean.toLowerCase(TextNormalizer.UK).startsWith(MERGE_PREFIX)) {
+                return clean;
+            }
+        }
+        return null;
     }
 
     static String join(String a, String b) {

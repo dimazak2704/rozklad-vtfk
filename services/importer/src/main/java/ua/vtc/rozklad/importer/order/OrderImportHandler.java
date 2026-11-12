@@ -201,9 +201,10 @@ public class OrderImportHandler implements ImportHandler {
             String location = "рядок " + index;
             Section section = "ROOM_CHANGES".equals(row.section()) ? Section.ROOM_CHANGES : Section.CHANGES;
             OrderRowType type = rowType(row, section, issues, location);
+            String[] to = rightSide(type, row.toDiscipline(), row.toTeacher());
             rows.add(new Row(section, groupCode(row.groupCode(), issues, location), clean(row.pairLabel()), type,
-                    clean(row.fromDiscipline()), clean(row.fromTeacher()), clean(row.reasonText()), clean(row.toDiscipline()),
-                    clean(row.toTeacher()), clean(row.roomText()), location));
+                    clean(row.fromDiscipline()), clean(row.fromTeacher()), clean(row.reasonText()), clean(to[0]),
+                    clean(to[1]), clean(row.roomText()), location));
         }
         extraction.warnings().forEach(warning -> issues.warn(RowType.ORDER, null, null, "ШІ: " + warning));
         return new OrderDraft(extraction.number(), kind, extraction.parentNumber(), date.orElse(null),
@@ -237,7 +238,9 @@ public class OrderImportHandler implements ImportHandler {
                                    String reasonText, String toDiscipline, String toTeacher, Issues issues,
                                    String location, String who) {
         boolean finishedByText = OrderTexts.finished(reasonText, toDiscipline, toTeacher);
-        if (finishedByText == (given == OrderRowType.FINISHED)) {
+        boolean mergeByText = OrderTexts.mergesSubgroups(toDiscipline, toTeacher);
+        if (finishedByText == (given == OrderRowType.FINISHED)
+                && (!mergeByText || given == OrderRowType.MERGE_SUBGROUPS)) {
             return given;
         }
         OrderRowType derived = OrderTexts.rowType(pairLabel, fromDiscipline, fromTeacher, reasonText, toDiscipline,
@@ -245,6 +248,12 @@ public class OrderImportHandler implements ImportHandler {
         issues.warn(RowType.ORDER, given.name(), location, who + " як " + ROW_TYPE_NAMES.get(given)
                 + ", але за текстом це " + ROW_TYPE_NAMES.get(derived) + " — взято " + ROW_TYPE_NAMES.get(derived) + ".");
         return derived;
+    }
+
+    /** A merge row keeps the discipline and the teacher, not the printed sentence (DOMAIN §8). */
+    private static String[] rightSide(OrderRowType type, String toDiscipline, String toTeacher) {
+        return type == OrderRowType.MERGE_SUBGROUPS ? OrderTexts.mergedLesson(toDiscipline, toTeacher)
+                : new String[] {toDiscipline, toTeacher};
     }
 
     private static String groupCode(String raw, Issues issues, String location) {
@@ -329,9 +338,10 @@ public class OrderImportHandler implements ImportHandler {
                     row.reasonText(), row.toDiscipline(), row.toTeacher(), issues, location, "Рядок позначено")
                     : OrderTexts.rowType(row.pairLabel(), row.fromDiscipline(), row.fromTeacher(), row.reasonText(),
                     row.toDiscipline(), row.toTeacher());
+            String[] to = rightSide(type, row.toDiscipline(), row.toTeacher());
             rows.add(new Row(section, groupCode(row.groupCode(), issues, location), clean(row.pairLabel()), type,
                     clean(row.fromDiscipline()), clean(row.fromTeacher()), clean(row.reasonText()),
-                    clean(row.toDiscipline()), clean(row.toTeacher()), clean(row.roomText()), location));
+                    clean(to[0]), clean(to[1]), clean(row.roomText()), location));
         }
         if (rows.isEmpty()) {
             issues.warn(RowType.ORDER, null, null, "У розпорядженні не залишилося жодного рядка змін.");

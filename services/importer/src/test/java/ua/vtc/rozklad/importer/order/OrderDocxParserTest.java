@@ -81,6 +81,34 @@ class OrderDocxParserTest {
         assertThat(draft.number()).isNull();
     }
 
+    /**
+     * DOMAIN §8: the system's own DOCX prints a merge of subgroups on the right side as one merged
+     * cell «Об'єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи».
+     */
+    @Test
+    void mergedSubgroupsRowKeepsItsTypeDisciplineAndTeacher() throws IOException {
+        XWPFDocument document = new XWPFDocument();
+        paragraph(document, "Р О З П О Р Я Д Ж Е Н Н Я  №36");
+        paragraph(document, "На 20 жовтня 2026 рік");
+        XWPFTable table = document.createTable(1, 8);
+        XWPFTableRow header = table.getRow(0);
+        fill(header, "Група", "Пара", "За розкладом", "", "Причина заміни", "По заміні", "", "Ауд");
+        merge(header, 5, 2);
+        merge(header, 2, 2);
+        merge(row(table, "1ТК1", "2", "Ін.мова", "Крисак Л. (п.)", "Відп.",
+                "Об’єднання підгруп: Ін.мова (Можаровська) — обидві підгрупи", "", "12"), 5, 2);
+        merge(row(table, "1ТК2", "3", "Ін.мова", "Крисак Л. (п.)", "Відп.",
+                "Об'єднання підгруп — обидві підгрупи", "", ""), 5, 2);
+
+        OrderDraft draft = parser.parse(bytes(document), new Issues());
+
+        assertThat(draft.rows()).extracting(Row::rowType)
+                .containsExactly(OrderRowType.MERGE_SUBGROUPS, OrderRowType.MERGE_SUBGROUPS);
+        assertThat(draft.rows().getFirst()).extracting(Row::fromDiscipline, Row::fromTeacher, Row::toDiscipline,
+                Row::toTeacher, Row::roomText).containsExactly("Ін.мова", "Крисак Л. (п.)", "Ін.мова", "Можаровська", "12");
+        assertThat(draft.rows().getLast()).extracting(Row::toDiscipline, Row::toTeacher).containsExactly(null, null);
+    }
+
     @Test
     void documentWithoutOrderTableIsRejected() throws IOException {
         XWPFDocument document = new XWPFDocument();

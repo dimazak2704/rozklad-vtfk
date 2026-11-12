@@ -172,6 +172,11 @@ public class OrderDocxParser {
                     fromDiscipline = null;
                     fromTeacher = null;
                 }
+                case MERGE_SUBGROUPS -> {
+                    String[] merged = OrderTexts.mergedLesson(toDiscipline, toTeacher);
+                    toDiscipline = merged[0];
+                    toTeacher = merged[1];
+                }
                 default -> {
                 }
             }
