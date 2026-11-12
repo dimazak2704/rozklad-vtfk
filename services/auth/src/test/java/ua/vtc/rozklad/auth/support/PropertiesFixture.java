@@ -49,6 +49,7 @@ public final class PropertiesFixture {
                 "rozklad-core", new ServiceClient("dev-core-auth-secret", Set.of(), Set.of("accounts.manage"))));
         private AuthServerProperties.SigningKey signingKey = new AuthServerProperties.SigningKey(null, "dev", null, null);
         private boolean demoSeed;
+        private List<AuthServerProperties.DemoAccount> demoAccounts = List.of();
 
         public Builder issuer(String value) {
             this.issuer = URI.create(value);
@@ -90,6 +91,11 @@ public final class PropertiesFixture {
             return this;
         }
 
+        public Builder demoAccounts(List<AuthServerProperties.DemoAccount> value) {
+            this.demoAccounts = value;
+            return this;
+        }
+
         public AuthServerProperties build() {
             return new AuthServerProperties(issuer, publicWebUrl, webOrigins, corsOrigins, cliEnabled,
                     new AuthServerProperties.Tokens(Duration.ofMinutes(15), Duration.ofMinutes(15),
@@ -100,7 +106,7 @@ public final class PropertiesFixture {
                             Duration.ofMinutes(15)),
                     new AuthServerProperties.Password(12),
                     new AuthServerProperties.Bootstrap(null, null, null, false),
-                    new AuthServerProperties.DemoSeed(demoSeed, List.of()));
+                    new AuthServerProperties.DemoSeed(demoSeed, null, demoAccounts));
         }
     }
 }

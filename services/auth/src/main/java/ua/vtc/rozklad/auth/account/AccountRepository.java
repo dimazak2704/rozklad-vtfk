@@ -64,6 +64,11 @@ public class AccountRepository {
         return identifier.contains("@") ? findByEmail(identifier) : findByUsername(identifier);
     }
 
+    /** Accounts created by the server demo seed ({@code demo = true}). */
+    public List<Account> findDemo() {
+        return jdbc.sql(SELECT + " WHERE a.demo ORDER BY a.username").query(AccountRepository::map).list();
+    }
+
     public List<Account> findAllById(Collection<UUID> ids) {
         if (ids.isEmpty()) {
             return List.of();
@@ -179,6 +184,17 @@ public class AccountRepository {
     public boolean hasGoogleBinding(UUID id) {
         return jdbc.sql("SELECT count(*) FROM federated_identity WHERE account_id = ?")
                 .param(id).query(Long.class).single() > 0;
+    }
+
+    /**
+     * Ends every sign-in of the account: its Spring Sessions and OAuth2 authorizations (principal name = account
+     * id, D9). Returns the deleted sessions and authorizations.
+     */
+    public int[] deleteSignIns(UUID id) {
+        int sessions = jdbc.sql("DELETE FROM spring_session WHERE principal_name = ?").param(id.toString()).update();
+        int authorizations = jdbc.sql("DELETE FROM oauth2_authorization WHERE principal_name = ?")
+                .param(id.toString()).update();
+        return new int[] {sessions, authorizations};
     }
 
     public void recordLogin(UUID id, Instant now) {

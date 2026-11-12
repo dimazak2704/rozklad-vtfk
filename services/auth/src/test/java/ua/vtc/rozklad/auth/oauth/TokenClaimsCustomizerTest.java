@@ -74,7 +74,7 @@ class TokenClaimsCustomizerTest {
     }
 
     @Test
-    void serviceTokensKeepTheKeycloakActorNameAndGetClientRoles() {
+    void serviceTokensKeepTheServiceAccountActorNameAndGetClientRoles() {
         JwtEncodingContext context = context("rozklad-notification", AuthorizationGrantType.CLIENT_CREDENTIALS,
                 OAuth2TokenType.ACCESS_TOKEN, "rozklad-notification");
 

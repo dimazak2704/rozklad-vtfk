@@ -9,7 +9,6 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,15 +39,13 @@ public class AccountAdministration {
     private final AccountRepository accounts;
     private final PasswordPolicy policy;
     private final PasswordEncoder passwordEncoder;
-    private final JdbcClient jdbc;
     private final Clock clock;
 
     public AccountAdministration(AccountRepository accounts, PasswordPolicy policy, PasswordEncoder passwordEncoder,
-            JdbcClient jdbc, Clock clock) {
+            Clock clock) {
         this.accounts = accounts;
         this.policy = policy;
         this.passwordEncoder = passwordEncoder;
-        this.jdbc = jdbc;
         this.clock = clock;
     }
 
@@ -191,10 +188,7 @@ public class AccountAdministration {
 
     /** Deletes Spring Sessions and OAuth2 authorizations of the account (principal name = account id, D9). */
     private int[] endSignIns(UUID id) {
-        int sessions = jdbc.sql("DELETE FROM spring_session WHERE principal_name = ?").param(id.toString()).update();
-        int authorizations = jdbc.sql("DELETE FROM oauth2_authorization WHERE principal_name = ?")
-                .param(id.toString()).update();
-        return new int[] {sessions, authorizations};
+        return accounts.deleteSignIns(id);
     }
 
     private Account require(UUID id) {

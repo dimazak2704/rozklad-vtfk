@@ -98,8 +98,15 @@ public record AuthServerProperties(
         }
     }
 
-    /** Demo accounts of the local stand (http issuer only). */
-    public record DemoSeed(boolean enabled, @DefaultValue List<DemoAccount> accounts) {
+    /**
+     * Demo accounts with the fixed ids core's demo links use.
+     *
+     * @param enabled the local stand: every account of {@code accounts} with its own short password (http issuer
+     *        only, {@code DemoSeed})
+     * @param serverTeacherPassword the defense on the server: the TEACHER accounts of {@code accounts} with this
+     *        password, marked {@code demo}; empty turns them off ({@code ServerDemoAccounts}, https issuer only)
+     */
+    public record DemoSeed(boolean enabled, String serverTeacherPassword, @DefaultValue List<DemoAccount> accounts) {
     }
 
     public record DemoAccount(UUID id, String username, String email, String displayName, String role,

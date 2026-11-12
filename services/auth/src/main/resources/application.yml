@@ -126,6 +126,9 @@ app:
     demo-seed:
       # демо-акаунти локального стенда (лише http-видавець); паролі з infra/dev/demo-users.env
       enabled: ${AUTH_DEMO_SEED:false}
+      # захист на сервері (лише https-видавець): викладачі krentsin і nepyivoda з цим паролем;
+      # порожньо — демо-акаунти вимкнено (DEMO_OFF). Адміністратор — через bootstrap
+      server-teacher-password: ${DEMO_TEACHER_PASSWORD:}
       accounts:
         - id: a0000000-0000-4000-8000-000000000001
           username: admin
