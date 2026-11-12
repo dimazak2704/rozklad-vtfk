@@ -72,24 +72,25 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
       {
         id: 'number',
         header: '№',
-        width: '5rem',
+        width: '9rem',
         rowHeader: true,
-        cell: (row) => <span className="font-semibold text-primary figures">№{row.number ?? '—'}</span>,
-      },
-      {
-        id: 'date',
-        header: 'На дату',
+        // вид документа — лише коли це доповнення: «Розпорядження» в кожному рядку нічого не каже
         cell: (row) => (
-          <span className="whitespace-nowrap figures">
-            {weekdayShort(isoWeekday(row.date))}, {formatNumericDate(row.date)}
+          <span className="whitespace-nowrap">
+            <span className="font-semibold text-secondary figures">№{row.number ?? '—'}</span>
+            {row.kind === 'AMENDMENT' ? <span className="text-caption text-muted"> · доповнення</span> : null}
           </span>
         ),
       },
       {
-        id: 'kind',
-        header: 'Документ',
-        hideBelow: 'sm',
-        cell: (row) => (row.kind === 'AMENDMENT' ? 'Доповнення' : 'Розпорядження'),
+        id: 'date',
+        header: 'На дату',
+        // дата — те, за чим шукають розпорядження: вона й найпомітніша в рядку
+        cell: (row) => (
+          <span className="whitespace-nowrap font-[650] text-primary figures">
+            {weekdayShort(isoWeekday(row.date))}, {formatNumericDate(row.date)}
+          </span>
+        ),
       },
       { id: 'rows', header: 'Рядків', numeric: true, hideBelow: 'md', cell: (row) => row.itemCount },
       {
@@ -106,7 +107,8 @@ export function OrdersArchive({ semester, selectedId, onOpen }: OrdersArchivePro
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Пошук" className="min-w-0 flex-1 basis-64">
+          {/* пошук по номеру чи прізвищу — коротке поле, а не смуга на всю ширину */}
+          <Field label="Пошук" className="min-w-0 flex-1 basis-64 sm:max-w-[30rem]">
             <Input
               value={query}
               onChange={(event) => {
