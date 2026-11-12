@@ -1,8 +1,12 @@
+import { useIsFetching } from '@tanstack/react-query';
 import { CircleExclamationPoint, Send, TriangleExclamationPoint } from 'lucide-react';
 import { useState } from 'react';
+import { isStaleDraft } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
+import { qk } from '@/api/queryKeys';
 import type { OrderDto } from '@/api/types';
 import { Button, Dialog, DialogContent, Skeleton } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { formatLongDate } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 
@@ -22,6 +26,8 @@ const ROWS = ['рядок', 'рядки', 'рядків'] as const;
 const NOTES = ['примітка', 'примітки', 'приміток'] as const;
 const CHANGES = ['заміна', 'заміни', 'замін'] as const;
 
+export const STALE_DRAFT_MESSAGE = 'Чернетку оновлено — перевірте зміни й опублікуйте ще раз.';
+
 /**
  * Підтвердження публікації: який номер отримає розпорядження, що в ньому і що станеться далі.
  * Номер остаточно присвоює сервер; якщо його вже зайняв колега, у тості буде справжній.
@@ -29,6 +35,9 @@ const CHANGES = ['заміна', 'заміни', 'замін'] as const;
 export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNumber, pending, declined, onPublish }: PublishDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // сервер відмовив: чернетка застаріла; її вже перечитують — поки нові рядки не прийшли, не публікуємо
+  const [stale, setStale] = useState(false);
+  const refreshing = useIsFetching({ queryKey: qk.admin.orders.draft(order.date) }) > 0;
   const rows = order.items.length + order.roomChanges.length;
   const kind = order.kind === 'AMENDMENT' ? 'доповнення' : 'розпорядження';
   const numberText = nextNumber !== null ? `№${nextNumber}` : null;
@@ -36,11 +45,17 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
   const publish = async () => {
     setBusy(true);
     setError(null);
+    setStale(false);
     try {
       await onPublish();
       onOpenChange(false);
     } catch (cause) {
-      setError(isApiError(cause) ? cause.message : 'Не вдалося опублікувати. Спробуйте ще раз.');
+      if (isStaleDraft(cause)) {
+        setStale(true);
+        setError(STALE_DRAFT_MESSAGE);
+      } else {
+        setError(isApiError(cause) ? cause.message : 'Не вдалося опублікувати. Спробуйте ще раз.');
+      }
     } finally {
       setBusy(false);
     }
@@ -51,7 +66,10 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
       open={open}
       onOpenChange={(next) => {
         if (busy) return;
-        if (!next) setError(null);
+        if (!next) {
+          setError(null);
+          setStale(false);
+        }
         onOpenChange(next);
       }}
     >
@@ -61,9 +79,14 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
         footer={
           <>
             <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
-              Скасувати
+              {stale ? 'Переглянути чернетку' : 'Скасувати'}
             </Button>
-            <Button variant="primary" loading={busy} onClick={() => void publish()} iconStart={<Send aria-hidden="true" className="size-4" />}>
+            <Button
+              variant="primary"
+              loading={busy || (stale && refreshing)}
+              onClick={() => void publish()}
+              iconStart={<Send aria-hidden="true" className="size-4" />}
+            >
               {numberText ? `Опублікувати ${numberText}` : 'Опублікувати'}
             </Button>
           </>
@@ -109,8 +132,12 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
           ) : null}
 
           {error ? (
-            <p role="alert" className="flex items-start gap-2 text-ui font-medium text-danger">
-              <CircleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <p role="alert" className={cn('flex items-start gap-2 text-ui font-medium', stale ? 'text-change' : 'text-danger')}>
+              {stale ? (
+                <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              ) : (
+                <CircleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              )}
               {error}
             </p>
           ) : null}

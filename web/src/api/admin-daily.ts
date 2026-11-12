@@ -337,6 +337,14 @@ export function useDeleteImportedOrder() {
   });
 }
 
+/**
+ * 409 публікації без `conflicts[]` і не `stale-data` — чернетка застаріла: після її формування змінилися
+ * підтверджені зміни (core OrderPublication.STALE_DRAFT). Публікується лише те, що бачив диспетчер.
+ */
+export function isStaleDraft(error: unknown): boolean {
+  return isApiError(error) && error.isConflict && !error.isStaleData && error.conflicts.length === 0;
+}
+
 export function usePublishOrder() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -344,6 +352,10 @@ export function usePublishOrder() {
     onSuccess: (order) => {
       queryClient.setQueryData(qk.admin.orders.detail(order.id), order);
       invalidateDaily(queryClient);
+    },
+    // 409 (застаріла чернетка чи конфлікт у розкладі) — сервер уже бачить інше: перечитуємо чернетку й зміни
+    onError: (error) => {
+      if (isApiError(error) && error.isConflict) invalidateDaily(queryClient);
     },
   });
 }

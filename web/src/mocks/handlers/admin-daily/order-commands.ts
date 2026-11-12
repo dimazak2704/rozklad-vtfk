@@ -7,13 +7,17 @@ import { compareIsoDates, formatNumericDate, isIsoDate, isoWeekday } from '@/lib
 import { matchScore } from '@/lib/search';
 import { findGroupByCode } from '../../fixtures';
 import { emitServerEvent } from '../../events';
-import { badRequest, businessRule, paginate, problem } from '../../kit';
+import { badRequest, businessRule, conflict, paginate, problem } from '../../kit';
 import { currentSettings } from '../settings';
 import { recordOrderDeliveries } from '../telegram';
 import { applyChanges } from './change-commands';
-import { buildDraft, isWithinActiveSemester, nextOrderNumber, orderTitle, toSummary } from './orders';
+import { buildDraft, isWithinActiveSemester, itemsFromChanges, nextOrderNumber, orderTitle, toSummary } from './orders';
 import { getOrder, world } from './state';
-import { ADMIN_ACTOR, type OrderRecord } from './world';
+import { ADMIN_ACTOR, changesOn, type OrderRecord } from './world';
+
+/** Текст OrderPublication.STALE_DRAFT у core (409 без `conflicts[]`). */
+export const STALE_DRAFT =
+  'Чернетка застаріла: після її формування змінилися підтверджені зміни. Оновіть чернетку, перевірте її і опублікуйте ще раз.';
 
 const MAX_NOTES = 20;
 const MAX_NOTE_LENGTH = 500;
@@ -66,6 +70,11 @@ export function updateNotes(id: Uuid, notes: unknown, version: unknown): OrderRe
 export function publishOrder(id: Uuid, now: Date): OrderRecord {
   const order = getOrder(id);
   if (order.status === 'PUBLISHED') throw businessRule('ORDER_ALREADY_PUBLISHED', 'Розпорядження вже опубліковане.');
+  // як core: публікується лише те, що бачив диспетчер; рядки, складені з поточних підтверджених змін, мають збігтися
+  const fresh = itemsFromChanges(changesOn(world(), order.date).filter((c) => c.status === 'CONFIRMED'));
+  if (JSON.stringify(fresh.items) !== JSON.stringify(order.items) || JSON.stringify(fresh.roomChanges) !== JSON.stringify(order.roomChanges)) {
+    throw conflict(STALE_DRAFT);
+  }
   if (order.kind === 'AMENDMENT' && order.items.length + order.roomChanges.length === 0) {
     throw businessRule('AMENDMENT_EMPTY', 'У доповненні немає нових змін — публікувати нічого.');
   }
