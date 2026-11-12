@@ -10,6 +10,7 @@ import { EmptyValue } from '@/components/catalog/FormParts';
 import { GroupFormDialog } from '@/components/catalog/GroupForm';
 import { activeParam, CATALOG_PAGE_SIZE, toActiveFilter } from '@/components/catalog/labels';
 import { groupRequest } from '@/components/catalog/requests';
+import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
@@ -29,6 +30,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { countLabel } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
+import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
 
 const NOUN = ['група', 'групи', 'груп'] as const;
@@ -55,13 +57,21 @@ export default function GroupsPage() {
   const specialties = useCatalogOptions('specialties');
   const remove = useDeleteCatalogItem('groups');
   const toggleActive = useToggleActive('groups', groupRequest, (g, active) =>
-    active ? `Група ${g.code} знову навчається` : `Групу ${g.code} позначено неактивною`,
+    active ? `Групу ${g.code} знову позначено активною` : `Групу ${g.code} позначено неактивною`,
   );
   const [editing, setEditing] = useState<CatalogGroup | 'new' | null>(null);
   const [deleting, setDeleting] = useState<CatalogGroup | null>(null);
 
   const openNew = () => setEditing('new');
   useHotkeys([{ keys: 'n', handler: openNew, description: 'Нова група', group: 'Групи' }]);
+  const cursor = useRowCursor({
+    rows: list.data?.items,
+    getId: (row) => row.id,
+    onOpen: (row) => setEditing(row),
+    onDelete: (row) => setDeleting(row),
+    group: 'Групи',
+    enabled: editing === null && deleting === null,
+  });
   useRegisterCommands([{ id: 'new-group', label: 'Додати групу', group: 'Групи', icon: Plus, shortcut: 'n', perform: openNew }]);
 
   const specialtyName = useMemo(() => new Map((specialties.items ?? []).map((s) => [s.id, s.name])), [specialties.items]);
@@ -149,9 +159,11 @@ export default function GroupsPage() {
       <PageHeader
         title={<CatalogTitle section="Групи" />}
         primaryAction={
-          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-            Додати групу
-          </Button>
+          <Tooltip content={null} shortcut="n">
+            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+              Додати групу
+            </Button>
+          </Tooltip>
         }
       />
       <CatalogNav />
@@ -216,7 +228,11 @@ export default function GroupsPage() {
         manualSorting
         sort={table.sort}
         onSortChange={table.setSort}
-        onRowClick={(g) => setEditing(g)}
+        selectedRowId={cursor.selectedRowId}
+        onRowClick={(g) => {
+          cursor.setCursor(g.id);
+          setEditing(g);
+        }}
         rowClassName={(g) => (g.active ? undefined : 'text-muted')}
         mobileRow={(g) => ({
           title: <span className="figures">{g.code}</span>,
@@ -227,14 +243,14 @@ export default function GroupsPage() {
           <RowActions
             rowLabel={`група ${g.code}`}
             actions={[
-              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, onSelect: () => setEditing(g) },
+              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(g) },
               { label: 'Розклад групи', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.group(g.code)) },
               {
                 label: g.active ? 'Позначити неактивною' : 'Зробити активною',
                 icon: <Power aria-hidden="true" />,
                 onSelect: () => void toggleActive(g).catch((error: unknown) => notify.error(error, 'Не вдалося змінити стан групи')),
               },
-              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleting(g) },
+              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, shortcut: 'delete', onSelect: () => setDeleting(g) },
             ]}
           />
         )}
@@ -283,13 +299,12 @@ export default function GroupsPage() {
         title="Видалити групу?"
         description="Група зникне з довідника разом з підгрупами. Групу з розкладом, навантаженням чи замінами видалити не можна."
         onDelete={(id) => remove.mutateAsync(id)}
-        successMessage={(name) => `${name}: видалено`}
+        successMessage={(name) => `Видалено: ${lowerFirst(name)}`}
         deactivate={
           deleting?.active
             ? {
                 label: 'Позначити неактивною',
-                run: () => toggleActive(deleting, { undo: false }),
-                successMessage: (name) => `${name}: позначено неактивною`,
+                run: () => toggleActive(deleting),
               }
             : undefined
         }

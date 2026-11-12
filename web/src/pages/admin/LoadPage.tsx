@@ -1,5 +1,5 @@
 import { GitMerge, ListFilter, Pencil, Plus, Search, Trash } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useSemesters, activeSemesterOf, useShiftWindows } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
 import { useDeleteLoadItem, useLoadItems, type LoadItem } from '@/api/load';
@@ -34,6 +34,7 @@ import { disciplineLine } from '@/lib/discipline-color';
 import { countLabel, LESSON_KIND_LABEL } from '@/lib/labels';
 import { matchScore } from '@/lib/search';
 import { sortRows } from '@/lib/sort';
+import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
 
@@ -57,7 +58,11 @@ export default function LoadPage() {
   const [deriving, setDeriving] = useState(false);
 
   const openNew = () => setEditing('new');
-  useHotkeys([{ keys: 'n', handler: openNew, description: 'Нове навантаження', group: 'Навантаження' }]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useHotkeys([
+    { keys: 'n', handler: openNew, description: 'Нове навантаження', group: 'Навантаження' },
+    { keys: '/', handler: () => searchRef.current?.focus(), description: 'Пошук у навантаженні', group: 'Навантаження' },
+  ]);
   useRegisterCommands([
     { id: 'new-load', label: 'Додати навантаження', group: 'Навантаження', icon: Plus, shortcut: 'n', perform: openNew },
     { id: 'derive-load', label: 'Вивести навантаження з розкладу', group: 'Навантаження', icon: GitMerge, perform: () => setDeriving(true) },
@@ -212,6 +217,14 @@ export default function LoadPage() {
     [columns, pageRows],
   );
   if (!sameSet(starts, groupStarts)) setGroupStarts(starts);
+  const cursor = useRowCursor({
+    rows: pageRows,
+    getId: (item) => item.id,
+    onOpen: (item) => setEditing(item),
+    onDelete: (item) => setDeleting(item),
+    group: 'Навантаження',
+    enabled: editing === null && deleting === null && !deriving,
+  });
 
   if (semesters.isPending) {
     return (
@@ -256,9 +269,11 @@ export default function LoadPage() {
       <PageHeader
         title="Навантаження"
         primaryAction={
-          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-            Додати навантаження
-          </Button>
+          <Tooltip content={null} shortcut="n">
+            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+              Додати навантаження
+            </Button>
+          </Tooltip>
         }
         more={[{ label: 'Вивести з розкладу', icon: <GitMerge aria-hidden="true" className="size-4" />, onSelect: () => setDeriving(true) }]}
       />
@@ -278,9 +293,16 @@ export default function LoadPage() {
           />
         </label>
         <Input
+          ref={searchRef}
           type="search"
           value={table.q}
           onChange={(event) => table.set({ q: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && table.q) {
+              event.preventDefault();
+              table.set({ q: null });
+            }
+          }}
           placeholder="Дисципліна або викладач"
           iconStart={<Search aria-hidden="true" className="size-4" />}
           aria-label="Пошук у навантаженні"
@@ -369,7 +391,11 @@ export default function LoadPage() {
         manualSorting
         sort={sort}
         onSortChange={table.setSort}
-        onRowClick={(item) => setEditing(item)}
+        selectedRowId={cursor.selectedRowId}
+        onRowClick={(item) => {
+          cursor.setCursor(item.id);
+          setEditing(item);
+        }}
         mobileRow={(item) => ({
           title: groupId ? item.discipline.shortName : `${item.group.code} · ${item.discipline.shortName}`,
           caption: [
@@ -381,8 +407,8 @@ export default function LoadPage() {
           <RowActions
             rowLabel={`${item.group.code} · ${item.discipline.shortName}`}
             actions={[
-              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, onSelect: () => setEditing(item) },
-              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleting(item) },
+              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(item) },
+              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, shortcut: 'delete', onSelect: () => setDeleting(item) },
             ]}
           />
         )}

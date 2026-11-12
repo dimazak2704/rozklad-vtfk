@@ -38,7 +38,7 @@ test.describe('довідник аудиторій', () => {
     await dialog.getByRole('spinbutton', { name: 'Місткість' }).fill('30');
     await submit.click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText('Аудиторію 512 додано')).toBeVisible();
+    await expect(page.getByText('Додано аудиторію 512')).toBeVisible();
 
     await page.getByRole('searchbox', { name: 'Пошук аудиторії' }).fill('512');
     await expect(page).toHaveURL(/q=512/);

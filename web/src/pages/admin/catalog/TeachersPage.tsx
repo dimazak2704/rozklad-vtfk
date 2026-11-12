@@ -11,6 +11,7 @@ import { EmptyValue } from '@/components/catalog/FormParts';
 import { activeParam, CATALOG_PAGE_SIZE, EMPLOYMENT_LABEL, toActiveFilter } from '@/components/catalog/labels';
 import { teacherRequest } from '@/components/catalog/requests';
 import { TeacherFormDialog } from '@/components/catalog/TeacherForm';
+import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
@@ -20,6 +21,7 @@ import {
   PageHeader,
   Panel,
   RowActions,
+  Tooltip,
   Select,
   Switch,
   notify,
@@ -53,13 +55,21 @@ export default function TeachersPage() {
   const commissions = useCatalogOptions('cycle-commissions');
   const remove = useDeleteCatalogItem('teachers');
   const toggleActive = useToggleActive('teachers', teacherRequest, (t, active) =>
-    active ? `${t.shortName}: знову в списку викладачів` : `${t.shortName}: позначено неактивним`,
+    active ? `Викладача ${t.shortName} повернуто до списку` : `Викладача ${t.shortName} позначено неактивним`,
   );
   const [editing, setEditing] = useState<CatalogTeacher | 'new' | null>(null);
   const [deleting, setDeleting] = useState<CatalogTeacher | null>(null);
 
   const openNew = () => setEditing('new');
   useHotkeys([{ keys: 'n', handler: openNew, description: 'Новий викладач', group: 'Викладачі' }]);
+  const cursor = useRowCursor({
+    rows: list.data?.items,
+    getId: (row) => row.id,
+    onOpen: (row) => setEditing(row),
+    onDelete: (row) => setDeleting(row),
+    group: 'Викладачі',
+    enabled: editing === null && deleting === null,
+  });
   useRegisterCommands([{ id: 'new-teacher', label: 'Додати викладача', group: 'Викладачі', icon: Plus, shortcut: 'n', perform: openNew }]);
 
   const columns = useMemo<Array<DataTableColumn<CatalogTeacher>>>(
@@ -127,9 +137,11 @@ export default function TeachersPage() {
       <PageHeader
         title={<CatalogTitle section="Викладачі" />}
         primaryAction={
-          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-            Додати викладача
-          </Button>
+          <Tooltip content={null} shortcut="n">
+            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+              Додати викладача
+            </Button>
+          </Tooltip>
         }
       />
       <CatalogNav />
@@ -177,20 +189,24 @@ export default function TeachersPage() {
         manualSorting
         sort={table.sort}
         onSortChange={table.setSort}
-        onRowClick={(t) => setEditing(t)}
+        selectedRowId={cursor.selectedRowId}
+        onRowClick={(t) => {
+          cursor.setCursor(t.id);
+          setEditing(t);
+        }}
         rowClassName={(t) => (t.active ? undefined : 'text-muted')}
         rowActions={(t) => (
           <RowActions
             rowLabel={t.shortName}
             actions={[
-              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, onSelect: () => setEditing(t) },
+              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(t) },
               { label: 'Розклад викладача', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.teacher(t.id)) },
               {
                 label: t.active ? 'Позначити неактивним' : 'Зробити активним',
                 icon: <Power aria-hidden="true" />,
                 onSelect: () => void toggleActive(t).catch((error: unknown) => notify.error(error, 'Не вдалося змінити стан викладача')),
               },
-              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleting(t) },
+              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, shortcut: 'delete', onSelect: () => setDeleting(t) },
             ]}
           />
         )}
@@ -239,13 +255,12 @@ export default function TeachersPage() {
         title="Видалити викладача?"
         description="Разом з ним зникнуть його псевдоніми й дисципліни. Викладача із заняттями, навантаженням чи кураторством видалити не можна."
         onDelete={(id) => remove.mutateAsync(id)}
-        successMessage={(name) => `Викладача ${name} видалено`}
+        successMessage={(name) => `Видалено викладача ${name}`}
         deactivate={
           deleting?.active
             ? {
                 label: 'Позначити неактивним',
-                run: () => toggleActive(deleting, { undo: false }),
-                successMessage: (name) => `${name}: позначено неактивним`,
+                run: () => toggleActive(deleting),
               }
             : undefined
         }

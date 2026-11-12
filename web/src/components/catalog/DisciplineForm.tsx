@@ -2,13 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
-import { useSaveCatalogItem, type CatalogDiscipline } from '@/api/catalog';
-import { Checkbox, Field, Input, notify } from '@/components/ui';
+import { useSaveCatalogItem, type CatalogDiscipline, type DisciplineRequest } from '@/api/catalog';
+import { Checkbox, Field, Input } from '@/components/ui';
 import { AliasEditor } from './AliasEditor';
 import { DisciplineColorField } from './DisciplineColorField';
 import { HEX_COLOR_RE } from './discipline-palette';
 import { applyServerErrors } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
+import { useCatalogJournal } from './useCatalogJournal';
 
 const disciplineSchema = z.object({
   shortName: z.string().trim().min(1, 'Вкажіть скорочення, як у розкладі: «СТП»').max(64, 'Не довше за 64 символи'),
@@ -32,28 +33,32 @@ interface DisciplineFormDialogProps {
 export function DisciplineFormDialog({ discipline, open, onOpenChange }: DisciplineFormDialogProps) {
   const formId = useId();
   const save = useSaveCatalogItem('disciplines');
+  const journal = useCatalogJournal('disciplines');
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<DisciplineValues>({
-    resolver: zodResolver(disciplineSchema),
-    defaultValues: {
-      shortName: discipline?.shortName ?? '',
-      name: discipline?.name ?? '',
-      color: discipline?.color ?? null,
-      needsReview: discipline?.needsReview ?? false,
-      active: discipline?.active ?? true,
-    },
-  });
+  const [defaults] = useState<DisciplineValues>(() => ({
+    shortName: discipline?.shortName ?? '',
+    name: discipline?.name ?? '',
+    color: discipline?.color ?? null,
+    needsReview: discipline?.needsReview ?? false,
+    active: discipline?.active ?? true,
+  }));
+  const form = useForm<DisciplineValues>({ resolver: zodResolver(disciplineSchema), defaultValues: defaults });
   const { errors, isDirty } = form.formState;
   const [shortName, name] = useWatch({ control: form.control, name: ['shortName', 'name'] });
+
+  const toBody = (values: DisciplineValues): DisciplineRequest => ({ ...values, shortName: values.shortName.trim(), name: values.name.trim(), version: discipline?.version });
 
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: discipline?.id,
-        body: { ...values, shortName: values.shortName.trim(), name: values.name.trim(), version: discipline?.version },
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: discipline?.id, body });
+      journal.saved({
+        before: discipline ? toBody(defaults) : null,
+        after: body,
+        saved,
+        label: discipline ? `Змінено дисципліну ${saved.shortName}` : `Додано дисципліну ${saved.shortName}`,
       });
-      notify.success(discipline ? `Дисципліну ${saved.shortName} збережено` : `Дисципліну ${saved.shortName} додано`);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS));

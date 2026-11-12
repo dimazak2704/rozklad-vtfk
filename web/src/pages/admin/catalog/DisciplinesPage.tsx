@@ -8,6 +8,7 @@ import { DisciplineFormDialog } from '@/components/catalog/DisciplineForm';
 import { lineName, lineOf } from '@/components/catalog/discipline-palette';
 import { activeParam, CATALOG_PAGE_SIZE, toActiveFilter } from '@/components/catalog/labels';
 import { disciplineRequest } from '@/components/catalog/requests';
+import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
@@ -46,13 +47,21 @@ export default function DisciplinesPage() {
   const reviewCount = useCatalogList('disciplines', { needsReview: true, size: 1 });
   const remove = useDeleteCatalogItem('disciplines');
   const toggleActive = useToggleActive('disciplines', disciplineRequest, (d, active) =>
-    active ? `Дисципліна ${d.shortName} знову викладається` : `Дисципліну ${d.shortName} позначено неактивною`,
+    active ? `Дисципліну ${d.shortName} знову позначено активною` : `Дисципліну ${d.shortName} позначено неактивною`,
   );
   const [editing, setEditing] = useState<CatalogDiscipline | 'new' | null>(null);
   const [deleting, setDeleting] = useState<CatalogDiscipline | null>(null);
 
   const openNew = () => setEditing('new');
   useHotkeys([{ keys: 'n', handler: openNew, description: 'Нова дисципліна', group: 'Дисципліни' }]);
+  const cursor = useRowCursor({
+    rows: list.data?.items,
+    getId: (row) => row.id,
+    onOpen: (row) => setEditing(row),
+    onDelete: (row) => setDeleting(row),
+    group: 'Дисципліни',
+    enabled: editing === null && deleting === null,
+  });
   useRegisterCommands([{ id: 'new-discipline', label: 'Додати дисципліну', group: 'Дисципліни', icon: Plus, shortcut: 'n', perform: openNew }]);
 
   const columns = useMemo<Array<DataTableColumn<CatalogDiscipline>>>(
@@ -110,9 +119,11 @@ export default function DisciplinesPage() {
       <PageHeader
         title={<CatalogTitle section="Дисципліни" />}
         primaryAction={
-          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-            Додати дисципліну
-          </Button>
+          <Tooltip content={null} shortcut="n">
+            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+              Додати дисципліну
+            </Button>
+          </Tooltip>
         }
       />
       <CatalogNav />
@@ -162,19 +173,23 @@ export default function DisciplinesPage() {
         manualSorting
         sort={table.sort}
         onSortChange={table.setSort}
-        onRowClick={(d) => setEditing(d)}
+        selectedRowId={cursor.selectedRowId}
+        onRowClick={(d) => {
+          cursor.setCursor(d.id);
+          setEditing(d);
+        }}
         rowClassName={(d) => (d.active ? undefined : 'text-muted')}
         rowActions={(d) => (
           <RowActions
             rowLabel={`дисципліна ${d.shortName}`}
             actions={[
-              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, onSelect: () => setEditing(d) },
+              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(d) },
               {
                 label: d.active ? 'Позначити неактивною' : 'Зробити активною',
                 icon: <Power aria-hidden="true" />,
                 onSelect: () => void toggleActive(d).catch((error: unknown) => notify.error(error, 'Не вдалося змінити стан дисципліни')),
               },
-              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleting(d) },
+              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, shortcut: 'delete', onSelect: () => setDeleting(d) },
             ]}
           />
         )}
@@ -227,8 +242,7 @@ export default function DisciplinesPage() {
           deleting?.active
             ? {
                 label: 'Позначити неактивною',
-                run: () => toggleActive(deleting, { undo: false }),
-                successMessage: (name) => `Позначено неактивною: ${name}`,
+                run: () => toggleActive(deleting),
               }
             : undefined
         }

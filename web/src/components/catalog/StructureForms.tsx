@@ -9,10 +9,14 @@ import {
   type CatalogCycleCommission,
   type CatalogDepartment,
   type CatalogSpecialty,
+  type DepartmentRequest,
+  type NameRequest,
+  type SpecialtyRequest,
 } from '@/api/catalog';
-import { Field, Input, Select, notify } from '@/components/ui';
+import { Field, Input, Select } from '@/components/ui';
 import { applyServerErrors, blankToNull } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
+import { useCatalogJournal } from './useCatalogJournal';
 
 interface DialogProps<T> {
   item: T | null;
@@ -30,6 +34,7 @@ const departmentSchema = z.object({
 export function DepartmentFormDialog({ item, open, onOpenChange }: DialogProps<CatalogDepartment>) {
   const formId = useId();
   const save = useSaveCatalogItem('departments');
+  const journal = useCatalogJournal('departments');
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<z.infer<typeof departmentSchema>>({
     resolver: zodResolver(departmentSchema),
@@ -39,11 +44,19 @@ export function DepartmentFormDialog({ item, open, onOpenChange }: DialogProps<C
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: item?.id,
-        body: { name: values.name.trim(), shortName: blankToNull(values.shortName), version: item?.version },
+      const toBody = (v: { name: string; shortName: string | null }): DepartmentRequest => ({
+        name: v.name.trim(),
+        shortName: blankToNull(v.shortName ?? ''),
+        version: item?.version,
       });
-      notify.success(item ? `Відділення «${saved.name}» збережено` : `Відділення «${saved.name}» додано`);
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: item?.id, body });
+      journal.saved({
+        before: item ? toBody(item) : null,
+        after: body,
+        saved,
+        label: item ? `Змінено відділення «${saved.name}»` : `Додано відділення «${saved.name}»`,
+      });
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, ['name', 'shortName']));
@@ -91,6 +104,7 @@ const NONE = 'none';
 export function SpecialtyFormDialog({ item, open, onOpenChange }: DialogProps<CatalogSpecialty>) {
   const formId = useId();
   const save = useSaveCatalogItem('specialties');
+  const journal = useCatalogJournal('specialties');
   const departments = useCatalogOptions('departments');
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<z.infer<typeof specialtySchema>>({
@@ -106,17 +120,21 @@ export function SpecialtyFormDialog({ item, open, onOpenChange }: DialogProps<Ca
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: item?.id,
-        body: {
-          letters: values.letters.trim(),
-          name: values.name.trim(),
-          code: blankToNull(values.code),
-          departmentId: values.departmentId,
-          version: item?.version,
-        },
+      const toBody = (v: { letters: string; name: string; code: string | null; departmentId: string | null }): SpecialtyRequest => ({
+        letters: v.letters.trim(),
+        name: v.name.trim(),
+        code: blankToNull(v.code ?? ''),
+        departmentId: v.departmentId,
+        version: item?.version,
       });
-      notify.success(item ? `Спеціальність ${saved.letters} збережено` : `Спеціальність ${saved.letters} додано`);
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: item?.id, body });
+      journal.saved({
+        before: item ? toBody(item) : null,
+        after: body,
+        saved,
+        label: item ? `Змінено спеціальність ${saved.letters}` : `Додано спеціальність ${saved.letters}`,
+      });
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, ['letters', 'name', 'code', 'departmentId']));
@@ -173,15 +191,15 @@ const NAMED_TEXT = {
   'cycle-commissions': {
     create: 'Нова циклова комісія',
     placeholder: 'Компʼютерних дисциплін',
-    added: (name: string) => `Циклову комісію «${name}» додано`,
-    saved: (name: string) => `Циклову комісію «${name}» збережено`,
+    added: (name: string) => `Додано циклову комісію «${name}»`,
+    saved: (name: string) => `Змінено циклову комісію «${name}»`,
     submit: 'Додати комісію',
   },
   buildings: {
     create: 'Новий корпус',
     placeholder: 'Головний корпус',
-    added: (name: string) => `Корпус «${name}» додано`,
-    saved: (name: string) => `Корпус «${name}» збережено`,
+    added: (name: string) => `Додано корпус «${name}»`,
+    saved: (name: string) => `Змінено корпус «${name}»`,
     submit: 'Додати корпус',
   },
 } as const;
@@ -189,6 +207,7 @@ const NAMED_TEXT = {
 export function NamedFormDialog({ entity, item, open, onOpenChange }: NamedDialogProps) {
   const formId = useId();
   const save = useSaveCatalogItem(entity);
+  const journal = useCatalogJournal(entity);
   const text = NAMED_TEXT[entity];
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<z.infer<typeof nameSchema>>({ resolver: zodResolver(nameSchema), defaultValues: { name: item?.name ?? '' } });
@@ -196,8 +215,14 @@ export function NamedFormDialog({ entity, item, open, onOpenChange }: NamedDialo
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({ id: item?.id, body: { name: values.name.trim(), version: item?.version } });
-      notify.success(item ? text.saved(saved.name) : text.added(saved.name));
+      const body: NameRequest = { name: values.name.trim(), version: item?.version };
+      const saved = await save.mutateAsync({ id: item?.id, body });
+      journal.saved({
+        before: item ? { name: item.name, version: item.version } : null,
+        after: body,
+        saved,
+        label: item ? text.saved(saved.name) : text.added(saved.name),
+      });
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, ['name']));

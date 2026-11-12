@@ -25,6 +25,7 @@ import {
   Select,
   type DataTableColumn,
 } from '@/components/ui';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
 
 type Tab = 'departments' | 'specialties' | 'commissions' | 'buildings';
@@ -117,6 +118,14 @@ export default function StructurePage() {
       },
       { replace: true },
     );
+
+  const NEW_LABEL: Record<Tab, string> = {
+    departments: 'Нове відділення',
+    specialties: 'Нова спеціальність',
+    commissions: 'Нова циклова комісія',
+    buildings: 'Новий корпус',
+  };
+  useHotkeys([{ keys: 'n', handler: () => setEditing({ tab, item: null }), description: NEW_LABEL[tab], group: 'Структура' }]);
 
   useRegisterCommands([
     { id: 'new-department', label: 'Додати відділення', group: 'Структура', icon: Plus, perform: () => setEditing({ tab: 'departments', item: null }) },

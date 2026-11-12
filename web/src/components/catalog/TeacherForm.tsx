@@ -3,14 +3,15 @@ import { useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
 import { z } from 'zod';
-import { useCatalogOptions, useSaveCatalogItem, type CatalogTeacher } from '@/api/catalog';
-import { Checkbox, Field, Input, RadioGroup, Select, notify } from '@/components/ui';
+import { useCatalogOptions, useSaveCatalogItem, type CatalogTeacher, type TeacherRequest } from '@/api/catalog';
+import { Checkbox, Field, Input, RadioGroup, Select } from '@/components/ui';
 import { AliasEditor } from './AliasEditor';
 import { CompetenceEditor } from './CompetenceEditor';
 import { applyServerErrors, blankToNull } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
 import { EMPLOYMENT_OPTIONS } from './labels';
 import { shortNameOf } from './names';
+import { useCatalogJournal } from './useCatalogJournal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const optionalName = z.string().trim().max(100, 'Не довше за 100 символів');
@@ -62,47 +63,51 @@ interface TeacherFormDialogProps {
 export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDialogProps) {
   const formId = useId();
   const save = useSaveCatalogItem('teachers');
+  const journal = useCatalogJournal('teachers');
   const commissions = useCatalogOptions('cycle-commissions');
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<TeacherValues>({
-    resolver: zodResolver(teacherSchema),
-    defaultValues: {
-      lastName: teacher?.lastName ?? '',
-      firstName: teacher?.firstName ?? '',
-      middleName: teacher?.middleName ?? '',
-      shortName: teacher?.shortName ?? '',
-      displayName: teacher?.displayName ?? '',
-      cycleCommissionId: teacher?.cycleCommission?.id ?? null,
-      employment: teacher?.employment ?? 'STAFF',
-      email: teacher?.email ?? '',
-      needsReview: teacher?.needsReview ?? false,
-      active: teacher?.active ?? true,
-    },
-  });
+  const [defaults] = useState<TeacherValues>(() => ({
+    lastName: teacher?.lastName ?? '',
+    firstName: teacher?.firstName ?? '',
+    middleName: teacher?.middleName ?? '',
+    shortName: teacher?.shortName ?? '',
+    displayName: teacher?.displayName ?? '',
+    cycleCommissionId: teacher?.cycleCommission?.id ?? null,
+    employment: teacher?.employment ?? 'STAFF',
+    email: teacher?.email ?? '',
+    needsReview: teacher?.needsReview ?? false,
+    active: teacher?.active ?? true,
+  }));
+  const form = useForm<TeacherValues>({ resolver: zodResolver(teacherSchema), defaultValues: defaults });
   const { errors, isDirty } = form.formState;
   const [lastName, firstName, middleName] = useWatch({ control: form.control, name: ['lastName', 'firstName', 'middleName'] });
   const suggestedShort = shortNameOf(lastName.trim(), blankToNull(firstName), blankToNull(middleName));
 
+  const toBody = (values: TeacherValues): TeacherRequest => ({
+      lastName: values.lastName.trim(),
+      firstName: blankToNull(values.firstName),
+      middleName: blankToNull(values.middleName),
+      shortName: blankToNull(values.shortName),
+      displayName: blankToNull(values.displayName),
+      cycleCommissionId: values.cycleCommissionId,
+      employment: values.employment,
+      email: blankToNull(values.email),
+      needsReview: values.needsReview,
+      active: values.active,
+      version: teacher?.version,
+    });
+
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: teacher?.id,
-        body: {
-          lastName: values.lastName.trim(),
-          firstName: blankToNull(values.firstName),
-          middleName: blankToNull(values.middleName),
-          shortName: blankToNull(values.shortName),
-          displayName: blankToNull(values.displayName),
-          cycleCommissionId: values.cycleCommissionId,
-          employment: values.employment,
-          email: blankToNull(values.email),
-          needsReview: values.needsReview,
-          active: values.active,
-          version: teacher?.version,
-        },
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: teacher?.id, body });
+      journal.saved({
+        before: teacher ? toBody(defaults) : null,
+        after: body,
+        saved,
+        label: teacher ? `Змінено дані викладача ${saved.shortName}` : `Додано викладача ${saved.shortName}`,
       });
-      notify.success(teacher ? `Дані викладача ${saved.shortName} збережено` : `Викладача ${saved.shortName} додано`);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS));

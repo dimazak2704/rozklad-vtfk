@@ -4,12 +4,15 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import type { CalendarSemester } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
-import { useSaveLoadItem, type LoadItem } from '@/api/load';
+import { useDeleteLoadItem, useSaveLoadItem, type LoadItem, type LoadItemRequest } from '@/api/load';
+import { qk } from '@/api/queryKeys';
 import type { ControlForm, LessonKind, RoomType } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { ROOM_TYPE_OPTIONS } from '@/components/catalog/labels';
-import { Checkbox, Combobox, Field, NumberInput, Select, Textarea, notify } from '@/components/ui';
+import { Checkbox, Combobox, Field, NumberInput, Select, Textarea } from '@/components/ui';
+import { track } from '@/lib/undo/actions';
+import { loadRequest } from './request';
 import { CONTROL_FORM_LABEL, LESSON_KIND_OPTIONS } from './labels';
 import { DEFAULT_HOURS_PER_PAIR, formatHours, loadPattern, patternDescription } from './pattern';
 
@@ -67,6 +70,7 @@ interface LoadFormDialogProps {
 export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenChange }: LoadFormDialogProps) {
   const formId = useId();
   const save = useSaveLoadItem();
+  const remove = useDeleteLoadItem();
   const groups = useCatalogOptions('groups', { active: true });
   const disciplines = useCatalogOptions('disciplines', { active: true });
   const teachers = useCatalogOptions('teachers', { active: true });
@@ -97,31 +101,55 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
   const teachersError = typeof errors.teachers?.message === 'string' ? errors.teachers.message : undefined;
   const plannedDefault = hoursPerWeek ? Math.round(hoursPerWeek * semester.teachingWeeks) : null;
 
+  /**
+   * Навантаження — у журнал дій: додане скасовує видалення (повтор додає знову), змінене — попередні
+   * значення з версією після правки (якщо хтось змінив запис після вас, сервер відповість 409).
+   */
+  const journalLoad = (before: LoadItem | null, after: LoadItemRequest, saved: LoadItem) => {
+    const what = `${saved.group.code} · ${saved.discipline.shortName}`;
+    const invalidate = [qk.admin.load()];
+    if (!before) {
+      let id = saved.id;
+      track({
+        label: `Додано навантаження ${what}`,
+        invalidate,
+        undo: () => remove.mutateAsync(id),
+        redo: async () => {
+          id = (await save.mutateAsync({ body: { ...after, version: undefined } })).id;
+        },
+      });
+      return;
+    }
+    let version = saved.version;
+    const put = async (body: LoadItemRequest) => {
+      version = (await save.mutateAsync({ id: saved.id, body: { ...body, version } })).version;
+    };
+    track({ label: `Змінено навантаження ${what}`, invalidate, undo: () => put(loadRequest(before)), redo: () => put(after) });
+  };
+
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     const assigned = Object.entries(values.teachers)
       .filter(([subgroup, teacher]) => teacher && (values.splitSubgroups ? subgroup !== '0' && subgroupNumbers.includes(Number(subgroup)) : subgroup === '0'))
       .map(([subgroup, teacher]) => ({ subgroup: Number(subgroup), teacherId: teacher as string }));
     try {
-      const saved = await save.mutateAsync({
-        id: item?.id,
-        body: {
-          semesterId: semester.id,
-          groupId: values.groupId,
-          disciplineId: values.disciplineId,
-          lessonKind: values.lessonKind,
-          hoursPerWeek: values.hoursPerWeek,
-          plannedHours: values.plannedHours,
-          splitSubgroups: values.splitSubgroups,
-          teachers: assigned,
-          requiredRoomType: values.requiredRoomType as RoomType | null,
-          preferredRoomId: values.preferredRoomId,
-          controlForm: values.controlForm,
-          note: blankToNull(values.note),
-          version: item?.version,
-        },
-      });
-      notify.success(`${saved.group.code} · ${saved.discipline.shortName}: ${item ? 'навантаження збережено' : 'навантаження додано'}`);
+      const body: LoadItemRequest = {
+        semesterId: semester.id,
+        groupId: values.groupId,
+        disciplineId: values.disciplineId,
+        lessonKind: values.lessonKind,
+        hoursPerWeek: values.hoursPerWeek,
+        plannedHours: values.plannedHours,
+        splitSubgroups: values.splitSubgroups,
+        teachers: assigned,
+        requiredRoomType: values.requiredRoomType as RoomType | null,
+        preferredRoomId: values.preferredRoomId,
+        controlForm: values.controlForm,
+        note: blankToNull(values.note),
+        version: item?.version,
+      };
+      const saved = await save.mutateAsync({ id: item?.id, body });
+      journalLoad(item, body, saved);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS, { 'teachers[0].teacherId': 'teachers', 'teachers[0].subgroup': 'teachers' }));

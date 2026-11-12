@@ -3,12 +3,13 @@ import { useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
 import { z } from 'zod';
-import { useCatalogOptions, useSaveCatalogItem, type CatalogGroup } from '@/api/catalog';
-import { Checkbox, Combobox, Field, Input, NumberInput, Plate, RadioGroup, notify } from '@/components/ui';
+import { useCatalogOptions, useSaveCatalogItem, type CatalogGroup, type GroupRequest } from '@/api/catalog';
+import { Checkbox, Combobox, Field, Input, NumberInput, Plate, RadioGroup } from '@/components/ui';
 import { canonicalGroupCode } from '@/lib/search';
 import { applyServerErrors } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
 import { SubgroupEditor } from './SubgroupEditor';
+import { useCatalogJournal } from './useCatalogJournal';
 
 const groupSchema = z.object({
   code: z
@@ -48,43 +49,47 @@ interface GroupFormDialogProps {
 export function GroupFormDialog({ group, open, onOpenChange }: GroupFormDialogProps) {
   const formId = useId();
   const save = useSaveCatalogItem('groups');
+  const journal = useCatalogJournal('groups');
   const specialties = useCatalogOptions('specialties');
   const teachers = useCatalogOptions('teachers', { active: true });
   const rooms = useCatalogOptions('rooms', { active: true });
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<GroupValues>({
-    resolver: zodResolver(groupSchema),
-    defaultValues: {
-      code: group?.code ?? '',
-      shift: group ? (String(group.shift) as '1' | '2') : '1',
-      size: group?.size ?? null,
-      curatorTeacherId: group?.curator?.id ?? null,
-      homeRoomId: group?.homeRoom?.id ?? null,
-      active: group?.active ?? true,
-    },
-  });
+  const [defaults] = useState<GroupValues>(() => ({
+    code: group?.code ?? '',
+    shift: group ? (String(group.shift) as '1' | '2') : '1',
+    size: group?.size ?? null,
+    curatorTeacherId: group?.curator?.id ?? null,
+    homeRoomId: group?.homeRoom?.id ?? null,
+    active: group?.active ?? true,
+  }));
+  const form = useForm<GroupValues>({ resolver: zodResolver(groupSchema), defaultValues: defaults });
   const { errors, isDirty } = form.formState;
   const code = useWatch({ control: form.control, name: 'code' });
   const canonical = canonicalGroupCode(code);
   const letters = canonical ? /^\d([А-ЯІЇЄҐ]{1,3})/u.exec(canonical)?.[1] : undefined;
   const specialty = letters ? specialties.items?.find((s) => s.letters === letters) : undefined;
 
+  const toBody = (values: GroupValues): GroupRequest => ({
+      code: canonicalGroupCode(values.code) ?? values.code.trim(),
+      shift: Number(values.shift) as 1 | 2,
+      size: values.size,
+      curatorTeacherId: values.curatorTeacherId,
+      homeRoomId: values.homeRoomId,
+      active: values.active,
+      version: group?.version,
+    });
+
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: group?.id,
-        body: {
-          code: canonicalGroupCode(values.code) ?? values.code.trim(),
-          shift: Number(values.shift) as 1 | 2,
-          size: values.size,
-          curatorTeacherId: values.curatorTeacherId,
-          homeRoomId: values.homeRoomId,
-          active: values.active,
-          version: group?.version,
-        },
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: group?.id, body });
+      journal.saved({
+        before: group ? toBody(defaults) : null,
+        after: body,
+        saved,
+        label: group ? `Змінено групу ${saved.code}` : `Додано групу ${saved.code}`,
       });
-      notify.success(group ? `Групу ${saved.code} збережено` : `Групу ${saved.code} додано`);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS, { course: 'code', number: 'code', specialtyId: 'code' }));

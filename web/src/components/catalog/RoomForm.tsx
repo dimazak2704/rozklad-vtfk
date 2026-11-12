@@ -3,11 +3,12 @@ import { useId, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Link } from 'react-router';
 import { z } from 'zod';
-import { useCatalogOptions, useSaveCatalogItem, type CatalogRoom } from '@/api/catalog';
-import { Checkbox, Combobox, Field, Input, NumberInput, Select, notify } from '@/components/ui';
+import { useCatalogOptions, useSaveCatalogItem, type CatalogRoom, type RoomRequest } from '@/api/catalog';
+import { Checkbox, Combobox, Field, Input, NumberInput, Select } from '@/components/ui';
 import { applyServerErrors } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
 import { ROOM_TYPE_OPTIONS } from './labels';
+import { useCatalogJournal } from './useCatalogJournal';
 
 const roomSchema = z.object({
   name: z.string().trim().min(1, 'Вкажіть назву або номер аудиторії').max(50, 'Не довше за 50 символів'),
@@ -37,37 +38,41 @@ interface RoomFormDialogProps {
 export function RoomFormDialog({ room, open, onOpenChange }: RoomFormDialogProps) {
   const formId = useId();
   const save = useSaveCatalogItem('rooms');
+  const journal = useCatalogJournal('rooms');
   const buildings = useCatalogOptions('buildings');
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<RoomValues>({
-    resolver: zodResolver(roomSchema),
-    defaultValues: {
-      name: room?.name ?? '',
-      type: room?.type ?? 'CLASSROOM',
-      buildingId: room?.building?.id ?? null,
-      capacity: room?.capacity ?? null,
-      maxParallel: room?.maxParallel ?? 1,
-      active: room?.active ?? true,
-    },
-  });
+  const [defaults] = useState<RoomValues>(() => ({
+    name: room?.name ?? '',
+    type: room?.type ?? 'CLASSROOM',
+    buildingId: room?.building?.id ?? null,
+    capacity: room?.capacity ?? null,
+    maxParallel: room?.maxParallel ?? 1,
+    active: room?.active ?? true,
+  }));
+  const form = useForm<RoomValues>({ resolver: zodResolver(roomSchema), defaultValues: defaults });
   const { errors, isDirty } = form.formState;
+
+  const toBody = (values: RoomValues): RoomRequest => ({
+    name: values.name.trim(),
+    type: values.type,
+    buildingId: values.buildingId,
+    capacity: values.capacity,
+    maxParallel: values.maxParallel,
+    active: values.active,
+    version: room?.version,
+  });
 
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const saved = await save.mutateAsync({
-        id: room?.id,
-        body: {
-          name: values.name.trim(),
-          type: values.type,
-          buildingId: values.buildingId,
-          capacity: values.capacity,
-          maxParallel: values.maxParallel,
-          active: values.active,
-          version: room?.version,
-        },
+      const body = toBody(values);
+      const saved = await save.mutateAsync({ id: room?.id, body });
+      journal.saved({
+        before: room ? toBody(defaults) : null,
+        after: body,
+        saved,
+        label: room ? `Змінено аудиторію ${saved.name}` : `Додано аудиторію ${saved.name}`,
       });
-      notify.success(room ? `Аудиторію ${saved.name} збережено` : `Аудиторію ${saved.name} додано`);
       onOpenChange(false);
     } catch (error) {
       setFormError(applyServerErrors(error, form.setError, FIELDS));

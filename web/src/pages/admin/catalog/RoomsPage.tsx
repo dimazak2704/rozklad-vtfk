@@ -16,6 +16,7 @@ import { EmptyValue } from '@/components/catalog/FormParts';
 import { activeParam, CATALOG_PAGE_SIZE, ROOM_TYPE_OPTIONS, toActiveFilter } from '@/components/catalog/labels';
 import { roomRequest } from '@/components/catalog/requests';
 import { RoomFormDialog } from '@/components/catalog/RoomForm';
+import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { useToggleActive } from '@/components/catalog/useToggleActive';
 import {
@@ -25,6 +26,7 @@ import {
   PageHeader,
   Panel,
   RowActions,
+  Tooltip,
   Select,
   notify,
   type DataTableColumn,
@@ -33,6 +35,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
+import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
 
 const NOUN = ['аудиторія', 'аудиторії', 'аудиторій'] as const;
@@ -56,13 +59,21 @@ export default function RoomsPage() {
   const buildings = useCatalogOptions('buildings');
   const remove = useDeleteCatalogItem('rooms');
   const toggleActive = useToggleActive('rooms', roomRequest, (room, active) =>
-    active ? `Аудиторія ${room.name} знову діє` : `Аудиторію ${room.name} позначено неактивною`,
+    active ? `Аудиторію ${room.name} знову позначено активною` : `Аудиторію ${room.name} позначено неактивною`,
   );
   const [editing, setEditing] = useState<CatalogRoom | 'new' | null>(null);
   const [deleting, setDeleting] = useState<CatalogRoom | null>(null);
 
   const openNew = () => setEditing('new');
   useHotkeys([{ keys: 'n', handler: openNew, description: 'Нова аудиторія', group: 'Аудиторії' }]);
+  const cursor = useRowCursor({
+    rows: list.data?.items,
+    getId: (row) => row.id,
+    onOpen: (row) => setEditing(row),
+    onDelete: (row) => setDeleting(row),
+    group: 'Аудиторії',
+    enabled: editing === null && deleting === null,
+  });
   useRegisterCommands([{ id: 'new-room', label: 'Додати аудиторію', group: 'Аудиторії', icon: Plus, shortcut: 'n', perform: openNew }]);
 
   const columns = useMemo<Array<DataTableColumn<CatalogRoom>>>(
@@ -127,9 +138,11 @@ export default function RoomsPage() {
       <PageHeader
         title={<CatalogTitle section="Аудиторії" />}
         primaryAction={
-          <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
-            Додати аудиторію
-          </Button>
+          <Tooltip content={null} shortcut="n">
+            <Button variant="primary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={openNew}>
+              Додати аудиторію
+            </Button>
+          </Tooltip>
         }
       />
       <CatalogNav />
@@ -183,20 +196,24 @@ export default function RoomsPage() {
         manualSorting
         sort={table.sort}
         onSortChange={table.setSort}
-        onRowClick={(room) => setEditing(room)}
+        selectedRowId={cursor.selectedRowId}
+        onRowClick={(room) => {
+          cursor.setCursor(room.id);
+          setEditing(room);
+        }}
         rowClassName={(room) => (room.active ? undefined : 'text-muted')}
         rowActions={(room) => (
           <RowActions
             rowLabel={`аудиторія ${room.name}`}
             actions={[
-              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, onSelect: () => setEditing(room) },
+              { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(room) },
               { label: 'Розклад аудиторії', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.room(room.id)) },
               {
                 label: room.active ? 'Позначити неактивною' : 'Зробити активною',
                 icon: <Power aria-hidden="true" />,
                 onSelect: () => void toggleActive(room).catch((error: unknown) => notify.error(error, 'Не вдалося змінити стан аудиторії')),
               },
-              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleting(room) },
+              { label: 'Видалити', icon: <Trash aria-hidden="true" />, tone: 'danger', separatorBefore: true, shortcut: 'delete', onSelect: () => setDeleting(room) },
             ]}
           />
         )}
@@ -244,13 +261,12 @@ export default function RoomsPage() {
         title="Видалити аудиторію?"
         description="Аудиторія зникне з довідника. Якщо вона вже є в розкладі чи навантаженні, система не дасть її видалити."
         onDelete={(id) => remove.mutateAsync(id)}
-        successMessage={(name) => `${name}: видалено`}
+        successMessage={(name) => `Видалено: ${lowerFirst(name)}`}
         deactivate={
           deleting?.active
             ? {
                 label: 'Позначити неактивною',
-                run: () => toggleActive(deleting, { undo: false }),
-                successMessage: (name) => `${name}: позначено неактивною`,
+                run: () => toggleActive(deleting),
               }
             : undefined
         }

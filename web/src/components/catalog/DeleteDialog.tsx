@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { errorMessage, isApiError, withConflicts } from '@/api/errors';
 import { Button, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { trackFinal } from '@/lib/undo/actions';
 
 export interface DeleteTarget {
   id: string;
@@ -25,7 +26,12 @@ interface DeleteDialogProps {
    * Якщо запис використано, сервер не видаляє його (409) і радить вимкнути. Тоді діалог пропонує
    * це зробити однією кнопкою.
    */
-  deactivate?: { label: string; run: (id: string) => Promise<unknown>; successMessage: (name: string) => string };
+  deactivate?: {
+    label: string;
+    run: (id: string) => Promise<unknown>;
+    /** Без тексту тост показує сама дія (вона в журналі з «Скасувати»). */
+    successMessage?: (name: string) => string;
+  };
 }
 
 type Phase = { kind: 'confirm' } | { kind: 'blocked'; reason: string } | { kind: 'error'; message: string };
@@ -45,11 +51,13 @@ export function DeleteDialog({ target, onClose, title, description, onDelete, su
     onClose();
   };
 
-  const run = async (action: () => Promise<unknown>, success: string) => {
+  const run = async (action: () => Promise<unknown>, success: string | null, final = false) => {
     setPending(true);
     try {
       await action();
-      notify.success(success);
+      if (success) notify.success(success);
+      // видалення з довідника жорстке (зникають і псевдоніми, підгрупи): у журналі — без «Скасувати»
+      if (final && success) trackFinal(success, 'Видалення не скасовується: створіть запис знову');
       setPhase({ kind: 'confirm' });
       onClose();
     } catch (error) {
@@ -117,13 +125,13 @@ export function DeleteDialog({ target, onClose, title, description, onDelete, su
                   <Button
                     variant="primary"
                     loading={pending}
-                    onClick={() => void run(() => deactivate.run(target.id), deactivate.successMessage(target.name))}
+                    onClick={() => void run(() => deactivate.run(target.id), deactivate.successMessage?.(target.name) ?? null)}
                   >
                     {deactivate.label}
                   </Button>
                 ) : null
               ) : (
-                <Button variant="danger" loading={pending} onClick={() => void run(() => onDelete(target.id), successMessage(target.name))}>
+                <Button variant="danger" loading={pending} onClick={() => void run(() => onDelete(target.id), successMessage(target.name), true)}>
                   Видалити
                 </Button>
               )}
