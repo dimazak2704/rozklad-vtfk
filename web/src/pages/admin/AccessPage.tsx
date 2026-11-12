@@ -1,4 +1,4 @@
-import { KeyRound, Link2Off, Pencil, Plus, RotateCcw, ShieldOff } from 'lucide-react';
+import { KeyRound, Link2Off, Pencil, Plus, RotateCcw, Search, ShieldOff } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import {
   useAccessList,
@@ -170,7 +170,8 @@ export default function AccessPage() {
         header: 'Останній вхід',
         hideBelow: 'lg',
         className: 'max-md:hidden!',
-        cell: (a) => (a.lastLoginAt ? <span className="figures">{formatInstant(a.lastLoginAt)}</span> : <Muted>—</Muted>),
+        // дата — довідка, не головне в рядку: вторинним кольором, щоб не перекрикувала ім’я
+        cell: (a) => (a.lastLoginAt ? <span className="text-secondary figures">{formatInstant(a.lastLoginAt)}</span> : <Muted>—</Muted>),
       },
     ],
     [],
@@ -223,6 +224,8 @@ export default function AccessPage() {
           placeholder="Ім’я, e-mail або логін"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
+          // з іконкою, як пошук довідників: тоді й обгортка має ширину, і фільтри стають у той самий рядок
+          iconStart={<Search aria-hidden="true" className="size-4" />}
           wrapperClassName="w-full sm:w-72"
         />
         <Select<RoleFilter> aria-label="Роль" value={role} onValueChange={setRole} options={ROLE_FILTERS} className="w-44" />
