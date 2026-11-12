@@ -5,6 +5,7 @@ import { useLiveConnection } from '@/api/live';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { AdminSidebar } from '@/components/shell/AdminSidebar';
 import { AdminTopBar } from '@/components/shell/AdminTopBar';
+import { JournalHost } from '@/components/shell/JournalPanel';
 import { SkipLink } from '@/components/shell/SkipLink';
 import { useReturnFocus } from '@/components/ui/returnFocus';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -33,6 +34,7 @@ export function AdminLayout() {
   return (
     <div className="min-h-dvh bg-canvas [--sticky-top:3.5rem] lg:[--sticky-top:4rem]">
       <SkipLink />
+      <JournalHost />
       <aside
         className={cn(
           'fixed inset-y-0 start-0 z-40 hidden transition-[width] duration-200 ease-out motion-reduce:transition-none lg:block',

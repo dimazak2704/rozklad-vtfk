@@ -3,6 +3,7 @@ import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconButton } from './IconButton';
+import { KbdCombo } from './Kbd';
 
 export interface RowAction {
   label: string;
@@ -12,12 +13,22 @@ export interface RowAction {
   disabled?: boolean;
   /** Розділювач перед цим пунктом. */
   separatorBefore?: boolean;
+  /** Клавіша для виділеного рядка (`e`, `delete`) — тихо праворуч у пункті меню. */
+  shortcut?: string;
 }
 
 interface RowActionsProps {
   actions: readonly RowAction[];
   /** Назва рядка для підпису кнопки: «Дії: Кренцін М.Д.». */
   rowLabel: string;
+}
+
+/** `delete` → `Delete`, `e` → `E`: значення для aria-keyshortcuts. */
+function keyshortcuts(keys: string): string {
+  return keys
+    .split('+')
+    .map((key) => (key === 'mod' ? 'Control' : key.length === 1 ? key.toUpperCase() : key[0]?.toUpperCase() + key.slice(1)))
+    .join('+');
 }
 
 /** Меню дій рядка таблиці. Небезпечні дії — останніми й червоним, з підтвердженням у самій дії. */
@@ -48,6 +59,7 @@ export function RowActions({ actions, rowLabel }: RowActionsProps) {
               <DropdownMenu.Item
                 disabled={action.disabled}
                 onSelect={action.onSelect}
+                aria-keyshortcuts={action.shortcut ? keyshortcuts(action.shortcut) : undefined}
                 className={cn(
                   'flex cursor-default select-none items-center gap-2 rounded-control px-2.5 py-2 text-ui outline-none',
                   'data-highlighted:bg-hover data-disabled:text-disabled',
@@ -56,6 +68,11 @@ export function RowActions({ actions, rowLabel }: RowActionsProps) {
               >
                 {action.icon ? <span className="[&_svg]:size-4">{action.icon}</span> : null}
                 {action.label}
+                {action.shortcut ? (
+                  <span aria-hidden="true" className="ms-auto ps-4">
+                    <KbdCombo keys={action.shortcut} />
+                  </span>
+                ) : null}
               </DropdownMenu.Item>
             </div>
           ))}
