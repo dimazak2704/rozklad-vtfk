@@ -174,6 +174,8 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 | `GET /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | `{teacherId, teacherName, bound, binding?: BindingDto, botUsername, botLink}`; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status` | delivery log |
 | `POST /api/notify/test` | sends a test message to `TELEGRAM_OWNER_CHAT_ID` |
+| `GET /api/notify/events/dead-letters` (ADMIN) | `{queue, count}`: events in `notification.q.events.dlq` (failed every retry); 503 when RabbitMQ cannot be asked |
+| `POST /api/notify/events/dead-letters/replay` (ADMIN) | `{replayed}`: moves the messages now in the DLQ back to `notification.q.events`, each once; 503 when RabbitMQ cannot be asked |
 | `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` (public for PUBLISHED orders) | file |
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` (ADMIN, drafts) | file |
 

@@ -476,6 +476,23 @@ class SubstitutionFlowIT extends IntegrationTest {
                 .filteredOn(text -> text.startsWith("⏰ <b>Немає відповіді щодо заміни</b>")).hasSize(2);
     }
 
+    /** After the deadline round was reminded, a new room (core re-sends the request) still reaches the teacher. */
+    @Test
+    void newRoomAfterTheDeadlineReminderIsStillSent() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        clock.set(Instant.parse("2026-10-19T07:01:00Z"));
+        assertThat(substitutions.remindOverdue()).isEqualTo(1);
+        handlers.handle(new SubstitutionConfirmationRequested(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE,
+                CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2, LocalTime.of(9, 40), LocalTime.of(10, 40), "4КІ1", 0,
+                "Надійність, діагностика та експлуатація комп'ютерних систем і мереж", "Кренцін М.Д.", "12",
+                Instant.parse("2026-10-19T07:00:00Z")));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).hasSize(3);
+        assertThat(telegram.lastSentTo(TEACHER).text()).contains("🚪 Аудиторія 12");
+    }
+
     /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
     @Test
     void eventHandlersDoNotCallCoreInsideTheTransaction() {

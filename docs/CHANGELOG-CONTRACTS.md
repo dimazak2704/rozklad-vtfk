@@ -462,3 +462,10 @@ server. Nothing was ever deployed with Keycloak, so there is no account import a
 | `substitution.confirmation-requested` (no schema change) | Also published when `PUT /api/admin/changes/{id}` gives a new room to a change whose teacher was already told (PENDING, or NOTIFY and CONFIRMED): same `changeId`, `mode` and `deadline`, the new `roomName`. Consumers treat it like a repeated request (notification: the request or notice is sent again). | The teacher's Telegram message named the old room until the order was published. |
 | UNAVAILABLE conflicts | `conflicts[]` of create and publication no longer contain UNAVAILABLE for a teacher who keeps his own pair (ROOM_CHANGE, MERGE_SUBGROUPS partner, DISCIPLINE_FINISHED without a substitute). | DOMAIN H4 applies UNAVAILABLE to the substitute; a teacher's later grid edit blocked the whole order. |
 | `GET /api/admin/orders/draft` | With nothing newly confirmed after publication, an amendment draft left from cancelled changes is deleted and the latest published document is returned. | An empty «ДОПОВНЕННЯ» could only fail with `AMENDMENT_EMPTY`. |
+
+## Audit fixes: notification and gateway (12.11.2026)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/notify/events/dead-letters`, `POST …/replay` (new, ADMIN) | `{queue, count}` and `{replayed}`; 503 ProblemDetail when RabbitMQ cannot be asked. A replayed message goes straight to `notification.q.events` (default exchange) with header `x-rozklad-routing-key` = the event's routing key; the listener reads the event type from that header first. Gauge `notification.events.dead_letters`. | Dead-lettered events had no metric and no way back (notification.md §5). |
+| Delivery log `error` (no schema change) | A substitution request, notice or reminder that waited in the queue while its change went to another teacher or stopped waiting for an answer is FAILED with «Неактуальне: заміну передано іншому викладачу.» / «Неактуальне: заміна вже не чекає відповіді.» instead of being sent. | The old teacher got live buttons and later another teacher's «Ви підтвердили заміну». |

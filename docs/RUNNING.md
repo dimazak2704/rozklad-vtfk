@@ -202,3 +202,9 @@ starts the container again and waits until it is healthy (about a minute).
 * `GET /api/documents/orders/{id}.pdf` is 404 for a moment after publication: notification gets the order
   through the `order.published` event.
 * Port 5432 belongs to a local PostgreSQL, therefore Docker Postgres is on 5433.
+* notification logs «… event(s) in notification.q.events.dlq failed every retry»: some events (an order, a
+  substitution, an admin notice) were not handled, usually because notification's database was down for more
+  than about a minute. Fix the cause, then, as an ADMIN, `GET /api/notify/events/dead-letters` shows how many and
+  `POST /api/notify/events/dead-letters/replay` sends each of them back once (handlers skip events they already
+  handled). A message that fails again returns to the DLQ; an unreadable one stays there for a developer
+  (RabbitMQ management, `http://127.0.0.1:15672`). The gauge `notification.events.dead_letters` has the count.

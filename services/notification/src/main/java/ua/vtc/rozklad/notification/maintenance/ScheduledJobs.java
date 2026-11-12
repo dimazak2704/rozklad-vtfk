@@ -15,12 +15,13 @@ import ua.vtc.rozklad.notification.config.DeliveryProperties;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageRepository;
 import ua.vtc.rozklad.notification.delivery.OutboundStatus;
+import ua.vtc.rozklad.notification.events.DeadLetters;
 import ua.vtc.rozklad.notification.events.ProcessedEvents;
 import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 
 /**
  * Periodic jobs: confirmation deadlines and warnings about teachers without Telegram (every minute),
- * nightly cleanup of old rows.
+ * the dead-letter queue check (every minute), nightly cleanup of old rows.
  */
 @Component
 public class ScheduledJobs {
@@ -38,10 +39,11 @@ public class ScheduledJobs {
     private final DeliveryProperties delivery;
     private final TelegramProperties telegram;
     private final Clock clock;
+    private final DeadLetters deadLetters;
 
     public ScheduledJobs(SubstitutionRequests substitutions, OutboundMessageRepository outbound,
                          ProcessedEvents processedEvents, BindingCodes codes, DeliveryProperties delivery,
-                         TelegramProperties telegram, Clock clock) {
+                         TelegramProperties telegram, Clock clock, DeadLetters deadLetters) {
         this.substitutions = substitutions;
         this.outbound = outbound;
         this.processedEvents = processedEvents;
@@ -49,6 +51,13 @@ public class ScheduledJobs {
         this.delivery = delivery;
         this.telegram = telegram;
         this.clock = clock;
+        this.deadLetters = deadLetters;
+    }
+
+    /** Events that failed every retry: gauge {@code notification.events.dead_letters} and a warning when it grows. */
+    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
+    public void deadLetters() {
+        runSafely("dead letters", deadLetters::check);
     }
 
     /**

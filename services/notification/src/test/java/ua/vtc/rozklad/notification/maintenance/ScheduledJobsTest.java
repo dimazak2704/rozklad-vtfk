@@ -35,7 +35,7 @@ class ScheduledJobsTest {
     private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken) {
         TelegramProperties telegram = new TelegramProperties(botToken, "scheduler_vtfk_bot", null,
                 TelegramProperties.Mode.POLLING, null, null, TelegramProperties.Access.BOUND_ONLY);
-        return new ScheduledJobs(substitutions, null, null, null, null, telegram, Clock.systemUTC());
+        return new ScheduledJobs(substitutions, null, null, null, null, telegram, Clock.systemUTC(), null);
     }
 
     /** Records the calls; the jobs themselves are covered by {@code SubstitutionFlowIT}. */

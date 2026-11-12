@@ -117,10 +117,12 @@ public class SubstitutionRequests implements OutboundRelevance {
         boolean sameTeacher = existing.map(found -> found.getTeacherId().equals(event.teacherId())).orElse(false);
         boolean reminder = !notice && sameTeacher && existing.get().isPending()
                 && !messages.findByChangeId(event.changeId()).isEmpty();
-        // core's deadline reminder (the same, already passed deadline) is the round remindOverdue() reminds
-        // about too: both use one dedup key, so the teacher gets one reminder whichever comes first
+        // core's deadline reminder (the same, already passed deadline, nothing else changed) is the round
+        // remindOverdue() reminds about too: both use one dedup key, so the teacher gets one reminder whichever
+        // comes first. A new room re-sends the request even then.
         boolean deadlineReminder = reminder && event.deadline() != null && !event.deadline().isAfter(now)
-                && Objects.equals(existing.get().getDeadline(), event.deadline());
+                && Objects.equals(existing.get().getDeadline(), event.deadline())
+                && Objects.equals(existing.get().getRoomName(), event.roomName());
         if (existing.isPresent() && !sameTeacher) {
             retireMessages(existing.get(), event.eventId());
         }

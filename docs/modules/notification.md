@@ -40,6 +40,8 @@ from `V1`).
 | `POST /api/notify/test` | ADMIN | sends «Тест: бот Розклад ВТФК підключено ✅» to `TELEGRAM_OWNER_CHAT_ID` right away and returns the delivery (200); 503 bot disabled, 422 no owner chat, 502 Telegram refused |
 | `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` | public | only orders received in `order.published` (PUBLISHED); 404 otherwise; `ETag`, `Cache-Control: public, max-age=300`; DOCX as attachment, PDF/PNG inline; ASCII file names `rozporiadzhennia-35-2026-10-19.pdf`, `dopovnennia-36-…` |
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` | ADMIN | draft preview, `no-store`; 400 `errors[format]` |
+| `GET /api/notify/events/dead-letters` | ADMIN | `{queue, count}`: events in `notification.q.events.dlq`; 503 RabbitMQ unreachable (§5) |
+| `POST /api/notify/events/dead-letters/replay` | ADMIN | `{replayed}`: moves the messages now in the DLQ back to the consumer, each once (§5) |
 | `POST /api/notify/telegram/webhook` | open | WEBHOOK mode only (404 otherwise); `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET` (403) |
 
 PDF/PNG without LibreOffice: 503 ProblemDetail, title «Конвертер PDF недоступний» (DOCX still works).
@@ -194,7 +196,19 @@ and the worker re-checks the binding right before sending (deleted binding ⇒ F
 ## 5. Events (`notification.q.events`, DLQ `notification.q.events.dlq`)
 
 The payload type comes from the routing key. Unreadable messages are rejected to the DLQ; handler failures are
-retried 3× and then dead-lettered.
+retried 3× and then dead-lettered (1 s, 2 s backoff; with notification's database down each attempt also waits for
+Hikari's 30 s connection timeout, so an event is lost to the DLQ only after about a minute of outage).
+
+**Dead letters** (`DeadLetters`, kept simple on purpose): nothing consumes the DLQ by itself. Every minute the
+service reads its depth into the gauge `notification.events.dead_letters` and logs a WARN when it grew. After the
+cause is fixed an admin calls `POST /api/notify/events/dead-letters/replay` (runbook: RUNNING.md §7): each message
+that is in the DLQ at that moment is taken once, published straight to `notification.q.events` (default exchange,
+so other services do not get it again) with header `x-rozklad-routing-key` = its original routing key (from
+`x-death`), and acknowledged only after the publish. The listener reads the event type from that header first.
+Handlers are exactly-once by `eventId`, so an event that was handled after all changes nothing; one that fails
+again goes back to the DLQ and is not retried by the same call. No Telegram alert: a new delivery purpose would
+change the delivery-log contract the web reads (owner question). core's `core.q.scheduler-results.dlq` is outside
+this module.
 
 | Event | Effect |
 |---|---|

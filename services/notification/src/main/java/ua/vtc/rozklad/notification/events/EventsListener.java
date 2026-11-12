@@ -14,7 +14,8 @@ import ua.vtc.rozklad.contracts.events.RozkladEvents;
 /**
  * Consumer of {@code notification.q.events}. The payload type comes from the routing key, so a
  * message is read correctly even without a type header. Unreadable messages go to the DLQ;
- * handler failures are retried (3 attempts) and then dead-lettered.
+ * handler failures are retried (3 attempts) and then dead-lettered. A message replayed from the DLQ
+ * ({@link DeadLetters}) comes straight to the queue and carries its routing key in a header.
  */
 @Component
 public class EventsListener {
@@ -31,7 +32,9 @@ public class EventsListener {
 
     @RabbitListener(queues = RozkladEvents.Queues.NOTIFICATION_EVENTS)
     public void onMessage(Message message) {
-        String routingKey = message.getMessageProperties().getReceivedRoutingKey();
+        Object replayed = message.getMessageProperties().getHeader(DeadLetters.ORIGINAL_ROUTING_KEY);
+        String routingKey = replayed != null ? replayed.toString()
+                : message.getMessageProperties().getReceivedRoutingKey();
         RozkladEvent event;
         try {
             event = json.readValue(message.getBody(), RozkladEvents.eventType(routingKey));
