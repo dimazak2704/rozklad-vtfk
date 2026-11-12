@@ -127,11 +127,14 @@ public class SubstitutionRequest implements Persistable<UUID> {
 
     /** A new request for the same change (re-sent or reassigned): take the latest details. */
     void refresh(SubstitutionConfirmationRequested event, Instant now) {
-        if (!event.teacherId().equals(teacherId)) {
+        boolean sameTeacher = event.teacherId().equals(teacherId);
+        if (!sameTeacher) {
             // інший викладач — попередження про Telegram стосувалося попереднього
             this.noTelegramAt = null;
             this.adminWarnedAt = null;
         }
+        // той самий викладач і той самий строк — той самий раунд: нагадування core не скидає позначку нагадування
+        boolean sameRound = sameTeacher && deadline != null && deadline.equals(event.deadline());
         this.teacherId = event.teacherId();
         this.lessonDate = event.date();
         this.pair = event.pair();
@@ -150,7 +153,9 @@ public class SubstitutionRequest implements Persistable<UUID> {
         // повідомлення NOTIFY — про вже підтверджену заміну; прохання CONFIRM чекає відповіді
         this.status = mode == SubstitutionRequestMode.NOTIFY ? ChangeStatus.CONFIRMED : ChangeStatus.PENDING_CONFIRMATION;
         this.teacherAnswer = null;
-        this.remindedAt = null;
+        if (!sameRound) {
+            this.remindedAt = null;
+        }
         this.updatedAt = now;
     }
 

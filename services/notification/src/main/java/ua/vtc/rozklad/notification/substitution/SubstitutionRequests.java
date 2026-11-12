@@ -3,11 +3,13 @@ package ua.vtc.rozklad.notification.substitution;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -23,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
+import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
@@ -37,7 +40,9 @@ import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.delivery.DeliveryPurpose;
 import ua.vtc.rozklad.notification.delivery.OutboundDraft;
+import ua.vtc.rozklad.notification.delivery.OutboundMessage;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageSent;
+import ua.vtc.rozklad.notification.delivery.OutboundRelevance;
 import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
@@ -53,13 +58,19 @@ import ua.vtc.rozklad.notification.text.WebLinks;
  * same time (core publishes {@code substitution.status-changed} for the very answer the button sent).
  * Every writer reads the row with a lock and only moves a pending request to a final state, so the
  * two converge to the same state and neither of them fails.
+ *
+ * <p>A request, notice or reminder can wait in the outbound queue (rate limits, Telegram retries) while the
+ * change moves on. The worker asks {@link #obsoleteReason(OutboundMessage)} right before sending, and a message
+ * Telegram accepted in that window is corrected at once by {@link #onSent(OutboundMessageSent)}.
  */
 @Service
-public class SubstitutionRequests {
+public class SubstitutionRequests implements OutboundRelevance {
 
     private static final Logger log = LoggerFactory.getLogger(SubstitutionRequests.class);
     private static final String UNKNOWN_TEACHER = "Викладач";
     private static final int MAX_RECORD_ATTEMPTS = 3;
+    static final String REASSIGNED = "Неактуальне: заміну передано іншому викладачу.";
+    static final String NOT_AWAITING = "Неактуальне: заміна вже не чекає відповіді.";
     private static final Comparator<SubstitutionRequest> BY_TEACHER_DATE_PAIR =
             Comparator.comparing(SubstitutionRequest::getTeacherId)
                     .thenComparing(SubstitutionRequest::getLessonDate)
@@ -106,6 +117,10 @@ public class SubstitutionRequests {
         boolean sameTeacher = existing.map(found -> found.getTeacherId().equals(event.teacherId())).orElse(false);
         boolean reminder = !notice && sameTeacher && existing.get().isPending()
                 && !messages.findByChangeId(event.changeId()).isEmpty();
+        // core's deadline reminder (the same, already passed deadline) is the round remindOverdue() reminds
+        // about too: both use one dedup key, so the teacher gets one reminder whichever comes first
+        boolean deadlineReminder = reminder && event.deadline() != null && !event.deadline().isAfter(now)
+                && Objects.equals(existing.get().getDeadline(), event.deadline());
         if (existing.isPresent() && !sameTeacher) {
             retireMessages(existing.get(), event.eventId());
         }
@@ -114,8 +129,8 @@ public class SubstitutionRequests {
             return found;
         }).orElseGet(() -> requests.save(SubstitutionRequest.from(event, now)));
 
-        if (notice && event.date().isBefore(LocalDate.now(clock))) {
-            // пара вже минула: повідомляти нема про що (минулі дні диспетчер вносить для обліку)
+        if (notice && lessonOver(event.date(), event.endsAt())) {
+            // пара вже минула (і сьогоднішня теж): повідомляти нема про що, диспетчер вносить це для обліку
             return;
         }
         Optional<ChatBinding> chat = bindings.teacherChat(event.teacherId());
@@ -129,7 +144,9 @@ public class SubstitutionRequests {
                             reminder ? DeliveryPurpose.SUBSTITUTION_REMINDER : DeliveryPurpose.SUBSTITUTION_REQUEST,
                             SubstitutionTexts.request(request, reminder))
                     .withKeyboard(SubstitutionTexts.buttons(event.changeId()));
-            outbox.enqueue(draft.correlatedWith(event.changeId()).forEvent(event.eventId(), "request"));
+            draft = draft.correlatedWith(event.changeId());
+            outbox.enqueue(deadlineReminder ? draft.dedupBy(reminderKey(request))
+                    : draft.forEvent(event.eventId(), "request"));
             return;
         }
         request.markNoTelegram(now);
@@ -138,9 +155,11 @@ public class SubstitutionRequests {
     /**
      * {@code substitution.status-changed}: final states edit the request messages (a notice of a published
      * change keeps its buttons until the teacher answers); a refusal goes to admins.
+     *
+     * <p>{@code teacherName}: looked up by {@link #adminNameFor(RozkladEvent)} before the transaction (null ⇒ now).
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void onStatusChanged(SubstitutionStatusChanged event) {
+    public void onStatusChanged(SubstitutionStatusChanged event, String teacherName) {
         Optional<SubstitutionRequest> request = requests.findForUpdate(event.changeId());
         request.ifPresent(found -> {
             // NOTIFY: у DECLINED заміну переводить лише «Не можу» викладача — локальна копія це запамʼятовує
@@ -154,7 +173,7 @@ public class SubstitutionRequests {
             }
         });
         if (event.status() == ChangeStatus.DECLINED) {
-            String name = teacherName(event.teacherId());
+            String name = teacherName != null ? teacherName : teacherName(event.teacherId());
             String text = request
                     .map(found -> SubstitutionTexts.adminDeclined(name, found, links.adminChanges(found.getLessonDate())))
                     .orElseGet(() -> SubstitutionTexts.adminDeclinedUnknown(name, event.date(), event.groupCode(),
@@ -166,12 +185,14 @@ public class SubstitutionRequests {
     /**
      * {@code substitution.teacher-replied} (NOTIFY): «Добре» or «Не можу» that kept the status, given in Telegram
      * or the cabinet. The notice messages show the answer; an objection to a published change goes to admins
-     * (the order stays, the dispatcher prepares an amendment). The teacher's name is looked up before the row
-     * is locked.
+     * (the order stays, the dispatcher prepares an amendment).
+     *
+     * <p>{@code teacherName}: looked up by {@link #adminNameFor(RozkladEvent)} before the transaction (null ⇒ now).
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void onTeacherReplied(SubstitutionTeacherReplied event) {
-        String name = event.raisesObjection() ? teacherName(event.teacherId()) : null;
+    public void onTeacherReplied(SubstitutionTeacherReplied event, String teacherName) {
+        String name = !event.raisesObjection() ? null
+                : teacherName != null ? teacherName : teacherName(event.teacherId());
         Optional<SubstitutionRequest> request = requests.findForUpdate(event.changeId());
         request.ifPresent(found -> {
             if (found.isNotice() && found.getTeacherId().equals(event.teacherId())
@@ -189,18 +210,72 @@ public class SubstitutionRequests {
         }
     }
 
-    /** Remembers ids of sent request messages so they can be edited later. */
+    /**
+     * The teacher's name an admin text of this event needs (a refusal, an objection), or null. Called before the
+     * event's transaction: on a cache miss it is an HTTP call to core, which must not run while a row is locked.
+     */
+    public String adminNameFor(RozkladEvent event) {
+        return switch (event) {
+            case SubstitutionStatusChanged changed when changed.status() == ChangeStatus.DECLINED ->
+                    teacherName(changed.teacherId());
+            case SubstitutionTeacherReplied replied when replied.raisesObjection() -> teacherName(replied.teacherId());
+            default -> null;
+        };
+    }
+
+    /**
+     * Remembers ids of sent request messages so they can be edited later. A message Telegram accepted after the
+     * change moved on (the worker had checked it just before) is corrected at once: another teacher's message is
+     * retired, a cancelled or answered one shows the current state. The row lock orders this with the event
+     * handlers, so either they see the message or this sees their state.
+     */
     @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
     public void onSent(OutboundMessageSent sent) {
         if (!sent.purpose().isSubstitutionRequest() || sent.correlationId() == null
                 || sent.telegramMessageId() == null) {
             return;
         }
-        if (requests.existsById(sent.correlationId())
-                && !messages.existsByChatIdAndMessageId(sent.chatId(), sent.telegramMessageId())) {
+        Optional<SubstitutionRequest> request = requests.findForUpdate(sent.correlationId());
+        if (request.isEmpty() || messages.existsByChatIdAndMessageId(sent.chatId(), sent.telegramMessageId())) {
+            return;
+        }
+        SubstitutionRequest found = request.get();
+        Optional<String> obsolete = obsoleteReason(found, sent.chatId());
+        boolean addressee = !REASSIGNED.equals(obsolete.orElse(null));
+        if (addressee) {
             messages.save(new SubstitutionMessage(sent.correlationId(), sent.chatId(), sent.telegramMessageId(),
                     clock.instant()));
         }
+        if (obsolete.isEmpty()) {
+            return;
+        }
+        String text = addressee ? SubstitutionTexts.current(found) : SubstitutionTexts.outdated(found);
+        InlineKeyboard keyboard = addressee ? keyboardOf(found) : null;
+        bindings.teacherBinding(sent.chatId()).ifPresent(chat -> outbox.enqueue(
+                OutboundDraft.edit(Recipient.of(chat), DeliveryPurpose.SUBSTITUTION_STATUS, sent.telegramMessageId(),
+                                text, keyboard)
+                        .correlatedWith(found.getChangeId())
+                        .dedupBy("late:" + sent.outboundId())));
+    }
+
+    /** A request, notice or reminder still queued whose change went to another teacher or stopped waiting. */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> obsoleteReason(OutboundMessage message) {
+        if (!message.getPurpose().isSubstitutionRequest() || message.getCorrelationId() == null) {
+            return Optional.empty();
+        }
+        return requests.findById(message.getCorrelationId())
+                .flatMap(request -> obsoleteReason(request, message.getChatId()));
+    }
+
+    private Optional<String> obsoleteReason(SubstitutionRequest request, long chatId) {
+        Optional<UUID> chatTeacher = bindings.teacherBinding(chatId).map(ChatBinding::getTeacherId);
+        if (chatTeacher.isPresent() && !chatTeacher.get().equals(request.getTeacherId())) {
+            return Optional.of(REASSIGNED);
+        }
+        return request.isAwaitingAnswer() ? Optional.empty() : Optional.of(NOT_AWAITING);
     }
 
     /**
@@ -339,7 +414,7 @@ public class SubstitutionRequests {
                                     SubstitutionTexts.request(request, true))
                             .withKeyboard(SubstitutionTexts.buttons(request.getChangeId()))
                             .correlatedWith(request.getChangeId())
-                            .dedupBy("reminder:" + key)));
+                            .dedupBy(reminderKey(request))));
             String text = SubstitutionTexts.adminOverdue(name(names, request.getTeacherId()), request,
                     links.adminChanges(request.getLessonDate()));
             for (ChatBinding admin : bindings.adminChats()) {
@@ -447,7 +522,8 @@ public class SubstitutionRequests {
                 continue;
             }
             Optional<ChatBinding> chat = bindings.teacherBinding(message.getChatId());
-            if (chat.isEmpty()) {
+            if (chat.isEmpty() || !request.getTeacherId().equals(chat.get().getTeacherId())) {
+                // лише повідомлення поточного адресата: чуже вже відкликане як неактуальне
                 continue;
             }
             OutboundDraft draft = OutboundDraft.edit(Recipient.of(chat.get()), DeliveryPurpose.SUBSTITUTION_STATUS,
@@ -457,6 +533,18 @@ public class SubstitutionRequests {
                     : draft.dedupBy("reply:" + request.getChangeId() + ":" + message.getMessageId() + ":"
                             + request.getStatus() + (request.isNotice() ? ":" + request.getTeacherAnswer() : "")));
         }
+    }
+
+    /** The reminder of one deadline round: core's re-sent request and {@link #remindOverdue()} share it. */
+    private static String reminderKey(SubstitutionRequest request) {
+        return "reminder:" + request.getChangeId() + ":" + request.getDeadline().toEpochMilli();
+    }
+
+    /** The lesson ended: an earlier day, or today after its end (when the end time is known). */
+    private boolean lessonOver(LocalDate date, LocalTime endsAt) {
+        LocalDate today = LocalDate.now(clock);
+        return date.isBefore(today)
+                || date.equals(today) && endsAt != null && !endsAt.isAfter(LocalTime.now(clock));
     }
 
     private void notifyAdmins(String text, UUID eventId, String part) {

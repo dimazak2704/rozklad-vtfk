@@ -3,7 +3,7 @@ package ua.vtc.rozklad.notification.events;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.GenerationCancelRequested;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
@@ -22,7 +22,8 @@ import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 
 /**
  * Handles one event exactly once: the event id is recorded in {@code processed_event} in the same
- * transaction that queues the resulting messages.
+ * transaction that queues the resulting messages. Teacher names for admin texts are looked up in core
+ * before that transaction, so no HTTP call runs while the handlers hold a row lock.
  */
 @Service
 public class EventHandlers {
@@ -34,18 +35,25 @@ public class EventHandlers {
     private final SubstitutionRequests substitutions;
     private final AdminNotices adminNotices;
     private final CoreQueries queries;
+    private final TransactionTemplate transactions;
 
     public EventHandlers(ProcessedEvents processedEvents, OrderDistribution orders,
-                         SubstitutionRequests substitutions, AdminNotices adminNotices, CoreQueries queries) {
+                         SubstitutionRequests substitutions, AdminNotices adminNotices, CoreQueries queries,
+                         TransactionTemplate transactions) {
         this.processedEvents = processedEvents;
         this.orders = orders;
         this.substitutions = substitutions;
         this.adminNotices = adminNotices;
         this.queries = queries;
+        this.transactions = transactions;
     }
 
-    @Transactional
     public void handle(RozkladEvent event) {
+        String teacherName = substitutions.adminNameFor(event);
+        transactions.executeWithoutResult(tx -> handle(event, teacherName));
+    }
+
+    private void handle(RozkladEvent event, String teacherName) {
         if (!processedEvents.markProcessed(event.eventId())) {
             log.debug("Event {} ({}) was already processed", event.eventId(), event.getClass().getSimpleName());
             return;
@@ -53,8 +61,8 @@ public class EventHandlers {
         switch (event) {
             case OrderPublished published -> orders.onPublished(published);
             case SubstitutionConfirmationRequested requested -> substitutions.onConfirmationRequested(requested);
-            case SubstitutionStatusChanged changed -> substitutions.onStatusChanged(changed);
-            case SubstitutionTeacherReplied replied -> substitutions.onTeacherReplied(replied);
+            case SubstitutionStatusChanged changed -> substitutions.onStatusChanged(changed, teacherName);
+            case SubstitutionTeacherReplied replied -> substitutions.onTeacherReplied(replied, teacherName);
             case AbsenceReported absence -> adminNotices.onAbsenceReported(absence);
             case GenerationCompleted completed -> adminNotices.onGenerationCompleted(completed);
             case ScheduleChanged ignored -> queries.invalidateSchedules();

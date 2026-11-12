@@ -83,7 +83,8 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   deadline, «Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.», [👍 Добре] [❌ Не можу]
   (same callbacks `sr:c:`/`sr:d:` as a request; core knows the change's mode). Purpose `SUBSTITUTION_NOTICE`;
   the local copy starts CONFIRMED with `mode = NOTIFY` and keeps `teacher_answer`. Not sent for a lesson that is
-  already over. «Добре» → «👍 Добре, заміну прийнято. Дякуємо!»; «Не можу» before the order → core declines the
+  already over: an earlier day, or today after the pair's end (`endsAt`, Kyiv time) — a same-day entry for
+  accounting gets no live buttons. «Добре» → «👍 Добре, заміну прийнято. Дякуємо!»; «Не можу» before the order → core declines the
   change → «❌ Ви відмовилися від заміни. Диспетчер обере інший варіант.» and `status-changed DECLINED` tells
   admins «❌ Відмова від заміни / {викладач} не може взяти {N} пару {група} у {день}. Оберіть інший варіант на
   сторінці змін.»; «Не можу» after the order → «❗ Ви повідомили, що не можете. … диспетчера повідомлено: він
@@ -99,7 +100,11 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   repeated tap of the answer core already holds gets the same success reply), 403 → «адресовано іншому
   викладачу», core down → alert, buttons stay. A repeated `confirmation-requested` for a pending change is sent
   as «⏰ Нагадування». Deadline passed without an answer → one reminder to the teacher and one notice to admin
-  chats (not for requests that never reached a teacher without Telegram, not for past lessons).
+  chats (not for requests that never reached a teacher without Telegram, not for past lessons). core's
+  `ConfirmationReminders` re-sends the request with the same, already passed deadline, and the every-minute job
+  reminds too: such a re-send keeps `reminded_at` and both use one dedup key per deadline round
+  (`reminder:{change}:{deadline}`), so in either order the teacher gets one reminder and admins one notice
+  (`SubstitutionFlowIT.coresDeadlineReminderAndTheJobRemindOnlyOnce`).
   **Race-safe:** core publishes `substitution.status-changed` for the very answer, so the button handler and
   the event consumer write the same `substitution_request` row at the same time. Both read it with
   `SELECT … FOR NO KEY UPDATE` and only move a PENDING request to a final state; the second one waits for the
@@ -111,7 +116,17 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   covers the dangerous order. The two every-minute jobs (deadlines, teachers without Telegram) run one after
   another in one scheduled method (the scheduler uses virtual threads, separate methods would run side by side),
   lock their rows in one order (`order by change_id`, also across instances) and look teacher names up in core
-  before locking, so no HTTP call holds a row the button or an event waits for.
+  before locking, so no HTTP call holds a row the button or an event waits for. The event handlers do the same:
+  `EventHandlers` looks the name for a refusal or an objection up before it opens the event's transaction.
+  **Queued while the change moved on:** a request, notice or reminder can wait in the queue (rate limits,
+  Telegram retries) while the change is reassigned, cancelled or answered in the cabinet. The worker asks
+  `SubstitutionRequests` right before sending (`OutboundRelevance`): the chat's teacher is no longer the
+  addressee → FAILED «Неактуальне: заміну передано іншому викладачу.»; the change no longer waits for this
+  teacher's answer → FAILED «Неактуальне: заміна вже не чекає відповіді.». A message Telegram accepted in the
+  window between that check and the record is corrected at once in `onSent` (row lock, so either the event
+  handler sees the message or `onSent` sees the new state): another teacher's message becomes «неактуальний»
+  and is not remembered, the addressee's shows the current state. Edits go only to the current addressee's
+  messages.
 * **REPLACE_DISCIPLINE** (request and notice): the line «🔁 Замість «{дисципліна за розкладом}» ({викладач})», plus
   «(взаємна заміна)» when the reason is MUTUAL, replaces «👤 Замість: …»; «📘» names the discipline the teacher
   will teach (the event's `disciplineName`).
@@ -169,7 +184,8 @@ and the worker re-checks the binding right before sending (deleted binding ⇒ F
   2 s · 2^(n-1) up to 10 min, FAILED after 8 attempts; supergroup migration → binding and message move to the
   new chat id; other 4xx (blocked, chat not found) → FAILED at once; edit «message is not modified» = success.
   Messages older than 24 h are FAILED as stale (no flood of old news after an outage).
-* Metrics: `notification.deliveries{outcome=sent|retry|failed|deferred|stale|unbound|migrated}`.
+* Metrics: `notification.deliveries{outcome=sent|retry|failed|deferred|stale|unbound|obsolete|migrated}`
+  (`obsolete`: a substitution message the change no longer needs, §3).
 * Retention: SENT/FAILED rows 30 days, processed events 30 days, expired codes 7 days, substitution requests 60
   days after the lesson (03:40 Kyiv).
 

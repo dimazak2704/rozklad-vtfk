@@ -12,6 +12,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
@@ -43,11 +44,13 @@ public class DeliveryWorker implements SmartLifecycle {
     private final TelegramProperties telegram;
     private final Clock clock;
     private final MeterRegistry meters;
+    private final ObjectProvider<OutboundRelevance> relevance;
     private ScheduledExecutorService executor;
 
     public DeliveryWorker(DeliveryRecorder recorder, MessageSender sender, RateLimiter limiter,
                           RetryPolicy retryPolicy, ChatBindings bindings, DeliveryProperties properties,
-                          TelegramProperties telegram, Clock clock, MeterRegistry meters) {
+                          TelegramProperties telegram, Clock clock, MeterRegistry meters,
+                          ObjectProvider<OutboundRelevance> relevance) {
         this.recorder = recorder;
         this.sender = sender;
         this.limiter = limiter;
@@ -57,6 +60,7 @@ public class DeliveryWorker implements SmartLifecycle {
         this.telegram = telegram;
         this.clock = clock;
         this.meters = meters;
+        this.relevance = relevance;
     }
 
     /** One poll: claims a batch and processes it. @return number of claimed messages */
@@ -96,6 +100,12 @@ public class DeliveryWorker implements SmartLifecycle {
             count("unbound");
             return;
         }
+        Optional<String> obsolete = obsoleteReason(message);
+        if (obsolete.isPresent()) {
+            recorder.markFailed(id, obsolete.get(), false, now);
+            count("obsolete");
+            return;
+        }
         Duration wait = acquire(message.getChatId(), waitForRateLimit);
         if (!wait.isZero()) {
             recorder.defer(id, now.plus(wait), now);
@@ -117,6 +127,13 @@ public class DeliveryWorker implements SmartLifecycle {
             apply(message, retryPolicy.onTransientFailure(message.getAttempts() + 1, clock.instant()),
                     "Помилка підготовки повідомлення: " + e.getMessage());
         }
+    }
+
+    private Optional<String> obsoleteReason(OutboundMessage message) {
+        return relevance.orderedStream()
+                .map(check -> check.obsoleteReason(message))
+                .flatMap(Optional::stream)
+                .findFirst();
     }
 
     /** @return zero when a token was taken, otherwise how long the message must wait */

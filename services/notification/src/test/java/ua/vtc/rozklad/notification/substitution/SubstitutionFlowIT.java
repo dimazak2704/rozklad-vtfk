@@ -27,6 +27,8 @@ import ua.vtc.rozklad.contracts.events.SubstitutionTeacherReplied;
 import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
+import ua.vtc.rozklad.notification.delivery.DeliveryPurpose;
+import ua.vtc.rozklad.notification.delivery.OutboundMessageSent;
 import ua.vtc.rozklad.notification.events.EventHandlers;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
 import ua.vtc.rozklad.notification.support.FakeCoreClient.Reply;
@@ -390,7 +392,161 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.lastSentTo(2002).text()).startsWith("🙋 <b>Прохання про заміну</b>");
     }
 
+    /**
+     * The change went to another teacher while the request to the first one was still queued (per-chat rate
+     * limit, Telegram retry backoff): the first teacher never gets it, and the second one's answer edits
+     * only the second one's message.
+     */
+    @Test
+    void reassignmentBeforeDeliveryNeverReachesThePreviousTeacher() {
+        teacherChat(2002, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        handlers.handle(requested(CoreFixtures.TEACHER_KRENTSIN));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+        assertThat(telegram.lastSentTo(2002).text()).startsWith("🙋 <b>Прохання про заміну</b>");
+        assertThat(jdbc.queryForList("select status || ' ' || last_error from outbound_message where chat_id = ?",
+                String.class, TEACHER)).singleElement().asString()
+                .isEqualTo("FAILED Неактуальне: заміну передано іншому викладачу.");
+
+        handlers.handle(statusChanged(CHANGE, ChangeStatus.CONFIRMED, CoreFixtures.TEACHER_KRENTSIN));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).isEmpty();
+        assertThat(telegram.lastEditIn(2002).text()).endsWith("✅ <b>Ви підтвердили заміну.</b> Дякуємо!");
+    }
+
+    /**
+     * Telegram accepted the request to the first teacher while the change was being reassigned (the worker had
+     * already checked it): the message is retired at once and is never edited with the second teacher's answer.
+     */
+    @Test
+    void requestDeliveredWhileTheChangeWasReassignedIsRetiredAtOnce() {
+        teacherChat(2002, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        handlers.handle(requested(CoreFixtures.TEACHER_KRENTSIN));
+        delivered(TEACHER, 555, DeliveryPurpose.SUBSTITUTION_REQUEST);
+        worker.drain();
+
+        assertThat(telegram.editsIn(TEACHER)).singleElement().satisfies(edit -> {
+            assertThat(edit.messageId()).isEqualTo(555);
+            assertThat(edit.text()).endsWith("Цей запит уже неактуальний.</b>");
+            assertThat(edit.keyboard()).isNull();
+        });
+        handlers.handle(statusChanged(CHANGE, ChangeStatus.CONFIRMED, CoreFixtures.TEACHER_KRENTSIN));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).hasSize(1);
+    }
+
+    /** Telegram's 5xx keeps the request in retry backoff while the dispatcher cancels: it is never sent. */
+    @Test
+    void requestCancelledDuringRetryBackoffIsNotSent() {
+        telegram.failNext(new ua.vtc.rozklad.notification.telegram.TelegramApiFailure(502, "Bad Gateway", null, null,
+                null));
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        clock.advance(Duration.ofSeconds(3));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+        assertThat(telegram.editsIn(TEACHER)).isEmpty();
+    }
+
+    /**
+     * core re-sends the request once the deadline passed, and notification's every-minute job reminds too: in
+     * either order the teacher gets one reminder and admins one notice per change.
+     */
+    @Test
+    void coresDeadlineReminderAndTheJobRemindOnlyOnce() {
+        handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 3));
+        worker.drain();
+        clock.set(Instant.parse("2026-10-19T07:01:00Z"));
+
+        handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 3)); // core first
+        assertThat(substitutions.remindOverdue()).isEqualTo(2);
+        handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2)); // the job first
+        assertThat(substitutions.remindOverdue()).isZero();
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).extracting(Sent::text)
+                .filteredOn(text -> text.startsWith("⏰")).hasSize(2);
+        assertThat(telegram.sentTo(OWNER_CHAT)).extracting(Sent::text)
+                .filteredOn(text -> text.startsWith("⏰ <b>Немає відповіді щодо заміни</b>")).hasSize(2);
+    }
+
+    /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
+    @Test
+    void eventHandlersDoNotCallCoreInsideTheTransaction() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        handlers.handle(notice(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 3));
+        worker.drain();
+        flushCaches();
+        core.reset();
+
+        handlers.handle(statusChanged(ChangeStatus.DECLINED));
+        flushCaches();
+        handlers.handle(new SubstitutionTeacherReplied(EventEnvelope.create(java.time.Clock.systemUTC()), CHANGE_2,
+                CoreFixtures.TEACHER_NEPYIVODA, ConfirmationDecision.DECLINE, ChangeStatus.APPLIED, Order35.DATE, 3,
+                "4КІ1"));
+        worker.drain();
+
+        assertThat(core.teacherCalls()).isPositive();
+        assertThat(core.teacherCallsInTransaction()).isZero();
+        assertThat(telegram.sentTo(OWNER_CHAT)).extracting(Sent::text)
+                .anySatisfy(text -> assertThat(text).contains("Непийвода М.В. не може взяти 2 пару"))
+                .anySatisfy(text -> assertThat(text).contains("Непийвода М.В. не може взяти 3 пару"));
+    }
+
+    /** Records that Telegram accepted a message the worker took before the change moved on (the race window). */
+    private void delivered(long chatId, long messageId, DeliveryPurpose purpose) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> substitutions.onSent(
+                new OutboundMessageSent(UUID.randomUUID(), purpose, CHANGE, chatId, messageId)));
+    }
+
     // ───────────── NOTIFY: «Вам поставили заміну» з [👍 Добре] [❌ Не можу] ─────────────
+
+    /** The dispatcher assigned and cancelled before the notice left the queue: the teacher gets nothing. */
+    @Test
+    void noticeCancelledBeforeDeliveryIsNotSent() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+        assertThat(jdbc.queryForList("select last_error from outbound_message where chat_id = ?", String.class,
+                TEACHER)).singleElement().asString().isEqualTo("Неактуальне: заміна вже не чекає відповіді.");
+    }
+
+    /** The notice reached Telegram just as the change was cancelled: it is corrected at once, without buttons. */
+    @Test
+    void noticeDeliveredWhileTheChangeWasCancelledIsCorrectedAtOnce() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        delivered(TEACHER, 556, DeliveryPurpose.SUBSTITUTION_NOTICE);
+        worker.drain();
+
+        assertThat(telegram.editsIn(TEACHER)).singleElement().satisfies(edit -> {
+            assertThat(edit.messageId()).isEqualTo(556);
+            assertThat(edit.text()).startsWith("📌").contains("Заміну скасовано");
+            assertThat(edit.keyboard()).isNull();
+        });
+    }
+
+    /** A same-day entry for a pair that already ended (accounting) sends nothing; a pair still running does. */
+    @Test
+    void noticeForAPairThatAlreadyEndedTodayIsNotSent() {
+        clock.set(Instant.parse("2026-10-19T12:00:00Z")); // 15:00 у Києві, 2 пара 09:40–10:40 минула
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+
+        clock.set(Instant.parse("2026-10-19T07:00:00Z")); // 10:00, пара ще йде
+        handlers.handle(notice(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(1);
+    }
 
     @Test
     void noticeIsAnsweredWithOkAndTheChangeStays() {
