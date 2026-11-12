@@ -521,7 +521,7 @@ the table above is inside sRGB). Text pairs need at least 4.5:1, non-text pairs 
 | `--duration-instant` | 100 ms | press feedback |
 | `--duration-fast` | 160 ms | hover, colour, reveal of row actions |
 | `--duration-base` | 200 ms | popover and menu in, digit roll, wash fade |
-| `--duration-slow` | 280 ms | dialog and sheet in, disclosure height |
+| `--duration-slow` | 280 ms | dialog and sheet in |
 | `--duration-tick` | 1000 ms | now-line glide, current-pair fill (linear) |
 | `--duration-live` | 1600 ms | live-dot halo (×2 only) |
 | `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | everything entering |
@@ -548,11 +548,31 @@ except the spinner. This is the repo's existing rule; keep `--animate-live` at 2
    - Then the wash fades in over 200 ms and the state word slides 4 px.
    - No repeated pulses.
 5. **The mark draws itself once** on the sign-in screen: stroke-dashoffset, 1.4 s `--ease-out`.
+6. **A new row arrives, once (arrival wash).** A substitution request that appears in the teacher's
+   list (`SubstitutionCard`, `fresh`) gets `anim-arrive`: a selected-tint wash behind the row starts at
+   full strength after 200 ms and fades out over 1.6 s `--ease-out`. The strike line and the state word
+   play as in item 4. The schedule's `useArrivedChanges` drops its mark after 1 s, so a remount of the
+   same cell does not replay it.
+7. **Disclosures reveal.** Content opened by a disclosure (`anim-reveal` on an un-`hidden` panel, or a
+   `<details open>` body) drops 4 px and fades in over 200 ms `--ease-out`. The height changes at once:
+   no height animation, no per-frame layout.
+
+**Hover delays (`Tooltip.helpers.ts`)**
+
+- Tooltips open after 300 ms (`HOVER_DELAY_MS`); moving straight to the next tooltip within 300 ms
+  skips the delay (`skipDelayDuration`).
+- `HoverDetails` (the lesson card and other detail cards) opens after 550 ms (`HOVER_CARD_DELAY_MS`)
+  and closes 100 ms after the pointer leaves (`HOVER_CARD_CLOSE_DELAY_MS`), so the pointer can cross to
+  the card. Right after another card was open it opens at once.
+- The delays apply to the mouse only. Enter or a tap toggles the card at once.
+- Admin `HoverCard`s (lesson list, order sheet, board chip) set their own: 350–400 ms open,
+  100–120 ms close.
 
 **`prefers-reduced-motion: reduce`:**
 - All transitions and animations are off.
 - Values update in place: the line jumps, the digits swap.
 - The mark is shown fully drawn.
+- No arrival wash and no reveal: rows and disclosure content appear in place.
 
 ---
 
