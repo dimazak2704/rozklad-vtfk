@@ -246,8 +246,7 @@ public class ChangeCommands {
      * by other open changes) plus a newly assigned teacher who is absent at the slot (DOMAIN §7).
      */
     private void requireFreeSlot(Change change, ChangeEffect effect) {
-        List<ConflictDto> conflicts = new ArrayList<>(checker.check(effect.created(), effect.cancelledIds(),
-                change.getId(), true));
+        List<ConflictDto> conflicts = new ArrayList<>(checker.check(List.of(effect), change.getId(), true));
         conflicts.addAll(absentSubstitutes.conflicts(change));
         if (!conflicts.isEmpty()) {
             throw ConflictException.schedule(conflicts);

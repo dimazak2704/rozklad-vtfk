@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -11,7 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +50,7 @@ import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
+import ua.vtc.rozklad.core.substitution.PreferenceKind;
 import ua.vtc.rozklad.core.substitution.fixture.EventProbe;
 import ua.vtc.rozklad.core.substitution.fixture.ScheduleFixture;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeCommands;
@@ -69,6 +74,13 @@ class OrderPublicationIT {
 
     private static final LocalDate MONDAY = LocalDate.of(2026, 10, 19);
     private static final Duration WAIT = Duration.ofSeconds(15);
+    /**
+     * Statements of publishing order №35 (8 changes): 130 to 160 before the conflict check, the SSE
+     * views and the absence check read once per order, 89 measured after. The rest is the writes,
+     * one lock per group-day and the calendar of the block and the extra pair. The outbox completes
+     * events on other threads meanwhile, so the count varies by a few statements.
+     */
+    private static final long PUBLICATION_BUDGET = 100;
 
     @Autowired
     private ChangeCommands changeCommands;
@@ -114,6 +126,9 @@ class OrderPublicationIT {
 
     @Autowired
     private LessonConflictChecker datedConflicts;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     private ScheduleFixture fixture;
     private Semester semester;
@@ -371,6 +386,58 @@ class OrderPublicationIT {
                 });
     }
 
+    /**
+     * The change confirmed after publication was cancelled again: with nothing new the draft
+     * endpoint gives the published order back and the empty amendment draft is dropped (it could
+     * not be published anyway: AMENDMENT_EMPTY).
+     */
+    @Test
+    void amendmentWithoutNewChangesGivesWayToThePublishedOrder() {
+        createOrder35Changes();
+        OrderDto main = publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+        ChangeDto roomChange = changeCommands.create(new CreateChangeRequest(ChangeKind.ROOM_CHANGE, MONDAY, 3, null,
+                ki41.getId(), null, ki41Ndks.getId(), null, null, room12.getId(), null, ReasonCode.OTHER, null, null),
+                "admin");
+        OrderDto amendment = drafts.draftFor(MONDAY);
+        assertThat(amendment.kind()).isEqualTo(OrderKind.AMENDMENT);
+
+        changeCommands.cancel(roomChange.id(), "admin");
+        OrderDto draft = drafts.draftFor(MONDAY);
+
+        assertThat(draft.id()).isEqualTo(main.id());
+        assertThat(draft.status()).isEqualTo(OrderStatus.PUBLISHED);
+        assertThat(orders.findById(amendment.id())).isEmpty();
+    }
+
+    /**
+     * A teacher marked his own pair UNAVAILABLE after a room change of it was confirmed: he still
+     * teaches it (DOMAIN H4 excludes substitutes only), so the order is published.
+     */
+    @Test
+    void ownPairMarkedUnavailableAfterTheRoomChangeDoesNotBlockPublication() {
+        ChangeDto roomChange = changeCommands.create(new CreateChangeRequest(ChangeKind.ROOM_CHANGE, MONDAY, 3, null,
+                ki41.getId(), null, ki41Ndks.getId(), null, null, room12.getId(), null, ReasonCode.OTHER, null, null),
+                "admin");
+        fixture.preference(nepyivoda, semester, MONDAY, 3, PreferenceKind.UNAVAILABLE);
+
+        assertThat(publication.publish(drafts.draftFor(MONDAY).id(), "admin").number()).isEqualTo(35);
+        assertThat(changes.findById(roomChange.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.APPLIED);
+    }
+
+    /**
+     * Statement budget of a publication (order №35: 8 changes, 9 new lessons). The conflict check
+     * reads the load items, preferences and calendar once for the whole order, not per lesson.
+     */
+    @Test
+    void publicationReadsWithABoundedNumberOfStatements() {
+        createOrder35Changes();
+        UUID draftId = drafts.draftFor(MONDAY).id();
+
+        long statements = statements(() -> publication.publish(draftId, "admin"));
+
+        assertThat(statements).isLessThanOrEqualTo(PUBLICATION_BUDGET);
+    }
+
     @Test
     void staleDraftIsNotPublished() {
         ChangeDto first = replaceTeacher(ki12English, prokopchuk);
@@ -547,6 +614,19 @@ class OrderPublicationIT {
         assertThat(changes.findAllById(List.of(replacement.id(), cancellation.id())))
                 .allSatisfy(change -> assertThat(change.getStatus()).isEqualTo(ChangeStatus.CONFIRMED));
         assertThat(lessons.findById(ki12English.getId()).orElseThrow().isScheduled()).isTrue();
+    }
+
+    private long statements(Supplier<?> call) {
+        Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean enabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            call.get();
+            return statistics.getPrepareStatementCount();
+        } finally {
+            statistics.setStatisticsEnabled(enabled);
+        }
     }
 
     private List<UUID> createOrder35Changes() {

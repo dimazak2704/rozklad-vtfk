@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.substitution;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,9 @@ public interface TeacherPreferenceRepository extends JpaRepository<TeacherPrefer
     List<TeacherPreference> findAllByTeacherIdAndSemesterId(UUID teacherId, UUID semesterId);
 
     List<TeacherPreference> findAllBySemesterId(UUID semesterId);
+
+    /** Preferences of several teachers in one query (conflict check of all lessons an order creates). */
+    List<TeacherPreference> findAllBySemesterIdAndTeacherIdIn(UUID semesterId, Collection<UUID> teacherIds);
 
     /** Preferences of all teachers for one weekday (substitute ranking for a day). */
     List<TeacherPreference> findAllBySemesterIdAndWeekday(UUID semesterId, int weekday);

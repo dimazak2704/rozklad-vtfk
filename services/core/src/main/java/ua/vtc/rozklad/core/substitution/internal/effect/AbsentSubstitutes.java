@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
@@ -45,14 +44,17 @@ public class AbsentSubstitutes {
     }
 
     public List<ConflictDto> conflicts(Collection<Change> changes) {
-        Map<TeacherDay, List<Absence>> cache = new HashMap<>();
+        // одна вибірка на дату для всіх замінників (публікація перевіряє всі зміни розпорядження)
+        Map<LocalDate, List<Absence>> byDate = new HashMap<>();
         List<ConflictDto> conflicts = new ArrayList<>();
         for (Change change : changes) {
             if (!hasSubstitute(change)) {
                 continue;
             }
-            List<Absence> active = cache.computeIfAbsent(new TeacherDay(change.getNewTeacherId(), change.getDate()),
-                    key -> absences.findActiveOverlapping(key.date(), key.date(), key.teacherId()));
+            List<Absence> active = byDate.computeIfAbsent(change.getDate(),
+                    date -> absences.findActiveOverlapping(date, date, null)).stream()
+                    .filter(absence -> absence.getTeacherId().equals(change.getNewTeacherId()))
+                    .toList();
             if (active.isEmpty()) {
                 continue;
             }
@@ -68,8 +70,5 @@ public class AbsentSubstitutes {
             }
         }
         return conflicts;
-    }
-
-    private record TeacherDay(UUID teacherId, LocalDate date) {
     }
 }

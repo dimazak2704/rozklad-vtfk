@@ -1,7 +1,9 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -98,11 +100,22 @@ public class ChangeNotifications {
 
     /** SSE {@code change.updated} with the fresh DTO for dispatchers and the assigned teacher. */
     public void pushUpdate(Change change) {
-        ChangeDto dto = views.toDto(change);
-        sse.sendToRole(Roles.ADMIN, SseEventTypes.CHANGE_UPDATED, dto);
-        if (change.getNewTeacherId() != null) {
-            UUID account = catalog.teacher(change.getNewTeacherId()).getAccountId();
-            sse.sendToUser(account, SseEventTypes.CHANGE_UPDATED, dto);
+        pushUpdates(List.of(change));
+    }
+
+    /** {@link #pushUpdate} for several changes with one read of their views (order publication). */
+    public void pushUpdates(List<Change> changes) {
+        List<ChangeDto> dtos = views.toDtos(changes);
+        Map<UUID, Teacher> teachers = catalog.teachers(changes.stream().map(Change::getNewTeacherId)
+                .filter(Objects::nonNull).toList());
+        for (int index = 0; index < changes.size(); index++) {
+            Change change = changes.get(index);
+            ChangeDto dto = dtos.get(index);
+            sse.sendToRole(Roles.ADMIN, SseEventTypes.CHANGE_UPDATED, dto);
+            if (change.getNewTeacherId() != null) {
+                sse.sendToUser(teachers.get(change.getNewTeacherId()).getAccountId(), SseEventTypes.CHANGE_UPDATED,
+                        dto);
+            }
         }
     }
 }

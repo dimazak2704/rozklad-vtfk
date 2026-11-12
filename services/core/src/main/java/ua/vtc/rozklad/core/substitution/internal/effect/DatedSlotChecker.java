@@ -9,8 +9,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeKind;
@@ -28,6 +30,7 @@ import ua.vtc.rozklad.core.shared.text.UkrainianText;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
 import ua.vtc.rozklad.core.substitution.PreferenceKind;
+import ua.vtc.rozklad.core.substitution.TeacherPreference;
 import ua.vtc.rozklad.core.substitution.TeacherPreferenceRepository;
 import ua.vtc.rozklad.core.substitution.internal.support.CatalogLookup;
 import ua.vtc.rozklad.core.timetable.Lesson;
@@ -40,7 +43,10 @@ import ua.vtc.rozklad.core.timetable.LessonStatus;
  * the teacher marked the slot UNAVAILABLE. Lessons the change itself replaces are free. With
  * {@code includeOpenChanges} the slots promised by pending or confirmed changes count as busy too
  * (used when a change is created; on publication only real lessons count). Planned lessons are
- * also checked against each other.
+ * also checked against each other. UNAVAILABLE (DOMAIN H4) concerns a teacher who takes a pair:
+ * a teacher who keeps his own pair (room change, the partner of a merge, a finished discipline
+ * without a substitute) is not refused because of his own grid. The load items, preferences and
+ * catalog entries are read once per call, whatever the number of lessons (order publication).
  */
 @Component
 public class DatedSlotChecker {
@@ -64,26 +70,43 @@ public class DatedSlotChecker {
         this.preferences = preferences;
     }
 
-    public List<ConflictDto> check(List<PlannedLesson> planned, Set<UUID> freedLessonIds, UUID ownChangeId,
-                                   boolean includeOpenChanges) {
+    /**
+     * Conflicts of the lessons the given effects create, with the lessons they cancel counted as
+     * free (one change when it is created, all changes of an order on publication).
+     */
+    public List<ConflictDto> check(List<ChangeEffect> effects, UUID ownChangeId, boolean includeOpenChanges) {
+        List<PlannedLesson> planned = effects.stream().flatMap(effect -> effect.created().stream()).toList();
         if (planned.isEmpty()) {
             return List.of();
         }
+        Set<UUID> freedLessonIds = effects.stream().flatMap(effect -> effect.cancelledIds().stream())
+                .collect(Collectors.toSet());
         Context context = new Context(planned, freedLessonIds, ownChangeId, includeOpenChanges);
         List<ConflictDto> conflicts = new ArrayList<>();
         List<PlannedLesson> accepted = new ArrayList<>();
-        for (PlannedLesson lesson : planned) {
-            List<Lesson> atSlot = context.lessonsAt(lesson.date(), lesson.pair());
-            List<Change> openAtSlot = context.openChangesAt(lesson.date(), lesson.pair());
-            teacherConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
-            groupConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
-            roomConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
-            capacityConflict(lesson, context, conflicts);
-            roomTypeConflict(lesson, context, conflicts);
-            unavailableConflict(lesson, context, conflicts);
-            accepted.add(lesson);
+        for (ChangeEffect effect : effects) {
+            for (PlannedLesson lesson : effect.created()) {
+                List<Lesson> atSlot = context.lessonsAt(lesson.date(), lesson.pair());
+                List<Change> openAtSlot = context.openChangesAt(lesson.date(), lesson.pair());
+                teacherConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
+                groupConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
+                roomConflicts(lesson, atSlot, openAtSlot, accepted, context, conflicts);
+                capacityConflict(lesson, context, conflicts);
+                roomTypeConflict(lesson, context, conflicts);
+                if (!keepsOwnPair(lesson, effect)) {
+                    unavailableConflict(lesson, context, conflicts);
+                }
+                accepted.add(lesson);
+            }
         }
         return conflicts.stream().distinct().toList();
+    }
+
+    /** The teacher taught a lesson this change replaces in the same slot: his own pair, not a cover. */
+    private static boolean keepsOwnPair(PlannedLesson lesson, ChangeEffect effect) {
+        return lesson.teacherId() != null && effect.cancelled().stream()
+                .anyMatch(freed -> lesson.teacherId().equals(freed.getTeacherId())
+                        && lesson.date().equals(freed.getDate()) && lesson.pair() == freed.getPairNumber());
     }
 
     /**
@@ -208,11 +231,7 @@ public class DatedSlotChecker {
             return;
         }
         Room room = context.room(lesson.roomId());
-        loadItems.findAllBySemesterIdAndGroupIdAndDisciplineId(lesson.semesterId(), lesson.groupId(),
-                        lesson.disciplineId()).stream()
-                .map(LoadItem::getRequiredRoomType)
-                .filter(Objects::nonNull)
-                .findFirst()
+        context.requiredRoomType(lesson)
                 .filter(required -> required != room.getType())
                 .ifPresent(required -> conflicts.add(hard(ConflictKind.ROOM_TYPE, lesson,
                         "Для дисципліни %s потрібна аудиторія типу «%s», а %s — «%s»".formatted(
@@ -225,8 +244,7 @@ public class DatedSlotChecker {
             return;
         }
         int weekday = lesson.date().getDayOfWeek().getValue();
-        boolean unavailable = preferences.findAllByTeacherIdAndSemesterId(lesson.teacherId(), lesson.semesterId())
-                .stream()
+        boolean unavailable = context.preferencesOf(lesson).stream()
                 .anyMatch(preference -> preference.getWeekday() == weekday
                         && preference.getPairNumber() == lesson.pair()
                         && preference.getKind() == PreferenceKind.UNAVAILABLE);
@@ -284,8 +302,14 @@ public class DatedSlotChecker {
         private final Map<UUID, StudentGroup> groups = new HashMap<>();
         private final Map<UUID, Room> rooms = new HashMap<>();
         private final Map<UUID, Discipline> disciplines = new HashMap<>();
+        private final List<PlannedLesson> planned;
+        /** Load items of the planned lessons' groups, per semester (read on first use). */
+        private final Map<UUID, List<LoadItem>> loadItemsBySemester = new HashMap<>();
+        /** Preferences of the planned lessons' teachers, per semester (read on first use). */
+        private final Map<UUID, List<TeacherPreference>> preferencesBySemester = new HashMap<>();
 
         Context(List<PlannedLesson> planned, Set<UUID> freedLessonIds, UUID ownChangeId, boolean includeOpenChanges) {
+            this.planned = planned;
             this.freedLessonIds = freedLessonIds;
             this.ownChangeId = ownChangeId;
             this.includeOpenChanges = includeOpenChanges;
@@ -329,6 +353,32 @@ public class DatedSlotChecker {
 
         private static List<UUID> missing(Stream<UUID> ids, Collection<UUID> known) {
             return ids.filter(Objects::nonNull).filter(id -> !known.contains(id)).distinct().toList();
+        }
+
+        /** The room type a load item of the lesson's group and discipline requires, if any. */
+        Optional<RoomType> requiredRoomType(PlannedLesson lesson) {
+            return loadItemsBySemester.computeIfAbsent(lesson.semesterId(), semesterId -> loadItems
+                            .findAllBySemesterIdAndGroupIdIn(semesterId, planned.stream()
+                                    .filter(other -> semesterId.equals(other.semesterId()))
+                                    .map(PlannedLesson::groupId).collect(Collectors.toSet())))
+                    .stream()
+                    .filter(item -> item.getGroupId().equals(lesson.groupId())
+                            && item.getDisciplineId().equals(lesson.disciplineId()))
+                    .map(LoadItem::getRequiredRoomType)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+        }
+
+        /** Preferences of the lesson's teacher (all planned lessons' teachers are read in one query). */
+        List<TeacherPreference> preferencesOf(PlannedLesson lesson) {
+            return preferencesBySemester.computeIfAbsent(lesson.semesterId(), semesterId -> preferences
+                            .findAllBySemesterIdAndTeacherIdIn(semesterId, planned.stream()
+                                    .filter(other -> semesterId.equals(other.semesterId()))
+                                    .map(PlannedLesson::teacherId).filter(Objects::nonNull)
+                                    .collect(Collectors.toSet())))
+                    .stream()
+                    .filter(preference -> preference.getTeacherId().equals(lesson.teacherId()))
+                    .toList();
         }
 
         List<Lesson> lessonsAt(LocalDate date, int pair) {

@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
@@ -101,18 +102,17 @@ class ChangeApplier implements ChangePublication {
 
         List<Planned> plans = toApply.stream().map(change -> new Planned(change, planner.plan(change))).toList();
         Set<UUID> teacherIds = new HashSet<>();
-        Set<UUID> cancelledIds = new HashSet<>();
         for (Planned plan : plans) {
             for (Lesson lesson : plan.effect().cancelled()) {
                 if (lesson.isScheduled()) {
                     lesson.cancel();
                 }
-                cancelledIds.add(lesson.getId());
                 teacherIds.add(lesson.getTeacherId());
             }
         }
         List<PlannedLesson> created = plans.stream().flatMap(plan -> plan.effect().created().stream()).toList();
-        List<ConflictDto> conflicts = new ArrayList<>(checker.check(created, cancelledIds, null, false));
+        List<ConflictDto> conflicts = new ArrayList<>(checker.check(plans.stream().map(Planned::effect).toList(),
+                null, false));
         // день міг закритися (практика, свято) уже після підтвердження: пара на такий день не ставиться
         conflicts.addAll(onDaysWithoutClasses(plans));
         // замінника могли зареєструвати відсутнім уже після підтвердження (DOMAIN §7)
@@ -140,7 +140,7 @@ class ChangeApplier implements ChangePublication {
         }
         created.forEach(lesson -> teacherIds.add(lesson.teacherId()));
         changes.flush();
-        toApply.forEach(notifications::pushUpdate);
+        notifications.pushUpdates(toApply);
 
         teacherIds.remove(null);
         return new AppliedChanges(toApply.stream().map(Change::getId).toList(),
@@ -181,20 +181,28 @@ class ChangeApplier implements ChangePublication {
      * how a stray lesson is taken off such a day.
      */
     private List<ConflictDto> onDaysWithoutClasses(List<Planned> plans) {
+        List<Change> creating = plans.stream().filter(plan -> !plan.effect().created().isEmpty())
+                .map(Planned::change).toList();
+        if (creating.isEmpty()) {
+            return List.of();
+        }
+        // календар і групи читаються один раз на все розпорядження, а не на кожну зміну
+        StudyCalendar days = calendar.range(
+                creating.stream().map(Change::getDate).min(Comparator.naturalOrder()).orElseThrow(),
+                creating.stream().map(Change::getDate).max(Comparator.naturalOrder()).orElseThrow());
+        Map<UUID, StudentGroup> groups = catalog.groups(creating.stream().map(Change::getGroupId).toList());
         List<ConflictDto> conflicts = new ArrayList<>();
-        for (Planned plan : plans) {
-            if (plan.effect().created().isEmpty()) {
-                continue;
-            }
-            Change change = plan.change();
-            StudentGroup group = catalog.group(change.getGroupId());
-            calendar.noClassesReason(change.getDate(), group).ifPresent(reason -> conflicts.add(ConflictDto.hard(
-                    ConflictKind.GROUP, "У групи %s %s занять немає (%s): зміну %d пари не можна опублікувати. "
-                            .formatted(group.getCode(), change.getDate().format(SubstitutionCalendar.DATE), reason,
-                                    change.getPairFrom())
-                            + "Скасуйте її або змініть календар.",
-                    Stream.ofNullable(change.getOriginalLessonId()).toList(), change.getDate(),
-                    change.getPairFrom())));
+        for (Change change : creating) {
+            StudentGroup group = groups.get(change.getGroupId());
+            SubstitutionCalendar.noClassesReason(days, change.getDate(), group).ifPresent(reason -> {
+                String message = "У групи %s %s занять немає (%s): зміну %d пари не можна опублікувати. "
+                        .formatted(group.getCode(), change.getDate().format(SubstitutionCalendar.DATE), reason,
+                                change.getPairFrom())
+                        + "Скасуйте її або змініть календар.";
+                conflicts.add(ConflictDto.hard(ConflictKind.GROUP, message,
+                        Stream.ofNullable(change.getOriginalLessonId()).toList(), change.getDate(),
+                        change.getPairFrom()));
+            });
         }
         return conflicts;
     }

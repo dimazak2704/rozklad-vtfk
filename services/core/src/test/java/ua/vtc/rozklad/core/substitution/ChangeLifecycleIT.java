@@ -423,7 +423,8 @@ class ChangeLifecycleIT {
     /**
      * Two teachers declined the lesson one after the other, then the dispatcher asked the first one
      * again: the re-asked (older) change is the lesson's decision, not the newer declined one.
-     */    @Test
+     */
+    @Test
     void olderChangeAskedAgainIsTheDecisionOverANewerDeclinedOne() {
         AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY,
                 List.of(2), AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin");
@@ -446,10 +447,50 @@ class ChangeLifecycleIT {
         assertThat(lessonOptions.plan(absence.id(), MONDAY).lessons()).as("nothing to propose").isEmpty();
     }
 
+    /** DOMAIN H4: UNAVAILABLE excludes a substitute; it does not stop a teacher keeping his own pair. */
+    @Test
+    void roomChangeKeepsATeacherWhoMarkedHisOwnPairUnavailable() {
+        fixture.preference(krentsin, semester, MONDAY, 2, PreferenceKind.UNAVAILABLE);
+
+        ChangeDto roomChange = commands.create(new CreateChangeRequest(ChangeKind.ROOM_CHANGE, MONDAY, 2, null,
+                group.getId(), null, lesson.getId(), null, null, fixture.room("7").getId(), null, ReasonCode.OTHER,
+                null, null), "admin");
+
+        assertThat(roomChange.status()).isEqualTo(ChangeStatus.CONFIRMED);
+    }
+
+    @Test
+    void mergeKeepsThePartnerWhoMarkedHisOwnPairUnavailable() {
+        Discipline english = fixture.discipline("Ін.мова", "Іноземна мова");
+        Lesson first = fixture.lesson(semester, MONDAY, 3, group, 1, english, krentsin, fixture.room("110"));
+        Lesson second = fixture.lesson(semester, MONDAY, 3, group, 2, english, nepyivoda, fixture.room("12"));
+        fixture.preference(nepyivoda, semester, MONDAY, 3, PreferenceKind.UNAVAILABLE);
+
+        ChangeDto merge = commands.create(new CreateChangeRequest(ChangeKind.MERGE_SUBGROUPS, MONDAY, 3, null,
+                group.getId(), null, first.getId(), null, null, null, second.getId(), ReasonCode.ABSENT, null, null),
+                "admin");
+
+        assertThat(merge.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+    }
+
+    @Test
+    void substituteWhoMarkedThePairUnavailableIsRefused() {
+        fixture.preference(nepyivoda, semester, MONDAY, 2, PreferenceKind.UNAVAILABLE);
+
+        assertThatThrownBy(() -> commands.create(replaceTeacher(nepyivoda), "admin"))
+                .isInstanceOfSatisfying(ConflictException.class, conflict -> assertThat(conflict.getConflicts())
+                        .singleElement().satisfies(found -> {
+                            assertThat(found.kind()).isEqualTo(ConflictKind.UNAVAILABLE);
+                            assertThat(found.message())
+                                    .isEqualTo("Непийвода М.В. позначив 2 пару (понеділок) як недоступну");
+                        }));
+    }
+
     /**
      * Shrinking an absence cancels the decisions of the pairs it no longer covers (with history and
      * an event, so the informed substitute hears about it) and keeps the others.
-     */    @Test
+     */
+    @Test
     void absenceEditCancelsOnlyTheChangesOfPairsItNoLongerCovers() {
         EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate, RozkladEvents.SUBSTITUTION_STATUS_CHANGED);
         Lesson third = fixture.lesson(semester, MONDAY, 3, group, 0, stp, krentsin, room);
