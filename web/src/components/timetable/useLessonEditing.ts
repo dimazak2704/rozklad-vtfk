@@ -4,13 +4,23 @@
  * розділяє версії розкладу: Ctrl+Z у версії скасовує лише її правки. Помилки сервера не ховаємо:
  * кеш повертається як був, а тост пояснює причину словами сервера.
  */
+import { useQueryClient } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { isApiError } from '@/api/errors';
+import { isApiError, STALE_DATA_MESSAGE } from '@/api/errors';
 import { qk } from '@/api/queryKeys';
-import { useCreateLesson, useDeleteLesson, useMoveLesson, useUpdateLesson, type TimetableConflict } from '@/api/timetable';
+import {
+  isLessonOutdated,
+  useCreateLesson,
+  useDeleteLesson,
+  useMoveLesson,
+  useUpdateLesson,
+  type TimetableConflict,
+} from '@/api/timetable';
 import type { MoveLessonRequest, PublicRoomDto, RoomRef, TemplateLessonDto, TemplateLessonRequest, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
 import { lowerFirst, redoLatest, track, undoLatest, useJournalScope } from '@/lib/undo/actions';
+import { JournalBlockedError, STALE_REASON } from '@/lib/undo/errors';
+import { sameRequest } from '@/lib/undo/records';
 import { latestRedoable, latestUndoable, useJournal } from '@/lib/undo/journal';
 import { LessonLedger, slotOf, toLessonRequest } from './model/history';
 import { lessonShort, slotShort } from './model/text';
@@ -29,6 +39,20 @@ function warningsDescription(conflicts: readonly TimetableConflict[]): string | 
   if (hard.length > 0) return `Конфлікт: ${hard[0]?.message ?? ''}${hard.length > 1 ? ` (і ще ${hard.length - 1})` : ''}`;
   if (soft.length > 0) return `Попередження: ${soft[0]?.message ?? ''}${soft.length > 1 ? ` (і ще ${soft.length - 1})` : ''}`;
   return undefined;
+}
+
+/**
+ * Повтор після 409 з відкритого діалогу: форма ще тримає старі значення. Беремо свіжу пару й кладемо
+ * на неї лише ті поля, які диспетчер справді змінив у формі, — чужа правка інших полів лишається.
+ */
+function rebaseRequest(snapshot: TemplateLessonDto, fresh: TemplateLessonDto, body: TemplateLessonRequest): TemplateLessonRequest {
+  if (fresh === snapshot) return body;
+  const was = toLessonRequest(snapshot);
+  const out: Record<string, unknown> = { ...toLessonRequest(fresh) };
+  for (const [key, value] of Object.entries(body)) {
+    if (key !== 'version' && !sameRequest(value, was[key as keyof TemplateLessonRequest])) out[key] = value;
+  }
+  return out as unknown as TemplateLessonRequest;
 }
 
 const toRoomRef = (room: PublicRoomDto | RoomRef): RoomRef => ({ id: room.id, name: room.name, type: room.type });
@@ -58,6 +82,9 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
     ledgers.set(versionId, ledger);
   }
   const book = ledger;
+  const queryClient = useQueryClient();
+  // пари, про чужу правку яких диспетчер уже знає (тост після 409): наступна дія — зі свіжою версією
+  const [outdated] = useState(() => new Set<Uuid>());
   const scope = timetableScope(versionId);
   useJournalScope(scope);
   const lastUndo = useJournal((state) => latestUndoable(state.entries, scope));
@@ -66,6 +93,43 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
 
   /** Тіло з останньою відомою версією заняття — не з кешу (там могла бути вже чужа правка). */
   const versioned = <T extends { version?: number }>(lessonId: Uuid, body: T): T => ({ ...body, version: book.version(lessonId) });
+
+  /**
+   * Пара, з якою діє диспетчер. Діалог тримає знімок з моменту відкриття; якщо після 409 його вже
+   * попередили й кеш перечитано, беремо свіжу пару з кешу — інакше повтор знову отримав би 409.
+   */
+  const current = (lesson: TemplateLessonDto): TemplateLessonDto => {
+    if (!outdated.has(lesson.id)) return lesson;
+    return queryClient.getQueryData<TemplateLessonDto[]>(qk.admin.timetable.lessons(versionId, {}))?.find((l) => l.id === lesson.id) ?? lesson;
+  };
+
+  /** Дія диспетчера над парою, яку тим часом змінив хтось інший: попередні записи журналу вже не наші. */
+  const adopt = (lesson: TemplateLessonDto) => {
+    const known = book.version(lesson.id);
+    if (known !== undefined && lesson.version !== undefined && known !== lesson.version) book.fork(lesson.id);
+  };
+
+  /** Скасування й повтор діють, лише поки між нашими правками пари не втрутився хтось інший. */
+  const guard = (lessonId: Uuid, op: () => Promise<unknown>) => {
+    const epoch = book.epoch(lessonId);
+    return async () => {
+      if (book.epoch(lessonId) !== epoch) throw new JournalBlockedError(STALE_REASON, 'stale');
+      await op();
+    };
+  };
+
+  /** 409/404: пару вже змінили чи видалили — кеш перечитується (api/timetable), пояснюємо без паніки. */
+  const reportOutdated = (lesson: TemplateLessonDto, error: unknown): boolean => {
+    if (!isLessonOutdated(error)) return false;
+    outdated.add(lesson.id);
+    book.fork(lesson.id);
+    if (isApiError(error) && error.isNotFound) {
+      notify.warning('Цієї пари вже немає', { description: 'Її щойно видалив хтось інший. Розклад оновлено.' });
+    } else {
+      notify.warning('Пару щойно змінив хтось інший', { description: STALE_DATA_MESSAGE });
+    }
+    return true;
+  };
 
   const recreate = async (lesson: TemplateLessonDto) => {
     const result = await create.mutateAsync({ ...toLessonRequest(lesson), version: undefined });
@@ -78,7 +142,9 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
 
   // ── дії, що потрапляють у журнал
 
-  async function moveLesson(lesson: TemplateLessonDto, target: MoveLessonRequest, room: PublicRoomDto | null): Promise<boolean> {
+  async function moveLesson(picked: TemplateLessonDto, target: MoveLessonRequest, room: PublicRoomDto | null): Promise<boolean> {
+    const lesson = current(picked);
+    adopt(lesson);
     const toRoom = room ? toRoomRef(room) : (lesson.room ?? null);
     const fromRoom = lesson.room ?? null;
     const from = slotOf(lesson);
@@ -90,6 +156,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
         room: room ? toRoomRef(room) : undefined,
       });
       book.note(result.lesson);
+      outdated.delete(lesson.id);
       const go = async (slot: MoveLessonRequest, slotRoom: RoomRef | null) => {
         const id = book.resolve(lesson.id);
         const moved = await move.mutateAsync({ lessonId: id, target: versioned(id, slot), room: slotRoom ?? undefined });
@@ -99,11 +166,12 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
         label: `Перенесено пару ${lessonShort(lesson)}: ${slotShort(lesson)} → ${slotShort(target)}`,
         description: warningsDescription(result.conflicts),
         invalidate,
-        undo: () => go(from, fromRoom),
-        redo: () => go(target, toRoom),
+        undo: guard(lesson.id, () => go(from, fromRoom)),
+        redo: guard(lesson.id, () => go(target, toRoom)),
       });
       return true;
     } catch (error) {
+      if (reportOutdated(lesson, error)) return false;
       notify.error(error, 'Пару не перенесено', { description: conflictDescription(error) ?? (isApiError(error) ? error.message : undefined) });
       return false;
     }
@@ -118,7 +186,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
         label: `Додано пару ${lessonShort(created)}, ${slotShort(created)}`,
         description: warningsDescription(result.conflicts),
         invalidate,
-        undo: () => removeCurrent(created.id),
+        undo: guard(created.id, () => removeCurrent(created.id)),
         redo: () => recreate(created),
       });
       return created;
@@ -128,12 +196,16 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
     }
   }
 
-  async function updateLesson(before: TemplateLessonDto, body: TemplateLessonRequest): Promise<TemplateLessonDto | null> {
+  async function updateLesson(snapshot: TemplateLessonDto, edited: TemplateLessonRequest): Promise<TemplateLessonDto | null> {
+    const before = current(snapshot);
+    const body = rebaseRequest(snapshot, before, edited);
+    adopt(before);
     try {
       // версія уроку, з якого відкрили форму: чужа правка за цей час не перезапишеться мовчки
       const result = await update.mutateAsync({ lessonId: before.id, body: { ...body, version: before.version } });
       const after = result.lesson;
       book.note(after);
+      outdated.delete(before.id);
       const put = async (lesson: TemplateLessonDto) => {
         const id = book.resolve(before.id);
         const saved = await update.mutateAsync({ lessonId: id, body: versioned(id, toLessonRequest(lesson)) });
@@ -143,12 +215,12 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
         label: `Змінено пару ${lessonShort(after)}, ${slotShort(after)}`,
         description: warningsDescription(result.conflicts),
         invalidate,
-        undo: () => put(before),
-        redo: () => put(after),
+        undo: guard(before.id, () => put(before)),
+        redo: guard(before.id, () => put(after)),
       });
       return after;
     } catch (error) {
-      notify.error(error, 'Зміни не збережено');
+      if (!reportOutdated(before, error)) notify.error(error, 'Зміни не збережено');
       throw error;
     }
   }
@@ -166,6 +238,7 @@ export function useLessonEditing(versionId: Uuid, options: LessonEditingOptions 
       });
       return true;
     } catch (error) {
+      if (reportOutdated(lesson, error)) return false;
       notify.error(error, 'Пару не видалено');
       return false;
     }

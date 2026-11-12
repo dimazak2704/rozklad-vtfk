@@ -169,7 +169,8 @@ export function useVersionDiff(baseId: Uuid | undefined, targetId: Uuid | undefi
 
 /**
  * Після правки заняття застаріли конфлікти, метрики, лічильники версій і порівняння.
- * Самі заняття вже оновлені в кеші відповіддю сервера — їх (≈1000 рядків) не перечитуємо.
+ * Самі заняття вже оновлені в кеші відповіддю сервера — їх (≈1000 рядків) не перечитуємо;
+ * виняток — 409/404 (`refreshIfOutdated`), коли кеш занять уже не збігається із сервером.
  */
 export function invalidateVersionDerived(queryClient: QueryClient, versionId: Uuid): Promise<void> {
   return queryClient.invalidateQueries({
@@ -196,6 +197,19 @@ function patchLessons(
 
 function restoreLessons(queryClient: QueryClient, versionId: Uuid, previous: TemplateLessonDto[] | undefined): void {
   if (previous) queryClient.setQueryData(qk.admin.timetable.lessons(versionId, {}), previous);
+}
+
+/**
+ * Пару вже змінив чи видалив хтось інший (409 `stale-data`, 404): наш кеш застарів. Без перечитування
+ * кожна наступна дія з цією парою знову йшла б зі старою версією й отримувала 409.
+ */
+export function isLessonOutdated(error: unknown): boolean {
+  return isApiError(error) && (error.isStaleData || error.isNotFound);
+}
+
+/** Після 409/404 перечитуємо заняття версії: наступна дія піде з версією, яку дав сервер. */
+function refreshIfOutdated(queryClient: QueryClient, versionId: Uuid, error: unknown): void {
+  if (isLessonOutdated(error)) void queryClient.invalidateQueries({ queryKey: qk.admin.timetable.lessons(versionId, {}) });
 }
 
 /** Заняття потоку переміщуються разом (одна пара для кількох груп): у кеші рухаємо всіх учасників. */
@@ -244,7 +258,10 @@ export function useMoveLesson(versionId: Uuid) {
       await queryClient.cancelQueries({ queryKey: qk.admin.timetable.lessons(versionId, {}) });
       return { previous: patchLessons(queryClient, versionId, (lessons) => applyMoveToLessons(lessons, variables)) };
     },
-    onError: (_error, _variables, context) => restoreLessons(queryClient, versionId, context?.previous),
+    onError: (error, _variables, context) => {
+      restoreLessons(queryClient, versionId, context?.previous);
+      refreshIfOutdated(queryClient, versionId, error);
+    },
     onSuccess: (result) => {
       if (result.lesson.streamId) {
         // інші учасники потоку теж переїхали — беремо їх із сервера
@@ -300,6 +317,7 @@ export function useUpdateLesson(versionId: Uuid) {
     onSuccess: (result) => {
       patchLessons(queryClient, versionId, (lessons) => lessons.map((l) => (l.id === result.lesson.id ? result.lesson : l)));
     },
+    onError: (error) => refreshIfOutdated(queryClient, versionId, error),
     onSettled: () => invalidateVersionDerived(queryClient, versionId),
   });
 }
@@ -312,7 +330,10 @@ export function useDeleteLesson(versionId: Uuid) {
       await queryClient.cancelQueries({ queryKey: qk.admin.timetable.lessons(versionId, {}) });
       return { previous: patchLessons(queryClient, versionId, (lessons) => lessons.filter((l) => l.id !== lessonId)) };
     },
-    onError: (_error, _lessonId, context) => restoreLessons(queryClient, versionId, context?.previous),
+    onError: (error, _lessonId, context) => {
+      restoreLessons(queryClient, versionId, context?.previous);
+      refreshIfOutdated(queryClient, versionId, error);
+    },
     onSettled: () => invalidateVersionDerived(queryClient, versionId),
   });
 }

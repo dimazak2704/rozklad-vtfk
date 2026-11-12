@@ -11,6 +11,7 @@ import type { MoveLessonRequest, TemplateLessonDto, TemplateLessonRequest, Uuid 
 export class LessonLedger {
   private readonly aliases = new Map<Uuid, Uuid>();
   private readonly versions = new Map<Uuid, number>();
+  private readonly epochs = new Map<Uuid, number>();
 
   /** Поточний id заняття, яке колись мало `id` (після відновлень — найновіший). */
   resolve(id: Uuid): Uuid {
@@ -26,7 +27,11 @@ export class LessonLedger {
   /** Заняття `from` відновлено як `to`. */
   remap(from: Uuid, to: Pick<TemplateLessonDto, 'id' | 'version'>): void {
     const resolved = this.resolve(from);
-    if (resolved !== to.id) this.aliases.set(resolved, to.id);
+    if (resolved !== to.id) {
+      this.aliases.set(resolved, to.id);
+      const epoch = this.epochs.get(resolved);
+      if (epoch !== undefined) this.epochs.set(to.id, epoch);
+    }
     this.note(to);
   }
 
@@ -38,6 +43,20 @@ export class LessonLedger {
   /** Остання відома версія заняття (за будь-яким його колишнім id). */
   version(id: Uuid): number | undefined {
     return this.versions.get(this.resolve(id));
+  }
+
+  /** Номер ланцюжка наших правок заняття: росте, коли між ними втрутився хтось інший. */
+  epoch(id: Uuid): number {
+    return this.epochs.get(this.resolve(id)) ?? 0;
+  }
+
+  /**
+   * Заняття змінив хтось інший: попередні записи журналу про нього вже не наші, і скасовувати їх
+   * наосліп (з новою версією) означало б мовчки перезаписати чужу правку.
+   */
+  fork(id: Uuid): void {
+    const key = this.resolve(id);
+    this.epochs.set(key, this.epoch(key) + 1);
   }
 }
 
