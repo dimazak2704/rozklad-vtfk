@@ -112,13 +112,14 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
             )}
           >
             <span className="flex flex-col">
-              <span className="text-ui font-semibold text-primary figures">{lesson.startsAt ?? `${lesson.pair}`}</span>
+              <span className="text-ui font-semibold text-secondary figures">{lesson.startsAt ?? `${lesson.pair}`}</span>
               <span className="text-meta text-muted">{lesson.pair} пара</span>
             </span>
             <span className="flex min-w-0 flex-col gap-1">
-              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-ui font-[650] text-primary">
-                <span className="figures">{lesson.group.code}</span>
-                {subgroup ? <span className="font-normal text-secondary">{subgroup}</span> : null}
+              {/* головне — група й дисципліна: на крок більше за час і стан, код групи — Geologica, як скрізь */}
+              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-cell font-[650] text-primary">
+                <span className="font-display font-semibold tracking-[0.01em]">{lesson.group.code}</span>
+                {subgroup ? <span className="text-ui font-normal text-secondary">{subgroup}</span> : null}
                 <span aria-hidden="true" className="text-muted">
                   ·
                 </span>
@@ -126,7 +127,7 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
                   <span {...lineAttr(lesson.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
                   <span className="truncate">{lesson.discipline.shortName}</span>
                 </span>
-                {lesson.room ? <span className="font-normal text-secondary">· ауд. {lesson.room.name}</span> : null}
+                {lesson.room ? <span className="text-ui font-normal text-secondary">· ауд. {lesson.room.name}</span> : null}
               </span>
               <StatusLine entry={entry} />
               {audit ? <span className="text-caption text-muted">{audit}</span> : null}

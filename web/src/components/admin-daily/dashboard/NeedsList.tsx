@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, CircleCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { DashboardAlert, IsoDate } from '@/api/types';
@@ -20,8 +20,17 @@ const SEVERITY_DOT: Record<DashboardAlert['severity'], string> = {
   INFO: 'border-[1.5px] border-[var(--fill-muted)] bg-transparent',
 };
 
+// рядок виходить за край колонки на 12 px (`-mx-3` у списку): текст стоїть на одній лінії з заголовком розділу,
+// а тоновання наведення виступає назовні, як у Linear чи Notion
 const ROW =
-  'grid min-h-14 items-center gap-x-3 px-3 py-2.5 rounded-popover transition-[background-color] duration-150 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus';
+  'group/row grid min-h-14 items-center gap-x-3 px-3 py-2.5 rounded-popover transition-[background-color] duration-150 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus';
+
+/**
+ * Стрілка «перейти»: на дотику видно завжди; мишею — проступає й підʼїжджає на 4 px лише під наведенням чи фокусом,
+ * щоб у спокої список не був парканом із шевронів.
+ */
+const ARROW =
+  'size-4 text-muted rtl:rotate-180 transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:-translate-x-1 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100';
 
 function Row({ to, children, className }: { to: string | null; children: ReactNode; className?: string }) {
   if (!to) return <div className={cn(ROW, 'hover:bg-transparent', className)}>{children}</div>;
@@ -58,11 +67,17 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
   const rest = [...alerts.filter((alert) => !(pairsKnown && COVERED_BY_PAIRS.has(alert.kind))), ...serviceAlerts];
 
   if (open.length === 0 && rest.length === 0) {
-    return <p className="px-3 py-2 text-body text-secondary">{calm}</p>;
+    // добра новина — повним реченням у кольорі тексту з галочкою, а не сірою приміткою
+    return (
+      <p className="flex items-start gap-2 py-1 text-body font-[550] text-primary">
+        <CircleCheck aria-hidden="true" className="mt-1 size-4 shrink-0 text-add" />
+        <span>{calm}</span>
+      </p>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="-mx-3 flex flex-col gap-1">
       <ul className="flex flex-col gap-0.5">
         {open.slice(0, MAX_PAIRS).map((entry) => {
           const { lesson } = entry.item;
@@ -74,13 +89,14 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
             <li key={`${entry.item.date}-${lesson.id}`}>
               <Row to={`/admin/changes?date=${date}&lesson=${lesson.id}`} className="grid-cols-[3.25rem_minmax(0,1fr)_auto]">
                 <span className="flex flex-col">
-                  <span className="text-ui font-semibold text-primary figures">{lesson.startsAt ?? lesson.pair}</span>
+                  <span className="text-ui font-semibold text-secondary figures">{lesson.startsAt ?? lesson.pair}</span>
                   <span className="text-meta text-muted">{lesson.pair} пара</span>
                 </span>
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-ui font-[650] text-primary">
-                    <span className="figures">{lesson.group.code}</span> · {lesson.discipline.shortName}
-                    <span className="font-normal text-secondary"> · {entry.absence.teacher.shortName}</span>
+                  {/* головне в рядку — яка група й що в неї зависло: на крок більше й жирніше за решту */}
+                  <span className="truncate text-cell font-[650] text-primary">
+                    <span className="font-display font-semibold tracking-[0.01em]">{lesson.group.code}</span> · {lesson.discipline.shortName}
+                    <span className="text-ui font-[500] text-secondary"> · {entry.absence.teacher.shortName}</span>
                   </span>
                   <StateText state={entry.state}>
                     {entry.state === 'declined' ? 'Відмова — потрібен інший варіант' : 'Потрібне рішення'}
@@ -93,7 +109,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
                     ) : null}
                   </StateText>
                 </span>
-                <ChevronRight aria-hidden="true" className="size-4 text-muted rtl:rotate-180" />
+                <ChevronRight aria-hidden="true" className={ARROW} />
               </Row>
             </li>
           );
@@ -105,7 +121,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
                 <span className={cn('size-2 rounded-full', SEVERITY_DOT[alert.severity])} />
               </span>
               <span className="text-ui text-primary">{alert.message}</span>
-              {alert.link ? <ChevronRight aria-hidden="true" className="size-4 text-muted rtl:rotate-180" /> : <span />}
+              {alert.link ? <ChevronRight aria-hidden="true" className={ARROW} /> : <span />}
             </Row>
           </li>
         ))}

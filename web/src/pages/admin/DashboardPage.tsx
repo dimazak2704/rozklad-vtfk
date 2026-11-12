@@ -44,10 +44,14 @@ function SectionLink({ to, children }: { to: string; children: string }) {
   return (
     <Link
       to={to}
-      className="-my-1 inline-flex min-h-9 items-center gap-0.5 rounded-control px-1 text-ui font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-2.5 pointer-coarse:min-h-11"
+      className="group/link -my-1 inline-flex min-h-9 items-center gap-0.5 rounded-control px-1 text-ui font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-2.5 pointer-coarse:min-h-11"
     >
       {children}
-      <ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />
+      {/* та сама мова, що й «Усі заміни →» на головній: під мишею стрілка підʼїжджає на 3 px */}
+      <ChevronRight
+        aria-hidden="true"
+        className="size-4 transition-transform duration-200 ease-out motion-reduce:transition-none rtl:rotate-180 pointer-fine:group-hover/link:translate-x-[3px]"
+      />
     </Link>
   );
 }
@@ -252,7 +256,7 @@ export default function DashboardPage() {
                 workspace.error ? (
                   <ErrorState error={workspace.error} size="sm" inset />
                 ) : (
-                  <p className="px-3 py-2 text-body text-secondary">Подій ще немає.</p>
+                  <p className="py-1 text-body text-secondary">Подій ще немає.</p>
                 )
               ) : (
                 <ActivityFeed items={feed} fresh={fresh} today={today} />

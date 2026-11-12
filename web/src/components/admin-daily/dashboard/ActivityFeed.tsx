@@ -48,7 +48,8 @@ export function ActivityFeed({ items, fresh, today = todayInKyiv() }: ActivityFe
     latestOfSource.add(item.id);
   }
   return (
-    <div className="flex flex-col">
+    // `-mx-3`: час стоїть на одній лінії з заголовком розділу, тоновання наведення виступає назовні
+    <div className="-mx-3 flex flex-col">
       <ol aria-label="Останні дії" aria-live="polite" aria-relevant="additions" className="flex flex-col">
         {shown.map((item, index) => {
           // рядок дня — перед першою подією іншого дня; сьогоднішні події згори його не мають
@@ -81,7 +82,7 @@ export function ActivityFeed({ items, fresh, today = todayInKyiv() }: ActivityFe
                     to={item.href}
                     className={cn(
                       rowClass,
-                      'transition-[background-color] duration-100 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                      'transition-[background-color] duration-150 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
                     )}
                   >
                     {body}
