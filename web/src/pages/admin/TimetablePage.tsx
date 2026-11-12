@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { usePublicMeta } from '@/api/meta';
 import { useTimetableVersions, useVersionConflicts } from '@/api/timetable';
 import type { TemplateLessonDto, Uuid } from '@/api/types';
-import { Button, buttonClass, EmptyState, LoadingRegion, PageErrorBanner, PageHeader, Skeleton, type MoreMenuItem } from '@/components/ui';
+import { Button, buttonClass, EmptyState, LoadingRegion, PageErrorBanner, PageHeader, Skeleton, Tooltip, type MoreMenuItem } from '@/components/ui';
 import { CreateVersionDialog } from '@/components/timetable/dialogs/CreateVersionDialog';
 import { PublishDialog } from '@/components/timetable/dialogs/PublishDialog';
 import { DiffView } from '@/components/timetable/DiffView';
@@ -15,7 +15,10 @@ import { useEditorUrlState } from '@/components/timetable/useEditorUrlState';
 import { ModeSwitch, VersionSelect } from '@/components/timetable/VersionBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { todayInKyiv } from '@/lib/date';
+import { countLabel } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
+
+const CONFLICT_FORMS = ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'] as const;
 
 /**
  * Редактор базового розкладу: версії семестру (чернетки, опублікована, архів), сітка з перетягуванням,
@@ -71,14 +74,24 @@ export default function TimetablePage() {
 
   const showConflicts = () => setUrl({ mode: 'grid', filters: { ...EMPTY_FILTERS, conflictsOnly: true } });
 
-  // головна дія одна: для чернетки — опублікувати (а поки є жорсткі конфлікти — показати їх, бо публікація
-  // однаково неможлива), для опублікованої чи архівної — почати чернетку з неї
+  // головна дія одна: для чернетки — опублікувати, для опублікованої чи архівної — почати чернетку з неї.
+  // Поки є жорсткі конфлікти, «Опублікувати» вимкнена з причиною в підказці: шлях до конфліктів уже дає
+  // речення «75 конфліктів не дають опублікувати — показати» і панель «Конфлікти», третій не потрібен.
   const primaryAction = selected ? (
     selected.status === 'DRAFT' ? (
       blocked ? (
-        <Button variant="primary" onClick={showConflicts} iconStart={<TriangleAlert aria-hidden="true" className="size-4" />}>
-          Показати конфлікти
-        </Button>
+        <Tooltip content={`Спершу виправте ${countLabel(hardCount, CONFLICT_FORMS)}`}>
+          <Button
+            variant="primary"
+            aria-disabled="true"
+            onClick={(event) => event.preventDefault()}
+            iconStart={<Send aria-hidden="true" className="size-4" />}
+            className="border border-separator bg-sunken text-disabled hover:bg-sunken active:bg-sunken"
+            static
+          >
+            Опублікувати
+          </Button>
+        </Tooltip>
       ) : (
         <Button variant="primary" onClick={() => setPublishOpen(true)} iconStart={<Send aria-hidden="true" className="size-4" />}>
           Опублікувати
@@ -93,15 +106,6 @@ export default function TimetablePage() {
 
   const more: MoreMenuItem[] = selected
     ? [
-        ...(blocked
-          ? [
-              {
-                label: 'Опублікувати (є конфлікти)',
-                icon: <Send aria-hidden="true" className="size-4" />,
-                disabled: true,
-              },
-            ]
-          : []),
         ...(url.mode === 'grid'
           ? [{ label: 'Порівняти з іншою версією', icon: <FileDiff aria-hidden="true" className="size-4" />, onSelect: () => setUrl({ mode: 'diff' }) }]
           : []),

@@ -78,6 +78,11 @@ export const EntityGrid = memo(function EntityGrid({
     }
     return map;
   }, [entity.lessons]);
+  // пари, де хоч в одному з показаних днів заняття лише за чисельником чи знаменником
+  const splitRows = useMemo(() => {
+    const shown = new Set<Weekday>(days);
+    return new Set(entity.lessons.filter((l) => l.parity !== 'BOTH' && shown.has(l.weekday)).map((l) => l.pair));
+  }, [entity.lessons, days]);
   const hardCount = useMemo(
     () => entity.lessons.filter((l) => (conflictsByLesson.get(l.id) ?? NO_CONFLICTS).some((c) => c.severity === 'HARD')).length,
     [entity.lessons, conflictsByLesson],
@@ -166,13 +171,18 @@ export const EntityGrid = memo(function EntityGrid({
             >
               <span className="text-title leading-none font-semibold text-primary figures">{pair}</span>
               <span className="sr-only"> пара</span>
-              {/* верхня половина клітинки — чисельник, нижня — знаменник, як у друкованому розкладі; 12 px — найменший текст */}
-              <span aria-hidden="true" title="чисельник" className="absolute end-1 top-1/4 -translate-y-1/2 text-meta leading-none text-muted">
-                ч
-              </span>
-              <span aria-hidden="true" title="знаменник" className="absolute end-1 top-3/4 -translate-y-1/2 text-meta leading-none text-muted">
-                з
-              </span>
+              {/* верхня половина клітинки — чисельник, нижня — знаменник, як у друкованому розкладі. Позначки «ч/з»
+                  лише там, де пару справді поділено за тижнями: у решті рядків вони — шум */}
+              {splitRows.has(pair) ? (
+                <>
+                  <span aria-hidden="true" title="чисельник" className="absolute end-1 top-1/4 -translate-y-1/2 text-meta leading-none text-muted">
+                    ч
+                  </span>
+                  <span aria-hidden="true" title="знаменник" className="absolute end-1 top-3/4 -translate-y-1/2 text-meta leading-none text-muted">
+                    з
+                  </span>
+                </>
+              ) : null}
             </div>
             {days.map((weekday, dayIndex) => (
               <SlotCell

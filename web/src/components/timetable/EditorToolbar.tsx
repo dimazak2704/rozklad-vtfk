@@ -13,6 +13,7 @@ import {
   SegmentedControl,
   Select,
   Switch,
+  Tooltip,
   type MoreMenuItem,
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -24,6 +25,12 @@ const VIEW_OPTIONS = [
   { value: 'teacher' as const, label: 'Викладачі', icon: <UserRound aria-hidden="true" className="size-3.5" /> },
   { value: 'room' as const, label: 'Аудиторії', icon: <DoorOpen aria-hidden="true" className="size-3.5" /> },
 ];
+
+/** У вузькому рядку (планшет, колонка поруч із панеллю конфліктів) подання без іконок — пошуку лишається місце. */
+const VIEW_OPTIONS_ROW = VIEW_OPTIONS.map((option) => ({
+  ...option,
+  icon: <span className="contents @max-[52rem]/toolbar:hidden">{option.icon}</span>,
+}));
 
 const SEARCH_PLACEHOLDER: Record<BoardView, string> = {
   group: 'Група: 4КІ1',
@@ -180,22 +187,44 @@ export function EditorToolbar({
     );
   }
 
+  // один рядок: подання, пошук (забирає вільне місце), фільтр, скасування й «Додати пару». Вужче — фільтр
+  // стає іконкою з підписом для читача екрана, а подання втрачає іконки; рядок не переноситься
   return (
-    <div className={cn('flex flex-col gap-2.5', className)}>
-      <div className="flex flex-wrap items-center gap-2">
-        <SegmentedControl<BoardView> aria-label="Подання сітки" value={view} onValueChange={onViewChange} options={VIEW_OPTIONS} />
-        {search}
+    <div className={cn('@container/toolbar flex flex-col gap-2.5', className)}>
+      <div className="flex items-center gap-2">
+        <SegmentedControl<BoardView> aria-label="Подання сітки" value={view} onValueChange={onViewChange} options={VIEW_OPTIONS_ROW} />
+        <Input
+          ref={searchRef}
+          type="search"
+          size="md"
+          value={filters.query}
+          onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
+          placeholder={SEARCH_PLACEHOLDER[view]}
+          aria-label="Пошук у сітці"
+          iconStart={<Search aria-hidden="true" className="size-4" />}
+          wrapperClassName="min-w-36 flex-1 max-w-80"
+        />
         <Popover>
-          <PopoverTrigger asChild>
-            <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />} aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}>
-              Фільтр
-              {activeFilters > 0 ? (
-                <span aria-hidden="true" className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures">
-                  {activeFilters}
-                </span>
-              ) : null}
-            </Button>
-          </PopoverTrigger>
+          {/* коли кнопка звужується до іконки, підказка каже, що за нею */}
+          <Tooltip content="Курси, відділення, лише з конфліктами">
+            <PopoverTrigger asChild>
+              <Button
+                iconStart={<ListFilter aria-hidden="true" className="size-4" />}
+                aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}
+                className="@max-[60rem]/toolbar:w-10 @max-[60rem]/toolbar:gap-0 @max-[60rem]/toolbar:px-0"
+              >
+                <span className="@max-[60rem]/toolbar:sr-only">Фільтр</span>
+                {activeFilters > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures @max-[60rem]/toolbar:absolute @max-[60rem]/toolbar:-end-1.5 @max-[60rem]/toolbar:-top-1.5"
+                  >
+                    {activeFilters}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
+          </Tooltip>
           <PopoverContent title="Що показати" width="md">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5" role="group" aria-label="Курс">
@@ -235,7 +264,7 @@ export function EditorToolbar({
           </PopoverContent>
         </Popover>
         {editable ? (
-          <div className="ms-auto flex items-center gap-1">
+          <div className="ms-auto flex shrink-0 items-center gap-1">
             <IconButton
               label={undoLabel ? `Скасувати: ${undoLabel}` : 'Скасувати — правок ще немає'}
               shortcut="mod+z"
