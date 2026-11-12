@@ -89,11 +89,16 @@ function byDateAndPair(a: ChangeDto, b: ChangeDto): number {
   return compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom;
 }
 
-/** Повідомлення NOTIFY, на яке ще не відповіли: заміна вже діє, викладач може відповісти «Підтверджую» чи «Не можу». */
+/**
+ * Повідомлення NOTIFY, на яке ще не відповіли: заміна вже діє, викладач може відповісти «Підтверджую» чи «Не можу».
+ * Заміну, про яку вже вирішило пізніше доповнення (скасувало, передало іншому), не питаємо: цієї пари в мене
+ * вже немає, і «Не можу» лише сповістило б диспетчера про пару, яку вже передано.
+ */
 export function isUnansweredNotice(change: ChangeDto, today: IsoDate): boolean {
   return (
     change.approvalMode === 'NOTIFY' &&
     !change.teacherAnswer &&
+    !change.supersededBy &&
     (change.status === 'CONFIRMED' || change.status === 'APPLIED') &&
     compareIsoDates(change.date, today) >= 0
   );
@@ -101,7 +106,9 @@ export function isUnansweredNotice(change: ChangeDto, today: IsoDate): boolean {
 
 /** Що чекає моєї відповіді: прохання (CONFIRM) і нові заміни, про які мені повідомили (NOTIFY). */
 export function awaitingAnswer(changes: readonly ChangeDto[], today: IsoDate): ChangeDto[] {
-  return changes.filter((c) => c.status === 'PENDING_CONFIRMATION' || isUnansweredNotice(c, today)).sort(byDateAndPair);
+  return changes
+    .filter((c) => (c.status === 'PENDING_CONFIRMATION' && !c.supersededBy) || isUnansweredNotice(c, today))
+    .sort(byDateAndPair);
 }
 
 /** Скільки часу є, щоб передумати: стільки ж живе сповіщення з «Скасувати». */

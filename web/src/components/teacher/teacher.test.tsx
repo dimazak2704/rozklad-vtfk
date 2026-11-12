@@ -6,13 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BellSlotDto, ChangeDto, DayDto, LessonView, PreferenceKind, Weekday } from '@/api/types';
 import { notify } from '@/components/ui';
 import { teacherNamed } from '@/mocks/fixtures';
+import { changesForTeacher } from '@/mocks/handlers/public';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
-import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, mostUrgent, REPLY_UNDO_MS } from './change-text';
+import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
 import { endSentence, lessonPhrase, nextDaySentence } from './my-day';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
@@ -87,6 +88,32 @@ describe('SubstitutionRequests', () => {
     expect(sent).toEqual([]);
     unmount();
     await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
+  });
+
+  it('заміну, яку доповнення передало іншому, відповісти не просять: у «Моїх замінах» вона як передана', async () => {
+    server.use(
+      http.get(apiPath('/me/changes'), () =>
+        Response.json(
+          changesForTeacher(krentsin.id, new Date()).map((change) =>
+            change.approvalMode === 'NOTIFY'
+              ? { ...change, status: 'APPLIED', supersededBy: { changeId: '00000000-0000-4000-8000-0000000000c2', kind: 'REPLACE_TEACHER', orderId: null } }
+              : change,
+          ),
+        ),
+      ),
+    );
+    renderWithProviders(
+      <>
+        <SubstitutionRequests teacherId={krentsin.id} />
+        <MyUpcomingChanges />
+      </>,
+    );
+    expect(await screen.findByRole('heading', { name: /^2\sзаміни чекають вашої відповіді$/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('article', { name: /^Запит на заміну/ })).toHaveLength(2);
+    expect(screen.queryAllByRole('article', { name: /^Нова заміна/ })).toHaveLength(0);
+    const mine = screen.getByRole('region', { name: 'Мої заміни' });
+    expect(within(mine).getByText('Передано іншому доповненням')).toBeInTheDocument();
+    expect(within(mine).queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('відмова — звичайною кнопкою, з коментарем і можливістю передумати', async () => {
@@ -565,6 +592,16 @@ describe('відповідь на заміну (як у core)', () => {
     const request = { ...base, status: 'PENDING_CONFIRMATION', approvalMode: 'CONFIRM' } as ChangeDto;
     expect(answered(request, 'CONFIRM', at).status).toBe('CONFIRMED');
     expect(answered(request, 'DECLINE', at).status).toBe('DECLINED');
+  });
+
+  it('заміна, яку доповнення скасувало чи передало іншому, відповіді не чекає', () => {
+    const notice = { ...base, id: 'gone', status: 'APPLIED', date: '2026-11-13', pairFrom: 2 } as ChangeDto;
+    expect(awaitingAnswer([notice], '2026-11-12')).toHaveLength(1);
+    for (const kind of ['CANCEL', 'REPLACE_TEACHER', 'REPLACE_DISCIPLINE', 'MERGE_SUBGROUPS', 'SWAP'] as const) {
+      const superseded: ChangeDto = { ...notice, supersededBy: { changeId: 'c2', kind, orderId: 'o49' } };
+      expect(isUnansweredNotice(superseded, '2026-11-12')).toBe(false);
+      expect(awaitingAnswer([superseded], '2026-11-12')).toEqual([]);
+    }
   });
 
   it('у списку «Нові заміни» — прохання й повідомлення без відповіді, не з минулих днів', () => {
