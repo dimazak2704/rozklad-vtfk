@@ -27,6 +27,11 @@ export interface LessonCellProps {
   past?: boolean;
   /** Показати час (коли він відрізняється від часу рядка сітки, напр. у пʼятницю). */
   showTime?: boolean;
+  /**
+   * Зміна щойно прийшла наживо (`useArrivedChanges`): один раз проводиться лінія по старому значенню,
+   * потім проявляються тло й слово стану. Без руху — одразу кінцевий стан.
+   */
+  arrived?: boolean;
   className?: string;
 }
 
@@ -99,6 +104,7 @@ export function LessonCell({
   now = false,
   past = false,
   showTime = false,
+  arrived = false,
   className,
 }: LessonCellProps) {
   const phone = usePhoneLayout();
@@ -148,13 +154,16 @@ export function LessonCell({
           isList ? 'before:inset-0' : '@container/cell h-full before:inset-1',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
           TONE_SURFACE[tone],
+          arrived && (tone === 'change' || tone === 'add') && 'anim-wash-in',
           // перенесена пара — пунктирний контур замість п'ятого кольору
           moved && 'after:pointer-events-none after:absolute after:inset-1 after:rounded-cell after:border after:border-dashed after:border-control',
           className,
         )}
       >
         {stateWord ? (
-          <span className={cn('text-meta font-semibold', STATE_WORD[tone as keyof typeof STATE_WORD])}>{stateWord}</span>
+          <span className={cn('text-meta font-semibold', STATE_WORD[tone as keyof typeof STATE_WORD], arrived && 'anim-word-in')}>
+            {stateWord}
+          </span>
         ) : null}
 
         <span className={cn('flex min-w-0 items-start gap-2', tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1')}>
@@ -189,7 +198,7 @@ export function LessonCell({
           {counterpart ? <span className="min-w-0 truncate">{counterpart}</span> : null}
           {originalRoom ? (
             <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
-              <s className={cn('text-muted', STRUCK)}>{originalRoom}</s>
+              <s className={cn('text-muted', STRUCK, arrived && 'anim-strike')}>{originalRoom}</s>
               <span className="font-[650] text-room figures">{room?.replace(/^ауд\.\u00a0/, '')}</span>
             </span>
           ) : room ? (
@@ -218,7 +227,7 @@ export function LessonCell({
         {replacedText ? (
           <span className="min-w-0 truncate ps-4 text-caption text-muted">
             <span className="sr-only">замість </span>
-            <s className={STRUCK}>{replacedText}</s>
+            <s className={cn(STRUCK, arrived && 'anim-strike')}>{replacedText}</s>
           </span>
         ) : null}
         {movedFrom ? (

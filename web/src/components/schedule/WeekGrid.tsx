@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { IsoDate, ScheduleDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
@@ -15,11 +15,30 @@ export interface WeekGridProps {
   at?: number;
   /** Відступ липкої шапки від верху вікна (висота шапки сайту). */
   stickyTop?: string;
+  /** Заняття, зміна в яких щойно прийшла наживо (`useArrivedChanges`). */
+  arrived?: ReadonlySet<string>;
   className?: string;
 }
 
 function clockLabel(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`;
+}
+
+/**
+ * Шар на всю висоту клітинки, зсунутий на пройдену частку пари: його верхній край — це «зараз».
+ * Хвилина минає — шар ковзає `translateY` за 1 с лінійно (лише композиція, без перерахунку макета).
+ * Відсоток у translate береться від висоти самого шару, тобто від висоти клітинки.
+ */
+function AtNow({ fraction, className, children }: { fraction: number; className?: string; children: ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('pointer-events-none absolute inset-x-0 top-0 h-full transition-transform duration-1000 ease-linear', className)}
+      style={{ transform: `translateY(${fraction * 100}%)` }}
+    >
+      {children}
+    </span>
+  );
 }
 
 /** Половина висоти пігулки «зараз» (20 px). */
@@ -51,7 +70,7 @@ function PairGutter({
 
   useLayoutEffect(() => {
     const pill = pillRef.current;
-    const cell = pill?.offsetParent;
+    const cell = pill?.closest('th');
     if (fraction === null || !pill || !(cell instanceof HTMLElement)) {
       setCovered((prev) => (prev.start || prev.end ? { start: false, end: false } : prev));
       return;
@@ -108,19 +127,15 @@ function PairGutter({
       {now ? (
         <>
           {/* пігулка «зараз» — у колонці часу, тож не закриває жодного заняття; тонкий штрих веде від неї до днів */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute end-0 h-px w-1.5 -translate-y-1/2 bg-[var(--fill-now)] opacity-40 transition-[top] duration-1000 ease-linear"
-            style={{ top: `${now.fraction * 100}%` }}
-          />
-          <span
-            ref={pillRef}
-            aria-hidden="true"
-            className="absolute end-1 z-10 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures transition-[top] duration-1000 ease-linear"
-            style={{ top: `${now.fraction * 100}%` }}
-          >
-            {now.label}
-          </span>
+          <AtNow fraction={now.fraction} className="z-10">
+            <span className="absolute end-0 top-0 h-px w-1.5 -translate-y-1/2 bg-[var(--fill-now)] opacity-40" />
+            <span
+              ref={pillRef}
+              className="absolute end-1 top-0 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures"
+            >
+              {now.label}
+            </span>
+          </AtNow>
         </>
       ) : null}
     </>
@@ -137,7 +152,7 @@ function PairGutter({
  * до сьогодні веде ледь помітна лінія 1 px — теж лише порожніми клітинками.
  * Рядки ростуть під вміст — нічого не обрізається.
  */
-export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', className }: WeekGridProps) {
+export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, className }: WeekGridProps) {
   const days = schedule.days;
   const range = useMemo(() => pairRange(days), [days]);
   const times = useMemo(() => rowTimes(days), [days]);
@@ -191,7 +206,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
   const freeRow = todayLessons && lastTodayPair > 0 && lastTodayPair < range.last ? lastTodayPair + 1 : null;
 
   return (
-    <div className={cn('overflow-x-auto rounded-panel border border-default bg-surface lg:overflow-clip', className)}>
+    <div className={cn('overflow-x-auto overflow-y-hidden rounded-panel border border-default bg-surface lg:overflow-clip', className)}>
       <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0">
         <caption className="sr-only">
           Розклад {schedule.owner.label} на {formatDateRange(schedule.from, schedule.to)}
@@ -285,17 +300,16 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                     <td key={day.date} className={cn('relative h-px p-0 align-top', !lastRow && 'border-b border-separator', cellBg)}>
                       {/* лінія йде першою й без z-index: вміст клітинки (з тим самим тлом) малюється поверх неї */}
                       {nowRule ? (
-                        <span
-                          aria-hidden="true"
-                          data-now-line={nowRule}
-                          className={cn(
-                            'pointer-events-none absolute inset-x-0 -translate-y-1/2 bg-[var(--fill-now)] transition-[top] duration-1000 ease-linear',
-                            nowRule === 'strong' ? 'h-0.5' : 'h-px opacity-40',
-                            // у перерві лінія лежить на межі рядків, де тексту немає, — тож поверх
-                            nowTop === 0 && 'z-[1]',
-                          )}
-                          style={{ top: `${nowTop * 100}%` }}
-                        />
+                        // у перерві лінія лежить на межі рядків, де тексту немає, — тож поверх
+                        <AtNow fraction={nowTop} className={cn(nowTop === 0 && 'z-[1]')}>
+                          <span
+                            data-now-line={nowRule}
+                            className={cn(
+                              'absolute inset-x-0 top-0 -translate-y-1/2 bg-[var(--fill-now)]',
+                              nowRule === 'strong' ? 'h-0.5' : 'h-px opacity-40',
+                            )}
+                          />
+                        </AtNow>
                       ) : null}
                       {lessons.length === 0 ? (
                         isLiveDay && pair === freeRow ? (
@@ -321,6 +335,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                 dayParity={day.parity}
                                 now={current}
                                 past={lessonPast}
+                                arrived={arrived?.has(lesson.id)}
                                 showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
                                 className="flex-1"
                               />
@@ -330,12 +345,17 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                       )}
                       {/* крапка 8 px на лівому краї колонки сьогодні: початок лінії, видна й над зайнятою клітинкою */}
                       {nowRule === 'strong' ? (
-                        <span
-                          aria-hidden="true"
-                          data-now-marker=""
-                          className="pointer-events-none absolute start-0 z-[1] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--fill-now)] ring-2 ring-[var(--background-color-today-wash)] transition-[top] duration-1000 ease-linear rtl:translate-x-1/2"
-                          style={{ top: `${nowTop * 100}%` }}
-                        />
+                        <AtNow fraction={nowTop} className="z-[1]">
+                          <span
+                            // нова пара — новий ключ: ореол крапки розходиться двічі й затихає
+                            key={currentRow ? pair : 'break'}
+                            data-now-marker=""
+                            className={cn(
+                              'absolute start-0 top-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--fill-now)] ring-2 ring-[var(--background-color-today-wash)] rtl:translate-x-1/2',
+                              currentRow && 'anim-halo',
+                            )}
+                          />
+                        </AtNow>
                       ) : null}
                     </td>
                   );

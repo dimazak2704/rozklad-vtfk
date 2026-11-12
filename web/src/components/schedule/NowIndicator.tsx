@@ -1,10 +1,12 @@
-import { Fragment, useMemo, type ReactNode } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import type { BellSlotDto, IsoDate } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { describePairStatus, pairStatus, toTimedSlots, type PairStatus, type TimedSlot } from '@/lib/bells';
 import { cn } from '@/lib/cn';
 import { durationLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
+import { Tooltip } from '../ui/Tooltip';
+import { segmentHint, type SegmentState } from './track-hint';
 
 export interface NowIndicatorProps {
   /** Дзвінки дня (профіль, що діє). */
@@ -57,18 +59,37 @@ function inlineText(status: PairStatus): string {
 }
 
 /**
- * Відлік, що «котиться»: коли хвилина змінюється, нова цифра заходить знизу на 4 px (200 мс). Рухаються
- * лише ті цифри, що змінилися (ключ — позиція й цифра). Без руху — цифри просто міняються.
+ * Відлік, що «котиться»: коли хвилина змінюється, стара цифра йде вгору на 4 px і гасне, а нова заходить
+ * знизу (200 мс, ease-out). Рухаються лише ті цифри, що змінилися (ключ — позиція від кінця й цифра).
+ * Без руху стара цифра не показується, а нова стає на місце одразу.
  */
-function Countdown({ value, className }: { value: number; className?: string }) {
+export function Countdown({ value, className }: { value: number; className?: string }) {
   const digits = String(value).split('');
+  // попереднє значення — щоб показати, яка цифра йде; оновлюється під час рендеру, без ефекту
+  const [shown, setShown] = useState(value);
+  const [previous, setPrevious] = useState<string | null>(null);
+  if (value !== shown) {
+    setPrevious(String(shown));
+    setShown(value);
+  }
+  const old = previous ? previous.split('') : [];
   return (
     <span className={cn('inline-flex figures', className)} aria-hidden="true">
-      {digits.map((digit, index) => (
-        <span key={`${digits.length - index}-${digit}`} className="anim-digit">
-          {digit}
-        </span>
-      ))}
+      {digits.map((digit, index) => {
+        const fromEnd = digits.length - index;
+        const before = old[old.length - fromEnd];
+        const leaving = before !== undefined && before !== digit ? before : null;
+        return (
+          <span key={`${fromEnd}-${digit}`} className="relative inline-block">
+            <span className="anim-digit">{digit}</span>
+            {leaving ? (
+              <span data-leaving="" className="anim-digit-out absolute inset-0">
+                {leaving}
+              </span>
+            ) : null}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -157,7 +178,6 @@ function NextSentence({ status }: { status: PairStatus }) {
   return null;
 }
 
-type SegmentState = 'past' | 'current' | 'future';
 
 /**
  * Ширина доріжки, вужче за яку підпис часу вже не вміщається у свою колонку (≈ 3.25rem на пару).
@@ -233,16 +253,23 @@ export function DayTrack({
             className="relative row-start-1 min-w-0"
             style={{ gridColumn: currentIndex >= 0 ? column(currentIndex) : column(breakIndex) + 1 }}
           >
-            <span
-              className={cn(
-                'absolute top-0 flex h-5 w-14 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures',
-                'transition-[left] duration-1000 ease-linear',
-                currentIndex < 0 && 'left-1/2 -translate-x-1/2',
-              )}
-              style={currentIndex >= 0 ? { left: `clamp(0px, calc(${progress} * 100% - 1.75rem), calc(100% - 3.5rem))` } : undefined}
-            >
-              {clock}
-            </span>
+            {currentIndex >= 0 ? (
+              // доріжка пігулки — колонка без її ширини: зсув на частку пари лишає пігулку в межах колонки,
+              // а ковзає вона лише transform (1 с лінійно), без перерахунку макета
+              <span
+                data-now-pill-track=""
+                className="absolute inset-y-0 start-0 w-[calc(100%-3.5rem)] transition-transform duration-1000 ease-linear"
+                style={{ transform: `translateX(${progress * 100}%)` }}
+              >
+                <span className="absolute start-0 top-0 flex h-5 w-14 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures">
+                  {clock}
+                </span>
+              </span>
+            ) : (
+              <span className="absolute top-0 left-1/2 flex h-5 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures">
+                {clock}
+              </span>
+            )}
           </span>
         ) : null}
 
@@ -252,22 +279,26 @@ export function DayTrack({
           const next = slots[index + 1];
           return (
             <Fragment key={slot.pair}>
-              <span
-                className={cn(
-                  'row-start-2 h-2 overflow-hidden rounded-full',
-                  state === 'past' && 'bg-[var(--fill-track-past)]',
-                  state === 'current' && 'bg-selected',
-                  state === 'future' && (isWindow ? 'border border-dashed border-default' : 'bg-[var(--fill-track-future)]'),
-                )}
-                style={{ gridColumn: column(index) }}
-              >
-                {state === 'current' ? (
+              {/* наведення мишею на смугу називає пару й час (ціль вища за саму смугу: 8 px зверху й знизу) */}
+              <Tooltip content={segmentHint(slot, state, isWindow)} side="bottom">
+                <span data-track-segment="" className="row-start-2 -my-2 min-w-0 py-2" style={{ gridColumn: column(index) }}>
                   <span
-                    className="block h-full origin-left rounded-full bg-accent transition-transform duration-1000 ease-linear rtl:origin-right"
-                    style={{ transform: `scaleX(${Math.max(0.04, progress)})` }}
-                  />
-                ) : null}
-              </span>
+                    className={cn(
+                      'block h-2 overflow-hidden rounded-full',
+                      state === 'past' && 'bg-[var(--fill-track-past)]',
+                      state === 'current' && 'bg-selected',
+                      state === 'future' && (isWindow ? 'border border-dashed border-default' : 'bg-[var(--fill-track-future)]'),
+                    )}
+                  >
+                    {state === 'current' ? (
+                      <span
+                        className="block h-full origin-left rounded-full bg-accent transition-transform duration-1000 ease-linear rtl:origin-right"
+                        style={{ transform: `scaleX(${Math.max(0.04, progress)})` }}
+                      />
+                    ) : null}
+                  </span>
+                </span>
+              </Tooltip>
               {/* перерва зараз: проміжок між смугами світиться акцентом */}
               {next && index === breakIndex ? (
                 <span className="row-start-2 h-2 rounded-full bg-accent" style={{ gridColumn: column(index) + 1 }} />

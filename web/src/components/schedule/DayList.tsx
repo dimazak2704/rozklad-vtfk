@@ -20,6 +20,8 @@ export interface DayListProps {
   at?: number;
   showHeader?: boolean;
   headingLevel?: 2 | 3;
+  /** Заняття, зміна в яких щойно прийшла наживо (`useArrivedChanges`). */
+  arrived?: ReadonlySet<string>;
   className?: string;
 }
 
@@ -64,6 +66,7 @@ export function DayList({
   at,
   showHeader = true,
   headingLevel = 2,
+  arrived,
   className,
 }: DayListProps) {
   const slots = useMemo(() => daySlots(day, bells), [day, bells]);
@@ -130,14 +133,27 @@ export function DayList({
                     ) : null}
                     <span className={cn('text-meta', current ? 'font-semibold text-accent' : 'text-muted')}>{slot.pair} пара</span>
                     {/* поточна пара: лінія між часом і заняттям заповнюється акцентом до пройденої частки — повз текст */}
+                    {/* рух — лише transform: смуга росте scaleY від верху, крапка ковзає translateY (1 с лінійно) */}
                     {current ? (
                       <span
                         aria-hidden="true"
-                        data-now-progress=""
-                        className="pointer-events-none absolute -end-px top-0 w-0.5 translate-x-[0.5px] rounded-full bg-[var(--fill-now)] transition-[height] duration-1000 ease-linear rtl:-translate-x-[0.5px]"
-                        style={{ height: `${Math.max(4, Math.round(fill * 100))}%` }}
+                        className="pointer-events-none absolute inset-y-0 -end-px w-0.5 translate-x-[0.5px] rtl:-translate-x-[0.5px]"
                       >
-                        <span className="absolute start-1/2 bottom-0 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-[var(--fill-now)] rtl:translate-x-1/2" />
+                        <span
+                          data-now-progress=""
+                          className="absolute inset-0 origin-top rounded-full bg-[var(--fill-now)] transition-transform duration-1000 ease-linear"
+                          style={{ transform: `scaleY(${Math.max(0.04, fill)})` }}
+                        />
+                        <span
+                          className="absolute start-0 top-0 h-full w-full transition-transform duration-1000 ease-linear"
+                          style={{ transform: `translateY(${fill * 100}%)` }}
+                        >
+                          {/* нова пара — новий елемент: ореол крапки розходиться двічі й затихає */}
+                          <span
+                            key={slot.pair}
+                            className="anim-halo absolute start-1/2 top-0 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--fill-now)] rtl:translate-x-1/2"
+                          />
+                        </span>
                       </span>
                     ) : null}
                   </div>
@@ -156,6 +172,7 @@ export function DayList({
                           dayParity={day.parity}
                           now={current}
                           past={past}
+                          arrived={arrived?.has(lesson.id)}
                         />
                       ))
                     )}

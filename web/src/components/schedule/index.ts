@@ -5,4 +5,6 @@ export { LessonCell } from './LessonCell';
 export { LessonDetails } from './LessonDetails';
 export { DayTrack, NowIndicator, type NowIndicatorProps } from './NowIndicator';
 export { TONE_BADGE } from './tones';
+export { useArrivedChanges } from './useArrivedChanges';
+export { navEnter, useNavTransition, type NavKey } from './useNavTransition';
 export { WeekGrid } from './WeekGrid';

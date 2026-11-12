@@ -65,14 +65,21 @@ describe('WeekGrid', () => {
     const line = table.querySelector<HTMLElement>('[data-now-line="strong"]');
     expect(line).not.toBeNull();
     // без z-index і перед вмістом у DOM: клітинка з тим самим тлом малюється поверх лінії
-    expect(line!.className).not.toMatch(/(^|\s)z-/);
-    const content = line!.parentElement!.querySelector('div');
+    const layer = line!.parentElement!;
+    expect(layer.className).not.toMatch(/(^|\s)z-/);
+    // лінія ковзає лише transform: шар висотою з клітинку зсунуто на пройдену частку пари
+    expect(layer.style.transform).toMatch(/^translateY\(/);
+    expect(layer.style.top).toBe('');
+    const cell = line!.closest('td')!;
+    const content = cell.querySelector(':scope > div');
     expect(content).not.toBeNull();
-    expect(line!.compareDocumentPosition(content!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(layer.compareDocumentPosition(content!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(content!.className).toMatch(/relative/);
     expect(content!.className).toMatch(/bg-today-wash/);
-    // над заняттям від лінії лишається крапка на краю колонки
-    expect(line!.parentElement!.querySelector('[data-now-marker]')).not.toBeNull();
+    // над заняттям від лінії лишається крапка на краю колонки, з ореолом «пара почалась»
+    const marker = cell.querySelector('[data-now-marker]');
+    expect(marker).not.toBeNull();
+    expect(marker!.className).toMatch(/anim-halo/);
   });
 
   it('пʼятнична пара з іншим дзвінком показує свій час', () => {
@@ -115,7 +122,9 @@ describe('DayList і NowIndicator', () => {
     const current = screen.getAllByRole('listitem').find((item) => item.getAttribute('aria-current') === 'time')!;
     const progress = current.querySelector<HTMLElement>('[data-now-progress]');
     expect(progress).not.toBeNull();
-    expect(progress!.style.height).toBe('50%');
+    // росте лише transform (scaleY), без анімації висоти
+    expect(progress!.style.transform).toBe('scaleY(0.5)');
+    expect(progress!.style.height).toBe('');
     // жодної горизонтальної лінії на всю ширину рядка
     expect(current.querySelector('.inset-x-0')).toBeNull();
   });

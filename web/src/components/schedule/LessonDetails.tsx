@@ -85,7 +85,10 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           {lesson.room ? (
             <>
               {roomLabel(lesson.room.name)}
-              <span className="text-secondary"> · {ROOM_TYPE_LABEL[lesson.room.type]}</span>
+              {/* «ауд. 16 · аудиторія» — повтор; тип називаємо, лише коли він щось каже (клас, лабораторія, зал) */}
+              {lesson.room.type !== 'CLASSROOM' && lesson.room.type !== 'OTHER' ? (
+                <span className="text-secondary"> · {ROOM_TYPE_LABEL[lesson.room.type]}</span>
+              ) : null}
             </>
           ) : (
             <span className="text-muted">не вказано</span>

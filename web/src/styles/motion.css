@@ -47,6 +47,11 @@
     animation: fade-out 140ms var(--ease-in) forwards;
   }
 
+  /* Без руху цифра, що йде, не показується зовсім: число просто міняється на місці */
+  .anim-digit-out {
+    display: none;
+  }
+
   /* Поява зміни з живого оновлення: тонування «наливається» один раз */
   .anim-tint-in {
     animation: fade-in 150ms var(--ease-out);
@@ -116,6 +121,39 @@
     .anim-digit {
       display: inline-block;
       animation: digit-in 200ms var(--ease-out) both;
+    }
+
+    /* …а стара йде вгору на 4 px і гасне (лише на місці цифри, що змінилась) */
+    .anim-digit-out {
+      display: inline-block;
+      animation: digit-out 200ms var(--ease-out) both;
+    }
+
+    /* Почалася пара: ореол крапки «зараз» розходиться двічі й затихає (батько позиціонований) */
+    .anim-halo::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background-color: var(--fill-now);
+      opacity: 0;
+      pointer-events: none;
+      animation: live-pulse var(--duration-live) var(--ease-out) 2;
+    }
+
+    /* Зміна прийшла наживо: спершу лінія закреслення (anim-strike), потім тло й слово стану — один раз */
+    .anim-wash-in::before {
+      animation: fade-in 200ms var(--ease-out) 200ms both;
+    }
+
+    .anim-word-in {
+      animation: word-in 200ms var(--ease-out) 200ms both;
+    }
+
+    /* Розгортка: вміст спускається на 4 px і проявляється; висота змінюється одразу (без перерахунку макета щокадру) */
+    .anim-reveal:not([hidden]),
+    details[open] > :not(summary) {
+      animation: reveal-in 200ms var(--ease-out);
     }
 
     /* Знак малює себе один раз (екран входу): лінія проходить за 1.4 с */
@@ -202,6 +240,31 @@
   from {
     opacity: 0;
     transform: translateY(4px);
+  }
+}
+
+@keyframes digit-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
   }
 }
 

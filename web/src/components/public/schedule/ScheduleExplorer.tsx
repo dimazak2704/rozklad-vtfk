@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
-import { DayList, NowIndicator, WeekGrid } from '@/components/schedule';
+import { DayList, NowIndicator, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -117,6 +117,12 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   const changes = useMemo(() => (placeholder ? [] : changedLessons(schedule)), [schedule, placeholder]);
   const day = placeholder ? undefined : dayOf(schedule, date);
   const slots = bells.data?.slots;
+  // зміни, що прийшли, поки людина дивиться на цей тиждень (без підгрупового фільтра й placeholder)
+  const arrived = useArrivedChanges(placeholder ? undefined : query.data);
+  // день чи тиждень входить спокійно: ковзає на 8 px у бік навігації; після скелета — проявляється
+  const enterRef = useNavTransition<HTMLDivElement>(
+    view === 'day' ? (day ? { view, at: day.date } : null) : schedule ? { view, at: schedule.from } : null,
+  );
 
   const openDay = (next: string) => {
     setDate(next);
@@ -188,7 +194,11 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       <div className="grid items-start gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div className="flex min-w-0 flex-col gap-5">
           {live && day && slots ? <NowIndicator variant="inline" bells={slots} lessonPairs={activePairs(day)} date={day.date} /> : null}
-          {day ? <DayList day={day} bells={slots} perspective={perspective} today={today} showHeader={false} /> : <ScheduleSkeleton view="day" />}
+          {day ? (
+            <DayList day={day} bells={slots} perspective={perspective} today={today} showHeader={false} arrived={arrived} />
+          ) : (
+            <ScheduleSkeleton view="day" />
+          )}
         </div>
         {slots && slots.length > 0 ? (
           <section aria-labelledby="day-bells-heading" className="hidden flex-col gap-2 lg:flex">
@@ -204,11 +214,11 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
     content = (
       <div id={WEEK_REGION_ID}>
         <div className="hidden lg:block">
-          <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" />
+          <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" arrived={arrived} />
         </div>
         <div className="flex flex-col gap-8 lg:hidden">
           {schedule.days.map((d) => (
-            <DayList key={d.date} day={d} perspective={perspective} today={today} />
+            <DayList key={d.date} day={d} perspective={perspective} today={today} arrived={arrived} />
           ))}
         </div>
       </div>
@@ -261,7 +271,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
         aria-busy={(placeholder && !unavailableOffline) || undefined}
         className={cn('transition-opacity duration-150', placeholder && !unavailableOffline && 'opacity-60')}
       >
-        {content}
+        <div ref={enterRef}>{content}</div>
       </div>
     </section>
   );

@@ -7,7 +7,7 @@ import type { ScheduleParams, ScheduleView } from '@/components/public/schedule/
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { WeekDayTabs } from '@/components/public/schedule/WeekDayTabs';
 import { WeekNav } from '@/components/public/schedule/WeekNav';
-import { DayList, WeekGrid } from '@/components/schedule';
+import { DayList, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
@@ -38,6 +38,12 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const day = placeholder ? undefined : dayOf(schedule, date);
   const parity: WeekParity | null = placeholder ? null : (schedule?.days.find((d) => d.parity)?.parity ?? null);
   const awayFromNow = homeDate < week.from || homeDate > week.to;
+  // заміна, що прийшла наживо (SSE оновив «мої пари»), проявляється один раз у своїй клітинці
+  const arrived = useArrivedChanges(placeholder ? undefined : schedule);
+  // день чи тиждень входить спокійно: ковзає на 8 px у бік навігації; після скелета — проявляється
+  const enterRef = useNavTransition<HTMLDivElement>(
+    view === 'day' ? (day ? { view, at: day.date } : null) : schedule ? { view, at: schedule.from } : null,
+  );
 
   useHotkeys([
     { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад' },
@@ -71,7 +77,7 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
       day.studyDay && day.lessons.length === 0 ? (
         <EmptyState title="Цього дня у вас пар немає." />
       ) : (
-        <DayList day={day} bells={bells.data?.slots} perspective="teacher" today={today} showHeader={false} />
+        <DayList day={day} bells={bells.data?.slots} perspective="teacher" today={today} showHeader={false} arrived={arrived} />
       )
     ) : (
       <ScheduleSkeleton view="day" />
@@ -80,11 +86,11 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
     content = (
       <>
         <div className="hidden md:block">
-          <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" />
+          <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" arrived={arrived} />
         </div>
         <div className="flex flex-col gap-8 md:hidden">
           {schedule.days.map((d) => (
-            <DayList key={d.date} day={d} perspective="teacher" today={today} />
+            <DayList key={d.date} day={d} perspective="teacher" today={today} arrived={arrived} />
           ))}
         </div>
       </>
@@ -131,7 +137,7 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
         aria-busy={placeholder || undefined}
         className={cn('transition-opacity duration-150', view === 'day' && 'max-w-3xl', placeholder && 'opacity-60')}
       >
-        {content}
+        <div ref={enterRef}>{content}</div>
       </div>
     </section>
   );
