@@ -54,7 +54,8 @@ export function PublicFooter({ className }: { className?: string }) {
             <ul className="flex flex-col sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
               <li>
                 <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className={LINK}>
-                  <span className="u-line">Telegram&#8209;бот</span>
+                  {/* нерозривний дефіс (U+2011): «Telegram-бот» не рветься на два рядки */}
+                  <span className="u-line">Telegram{'‑'}бот</span>
                   <span className="sr-only">(відкриється в новій вкладці)</span>
                 </a>
               </li>
