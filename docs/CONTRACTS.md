@@ -201,6 +201,12 @@ Records live in `libs/contracts` (`ua.vtc.rozklad.contracts.events`).
 | `absence.reported` | core → notification | `absenceId, teacherId, teacherName, dateFrom, dateTo, pairs, source` |
 | `order.published` | core → notification | `OrderPayload` (all fields of `OrderDto` + `semesterName`, `affectedGroups:[{groupId, code}]`, `affectedTeachers:[{teacherId, name}]`) |
 
+Message properties (additive, optional): `message_id` = the event's `eventId`; header `X-Request-Id` = the
+request id of the HTTP request (or of the consumed message) that caused the event. A consumer puts both into
+its MDC (`requestId`, `eventId`) while it handles the message and forwards `X-Request-Id` on the calls it
+makes; a message without the header gets a new request id. Events re-sent after a restart or a broker failure
+(outbox resubmission, scheduler's resend of `generation.completed`) have no header.
+
 `ProblemSnapshot { timeslots:[{weekday,pair}], shiftWindows:[{shift,weekday,firstPair,lastPair}], groups:[{id,code,size,shift,subgroups:[n]}],
 rooms:[{id,name,type,capacity,maxParallel}], teachers:[{id,name,unavailable:[{weekday,pair}], unwanted:[{weekday,pair}]}],
 units:[{unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight: WHOLE|HALF, requiredRoomType?, preferredRoomId?, homeRoomId?,

@@ -238,7 +238,8 @@ Sign-in service `auth` (`services/auth`, details in `docs/modules/auth.md`):
 
 Actuator `health` (liveness/readiness groups), `info`, `metrics`; structured console logs (Boot 4
 structured logging, `logging.structured.format.console=ecs` in compose), `X-Request-Id` propagated and
-put into MDC. Never log tokens, API keys, Telegram tokens, or absence reasons/comments.
+put into MDC: forwarded on service-to-service calls, carried by event messages as a header with
+`message_id` = `eventId` (CONTRACTS §7) and put back into the consumer's MDC (`requestId`, `eventId`). Never log tokens, API keys, Telegram tokens, or absence reasons/comments.
 
 ## 11. Testing
 

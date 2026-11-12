@@ -123,6 +123,11 @@ constraint shows its matches with score `0hard/0soft`.
   (`publisher-confirm-type: correlated`, `CorrelationData` = event id; `simple` confirms were dropped
   because `waitForConfirms` also reports NACKs of earlier messages on a cached channel); if the broker
   does not confirm, `JobMaintenance` re-sends the stored payload with the same `eventId` every 30 s.
+* **Request id** (CONTRACTS §7): the listener factory puts `X-Request-Id` and `message_id` of
+  `generation.requested`/`generation.cancel` into the MDC (`requestId`, `eventId`; a new id when the header
+  is missing); the solver callbacks run with the MDC of the request that started the job, so
+  `generation.completed` carries the same `X-Request-Id` and every sent event has `message_id` = `eventId`.
+  Periodic progress and the completion re-sent by `JobMaintenance` carry no request id.
 * **Statuses**: SOLVED — time limit or plateau reached, all units placed (may still have hard
   violations: `hardScore < 0`, the analysis shows which). CANCELLED — after `generation.cancel`; a job
   that was already solving keeps its best timetable (assignments present), a queued or not yet placed

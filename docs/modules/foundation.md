@@ -138,6 +138,17 @@ curl -s -u rozklad-notification:dev-notification-secret -d grant_type=client_cre
   (notification also `importerRestClient`). They add a client-credentials token of the service
   account (registration `rozklad-service`, token URI `AUTH_TOKEN_URI` of `auth`) and
   forward `X-Request-Id`.
+* Request id (`X-Request-Id`, MDC `requestId`) follows the work it caused. Every service with a servlet
+  stack (core, importer, notification, scheduler, auth) has a `RequestIdFilter`; every RestClient built from
+  the application's `RestClient.Builder` forwards the header (core: `shared.web.RequestIdPropagationConfig`,
+  also used by the accounts client of identity). Async work keeps the MDC of its submitter: core's
+  `applicationTaskExecutor` (Modulith async listeners and the outbox externalization) through a
+  `TaskDecorator`, importer's job executor, scheduler's solver callbacks. Events carry it as a message header
+  and the event id as `message_id` (`RequestIdMessages` in core, scheduler and notification, CONTRACTS §7);
+  the listener factory of each service puts `requestId` and `eventId` into the MDC for the whole handling,
+  retries included. Not carried: events re-sent by the outbox resubmitter or after a restart, and
+  notification's delivery worker, which sends queued Telegram messages on its own thread (its log lines
+  name the delivery and the chat).
 * CORS is handled only by the gateway (`CORS_ALLOWED_ORIGINS`); services never add CORS headers.
 
 ## 6. Errors (RFC 9457)
@@ -316,7 +327,8 @@ notification, `/api/scheduler/**` → scheduler, `/api/events/stream` → core w
 absolute URLs with the client's host), `DedupeResponseHeader` for CORS headers. CORS for
 `CORS_ALLOWED_ORIGINS` (5180, 8088) incl. preflight on unmatched paths, exposed headers `Location`,
 `Content-Disposition`, `X-Request-Id`, `X-RateLimit-*`. `X-Request-Id`: kept if safe
-(`[A-Za-z0-9._-]{1,64}`), otherwise generated; forwarded and returned. Gateway's own errors (no
+(`[A-Za-z0-9._-]{1,64}`), otherwise generated; forwarded and returned (the WARN line of a 5xx gateway error
+starts with `[<requestId>]`, WebFlux has no MDC). Gateway's own errors (no
 route 404, service down 503, timeout 504) are ProblemDetail in Ukrainian. Response timeout 120 s
 (`GATEWAY_RESPONSE_TIMEOUT`), connect 5 s. X-Forwarded headers are stripped (no trusted proxies),
 the rate-limit key ignores `X-Forwarded-For` (forgeable).
