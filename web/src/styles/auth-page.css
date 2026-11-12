@@ -529,9 +529,10 @@ body.auth {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* штрих пунктиром лише під час малювання (backwards, не both): після нього лишається суцільна лінія.
+     Пунктир 1 при pathLength=1 у Chromium не сходиться: на колах лишався проріз на «3 годині» */
   .auth-mark .auth-stroke {
-    stroke-dasharray: 1;
-    animation: auth-mark-draw 1400ms var(--auth-ease-out) both;
+    animation: auth-mark-draw 1400ms var(--auth-ease-out) backwards;
   }
 
   .auth-spire-line {
@@ -583,9 +584,11 @@ body.auth {
 
 @keyframes auth-mark-draw {
   from {
+    stroke-dasharray: 1;
     stroke-dashoffset: 1;
   }
   to {
+    stroke-dasharray: 1;
     stroke-dashoffset: 0;
   }
 }
