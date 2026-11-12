@@ -172,6 +172,8 @@ management:
           include: readinessState,db,adminCredential
 
 logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
   level:
     root: INFO
     ua.vtc.rozklad: ${LOG_LEVEL_APP:INFO}

@@ -62,6 +62,19 @@ class InternalAccountsApiIT {
     }
 
     @Test
+    void theRequestIdOfCoreIsKeptAndARejectedCallIsCorrelatedToo() {
+        UUID id = UUID.randomUUID();
+        String body = newAccount("nobody" + suffix(), null, STRONG);
+
+        HttpResponse<String> rejected = core.json("PUT", path(id), body, "X-Request-Id", "req-core-42");
+        HttpResponse<String> forged = core.json("PUT", path(id), body, "X-Request-Id", "bad id with spaces");
+
+        assertThat(rejected.statusCode()).isEqualTo(401);
+        assertThat(rejected.headers().firstValue("X-Request-Id")).hasValue("req-core-42");
+        assertThat(forged.headers().firstValue("X-Request-Id")).get().asString().hasSize(36);
+    }
+
+    @Test
     void createIsIdempotentAndTheAccountCanSignIn() {
         UUID id = UUID.randomUUID();
         String username = "teacher" + suffix();

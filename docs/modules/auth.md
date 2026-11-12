@@ -88,6 +88,9 @@ There is no password grant and no refresh token for the SPA.
   `DELETE /{id}/federated/google`, `DELETE /{id}`. Errors are RFC 9457 problems with stable types
   (`username-taken`, `email-taken`, `last-admin`, `account-revoked`, `password-rejected` with `reason`).
   `X-Actor` names the admin for the audit columns.
+- **Request id.** `config.RequestIdFilter` (before Spring Security) keeps a safe `X-Request-Id` (core
+  forwards the one of the admin's request), otherwise generates one, puts it into the MDC as `requestId`
+  (console pattern `[%X{requestId:-}]`) and echoes it in the response.
 
 ## Seeds and the first admin
 
