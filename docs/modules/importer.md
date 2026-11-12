@@ -56,7 +56,10 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
   alias. Raw values must belong to the job (else 400). Optimistic version check → 409 on concurrent edits.
 * **Apply** re-reads the catalog, re-matches (new blocking rows → back to `NEEDS_REVIEW` with a message), then
   runs the kind's steps. Every finished step is stored in `result` at once (checkpoint); a retry after a failed
-  step skips finished ones. Calls carry `Idempotency-Key: import-job:<id>:<step>`. A second apply of an applied
+  step skips finished ones. Saving mappings, options or a revised draft clears the checkpoints of a job that is
+  not applied yet: the stored steps were built from the old inputs, so the next apply sends every step again
+  (core's catalog import is an upsert; a new teacher or discipline the admin confirmed after a rejection is
+  then really created). Calls carry `Idempotency-Key: import-job:<id>:<step>`. A second apply of an applied
   job changes nothing.
 * **Restart**: `UPLOADED` jobs are re-queued; `PARSING` → `FAILED` (re-parsing could loop on a poison file and
   re-spend AI money); `APPLYING` → `FAILED` with a "press apply again" message (checkpoints make it safe).
@@ -329,4 +332,6 @@ run the jar with `SERVER_PORT=18083 DB_NAME=importer_<name>` and a key from `.en
   enforced (NEEDS_REVIEW until the rows are saved); group codes misread as other existing codes cannot be caught by
   matching, only by the admin's review.
 * Single instance assumed: restart recovery marks every `PARSING`/`APPLYING` job of the database.
+* A catalog entry created by an apply attempt that core then rejected stays in core when the admin later maps
+  that value to an existing record instead (core has no undo for an import; it is marked `needsReview` there).
 * `FILESYSTEM` storage: a file written for a rolled-back upload stays in the directory (harmless orphan).

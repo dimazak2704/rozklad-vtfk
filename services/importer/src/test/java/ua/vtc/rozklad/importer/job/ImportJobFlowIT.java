@@ -203,6 +203,57 @@ class ImportJobFlowIT {
         verify(core, times(2)).importTimetable(any(), anyString());
     }
 
+    /**
+     * Core rejects the second step after the catalog step was stored; the admin fixes a mapping
+     * (an existing teacher becomes a new one). The stored catalog step was built from the old
+     * mappings, so it must be sent again with the new teacher instead of being skipped.
+     */
+    @Test
+    void changedMappingsAfterACoreRejectionRepeatTheCatalogStep() throws Exception {
+        UUID id = UUID.fromString(upload("schedule-2025-26.xlsx", "TIMETABLE_XLSX", TestCatalogs.SEMESTER, null)
+                .get("id").asString());
+        String toExisting = """
+                {"mappings":[{"type":"TEACHER","raw":"Стець","targetId":"%s","addAlias":false},
+                             {"type":"DISCIPLINE","raw":"НДЕКС","targetId":"%s","addAlias":true}]}
+                """.formatted(TestCatalogs.STETSIO, TestCatalogs.NDEKSM);
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(toExisting))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"));
+
+        when(core.importCatalog(any(), anyString())).thenReturn(jsonMapper.readTree("{\"created\":120}"));
+        when(core.importTimetable(any(), anyString()))
+                .thenThrow(new CoreImportException(422, "Сервер розкладу не прийняв розклад: викладача не знайдено.",
+                        null))
+                .thenReturn(jsonMapper.readTree("{\"versionId\":\"00000000-0000-4000-8000-00000000cccc\"}"));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted());
+        JsonNode rejected = job(id);
+        assertThat(rejected.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(rejected.at("/result/catalog/created").asInt()).isEqualTo(120);
+
+        String toNew = """
+                {"mappings":[{"type":"TEACHER","raw":"Стець","createNew":{},"addAlias":false},
+                             {"type":"DISCIPLINE","raw":"НДЕКС","targetId":"%s","addAlias":true}]}
+                """.formatted(TestCatalogs.NDEKSM);
+        mockMvc.perform(put("/api/import/jobs/{id}/mappings", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(toNew))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"));
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted());
+
+        assertThat(job(id).get("status").asString()).isEqualTo("APPLIED");
+        ArgumentCaptor<CoreImportPayloads.CatalogRequest> catalogRequests =
+                ArgumentCaptor.forClass(CoreImportPayloads.CatalogRequest.class);
+        verify(core, times(2)).importCatalog(catalogRequests.capture(), eq("import-job:" + id + ":catalog"));
+        assertThat(catalogRequests.getAllValues().getFirst().teachers()).extracting(CoreImportPayloads.Teacher::shortName)
+                .doesNotContain("Стець");
+        assertThat(catalogRequests.getAllValues().getLast().teachers()).extracting(CoreImportPayloads.Teacher::shortName)
+                .contains("Стець");
+        verify(core, times(2)).importTimetable(any(), anyString());
+    }
+
     @Test
     void catalogOutageBlocksReviewUntilMatchingIsRepeated() throws Exception {
         when(catalog.snapshot()).thenThrow(new CatalogUnavailableException("Не вдалося отримати каталог з core.", null));

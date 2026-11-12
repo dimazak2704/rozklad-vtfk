@@ -169,10 +169,11 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
-    /** New admin mappings and the matching rows computed with them. */
+    /** New admin mappings and the matching rows computed with them; earlier apply steps are void. */
     public void remapped(List<MappingDecision> mappings, List<ReportRow> entityRows, Instant now) {
         require(acceptsMappings(), "change mappings");
         this.mappings = List.copyOf(mappings);
+        forgetApplySteps();
         updateReport(entityRows);
         status = summary.blocking() ? ImportJobStatus.NEEDS_REVIEW : ImportJobStatus.READY;
         if (status == ImportJobStatus.READY) {
@@ -188,6 +189,7 @@ public class ImportJob implements Persistable<UUID> {
     public void reoptioned(JsonNode options, List<ReportRow> entityRows, Instant now) {
         require(acceptsMappings(), "change the options");
         this.options = options;
+        forgetApplySteps();
         updateReport(entityRows);
         status = summary.blocking() ? ImportJobStatus.NEEDS_REVIEW : ImportJobStatus.READY;
         if (status == ImportJobStatus.READY) {
@@ -200,6 +202,7 @@ public class ImportJob implements Persistable<UUID> {
     public void revised(JsonNode draft, List<ReportRow> parseIssues, List<ReportRow> entityRows, Instant now) {
         require(acceptsMappings(), "revise the draft");
         this.draft = draft;
+        forgetApplySteps();
         this.issues = List.copyOf(parseIssues);
         updateReport(entityRows);
         status = summary.blocking() ? ImportJobStatus.NEEDS_REVIEW : ImportJobStatus.READY;
@@ -217,6 +220,18 @@ public class ImportJob implements Persistable<UUID> {
         status = ImportJobStatus.APPLYING;
         error = null;
         updatedAt = now;
+    }
+
+    /**
+     * The admin changed what the apply steps send (mappings, options or the draft): a stored
+     * checkpoint was built from the old inputs, so every step runs again on the next apply
+     * (core's catalog import is an upsert; a later step is stored only when the whole job applies).
+     * Pressing apply again without a change keeps the checkpoints.
+     */
+    private void forgetApplySteps() {
+        if (status != ImportJobStatus.APPLIED) {
+            result = null;
+        }
     }
 
     /** A step of applying succeeded; its result is kept so a retry skips it. */
