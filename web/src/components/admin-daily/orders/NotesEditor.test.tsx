@@ -10,6 +10,7 @@ import { api } from '@/api/client';
 import type { OrderDto } from '@/api/types';
 import { undoLatest, redoLatest } from '@/lib/undo/actions';
 import { useJournal } from '@/lib/undo/journal';
+import { resetMockStores } from '@/mocks/store';
 import { renderWithProviders } from '@/test/render';
 import { NotesEditor } from './NotesEditor';
 
@@ -28,6 +29,8 @@ const serverNotes = async () => (await api.get<OrderDto>('/admin/orders/draft', 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-09T05:40:00Z'));
+  // демо-ранок мока будується від поточного часу: скидаємо світ уже з підробленою датою
+  resetMockStores();
   useJournal.getState().clear();
   useJournal.getState().setPathScope('/admin/orders');
 });

@@ -161,7 +161,7 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
       const now = valuesOf(fresh, date);
       const typed = form.getValues();
       for (const key of Object.keys(now) as (keyof FormValues)[]) {
-        if (sameRequest(typed[key], was[key])) form.setValue(key, now[key] as never);
+        if (sameRequest(typed[key], was[key])) form.setValue(key, now[key]);
       }
       setBase(fresh);
       return STALE_DATA_MESSAGE;

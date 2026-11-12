@@ -12,7 +12,8 @@ import type { PublicMetaDto } from '@/api/types';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
-import { workingParity, WorkingDateSwitcher } from './WorkingDateSwitcher';
+import { WorkingDateSwitcher } from './WorkingDateSwitcher';
+import { workingParity } from './working-parity';
 
 const meta = { today: '2026-11-12', parity: 'NUMERATOR', weekNumber: 11 } as Pick<PublicMetaDto, 'today' | 'parity' | 'weekNumber'>;
 const semester = { startsOn: '2026-09-01', endsOn: '2026-12-30' };
