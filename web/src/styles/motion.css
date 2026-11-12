@@ -150,6 +150,19 @@
       animation: word-in 200ms var(--ease-out) 200ms both;
     }
 
+    /* Новий рядок у списку (запит на заміну): ледь тоноване тло з'являється й тихо сходить — один раз */
+    .anim-arrive::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border-radius: inherit;
+      background-color: var(--background-color-selected);
+      opacity: 0;
+      pointer-events: none;
+      animation: arrive-wash 1600ms var(--ease-out) 200ms both;
+    }
+
     /* Розгортка: вміст спускається на 4 px і проявляється; висота змінюється одразу (без перерахунку макета щокадру) */
     .anim-reveal:not([hidden]),
     details[open] > :not(summary) {
@@ -251,6 +264,15 @@
   to {
     opacity: 0;
     transform: translateY(-4px);
+  }
+}
+
+@keyframes arrive-wash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 

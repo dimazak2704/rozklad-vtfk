@@ -36,6 +36,8 @@ interface ScheduleExplorerProps {
 
 /** Телефон: тиждень і подання живуть в одному рядку над днями, а не трьома рядками керувань. */
 export const PHONE_QUERY = '(max-width: 639.98px)';
+/** Від 1024 px тиждень — сітка, вужче — дні списком. */
+const WIDE_QUERY = '(min-width: 1024px)';
 
 /**
  * «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки (§7: не більше двох).
@@ -107,6 +109,8 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
   const online = useOnline();
   const phone = useMediaQuery(PHONE_QUERY);
+  // сітка або дні списком — що одне видно, те й рендеримо: «тік» часу не перемальовує прихований варіант
+  const wide = useMediaQuery(WIDE_QUERY);
   const bells = useBells(date);
   const schedule = useMemo(() => {
     if (!query.data) return undefined;
@@ -213,14 +217,15 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   } else {
     content = (
       <div id={WEEK_REGION_ID}>
-        <div className="hidden lg:block">
+        {wide ? (
           <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" arrived={arrived} />
-        </div>
-        <div className="flex flex-col gap-8 lg:hidden">
-          {schedule.days.map((d) => (
-            <DayList key={d.date} day={d} perspective={perspective} today={today} arrived={arrived} />
-          ))}
-        </div>
+        ) : (
+          <div className="flex flex-col gap-8">
+            {schedule.days.map((d) => (
+              <DayList key={d.date} day={d} perspective={perspective} today={today} arrived={arrived} />
+            ))}
+          </div>
+        )}
       </div>
     );
   }

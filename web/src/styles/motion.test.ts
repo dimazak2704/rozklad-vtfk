@@ -31,7 +31,7 @@ describe('prefers-reduced-motion у motion.css', () => {
   });
 
   it('рух (зсув, закреслення, ореол, відлік, розгортка) — лише коли людина не просила його вимкнути', () => {
-    for (const name of ['digit-in', 'digit-out', 'strike-draw', 'live-pulse', 'word-in', 'reveal-in', 'pop-in', 'dialog-in']) {
+    for (const name of ['digit-in', 'digit-out', 'strike-draw', 'live-pulse', 'word-in', 'reveal-in', 'arrive-wash', 'pop-in', 'dialog-in']) {
       expect(outside, name).not.toMatch(new RegExp(`animation:\\s*${name}\\b`));
     }
   });

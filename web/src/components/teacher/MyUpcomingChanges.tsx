@@ -1,6 +1,6 @@
 import { useMyChanges } from '@/api/me';
 import type { BadgeTone } from '@/components/ui';
-import { ErrorState, Skeleton } from '@/components/ui';
+import { ErrorState, Skeleton, TruncatedText } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { compareIsoDates, todayInKyiv } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
@@ -62,10 +62,11 @@ export function MyUpcomingChanges() {
                   {discipline ? (
                     <span {...lineAttr(discipline)} aria-hidden="true" className="size-2 shrink-0 self-center rounded-full bg-[var(--line-dot)]" />
                   ) : null}
-                  <span className="min-w-0 truncate">
+                  {/* вузький рядок обрізає назву — наведення мишею показує її повністю */}
+                  <TruncatedText className="min-w-0 truncate">
                     {changeDisciplineTitle(change)}
                     <span className="font-[500] text-secondary"> · {change.group.code}</span>
-                  </span>
+                  </TruncatedText>
                 </p>
                 {status ? <p className={cn('text-caption', TONE_TEXT[status.tone] ?? 'text-secondary')}>{status.label}</p> : null}
               </div>

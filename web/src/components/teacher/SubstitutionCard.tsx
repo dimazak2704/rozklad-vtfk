@@ -73,7 +73,9 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
       aria-label={`${notice ? 'Нова заміна' : 'Запит на заміну'}: ${change.group.code}, ${changeDay(change).toLocaleLowerCase('uk')}, ${change.pairFrom} пара`}
       className={cn(
         'grid gap-x-6 gap-y-3 px-4 py-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:px-5 lg:grid-cols-[7rem_minmax(0,1fr)_auto] lg:items-center',
-        fresh && 'motion-safe:animate-[live-flash_2.4s_var(--ease-out)]',
+        // прийшов наживо: закреслення по старому значенню, слово стану заходить на 4 px, рядок ледь тоновано
+        // й тоновання тихо сходить — один раз, лише transform, opacity і clip-path
+        fresh && 'anim-arrive relative isolate',
       )}
     >
       <p className="flex flex-wrap items-baseline gap-x-2 sm:flex-col sm:gap-0.5">
@@ -83,7 +85,13 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
       </p>
 
       <div className="flex min-w-0 flex-col gap-1">
-        <p className={cn(primary && due && !overdue ? 'text-body font-[650]' : 'text-caption font-[600]', overdue ? 'text-cancel' : 'text-change')}>
+        <p
+          className={cn(
+            primary && due && !overdue ? 'text-body font-[650]' : 'text-caption font-[600]',
+            overdue ? 'text-cancel' : 'text-change',
+            fresh && 'anim-word-in',
+          )}
+        >
           {state}
         </p>
         <p className="flex min-w-0 items-baseline gap-2 text-cell text-primary">
@@ -103,7 +111,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
         <p className="text-caption text-secondary">
           {replaced ? (
             <>
-              замість <s className="decoration-[var(--text-decoration-color-change)]">{replaced}</s>
+              замість <s className={cn('decoration-[var(--text-decoration-color-change)]', fresh && 'anim-strike')}>{replaced}</s>
             </>
           ) : null}
           {replaced && room ? ' · ' : null}

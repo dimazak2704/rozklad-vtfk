@@ -1,5 +1,5 @@
 import { CornerDownRight, MonitorSmartphone } from 'lucide-react';
-import type { ComponentProps, ReactElement } from 'react';
+import { memo, type ComponentProps, type ReactElement } from 'react';
 import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { lineAttr } from '@/lib/discipline-color';
@@ -95,7 +95,7 @@ function DetailsTrigger({
  * до двох рядків, викладач ліворуч і аудиторія праворуч, закреслений оригінал для заміни. Не більше трьох
  * рядків тексту й рядка стану; решта — у картці деталей (наведення чи Enter, на телефоні — шторка).
  */
-export function LessonCell({
+function LessonCellView({
   lesson,
   perspective = 'group',
   variant = 'grid',
@@ -241,3 +241,9 @@ export function LessonCell({
     </DetailsTrigger>
   );
 }
+
+/**
+ * Годинник «зараз» щоп'ять секунд перемальовує сітку; клітинка з тими самими пропсами (заняття — той самий
+ * об'єкт із кешу запиту) не перемальовується. Так «тік» часу не коштує кадрів навіть на повному тижні.
+ */
+export const LessonCell = memo(LessonCellView);

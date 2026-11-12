@@ -10,6 +10,7 @@ import { WeekNav } from '@/components/public/schedule/WeekNav';
 import { DayList, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 
 const VIEW_OPTIONS = [
@@ -38,6 +39,8 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const day = placeholder ? undefined : dayOf(schedule, date);
   const parity: WeekParity | null = placeholder ? null : (schedule?.days.find((d) => d.parity)?.parity ?? null);
   const awayFromNow = homeDate < week.from || homeDate > week.to;
+  // сітка або дні списком — що одне видно, те й рендеримо: «тік» часу не перемальовує прихований варіант
+  const wide = useMediaQuery('(min-width: 768px)');
   // заміна, що прийшла наживо (SSE оновив «мої пари»), проявляється один раз у своїй клітинці
   const arrived = useArrivedChanges(placeholder ? undefined : schedule);
   // день чи тиждень входить спокійно: ковзає на 8 px у бік навігації; після скелета — проявляється
@@ -83,17 +86,14 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
       <ScheduleSkeleton view="day" />
     );
   } else {
-    content = (
-      <>
-        <div className="hidden md:block">
-          <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" arrived={arrived} />
-        </div>
-        <div className="flex flex-col gap-8 md:hidden">
-          {schedule.days.map((d) => (
-            <DayList key={d.date} day={d} perspective="teacher" today={today} arrived={arrived} />
-          ))}
-        </div>
-      </>
+    content = wide ? (
+      <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" arrived={arrived} />
+    ) : (
+      <div className="flex flex-col gap-8">
+        {schedule.days.map((d) => (
+          <DayList key={d.date} day={d} perspective="teacher" today={today} arrived={arrived} />
+        ))}
+      </div>
     );
   }
 
