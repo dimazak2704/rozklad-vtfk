@@ -163,19 +163,25 @@ export default function AboutPage() {
         </div>
 
         <aside className="flex min-w-0 flex-col gap-6" aria-label="Telegram і вхід">
+          {/* на телефоні QR нічого не дає (сканувати нічим): лише кнопка, і одразу під заголовком */}
           <section aria-labelledby="about-bot" className="flex flex-col gap-3">
             <h2 id="about-bot" className="text-heading font-bold text-primary">
               Telegram-бот {TELEGRAM_BOT_HANDLE}
             </h2>
+            <a
+              href={TELEGRAM_BOT_URL}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonClass({ variant: 'primary', className: 'self-start md:order-last' })}
+            >
+              <Send aria-hidden="true" className="size-4" />
+              Відкрити бота
+            </a>
             <p className="text-ui text-secondary">
               Розклад групи на сьогодні й завтра у два дотики, а групові чати отримують свої рядки розпорядження одразу
               після публікації. Викладачам бот надсилає запити на заміну з кнопками «Підтверджую» / «Не можу».
             </p>
-            <QrPlate value={TELEGRAM_BOT_URL} size={152} label={`QR-код: бот ${TELEGRAM_BOT_HANDLE}`} className="self-start" />
-            <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'primary', className: 'self-start' })}>
-              <Send aria-hidden="true" className="size-4" />
-              Відкрити бота
-            </a>
+            <QrPlate value={TELEGRAM_BOT_URL} size={152} label={`QR-код: бот ${TELEGRAM_BOT_HANDLE}`} className="self-start max-md:hidden" />
           </section>
 
           <section aria-labelledby="about-teachers" className="flex flex-col gap-3 border-t border-separator pt-6">
