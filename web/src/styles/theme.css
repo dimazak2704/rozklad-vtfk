@@ -248,7 +248,7 @@
   --c-bg-danger-active: oklch(46.5% 0.18 27);
   --c-bg-danger-subtle: oklch(24.5% 0.03 25);
   --c-bg-change: oklch(78% 0.14 76);
-  --c-bg-change-subtle: oklch(25.5% 0.035 75);
+  --c-bg-change-subtle: oklch(24% 0.02 75); /* низька насиченість: у темній колонці «сьогодні» не бурий брус; стан несуть слово й рамка 1 px */
   --c-bg-cancel-subtle: oklch(24.5% 0.03 25);
   --c-bg-add: oklch(72% 0.14 152);
   --c-bg-add-subtle: oklch(24.5% 0.032 152);

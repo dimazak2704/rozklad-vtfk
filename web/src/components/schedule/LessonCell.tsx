@@ -37,7 +37,8 @@ export interface LessonCellProps {
  */
 const TONE_SURFACE = {
   regular: 'before:bg-transparent hover:before:bg-hover',
-  change: 'before:bg-change-subtle',
+  // у темній темі тло ледь тоноване, тож стан тримає ще й рамка 1 px кольору заміни (не «бурий брус»)
+  change: 'before:bg-change-subtle dark:before:shadow-[inset_0_0_0_1px_var(--border-color-change)]',
   cancel: 'before:bg-transparent hover:before:bg-hover',
   add: 'before:bg-add-subtle',
   room: 'before:bg-transparent hover:before:bg-hover',
