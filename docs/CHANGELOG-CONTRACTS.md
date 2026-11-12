@@ -428,3 +428,20 @@ types and the mock API:
 | `POST /api/public/invites/{token}/accept` | For a password link: `username` must be the account's username (409 otherwise); an account without one gets the chosen username. Passwords: 12–64 characters (`auth` is authoritative; `password-rejected` reasons become Ukrainian field errors). | Q1: minimum length 12. |
 | `GET /api/admin/invites` | Lists teacher invites only (password links are not invites of a teacher). | — |
 | Sign-in page | «Увійти через Google» when `AUTH_GOOGLE_CLIENT_ID` is set; a refused address goes to `/auth/login?error=not_allowed`, a provider error to `?error=google`. | DESIGN §4.4. |
+
+## Sign-in service only (step 6, 12.11.2026): contract version 2
+
+Keycloak is removed from the repository: the realm files, the container, the prod overlay, the deploy
+scripts that synced it and `keycloak-admin-client`. `auth` is the only issuer in development and on the
+server. Nothing was ever deployed with Keycloak, so there is no account import and no cutover release.
+
+| Area | Decision | Why |
+|---|---|---|
+| Version | Authentication contract version 2 (`docs/CONTRACTS.md` §0). | Two removals below are breaking for readers of version 1. |
+| Access-token roles | Only the flat `roles` claim is read (Java `TokenRoles`, SPA `rolesFromClaims`); `realm_access.roles` gives no role any more. | No token with that shape is issued. |
+| Audience | `AUTH_AUDIENCE` is required (default `rozklad-api`); the "empty = no check" branch is gone. | Every token of `auth` carries `rozklad-api`. |
+| `GET /api/internal/teachers/{id}` | `keycloakUserId` removed; `accountId` stays. | Deprecated in step 0; no service in the repository read it. |
+| Server layout | One origin: `https://<DOMAIN>` serves the SPA, `/api` and `/auth`. The `auth.<DOMAIN>` and `api.<DOMAIN>` hosts, `EXTRA_WEB_ORIGIN` and the Netlify client layout are gone (owner decision Q2). The web image no longer bakes an OIDC authority. | Same-origin sign-in; one image for every domain. |
+| Server accounts | The first admin comes from `AUTH_BOOTSTRAP_ADMIN_USERNAME`/`_PASSWORD`; demo teachers `krentsin`, `nepyivoda` from `DEMO_TEACHER_PASSWORD` (`ServerDemoAccounts`, empty = off). `DEMO_ADMIN_PASSWORD` is gone. | Replaces the Keycloak demo-user script. |
+| Server env | New: `AUTH_DB_PASSWORD`, `AUTH_SIGNING_KEY_ID`, `infra/deploy/secrets/auth-signing-key.pem` (`gen-secrets.sh`). Gone: `KEYCLOAK_*`, `KC_ADMIN_ALLOWED`, `CORE_ADMIN_CLIENT_SECRET`, `API_SITE_ENABLED`, `EXTRA_WEB_ORIGIN`. | `docs/DEPLOY.md`. |
+| Development | `scripts/dev-stack.sh up` removes the old container (`--remove-orphans`); `reset-auth --yes` recreates the `auth` database. A Postgres volume created before still holds the unused `keycloak` database: `docker exec rozklad-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS keycloak" -c "DROP ROLE IF EXISTS keycloak"`. | `init.sql` runs only on an empty volume. |

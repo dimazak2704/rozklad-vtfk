@@ -16,9 +16,10 @@ services/scheduler              rozklad-scheduler :8082  skeleton (Timefold star
 services/importer               rozklad-importer  :8083  skeleton (POI, PDFBox, Anthropic SDK, RestClient→core)
 services/notification           rozklad-notification :8084 skeleton (Telegram libs, POI/PDFBox, queue, RestClients)
 services/gateway                rozklad-gateway   :8080  complete (routes, CORS, rate limit, request id, errors)
+services/auth                   rozklad-auth      :8085  sign-in service (added later, docs/modules/auth.md)
 infra/docker-compose.yml        profiles infra / app
 infra/postgres/init.sql         databases + users per service
-infra/keycloak/rozklad-realm.json
+infra/dev/demo-users.env        demo passwords of the local stand (development only)
 scripts/env.sh                  JDK 25 + Maven 3.9.11 (source it in every shell)
 scripts/run-local.sh            run one service jar on the host with secrets from .env
 .env.example                    every non-secret dev default, empty secrets
@@ -56,16 +57,14 @@ mvn -q -pl services/core -am verify -Dbuild.dir='${project.basedir}/target-catal
 Infrastructure and apps:
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile infra up -d           # postgres, rabbitmq, redis, keycloak
+docker compose -f infra/docker-compose.yml --profile infra up -d           # postgres, rabbitmq, redis
 mvn -q -DskipTests package                                                 # jars for the images
 docker compose -f infra/docker-compose.yml --profile app up -d --build     # + all services and web
 scripts/run-local.sh core                                                  # or run one service on the host
 ```
 
-Infra services carry both profiles, so `--profile app` alone also starts them. Keycloak needs about
-2 minutes on the very first start (augmentation + schema). `--import-realm` skips an existing realm:
-after editing `rozklad-realm.json` delete the realm in the admin console (or `docker compose ... down -v`,
-which also wipes all databases).
+Infra services carry both profiles, so `--profile app` alone also starts them. `scripts/dev-stack.sh up`
+does all of this and waits for health (`docs/RUNNING.md`).
 
 Spring Boot does not read `.env`. On the host use `scripts/run-local.sh <service>` (exports non-empty
 `.env` values, tolerates CRLF) — tests never see the real secrets.
@@ -81,57 +80,44 @@ Spring Boot does not read `.env`. On the host use `scripts/run-local.sh <service
 | PostgreSQL 18 | **5433** (5432 is a local PostgreSQL) | postgres:5432 |
 | RabbitMQ / management UI | 5672 / 15672 (rozklad / rozklad) | rabbitmq:5672 |
 | Redis | 6379 | redis:6379 |
-| Keycloak | 8180 (admin console: admin / admin, master realm) | keycloak:8080, health on 9000 |
+| auth (sign-in) | 8085 (browser: through web, `http://localhost:8088/auth`) | auth:8085, actuator on 8086 |
 
-Databases (owner = user = password): `core`, `scheduler`, `importer`, `notification`, `keycloak`;
+Databases (owner = user = password): `core`, `scheduler`, `importer`, `notification`, `auth`;
 each user can connect only to its own database. Superuser `postgres` / `postgres`.
 
-## 4. Keycloak realm `rozklad`
+## 4. Sign-in service `auth`
 
-Issuer is always `http://localhost:8180/realms/rozklad` (`KC_HOSTNAME`); containers fetch keys from
-`http://keycloak:8080/realms/rozklad/protocol/openid-connect/certs` (`AUTH_JWKS_URI`). Login
-pages are Ukrainian by default (`uk`, `en` supported). Roles: `ADMIN`, `TEACHER`, `SERVICE`.
+Issuer `http://localhost:8088/auth` (nginx of the `web` container); containers fetch keys from
+`http://auth:8085/auth/oauth2/jwks` (`AUTH_JWKS_URI`). Roles: `ADMIN`, `TEACHER`, `SERVICE`. Clients,
+token claims, seeds and the internal API: `docs/modules/auth.md`.
 
-| User | Password | Role | Fixed id (`sub`) |
-|---|---|---|---|
-| admin | admin | ADMIN | `a0000000-0000-4000-8000-000000000001` |
-| krentsin (Кренцін М. Д.) | teacher | TEACHER | `a0000000-0000-4000-8000-000000000002` |
-| nepyivoda (Непийвода М. В.) | teacher | TEACHER | `a0000000-0000-4000-8000-000000000003` |
-| service-account-rozklad-core-admin | — | realm-management manage/view/query-users | `a0000000-0000-4000-8000-000000000010` |
-| service-account-rozklad-notification | — | SERVICE | `a0000000-0000-4000-8000-000000000011` |
-| service-account-rozklad-importer | — | SERVICE | `a0000000-0000-4000-8000-000000000012` |
-
-`scripts/seed_demo.py` links the teachers «Кренцін» and «Непийвода» to these accounts through
-`PUT /api/admin/teachers/{id}/account` (the `demo` profile's `DemoAccountLinks` does the same by id).
-Test credentials for scripts: `infra/keycloak/demo-users.env`; how to run everything: `docs/RUNNING.md`.
-
-| Client | Type | Secret (dev, also in `.env.example`) |
+| User | Role | Fixed id (`sub`) |
 |---|---|---|
-| rozklad-web | public, Authorization Code + PKCE S256, redirects `http://localhost:5180/*`, `http://localhost:8088/*` | — |
-| rozklad-core-admin | confidential, service account | `dev-core-admin-secret` (`CORE_ADMIN_CLIENT_SECRET`) |
-| rozklad-notification | confidential, service account (SERVICE) | `dev-notification-secret` |
-| rozklad-importer | confidential, service account (SERVICE) | `dev-importer-secret` |
-| rozklad-dev-cli | public, direct access grants (scripts/tests only) | — |
+| admin | ADMIN | `a0000000-0000-4000-8000-000000000001` |
+| krentsin (Кренцін М. Д.) | TEACHER | `a0000000-0000-4000-8000-000000000002` |
+| nepyivoda (Непийвода М. В.) | TEACHER | `a0000000-0000-4000-8000-000000000003` |
 
-Tokens for scripted tests:
+Service tokens have `sub` = client id (`rozklad-notification`, `rozklad-importer`, `rozklad-core`) and
+`preferred_username` = `service-account-<client>`. `scripts/seed_demo.py` links the teachers «Кренцін» and
+«Непийвода» to the demo accounts through `PUT /api/admin/teachers/{id}/account` (the `demo` profile's
+`DemoAccountLinks` does the same by id). Passwords: `infra/dev/demo-users.env`.
+
+Tokens for scripted tests (no password grant: the script signs in through the page with `rozklad-cli`):
 
 ```bash
-TOKEN=$(curl -s -d client_id=rozklad-dev-cli -d grant_type=password -d username=admin -d password=admin \
-  http://localhost:8180/realms/rozklad/protocol/openid-connect/token | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+TOKEN=$(python scripts/rozklad_auth.py token --user admin)
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/me
 # service account token (client credentials):
-curl -s -d client_id=rozklad-notification -d client_secret=dev-notification-secret -d grant_type=client_credentials \
-  http://localhost:8180/realms/rozklad/protocol/openid-connect/token
+curl -s -u rozklad-notification:dev-notification-secret -d grant_type=client_credentials \
+  http://localhost:8085/auth/oauth2/token
 ```
-
-Access tokens live 15 min; `realm_access.roles`, `preferred_username` and `sub` are present (the
-realm JSON does not define client scopes, so Keycloak creates the default ones incl. `basic`).
 
 ## 5. Security in the services
 
 * Every service is a stateless resource server with a custom `JwtDecoder`: JWKS from
-  `AUTH_JWKS_URI`, issuer validated against `AUTH_ISSUER` (no discovery call, keys are fetched
-  lazily, so services start without Keycloak). `realm_access.roles` → `ROLE_<NAME>`.
+  `AUTH_JWKS_URI`, issuer validated against `AUTH_ISSUER` and audience `rozklad-api` against
+  `AUTH_AUDIENCE` (no discovery call, keys are fetched lazily, so services start without `auth`).
+  The flat `roles` claim → `ROLE_<NAME>` (`TokenRoles`).
 * Deny by default (`anyRequest().denyAll()`); `ASYNC`/`ERROR` dispatches are permitted (SSE, error
   pages). Health/info and OpenAPI are open (`API_DOCS_ENABLED=false` hides the docs).
 * core: `/api/public/**` open; `/api/admin/import/**` ADMIN or SERVICE; `/api/admin/**` ADMIN;
@@ -144,11 +130,11 @@ realm JSON does not define client scopes, so Keycloak creates the default ones i
   `X-Telegram-Bot-Api-Secret-Token` header), other `/api/notify/**` ADMIN.
 * scheduler: `/api/scheduler/**` ADMIN.
 * Ownership (a teacher sees/changes only his own data) is checked in services, not by URL rules.
-* core: declare a `CurrentUser` controller parameter (id = Keycloak `sub`, username, roles) or inject
+* core: declare a `CurrentUser` controller parameter (id = `sub`, the account id; username; roles) or inject
   `CurrentUserProvider`. Actor columns (`created_by`, `published_by`, …) store the username.
 * Outgoing service calls (importer, notification): inject `RestClient coreRestClient`
   (notification also `importerRestClient`). They add a client-credentials token of the service
-  account (registration `rozklad-service`, token URI `${KEYCLOAK_URL}/realms/rozklad/...`) and
+  account (registration `rozklad-service`, token URI `AUTH_TOKEN_URI` of `auth`) and
   forward `X-Request-Id`.
 * CORS is handled only by the gateway (`CORS_ALLOWED_ORIGINS`); services never add CORS headers.
 
@@ -193,7 +179,7 @@ Modules (Spring Modulith, `ModularityTests` verifies them and writes PlantUML do
   `GenerationStatus`, `UnitWeight`, `ConfirmationDecision`); module enums live with their entities.
   Adding an enum value = new migration that replaces the CHECK constraint.
 * JSON columns (`jsonb`): `JsonNode` (Jackson 3) or `List<String>` with `@JdbcTypeCode(SqlTypes.JSON)`.
-  Hibernate would silently use Jackson 2 (it comes with keycloak-admin-client), so `JpaConfig` sets
+  Hibernate would silently use Jackson 2 (it comes with springdoc-openapi), so `JpaConfig` sets
   `Jackson3JsonFormatMapper` with the application `JsonMapper`. Replace the value instead of mutating
   a node in place (dirty checking compares values).
 * Arrays: `absence.pairs`, `calendar_period.courses` are `smallint[]` mapped to `Short[]`; the entities
@@ -278,8 +264,7 @@ Modules (Spring Modulith, `ModularityTests` verifies them and writes PlantUML do
 
 `domain` (Ids, IdentifiableEntity, BaseEntity) · `time.TimeConfig` (`Clock` Europe/Kyiv, `KYIV`) ·
 `persistence.JpaConfig` · `error.*` · `security.*` (SecurityConfig, CurrentUser, CurrentUserProvider,
-Roles, TokenRoles, AuthProperties `app.auth.{issuer,jwks-uri,audience}`, KeycloakProperties
-`app.keycloak.*` incl. `admin.client-id/client-secret` for the identity module's admin client) ·
+Roles, TokenRoles, AuthProperties `app.auth.{issuer,jwks-uri,audience}`) ·
 `web.*` (RequestIdFilter + MDC `requestId`, `PageResponse.of(page, mapper)`
 → `{items,page,size,total}`, JacksonConfig: `LocalTime` written as `HH:mm`, OpenApiConfig, WebConfig)
 · `sse.*` (`SseBroadcaster.sendToUser(uuid, type, data)`, `sendToRole("ADMIN", …)`, `broadcast(…)`,
@@ -317,7 +302,7 @@ route 404, service down 503, timeout 504) are ProblemDetail in Ukrainian. Respon
 (`GATEWAY_RESPONSE_TIMEOUT`), connect 5 s. X-Forwarded headers are stripped (no trusted proxies),
 the rate-limit key ignores `X-Forwarded-For` (forgeable).
 
-## 12. Gotchas met (Boot 4.1 / Jackson 3 / Modulith 2.1 / Keycloak 26 / SCG 5)
+## 12. Gotchas met (Boot 4.1 / Jackson 3 / Modulith 2.1 / SCG 5)
 
 * Starters: `spring-boot-starter-security-oauth2-resource-server` (the old `…-oauth2-resource-server`
   is deprecated), `spring-boot-starter-restclient` for `RestClient.Builder`, test starters
@@ -342,8 +327,7 @@ the rate-limit key ignores `X-Forwarded-For` (forgeable).
   `@PlanningSolution` class.
 * Spring Cloud Gateway 5: properties under `spring.cloud.gateway.server.webflux.*`; forwarded headers
   are only added when `trusted-proxies` is set.
-* Keycloak 26.8: `KC_BOOTSTRAP_ADMIN_*`; health on management port 9000; the image has no curl
-  (health checks use bash `/dev/tcp`).
+* The Java images have no curl: compose health checks use bash `/dev/tcp`.
 * PostgreSQL 18 image: mount the volume at `/var/lib/postgresql`.
 * `eclipse-temurin:25-jre` is Ubuntu 26.04 without curl/wget; importer/notification use
   `eclipse-temurin:25-jre-noble` + `libreoffice-writer-nogui fonts-liberation fonts-dejavu`,
@@ -353,17 +337,17 @@ the rate-limit key ignores `X-Forwarded-For` (forgeable).
 ## 13. Known gaps (for the next agents)
 
 * No domain services/controllers: catalog CRUD, calendar, load, timetable, substitution, orders,
-  accounting, identity (invites + Keycloak admin client), settings — all to be implemented on top of
+  accounting, identity (invites + account management), settings — all to be implemented on top of
   the entities and repositories.
 * Demo seed (DOMAIN §12) and reference data (bell profiles, shift windows, default settings) are not created.
 * scheduler: no Timefold model, no `generation_job` table, no listeners. importer: no tables, parsers,
   AI port. notification: no bot, bindings, delivery queue, renderers.
 * Redis is wired (connection + health) in core, importer, notification, but nothing uses it yet.
 * `web/Dockerfile` is the web agent's; `docker compose --profile app up --build` fails until it exists.
-* Verified images: `rozklad/core:dev` (ran healthy in the compose network, validated real Keycloak tokens
-  with JWKS from `keycloak:8080`) and `rozklad/notification:dev` (LibreOffice 24.2 converts a seed DOCX
+* Verified images: `rozklad/core:dev` (ran healthy in the compose network, validated real tokens
+  of the identity provider of that time through its JWKS) and `rozklad/notification:dev` (LibreOffice 24.2 converts a seed DOCX
   to PDF as user `app`). scheduler, importer and gateway images use the same Dockerfiles but were not built.
 * Completed rows of `event_publication` are kept (completion mode UPDATE). Add a daily cleanup with
   Modulith's `CompletedEventPublications.deletePublicationsOlderThan(Duration)` when the outbox grows.
 * The client-credentials `RestClient`s are unit-tested against a fake token endpoint
-  (`ServiceClientsConfigTest` in notification), not yet end-to-end against Keycloak + core.
+  (`ServiceClientsConfigTest` in notification), not yet end-to-end against `auth` + core.

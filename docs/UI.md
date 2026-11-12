@@ -17,7 +17,8 @@ The main audience is students, parents and teachers who just want *the schedule 
 /bells                    Bell schedule (profile in effect, today's highlighted)
 /about                    About the system (methodology requires an «about» page) + Telegram bot link
 /invite/:token            Teacher registration by invite
-/login                    → Keycloak (PKCE). After login: ADMIN → /admin, TEACHER → /me
+/login                    → sign-in service /auth/login (code + PKCE). After login: ADMIN → /admin, TEACHER → /me
+/login/callback           OIDC callback (the code is exchanged here, then the role decides where to go)
 
 /me                       Teacher cabinet: my day/week, my substitutions (confirm/decline), report absence,
 /me/absences              preferences (unwanted slots grid), connect Telegram (deep link + QR)

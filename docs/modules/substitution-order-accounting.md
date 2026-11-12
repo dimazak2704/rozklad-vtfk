@@ -228,7 +228,7 @@ Manual run: own database on the shared PostgreSQL, port 38081.
 ## 9. Known gaps
 
 * REST security is tested with `@WebMvcTest` slices; the integration tests call services directly
-  (a real JWT would need Keycloak or a second test context).
+  (a real JWT would need the auth service or a second test context).
 * `aiSpendToday` of the dashboard is always `null` (the importer accounts AI usage; core has no client for
   `GET /api/import/ai/usage`, the SPA can read it directly).
 * Streams: a replacement or a cover keeps the stream of the replaced lesson; pending changes of other

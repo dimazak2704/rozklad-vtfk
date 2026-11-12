@@ -328,7 +328,7 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:18084/api/
 ```
 
 Verified on 08.11.2026 this way against the real infrastructure (Flyway V2–V5 on PostgreSQL 18, Redis,
-Keycloak tokens): `getMe` → @scheduler_vtfk_bot, `GET /api/notify/bot` reports the identity, the owner chat
+real access tokens): `getMe` → @scheduler_vtfk_bot, `GET /api/notify/bot` reports the identity, the owner chat
 was registered as ADMIN_CHAT, `POST /api/notify/test` delivered exactly one message «Тест: бот Розклад ВТФК
 підключено ✅» (status SENT); the bot token does not occur in the log. No polling was started.
 

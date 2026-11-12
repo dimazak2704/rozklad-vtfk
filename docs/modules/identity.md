@@ -18,7 +18,7 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
 | `GET /api/admin/invites?teacherId=` | `[{id, teacher, status: ACTIVE\|USED\|EXPIRED\|REVOKED, expiresAt, usedAt, revokedAt, createdAt, createdBy}]` |
 | `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt}`; 404 for an unknown token |
 | `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation (password 12–64 characters; `auth` may refuse it with a reason, shown in Ukrainian); 404; 409 username taken; 410 used/expired/revoked invite, or a revoked account («Доступ відкликано…», `inviteStatus: REVOKED`); 503 sign-in service unavailable |
-| `GET /api/internal/teachers/{id}` (SERVICE) | teacher with `accountId` (and deprecated `keycloakUserId`), `linked`, cycle commission |
+| `GET /api/internal/teachers/{id}` (SERVICE) | teacher with `accountId`, `linked`, cycle commission |
 | `GET /api/admin/teachers/{id}/account` | `{teacherId, teacherName, linked, userId, username, enabled}` (`username` is the username or, for an access grant by e-mail, the e-mail; null when `auth` lost the account) |
 | `PUT /api/admin/teachers/{id}/account {username}` | links an **existing** account by username or e-mail (`TeacherAccountService`): grants TEACHER, revokes open invites; 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher already has a live account, 503 sign-in service down. `scripts/seed_demo.py` links `krentsin`/`nepyivoda` this way |
 | `DELETE /api/admin/teachers/{id}/account` | 204, idempotent; the account in `auth` stays |

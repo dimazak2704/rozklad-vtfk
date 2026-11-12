@@ -1,6 +1,6 @@
 # Running the whole system locally with real data
 
-How to start the five services against the Docker infrastructure, fill them with the college's real
+How to start the six services against the Docker infrastructure, fill them with the college's real
 data through the system's own API, and check the main workflows. Everything here is for a development
 PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY.md`.
 
@@ -8,10 +8,9 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 
 | Container | Port (host) | Memory | Notes |
 |---|---|---|---|
-| postgres 18 | 5433 | — | databases `core`, `scheduler`, `importer`, `notification`, `keycloak` (`infra/postgres/init.sql`) |
+| postgres 18 | 5433 | — | databases `core`, `scheduler`, `importer`, `notification`, `auth` (`infra/postgres/init.sql`) |
 | rabbitmq 4.4 | 5672, UI 15672 | — | `rozklad` / `rozklad` |
 | redis 8 | 6379 | — | |
-| keycloak 26.8 | 8180 | — | no longer issues tokens (the services and the SPA use `auth`); removed soon |
 | auth | 8085 (management 8086 in the container) | 256 / 512 MB | sign-in service (OIDC issuer `http://localhost:8088/auth`), database `auth` |
 | core | 8081 | heap 512 MB, limit 900 MB | domain, SSE `/api/events/stream`, Swagger `/swagger-ui.html` |
 | scheduler | 8082 | 512 / 900 MB | Timefold |
@@ -22,7 +21,7 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 
 Heaps are set with `JAVA_TOOL_OPTIONS=-Xmx…` (wins over `-XX:MaxRAMPercentage=75` of the images) and
 can be changed with `CORE_HEAP`, `CORE_MEM_LIMIT`, … in the shell or `.env`. The whole stack takes about
-4.5 GB (Keycloak alone ~1 GB).
+3.5–4 GB.
 
 ## 2. Requirements
 
@@ -31,23 +30,24 @@ can be changed with `CORE_HEAP`, `CORE_MEM_LIMIT`, … in the shell or `.env`. T
 * Python 3.10+ (standard library only) for the seed and smoke scripts.
 * `.env` in the repository root (gitignored, never committed). Only secrets live there:
   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`, `ANTHROPIC_API_KEY`. Everything else has dev defaults in
-  `infra/docker-compose.yml` (client secrets are the dev values of the realm file). `.env.example` lists all
+  `infra/docker-compose.yml` (the client secrets are dev values shared by `auth` and the services). `.env.example` lists all
   variables.
 
 ## 3. Commands (`scripts/dev-stack.sh`)
 
 ```bash
-scripts/dev-stack.sh up                 # infra + build jars and images + 5 services, waits until healthy
+scripts/dev-stack.sh up                 # infra + build jars and images + 6 services + web, waits until healthy
 scripts/dev-stack.sh up --no-telegram   # the same, the bot stays off (empty token for notification)
 scripts/dev-stack.sh up --no-build      # start from the images already built
-scripts/dev-stack.sh up --web           # also the nginx SPA on :8088
+scripts/dev-stack.sh up --no-web        # without the nginx SPA on :8088 (then nobody can sign in)
 scripts/dev-stack.sh up --google-mock   # «Увійти через Google» against a local mock-oauth2-server (:8090)
 scripts/dev-stack.sh status             # containers, health, memory, URLs
 scripts/dev-stack.sh logs core          # follow one service
 scripts/dev-stack.sh seed               # real data through the API (idempotent, ~3 min)
 scripts/dev-stack.sh down               # stop the app services (infra and data stay)
 scripts/dev-stack.sh down --all         # stop everything; data stays in the Docker volumes
-scripts/dev-stack.sh reset-data --yes   # empty the four app databases, queues and Redis (Keycloak stays)
+scripts/dev-stack.sh reset-data --yes   # empty the four app databases, queues and Redis (accounts stay)
+scripts/dev-stack.sh reset-auth --yes   # drop the auth database; the next `up` creates the demo accounts again
 ```
 
 A fresh demo database: `reset-data --yes`, `up --no-build`, `seed`.
@@ -57,8 +57,11 @@ with the token from `.env`; stop any other copy (server, IDE run) first. `--no-t
 adds `infra/docker-compose.no-telegram.yml`, which empties the token: the bot and the delivery worker stay off,
 everything else works. To switch the running stack later: `scripts/dev-stack.sh up --no-build`.
 
-`up` also makes sure the Keycloak client `rozklad-core-admin` has the scope `kc-admin-api` (Keycloak 26.8
-rejects admin REST calls without it; realms imported before 08.11.2026 lack it).
+`up` also creates the database `auth` on an older Postgres volume and checks, through nginx, that discovery
+names the issuer `http://localhost:8088/auth` and that an authorize request without a session goes to
+`/auth/login`. It removes containers of services that are no longer in the compose files. A volume created
+before the sign-in service may still hold the unused database of the former identity provider; the command
+that drops it is in `docs/CHANGELOG-CONTRACTS.md` (entry «Sign-in service only»).
 
 ## 4. Demo users (test credentials)
 

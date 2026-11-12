@@ -16,7 +16,7 @@ web
   or the evening before, to answer one question: *what do I have now / tomorrow, where, and did anything change?*
   They know their group code (`4КІ1`) by heart and type it in Latin as often as in Cyrillic *(inferred from the
   normalisation rules in DOMAIN §10)*.
-- **Teachers** (log in via Keycloak). They check their own day/week, confirm or decline substitution requests,
+- **Teachers** (sign in with Google or a password on the college's own sign-in page). They check their own day/week, confirm or decline substitution requests,
   report absences and mark unwanted slots. Mostly on phones, often from Telegram links *(inferred)*.
 - **Dispatcher / deputy director** (role ADMIN). Every school morning they turn absences into substitutions,
   collect confirmations and publish the daily «розпорядження». They work at a desktop, under time pressure,

@@ -132,7 +132,7 @@ CHANGELOG-CONTRACTS, «Web: wiring to the backend contracts»).
 ### Status after the SPA ran against the real stack (08.11.2026)
 
 `web/e2e-real` (opt-in Playwright suite, `npm run e2e:real`, docs/RUNNING.md §6) drives the SPA through the
-gateway with real Keycloak logins. Closed in this pass (CHANGELOG-CONTRACTS, «SPA against the real stack»):
+gateway with real sign-ins of the demo users. Closed in this pass (CHANGELOG-CONTRACTS, «SPA against the real stack»):
 - `affected` items carry `date` (multi-day absences work on the changes screen).
 - Item 15: `maxParallel` in public rooms; `GET /api/notify/bindings/me` wired into the teacher cabinet.
 - Gateway answers 503 (not 500) when a stopped service's host does not resolve.

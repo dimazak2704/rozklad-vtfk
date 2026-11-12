@@ -20,12 +20,13 @@ npm run e2e          # playwright (desktop 1440 + mobile 360); браузер: n
 Сторінка всіх компонентів (лише dev): **http://localhost:5180/dev/kitchen-sink** — обидві теми, «час демо»,
 стани клітинок, тиждень, день, таблиця, шари.
 
-Без Keycloak адмінку й кабінет можна дивитися з фіктивним користувачем: `web/.env.development.local` з
+Без сервісу входу адмінку й кабінет можна дивитися з фіктивним користувачем: `web/.env.development.local` з
 `VITE_DEV_AUTH_ROLES=ADMIN,TEACHER` (лише `npm run dev`; у production-збірці гілка вирізається). Без бекенду
 запити повертають 502 — сторінки мають показувати `ErrorState`, а не падати.
 
 Змінні (`import.meta.env`, див. `web/.env.example`): `VITE_API_BASE` (`/api`), `VITE_OIDC_AUTHORITY`
-(`http://localhost:8180/realms/rozklad`), `VITE_OIDC_CLIENT_ID` (`rozklad-web`), `VITE_OIDC_SCOPE`,
+(порожньо — `${origin}/auth`; `npm run dev` бере `http://localhost:8088/auth` з `web/.env.development`),
+`VITE_OIDC_CLIENT_ID` (`rozklad-web`), `VITE_OIDC_SCOPE`,
 `VITE_TELEGRAM_BOT_URL`, `VITE_DEV_API_TARGET`, `VITE_DEV_AUTH_ROLES`, `VITE_QUERY_DEVTOOLS=1`.
 
 Docker: `docker build -t rozklad-web web/` → nginx на 80 (у compose — 8088): SPA-fallback, `/api` → `gateway:8080`
@@ -129,9 +130,11 @@ ROOM_CHANGED/BLOCK, підгрупа, онлайн, колір лінії дис
   утиліта сама обмежує роль (фон не потрапить у текст).
 - **Деталі заняття** — `HoverDetails` (Popover): наведення мишею + Enter/тап; Radix HoverCard недоступний з клавіатури.
 - **Тиждень** — справжня `<table>` (семантика для читачів екрана), день на телефоні — список з лінією.
-- **Тихе оновлення токена** — refresh token (Keycloak видає його публічним клієнтам), без iframe; токен у
-  `sessionStorage`. Ролі — з `realm_access.roles` access-токена (лише для інтерфейсу, перевіряє сервер).
-- **`/login`** одразу веде на Keycloak; якщо він недоступний — пояснення і «Спробувати ще раз».
+- **Тихе оновлення токена** — прихований iframe `/login/silent.html` з `prompt=none` на сесії сервісу входу;
+  refresh token SPA не отримує. Токен у `sessionStorage`. Ролі — з поля `roles` access-токена (лише для
+  інтерфейсу, перевіряє сервер).
+- **`/login`** одразу веде на сторінку сервісу входу `/auth/login`; якщо він недоступний — пояснення і
+  «Спробувати ще раз». Повернення — на `/login/callback`.
 - **Макети кабінету й адмінки** вантажаться ліниво; палітра команд — при першому відкритті. Основний JS
   публічної частини ≈ 123 КБ gzip.
 - **SSE** — одне зʼєднання на вкладку в макетах адмінки/кабінету; сторінки підписуються `useServerEvent`.
@@ -148,8 +151,8 @@ ROOM_CHANGED/BLOCK, підгрупа, онлайн, колір лінії дис
 ## Відомі прогалини
 
 - Сторінки — заглушки (робота агентів сторінок). PWA, ICS, QR, Web Share, друк A4 — не реалізовані (UI.md §4).
-- CSP у `nginx.conf` дозволяє Keycloak лише на `http://localhost:8180`; для іншого хоста змініть
-  `connect-src`/`form-action`. Резолвер nginx `127.0.0.11` працює в мережі docker compose, не в `docker run`
+- CSP у `nginx.conf`: вхід на тому ж походженні (`connect-src 'self'`, `form-action 'self'`), `/auth/` nginx
+  проксіює на сервіс `auth`. Резолвер nginx `127.0.0.11` працює в мережі docker compose, не в `docker run`
   за замовчуванням.
-- Lighthouse не вимірювався; бекенд, Keycloak і SSE наживо не перевірялися (їх не було запущено).
+- Lighthouse не вимірювався; бекенд, вхід і SSE на цьому етапі наживо не перевірялися (їх не було запущено).
 - E2E запускалися на Chromium 1248 із кешу (для 1.65 потрібен 1254: `npx playwright install chromium`).

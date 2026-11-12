@@ -1,6 +1,6 @@
 # Модуль web-mocks — мок-API SPA (MSW)
 
-Мета: агенти сторінок і розробник працюють з інтерфейсом без бекенду, Keycloak і Docker, на даних із
+Мета: агенти сторінок і розробник працюють з інтерфейсом без бекенду, сервісу входу і Docker, на даних із
 реального розкладу коледжу. Код — `web/src/mocks/`, інструкція для розробника — `web/src/mocks/README.md`.
 
 ## Відповідальність
@@ -60,7 +60,7 @@
 
 ```bash
 cd web
-npm run dev:mock                         # http://localhost:5180, адмінка й кабінет без Keycloak
+npm run dev:mock                         # http://localhost:5180, адмінка й кабінет без сервісу входу
 npx vitest run src/mocks src/auth        # фікстури, генератор, meta/search, kit, сховища, SSE, ролі
 PW_PORT=5180 npx playwright test         # e2e з моками: оболонка + e2e/mocks.spec.ts
 python -I web/scripts/mocks/extract_timetable.py seed/schedule-2025-26.xlsx web/src/mocks/fixtures/timetable.data.ts  # з кореня

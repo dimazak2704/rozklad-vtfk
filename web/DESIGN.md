@@ -861,7 +861,7 @@ These rules come from the admin audit:
 - **Tool hierarchy:** daily tools (Сьогодні, Заміни, Розпорядження, Розклад) get the full header. Rare
   tools (Довідники, Налаштування) use `headline` with no hero and dense tables.
 
-### 10.5 Sign-in (`/login`, and later the Keycloak theme)
+### 10.5 Sign-in (`/login` and the page of the sign-in service, `/auth/login`)
 
 **Centred column (400 px max) on `bg-canvas`:**
 1. The mark at 48 px, which draws itself once.
@@ -880,9 +880,9 @@ These rules come from the admin audit:
 **≥ 1024:** an optional decorative spire mark, 480 px, 1 px stroke in `border-default`, bottom-right
 and `aria-hidden` (the toned-down nod from). Nothing else: no blue panel, no photo.
 
-**Keycloak:** the stock theme is a hard brand break. Follow-up: a `rozklad` login theme (FreeMarker
-plus one CSS file generated from these tokens), with the Google IdP as the primary button and the
-username/password form collapsed. This is not part of the first pass.
+**Sign-in service page:** `/auth/login` is a Thymeleaf page of `services/auth` on the same origin. It
+links `/brand/auth.css`, which the web build emits from `src/styles/auth-page.css` with these tokens, so
+a design refresh changes web files only. The Google button shows only when Google is configured.
 
 ---
 
@@ -1114,4 +1114,4 @@ their column, not the viewport.
   not an explicit "my group". An explicit «Це моя група» action (in `⋯`) can come later.
 - **States with real data.** Only substitutions exist in the current data. Cancelled, added, room change,
   moved and the split parity cell were checked against specimens, not live data.
-- **Keycloak theme.** The sign-in page follows §10.5; a matching login theme is a follow-up.
+- **Sign-in page.** `/auth/login` follows §10.5 through `src/styles/auth-page.css`.

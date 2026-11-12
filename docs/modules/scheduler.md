@@ -227,7 +227,7 @@ SERVER_PORT=18082 DB_NAME=scheduler_feat DB_USER=scheduler_feat DB_PASSWORD=sche
 Publish a `generation.requested` (header `__TypeId__ = ua.vtc.rozklad.contracts.events.GenerationRequested`)
 to `rozklad.events` in that vhost, e.g. through the management API, and read `generation.*` from a
 **durable** queue bound there (RabbitMQ 4.4 rejects transient non-exclusive queues);
-`GET /api/scheduler/jobs/{id}` needs an ADMIN token from Keycloak. Done once for this module: two
+`GET /api/scheduler/jobs/{id}` needs an ADMIN token (`python scripts/rozklad_auth.py token --user admin`). Done once for this module: two
 groups / 17 units, 8 s limit → one `generation.progress`, `generation.completed` SOLVED `0hard/4soft`
 with 17 assignments and 15 analysis rows, REST 200 with `resultDelivered: true`; the database, role
 and vhost were dropped afterwards.

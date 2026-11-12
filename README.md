@@ -43,8 +43,9 @@ services/core     :8081 предметна область: довідники, �
 services/scheduler:8082 генерація розкладу (Timefold)
 services/importer :8083 імпорт Excel/DOCX/PDF/фото, AI (Anthropic API)
 services/notification :8084 Telegram-бот, доставка повідомлень, рендер розпоряджень
+services/auth     :8085 вхід: OIDC-провайдер (Spring Authorization Server), облікові записи, сторінка входу
 web/                    React 19 + TypeScript strict + Vite, PWA
-infra/                  docker compose, Keycloak, Postgres, продакшн-розгортання (Caddy)
+infra/                  docker compose, Postgres, продакшн-розгортання (Caddy)
 docs/                   архітектура, контракти, предметна область, модулі
 ```
 
@@ -60,10 +61,13 @@ flowchart LR
   notif -- REST --> core & imp
   core & sched & imp & notif --> pg[(PostgreSQL)]
   gw & notif --> redis[(Redis)]
-  kc[Keycloak] -. JWT .- gw & core
+  web -- вхід /auth --> auth[auth]
+  core -- облікові записи --> auth
+  auth --> pg
+  auth -. JWT .- core & sched & imp & notif
 ```
 
-- **Вхід.** Keycloak (OIDC, PKCE) з ролями ADMIN, TEACHER і SERVICE. Реєстрація відбувається за запрошенням, паролі зберігає Keycloak у вигляді хешів.
+- **Вхід.** Власний сервіс `auth` (OIDC, код + PKCE) на тому ж сайті під `/auth`: українська сторінка входу, вхід через Google за списком доступу або логін і пароль (BCrypt). Ролі ADMIN, TEACHER і SERVICE. Викладач реєструється за запрошенням, доступи за e-mail адміністратор видає на сторінці «Доступи».
 - **Події.** Core публікує події через outbox (Spring Modulith) в обмінник `rozklad.events`. Споживачі ідемпотентні. Браузер отримує оновлення через SSE.
 - **Бази.** Кожен сервіс має власну базу в одному PostgreSQL 18, міграції виконує Flyway.
 
@@ -75,21 +79,21 @@ flowchart LR
 
 ```bash
 cp .env.example .env        # впишіть TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_CHAT_ID, ANTHROPIC_API_KEY (за потреби)
-scripts/dev-stack.sh up --web            # інфраструктура, збірка, 5 сервісів і сайт
+scripts/dev-stack.sh up                 # інфраструктура, збірка, 6 сервісів і сайт
 scripts/dev-stack.sh seed                # реальні дані коледжу через API (~3 хв)
 ```
 
-Без бота: `scripts/dev-stack.sh up --web --no-telegram`.
+Без бота: `scripts/dev-stack.sh up --no-telegram`.
 
 | Що | Адреса |
 |---|---|
 | Сайт | http://localhost:8088 |
 | API (gateway) | http://127.0.0.1:8080 |
 | Swagger core | http://localhost:8081/swagger-ui.html |
-| Keycloak | http://localhost:8180 |
+| Вхід | http://localhost:8088/auth/login |
 | RabbitMQ | http://localhost:15672 |
 
-Демо-користувачі (`admin`, `krentsin`, `nepyivoda`) і їхні локальні паролі лежать у `infra/keycloak/demo-users.env`. Це паролі лише для локальної розробки, на сервері вони інші.
+Демо-користувачі (`admin`, `krentsin`, `nepyivoda`) і їхні локальні паролі лежать у `infra/dev/demo-users.env`. Це паролі лише для локальної розробки, на сервері вони інші.
 
 Клієнт окремо, з моками й без бекенду: `cd web && npm ci && npm run dev:mock` (http://localhost:5180).
 
@@ -108,4 +112,4 @@ CI (`.github/workflows/ci.yml`) запускає бекенд, клієнт і �
 
 ## Секрети
 
-Справжні значення зберігаються лише в `.env`, а він у `.gitignore`. У репозиторії є тільки `.env.example`, `infra/deploy/.env.example` і dev-значення для локального Keycloak.
+Справжні значення зберігаються лише в `.env`, а він у `.gitignore`. У репозиторії є тільки `.env.example`, `infra/deploy/.env.example` і dev-значення для локального стенда (`infra/dev/`).

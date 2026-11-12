@@ -242,7 +242,7 @@ The text is never logged (absence reasons are private).
 | `IMPORT_MAX_FILE_SIZE` | `20MB` | the servlet limit is `UPLOAD_MAX_FILE_SIZE` 21MB so the service answers 413 itself |
 | `IMPORT_STORAGE` | `DATABASE` | or `FILESYSTEM` with `IMPORT_STORAGE_DIR` (a volume; atomic writes) |
 | `IMPORT_WORKERS`, `IMPORT_QUEUE_CAPACITY` | `2`, `50` | full queue → job FAILED «Черга обробки переповнена» |
-| `CORE_URL`, `IMPORTER_CLIENT_SECRET`, `KEYCLOAK_URL` | foundation | catalog snapshot and import calls use the `rozklad-importer` service account |
+| `CORE_URL`, `IMPORTER_CLIENT_SECRET`, `AUTH_TOKEN_URI` | foundation | catalog snapshot and import calls use the `rozklad-importer` service account |
 
 ## 6. Persistence (Flyway `V1__import_jobs_and_ai_usage.sql`)
 
@@ -313,8 +313,8 @@ mvn -q -pl services/importer -am verify -Dtest=None -Dsurefire.failIfNoSpecified
   list; `ImporterApplicationIT`: security, parse-absence, usage.
 
 Manual run (port 18083, own database): create `importer_<name>` owned by `importer` on the shared Postgres,
-run the jar with `SERVER_PORT=18083 DB_NAME=importer_<name>` and a key from `.env`; tokens from Keycloak
-(`rozklad-dev-cli` admin/admin, `rozklad-notification` client credentials for SERVICE).
+run the jar with `SERVER_PORT=18083 DB_NAME=importer_<name>` and a key from `.env`; tokens from `auth`
+(`python scripts/rozklad_auth.py token --user admin`, `rozklad-notification` client credentials for SERVICE).
 
 ## 10. Known gaps
 

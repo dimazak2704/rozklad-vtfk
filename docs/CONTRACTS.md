@@ -18,6 +18,24 @@ Conflict      {kind: TEACHER|GROUP|ROOM|CAPACITY|ROOM_TYPE|SHIFT|UNAVAILABLE, se
 Page<T>       {items:[T], page, size, total}
 ```
 
+## 0. Authentication (sign-in service `auth`, contract version 2 of 12.11.2026)
+
+Every protected call carries `Authorization: Bearer <access token>` issued by `auth`
+(`docs/modules/auth.md`). What the services rely on:
+
+| Claim | Value |
+|---|---|
+| `iss` | the one issuer of the environment: `http://localhost:8088/auth` (development), `https://<DOMAIN>/auth` (server) |
+| `aud` | contains `rozklad-api` (every resource server checks it) |
+| `sub` | the account id (UUID) for people; the client id for services |
+| `roles` | flat list of `ADMIN`, `TEACHER`, `SERVICE` → authorities `ROLE_<NAME>` |
+| `preferred_username` | the username (else the e-mail) for people; `service-account-<client_id>` for services; written to the actor columns |
+
+Keys: `<issuer>/oauth2/jwks` (RS256, `kid` in the header). Service tokens: `client_credentials` at
+`<auth>/auth/oauth2/token`. The SPA uses `rozklad-web` (code + PKCE, callback `/login/callback`, renewal
+in a hidden iframe `/login/silent.html`). Version 2 dropped the old `realm_access.roles` claim and the
+deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELOG-CONTRACTS.md`).
+
 ## 1. Core — public (no auth)
 
 | Method & path | Response |
@@ -133,7 +151,7 @@ SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `abs
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
 `GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...]}`;
-`GET /api/internal/teachers/{id}` → teacher with the account link `accountId` (`keycloakUserId` repeats it, deprecated).
+`GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens).
 
 ## 5. Importer (role ADMIN; `ai/parse-absence` also SERVICE)
 
