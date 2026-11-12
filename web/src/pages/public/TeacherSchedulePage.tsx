@@ -20,7 +20,11 @@ export default function TeacherSchedulePage() {
   const teacher = teachers.data?.find((t) => t.id === id);
   const label = teacher?.shortName ?? query.data?.owner.label;
   const loaded = query.isPlaceholderData ? undefined : query.data;
-  const disciplines = useMemo(() => mainDisciplines(loaded).join(', '), [loaded]);
+  // одна-дві дисципліни — повними назвами: клітинки кажуть лише скорочення, а підзаголовок має місце
+  const disciplines = useMemo(() => {
+    const short = mainDisciplines(loaded);
+    return (short.length <= 2 ? mainDisciplines(loaded, 2, 'full') : short).join(', ');
+  }, [loaded]);
 
   const missing = (isApiError(query.error) && query.error.isNotFound) || (teachers.isSuccess && !teacher);
   if (missing) {

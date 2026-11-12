@@ -273,6 +273,8 @@ describe('mainDisciplines', () => {
       ],
     } as unknown as ScheduleDto;
     expect(mainDisciplines(schedule)).toEqual(['СТП', 'ДК']);
+    // повні назви — для підзаголовка, коли дисциплін одна-дві
+    expect(mainDisciplines(schedule, 2, 'full')).toEqual(['СТП повна', 'ДК повна']);
     expect(mainDisciplines(undefined)).toEqual([]);
   });
 });

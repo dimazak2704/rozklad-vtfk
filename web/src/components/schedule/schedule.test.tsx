@@ -39,6 +39,18 @@ describe('LessonCell', () => {
     expect(screen.getByText('4КІ1')).toBeInTheDocument();
   });
 
+  it('для викладача першим рядком іде код групи, а дисципліна — тихим підписом', () => {
+    const lesson = monday.lessons[0]!;
+    renderWithProviders(<LessonCell lesson={lesson} perspective="teacher" />);
+    const cell = screen.getByRole('button');
+    const code = within(cell).getByText('4КІ1');
+    const discipline = within(cell).getByText(lesson.discipline.shortName);
+    expect(code).toHaveClass('font-display', 'text-cell');
+    expect(discipline).not.toHaveClass('text-cell');
+    // код групи стоїть раніше за дисципліну
+    expect(code.compareDocumentPosition(discipline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('для аудиторії виділяє лише код групи, а викладач лишається звичайним підписом', () => {
     const lesson = monday.lessons[0]!;
     renderWithProviders(<LessonCell lesson={lesson} perspective="room" />);

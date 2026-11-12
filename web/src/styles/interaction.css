@@ -3,6 +3,8 @@
  * - Текстове посилання: тонка риска під текстом «проїжджає» — заходить зліва, виходить праворуч.
  * - Пункт навігації шапки: та сама риска на місці риски активного розділу, але нейтральна (не акцент).
  * - Стрілка «далі» (→) зсувається на 3 px.
+ * - Заняття в розкладі: крім тихого тла, крапка дисципліни трохи більшає (1 → 1,25).
+ * - Доріжка дня: минулі пари — тонкі смуги (4 px); під мишею смуга стає на повну висоту, підказка каже час.
  * Лише transform. Наведення — тільки миша (hover + pointer: fine): на дотику не «залипає».
  * Фокус з клавіатури показує ту саму риску одразу, без руху, плюс звичайний контур фокусу.
  * Без вподобання руху риска зʼявляється на місці (переходи лише в блоці no-preference, решту гасить base.css).
@@ -52,6 +54,16 @@
     transform: translateX(0);
   }
 
+  /* ---------- Крапка дисципліни в клітинці заняття ---------- */
+  .lesson-dot {
+    transform: scale(1);
+  }
+
+  /* ---------- Смуга минулої пари на доріжці дня: половина висоти, лише transform ---------- */
+  .track-past {
+    transform: scaleY(0.5);
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     /* вихід: коротший і з ease-in (0,75× не дотягує до 100 мс — беремо 120) */
     .u-line::after,
@@ -59,7 +71,9 @@
       transition: transform 120ms var(--ease-in);
     }
 
-    .more-arrow {
+    .more-arrow,
+    .lesson-dot,
+    .track-past {
       transition: transform var(--duration-fast) var(--ease-in);
     }
   }
@@ -79,6 +93,14 @@
     :is(a, button):hover .more-arrow:dir(rtl) {
       transform: translateX(-3px);
     }
+
+    .lesson-cell:hover .lesson-dot {
+      transform: scale(1.25);
+    }
+
+    [data-track-segment]:hover .track-past {
+      transform: scaleY(1);
+    }
   }
 
   @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
@@ -91,6 +113,11 @@
     :is(a, button):hover .more-arrow {
       transition: transform var(--duration-base) var(--ease-out);
     }
+
+    .lesson-cell:hover .lesson-dot,
+    [data-track-segment]:hover .track-past {
+      transition: transform var(--duration-fast) var(--ease-out);
+    }
   }
 
   /* Фокус з клавіатури: та сама риска, одразу на місці */
@@ -99,6 +126,10 @@
   .nav-link:focus-visible::after {
     transform: scaleX(1);
     transition: none;
+  }
+
+  .lesson-cell:focus-visible .lesson-dot {
+    transform: scale(1.25);
   }
 
   @media (forced-colors: active) {

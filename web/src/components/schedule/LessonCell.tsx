@@ -129,12 +129,15 @@ function LessonCellView({
   const title = lesson.discipline.name || lesson.discipline.shortName;
   // минула пара сьогодні «осідає»: назва вторинним чорнилом (контраст лишається AA), крапка на 40 %
   const titleTone = cn('anim-settle', past || cancelled ? 'text-secondary' : 'text-primary', cancelled && STRUCK_CANCEL);
+  // викладачу головне — яка група: її код стає першим рядком, а дисципліна (вона в нього майже завжди та сама) —
+  // тихим підписом поруч з аудиторією. Крапка лишається кольором дисципліни.
+  const byGroup = perspective === 'teacher';
+  const groupCode = cn('font-display font-semibold tracking-[0.01em] figures', titleTone);
+  // крапка в обгортці: обгортка трохи більшає під мишею (transform), сама крапка «осідає» прозорістю
   const dot = (
-    <span
-      {...lineAttr(lesson.discipline)}
-      aria-hidden="true"
-      className={cn('anim-settle mt-[0.375rem] size-2 shrink-0 rounded-full bg-[var(--line-dot)]', past && 'opacity-40')}
-    />
+    <span aria-hidden="true" className="lesson-dot mt-[0.375rem] flex shrink-0">
+      <span {...lineAttr(lesson.discipline)} className={cn('anim-settle size-2 rounded-full bg-[var(--line-dot)]', past && 'opacity-40')} />
+    </span>
   );
 
   return (
@@ -147,7 +150,7 @@ function LessonCellView({
         type="button"
         aria-label={`${lessonSummary(lesson, perspective)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
         className={cn(
-          'group/lesson relative isolate flex w-full min-w-0 flex-col items-stretch gap-1 text-start',
+          'lesson-cell group/lesson relative isolate flex w-full min-w-0 flex-col items-stretch gap-1 text-start',
           // тло стану — псевдоелемент з відступом 4 px (у сітці) і радіусом 10
           'before:absolute before:-z-10 before:rounded-cell before:transition-[background-color] before:duration-150',
           'rounded-cell px-3.5 py-3',
@@ -168,7 +171,9 @@ function LessonCellView({
 
         <span className={cn('flex min-w-0 items-start gap-2', tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1')}>
           {dot}
-          {isList ? (
+          {byGroup ? (
+            <span className={cn('min-w-0 truncate text-cell', groupCode)}>{lesson.group.code}</span>
+          ) : isList ? (
             <span className={cn('min-w-0 text-cell font-[650] text-pretty', !stateWord && 'line-clamp-2', titleTone)}>{title}</span>
           ) : (
             <>
@@ -195,8 +200,10 @@ function LessonCellView({
             tone === 'block' && 'w-fit max-w-full rounded-tag bg-surface pe-1',
           )}
         >
-          {counterpart && perspective !== 'group' ? (
-            // викладачу й аудиторії головне, яка група: її код — шрифтом цифр і чорнилом, а не тихим підписом
+          {byGroup ? (
+            <span className="min-w-0 truncate">{isList ? title : lesson.discipline.shortName}</span>
+          ) : counterpart && perspective !== 'group' ? (
+            // аудиторії головне, яка група: її код — шрифтом цифр і чорнилом, а не тихим підписом
             <span className="min-w-0 truncate">
               <span className={cn('font-display font-semibold tracking-[0.01em]', !past && !cancelled && 'text-primary')}>
                 {lesson.group.code}
