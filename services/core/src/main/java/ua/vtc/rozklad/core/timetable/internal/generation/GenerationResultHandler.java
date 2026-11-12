@@ -27,7 +27,6 @@ import ua.vtc.rozklad.core.catalog.StudentGroup;
 import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
 import ua.vtc.rozklad.core.catalog.Teacher;
 import ua.vtc.rozklad.core.catalog.TeacherRepository;
-import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.shared.messaging.ProcessedEvents;
 import ua.vtc.rozklad.core.shared.security.Roles;
 import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
@@ -41,6 +40,7 @@ import ua.vtc.rozklad.core.timetable.TimetableVersion;
 import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
 import ua.vtc.rozklad.core.timetable.VersionSource;
 import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
+import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 
 /**
@@ -69,7 +69,7 @@ class GenerationResultHandler {
     private final TeacherRepository teachers;
     private final StudentGroupRepository groups;
     private final DisciplineRepository disciplines;
-    private final LoadItemRepository loadItems;
+    private final LoadReadRepository loadItems;
     private final VersionAnalysis analysis;
     private final GenerationJobMapper mapper;
     private final SseAfterCommit sse;
@@ -78,7 +78,7 @@ class GenerationResultHandler {
     GenerationResultHandler(ProcessedEvents processedEvents, GenerationJobRepository jobs,
                             TimetableVersionRepository versions, TemplateLessonRepository templateLessons,
                             RoomRepository rooms, TeacherRepository teachers, StudentGroupRepository groups,
-                            DisciplineRepository disciplines, LoadItemRepository loadItems, VersionAnalysis analysis,
+                            DisciplineRepository disciplines, LoadReadRepository loadItems, VersionAnalysis analysis,
                             GenerationJobMapper mapper, SseAfterCommit sse, Clock clock) {
         this.processedEvents = processedEvents;
         this.jobs = jobs;
@@ -213,7 +213,7 @@ class GenerationResultHandler {
                         .collect(Collectors.toSet()),
                 disciplines.findAllById(ids(units, PlanUnit::disciplineId)).stream().map(Discipline::getId)
                         .collect(Collectors.toSet()),
-                loadItemIds.isEmpty() ? Set.of() : Set.copyOf(loadItems.lockExisting(loadItemIds)));
+                loadItems.lockExisting(loadItemIds));
     }
 
     private static Set<UUID> ids(List<PlanUnit> units, Function<PlanUnit, UUID> id) {

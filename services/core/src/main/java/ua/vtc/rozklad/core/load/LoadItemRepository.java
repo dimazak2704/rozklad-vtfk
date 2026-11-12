@@ -3,7 +3,6 @@ package ua.vtc.rozklad.core.load;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,13 +24,6 @@ public interface LoadItemRepository extends JpaRepository<LoadItem, UUID> {
 
     @EntityGraph(attributePaths = "teachers")
     Optional<LoadItem> findWithTeachersById(UUID id);
-
-    /**
-     * Ids of {@code ids} that still exist, share-locked until the end of the transaction: a concurrent
-     * delete waits, so rows that refer to them can be inserted safely (generation results).
-     */
-    @Query(value = "SELECT id FROM load_item WHERE id IN (:ids) FOR SHARE", nativeQuery = true)
-    Set<UUID> lockExisting(Collection<UUID> ids);
 
     @Query("""
             select count(i) > 0 from LoadItem i join i.teachers t

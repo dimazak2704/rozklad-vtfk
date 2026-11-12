@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -46,6 +47,20 @@ public class LoadReadRepository {
                     types.put(rs.getObject("id", UUID.class), RoomType.valueOf(rs.getString("required_room_type")));
                 });
         return types;
+    }
+
+    /**
+     * Ids of {@code loadItemIds} that still exist, share-locked until the end of the transaction: a
+     * concurrent delete waits, so rows that refer to them can be inserted safely (generation results).
+     */
+    public Set<UUID> lockExisting(Collection<UUID> loadItemIds) {
+        if (loadItemIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbc.sql("SELECT id FROM load_item WHERE id IN (:ids) FOR SHARE")
+                .param("ids", List.copyOf(loadItemIds))
+                .query(UUID.class)
+                .list());
     }
 
     public Optional<LoadItemKey> findKey(UUID loadItemId) {
