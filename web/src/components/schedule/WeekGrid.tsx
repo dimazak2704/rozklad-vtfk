@@ -298,8 +298,9 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                   }
                   const past = isLiveDay && rowEnd !== null && nowMinutes >= rowEnd;
                   const cellBg = isToday ? 'bg-today-wash' : 'bg-surface';
-                  // лінія «зараз»: 2 px у колонці сьогодні, ледь помітна 1 px — у днях між колонкою часу й сьогодні
-                  const nowRule = line && isLiveDay ? 'strong' : line && dayIndex < liveDayIndex ? 'faint' : null;
+                  // лінія «зараз» — лише в колонці сьогодні (2 px); у днях до неї вона ховалася б під заняттями
+                  // й виринала уривками над порожніми клітинками, тож час біля неї показує пігулка в колонці часу
+                  const nowRule = line && isLiveDay ? 'strong' : null;
                   return (
                     <td key={day.date} className={cn('relative h-px p-0 align-top', !lastRow && 'border-b border-separator', cellBg)}>
                       {/* лінія йде першою й без z-index: вміст клітинки (з тим самим тлом) малюється поверх неї */}
@@ -310,7 +311,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                             data-now-line={nowRule}
                             className={cn(
                               'absolute inset-x-0 top-0 -translate-y-1/2 bg-[var(--fill-now)]',
-                              nowRule === 'strong' ? 'h-0.5' : 'h-px opacity-40',
+                              'h-0.5',
                             )}
                           />
                         </AtNow>

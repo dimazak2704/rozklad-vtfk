@@ -82,6 +82,14 @@ describe('WeekGrid', () => {
     expect(rowHeaders[2]!.className).toMatch(/(^|\s)z-\[5\]/);
   });
 
+  it('лінія «зараз» — лише в колонці сьогодні: у попередніх днях немає уривків над порожніми клітинками', () => {
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-11" at={10 * 60} />);
+    const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
+    const lines = table.querySelectorAll<HTMLElement>('[data-now-line]');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveAttribute('data-now-line', 'strong');
+  });
+
   it('лінія «зараз» не йде через текст заняття: лежить під вмістом, а в зайнятій клітинці — лише крапка на краю', () => {
     renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);
     const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
