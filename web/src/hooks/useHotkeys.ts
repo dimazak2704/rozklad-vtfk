@@ -12,6 +12,11 @@ export interface Hotkey {
   handler: (event: KeyboardEvent) => unknown;
   /** Опис для довідки «?». Без опису скорочення в довідці не показується. */
   description?: string;
+  /**
+   * Як показати клавіші в довідці, якщо інакше, ніж `keys`: варіанти через кому (`mod+shift+z,mod+y`,
+   * `enter,e`) чи діапазон (`1–9`).
+   */
+  helpKeys?: string;
   /** Розділ довідки: «Навігація», «Розклад». */
   group?: string;
   /** Спрацьовувати навіть у полях вводу й поверх модального вікна (для mod+k, Esc). */
@@ -181,7 +186,7 @@ export function useHotkeys(hotkeys: readonly Hotkey[]): void {
   const unregisterHelp = useShortcutsStore((state) => state.unregister);
   const signature = hotkeys
     .filter((h) => h.enabled !== false)
-    .map((h) => `${h.keys}|${h.description ?? ''}|${h.group ?? ''}|${h.priority ?? 0}`)
+    .map((h) => `${h.helpKeys ?? h.keys}|${h.description ?? ''}|${h.group ?? ''}|${h.priority ?? 0}`)
     .join('\n');
 
   useLayoutEffect(() => {
@@ -228,4 +233,24 @@ export function useShortcutHints(hints: ReadonlyArray<{ keys: string; descriptio
     });
     return () => ids.forEach((id) => unregisterHelp(id));
   }, [signature, scope, registerHelp, unregisterHelp]);
+}
+
+/**
+ * Esc у полі пошуку таблиці: перше натискання очищає текст, друге (у вже порожньому полі) виводить
+ * фокус на сторінку (`#main`), щоб знову працювали буквені скорочення — як у GitHub і Gmail.
+ */
+export function handleSearchEscape(
+  event: { key: string; preventDefault: () => void; currentTarget: EventTarget | null },
+  value: string,
+  clear: () => void,
+): void {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  if (value) {
+    clear();
+    return;
+  }
+  const main = document.getElementById('main');
+  if (main) main.focus({ preventScroll: true });
+  else if (event.currentTarget instanceof HTMLElement) event.currentTarget.blur();
 }

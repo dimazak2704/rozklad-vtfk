@@ -31,7 +31,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatInstant } from '@/lib/date';
 import { confirm } from '@/stores/confirm';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
 
 const ALL = 'all';
 type RoleFilter = AccessRole | typeof ALL;
@@ -218,12 +218,7 @@ export default function AccessPage() {
       <div className="flex flex-wrap items-end gap-3">
         <Input
           ref={searchRef}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && search) {
-              event.preventDefault();
-              setSearch('');
-            }
-          }}
+          onKeyDown={(event) => handleSearchEscape(event, search, () => setSearch(''))}
           aria-label="Пошук за ім’ям, e-mail або логіном"
           placeholder="Ім’я, e-mail або логін"
           value={search}

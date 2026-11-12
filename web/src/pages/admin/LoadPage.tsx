@@ -35,7 +35,7 @@ import { countLabel, LESSON_KIND_LABEL } from '@/lib/labels';
 import { matchScore } from '@/lib/search';
 import { sortRows } from '@/lib/sort';
 import { useRowCursor } from '@/components/catalog/useRowCursor';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
 
 const PAGE_SIZE = 50;
@@ -297,12 +297,7 @@ export default function LoadPage() {
           type="search"
           value={table.q}
           onChange={(event) => table.set({ q: event.target.value })}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && table.q) {
-              event.preventDefault();
-              table.set({ q: null });
-            }
-          }}
+          onKeyDown={(event) => handleSearchEscape(event, table.q, () => table.set({ q: null }))}
           placeholder="Дисципліна або викладач"
           iconStart={<Search aria-hidden="true" className="size-4" />}
           aria-label="Пошук у навантаженні"

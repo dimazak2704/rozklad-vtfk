@@ -1,7 +1,7 @@
 import { ListFilter, Search, X } from 'lucide-react';
 import { useRef, type ReactNode } from 'react';
 import { Button, IconButton, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '@/components/ui';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
 import { countLabel } from '@/lib/labels';
 import { ACTIVE_FILTER_OPTIONS, type ActiveFilter } from './labels';
 
@@ -59,12 +59,7 @@ export function CatalogToolbar({
           type="search"
           value={search}
           onChange={(event) => onSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && search) {
-              event.preventDefault();
-              onSearch('');
-            }
-          }}
+          onKeyDown={(event) => handleSearchEscape(event, search, () => onSearch(''))}
           placeholder={placeholder}
           aria-label={searchLabel}
           autoComplete="off"
