@@ -116,11 +116,14 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
         })}
         {rest.map((alert, index) => (
           <li key={`${alert.kind}-${index}`}>
-            <Row to={alert.link} className="grid-cols-[3.25rem_minmax(0,1fr)_auto]">
-              <span aria-hidden="true" className="flex justify-center">
-                <span className={cn('size-2 rounded-full', SEVERITY_DOT[alert.severity])} />
+            {/* сповіщення — один рядок: нижчий за пару, а крапка й текст стоять на тій самій лінії, що й стан пари
+                вище («● Потрібне рішення»), — один лівий край тексту на весь список */}
+            <Row to={alert.link} className="min-h-11 grid-cols-[3.25rem_minmax(0,1fr)_auto] py-2">
+              <span aria-hidden="true" />
+              <span className="flex min-w-0 items-start gap-2 text-ui text-primary">
+                <span aria-hidden="true" className={cn('mt-[calc(0.5lh-4px)] size-2 shrink-0 rounded-full', SEVERITY_DOT[alert.severity])} />
+                <span className="min-w-0">{alert.message}</span>
               </span>
-              <span className="text-ui text-primary">{alert.message}</span>
               {alert.link ? <ChevronRight aria-hidden="true" className={ARROW} /> : <span />}
             </Row>
           </li>
