@@ -48,6 +48,36 @@ export function defaultView(): ScheduleView {
   return typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches ? 'week' : 'day';
 }
 
+/** Підгрупа, яку людина обрала для групи востаннє: `rozklad.subgroup.<id групи>`. */
+export const SUBGROUP_STORAGE_PREFIX = 'rozklad.subgroup.';
+
+function storedSubgroup(key: string | undefined): number | null {
+  if (!key) return null;
+  try {
+    return parseSubgroup(window.localStorage.getItem(SUBGROUP_STORAGE_PREFIX + key));
+  } catch {
+    return null;
+  }
+}
+
+function storeSubgroup(key: string | undefined, subgroup: number | null) {
+  if (!key) return;
+  try {
+    if (subgroup === null) window.localStorage.removeItem(SUBGROUP_STORAGE_PREFIX + key);
+    else window.localStorage.setItem(SUBGROUP_STORAGE_PREFIX + key, String(subgroup));
+  } catch {
+    // без сховища вибір живе лише в адресі
+  }
+}
+
+export interface ScheduleParamsOptions {
+  /**
+   * Запамʼятовувати підгрупу для цієї групи (id): наступного разу розклад відкриється вже з нею.
+   * Підгрупа з адреси (посилання від одногрупника) важливіша за запамʼятовану.
+   */
+  rememberSubgroupFor?: string;
+}
+
 export interface ScheduleParams {
   /** День на екрані (завжди навчальний: пн–пт). */
   date: IsoDate;
@@ -64,13 +94,14 @@ export interface ScheduleParams {
   setSubgroup: (subgroup: number | null) => void;
 }
 
-export function useScheduleParams(): ScheduleParams {
+export function useScheduleParams({ rememberSubgroupFor }: ScheduleParamsOptions = {}): ScheduleParams {
   const [params, setParams] = useSearchParams();
   const today = todayInKyiv();
   const homeDate = nearestStudyDay(today);
   const date = resolveScheduleDate(params.get('date'), today);
   const view = parseView(params.get('view')) ?? defaultView();
-  const subgroup = parseSubgroup(params.get('sub'));
+  // підгрупа з адреси, без неї — запамʼятована для цієї групи
+  const subgroup = parseSubgroup(params.get('sub')) ?? storedSubgroup(rememberSubgroupFor);
 
   const patch = (changes: Record<string, string | null>) =>
     setParams(
@@ -98,7 +129,10 @@ export function useScheduleParams(): ScheduleParams {
     }
     patch({ view: next });
   };
-  const setSubgroup = (next: number | null) => patch({ sub: next === null ? null : String(next) });
+  const setSubgroup = (next: number | null) => {
+    storeSubgroup(rememberSubgroupFor, next);
+    patch({ sub: next === null ? null : String(next) });
+  };
 
   return { date, today, homeDate, view, subgroup, week: studyWeek(date), setDate, setView, setSubgroup };
 }

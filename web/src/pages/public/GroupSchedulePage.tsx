@@ -26,7 +26,7 @@ function groupDetails(group: PublicGroupDto): string {
 }
 
 function GroupSchedule({ group }: { group: PublicGroupDto }) {
-  const params = useScheduleParams();
+  const params = useScheduleParams({ rememberSubgroupFor: group.id });
   const query = usePublicSchedule('GROUP', group.id, params.week.from, params.week.to);
   const subgroups = useMemo(() => subgroupsIn(query.data), [query.data]);
   const url = paths.group(group.code);

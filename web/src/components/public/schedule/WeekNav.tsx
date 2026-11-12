@@ -6,7 +6,7 @@ import type { IsoDate } from '@/api/types';
 import { Button, IconButton, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
-import { addDays, formatDateRange, isoFromLocalDate, isWeekend, localDateFromIso, nearestStudyDay } from '@/lib/date';
+import { addDays, formatDateRange, formatDayMonthShort, isoFromLocalDate, isWeekend, localDateFromIso, nearestStudyDay, parseIsoDate } from '@/lib/date';
 import { DAY_PICKER_CLASSES } from './day-picker-classes';
 import { studyWeek } from './schedule-params';
 
@@ -23,11 +23,19 @@ interface WeekNavProps {
    * `none` — сторінка показує його сама (телефон).
    */
   returnLink?: 'below' | 'none';
+  /** Телефон: «9–13 лист.» замість «9–13 листопада», щоб поруч умістився «День / Тиждень». */
+  compact?: boolean;
   className?: string;
 }
 
+/** «9–13 лист.», «30 жовт.–3 лист.»: найкоротший запис тижня, який ще читається без зусиль. */
+function shortRange(from: IsoDate, to: IsoDate): string {
+  if (parseIsoDate(from).month === parseIsoDate(to).month) return `${parseIsoDate(from).day}–${formatDayMonthShort(to)}`;
+  return `${formatDayMonthShort(from)}–${formatDayMonthShort(to)}`;
+}
+
 /** Перемикач тижня: ‹ 9–13 листопада › з календарем під датами; день тижня при гортанні зберігається. */
-export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 'below', className }: WeekNavProps) {
+export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 'below', compact = false, className }: WeekNavProps) {
   const [open, setOpen] = useState(false);
   const week = studyWeek(value);
   const home = nearestStudyDay(today);
@@ -52,9 +60,9 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
           <Button
             variant="ghost"
             aria-label={`Обрати тиждень. Зараз: ${isCurrent ? 'цей тиждень, ' : ''}${formatDateRange(week.from, week.to)}`}
-            className="min-w-0 px-2.5 text-primary"
+            className={cn('min-w-0 text-primary', compact ? 'px-1.5' : 'px-2.5')}
           >
-            <span className="truncate font-[650] figures">{formatDateRange(week.from, week.to)}</span>
+            <span className="truncate font-[650] figures">{compact ? shortRange(week.from, week.to) : formatDateRange(week.from, week.to)}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent width="auto" align="center" className="p-2">

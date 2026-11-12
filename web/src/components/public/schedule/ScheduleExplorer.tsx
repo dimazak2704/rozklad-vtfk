@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { CalendarDays, CalendarRange, RotateCcw, WifiOff } from 'lucide-react';
+import { RotateCcw, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
@@ -25,10 +25,8 @@ interface ScheduleExplorerProps {
   perspective: Perspective;
   /** Чий розклад — для повідомлень: «4КІ1», «Кренцін», «ауд. 301». */
   ownerLabel: string;
-  /** Підгрупи групи (для фільтра «Уся група · 1 п/г · 2 п/г»). */
-  subgroups?: readonly number[];
   /**
-   * Власний рядок керувань над розкладом («День / Тиждень», тиждень, підгрупа, заміни тижня).
+   * Власний рядок керувань над розкладом («День / Тиждень», тиждень, заміни тижня).
    * `false` — сторінка ставить `ScheduleControls` у свій заголовок (PageHeader), а фільтр підгрупи — у «⋯».
    */
   toolbar?: boolean;
@@ -39,18 +37,18 @@ interface ScheduleExplorerProps {
 /** Телефон: тиждень і подання живуть в одному рядку над днями, а не трьома рядками керувань. */
 export const PHONE_QUERY = '(max-width: 639.98px)';
 
-/** «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки. */
+/**
+ * «День / Тиждень» і перемикач тижня — два керування для заголовка сторінки (§7: не більше двох).
+ * Підгрупа — не тут, а в «⋯» сторінки: її обирають раз, і вона запамʼятовується.
+ */
 export function ScheduleControls({
   params,
   hotkeys = true,
-  subgroups = [],
   phone = false,
 }: {
   params: ScheduleParams;
   hotkeys?: boolean;
-  /** Підгрупи групи: перемикач «Уся група / 1 п/г / 2 п/г» стоїть поруч із тижнем, лише якщо вони є. */
-  subgroups?: readonly number[];
-  /** На телефоні в заголовку лишається тільки підгрупа: тиждень і подання — у рядку над днями (`PhoneWeekBar`). */
+  /** На телефоні в заголовку керувань немає: тиждень і подання — одним рядком над днями (`PhoneWeekBar`). */
   phone?: boolean;
 }) {
   const { date, today, view, setView, setDate } = params;
@@ -58,62 +56,34 @@ export function ScheduleControls({
     { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys && !phone },
     { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад', enabled: hotkeys && !phone },
   ]);
-  if (phone) return <SubgroupSwitch subgroups={subgroups} value={params.subgroup} onChange={params.setSubgroup} />;
+  if (phone) return null;
   return (
     <>
       <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
       <WeekNav value={date} onChange={setDate} today={today} hotkeys={hotkeys} />
-      <SubgroupSwitch subgroups={subgroups} value={params.subgroup} onChange={params.setSubgroup} />
     </>
   );
 }
 
-/** «Уся група / 1 п/г / 2 п/г» — той самий сегментований перемикач, що й «День / Тиждень». Без підгруп — нічого. */
-function SubgroupSwitch({
-  subgroups,
-  value,
-  onChange,
-}: {
-  subgroups: readonly number[];
-  value: number | null;
-  onChange: (subgroup: number | null) => void;
-}) {
-  if (subgroups.length === 0) return null;
-  return (
-    <SegmentedControl
-      size="sm"
-      aria-label="Підгрупа"
-      value={value === null ? 'all' : String(value)}
-      onValueChange={(next) => onChange(next === 'all' ? null : Number(next))}
-      options={[
-        { value: 'all', label: 'Уся група' },
-        ...subgroups.map((n) => ({ value: String(n), label: `${n} п/г`, ariaLabel: `${n} підгрупа` })),
-      ]}
-    />
-  );
-}
-
 /**
- * Телефон: «‹ 9–13 листопада ›» і перемикач подання в одному рядку, під ним — дні тижня. Тиждень обирають
- * в одному місці, а до першої пари лишається на рядок керувань менше. Інший тиждень — тихе «До цього тижня».
+ * Телефон: «‹ 9–13 лист. ›» і «День / Тиждень» в одному рядку, під ним — дні тижня. Обидва слова видно:
+ * людина бачить, що це перемикач, а не підпис. Інший тиждень — тихе «До цього тижня» під рядком.
  */
 function PhoneWeekBar({ params }: { params: ScheduleParams }) {
   const { date, today, homeDate, view, week, setDate, setView } = params;
   const offWeek = homeDate < week.from || homeDate > week.to;
-  const toWeek = view === 'day';
   return (
     <div className="flex flex-col items-start gap-0.5">
       <div className="flex w-full items-center justify-between gap-2">
-        <WeekNav value={date} onChange={setDate} today={today} returnLink="none" className="-ms-2" />
-        <Button
-          variant="ghost"
-          aria-label={toWeek ? 'Показати весь тиждень' : 'Показати один день'}
-          iconStart={toWeek ? <CalendarRange aria-hidden="true" className="size-4" /> : <CalendarDays aria-hidden="true" className="size-4" />}
-          onClick={() => setView(toWeek ? 'week' : 'day')}
-          className="-me-2 shrink-0"
-        >
-          {toWeek ? 'Тиждень' : 'День'}
-        </Button>
+        <WeekNav value={date} onChange={setDate} today={today} returnLink="none" compact className="-ms-2" />
+        <SegmentedControl<ScheduleView>
+          size="sm"
+          aria-label="Подання розкладу"
+          value={view}
+          onValueChange={setView}
+          options={VIEW_OPTIONS}
+          className="shrink-0 [&>button]:px-2.5"
+        />
       </div>
       {offWeek ? (
         <Button variant="link" size="sm" onClick={() => setDate(homeDate)}>
@@ -133,7 +103,7 @@ const VIEW_OPTIONS = [
  * Розклад групи, викладача чи аудиторії: «День / Тиждень», навігація датами, фільтр підгрупи,
  * «зараз», зміни тижня. Стан — в адресі (useScheduleParams), дані — з переданого запиту.
  */
-export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgroups = [], toolbar = true, select }: ScheduleExplorerProps) {
+export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolbar = true, select }: ScheduleExplorerProps) {
   const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
   const online = useOnline();
   const phone = useMediaQuery(PHONE_QUERY);
@@ -249,7 +219,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     <section aria-label={`Розклад: ${ownerLabel}`} className="flex flex-col gap-4">
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <ScheduleControls params={params} subgroups={subgroups} />
+          <ScheduleControls params={params} />
           <ChangesNote items={changes} view={view} onOpenDay={openDay} className="lg:ms-auto" />
         </div>
       ) : null}

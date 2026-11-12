@@ -1,17 +1,20 @@
 import type { UseQueryResult } from '@tanstack/react-query';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
-import { PageErrorScope, PageHeader, ParityBadge } from '@/components/ui';
+import { PageErrorScope, PageHeader } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { Perspective } from '@/lib/schedule';
 import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
 import { SchedulePrint } from '../print/SchedulePrint';
 import { usePrintMode } from '../print/usePrintMode';
+import { HeaderParity } from '../HeaderParity';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { CalendarDialog } from './CalendarDialog';
 import { ChangesNote } from './ChangesNote';
 import { QrDoorDialog } from './QrDoorDialog';
+import { SubgroupDialog } from './SubgroupDialog';
 import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
 import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
@@ -23,6 +26,8 @@ interface SchedulePageProps {
   target: ScheduleTarget;
   /** «Розклад групи», «Розклад викладача», «Розклад аудиторії» — для друку й читача екрана. */
   kindLabel: string;
+  /** Назва великим, коли вона інша, ніж короткий підпис цілі: «Аудиторія 3» замість «ауд. 3». */
+  heading?: string;
   /** Заголовок вкладки браузера: «4КІ1 — розклад групи». */
   documentTitle: string;
   /** Поруч із назвою, дрібніше: «Компʼютерна інженерія · 4 курс». */
@@ -39,13 +44,14 @@ interface SchedulePageProps {
 }
 
 /**
- * Каркас сторінок /g, /t, /r: «‹ Розклад», назва великим, один рядок контексту (парність, заміни тижня),
- * два керування (День/Тиждень, тиждень) і «⋯» з усім іншим. Запамʼятовує ціль як останню переглянуту —
+ * Каркас сторінок /g, /t, /r: «‹ Розклад», назва великим, один рядок контексту (парність, підгрупа, заміни тижня),
+ * два керування (День/Тиждень, тиждень) і «⋯» з усім іншим, підгрупою теж. Запамʼятовує ціль як останню переглянуту —
  * головна покаже її розклад.
  */
 export function SchedulePage({
   target,
   kindLabel,
+  heading,
   documentTitle,
   details,
   status,
@@ -61,6 +67,9 @@ export function SchedulePage({
   const { mode, print } = usePrintMode();
   const [qrOpen, setQrOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [subgroupOpen, setSubgroupOpen] = useState(false);
+  // підгрупа має сенс, лише коли цього тижня є пари підгруп; запамʼятована без них нічого не ховає
+  const subgroupShown = subgroups.length > 0 ? params.subgroup : null;
   const url = `${window.location.origin}${target.url}`;
   const visible = useMemo(() => (query.data ? filterBySubgroup(query.data, params.subgroup) : undefined), [query.data, params.subgroup]);
   const placeholder = query.isPlaceholderData;
@@ -89,6 +98,8 @@ export function SchedulePage({
     onCalendar: ics ? () => setCalendarOpen(true) : null,
     onPrintWeek: () => print('week'),
     onQr: doorSign ? () => setQrOpen(true) : null,
+    onSubgroup: subgroups.length > 0 ? () => setSubgroupOpen(true) : null,
+    subgroup: subgroupShown,
   });
 
   const openDay = (date: string) => {
@@ -98,8 +109,20 @@ export function SchedulePage({
 
   const headerMeta = (
     <>
-      {parity ? <ParityBadge parity={parity} size="sm" /> : null}
+      <HeaderParity parity={parity} />
       {status}
+      {subgroupShown !== null ? (
+        // обрана підгрупа — тихо в рядку контексту, поки вона не «уся група»: інакше людина не зрозуміє, куди зникли пари
+        <button
+          type="button"
+          onClick={() => setSubgroupOpen(true)}
+          aria-label={`${subgroupShown} підгрупа — змінити`}
+          className="-mx-1.5 inline-flex h-7 items-center gap-1 rounded-control px-1.5 text-caption font-[650] whitespace-nowrap text-primary transition-[background-color] duration-150 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:h-11"
+        >
+          {subgroupShown} підгрупа
+          <ChevronDown aria-hidden="true" className="size-3.5 text-muted" />
+        </button>
+      ) : null}
       <ChangesNote items={changes} view={params.view} onOpenDay={openDay} />
     </>
   );
@@ -110,7 +133,7 @@ export function SchedulePage({
         size="display"
         title={
           <>
-            <span className="figures">{target.label}</span>
+            <span className="figures">{heading ?? target.label}</span>
             <span className="sr-only">{` — ${kindLabel.toLocaleLowerCase('uk')}. `}</span>
             {details ? (
               <span className="mt-1 block font-sans text-body font-normal tracking-normal text-secondary sm:ms-4 sm:mt-0 sm:inline">{details}</span>
@@ -118,7 +141,7 @@ export function SchedulePage({
           </>
         }
         meta={headerMeta}
-        controls={phone && subgroups.length === 0 ? undefined : <ScheduleControls params={params} subgroups={subgroups} phone={phone} />}
+        controls={phone ? undefined : <ScheduleControls params={params} />}
         more={more}
       />
       <ScheduleExplorer
@@ -126,7 +149,6 @@ export function SchedulePage({
         params={params}
         perspective={perspective}
         ownerLabel={target.label}
-        subgroups={subgroups}
         toolbar={false}
         select={select}
       />
@@ -139,6 +161,16 @@ export function SchedulePage({
         url={url}
         weekNumber={weekNumber}
       />
+      {subgroups.length > 0 ? (
+        <SubgroupDialog
+          open={subgroupOpen}
+          onOpenChange={setSubgroupOpen}
+          groupLabel={target.label}
+          subgroups={subgroups}
+          value={subgroupShown}
+          onChange={params.setSubgroup}
+        />
+      ) : null}
       {ics ? <CalendarDialog ics={ics} label={target.label} open={calendarOpen} onOpenChange={setCalendarOpen} /> : null}
       {doorSign ? (
         <QrDoorDialog

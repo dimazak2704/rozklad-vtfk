@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -16,6 +16,7 @@ function renderGroup(path = '/g/4КІ1?view=week&date=2026-11-11') {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   useFavoritesStore.setState({ favorites: [], recent: [], lastViewed: null });
 });
 
@@ -42,5 +43,27 @@ describe('Сторінка групи', () => {
 
     await user.click(screen.getByRole('button', { name: 'Ще дії' }));
     expect(screen.getByRole('menuitem', { name: 'Прибрати з обраного' })).toBeInTheDocument();
+  });
+
+  it('підгрупа — у «⋯», а не третім перемикачем; вибір видно тихим рядком і він памʼятається', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderGroup();
+    await screen.findByRole('heading', { level: 1, name: /4КІ1/ });
+    expect(screen.queryByRole('radiogroup', { name: 'Підгрупа' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Ще дії' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Лише моя підгрупа…' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Підгрупа 4КІ1' })).getByRole('button', { name: '1 підгрупа' }));
+
+    expect(await screen.findByText('1 підгрупа')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 підгрупа — змінити' })).toBeInTheDocument();
+    unmount();
+
+    // наступного разу та сама група відкривається вже з підгрупою, хоча в адресі її немає
+    renderGroup();
+    expect(await screen.findByRole('button', { name: '1 підгрупа — змінити' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '1 підгрупа — змінити' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Уся група' }));
+    expect(screen.queryByRole('button', { name: /підгрупа — змінити/ })).not.toBeInTheDocument();
   });
 });
