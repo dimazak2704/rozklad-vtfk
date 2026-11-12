@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * Domain owner of «Розклад ВТФК». Every direct sub-package is a Spring Modulith application
  * module; see {@code docs/ARCHITECTURE.md} §4 and {@code docs/modules/foundation.md}.
  */
-@SpringBootApplication
+// власний зовнішній відправник подій з підтвердженнями брокера (shared.messaging.EventExternalizationConfig)
+@SpringBootApplication(excludeName = "org.springframework.modulith.events.amqp.RabbitEventExternalizerConfiguration")
 @ConfigurationPropertiesScan
 public class CoreApplication {
 

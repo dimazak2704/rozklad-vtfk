@@ -13,7 +13,8 @@ import org.springframework.context.annotation.Import;
 /**
  * Full core on a random port with PostgreSQL, RabbitMQ and Redis in Docker. All test classes with
  * this annotation (and no extra configuration) share one Spring context and one set of
- * containers. Inject {@code RestTestClient} for HTTP calls. Name the class {@code *IT}.
+ * containers. Inject {@code RestTestClient} for HTTP calls. Name the class {@code *IT}. Every outbound
+ * event has a queue to go to ({@link ConsumerQueuesConfiguration}), as on a real broker.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -21,6 +22,6 @@ import org.springframework.context.annotation.Import;
 @Inherited
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, ConsumerQueuesConfiguration.class})
 public @interface CoreIntegrationTest {
 }

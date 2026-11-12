@@ -241,8 +241,22 @@ Modules (Spring Modulith, `ModularityTests` verifies them and writes PlantUML do
   Spring Modulith stores it in `event_publication` and sends it after commit (`EventExternalizationConfig.OUTBOUND`:
   timetable.version.published, schedule.changed, generation.requested, generation.cancel,
   substitution.confirmation-requested, substitution.status-changed, absence.reported,
-  order.published). Rolled-back transactions send nothing; incomplete publications are re-sent on
-  restart. `generation.progress/completed` received from the scheduler are never re-sent.
+  order.published). Rolled-back transactions send nothing. `generation.progress/completed` received from
+  the scheduler are never re-sent.
+* **Delivery is confirmed.** Modulith's own `RabbitEventExternalizerConfiguration` is excluded in
+  `CoreApplication`: it marks a publication COMPLETED as soon as `convertAndSend` returns. core registers the
+  same `EventExternalizerModuleListener` (so stored rows keep their listener id) with
+  `ConfirmingRabbitTransport`: `publisher-confirm-type: correlated`, `publisher-returns: true`,
+  `template.mandatory: true`; a publication completes only on an ack without a return. A broker that is down
+  (the send throws), a nack, an unroutable message (no consumer queue bound yet, e.g. notification not started
+  on a fresh broker) or no confirm within `app.outbox.confirm-timeout` (30 s) make it FAILED.
+* **Re-delivery while running.** `OutboxResubmitter` calls `FailedEventPublications.resubmit` every
+  `app.outbox.resubmit-interval` (1 min) for publications older than `app.outbox.resubmit-min-age` (30 s) and
+  logs a warning with the count; the Modulith staleness monitor (`spring.modulith.events.staleness.*`, 5 min,
+  `OUTBOX_STALE_AFTER`) turns publications stuck in PUBLISHED/PROCESSING/RESUBMITTED into FAILED for it. Restart
+  still republishes everything outstanding. Consumers deduplicate by `eventId`, so a repeat is harmless. A
+  permanently failing publication is retried every round (visible in the log), never dropped.
+* Completed publications older than `app.outbox.completed-retention` (7 days) are deleted nightly at 03:45.
 * Other services publish with `RabbitTemplate.convertAndSend(RozkladEvents.EXCHANGE, routingKey, event)`
   after their transaction commits.
 * Consumers: `@RabbitListener(queues = RozkladEvents.Queues.CORE_SCHEDULER_RESULTS)` etc. Queues are
@@ -280,7 +294,10 @@ reconnects) · `messaging.*` (topology, outbox config, ProcessedEvents) · `AppP
   containers), `@CoreJpaTest` (JPA slice on real PostgreSQL with Flyway, auditing, Jackson),
   `TestcontainersConfiguration` (postgres:18-alpine, rabbitmq:4.4-management-alpine, redis:8.8-alpine
   via `@ServiceConnection`), `WebSliceTestConfiguration` for `@WebMvcTest` (+ `@MockitoBean JwtDecoder`),
-  `TestJwts.admin()/teacher()/service()` (MockMvc tokens with the demo user ids).
+  `TestJwts.admin()/teacher()/service()` (MockMvc tokens with the demo user ids),
+  `ConsumerQueuesConfiguration` (part of `@CoreIntegrationTest`: a one-message queue bound to `#` stands in for
+  the consumer queues, since core publishes `mandatory`). `OutboxRedeliveryIT` has its own context with RabbitMQ
+  on a fixed host port: it stops and starts the broker and checks FAILED → re-delivered → COMPLETED.
 * Services: `support/TestcontainersConfiguration` + `*ApplicationIT`.
 * Boot 4 test packages: `org.springframework.boot.webmvc.test.autoconfigure.{WebMvcTest,AutoConfigureMockMvc}`,
   `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`,
@@ -347,7 +364,6 @@ the rate-limit key ignores `X-Forwarded-For` (forgeable).
 * Verified images: `rozklad/core:dev` (ran healthy in the compose network, validated real tokens
   of the identity provider of that time through its JWKS) and `rozklad/notification:dev` (LibreOffice 24.2 converts a seed DOCX
   to PDF as user `app`). scheduler, importer and gateway images use the same Dockerfiles but were not built.
-* Completed rows of `event_publication` are kept (completion mode UPDATE). Add a daily cleanup with
-  Modulith's `CompletedEventPublications.deletePublicationsOlderThan(Duration)` when the outbox grows.
+* No metric for FAILED outbox publications yet: only the warning of `OutboxResubmitter`.
 * The client-credentials `RestClient`s are unit-tested against a fake token endpoint
   (`ServiceClientsConfigTest` in notification), not yet end-to-end against `auth` + core.

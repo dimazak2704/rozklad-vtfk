@@ -36,6 +36,12 @@ spring:
     port: ${RABBIT_PORT:5672}
     username: ${RABBIT_USER:rozklad}
     password: ${RABBIT_PASSWORD:rozklad}
+    # outbox: публікація вважається відправленою лише після підтвердження брокера, а повідомлення без
+    # черги-отримувача повертається й стає FAILED (shared.messaging.ConfirmingRabbitTransport)
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     listener:
       simple:
         default-requeue-rejected: false
@@ -52,6 +58,12 @@ spring:
   modulith:
     events:
       republish-outstanding-events-on-restart: true
+      # публікація, що зависла (немає підтвердження, процес упав посеред відправлення), стає FAILED,
+      # а OutboxResubmitter надсилає її знову, не чекаючи перезапуску
+      staleness:
+        published: ${OUTBOX_STALE_AFTER:5m}
+        processing: ${OUTBOX_STALE_AFTER:5m}
+        resubmitted: ${OUTBOX_STALE_AFTER:5m}
       rabbitmq:
         # RabbitTemplate бере наш MessageConverter (Jackson 3 + довірений пакет contracts),
         # а не власний конвертер Modulith без trusted packages
@@ -145,6 +157,13 @@ app.timetable:
   generation:
     timeout-grace: ${GENERATION_TIMEOUT_GRACE:10m}
     watchdog-interval: ${GENERATION_WATCHDOG_INTERVAL:PT1M}
+
+# outbox: повтор невдалих публікацій під час роботи й очищення завершених (shared.messaging.OutboxProperties)
+app.outbox:
+  confirm-timeout: ${OUTBOX_CONFIRM_TIMEOUT:30s}
+  resubmit-interval: ${OUTBOX_RESUBMIT_INTERVAL:1m}
+  resubmit-min-age: ${OUTBOX_RESUBMIT_MIN_AGE:30s}
+  completed-retention: ${OUTBOX_COMPLETED_RETENTION:7d}
 
 app.substitution:
   # як часто шукати прострочені підтвердження замін, щоб нагадати (DOMAIN §7)
