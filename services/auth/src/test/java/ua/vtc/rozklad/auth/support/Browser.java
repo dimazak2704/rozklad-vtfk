@@ -101,6 +101,13 @@ public class Browser {
         return cookies.getCookieStore().getCookies().stream().filter(c -> c.getName().equals(name)).findFirst();
     }
 
+    /** Forgets one cookie, e.g. the sign-in session while the device cookie stays. */
+    public void removeCookie(String name) {
+        var store = cookies.getCookieStore();
+        store.getCookies().stream().filter(c -> c.getName().equals(name)).toList()
+                .forEach(c -> store.remove(null, c));
+    }
+
     public void clearCookies() {
         cookies.getCookieStore().removeAll();
     }

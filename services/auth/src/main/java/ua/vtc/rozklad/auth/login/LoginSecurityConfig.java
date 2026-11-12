@@ -32,8 +32,8 @@ public class LoginSecurityConfig {
     @Bean
     @Order(3)
     SecurityFilterChain loginChain(HttpSecurity http, AccountUserDetailsService users, PasswordEncoder passwordEncoder,
-            LoginOutcomeHandlers outcomes, LoginAttempts attempts, AuthServerProperties properties, Clock clock,
-            GoogleLogin google) throws Exception {
+            LoginOutcomeHandlers outcomes, LoginAttempts attempts, LoginDevices devices, AuthServerProperties properties,
+            Clock clock, GoogleLogin google) throws Exception {
         // Google (якщо налаштовано): /oauth2/authorization/google → Google → /login/oauth2/code/google
         google.configure(http);
         http
@@ -46,7 +46,7 @@ public class LoginSecurityConfig {
                         .successHandler(outcomes.successHandler())
                         .failureHandler(outcomes.failureHandler())
                         .permitAll())
-                .addFilterBefore(new LoginThrottleFilter(attempts, properties.lockout(), clock),
+                .addFilterBefore(new LoginThrottleFilter(attempts, devices, properties.lockout(), clock),
                         UsernamePasswordAuthenticationFilter.class)
                 // вихід — лише через OIDC /connect/logout (з id_token_hint), щоб видалялась і авторизація клієнта
                 .logout(AbstractHttpConfigurer::disable)

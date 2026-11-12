@@ -54,9 +54,16 @@ There is no password grant and no refresh token for the SPA.
   after the password, so a disabled account is revealed only to someone who knows its password.
 - **Policy** (`PasswordPolicy`): at least `AUTH_PASSWORD_MIN_LENGTH` (12) characters, at most 64 characters
   and 72 UTF-8 bytes, not the username or e-mail, not in the bundled list of common passwords.
-- **Lockout** (`LoginThrottleFilter`): per identifier and network (default 10 failures in 12 h, 5 on the
-  server), a global slowdown after many failures, and a throttle for a network that tries many identifiers.
-  Every attempt is in `login_attempt`.
+- **Lockout** (`LoginThrottleFilter`, `LockoutPolicy`): per identifier and network (default 10 failures in
+  12 h, 5 on the server); a throttle for a network that tries many identifiers (20 in 15 min); after 50
+  failures of one identifier in 24 h from all networks a global gate (`login_gate`) lets one password check
+  through per 2 s (longer as failures grow, at most 15 min) and refuses the rest without BCrypt, parallel
+  requests included. A browser that already signed in as the identifier carries a device cookie
+  (`RZ_DEVICE`, on the server `__Secure-RZ_DEVICE`; `HttpOnly`, `SameSite=Strict`, path `/auth/login`,
+  90 days, table `login_device`): its attempts have their own lockout key and skip the network throttle and
+  the gate, so a student spraying from the college NAT cannot lock teachers out. Every attempt is in
+  `login_attempt`. The client IP comes from `X-Forwarded-For` only from `AUTH_TRUSTED_PROXIES` (loopback by
+  default; the compose network's container range in compose).
 - **Google** (`docs/GOOGLE_SIGNIN.md`): only verified addresses that have access in «Доступи»; an address on
   the college domain must come with the matching `hd`; a binding is kept by Google's `sub`. A refusal shows
   «Цієї адреси немає у списку доступу. Зверніться до навчальної частини.» Development uses a mock provider
@@ -72,7 +79,7 @@ There is no password grant and no refresh token for the SPA.
   `enabled`, `disabled_reason` `REVOKED`/`DEMO_OFF`, `demo`), `account_role`, `federated_identity`.
 - **Revocation is sticky:** a revoked account comes back only through «Повернути доступ»
   (`POST …/enable` with `clearRevocation=true`); invites and password links never enable it. Revoke deletes
-  the account's sessions and authorizations.
+  the account's sessions and authorizations; so does a new password (`PUT …/password`, the bootstrap repair).
 - **Usable admin:** an enabled ADMIN with a password or a Google binding. A change that would leave no usable
   admin is refused (`last-admin`).
 - **Internal API** (`/auth/internal/accounts`, only a token with `sub=rozklad-core` and scope

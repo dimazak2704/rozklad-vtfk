@@ -20,7 +20,7 @@ public class LoginController {
 
     static final Map<String, String> MESSAGES = Map.of(
             "credentials", "Неправильний логін або пароль.",
-            "throttled", "Забагато спроб. Спробуйте пізніше або увійдіть через Google.",
+            "throttled", "Забагато спроб. Спробуйте пізніше або, якщо ваш вхід прив'язано до Google, увійдіть через Google.",
             "throttled_password_only", "Забагато спроб. Спробуйте пізніше.",
             "not_allowed", "Цієї адреси немає у списку доступу. Зверніться до навчальної частини.",
             "google", "Не вдалося увійти через Google. Спробуйте ще раз.");

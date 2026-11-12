@@ -23,7 +23,7 @@ class LoginUnitsTest {
         assertThat(LoginController.message("throttled_password_only", true)).isEqualTo("Неправильний логін або пароль.");
         assertThat(LoginController.message("throttled", false)).isEqualTo("Забагато спроб. Спробуйте пізніше.");
         assertThat(LoginController.message("throttled", true))
-                .isEqualTo("Забагато спроб. Спробуйте пізніше або увійдіть через Google.");
+                .isEqualTo("Забагато спроб. Спробуйте пізніше або, якщо ваш вхід прив'язано до Google, увійдіть через Google.");
         assertThat(LoginController.message("not_allowed", true))
                 .isEqualTo("Цієї адреси немає у списку доступу. Зверніться до навчальної частини.");
         assertThat(LoginController.message("google", true)).isEqualTo("Не вдалося увійти через Google. Спробуйте ще раз.");

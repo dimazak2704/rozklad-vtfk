@@ -67,7 +67,8 @@ class GoogleLoginIT {
         assertThat(html).contains("Увійти через Google").contains("href=\"/auth/oauth2/authorization/google\"")
                 .contains("Використовуйте корпоративну пошту коледжу.").contains("<details");
         assertThat(browsers.open().get("/auth/login?error=throttled").body())
-                .contains("Забагато спроб. Спробуйте пізніше або увійдіть через Google.");
+                .contains("Забагато спроб. Спробуйте пізніше або, якщо ваш вхід прив")
+                .contains("язано до Google, увійдіть через Google.");
     }
 
     @Test

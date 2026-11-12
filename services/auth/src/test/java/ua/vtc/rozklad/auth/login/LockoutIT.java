@@ -6,6 +6,13 @@ import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -15,8 +22,8 @@ import ua.vtc.rozklad.auth.support.Browsers;
 import ua.vtc.rozklad.auth.support.TestAccounts;
 
 /**
- * Lockout per identifier and network, the global slowdown and the network throttle (DESIGN §4.3). The test
- * configuration lowers the thresholds: 3 failures, 8 for the slowdown (600 ms), 6 identifiers per network.
+ * Lockout per identifier and network, the global gate, the network throttle and trusted devices (DESIGN §4.3).
+ * The test configuration lowers the thresholds: 3 failures, 8 for the gate (600 ms), 6 identifiers per network.
  * Client addresses come through {@code X-Forwarded-For}, as from nginx.
  */
 @AuthIntegrationTest
@@ -79,7 +86,7 @@ class LockoutIT {
     }
 
     @Test
-    void manyFailuresFromEverywhereSlowAnIdentifierDownButNeverBlockIt() {
+    void afterManyFailuresFromEverywhereOnlyOneParallelAttemptReachesThePasswordCheck() throws Exception {
         TestAccounts.Created teacher = accounts.teacher();
         byte[] hash = LoginAttempts.hash(teacher.username());
         Instant recent = Instant.now().minus(Duration.ofMinutes(30));
@@ -90,13 +97,81 @@ class LockoutIT {
                     VALUES (?, 'PASSWORD', ?, ?::inet, ?::cidr, 'BAD_CREDENTIALS')
                     """).params(Timestamp.from(recent), hash, "10.9." + i + ".1", "10.9." + i + ".0/24").update();
         }
+        // 6 браузерів з 6 мереж відкривають форму, а потім надсилають її одночасно
+        List<Browser> guessers = new ArrayList<>();
+        List<String> tokens = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            Browser guesser = browsers.open("198.18." + (20 + i) + ".5");
+            tokens.add(Browser.csrf(guesser.get("/auth/login", "Accept", "text/html").body()));
+            guessers.add(guesser);
+        }
+        List<Callable<HttpResponse<String>>> posts = new ArrayList<>();
+        for (int i = 0; i < guessers.size(); i++) {
+            Browser guesser = guessers.get(i);
+            Map<String, String> form = Map.of("username", teacher.username(), "password", "wrong-" + i, "_csrf",
+                    tokens.get(i));
+            posts.add(() -> guesser.postForm("/auth/login", form));
+        }
+        List<String> locations = new ArrayList<>();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (Future<HttpResponse<String>> post : executor.invokeAll(posts)) {
+                locations.add(Browser.location(post.get()));
+            }
+        }
 
-        long started = System.nanoTime();
-        HttpResponse<String> response = browsers.open("192.0.2.77").signIn(teacher.username(), TestAccounts.PASSWORD);
-        long elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
+        assertThat(locations).filteredOn("/auth/login?error"::equals).hasSize(1);
+        assertThat(locations).filteredOn("/auth/login?error=throttled"::equals).hasSize(5);
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM login_attempt WHERE identifier_hash = ? AND outcome = 'BAD_CREDENTIALS'
+                   AND occurred_at > ?
+                """).params(hash, Timestamp.from(recent.plusSeconds(60))).query(Long.class).single()).isEqualTo(1);
+        // після паузи ворота знову пропускають одну перевірку, і правильний пароль проходить
+        Thread.sleep(700);
+        assertThat(Browser.location(browsers.open("192.0.2.77").signIn(teacher.username(), TestAccounts.PASSWORD)))
+                .doesNotContain("error");
+    }
 
-        assertThat(Browser.location(response)).doesNotContain("error");
-        assertThat(elapsedMs).isGreaterThanOrEqualTo(600);
+    @Test
+    void aBrowserThatSignedInBeforeIsNotLockedOutByOthersOnTheSameNetwork() {
+        TestAccounts.Created teacher = accounts.teacher();
+        Browser own = browsers.open("198.51.104.10");
+        HttpResponse<String> first = own.signIn(teacher.username(), TestAccounts.PASSWORD);
+        assertThat(Browser.location(first)).doesNotContain("error");
+        assertThat(Browser.setCookies(first)).anySatisfy(cookie -> assertThat(cookie).startsWith("RZ_DEVICE=")
+                .contains("Path=/auth/login").contains("HttpOnly").contains("SameSite=Strict"));
+        own.removeCookie("RZ_AUTH");
+
+        // той самий NAT: хтось перебирає логіни (мережу зачинено) і пароль цього викладача (ключ зачинено)
+        Browser sprayer = browsers.open("198.51.104.200");
+        for (int i = 0; i < 6; i++) {
+            sprayer.signIn("spray" + i + "-" + System.nanoTime(), "Password123!");
+        }
+        Browser attacker = browsers.open("198.51.104.201");
+        for (int i = 0; i < 3; i++) {
+            attacker.signIn(teacher.username(), "wrong-" + i);
+        }
+        assertThat(Browser.location(browsers.open("198.51.104.50").signIn(teacher.username(), TestAccounts.PASSWORD)))
+                .isEqualTo("/auth/login?error=throttled");
+
+        // браузер, з якого викладач уже входив, має власний лічильник
+        assertThat(Browser.location(own.signIn(teacher.username(), TestAccounts.PASSWORD))).doesNotContain("error");
+    }
+
+    @Test
+    void aTrustedBrowserIsLockedByItsOwnFailures() {
+        TestAccounts.Created teacher = accounts.teacher();
+        Browser own = browsers.open("198.51.105.10");
+        own.signIn(teacher.username(), TestAccounts.PASSWORD);
+        own.removeCookie("RZ_AUTH");
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(Browser.location(own.signIn(teacher.username(), "wrong-" + i))).isEqualTo("/auth/login?error");
+        }
+
+        assertThat(Browser.location(own.signIn(teacher.username(), TestAccounts.PASSWORD)))
+                .isEqualTo("/auth/login?error=throttled");
+        // для іншого логіна кука нічого не дає: це звичайна спроба з цієї мережі
+        assertThat(Browser.location(own.signIn("ghost-" + System.nanoTime(), "wrong"))).isEqualTo("/auth/login?error");
     }
 
     @Test

@@ -19,14 +19,14 @@ class LockoutPolicyTest {
 
     @Test
     void belowTheThresholdEverythingIsAllowed() {
-        assertThat(policy.decide(new Stats(4, NOW.minusSeconds(1), 4, 1), NOW)).isEqualTo(Decision.ALLOW);
-        assertThat(policy.decide(new Stats(0, null, 0, 0), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(4, NOW.minusSeconds(1), 4, 1, false), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(0, null, 0, 0, false), NOW)).isEqualTo(Decision.ALLOW);
     }
 
     @Test
     void theFifthFailureLocksForOneMinute() {
-        assertThat(policy.decide(new Stats(5, NOW.minusSeconds(59), 5, 1), NOW)).isEqualTo(Decision.LOCKED);
-        assertThat(policy.decide(new Stats(5, NOW.minusSeconds(61), 5, 1), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(5, NOW.minusSeconds(59), 5, 1, false), NOW)).isEqualTo(Decision.LOCKED);
+        assertThat(policy.decide(new Stats(5, NOW.minusSeconds(61), 5, 1, false), NOW)).isEqualTo(Decision.ALLOW);
     }
 
     @Test
@@ -37,20 +37,34 @@ class LockoutPolicyTest {
         assertThat(policy.delay(9)).isEqualTo(Duration.ofMinutes(15));
         assertThat(policy.delay(40)).isEqualTo(Duration.ofMinutes(15));
         assertThat(policy.delay(Integer.MAX_VALUE)).isEqualTo(Duration.ofMinutes(15));
-        assertThat(policy.decide(new Stats(7, NOW.minusSeconds(200), 7, 1), NOW)).isEqualTo(Decision.LOCKED);
-        assertThat(policy.decide(new Stats(7, NOW.minusSeconds(241), 7, 1), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(7, NOW.minusSeconds(200), 7, 1, false), NOW)).isEqualTo(Decision.LOCKED);
+        assertThat(policy.decide(new Stats(7, NOW.minusSeconds(241), 7, 1, false), NOW)).isEqualTo(Decision.ALLOW);
     }
 
     @Test
-    void manyFailuresFromAllNetworksOnlySlowDown() {
-        assertThat(policy.decide(new Stats(0, null, 50, 1), NOW)).isEqualTo(Decision.SLOW);
-        assertThat(policy.decide(new Stats(1, NOW, 49, 1), NOW)).isEqualTo(Decision.ALLOW);
+    void manyFailuresFromAllNetworksCloseTheGlobalGate() {
+        assertThat(policy.decide(new Stats(0, null, 50, 1, false), NOW)).isEqualTo(Decision.GATED);
+        assertThat(policy.decide(new Stats(1, NOW, 49, 1, false), NOW)).isEqualTo(Decision.ALLOW);
     }
 
     @Test
     void aSprayingNetworkIsThrottledFirst() {
-        assertThat(policy.decide(new Stats(0, null, 0, 20), NOW)).isEqualTo(Decision.THROTTLED);
-        assertThat(policy.decide(new Stats(9, NOW, 60, 25), NOW)).isEqualTo(Decision.THROTTLED);
-        assertThat(policy.decide(new Stats(0, null, 0, 19), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(0, null, 0, 20, false), NOW)).isEqualTo(Decision.THROTTLED);
+        assertThat(policy.decide(new Stats(9, NOW, 60, 25, false), NOW)).isEqualTo(Decision.THROTTLED);
+        assertThat(policy.decide(new Stats(0, null, 0, 19, false), NOW)).isEqualTo(Decision.ALLOW);
+    }
+
+    @Test
+    void theGateSpacingGrowsWithTheFailuresAndStopsAtTheMaximum() {
+        assertThat(policy.gateDelay(new Stats(0, null, 50, 0, false))).isEqualTo(Duration.ofSeconds(2));
+        assertThat(policy.gateDelay(new Stats(0, null, 99, 0, false))).isEqualTo(Duration.ofSeconds(2));
+        assertThat(policy.gateDelay(new Stats(0, null, 500, 0, false))).isEqualTo(Duration.ofSeconds(20));
+        assertThat(policy.gateDelay(new Stats(0, null, 1_000_000, 0, false))).isEqualTo(Duration.ofMinutes(15));
+    }
+
+    @Test
+    void aTrustedDeviceSkipsTheNetworkThrottleAndTheGateButNotItsOwnLock() {
+        assertThat(policy.decide(new Stats(0, null, 500, 25, true), NOW)).isEqualTo(Decision.ALLOW);
+        assertThat(policy.decide(new Stats(5, NOW.minusSeconds(10), 500, 25, true), NOW)).isEqualTo(Decision.LOCKED);
     }
 }

@@ -35,11 +35,12 @@ class AccountSchemaIT {
     void allMigrationsAreApplied() {
         List<String> versions = jdbc.sql("SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank")
                 .query(String.class).list();
-        assertThat(versions).containsExactly("1.001", "1.002", "1.100", "1.101");
+        assertThat(versions).containsExactly("1.001", "1.002", "1.100", "1.101", "1.102");
         assertThat(jdbc.sql("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND "
                 + "table_name IN ('account', 'account_role', 'federated_identity', 'login_attempt', "
                 + "'oauth2_authorization', 'oauth2_registered_client', 'oauth2_authorization_consent', "
-                + "'spring_session', 'spring_session_attributes')").query(Long.class).single()).isEqualTo(9);
+                + "'spring_session', 'spring_session_attributes', 'login_device', 'login_gate')")
+                .query(Long.class).single()).isEqualTo(11);
     }
 
     @Test

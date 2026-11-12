@@ -20,7 +20,9 @@ import ua.vtc.rozklad.auth.config.AuthServerProperties;
 /**
  * Runs before the password check of {@code POST /login} and applies {@link LockoutPolicy}. A refused attempt
  * never reaches BCrypt; it is recorded as {@code LOCKED} or {@code THROTTLED} and sent to
- * {@code /login?error=throttled}. Google sign-in does not pass here, so password failures never block it.
+ * {@code /login?error=throttled}. Behind the global gate only one attempt per gate delay goes on to the
+ * password check, however many arrive in parallel. Google sign-in does not pass here, so password failures
+ * never block it.
  */
 public class LoginThrottleFilter extends OncePerRequestFilter {
 
@@ -29,12 +31,15 @@ public class LoginThrottleFilter extends OncePerRequestFilter {
     private final RequestMatcher loginPost = PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/login");
     private final RedirectStrategy redirect = new DefaultRedirectStrategy();
     private final LoginAttempts attempts;
+    private final LoginDevices devices;
     private final AuthServerProperties.Lockout config;
     private final LockoutPolicy policy;
     private final Clock clock;
 
-    public LoginThrottleFilter(LoginAttempts attempts, AuthServerProperties.Lockout config, Clock clock) {
+    public LoginThrottleFilter(LoginAttempts attempts, LoginDevices devices, AuthServerProperties.Lockout config,
+            Clock clock) {
         this.attempts = attempts;
+        this.devices = devices;
         this.config = config;
         this.policy = new LockoutPolicy(config);
         this.clock = clock;
@@ -51,32 +56,21 @@ public class LoginThrottleFilter extends OncePerRequestFilter {
         byte[] hash = LoginAttempts.hash(request.getParameter("username"));
         ClientAddress address = ClientAddress.of(request);
         Instant now = clock.instant();
-        LockoutPolicy.Decision decision = policy.decide(attempts.stats(hash, address.prefix(), now, config), now);
-        switch (decision) {
-            case LOCKED, THROTTLED -> {
-                LoginAttempts.Outcome outcome = decision == LockoutPolicy.Decision.LOCKED
-                        ? LoginAttempts.Outcome.LOCKED : LoginAttempts.Outcome.THROTTLED;
-                attempts.record(LoginAttempts.Method.PASSWORD, hash, null, address, outcome, now);
-                log.info("password sign-in refused: {} from {}", outcome, address.prefix());
-                redirect.sendRedirect(request, response, "/login?error=throttled");
-                return;
-            }
-            case SLOW -> {
-                log.warn("password sign-in slowed down: many failures of one identifier from all networks");
-                sleep();
-            }
-            case ALLOW -> {
-                // далі звичайна перевірка пароля
-            }
+        byte[] device = devices.trusted(request, hash, now).orElse(null);
+        LockoutPolicy.Stats stats = attempts.stats(hash, address.prefix(), device, now, config);
+        LockoutPolicy.Decision decision = policy.decide(stats, now);
+        if (decision == LockoutPolicy.Decision.GATED && !attempts.passGate(hash, now, policy.gateDelay(stats))) {
+            log.warn("password sign-in refused by the global gate: many failures of one identifier from all networks");
+            decision = LockoutPolicy.Decision.THROTTLED;
+        }
+        if (decision == LockoutPolicy.Decision.LOCKED || decision == LockoutPolicy.Decision.THROTTLED) {
+            LoginAttempts.Outcome outcome = decision == LockoutPolicy.Decision.LOCKED
+                    ? LoginAttempts.Outcome.LOCKED : LoginAttempts.Outcome.THROTTLED;
+            attempts.record(LoginAttempts.Method.PASSWORD, hash, null, address, device, outcome, now);
+            log.info("password sign-in refused: {} from {}", outcome, address.prefix());
+            redirect.sendRedirect(request, response, "/login?error=throttled");
+            return;
         }
         chain.doFilter(request, response);
-    }
-
-    private void sleep() {
-        try {
-            Thread.sleep(config.slowdownDelay());
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

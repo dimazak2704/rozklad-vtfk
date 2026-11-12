@@ -24,7 +24,8 @@ import ua.vtc.rozklad.auth.session.SessionAttributes;
 
 /**
  * What happens after a password check: the outcome goes to {@code login_attempt}, a success stamps the
- * session with its sign-in time (absolute timeout) and continues the saved authorize request. Every failure
+ * session with its sign-in time (absolute timeout), trusts the browser for this identifier
+ * ({@link LoginDevices}) and continues the saved authorize request. Every failure
  * shows the same generic message.
  */
 @Component
@@ -34,13 +35,15 @@ public class LoginOutcomeHandlers {
 
     private final AccountRepository accounts;
     private final LoginAttempts attempts;
+    private final LoginDevices devices;
     private final Clock clock;
     private final String defaultTarget;
 
-    public LoginOutcomeHandlers(AccountRepository accounts, LoginAttempts attempts, Clock clock,
+    public LoginOutcomeHandlers(AccountRepository accounts, LoginAttempts attempts, LoginDevices devices, Clock clock,
             AuthServerProperties properties) {
         this.accounts = accounts;
         this.attempts = attempts;
+        this.devices = devices;
         this.clock = clock;
         // без збереженого запиту (сторінку входу відкрили напряму) — на /login сайту, який одразу завершить вхід
         this.defaultTarget = stripSlash(properties.publicWebUrl().toString()) + "/login";
@@ -54,8 +57,11 @@ public class LoginOutcomeHandlers {
                 Instant now = clock.instant();
                 UUID accountId = UUID.fromString(authentication.getName());
                 accounts.recordLogin(accountId, now);
-                attempts.record(LoginAttempts.Method.PASSWORD, LoginAttempts.hash(request.getParameter("username")),
-                        accountId, ClientAddress.of(request), LoginAttempts.Outcome.SUCCESS, now);
+                byte[] identifier = LoginAttempts.hash(request.getParameter("username"));
+                attempts.record(LoginAttempts.Method.PASSWORD, identifier, accountId, ClientAddress.of(request),
+                        LoginDevices.trustedOf(request), LoginAttempts.Outcome.SUCCESS, now);
+                // цей браузер далі має власний лічильник блокування для цього логіна
+                devices.remember(request, response, identifier, now);
                 request.getSession().setAttribute(SessionAttributes.AUTHENTICATED_AT, now.toEpochMilli());
                 log.info("password sign-in succeeded for account {}", accountId);
                 super.onAuthenticationSuccess(request, response, authentication);
@@ -72,7 +78,8 @@ public class LoginOutcomeHandlers {
             Optional<Account> account = accounts.findByIdentifier(identifier);
             LoginAttempts.Outcome outcome = outcome(exception, account);
             attempts.record(LoginAttempts.Method.PASSWORD, LoginAttempts.hash(identifier),
-                    account.map(Account::id).orElse(null), ClientAddress.of(request), outcome, clock.instant());
+                    account.map(Account::id).orElse(null), ClientAddress.of(request), LoginDevices.trustedOf(request),
+                    outcome, clock.instant());
             log.info("password sign-in failed: {}", outcome);
             redirect.sendRedirect(request, response, "/login?error");
         };
