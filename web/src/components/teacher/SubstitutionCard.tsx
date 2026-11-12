@@ -94,17 +94,18 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
         >
           {state}
         </p>
-        <p className="flex min-w-0 items-baseline gap-2 text-cell text-primary">
+        {/* що й у кого провести — головний рядок: дисципліна жирно, код групи — Geologica в кольорі тексту */}
+        <p className="flex min-w-0 items-baseline gap-2 text-cell font-[650] text-primary">
           {discipline ? (
             <span {...lineAttr(discipline)} aria-hidden="true" className="relative -top-px size-2 shrink-0 self-center rounded-full bg-[var(--line-dot)]" />
           ) : null}
           <span className="min-w-0">
             {changeDisciplineTitle(change)}
             {/* група тримається за останнє слово назви: рядок не починається з «·» */}
-            <span className="font-[500] whitespace-nowrap text-secondary">
-              {' · '}
-              {change.group.code}
-              {subgroup ? `, ${subgroup}` : ''}
+            <span className="whitespace-nowrap">
+              <span className="font-[500] text-muted">{' · '}</span>
+              <span className="font-display font-semibold tracking-[0.01em]">{change.group.code}</span>
+              {subgroup ? <span className="font-[500] text-secondary">, {subgroup}</span> : null}
             </span>
           </span>
         </p>

@@ -111,7 +111,7 @@ function AbsenceRow({ absence, today, onDelete }: { absence: AbsenceDto; today: 
   return (
     <li className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3.5">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="text-cell text-primary">
+        <p className="text-cell font-[650] text-primary">
           <span className="figures">{range}</span>
           {year !== parseIsoDate(today).year ? <span className="font-[500] text-muted figures"> {year}</span> : null}
         </p>

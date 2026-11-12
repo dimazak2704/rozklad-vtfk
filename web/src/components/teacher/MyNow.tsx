@@ -25,7 +25,7 @@ function DayDone({ title, dateLine, next }: { title: string; dateLine: string; n
   return (
     <section aria-label="Стан навчального дня" className="flex flex-col gap-1 rounded-[20px] bg-today-wash px-5 py-5 md:rounded-hero md:px-10 md:py-7">
       <p className="text-body text-secondary">{dateLine}</p>
-      <p className="text-headline text-primary">{title}</p>
+      <p className="font-display text-[1.5rem] leading-[1.875rem] font-semibold tracking-[-0.02em] text-primary sm:text-headline">{title}</p>
       {next ? <p className="text-body text-secondary">{next}</p> : null}
     </section>
   );

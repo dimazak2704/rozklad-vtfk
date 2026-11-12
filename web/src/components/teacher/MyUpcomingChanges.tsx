@@ -65,7 +65,8 @@ export function MyUpcomingChanges() {
                   {/* вузький рядок обрізає назву — наведення мишею показує її повністю */}
                   <TruncatedText className="min-w-0 truncate">
                     {changeDisciplineTitle(change)}
-                    <span className="font-[500] text-secondary"> · {change.group.code}</span>
+                    <span className="font-[500] text-muted"> · </span>
+                    <span className="font-display font-semibold tracking-[0.01em]">{change.group.code}</span>
                   </TruncatedText>
                 </p>
                 {status ? <p className={cn('text-caption', TONE_TEXT[status.tone] ?? 'text-secondary')}>{status.label}</p> : null}
