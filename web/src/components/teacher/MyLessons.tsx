@@ -41,6 +41,8 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const awayFromNow = homeDate < week.from || homeDate > week.to;
   // сітка або дні списком — що одне видно, те й рендеримо: «тік» часу не перемальовує прихований варіант
   const wide = useMediaQuery('(min-width: 768px)');
+  // телефон: тиждень і подання — одним рядком, як на сторінці групи, а не двома поверхами над першою парою
+  const phone = useMediaQuery('(max-width: 639.98px)');
   // заміна, що прийшла наживо (SSE оновив «мої пари»), проявляється один раз у своїй клітинці
   const arrived = useArrivedChanges(placeholder ? undefined : schedule);
   // день чи тиждень входить спокійно: ковзає на 8 px у бік навігації; після скелета — проявляється
@@ -106,11 +108,25 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
           </h2>
           {parity ? <ParityBadge parity={parity} weekNumber={weekNumber} size="sm" className="self-start text-secondary" /> : null}
         </div>
-        <div className="flex max-w-full flex-wrap items-center gap-2">
-          <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
-          {/* як на публічній сторінці: перемикач завжди гортає тиждень, а день обирають вкладки під ним */}
-          <WeekNav value={date} onChange={setDate} today={today} hotkeys />
-        </div>
+        {phone ? (
+          <div className="flex w-full items-center justify-between gap-2">
+            <WeekNav value={date} onChange={setDate} today={today} hotkeys compact className="-ms-2" />
+            <SegmentedControl<ScheduleView>
+              size="sm"
+              aria-label="Подання розкладу"
+              value={view}
+              onValueChange={setView}
+              options={VIEW_OPTIONS}
+              className="shrink-0 [&>button]:px-2.5"
+            />
+          </div>
+        ) : (
+          <div className="flex max-w-full flex-wrap items-center gap-2">
+            <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
+            {/* як на публічній сторінці: перемикач завжди гортає тиждень, а день обирають вкладки під ним */}
+            <WeekNav value={date} onChange={setDate} today={today} hotkeys />
+          </div>
+        )}
       </div>
 
       {view === 'day' ? (
