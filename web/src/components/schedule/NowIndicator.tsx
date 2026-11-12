@@ -451,8 +451,10 @@ export function NowIndicator({
     );
   }
 
+  // після останнього дзвінка доріжка — лише ряд однакових сірих смуг, схожий на силует завантаження:
+  // день скінчився, тож її немає (як і смуги пари на телефоні); «На сьогодні все» каже заголовок
   const track =
-    slots.length > 0 ? (
+    slots.length > 0 && shown.kind !== 'after-day' ? (
       <div role="img" aria-label={label}>
         <DayTrack slots={slots} status={shown} minutes={minutes} ownPairs={ownPairs ?? groupSet} />
       </div>

@@ -189,4 +189,18 @@ describe('DayList і NowIndicator', () => {
     expect(screen.getByText('На сьогодні все')).toBeInTheDocument();
     expect(screen.getByText(/Остання пара закінчилася о 10:40/)).toBeInTheDocument();
   });
+
+  it('після останнього дзвінка доріжки дня немає: сірі смуги без підписів читались би як завантаження', () => {
+    const { container, unmount } = renderWithProviders(
+      <NowIndicator bells={BELLS_MON_THU} at={19 * 60} variant="hero" afterDay="Завтра перша о 08:30." />,
+    );
+    expect(screen.getByText('На сьогодні все')).toBeInTheDocument();
+    expect(container.querySelector('[data-track-segment]')).toBeNull();
+    expect(screen.queryByRole('img', { name: /Стан навчального дня/ })).not.toBeInTheDocument();
+    unmount();
+
+    // посеред дня доріжка на місці
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} at={10 * 60} variant="strip" />);
+    expect(screen.getByRole('img', { name: /Стан навчального дня/ })).toBeInTheDocument();
+  });
 });
