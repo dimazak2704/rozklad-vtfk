@@ -333,7 +333,7 @@ export function useImportJobs(filters: ImportJobFilters = {}, page = 0, size = I
 
 /**
  * Одне завдання; опитуємо, поки сервер розбирає чи застосовує файл. Коли застосування завершилось,
- * оновлюємо дані адмінки: імпорт міг змінити каталог, навантаження й розклад.
+ * оновлюємо дані адмінки, публічні довідники й кабінет: імпорт міг змінити каталог, навантаження й розклад.
  */
 export function useImportJob(id: Uuid | null | undefined) {
   const queryClient = useQueryClient();
@@ -346,6 +346,10 @@ export function useImportJob(id: Uuid | null | undefined) {
       if (previous?.status === 'APPLYING' && job.status !== 'APPLYING') {
         // не чіпаємо сам цей запит: інвалідація скасувала б поточне завантаження й зациклила опитування
         void queryClient.invalidateQueries({ queryKey: qk.admin.all });
+        // публічні довідники (редактор розкладу, вибір викладача) живуть годину без перечитування,
+        // а імпорт міг додати групи, викладачів чи аудиторії; розклад і розпорядження бачить і кабінет
+        void queryClient.invalidateQueries({ queryKey: qk.public.all });
+        void queryClient.invalidateQueries({ queryKey: qk.me.all });
         void queryClient.invalidateQueries({ queryKey: qk.importer.jobs() });
         void queryClient.invalidateQueries({ queryKey: qk.importer.aiUsage() });
       }
