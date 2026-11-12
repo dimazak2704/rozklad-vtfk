@@ -6,11 +6,13 @@ import { HOVER_DELAY_MS, isTruncated } from './Tooltip.helpers';
 
 /**
  * Один провайдер на застосунок: підказка зʼявляється через 300 мс, а якщо інша була відкрита
- * менш ніж 300 мс тому — одразу (користувач уже «читає» панель).
+ * менш ніж 300 мс тому — одразу (користувач уже «читає» панель). Для щільної сітки дрібних цілей
+ * (коди груп) вкладений провайдер з `skipDelayDuration={0}`: прогін мишею по сітці не блимає підказкою
+ * на кожному коді.
  */
-export function TooltipProvider({ children }: { children: ReactNode }) {
+export function TooltipProvider({ children, skipDelayDuration = 300 }: { children: ReactNode; skipDelayDuration?: number }) {
   return (
-    <RadixTooltip.Provider delayDuration={HOVER_DELAY_MS} skipDelayDuration={300}>
+    <RadixTooltip.Provider delayDuration={HOVER_DELAY_MS} skipDelayDuration={skipDelayDuration}>
       {children}
     </RadixTooltip.Provider>
   );

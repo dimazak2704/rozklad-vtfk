@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { groupHintText } from '@/components/public/group-hint';
+import { groupHintText, groupTooltipText } from '@/components/public/group-hint';
 import { renderWithProviders } from '@/test/render';
 import { TruncatedText } from './Tooltip';
 import { isTruncated } from './Tooltip.helpers';
@@ -39,10 +39,14 @@ describe('TruncatedText', () => {
 
 describe('GroupHint', () => {
   it('називає групу повністю: спеціальність і курс', () => {
-    expect(groupHintText({ course: 4, specialty: { letters: 'КІ', name: 'Компʼютерна інженерія' }, department: null })).toBe(
+    expect(groupHintText({ course: 4, specialty: { letters: 'КІ', name: 'Компʼютерна інженерія' } })).toBe(
       'Компʼютерна інженерія · 4 курс',
     );
-    // назва спеціальності збігається з літерами — беремо відділення, а якщо й його немає — лише курс
-    expect(groupHintText({ course: 2, specialty: { letters: 'ЕА', name: 'ЕА' }, department: null })).toBe('2 курс');
+    // назва спеціальності збігається з літерами — лише курс; відділенням не підмінюємо (одне джерело для всіх кодів)
+    const withDepartment = { course: 2, specialty: { letters: 'ЕА', name: 'ЕА' }, department: 'Відділення електроенергетики та електромеханіки' };
+    expect(groupHintText(withDepartment)).toBe('2 курс');
+    // підказка «2 курс» до коду «2ЕА2» нічого не додає — її немає; з назвою спеціальності є
+    expect(groupTooltipText(withDepartment)).toBeNull();
+    expect(groupTooltipText({ course: 4, specialty: { letters: 'КІ', name: 'Компʼютерна інженерія' } })).toBe('Компʼютерна інженерія · 4 курс');
   });
 });

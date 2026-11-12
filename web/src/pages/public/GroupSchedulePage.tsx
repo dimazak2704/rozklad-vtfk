@@ -3,6 +3,7 @@ import { Navigate, useLocation, useParams } from 'react-router';
 import { usePublicGroups, usePublicSchedule } from '@/api/public';
 import type { PublicGroupDto } from '@/api/types';
 import { paths } from '@/app/routes';
+import { groupHintText } from '@/components/public/group-hint';
 import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
@@ -19,10 +20,9 @@ function safeDecode(value: string): string {
   }
 }
 
-/** «Компʼютерна інженерія · 4 курс»; невідому назву спеціальності не показуємо. Зміну навчання — теж ні: «1 зміна» читається як «одна заміна». */
+/** «Компʼютерна інженерія · 4 курс» (те саме, що в підказках до кодів). Зміну навчання не показуємо: «1 зміна» читається як «одна заміна». */
 function groupDetails(group: PublicGroupDto): string {
-  const specialty = group.specialty.name !== group.specialty.letters ? group.specialty.name : null;
-  return [specialty, `${group.course} курс`].filter(Boolean).join(' · ');
+  return groupHintText(group);
 }
 
 function GroupSchedule({ group }: { group: PublicGroupDto }) {

@@ -4,10 +4,10 @@ import { Link } from 'react-router';
 import { usePublicGroups } from '@/api/public';
 import type { PublicGroupDto } from '@/api/types';
 import { paths } from '@/app/routes';
-import { ErrorState, Skeleton, Tooltip, useErrorCovered } from '@/components/ui';
+import { ErrorState, Skeleton, Tooltip, TooltipProvider, useErrorCovered } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
-import { groupHintText } from '../group-hint';
+import { groupTooltipText } from '../group-hint';
 import { useStalled } from '../useStalled';
 import { useRememberedGroup } from './useRememberedGroup';
 
@@ -35,31 +35,34 @@ function writeOpenCourses(courses: readonly number[]) {
 
 /**
  * Коди груп курсу — сіткою з однаковими колонками (ціль 44 px, без рамок), тож рядки рівні й ніде не
- * лишається «сирота» на окремому рядку. Своя група — тонованим тлом.
+ * лишається «сирота» на окремому рядку. Своя група — тонованим тлом. Підказка до коду — лише коли курсор
+ * затримався на ньому: без пропуску затримки прогін мишею по сітці не «блимає» назвою на кожному коді.
  */
 function CourseGrid({ list, ownId }: { list: readonly PublicGroupDto[]; ownId: string | null }) {
   return (
-    <ul className="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))]">
-      {list.map((group) => (
-        <li key={group.id}>
-          {/* мишею — повна назва групи; на дотик вона є на сторінці групи */}
-          <Tooltip content={groupHintText(group)} align="start">
-            <Link
-              to={paths.group(group.code)}
-              aria-current={group.id === ownId ? 'true' : undefined}
-              className={cn(
-                'flex h-11 items-center rounded-control px-2 text-ui font-semibold text-primary figures',
-                'transition-[background-color,color] duration-150 hover:bg-hover hover:text-accent',
-                'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                group.id === ownId && 'bg-selected text-accent hover:bg-selected',
-              )}
-            >
-              {group.code}
-            </Link>
-          </Tooltip>
-        </li>
-      ))}
-    </ul>
+    <TooltipProvider skipDelayDuration={0}>
+      <ul className="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))]">
+        {list.map((group) => (
+          <li key={group.id}>
+            {/* мишею — повна назва групи; на дотик вона є на сторінці групи */}
+            <Tooltip content={groupTooltipText(group)} align="start">
+              <Link
+                to={paths.group(group.code)}
+                aria-current={group.id === ownId ? 'true' : undefined}
+                className={cn(
+                  'flex h-11 items-center rounded-control px-2 text-ui font-semibold text-primary figures',
+                  'transition-[background-color,color] duration-150 hover:bg-hover hover:text-accent',
+                  'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                  group.id === ownId && 'bg-selected text-accent hover:bg-selected',
+                )}
+              >
+                {group.code}
+              </Link>
+            </Tooltip>
+          </li>
+        ))}
+      </ul>
+    </TooltipProvider>
   );
 }
 
