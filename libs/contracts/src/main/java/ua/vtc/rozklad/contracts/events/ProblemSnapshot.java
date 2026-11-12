@@ -69,6 +69,10 @@ public record ProblemSnapshot(
      * timetable: the room belongs to the teacher and groups come to it. The solver prefers
      * {@code preferredRoomId} (load item), then {@code teacherRoomId}, then {@code homeRoomId}; core
      * sends {@code homeRoomId} as {@code null} since round 7 (kept for older snapshots).
+     * {@code online} (additive; absent or null reads as {@code false}) marks a pinned unit that stands for an online
+     * template lesson (DOMAIN §5): its {@code pinned.roomId} is kept for reference only, so the
+     * scheduler lets it occupy no room, checks no capacity or room type for it and returns the room
+     * unchanged in the assignment. Free units are always placed in a room, whatever the flag says.
      */
     public record Unit(
             String unitId,
@@ -83,13 +87,24 @@ public record ProblemSnapshot(
             UUID homeRoomId,
             PinnedSlot pinned,
             PinnedSlot initial,
-            UUID teacherRoomId) {
+            UUID teacherRoomId,
+            Boolean online) {
 
         public Unit {
             Objects.requireNonNull(unitId, "unitId");
             Objects.requireNonNull(groupId, "groupId");
             Objects.requireNonNull(disciplineId, "disciplineId");
             Objects.requireNonNull(weight, "weight");
+            // Jackson 3 refuses an absent primitive: the wrapper reads older snapshots, null means in person
+            online = Boolean.TRUE.equals(online);
+        }
+
+        /** An in-person unit (snapshots before the online flag). */
+        public Unit(String unitId, UUID loadItemId, UUID groupId, int subgroup, UUID disciplineId, UUID teacherId,
+                    UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
+                    PinnedSlot pinned, PinnedSlot initial, UUID teacherRoomId) {
+            this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
+                    preferredRoomId, homeRoomId, pinned, initial, teacherRoomId, false);
         }
 
         /** A unit without a teacher room (snapshots before round 7). */
@@ -97,7 +112,7 @@ public record ProblemSnapshot(
                     UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
                     PinnedSlot pinned, PinnedSlot initial) {
             this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
-                    preferredRoomId, homeRoomId, pinned, initial, null);
+                    preferredRoomId, homeRoomId, pinned, initial, null, false);
         }
 
         /** A unit without a warm start. */
@@ -105,7 +120,7 @@ public record ProblemSnapshot(
                     UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
                     PinnedSlot pinned) {
             this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
-                    preferredRoomId, homeRoomId, pinned, null, null);
+                    preferredRoomId, homeRoomId, pinned, null, null, false);
         }
     }
 

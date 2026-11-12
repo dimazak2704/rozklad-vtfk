@@ -106,6 +106,27 @@ class EventJsonRoundTripTest {
         assertThat(unit.teacherRoomId()).isNull();
         assertThat(unit.homeRoomId()).hasToString("8b9c0d1e-2f3a-4b8c-9d0e-1f2a3b4c5d6e");
         assertThat(unit.initial()).isNull();
+        assertThat(unit.online()).as("older snapshots have no online flag").isFalse();
+    }
+
+    /** {@code online} is additive: an online pinned lesson keeps its room for reference only (DOMAIN §5). */
+    @Test
+    void snapshotUnitCarriesTheOnlineFlag() {
+        ProblemSnapshot.PinnedSlot slot = new ProblemSnapshot.PinnedSlot(1, 1, ua.vtc.rozklad.contracts.Parity.BOTH,
+                java.util.UUID.fromString("8b9c0d1e-2f3a-4b8c-9d0e-1f2a3b4c5d6e"));
+        ProblemSnapshot.Unit unit = new ProblemSnapshot.Unit("pin:1", null,
+                java.util.UUID.fromString("3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f"), 0,
+                java.util.UUID.fromString("7a8b9c0d-1e2f-4a7b-8c8d-9e0f1a2b3c4d"), null,
+                ua.vtc.rozklad.contracts.UnitWeight.WHOLE, null, null, null, slot, null, null, true);
+
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(unit));
+        ProblemSnapshot.Unit restored = mapper.readValue(json.toString(), ProblemSnapshot.Unit.class);
+
+        assertThat(json.get("online").asBoolean()).isTrue();
+        assertThat(restored).isEqualTo(unit);
+        assertThat(new ProblemSnapshot.Unit("u", null, unit.groupId(), 0, unit.disciplineId(), null,
+                unit.weight(), null, null, null, null, null, null).online())
+                .as("the 13-argument constructor stays and means in person").isFalse();
     }
 
     @Test

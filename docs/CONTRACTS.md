@@ -198,5 +198,6 @@ Records live in `libs/contracts` (`ua.vtc.rozklad.contracts.events`).
 `ProblemSnapshot { timeslots:[{weekday,pair}], shiftWindows:[{shift,weekday,firstPair,lastPair}], groups:[{id,code,size,shift,subgroups:[n]}],
 rooms:[{id,name,type,capacity,maxParallel}], teachers:[{id,name,unavailable:[{weekday,pair}], unwanted:[{weekday,pair}]}],
 units:[{unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight: WHOLE|HALF, requiredRoomType?, preferredRoomId?, homeRoomId?,
-pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?}] }`
-(`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7)
+pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?, online?}] }`
+(`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7;
+`online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5)
