@@ -30,6 +30,12 @@ public interface CatalogQueries {
     /** Active groups ordered by course and code. */
     List<GroupInfo> activeGroups();
 
+    /**
+     * Every group, inactive ones too, ordered by course and code: a group made inactive may still have
+     * published lessons, and calendar edits must reach them.
+     */
+    List<GroupInfo> allGroups();
+
     Optional<TeacherInfo> teacher(UUID id);
 
     Optional<RoomInfo> room(UUID id);

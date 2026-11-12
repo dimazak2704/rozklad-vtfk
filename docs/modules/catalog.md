@@ -8,7 +8,7 @@ catalog import used by the importer.
 
 | Type | What |
 |---|---|
-| `CatalogQueries` | batch refs (`groupRefs`, `teacherRefs`, `disciplineRefs`, `roomRefs`), read models (`group`, `groups`, `activeGroups`, `teacher`, `room`, `discipline`), tolerant natural-key lookups (`groupByCode("4ki1")`, `teacherByShortName("Кренцін М. Д.")` incl. aliases, `disciplineByShortName`, `roomByName("С.З.")`), `teacherByAccount(sub)`, competences (`hasCompetence`, `teachersCompetentIn`) |
+| `CatalogQueries` | batch refs (`groupRefs`, `teacherRefs`, `disciplineRefs`, `roomRefs`), read models (`group`, `groups`, `activeGroups`, `allGroups` (inactive too), `teacher`, `room`, `discipline`), tolerant natural-key lookups (`groupByCode("4ki1")`, `teacherByShortName("Кренцін М. Д.")` incl. aliases, `disciplineByShortName`, `roomByName("С.З.")`), `teacherByAccount(sub)`, competences (`hasCompetence`, `teachersCompetentIn`) |
 | `GroupRef`, `TeacherRef`, `DisciplineRef`, `RoomRef` | the common DTOs of CONTRACTS.md |
 | `GroupInfo`, `TeacherInfo`, `RoomInfo` | read models (`size`/`capacity` may be `null` = unknown) |
 | `CatalogText` | DOMAIN §10 normalization: `normalize`, `key` (natural key without separators), `fromEnglishLayout`, `clean` |

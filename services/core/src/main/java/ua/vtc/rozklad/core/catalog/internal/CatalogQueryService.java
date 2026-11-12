@@ -100,6 +100,11 @@ class CatalogQueryService implements CatalogQueries {
     }
 
     @Override
+    public List<GroupInfo> allGroups() {
+        return infos(groups.findAllByOrderByCourseAscCodeAsc());
+    }
+
+    @Override
     public Optional<TeacherInfo> teacher(UUID id) {
         return teachers.findById(id).map(TeacherInfo::of);
     }

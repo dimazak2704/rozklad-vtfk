@@ -25,7 +25,8 @@ import ua.vtc.rozklad.core.catalog.GroupInfo;
  * Publishes {@code schedule.changed} (reason CALENDAR_CHANGED) when a calendar edit changes which
  * lessons happen or how they look: parity overrides and calendar periods. The event goes through
  * the outbox, so it must be called inside the transaction of the edit. Consumers (notification
- * caches) get the Mon–Fri dates and the groups affected. Before it, the in-process
+ * caches) get the Mon–Fri dates and the groups affected; a college-wide or course-wide edit affects
+ * inactive groups too, because a publication materializes their lessons as well. Before it, the in-process
  * {@link CalendarEdited} carries the same dates and groups with the calendar as it was before the
  * edit, for the timetable module, which re-materializes the lessons or refuses the edit.
  */
@@ -58,19 +59,19 @@ class CalendarChangePublisher {
                         StudyCalendar before) {
         SortedSet<LocalDate> dates = new TreeSet<>();
         Set<UUID> groupIds = new java.util.LinkedHashSet<>();
-        List<GroupInfo> activeGroups = null;
+        List<GroupInfo> allGroups = null;
         for (PeriodSnapshot period : periods) {
             dates.addAll(studyWeekdays(period.startsOn(), period.endsOn(), semesterStart, semesterEnd));
             switch (period.scope()) {
                 case GROUPS -> groupIds.addAll(period.groupIds());
                 case COURSES -> {
-                    activeGroups = activeGroups != null ? activeGroups : catalog.activeGroups();
-                    activeGroups.stream().filter(group -> period.courses().contains(group.course()))
+                    allGroups = allGroups != null ? allGroups : catalog.allGroups();
+                    allGroups.stream().filter(group -> period.courses().contains(group.course()))
                             .forEach(group -> groupIds.add(group.id()));
                 }
                 case ALL -> {
-                    activeGroups = activeGroups != null ? activeGroups : catalog.activeGroups();
-                    activeGroups.forEach(group -> groupIds.add(group.id()));
+                    allGroups = allGroups != null ? allGroups : catalog.allGroups();
+                    allGroups.forEach(group -> groupIds.add(group.id()));
                 }
             }
         }
@@ -80,7 +81,7 @@ class CalendarChangePublisher {
     /** A parity override changes the lessons of every group in that week. */
     void weekChanged(LocalDate weekStart, LocalDate semesterStart, LocalDate semesterEnd, StudyCalendar before) {
         publish(new TreeSet<>(studyWeekdays(weekStart, weekStart.plusDays(4), semesterStart, semesterEnd)),
-                allActiveGroups(), before);
+                everyGroup(), before);
     }
 
     /**
@@ -91,11 +92,11 @@ class CalendarChangePublisher {
                          StudyCalendar before) {
         LocalDate from = oldStart.isBefore(newStart) ? oldStart : newStart;
         LocalDate to = oldEnd.isAfter(newEnd) ? oldEnd : newEnd;
-        publish(new TreeSet<>(studyWeekdays(from, to, from, to)), allActiveGroups(), before);
+        publish(new TreeSet<>(studyWeekdays(from, to, from, to)), everyGroup(), before);
     }
 
-    private Set<UUID> allActiveGroups() {
-        return catalog.activeGroups().stream().map(GroupInfo::id)
+    private Set<UUID> everyGroup() {
+        return catalog.allGroups().stream().map(GroupInfo::id)
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 

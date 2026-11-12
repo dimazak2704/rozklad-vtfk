@@ -14,6 +14,8 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, UUID
 
     List<StudentGroup> findAllByActiveTrueOrderByCourseAscCodeAsc();
 
+    List<StudentGroup> findAllByOrderByCourseAscCodeAsc();
+
     List<StudentGroup> findAllByCodeIn(Collection<String> codes);
 
     boolean existsBySpecialtyId(UUID specialtyId);

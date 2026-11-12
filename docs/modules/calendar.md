@@ -61,9 +61,11 @@ bell/period readers were removed.
 - **Periods** lie inside their semester; STUDY_MODE needs `studyMode`, other kinds must not have one;
   scope ALL has no courses/groups, COURSES needs courses, GROUPS needs existing groups.
 - **`schedule.changed` (CALENDAR_CHANGED)** is published (outbox) for a parity override (the week's
-  Mon–Fri, all active groups), for every period create/update/delete (old and new dates, the groups
+  Mon–Fri, all groups), for every period create/update/delete (old and new dates, the groups
   in scope) and for a semester whose dates or first-week parity change (every weekday of the old and
-  new range, all active groups). Timetable materialization can listen to the same in-process event.
+  new range, all groups). «All groups» includes inactive ones (`CatalogQueries.allGroups`): a publication
+  materializes their lessons too, so a holiday or a new semester end must reach them. Timetable
+  materialization listens to the same in-process event.
   Bell profile edits change only times and publish nothing.
 - **Bells**: the default bell profile in settings must exist and be active (`SettingsConstraint`
   implemented here); it cannot be deleted or deactivated. A profile used by a semester → 409 on delete.

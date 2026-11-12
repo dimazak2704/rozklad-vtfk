@@ -393,6 +393,22 @@ class TimetablePublicationIT {
         assertThat(lessonsOf(data.group4ki2.getId(), future)).isOne();
     }
 
+    /** A group made inactive keeps its published lessons, so a college-wide holiday must remove them too. */
+    @Test
+    void holidayReachesTheLessonsOfAnInactiveGroup() {
+        publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate future = data.monday(4);
+        UUID inactive = data.group4ki2.getId();
+        jdbc.update("UPDATE student_group SET active = false WHERE id = ?", inactive);
+        assertThat(lessonsOf(inactive, future)).isOne();
+
+        UUID holiday = periods.create(period(CalendarPeriodKind.HOLIDAY, future, null, PeriodScope.ALL, null)).id();
+
+        assertThat(lessonsOf(inactive, future)).isZero();
+        periods.delete(holiday);
+        assertThat(lessonsOf(inactive, future)).isOne();
+    }
+
     @Test
     void onlinePeriodAddedAfterPublicationMarksLessonsOnlineAndKeepsThem() {
         publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
