@@ -8,7 +8,6 @@ import { DayList, NowIndicator, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import type { Perspective } from '@/lib/schedule';
 import { useOnline } from '../useOnline';
@@ -148,8 +147,6 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
   const changes = useMemo(() => (placeholder ? [] : changedLessons(schedule)), [schedule, placeholder]);
   const day = placeholder ? undefined : dayOf(schedule, date);
   const slots = bells.data?.slots;
-  const ownPairs = useMemo(() => (day ? new Set(activePairs(day)) : null), [day]);
-  const { status: dayStatus } = useNow(day && day.date === today ? slots : null, { date: day?.date ?? null, onlyPairs: ownPairs });
 
   const openDay = (next: string) => {
     setDate(next);
@@ -215,31 +212,12 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, subgr
     );
   } else if (view === 'day') {
     const live = Boolean(day && day.studyDay && day.date === today && slots && slots.length > 0);
-    // великий відлік — лише поки пари ще йдуть; після них досить одного тихого рядка
-    const running = live && (dayStatus?.kind === 'in-pair' || dayStatus?.kind === 'break' || dayStatus?.kind === 'before-day');
+    // на сторінці розкладу головне — код групи, тож стан дня — один тихий рядок на всіх ширинах;
+    // великий відлік лишається для головної та «Дзвінків»
     content = (
       <div className="grid items-start gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div className="flex min-w-0 flex-col gap-5">
-          {live && day && slots ? (
-            <>
-              {running ? (
-                <NowIndicator
-                  variant="compact"
-                  bells={slots}
-                  lessonPairs={activePairs(day)}
-                  date={day.date}
-                  className="rounded-[20px] bg-today-wash p-5 lg:hidden"
-                />
-              ) : null}
-              <NowIndicator
-                variant="inline"
-                bells={slots}
-                lessonPairs={activePairs(day)}
-                date={day.date}
-                className={running ? 'hidden lg:flex' : undefined}
-              />
-            </>
-          ) : null}
+          {live && day && slots ? <NowIndicator variant="inline" bells={slots} lessonPairs={activePairs(day)} date={day.date} /> : null}
           {day ? <DayList day={day} bells={slots} perspective={perspective} today={today} showHeader={false} /> : <ScheduleSkeleton view="day" />}
         </div>
         {slots && slots.length > 0 ? (

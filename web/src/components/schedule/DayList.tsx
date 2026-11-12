@@ -53,7 +53,8 @@ function NowRule({ minutes }: { minutes: number }) {
 /**
  * День списком (телефон і денне подання): колонка часу (початок і номер пари) → тонка лінія → заняття
  * з тією самою анатомією, що й клітинка сітки. Завершені сьогодні пари «осідають», «вікна» — тихим рядком.
- * «Зараз» — лінія 2 px між рядками з пігулкою часу ліворуч (у перерві) або тонка лінія всередині поточної пари.
+ * «Зараз» ніколи не перетинає заняття: у перерві це лінія 2 px між рядками з пігулкою часу ліворуч, а під час
+ * пари — акцентна смуга на лінії між часом і заняттям, що росте зверху вниз до пройденої частки пари.
  */
 export function DayList({
   day,
@@ -115,7 +116,7 @@ export function DayList({
                   className={cn('relative grid min-h-16 grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3', !last && 'border-b border-separator')}
                 >
                   {/* час: початок пари і її номер; кінець — у картці деталей */}
-                  <div className="flex flex-col border-e border-separator py-3 pe-3">
+                  <div className="relative flex flex-col border-e border-separator py-3 pe-3">
                     {slot.startsAt ? (
                       <span
                         className={cn(
@@ -128,6 +129,17 @@ export function DayList({
                       </span>
                     ) : null}
                     <span className={cn('text-meta', current ? 'font-semibold text-accent' : 'text-muted')}>{slot.pair} пара</span>
+                    {/* поточна пара: лінія між часом і заняттям заповнюється акцентом до пройденої частки — повз текст */}
+                    {current ? (
+                      <span
+                        aria-hidden="true"
+                        data-now-progress=""
+                        className="pointer-events-none absolute -end-px top-0 w-0.5 translate-x-[0.5px] rounded-full bg-[var(--fill-now)] transition-[height] duration-1000 ease-linear rtl:-translate-x-[0.5px]"
+                        style={{ height: `${Math.max(4, Math.round(fill * 100))}%` }}
+                      >
+                        <span className="absolute start-1/2 bottom-0 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-[var(--fill-now)] rtl:translate-x-1/2" />
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="flex min-w-0 flex-col py-1.5">
@@ -149,14 +161,6 @@ export function DayList({
                     )}
                   </div>
 
-                  {/* поточна пара: тонка лінія «зараз» на частці її тривалості */}
-                  {current ? (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-0 h-0.5 -translate-y-1/2 bg-[var(--fill-now)] transition-[top] duration-1000 ease-linear"
-                      style={{ top: `${Math.round(fill * 100)}%` }}
-                    />
-                  ) : null}
                 </li>
               </Fragment>
             );

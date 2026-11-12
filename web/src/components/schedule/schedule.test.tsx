@@ -59,12 +59,31 @@ describe('WeekGrid', () => {
     expect(secondRow).toHaveTextContent('10:00');
   });
 
+  it('лінія «зараз» не йде через текст заняття: лежить під вмістом, а в зайнятій клітинці — лише крапка на краю', () => {
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);
+    const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
+    const line = table.querySelector<HTMLElement>('[data-now-line="strong"]');
+    expect(line).not.toBeNull();
+    // без z-index і перед вмістом у DOM: клітинка з тим самим тлом малюється поверх лінії
+    expect(line!.className).not.toMatch(/(^|\s)z-/);
+    const content = line!.parentElement!.querySelector('div');
+    expect(content).not.toBeNull();
+    expect(line!.compareDocumentPosition(content!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(content!.className).toMatch(/relative/);
+    expect(content!.className).toMatch(/bg-today-wash/);
+    // над заняттям від лінії лишається крапка на краю колонки
+    expect(line!.parentElement!.querySelector('[data-now-marker]')).not.toBeNull();
+  });
+
   it('пʼятнична пара з іншим дзвінком показує свій час', () => {
     renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);
     // у понеділок–четвер 1–3 пари мають той самий час, що й у пʼятницю, тож окремого часу немає
     expect(screen.queryByText('12:20–13:20')).not.toBeInTheDocument();
   });
 });
+
+/** Видимий текст (не прихований рядок для aria-live). */
+const visibleText = (text: RegExp) => screen.getAllByText(text).find((node) => !node.closest('.sr-only'))!;
 
 describe('DayList і NowIndicator', () => {
   it('позначає поточну пару і показує зворотний відлік', () => {
@@ -89,6 +108,28 @@ describe('DayList і NowIndicator', () => {
     expect(labels).toEqual(['09:40–10:40', '11:00']);
     // підписи — у потоці сітки, а не абсолютно за часом (саме це давало «08:3Ø9:40»)
     track.querySelectorAll('.row-start-3').forEach((node) => expect(node.className).not.toMatch(/absolute/));
+  });
+
+  it('у денному списку «зараз» не перетинає заняття: під час пари заповнюється лінія між часом і заняттям', () => {
+    renderWithProviders(<DayList day={monday} bells={BELLS_MON_THU} today={monday.date} at={10 * 60 + 10} />);
+    const current = screen.getAllByRole('listitem').find((item) => item.getAttribute('aria-current') === 'time')!;
+    const progress = current.querySelector<HTMLElement>('[data-now-progress]');
+    expect(progress).not.toBeNull();
+    expect(progress!.style.height).toBe('50%');
+    // жодної горизонтальної лінії на всю ширину рядка
+    expect(current.querySelector('.inset-x-0')).toBeNull();
+  });
+
+  it('заголовок не рве «о» і час на різні рядки', () => {
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={8 * 60} variant="compact" />);
+    const headline = visibleText(/Перша пара/);
+    expect(headline.textContent).toBe('Перша пара о 08:30');
+    expect(headline.querySelector('.whitespace-nowrap')?.textContent).toBe('о 08:30');
+  });
+
+  it('один рядок на сторінці розкладу тримає «о» з часом нерозривним пробілом', () => {
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={8 * 60} variant="inline" />);
+    expect(visibleText(/Перша пара/).textContent).toBe('Перша пара о\u00a008:30 · за\u00a030\u00a0хв');
   });
 
   it('пояснює, коли пари закінчилися', () => {

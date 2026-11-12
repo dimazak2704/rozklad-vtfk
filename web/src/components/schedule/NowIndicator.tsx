@@ -44,11 +44,13 @@ function inlineText(status: PairStatus): string {
     case 'in-pair':
       return `Зараз ${pairOrdinalLabel(status.current.pair)} · ще ${status.minutesLeft}\u00a0хв`;
     case 'break':
-      return `Перерва · ${pairOrdinalLabel(status.next.pair)} о ${status.next.startsAt}`;
+      return `Перерва · ${pairOrdinalLabel(status.next.pair)} о\u00a0${status.next.startsAt}`;
     case 'before-day':
-      return `Перша пара о ${status.next.startsAt}`;
+      return status.minutesUntil <= 180
+        ? `Перша пара о\u00a0${status.next.startsAt} · за\u00a0${durationLabel(status.minutesUntil)}`
+        : `Перша пара о\u00a0${status.next.startsAt}`;
     case 'after-day':
-      return `Пари закінчилися о ${status.last.endsAt}`;
+      return `Пари закінчилися о\u00a0${status.last.endsAt}`;
     case 'no-classes':
       return 'Сьогодні пар немає';
   }
@@ -71,7 +73,8 @@ function Countdown({ value, className }: { value: number; className?: string }) 
   );
 }
 
-const DISPLAY = 'font-display text-[2.125rem] leading-[2.375rem] font-semibold tracking-[-0.025em] md:text-display';
+/** Заголовок не рветься «Перша пара о / 08:30»: рядки вирівнюються, а прийменник тримається часу (о 08:30). */
+const DISPLAY = 'font-display text-[2.125rem] leading-[2.375rem] font-semibold tracking-[-0.025em] text-balance md:text-display';
 const NUMERAL = 'font-display text-[4rem] leading-[3.75rem] font-light tracking-[-0.04em] md:text-numeral';
 
 /** Заголовок дня одним рядком на спільній базовій лінії: «4 пара  38 хв до дзвінка». */
@@ -104,7 +107,7 @@ function Headline({ status, afterDay, compact }: { status: PairStatus; afterDay?
       return (
         <p className={wrap}>
           <span className={cn(DISPLAY, 'text-primary')}>
-            Перша пара о <span className="figures">{status.next.startsAt}</span>
+            Перша пара <span className="whitespace-nowrap">о <span className="figures">{status.next.startsAt}</span></span>
           </span>
           {status.minutesUntil <= 180 ? (
             <span className="text-body text-secondary">за {durationLabel(status.minutesUntil)}</span>
@@ -115,7 +118,7 @@ function Headline({ status, afterDay, compact }: { status: PairStatus; afterDay?
       return (
         <div className="flex flex-col gap-1">
           <p className={cn(DISPLAY, 'text-primary')}>На сьогодні все</p>
-          <p className="text-body text-secondary">{afterDay ?? `Остання пара закінчилася о ${status.last.endsAt}.`}</p>
+          <p className="text-body text-secondary">{afterDay ?? `Остання пара закінчилася о\u00a0${status.last.endsAt}.`}</p>
         </div>
       );
     case 'no-classes':
@@ -145,8 +148,8 @@ function NextSentence({ status }: { status: PairStatus }) {
   if (status.kind === 'break') {
     return (
       <>
-        Почнеться о{' '}
-        <span className="font-[650] text-primary figures">{status.next.startsAt}</span>, до{' '}
+        Почнеться о{'\u00a0'}
+        <span className="font-[650] text-primary figures">{status.next.startsAt}</span>, до{'\u00a0'}
         <span className="figures">{status.next.endsAt}</span>
       </>
     );

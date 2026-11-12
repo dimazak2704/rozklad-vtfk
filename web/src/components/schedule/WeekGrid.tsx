@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IsoDate, ScheduleDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
@@ -22,11 +22,119 @@ function clockLabel(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`;
 }
 
+/** Половина висоти пігулки «зараз» (20 px). */
+const PILL_REACH = 10;
+/** Рядок підпису вищий за самі цифри: зверху й знизу по ~3 px порожнього міжрядкового простору. */
+const CAPTION_LEADING = 3;
+
+/**
+ * Номер пари, початок і кінець у колонці часу. Пігулка «зараз» стоїть тут же, на точній хвилині. Підпис,
+ * який вона накрила б, на цей час тихо зникає (як в Apple Calendar): пігулка й так називає час, а читач
+ * екрана підпис чує. Так пігулка ніколи не лягає на текст, хоч би якою високою була клітинка.
+ */
+function PairGutter({
+  pair,
+  time,
+  current,
+  now,
+}: {
+  pair: number;
+  time: { startsAt: string; endsAt: string } | undefined;
+  current: boolean;
+  now: { fraction: number; label: string } | null;
+}) {
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const startRef = useRef<HTMLSpanElement>(null);
+  const endRef = useRef<HTMLSpanElement>(null);
+  const [covered, setCovered] = useState({ start: false, end: false });
+  const fraction = now?.fraction ?? null;
+
+  useLayoutEffect(() => {
+    const pill = pillRef.current;
+    const cell = pill?.offsetParent;
+    if (fraction === null || !pill || !(cell instanceof HTMLElement)) {
+      setCovered((prev) => (prev.start || prev.end ? { start: false, end: false } : prev));
+      return;
+    }
+    const measure = () => {
+      const box = cell.getBoundingClientRect();
+      // jsdom і схована вкладка не мають розмірів — нічого не ховаємо
+      if (box.height === 0) return;
+      const centre = box.top + fraction * box.height;
+      const pillLeft = box.right - pill.offsetWidth - 4;
+      const hits = (el: HTMLElement | null) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.right > pillLeft - 2 && r.bottom - CAPTION_LEADING > centre - PILL_REACH && r.top + CAPTION_LEADING < centre + PILL_REACH;
+      };
+      const next = { start: hits(startRef.current), end: hits(endRef.current) };
+      setCovered((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(cell);
+    return () => observer.disconnect();
+  }, [fraction]);
+
+  return (
+    <>
+      <span className="flex flex-col">
+        <span className={cn('text-title leading-7 font-semibold figures', current ? 'text-accent' : 'text-primary')}>{pair}</span>
+        {time ? (
+          <>
+            <span
+              ref={startRef}
+              data-covered={covered.start || undefined}
+              className={cn(
+                'mt-1 text-caption figures transition-opacity duration-200',
+                current ? 'text-accent' : 'text-secondary',
+                covered.start && 'opacity-0',
+              )}
+            >
+              {time.startsAt}
+            </span>
+            <span
+              ref={endRef}
+              data-covered={covered.end || undefined}
+              className={cn('text-caption text-muted figures transition-opacity duration-200', covered.end && 'opacity-0')}
+            >
+              <span className="sr-only">до </span>
+              {time.endsAt}
+            </span>
+          </>
+        ) : null}
+      </span>
+      {now ? (
+        <>
+          {/* пігулка «зараз» — у колонці часу, тож не закриває жодного заняття; тонкий штрих веде від неї до днів */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute end-0 h-px w-1.5 -translate-y-1/2 bg-[var(--fill-now)] opacity-40 transition-[top] duration-1000 ease-linear"
+            style={{ top: `${now.fraction * 100}%` }}
+          />
+          <span
+            ref={pillRef}
+            aria-hidden="true"
+            className="absolute end-1 z-10 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures transition-[top] duration-1000 ease-linear"
+            style={{ top: `${now.fraction * 100}%` }}
+          >
+            {now.label}
+          </span>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * Тижнева сітка (DESIGN.md, «Тижнева сітка») — справжня таблиця на одній панелі з горизонтальними лініями:
  * ліворуч колонка часу 88 px (номер пари, початок, кінець — кожне своїм рядком), дні — рівні колонки.
  * Сьогодні — тонована колонка й число в акцентній пігулці. «Зараз» — лінія 2 px через колонку сьогодні
  * на точній хвилині з крапкою ліворуч; пігулка з часом стоїть у колонці часу й не закриває заняття.
+ * Лінія лежить під вмістом клітинки й через текст не йде (інакше заняття читалося б закресленим, тобто
+ * скасованим): у зайнятій клітинці від неї лишається лише крапка на краю колонки. Від колонки часу
+ * до сьогодні веде ледь помітна лінія 1 px — теж лише порожніми клітинками.
  * Рядки ростуть під вміст — нічого не обрізається.
  */
 export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', className }: WeekGridProps) {
@@ -149,28 +257,12 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                     !lastRow && 'border-b border-separator',
                   )}
                 >
-                  <span className="flex flex-col">
-                    <span className={cn('text-title leading-7 font-semibold figures', currentRow ? 'text-accent' : 'text-primary')}>{pair}</span>
-                    {time ? (
-                      <>
-                        <span className={cn('mt-1 text-caption figures', currentRow ? 'text-accent' : 'text-secondary')}>{time.startsAt}</span>
-                        <span className="text-caption text-muted figures">
-                          <span className="sr-only">до </span>
-                          {time.endsAt}
-                        </span>
-                      </>
-                    ) : null}
-                  </span>
-                  {/* пігулка «зараз» — у колонці часу, тож не закриває жодного заняття */}
-                  {line ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute end-1 z-10 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures transition-[top] duration-1000 ease-linear"
-                      style={{ top: `${nowTop * 100}%` }}
-                    >
-                      {clockLabel(nowMinutes)}
-                    </span>
-                  ) : null}
+                  <PairGutter
+                    pair={pair}
+                    time={time}
+                    current={currentRow}
+                    now={line ? { fraction: nowTop, label: clockLabel(nowMinutes) } : null}
+                  />
                 </th>
                 {days.map((day, dayIndex) => {
                   const lessons = byDay[dayIndex]?.get(pair) ?? [];
@@ -186,21 +278,35 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                     ) : null;
                   }
                   const past = isLiveDay && rowEnd !== null && nowMinutes >= rowEnd;
+                  const cellBg = isToday ? 'bg-today-wash' : 'bg-surface';
+                  // лінія «зараз»: 2 px у колонці сьогодні, ледь помітна 1 px — у днях між колонкою часу й сьогодні
+                  const nowRule = line && isLiveDay ? 'strong' : line && dayIndex < liveDayIndex ? 'faint' : null;
                   return (
-                    <td
-                      key={day.date}
-                      className={cn('relative h-px p-0 align-top', !lastRow && 'border-b border-separator', isToday && 'bg-today-wash')}
-                    >
+                    <td key={day.date} className={cn('relative h-px p-0 align-top', !lastRow && 'border-b border-separator', cellBg)}>
+                      {/* лінія йде першою й без z-index: вміст клітинки (з тим самим тлом) малюється поверх неї */}
+                      {nowRule ? (
+                        <span
+                          aria-hidden="true"
+                          data-now-line={nowRule}
+                          className={cn(
+                            'pointer-events-none absolute inset-x-0 -translate-y-1/2 bg-[var(--fill-now)] transition-[top] duration-1000 ease-linear',
+                            nowRule === 'strong' ? 'h-0.5' : 'h-px opacity-40',
+                            // у перерві лінія лежить на межі рядків, де тексту немає, — тож поверх
+                            nowTop === 0 && 'z-[1]',
+                          )}
+                          style={{ top: `${nowTop * 100}%` }}
+                        />
+                      ) : null}
                       {lessons.length === 0 ? (
                         isLiveDay && pair === freeRow ? (
-                          <span className="flex h-full min-h-[6.5rem] items-center justify-center px-3.5 text-caption text-muted">
-                            вільно до кінця дня
+                          <span className="flex h-full min-h-[6.5rem] items-center justify-center px-3.5">
+                            <span className={cn('relative px-1.5 text-caption text-muted', cellBg)}>вільно до кінця дня</span>
                           </span>
                         ) : (
                           <span className="sr-only">Пари немає</span>
                         )
                       ) : (
-                        <div className="flex h-full flex-col divide-y divide-[var(--border-color-separator)]">
+                        <div className={cn('relative flex h-full flex-col divide-y divide-[var(--border-color-separator)]', cellBg)}>
                           {lessons.map((lesson) => {
                             const start = lesson.startsAt ? timeToMinutes(lesson.startsAt) : null;
                             const end = lesson.endsAt ? timeToMinutes(lesson.endsAt) : null;
@@ -222,15 +328,14 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                           })}
                         </div>
                       )}
-                      {/* лінія «зараз» 2 px з крапкою 6 px ліворуч; ковзає щохвилини */}
-                      {line && isLiveDay ? (
+                      {/* крапка 8 px на лівому краї колонки сьогодні: початок лінії, видна й над зайнятою клітинкою */}
+                      {nowRule === 'strong' ? (
                         <span
                           aria-hidden="true"
-                          className="pointer-events-none absolute inset-x-0 z-10 h-0.5 -translate-y-1/2 bg-[var(--fill-now)] transition-[top] duration-1000 ease-linear"
+                          data-now-marker=""
+                          className="pointer-events-none absolute start-0 z-[1] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--fill-now)] ring-2 ring-[var(--background-color-today-wash)] transition-[top] duration-1000 ease-linear rtl:translate-x-1/2"
                           style={{ top: `${nowTop * 100}%` }}
-                        >
-                          <span className="absolute start-0 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-[var(--fill-now)]" />
-                        </span>
+                        />
                       ) : null}
                     </td>
                   );
