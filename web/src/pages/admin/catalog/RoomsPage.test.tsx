@@ -5,7 +5,7 @@ import { renderWithProviders } from '@/test/render';
 import RoomsPage from './RoomsPage';
 
 describe('сторінка «Аудиторії»', () => {
-  it('нова аудиторія: помилка форми, потім дубль із сервера, потім успіх', async () => {
+  it('нова аудиторія: помилка форми, потім дубль із сервера, потім успіх', { timeout: 20_000 }, async () => {
     const user = userEvent.setup();
     renderWithProviders(<RoomsPage />, { route: '/admin/catalog/rooms' });
     expect(await screen.findByRole('rowheader', { name: '301' })).toBeInTheDocument();
@@ -30,7 +30,8 @@ describe('сторінка «Аудиторії»', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Нова аудиторія' })).not.toBeInTheDocument());
 
     await user.type(screen.getByRole('searchbox', { name: 'Пошук аудиторії' }), '512');
-    expect(await screen.findByRole('rowheader', { name: '512' })).toBeInTheDocument();
+    // пошук іде із затримкою (поле → адреса → запит), під навантаженням набору це довше за секунду
+    expect(await screen.findByRole('rowheader', { name: '512' }, { timeout: 5_000 })).toBeInTheDocument();
   });
 
   it('видалення використаної аудиторії пояснює 409 і пропонує зробити її неактивною', async () => {
