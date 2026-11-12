@@ -158,7 +158,7 @@ export default function GroupsPage() {
       <CatalogToolbar
         search={table.q}
         onSearch={(value) => table.set({ q: value })}
-        placeholder="Код групи або куратор"
+        placeholder="Група або куратор"
         searchLabel="Пошук групи"
         total={data?.total}
         noun={NOUN}

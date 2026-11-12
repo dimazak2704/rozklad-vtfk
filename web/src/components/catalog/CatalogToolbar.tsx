@@ -78,10 +78,18 @@ export function CatalogToolbar({
         {children ? (
           <Popover>
             <PopoverTrigger asChild>
-              <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />} aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}>
-                Фільтр
+              {/* на вузькому телефоні (< 400 px) — іконка з підписом для читача екрана: пошуку лишається місце */}
+              <Button
+                iconStart={<ListFilter aria-hidden="true" className="size-4" />}
+                aria-label={activeFilters > 0 ? `Фільтр: увімкнено ${activeFilters}` : 'Фільтр'}
+                className="max-[399.98px]:w-11 max-[399.98px]:gap-0 max-[399.98px]:px-0"
+              >
+                <span className="max-[399.98px]:sr-only">Фільтр</span>
                 {activeFilters > 0 ? (
-                  <span aria-hidden="true" className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures">
+                  <span
+                    aria-hidden="true"
+                    className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures max-[399.98px]:absolute max-[399.98px]:-end-1.5 max-[399.98px]:-top-1.5"
+                  >
                     {activeFilters}
                   </span>
                 ) : null}

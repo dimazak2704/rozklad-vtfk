@@ -164,7 +164,8 @@ export default function TeachersPage() {
           />
         </FilterField>
       </CatalogToolbar>
-      <Panel flush>
+      {/* коли лишається одна-дві колонки, таблиця на всю ширину — короткі прізвища в порожній смузі */}
+      <Panel flush className={visibleColumns.length <= 2 ? 'w-full max-w-2xl' : undefined}>
       <DataTable
         caption="Викладачі коледжу"
         columns={visibleColumns}
