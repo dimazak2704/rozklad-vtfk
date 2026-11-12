@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useAccountingRows, type AccountingRow } from '@/api/accounting';
 import { activeSemesterOf, useSemesters } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
-import { HoursBar } from '@/components/accounting/HoursBar';
+import { HoursBar, HoursBarLegend } from '@/components/accounting/HoursBar';
 import {
   accountingSummary,
   changesLink,
@@ -255,6 +255,8 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
           <Select<StatusFilter> className="w-full sm:w-64" value={filter} onValueChange={(value) => set({ status: value })} options={filterOptions} />
         </label>
       </div>
+      {/* смуга «Хід» є лише від 768 px — там і пояснення до неї */}
+      {visible.length > 0 ? <HoursBarLegend className="-mb-1 max-md:hidden" /> : null}
       <Panel flush>
         <DataTable
           caption={group ? `Облік годин групи ${group.code}` : `Облік годин: ${semester.name}`}
@@ -302,7 +304,7 @@ function StatusCell({ row }: { row: AccountingRow }) {
   const finish = row.forecastFinishDate && row.status !== 'WILL_UNDERRUN' ? formatNumericDate(row.forecastFinishDate) : null;
   return (
     <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-      {/* колір — лише в крапці: 93 червоні рядки поспіль кричали б, а не інформували */}
+      {/* колір — лише в крапці; «не вистачить» — сіра крапка (прогноз), бурштин лише в перевищення */}
       <span className="inline-flex items-center gap-2 text-ui font-[550] whitespace-nowrap text-primary">
         <span aria-hidden="true" className={cn('size-2 rounded-full bg-current', STATUS_TEXT[row.status])} />
         {statusLabel(row)}

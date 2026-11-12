@@ -14,7 +14,7 @@ const pct = (value: number, scale: number) => `${Math.max(0, Math.min(100, (valu
 /**
  * План / факт / прогноз однією смугою в нейтральному чорнилі: темніша частина — уже вичитано,
  * світліша — заплановано далі, риска — план. Колір лише там, де є рішення: що вийде за план —
- * бурштинове, чого не вистачить — червоний пунктир. Прапорець над рискою — дата, коли години буде вичитано.
+ * бурштинове; чого за прогнозом не вистачить — нейтральний пунктир (це прогноз, а не помилка). Прапорець над рискою — дата, коли години буде вичитано.
  */
 export function HoursBar({ row, className }: HoursBarProps) {
   const scale = barScale(row);
@@ -76,7 +76,7 @@ export function HoursBar({ row, className }: HoursBarProps) {
           {/* бракує до плану */}
           {short ? (
             <span
-              className="absolute inset-y-0 rounded-e-full border border-dashed border-[var(--text-decoration-color-cancel)]"
+              className="absolute inset-y-0 rounded-e-full border border-dashed border-strong"
               style={{
                 insetInlineStart: pct(row.forecast, scale),
                 width: pct(row.plan - row.forecast, scale),
@@ -102,5 +102,25 @@ export function HoursBar({ row, className }: HoursBarProps) {
         </span>
       </button>
     </HoverDetails>
+  );
+}
+
+/** Один рядок пояснення над таблицею: що означають риска й пунктир на смузі «Хід». */
+export function HoursBarLegend({ className }: { className?: string }) {
+  return (
+    <p className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-muted', className)}>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-3 w-0.5 rounded-full bg-[var(--text-color-primary)]" />
+        план
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-2 w-5 rounded-full bg-[var(--fill-track-past)]" />
+        вичитано
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-2 w-5 rounded-e-full border border-dashed border-strong" />
+        не вистачить за прогнозом
+      </span>
+    </p>
   );
 }

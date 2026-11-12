@@ -8,6 +8,8 @@ import {
   monthLabel,
   needsAttention,
   shiftMonth,
+  STATUS_TEXT,
+  STATUS_TONE,
   statusLabel,
   suggestionAction,
 } from './model';
@@ -96,5 +98,11 @@ describe('облік годин у інтерфейсі', () => {
     ).toBe('Додати 2 пари');
     expect(suggestionAction(base.suggestion!)).toBe('Зняти 11 пар після цієї дати');
     expect(suggestionAction({ kind: 'ADDITIONAL', text: 'Додати 3 пари' })).toBe('Додати пари');
+  });
+
+  it('«не вистачить» — нейтральний прогноз, найсильніший тон лише в перевищення', () => {
+    expect(STATUS_TEXT.WILL_UNDERRUN).toBe('text-muted');
+    expect(STATUS_TONE.WILL_UNDERRUN).toBe('neutral');
+    expect(STATUS_TEXT.WILL_OVERRUN).toBe('text-change');
   });
 });

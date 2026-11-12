@@ -7,10 +7,14 @@ import type { AccountingStatus } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
 import { MONTHS_NOMINATIVE, plural } from '@/lib/labels';
 
+/**
+ * «Не вистачить» посеред семестру — прогноз, а не помилка: нейтральне чорнило. Найсильніший тон —
+ * у перевищення, бо зайві години треба оформити розпорядженням.
+ */
 export const STATUS_TONE: Record<AccountingStatus, BadgeTone> = {
   FINISHED: 'accent',
   WILL_OVERRUN: 'change',
-  WILL_UNDERRUN: 'cancel',
+  WILL_UNDERRUN: 'neutral',
   ON_TRACK: 'neutral',
 };
 
@@ -42,7 +46,7 @@ export type StatusFilter = 'attention' | 'all' | AccountingStatus;
 export const STATUS_TEXT: Record<AccountingStatus, string> = {
   FINISHED: 'text-add',
   WILL_OVERRUN: 'text-change',
-  WILL_UNDERRUN: 'text-cancel',
+  WILL_UNDERRUN: 'text-muted',
   ON_TRACK: 'text-secondary',
 };
 
