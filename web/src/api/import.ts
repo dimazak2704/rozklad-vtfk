@@ -320,44 +320,109 @@ export interface ImportJobFilters {
 /** Розмір сторінки списку завдань (importer: 1..100, типово 20). */
 export const IMPORT_JOBS_PAGE_SIZE = 20;
 
+/**
+ * Застосування завершилось: імпорт міг змінити каталог, навантаження й розклад. Оновлюємо адмінку,
+ * публічні довідники (редактор розкладу й вибір викладача живуть годину без перечитування) і кабінет.
+ * Списки завдань не чіпаємо: цю функцію кличе й queryFn списку, а інвалідація скасувала б його ж
+ * поточне завантаження й зациклила опитування.
+ */
+export function refreshAfterApply(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: qk.admin.all });
+  void queryClient.invalidateQueries({ queryKey: qk.public.all });
+  void queryClient.invalidateQueries({ queryKey: qk.me.all });
+  void queryClient.invalidateQueries({ queryKey: qk.importer.aiUsage() });
+}
+
+/** Чи котресь завдання, що застосовувалось, уже ні (або зникло зі сторінки — скажімо, з фільтра APPLYING). */
+function applyFinished(previous: readonly Pick<ImportJob, 'id' | 'status'>[], next: readonly Pick<ImportJob, 'id' | 'status'>[]): boolean {
+  const now = new Map(next.map((job) => [job.id, job.status]));
+  return previous.some((job) => job.status === 'APPLYING' && now.get(job.id) !== 'APPLYING');
+}
+
 /** Завдання імпорту — сторінка `{items,page,size,total}`, нові зверху; поки якесь у роботі — оновлюємо. */
 export function useImportJobs(filters: ImportJobFilters = {}, page = 0, size = IMPORT_JOBS_PAGE_SIZE) {
+  const queryClient = useQueryClient();
+  const key = qk.importer.jobs({ ...filters, page, size });
   return useQuery({
-    queryKey: qk.importer.jobs({ ...filters, page, size }),
-    queryFn: ({ signal }) =>
-      api.get<Page<ImportJob>>('/import/jobs', { kind: filters.kind, status: filters.status, page, size }, { signal }),
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      const previous = queryClient.getQueryData<Page<ImportJob>>(key);
+      const result = await api.get<Page<ImportJob>>('/import/jobs', { kind: filters.kind, status: filters.status, page, size }, { signal });
+      // диспетчер міг піти зі сторінки завдання під час застосування: тоді завершення бачить лише список
+      if (previous && applyFinished(previous.items, result.items)) refreshAfterApply(queryClient);
+      return result;
+    },
     placeholderData: keepPreviousData,
     refetchInterval: (query) => (query.state.data?.items.some((job) => isBusy(job.status)) ? POLL_MS : false),
   });
 }
 
+/** Читає завдання й, якщо воно щойно вийшло з APPLYING, оновлює дані, які імпорт міг змінити. */
+async function fetchImportJob(queryClient: QueryClient, id: Uuid, signal?: AbortSignal): Promise<ImportJob> {
+  const previous = queryClient.getQueryData<ImportJob>(qk.importer.job(id));
+  const job = await api.get<ImportJob>(`/import/jobs/${id}`, undefined, { signal });
+  if (previous?.status === 'APPLYING' && job.status !== 'APPLYING') {
+    refreshAfterApply(queryClient);
+    // сам цей запит не чіпаємо: інвалідація скасувала б поточне завантаження й зациклила опитування
+    void queryClient.invalidateQueries({ queryKey: qk.importer.jobs() });
+  }
+  return job;
+}
+
 /**
  * Одне завдання; опитуємо, поки сервер розбирає чи застосовує файл. Коли застосування завершилось,
- * оновлюємо дані адмінки, публічні довідники й кабінет: імпорт міг змінити каталог, навантаження й розклад.
+ * оновлюємо дані адмінки, публічні довідники й кабінет (refreshAfterApply).
  */
 export function useImportJob(id: Uuid | null | undefined) {
   const queryClient = useQueryClient();
-  const key = qk.importer.job(id ?? '');
   return useQuery({
-    queryKey: key,
-    queryFn: async ({ signal }) => {
-      const previous = queryClient.getQueryData<ImportJob>(key);
-      const job = await api.get<ImportJob>(`/import/jobs/${id ?? ''}`, undefined, { signal });
-      if (previous?.status === 'APPLYING' && job.status !== 'APPLYING') {
-        // не чіпаємо сам цей запит: інвалідація скасувала б поточне завантаження й зациклила опитування
-        void queryClient.invalidateQueries({ queryKey: qk.admin.all });
-        // публічні довідники (редактор розкладу, вибір викладача) живуть годину без перечитування,
-        // а імпорт міг додати групи, викладачів чи аудиторії; розклад і розпорядження бачить і кабінет
-        void queryClient.invalidateQueries({ queryKey: qk.public.all });
-        void queryClient.invalidateQueries({ queryKey: qk.me.all });
-        void queryClient.invalidateQueries({ queryKey: qk.importer.jobs() });
-        void queryClient.invalidateQueries({ queryKey: qk.importer.aiUsage() });
-      }
-      return job;
-    },
+    queryKey: qk.importer.job(id ?? ''),
+    queryFn: ({ signal }) => fetchImportJob(queryClient, id ?? '', signal),
     enabled: Boolean(id),
     refetchInterval: (query) => (query.state.data && isBusy(query.state.data.status) ? POLL_MS : false),
   });
+}
+
+/** Скільки поспіль невдалих опитувань стерпить спостерігач застосування, перш ніж здатися. */
+const WATCH_MAX_ERRORS = 5;
+/** Найдовше застосування, яке чекаємо без сторінки завдання (core пише версію за секунди, не хвилини). */
+const WATCH_MAX_MS = 10 * 60_000;
+const watched = new Set<Uuid>();
+
+/**
+ * Стежить за застосуванням без жодного компонента: диспетчер міг одразу піти на «Усі імпорти» чи в іншу
+ * частину адмінки, і тоді ні сторінка завдання, ні список не побачать APPLIED. Опитує те саме завдання
+ * (fetchImportJob сам оновить дані), доки воно в роботі; на одне завдання — один спостерігач.
+ */
+export async function watchApply(
+  queryClient: QueryClient,
+  id: Uuid,
+  { pollMs = POLL_MS, maxMs = WATCH_MAX_MS }: { pollMs?: number; maxMs?: number } = {},
+): Promise<void> {
+  if (watched.has(id)) return;
+  watched.add(id);
+  const startedAt = Date.now();
+  let errors = 0;
+  try {
+    while (Date.now() - startedAt < maxMs) {
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      try {
+        const job = await queryClient.fetchQuery({
+          queryKey: qk.importer.job(id),
+          queryFn: ({ signal }) => fetchImportJob(queryClient, id, signal),
+          staleTime: 0,
+          retry: false,
+        });
+        errors = 0;
+        if (!isBusy(job.status)) return;
+      } catch {
+        errors += 1;
+        if (errors >= WATCH_MAX_ERRORS) return;
+      }
+    }
+  } finally {
+    watched.delete(id);
+  }
 }
 
 export interface UploadImportInput {
@@ -431,8 +496,12 @@ export function useApplyImport(jobId: Uuid) {
   return useMutation({
     mutationFn: () => api.post<ImportJob | undefined>(`/import/jobs/${jobId}/apply`),
     onSuccess: (job) => {
+      const before = queryClient.getQueryData<ImportJob>(qk.importer.job(jobId))?.status;
       if (job) queryClient.setQueryData(qk.importer.job(jobId), job);
       invalidateImport(queryClient);
+      // сервер застосував одразу (без APPLYING) — оновлюємо зараз; інакше чекаємо кінця й без сторінки
+      if (job?.status === 'APPLIED' && before !== 'APPLIED') refreshAfterApply(queryClient);
+      else if (!job || job.status === 'APPLYING') void watchApply(queryClient, jobId);
     },
   });
 }
