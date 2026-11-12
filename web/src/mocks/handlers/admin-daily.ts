@@ -100,6 +100,9 @@ export const handlers = [
     return HttpResponse.json(absence, { status: 201, headers: { Location: `/api/admin/absences/${absence.id}` } });
   }),
 
+  // як core: будь-який стан, скасовану теж (діалог після 409 так дізнається, що її вже немає)
+  http.get(apiPath('/admin/absences/:id'), ({ params }) => HttpResponse.json(getAbsence(String(params.id)))),
+
   http.put(apiPath('/admin/absences/:id'), async ({ params, request }) =>
     HttpResponse.json(updateAbsence(String(params.id), await readJson<Partial<AbsenceRequest>>(request))),
   ),

@@ -234,6 +234,19 @@ export function useUpdateAbsence() {
   });
 }
 
+/**
+ * Свіжа відсутність із сервера (`GET /admin/absences/{id}`, будь-який стан) — після 409 `stale-data`
+ * діалог бере версію й поля звідси, а не зі знімка сторінки. Ключ — під `absences.all`, тож
+ * `invalidateDaily` його теж оновлює.
+ */
+export function fetchAbsence(queryClient: QueryClient, id: Uuid): Promise<AbsenceDto> {
+  return queryClient.fetchQuery({
+    queryKey: [...qk.admin.absences.all, 'detail', id],
+    queryFn: ({ signal }) => api.get<AbsenceDto>(`/admin/absences/${id}`, undefined, { signal }),
+    staleTime: 0,
+  });
+}
+
 export function useCancelAbsence() {
   const queryClient = useQueryClient();
   return useMutation({

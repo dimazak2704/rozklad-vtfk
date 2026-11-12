@@ -578,9 +578,9 @@ export default function ChangesPage() {
         date={date}
         absence={dialog.absence}
         semester={meta.data?.semester ?? null}
-        onSaved={(absence, created) => {
+        onSaved={(absence, created, before) => {
           updateParams({ absence: absence.id, lesson: null });
-          journalAbsence(created ? null : dialog.absence, absence);
+          journalAbsence(created ? null : before, absence);
         }}
       />
     </div>

@@ -1,15 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { CalendarCheck, TriangleExclamationPoint } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
-import { useCreateAbsence, useUpdateAbsence } from '@/api/admin-daily';
+import { fetchAbsence, useCreateAbsence, useUpdateAbsence } from '@/api/admin-daily';
 import { usePublicSchedule, usePublicTeachers } from '@/api/public';
 import { isApiError, STALE_DATA_MESSAGE } from '@/api/errors';
 import { useBells } from '@/api/meta';
 import type { AbsenceDto, AbsenceReasonCategory, AbsenceRequest, IsoDate } from '@/api/types';
 import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl, Select, Textarea } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { sameRequest } from '@/lib/undo/records';
 import { compareIsoDates, diffDays, formatNumericDate, formatShortWeekdayDate } from '@/lib/date';
 import { ABSENCE_REASON_LABEL } from '@/lib/labels';
 import { pairsCountGenitive } from '../format';
@@ -50,6 +52,21 @@ function buildSchema(semester: SemesterBounds | null) {
 
 type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
+function valuesOf(absence: AbsenceDto | null | undefined, date: IsoDate): FormValues {
+  return {
+    teacherId: absence?.teacher.id ?? '',
+    dateFrom: absence?.dateFrom ?? date,
+    dateTo: absence?.dateTo ?? date,
+    wholeDay: absence ? absence.pairs === null : true,
+    pairs: absence?.pairs ?? [],
+    reasonCategory: absence?.reasonCategory ?? 'SICK_LEAVE',
+    comment: absence?.comment ?? '',
+  };
+}
+
+const CANCELLED_MESSAGE = 'Цю відсутність уже скасували — зберігати нічого. Закрийте вікно.';
+const REFRESH_FAILED_MESSAGE = 'Дані вже змінив хтось інший, а свіжі не завантажилися. Закрийте вікно й відкрийте відсутність знову.';
+
 interface AbsenceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,7 +75,8 @@ interface AbsenceDialogProps {
   semester: SemesterBounds | null;
   /** Редагування наявної відсутності; без неї — нова. */
   absence?: AbsenceDto | null;
-  onSaved: (absence: AbsenceDto, created: boolean) => void;
+  /** `before` — стан, який перезаписала правка (після 409 — свіжий із сервера, а не знімок сторінки). */
+  onSaved: (absence: AbsenceDto, created: boolean, before: AbsenceDto | null) => void;
 }
 
 /**
@@ -72,19 +90,11 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
   const create = useCreateAbsence();
   const update = useUpdateAbsence();
   const [formError, setFormError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  // відсутність, яку редагуємо: спершу знімок зі сторінки, після 409 — свіжа з сервера
+  const [base, setBase] = useState<AbsenceDto | null>(absence ?? null);
 
-  const defaults = useMemo<FormValues>(
-    () => ({
-      teacherId: absence?.teacher.id ?? '',
-      dateFrom: absence?.dateFrom ?? date,
-      dateTo: absence?.dateTo ?? date,
-      wholeDay: absence ? absence.pairs === null : true,
-      pairs: absence?.pairs ?? [],
-      reasonCategory: absence?.reasonCategory ?? 'SICK_LEAVE',
-      comment: absence?.comment ?? '',
-    }),
-    [absence, date],
-  );
+  const defaults = useMemo<FormValues>(() => valuesOf(absence, date), [absence, date]);
 
   // форма щоразу починається з чистого аркуша: батько змінює `key` при кожному відкритті
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: defaults });
@@ -113,13 +123,17 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
       reasonCategory: values.reasonCategory,
       comment: values.comment.trim() || null,
       // версія, яку бачив диспетчер: якщо відсутність тим часом змінили, core відповість 409
-      ...(absence ? { version: absence.version } : {}),
+      ...(base ? { version: base.version } : {}),
     };
     try {
-      const saved = absence ? await update.mutateAsync({ id: absence.id, body }) : await create.mutateAsync(body);
-      onSaved(saved, !absence);
+      const saved = base ? await update.mutateAsync({ id: base.id, body }) : await create.mutateAsync(body);
+      onSaved(saved, !base, base);
       onOpenChange(false);
     } catch (error) {
+      if (base && isApiError(error) && error.isStaleData) {
+        setFormError(await reloadBase(base));
+        return;
+      }
       if (isApiError(error) && error.errors.length > 0) {
         for (const [field, message] of Object.entries(error.fieldErrors())) {
           if (field in values) setError(field as keyof FormValues, { message });
@@ -134,6 +148,27 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
       );
     }
   });
+
+  /**
+   * Після 409: перечитує відсутність і підставляє свіжі значення в поля, яких диспетчер не чіпав
+   * (його власні правки лишаються). Наступне «Зберегти» піде з новою версією.
+   */
+  const reloadBase = async (stale: AbsenceDto): Promise<string> => {
+    try {
+      const fresh = await fetchAbsence(queryClient, stale.id);
+      if (fresh.status === 'CANCELLED') return CANCELLED_MESSAGE;
+      const was = valuesOf(stale, date);
+      const now = valuesOf(fresh, date);
+      const typed = form.getValues();
+      for (const key of Object.keys(now) as (keyof FormValues)[]) {
+        if (sameRequest(typed[key], was[key])) form.setValue(key, now[key] as never);
+      }
+      setBase(fresh);
+      return STALE_DATA_MESSAGE;
+    } catch (cause) {
+      return isApiError(cause) && cause.isNotFound ? CANCELLED_MESSAGE : REFRESH_FAILED_MESSAGE;
+    }
+  };
 
   const teacherOptions = useMemo(
     () =>

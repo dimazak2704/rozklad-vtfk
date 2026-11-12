@@ -96,7 +96,7 @@ Generation:
 | `POST /api/admin/generation/jobs/{jobId}/cancel` | 202 |
 
 Substitutions:
-| `GET /api/admin/absences?from&to&teacherId` · `POST` `{teacherId,dateFrom,dateTo,pairs?,reasonCategory,comment?}` · `PUT {id}` (+ required `version`) · `DELETE {id}` | |
+| `GET /api/admin/absences?from&to&teacherId` · `GET {id}` (any status) · `POST` `{teacherId,dateFrom,dateTo,pairs?,reasonCategory,comment?}` · `PUT {id}` (+ required `version`) · `DELETE {id}` | |
 | `GET /api/admin/absences/{id}/affected` | `[{date, lesson:LessonView, decision:{changeId,status,kind}?, asSubstitute}]` (`asSubstitute`: the absent teacher is the substitute of `decision`) |
 | `GET /api/admin/lessons/{lessonId}/options` | `{lesson:LessonView, options:[Option], declined:[{teacher:TeacherRef, at}], past:bool}` — options in server order; may contain any subset of kinds (REPLACE_DISCIPLINE, MERGE_SUBGROUPS, SWAP, CANCEL; never REPLACE_TEACHER or ADDITIONAL) |
 | `GET /api/admin/lessons/{lessonId}/teacher-availability?q=` | `[{teacher:TeacherRef, status: FREE\|BUSY\|ABSENT\|UNAVAILABLE\|DECLINED, detail?}]`, FREE first then alphabetical; `detail` «3 пара, 4КІ2» (BUSY) or «14:05» (DECLINED, Kyiv time); `q` filters by name |
