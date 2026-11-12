@@ -1,9 +1,10 @@
 import { BellRing, CalendarX, CircleCheck, FileCheck, Send, Undo2, UserX } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatInstantTime } from '@/lib/date';
+import type { IsoDate } from '@/api/types';
+import { formatInstantTime, formatWeekdayDate, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { plural } from '@/lib/labels';
 import type { FeedItem, FeedKind } from '../model';
 
@@ -25,10 +26,17 @@ interface ActivityFeedProps {
   items: readonly FeedItem[];
   /** Джерела (зміни, відсутності, розпорядження), що оновилися наживо після відкриття сторінки. */
   fresh: ReadonlySet<string>;
+  /** Сьогоднішня дата (за Києвом): події інших днів відділяє тихий рядок «Вчора». */
+  today?: IsoDate;
+}
+
+/** День події за Києвом: «23:50» учора не має читатися як пізніше за «00:30» сьогодні. */
+function dayOf(instant: string): IsoDate {
+  return todayInKyiv(new Date(instant));
 }
 
 /** Стрічка дня: хто що зробив і коли — найновіше згори, нові події наживо «наливаються» кольором. */
-export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
+export function ActivityFeed({ items, fresh, today = todayInKyiv() }: ActivityFeedProps) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, VISIBLE);
   // підсвічуємо лише найсвіжішу подію джерела: у зміни їх кілька (запит, відповідь, публікація)
@@ -42,7 +50,11 @@ export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
   return (
     <div className="flex flex-col">
       <ol aria-label="Останні дії" aria-live="polite" aria-relevant="additions" className="flex flex-col">
-        {shown.map((item) => {
+        {shown.map((item, index) => {
+          // рядок дня — перед першою подією іншого дня; сьогоднішні події згори його не мають
+          const day = dayOf(item.at);
+          const previous = index > 0 ? shown[index - 1] : undefined;
+          const newDay = previous ? dayOf(previous.at) !== day : day !== today;
           const isFresh = fresh.has(item.sourceId) && latestOfSource.has(item.id);
           const meta = ICON[item.kind];
           const body = (
@@ -59,21 +71,26 @@ export function ActivityFeed({ items, fresh }: ActivityFeedProps) {
             isFresh && 'motion-safe:animate-[live-flash_2.4s_var(--ease-out)] bg-selected motion-safe:bg-transparent',
           );
           return (
-            <li key={item.id}>
-              {item.href ? (
-                <Link
-                  to={item.href}
-                  className={cn(
-                    rowClass,
-                    'transition-[background-color] duration-100 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                  )}
-                >
-                  {body}
-                </Link>
-              ) : (
-                <div className={rowClass}>{body}</div>
-              )}
-            </li>
+            <Fragment key={item.id}>
+              {newDay ? (
+                <li className="px-3 pt-3 pb-1 text-meta font-semibold text-muted">{relativeDayLabel(day, today) ?? formatWeekdayDate(day)}</li>
+              ) : null}
+              <li>
+                {item.href ? (
+                  <Link
+                    to={item.href}
+                    className={cn(
+                      rowClass,
+                      'transition-[background-color] duration-100 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
+                    )}
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={rowClass}>{body}</div>
+                )}
+              </li>
+            </Fragment>
           );
         })}
       </ol>

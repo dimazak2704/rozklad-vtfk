@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronRight, FileText } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { useDailyLiveSync, useDashboard, useOrders } from '@/api/admin-daily';
@@ -15,7 +15,6 @@ import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
 import { NowIndicator } from '@/components/schedule';
 import {
   Button,
-  buttonClass,
   EmptyState,
   ErrorState,
   LoadingRegion,
@@ -39,6 +38,19 @@ import {
   shiftStudyDay,
 } from '@/lib/date';
 import { PAIR_FORMS, plural } from '@/lib/labels';
+
+/** Тихе посилання «Усі заміни →» праворуч від заголовка розділу. */
+function SectionLink({ to, children }: { to: string; children: string }) {
+  return (
+    <Link
+      to={to}
+      className="-my-1 inline-flex min-h-9 items-center gap-0.5 rounded-control px-1 text-ui font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-2.5 pointer-coarse:min-h-11"
+    >
+      {children}
+      <ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />
+    </Link>
+  );
+}
 
 /**
  * Пари вже скінчилися: замість доріжки з восьми сірих смуг — один рядок, що дивиться вперед:
@@ -86,6 +98,14 @@ function DayNow({ date, onNextDay }: { date: IsoDate; onNextDay: (next: IsoDate)
   const wide = useMediaQuery('(min-width: 768px)', true);
   const slots = bells.data?.slots;
   const { status } = useNow(slots && slots.length > 0 ? slots : null, { date });
+  // місце героя тримаємо, поки дзвінки їдуть: інакше він вставиться згори й зсуне весь екран
+  if (bells.isPending) {
+    return (
+      <LoadingRegion label="Завантажуємо стан дня…">
+        <Skeleton className="h-[11.5rem] w-full rounded-[20px] md:h-48 md:rounded-hero" />
+      </LoadingRegion>
+    );
+  }
   if (!slots || slots.length === 0) return null;
   if (status?.kind === 'after-day') return <DayOver endsAt={status.last.endsAt} date={date} onNextDay={onNextDay} />;
   return (
@@ -96,8 +116,9 @@ function DayNow({ date, onNextDay }: { date: IsoDate; onNextDay: (next: IsoDate)
 }
 
 /**
- * «Огляд» диспетчера: живий стан дня, що потребує рішення (пари, сповіщення й зламані сервіси реченнями) і
- * останні дії. Заголовок сталий — робочу дату несе верхня панель. Одне головне число — «Вирішено 3 з 7 пар».
+ * «Сьогодні» диспетчера: живий стан дня, що потребує рішення (пари, сповіщення й зламані сервіси реченнями) і
+ * останні дії. Заголовок — назва дня, як у меню й посиланнях назад («Сьогодні», «Завтра» чи дата).
+ * Одне головне число — «Вирішено 3 з 7 пар»; дорога далі — посиланням у заголовку розділу, а не кнопкою над героєм.
  */
 export default function DashboardPage() {
   const { date, today, setDate } = useWorkingDate();
@@ -137,18 +158,12 @@ export default function DashboardPage() {
 
   const changesLink = `/admin/changes?date=${date}`;
   const ordersLink = `/admin/orders?date=${date}`;
-  // одна головна дія — наступний крок дня: закрити пари, а коли їх немає — опублікувати розпорядження
-  const primary =
-    weekend ? null : needsAction > 0 ? (
-      <Link to={changesLink} className={buttonClass({ variant: 'primary' })}>
-        <ArrowLeftRight aria-hidden="true" className="size-4" />
-        До замін
-      </Link>
-    ) : draftRows > 0 ? (
-      <Link to={ordersLink} className={buttonClass({ variant: 'primary' })}>
-        <FileText aria-hidden="true" className="size-4" />
-        Розпорядження
-      </Link>
+  // наступний крок дня — тихе посилання в заголовку розділу, над тим, що воно підсумовує
+  const next =
+    weekend || workspace.loading ? null : needsAction === 0 && draftRows > 0 ? (
+      <SectionLink to={ordersLink}>До розпорядження</SectionLink>
+    ) : workspace.entries.length > 0 ? (
+      <SectionLink to={changesLink}>Усі заміни</SectionLink>
     ) : null;
 
   // одна помилка на сторінку: дані панелі, розпорядження дня й відсутності з рішеннями
@@ -169,9 +184,17 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Огляд"
-        meta={!weekend && workspace.entries.length > 0 ? <ResolvedProgress done={done} total={workspace.entries.length} /> : null}
-        primaryAction={primary}
+        title={relative ?? formatWeekdayDate(date)}
+        meta={
+          weekend ? null : workspace.loading && !workspace.offline && !workspace.error ? (
+            // місце під «Вирішено 4 з 8 пар», поки пари й рішення їдуть: нічого не стрибає
+            <span aria-hidden="true" className="flex h-[1.375rem] items-center">
+              <Skeleton className="h-3 w-48" />
+            </span>
+          ) : workspace.entries.length > 0 ? (
+            <ResolvedProgress done={done} total={workspace.entries.length} />
+          ) : null
+        }
       />
 
       {weekend ? (
@@ -191,7 +214,7 @@ export default function DashboardPage() {
           {/* ≥1536: колонки фіксованої міри, а зайва ширина стає полем праворуч (DESIGN §13) */}
           <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,45rem)_minmax(0,36rem)]">
             {/* рядок читається одним поглядом: ширина списку не більша за ~720 px навіть на 1920 */}
-            <Section title="Що потребує рішення" className="max-w-[45rem] gap-2">
+            <Section title="Що потребує рішення" actions={next} className="max-w-[45rem] gap-2">
               {offline && !summary ? (
                 <OfflineState size="sm" />
               ) : !summary || (workspace.loading && workspace.entries.length === 0) ? (
@@ -232,7 +255,7 @@ export default function DashboardPage() {
                   <p className="px-3 py-2 text-body text-secondary">Подій ще немає.</p>
                 )
               ) : (
-                <ActivityFeed items={feed} fresh={fresh} />
+                <ActivityFeed items={feed} fresh={fresh} today={today} />
               )}
             </Section>
           </div>

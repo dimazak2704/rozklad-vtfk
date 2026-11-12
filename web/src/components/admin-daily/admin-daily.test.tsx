@@ -485,11 +485,12 @@ describe('екран «Заміни»', () => {
     }
   });
 
-  it('«Огляд» після останньої пари: один рядок про завтра замість доріжки, без блоку «Сервіси» і зайвого «⋯»', { timeout: 20_000 }, async () => {
+  it('«Сьогодні» після останньої пари: один рядок про завтра замість доріжки, без блоку «Сервіси» і зайвого «⋯»', { timeout: 20_000 }, async () => {
     // 22:00 за Києвом: усі пари дня скінчилися
     vi.setSystemTime(new Date('2026-11-09T20:00:00Z'));
     renderWithProviders(<DashboardPage />, { route: '/admin' });
-    expect(screen.getByRole('heading', { level: 1, name: 'Огляд' })).toBeInTheDocument();
+    // заголовок — назва дня, як пункт меню й посилання назад «‹ Сьогодні»
+    expect(screen.getByRole('heading', { level: 1, name: 'Сьогодні' })).toBeInTheDocument();
     const day = await screen.findByRole('region', { name: 'Стан навчального дня' }, WAIT);
     expect(day).toHaveTextContent(/^Пари закінчилися о \d{2}:\d{2}\./);
     await waitFor(() => expect(day).toHaveTextContent(/(Завтра \d+ пар\S* без заміни|На завтра)/), WAIT);
@@ -497,9 +498,9 @@ describe('екран «Заміни»', () => {
     expect(screen.queryByRole('button', { name: 'Ще дії' })).not.toBeInTheDocument();
 
     await userEvent.click(within(day).getByRole('button', { name: 'Перейти на завтра' }));
-    // на завтра живого стану немає — рядок зникає, заголовок той самий
+    // на завтра живого стану немає — рядок зникає, а заголовок називає день, на який дивимося
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Стан навчального дня' })).not.toBeInTheDocument(), WAIT);
-    expect(screen.getByRole('heading', { level: 1, name: 'Огляд' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Завтра' })).toBeInTheDocument();
   });
 
   it('розпорядження без мережі — пояснення замість вічного силуету аркуша', { timeout: 20_000 }, async () => {
@@ -510,6 +511,36 @@ describe('екран «Заміни»', () => {
       expect(screen.queryByText('Складаємо розпорядження…')).not.toBeInTheDocument();
     } finally {
       onlineManager.setOnline(true);
+    }
+  });
+
+  it('пари ще їдуть — силует замість хибного «пар немає» і без лічильника «вирішено»', { timeout: 30_000 }, async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // зачеплені пари приходять пізніше за відсутніх; без відповіді обробник передає запит далі, до мок-API
+    server.use(
+      http.get(apiPath('/admin/absences/:id/affected'), async () => {
+        await gate;
+      }),
+    );
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+    try {
+      renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
+      expect(await screen.findByRole('button', { name: /Крисак Л\.В\./ }, WAIT)).toBeInTheDocument();
+      expect(screen.getAllByText('завантажуємо пари').length).toBeGreaterThan(0);
+      expect(screen.queryByText('пар у цей період немає')).not.toBeInTheDocument();
+      expect(screen.queryByRole('progressbar', { name: 'Вирішено пар' })).not.toBeInTheDocument();
+
+      release();
+      expect(await screen.findByRole('progressbar', { name: 'Вирішено пар' }, WAIT)).toBeInTheDocument();
+      expect(screen.queryByText('завантажуємо пари')).not.toBeInTheDocument();
+      expect(within(screen.getByRole('button', { name: /Крисак Л\.В\./ })).getByText(/вирішено|усе вирішено/)).toBeInTheDocument();
+    } finally {
+      release();
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
     }
   });
 

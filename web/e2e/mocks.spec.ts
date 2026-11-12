@@ -34,7 +34,7 @@ test.describe('мок-API', () => {
   test('адмінка відкривається з мок-ролями і тримає живе зʼєднання', async ({ page }) => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Огляд', { timeout: 30_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Сьогодні', { timeout: 30_000 });
     // здорове зʼєднання нічого не показує (видно лише збій), тож перевіряємо стан у атрибуті
     await expect(page.locator('[data-live-status="open"]')).toBeAttached({ timeout: 15_000 });
   });

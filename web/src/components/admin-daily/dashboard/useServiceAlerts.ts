@@ -3,7 +3,7 @@ import { useBotStatus } from '@/api/telegram';
 import type { DashboardAlert, DashboardDto } from '@/api/types';
 
 /**
- * Сервіси довкола змін зʼявляються на «Огляді» лише тоді, коли щось зламано, — одним рядком у
+ * Сервіси довкола змін зʼявляються на панелі «Сьогодні» лише тоді, коли щось зламано, — одним рядком у
  * «Що потребує рішення». Справний бот і генератор без задач — не новина; витрати ШІ живуть в «Імпорті».
  */
 export function useServiceAlerts(dashboard: DashboardDto | undefined): DashboardAlert[] {

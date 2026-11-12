@@ -25,7 +25,7 @@ function render(value: DashboardDto | undefined) {
   return { hook, client };
 }
 
-describe('useServiceAlerts: сервіси на «Огляді» лише коли зламані', () => {
+describe('useServiceAlerts: сервіси на панелі «Сьогодні» лише коли зламані', () => {
   it('справний бот і генератор без збою — жодного рядка', async () => {
     server.use(http.get(apiPath('/notify/bot'), () => Response.json(bot())));
     const { hook, client } = render(dashboard('SOLVED'));
