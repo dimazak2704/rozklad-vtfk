@@ -643,6 +643,107 @@ class SubstitutionFlowIT extends IntegrationTest {
                 .isEqualTo(ChangeStatus.CONFIRMED);
     }
 
+    /**
+     * The info-only update is the newest message in the teacher's chat: a later cancellation edits it too, so
+     * whichever message he reads says «скасовано» (with the new room).
+     */
+    @Test
+    void cancellationAfterAnInfoOnlyUpdateEditsItToo() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        Sent request = telegram.lastSentTo(TEACHER);
+        press(TEACHER, request.messageId(), request.callbackOf("✅ Підтверджую").orElseThrow());
+        handlers.handle(detailsChanged("214"));
+        worker.drain();
+        Sent update = telegram.lastSentTo(TEACHER);
+        int editsBefore = telegram.editsIn(TEACHER).size();
+
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER).subList(editsBefore, telegram.editsIn(TEACHER).size()))
+                .hasSize(2)
+                .allSatisfy(edit -> {
+                    assertThat(edit.text()).contains("🚪 Аудиторія 214")
+                            .endsWith("🚫 <b>Заміну скасовано.</b> Нічого робити не потрібно.");
+                    assertThat(edit.keyboard()).isNull();
+                })
+                .extracting(Edit::messageId).containsExactlyInAnyOrder(request.messageId(), update.messageId());
+    }
+
+    /** The change was cancelled before the info-only update left the queue: it is not sent. */
+    @Test
+    void infoOnlyUpdateOfACancelledChangeIsNotSent() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+        handlers.handle(detailsChanged("214"));
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        worker.drain();
+
+        assertThat(telegram.sentTo(TEACHER)).singleElement().extracting(Sent::text).asString().startsWith("🙋");
+        assertThat(jdbc.queryForList("select last_error from outbound_message where chat_id = ? and kind = 'TEXT' "
+                + "and purpose = 'SUBSTITUTION_STATUS'", String.class, TEACHER))
+                .containsExactly(SubstitutionRequests.NOT_IN_FORCE);
+    }
+
+    /** The info-only update reached Telegram just as the change was cancelled: it is corrected at once. */
+    @Test
+    void infoOnlyUpdateDeliveredWhileTheChangeWasCancelledIsCorrectedAtOnce() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+        handlers.handle(detailsChanged("214"));
+        handlers.handle(statusChanged(ChangeStatus.CANCELLED));
+        delivered(TEACHER, 557, DeliveryPurpose.SUBSTITUTION_STATUS);
+        worker.drain();
+
+        assertThat(jdbc.queryForObject("select count(*) from substitution_message where message_id = 557",
+                Integer.class)).isEqualTo(1);
+
+        assertThat(telegram.editsIn(TEACHER)).filteredOn(edit -> edit.messageId() == 557).singleElement()
+                .satisfies(edit -> {
+                    assertThat(edit.text()).contains("🚪 Аудиторія 214").contains("Заміну скасовано");
+                    assertThat(edit.keyboard()).isNull();
+                });
+    }
+
+    /**
+     * core published details-changed only for a confirmed request, so a copy still pending here only missed the
+     * CONFIRMED event (delayed, or the local bookkeeping of the teacher's tap failed): the request is confirmed
+     * here, its message shows it with the new room, and the teacher gets the info-only update; the late CONFIRMED
+     * event then changes nothing.
+     */
+    @Test
+    void roomEditOfARequestConfirmedInCoreButPendingHereIsAnInfoOnlyUpdate() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        Sent request = telegram.lastSentTo(TEACHER);
+
+        handlers.handle(detailsChanged("214"));
+        worker.drain();
+        assertThat(telegram.editsIn(TEACHER)).singleElement().satisfies(edit -> {
+            assertThat(edit.messageId()).isEqualTo(request.messageId());
+            assertThat(edit.text()).contains("🚪 Аудиторія 214").endsWith("✅ <b>Ви підтвердили заміну.</b> Дякуємо!");
+            assertThat(edit.keyboard()).isNull();
+        });
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        Sent update = telegram.lastSentTo(TEACHER);
+        assertThat(update.text()).startsWith("✏️ <b>Заміну змінено</b>\nНова аудиторія: 214 (була 6)\n\n📅")
+                .endsWith("Заміна вже підтверджена, відповідати не потрібно.");
+        assertThat(update.buttons()).isEmpty();
+        assertThat(substitutions.find(CHANGE)).get().satisfies(found -> {
+            assertThat(found.getStatus()).isEqualTo(ChangeStatus.CONFIRMED);
+            assertThat(found.getRoomName()).isEqualTo("214");
+        });
+
+        handlers.handle(statusChanged(ChangeStatus.CONFIRMED));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).hasSize(2);
+        assertThat(telegram.editsIn(TEACHER)).hasSize(1);
+    }
+
     /** Names for admin texts come from core over HTTP: looked up before the event's transaction, never inside. */
     @Test
     void eventHandlersDoNotCallCoreInsideTheTransaction() {

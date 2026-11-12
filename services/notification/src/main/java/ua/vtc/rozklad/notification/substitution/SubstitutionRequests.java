@@ -41,6 +41,7 @@ import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.delivery.DeliveryPurpose;
 import ua.vtc.rozklad.notification.delivery.OutboundDraft;
+import ua.vtc.rozklad.notification.delivery.OutboundKind;
 import ua.vtc.rozklad.notification.delivery.OutboundMessage;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageSent;
 import ua.vtc.rozklad.notification.delivery.OutboundRelevance;
@@ -72,6 +73,7 @@ public class SubstitutionRequests implements OutboundRelevance {
     private static final int MAX_RECORD_ATTEMPTS = 3;
     static final String REASSIGNED = "Неактуальне: заміну передано іншому викладачу.";
     static final String NOT_AWAITING = "Неактуальне: заміна вже не чекає відповіді.";
+    static final String NOT_IN_FORCE = "Неактуальне: заміна вже не в силі.";
     private static final Comparator<SubstitutionRequest> BY_TEACHER_DATE_PAIR =
             Comparator.comparing(SubstitutionRequest::getTeacherId)
                     .thenComparing(SubstitutionRequest::getLessonDate)
@@ -173,8 +175,10 @@ public class SubstitutionRequests implements OutboundRelevance {
      * {@code substitution.details-changed}: the dispatcher changed what the teacher reads (the room) of a request
      * already confirmed. He gets «✏️ Заміну змінено» with what changed and the details, without buttons, a deadline
      * or a request to confirm again; the status and the answer stay, and later edits of the old messages show the
-     * new details. A request still pending here (its CONFIRMED event is on the way) only takes the details: that
-     * event edits the messages to the final state with them. Another teacher's or a notice's copy is left alone.
+     * new details. core publishes the event only for a confirmed request, so a copy still pending here only
+     * missed the CONFIRMED event (delayed, or the local record of the teacher's tap failed): it is confirmed here,
+     * its messages show that with the new details, and the teacher gets the same info-only update; the late
+     * CONFIRMED event then changes nothing. Another teacher's or a notice's copy is left alone.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void onDetailsChanged(SubstitutionDetailsChanged event) {
@@ -182,10 +186,17 @@ public class SubstitutionRequests implements OutboundRelevance {
                 .filter(found -> found.getTeacherId().equals(event.teacherId()) && !found.isNotice())
                 .ifPresent(found -> {
                     SubstitutionRequest.Details after = SubstitutionRequest.Details.of(event);
-                    if (found.isConfirmedRequest()) {
-                        informOfNewDetails(found, after, event.eventId());
-                    } else if (found.isPending()) {
+                    if (found.isPending()) {
+                        SubstitutionRequest.Details before = found.details();
+                        found.changeStatus(ChangeStatus.CONFIRMED, clock.instant());
                         found.takeDetails(after, clock.instant());
+                        editMessages(found, SubstitutionTexts.finalState(found, ChangeStatus.CONFIRMED), null, null,
+                                null, event.eventId());
+                        if (SubstitutionTexts.differs(before, after)) {
+                            sendInfoUpdate(found, before, event.eventId());
+                        }
+                    } else if (found.isConfirmedRequest()) {
+                        informOfNewDetails(found, after, event.eventId());
                     }
                 });
     }
@@ -193,7 +204,8 @@ public class SubstitutionRequests implements OutboundRelevance {
     /**
      * The info-only update of a request already confirmed: nothing when the teacher would read the same, never
      * reached him, or the lesson is over. Its own message per event (purpose SUBSTITUTION_STATUS, no buttons), so
-     * neither the reminder key nor the «no longer waits for an answer» check can swallow it.
+     * neither the reminder key nor the «no longer waits for an answer» check can swallow it; {@link #onSent}
+     * remembers it, so later final states edit it like the request.
      */
     private void informOfNewDetails(SubstitutionRequest request, SubstitutionRequest.Details after, UUID eventId) {
         SubstitutionRequest.Details before = request.details();
@@ -201,7 +213,13 @@ public class SubstitutionRequests implements OutboundRelevance {
             return;
         }
         request.takeDetails(after, clock.instant());
-        if (messages.findByChangeId(request.getChangeId()).isEmpty() || lessonOver(after.lessonDate(), after.endsAt())) {
+        sendInfoUpdate(request, before, eventId);
+    }
+
+    /** «✏️ Заміну змінено» of a confirmed request whose details already moved from {@code before}. */
+    private void sendInfoUpdate(SubstitutionRequest request, SubstitutionRequest.Details before, UUID eventId) {
+        if (messages.findByChangeId(request.getChangeId()).isEmpty()
+                || lessonOver(request.details().lessonDate(), request.details().endsAt())) {
             return;
         }
         bindings.teacherChat(request.getTeacherId()).ifPresent(chat -> outbox.enqueue(
@@ -284,15 +302,17 @@ public class SubstitutionRequests implements OutboundRelevance {
     }
 
     /**
-     * Remembers ids of sent request messages so they can be edited later. A message Telegram accepted after the
-     * change moved on (the worker had checked it just before) is corrected at once: another teacher's message is
-     * retired, a cancelled or answered one shows the current state. The row lock orders this with the event
-     * handlers, so either they see the message or this sees their state.
+     * Remembers ids of sent request messages and info-only updates so they can be edited later. A message
+     * Telegram accepted after the change moved on (the worker had checked it just before) is corrected at once:
+     * another teacher's message is retired, a cancelled or answered one shows the current state. The row lock
+     * orders this with the event handlers, so either they see the message or this sees their state.
      */
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void onSent(OutboundMessageSent sent) {
-        if (!sent.purpose().isSubstitutionRequest() || sent.correlationId() == null
+        // edits carry no new message id; a new SUBSTITUTION_STATUS message is the info-only update
+        boolean infoUpdate = sent.purpose() == DeliveryPurpose.SUBSTITUTION_STATUS;
+        if (!(sent.purpose().isSubstitutionRequest() || infoUpdate) || sent.correlationId() == null
                 || sent.telegramMessageId() == null) {
             return;
         }
@@ -301,7 +321,8 @@ public class SubstitutionRequests implements OutboundRelevance {
             return;
         }
         SubstitutionRequest found = request.get();
-        Optional<String> obsolete = obsoleteReason(found, sent.chatId());
+        Optional<String> obsolete = infoUpdate ? infoObsoleteReason(found, sent.chatId())
+                : obsoleteReason(found, sent.chatId());
         boolean addressee = !REASSIGNED.equals(obsolete.orElse(null));
         if (addressee) {
             messages.save(new SubstitutionMessage(sent.correlationId(), sent.chatId(), sent.telegramMessageId(),
@@ -319,23 +340,45 @@ public class SubstitutionRequests implements OutboundRelevance {
                         .dedupBy("late:" + sent.outboundId())));
     }
 
-    /** A request, notice or reminder still queued whose change went to another teacher or stopped waiting. */
+    /**
+     * A request, notice or reminder still queued whose change went to another teacher or stopped waiting; an
+     * info-only update whose change went to another teacher or is no longer confirmed (cancelled).
+     */
     @Override
     @Transactional(readOnly = true)
     public Optional<String> obsoleteReason(OutboundMessage message) {
-        if (!message.getPurpose().isSubstitutionRequest() || message.getCorrelationId() == null) {
+        if (message.getCorrelationId() == null) {
             return Optional.empty();
         }
-        return requests.findById(message.getCorrelationId())
-                .flatMap(request -> obsoleteReason(request, message.getChatId()));
+        if (message.getPurpose().isSubstitutionRequest()) {
+            return requests.findById(message.getCorrelationId())
+                    .flatMap(request -> obsoleteReason(request, message.getChatId()));
+        }
+        if (message.getPurpose() == DeliveryPurpose.SUBSTITUTION_STATUS && message.getKind() == OutboundKind.TEXT) {
+            return requests.findById(message.getCorrelationId())
+                    .flatMap(request -> infoObsoleteReason(request, message.getChatId()));
+        }
+        return Optional.empty();
     }
 
     private Optional<String> obsoleteReason(SubstitutionRequest request, long chatId) {
-        Optional<UUID> chatTeacher = bindings.teacherBinding(chatId).map(ChatBinding::getTeacherId);
-        if (chatTeacher.isPresent() && !chatTeacher.get().equals(request.getTeacherId())) {
+        if (reassigned(request, chatId)) {
             return Optional.of(REASSIGNED);
         }
         return request.isAwaitingAnswer() ? Optional.empty() : Optional.of(NOT_AWAITING);
+    }
+
+    /** The info-only update informs only while the request is still confirmed for this chat's teacher. */
+    private Optional<String> infoObsoleteReason(SubstitutionRequest request, long chatId) {
+        if (reassigned(request, chatId)) {
+            return Optional.of(REASSIGNED);
+        }
+        return request.isConfirmedRequest() ? Optional.empty() : Optional.of(NOT_IN_FORCE);
+    }
+
+    private boolean reassigned(SubstitutionRequest request, long chatId) {
+        Optional<UUID> chatTeacher = bindings.teacherBinding(chatId).map(ChatBinding::getTeacherId);
+        return chatTeacher.isPresent() && !chatTeacher.get().equals(request.getTeacherId());
     }
 
     /**

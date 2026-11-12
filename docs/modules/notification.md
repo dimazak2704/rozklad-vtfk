@@ -117,14 +117,21 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   dispatcher for him) comes as `substitution.details-changed`. The teacher gets an info-only «✏️ Заміну змінено»:
   the what-changed line, the usual details and «Заміна вже підтверджена, відповідати не потрібно.», no buttons,
   no deadline (purpose `SUBSTITUTION_STATUS`, per event, so neither the `reminder:` key nor the «вже не чекає
-  відповіді» check can swallow it). The answer and the status stay; the stored request takes the new details,
-  so the later final-state edit («Заміну внесено до розпорядження», «скасовано») of the old message shows the new
-  room. Nothing is sent when the details read the same, when the teacher never got a message of the change, or
+  відповіді» check can swallow it). The answer and the status stay; the stored request takes the new details.
+  The info message is remembered like the request (`onSent` stores a new `SUBSTITUTION_STATUS` message of a
+  change), so the later final-state edit («Заміну внесено до розпорядження», «скасовано») reaches the old request
+  and the info message alike, both with the new room. An info update still queued when the change is no longer
+  confirmed (cancelled) is not sent («Неактуальне: заміна вже не в силі.»); one Telegram accepted in that window
+  is edited to the current state at once (`cancellationAfterAnInfoOnlyUpdateEditsItToo`,
+  `infoOnlyUpdateOfACancelledChangeIsNotSent`, `infoOnlyUpdateDeliveredWhileTheChangeWasCancelledIsCorrectedAtOnce`). Nothing is sent when the details read the same, when the teacher never got a message of the change, or
   when the lesson is over. A `confirmation-requested` (CONFIRM) for a request held as CONFIRMED or APPLIED is a
   late event (core never asks again after CONFIRMED): the same details send nothing, other details give the same
   info-only update; it never reopens the request (`SubstitutionFlowIT.roomEditOfAConfirmedRequestIsAnInfoOnlyUpdate`,
-  `lateRequestForAConfirmedRequestNeverAsksAgain`). A `details-changed` that finds the request still pending here
-  (its CONFIRMED event is on the way) only takes the details; that event then edits the messages with them.
+  `lateRequestForAConfirmedRequestNeverAsksAgain`). core publishes `details-changed` only for a confirmed request,
+  so one that finds the request still pending here (its CONFIRMED event is delayed, or the local record of the
+  teacher's tap failed) confirms it here: the request messages are edited to «Ви підтвердили заміну» with the new
+  room and the teacher gets the same info-only update; the late CONFIRMED event then changes nothing
+  (`roomEditOfARequestConfirmedInCoreButPendingHereIsAnInfoOnlyUpdate`).
   Deadline passed without an answer → one reminder to the teacher and one notice to admin
   chats (not for requests that never reached a teacher without Telegram, not for past lessons). core's
   `ConfirmationReminders` re-sends the request with the same, already passed deadline, and the every-minute job
@@ -244,7 +251,7 @@ this module.
 |---|---|
 | `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder; «✏️ Заміну змінено» when the details he sees changed); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
-| `substitution.details-changed` | a CONFIRM request already confirmed got a new room: info-only «✏️ Заміну змінено» to the teacher's chat, no buttons, no deadline; the stored request takes the new details, status and answer stay (§3) |
+| `substitution.details-changed` | a CONFIRM request already confirmed got a new room: info-only «✏️ Заміну змінено» to the teacher's chat, no buttons, no deadline; the stored request takes the new details, status and answer stay; a copy still pending here is confirmed (§3) |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
 | `substitution.teacher-replied` | NOTIFY answer that kept the status (from Telegram or the cabinet): the notice messages show it; an objection (DECLINE on APPLIED) → admin chats «Потрібне доповнення до розпорядження» |
 | `absence.reported` | admin chats: teacher, dates, pairs, source (reason is never in the event) |
@@ -420,7 +427,5 @@ image and rasterized by `PdfPngRenderer`; the PNG matches the layout of `seed/or
   60 хв»; the live bot showed «2 змін», so that profile was renamed in the running database. The bot now agrees
   «N зміна/зміни/змін» when it displays the name; the stored name itself is fixed in the web panel (calendar →
   bell profiles), not by notification.
-* The info-only «✏️ Заміну змінено» of a confirmed request is not remembered for later edits: a cancellation edits
-  the original request to «скасовано», the info message keeps its text.
 * «One warning per teacher and date» means a second change of the same teacher on the same date, created after
   the warning, is not announced in Telegram again; the dispatcher sees it as pending in the web panel.
