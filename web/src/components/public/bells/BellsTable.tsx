@@ -85,7 +85,7 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                 const minutes = pairMinutes(slot);
                 const note = [
                   minutes !== usual ? `${minutes}${NBSP}хв` : null,
-                  gap !== null && usualBreak !== null && gap > usualBreak ? `потім перерва ${gap}${NBSP}хв` : null,
+                  gap !== null && usualBreak !== null && gap > usualBreak ? `потім перерва${NBSP}${gap}${NBSP}хв` : null,
                 ]
                   .filter(Boolean)
                   .join(' · ');

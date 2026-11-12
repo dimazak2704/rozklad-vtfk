@@ -8,6 +8,7 @@ const SITE = 'Розклад ВТФК';
  */
 export function useDocumentTitle(title: string | null | undefined): void {
   useEffect(() => {
-    if (title) document.title = `${title} — ${SITE}`;
+    // головна просить саме імʼя сайту — без «Розклад ВТФК — Розклад ВТФК»
+    if (title) document.title = title === SITE ? SITE : `${title} — ${SITE}`;
   }, [title]);
 }

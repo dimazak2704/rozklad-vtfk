@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from 'msw';
 import { Route, Routes, useLocation } from 'react-router';
@@ -9,6 +9,7 @@ import { renderWithProviders } from '@/test/render';
 import { useFavoritesStore } from '@/stores/favorites';
 import { ScheduleFinder } from './home/ScheduleFinder';
 import { InviteForm } from './invite/InviteForm';
+import { useDocumentTitle } from './useDocumentTitle';
 
 function Location() {
   const location = useLocation();
@@ -104,5 +105,14 @@ describe('InviteForm', () => {
     await user.type(screen.getByLabelText(/Повторіть пароль/), 'secret-1234567');
     await user.click(screen.getByRole('button', { name: 'Створити обліковий запис' }));
     await waitFor(() => expect(gone).toEqual(['Термін дії запрошення минув.']));
+  });
+});
+
+describe('useDocumentTitle', () => {
+  it('додає імʼя сайту до заголовка сторінки, а на головній не повторює його', () => {
+    const { rerender } = renderHook(({ title }) => useDocumentTitle(title), { initialProps: { title: '4КІ1 — розклад групи' } });
+    expect(document.title).toBe('4КІ1 — розклад групи — Розклад ВТФК');
+    rerender({ title: 'Розклад ВТФК' });
+    expect(document.title).toBe('Розклад ВТФК');
   });
 });
