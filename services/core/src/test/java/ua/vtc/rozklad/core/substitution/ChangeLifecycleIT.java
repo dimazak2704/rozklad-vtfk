@@ -14,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -411,6 +412,76 @@ class ChangeLifecycleIT {
                 .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
     }
 
+    /**
+     * Shrinking an absence cancels the decisions of the pairs it no longer covers (with history and
+     * an event, so the informed substitute hears about it) and keeps the others.
+     */    @Test
+    void absenceEditCancelsOnlyTheChangesOfPairsItNoLongerCovers() {
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate, RozkladEvents.SUBSTITUTION_STATUS_CHANGED);
+        Lesson third = fixture.lesson(semester, MONDAY, 3, group, 0, stp, krentsin, room);
+        Teacher stets = fixture.teacher("Стець О.В.", "Стець");
+        AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY,
+                List.of(2, 3), AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin");
+        ChangeDto kept = commands.create(replaceOn(lesson, nepyivoda, absence.id()), "admin");
+        ChangeDto dropped = commands.create(replaceOn(third, stets, absence.id()), "admin");
+
+        absences.update(absence.id(), krentsin.getId(), new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(2),
+                AbsenceReasonCategory.OTHER, null), absence.version(), "admin");
+
+        assertThat(changes.findById(kept.id()).orElseThrow().getStatus())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+        assertThat(changes.findById(dropped.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.CANCELLED);
+        assertThat(jdbc.queryForList(
+                "SELECT comment FROM change_history WHERE change_id = ? AND to_status = 'CANCELLED'", String.class,
+                dropped.id())).containsExactly("Пара більше не входить у відсутність");
+        assertThat(probe.await(SubstitutionStatusChanged.class, event -> event.changeId().equals(dropped.id())
+                && event.status() == ChangeStatus.CANCELLED, 1, WAIT)).hasSize(1);
+        assertThat(probe.await(SubstitutionStatusChanged.class, event -> event.changeId().equals(kept.id())
+                && event.status() == ChangeStatus.CANCELLED, 1, Duration.ofSeconds(2))).isEmpty();
+    }
+
+    @Test
+    void teacherCannotCancelAnotherTeachersAbsence() {
+        LocalDate day = LocalDate.now(clock).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Lesson future = fixture.lesson(semester, day, 3, group, 0, stp, krentsin, room);
+        AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(day, day, null,
+                AbsenceReasonCategory.OTHER, null), AbsenceSource.WEB, "krentsin");
+        ChangeDto change = commands.create(replaceOn(future, nepyivoda, absence.id()), "admin");
+
+        assertThatThrownBy(() -> absences.cancelOwn(absence.id(), nepyivoda.getId(), "nepyivoda"))
+                .isInstanceOf(AccessDeniedException.class);
+
+        assertThat(absences.get(absence.id()).status()).isEqualTo(AbsenceStatus.ACTIVE);
+        assertThat(changes.findById(change.id()).orElseThrow().getStatus())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+    }
+
+    @Test
+    void teacherCannotCancelAnAbsenceThatHasStarted() {
+        LocalDate today = LocalDate.now(clock);
+        AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(today,
+                today.plusDays(3), null, AbsenceReasonCategory.OTHER, null), AbsenceSource.WEB, "krentsin");
+
+        assertThatThrownBy(() -> absences.cancelOwn(absence.id(), krentsin.getId(), "krentsin"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("ABSENCE_STARTED"));
+        assertThat(absences.get(absence.id()).status()).isEqualTo(AbsenceStatus.ACTIVE);
+    }
+
+    @Test
+    void teacherCancelsOwnFutureAbsenceWithItsChanges() {
+        LocalDate day = LocalDate.now(clock).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Lesson future = fixture.lesson(semester, day, 3, group, 0, stp, krentsin, room);
+        AbsenceDto absence = absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(day, day, null,
+                AbsenceReasonCategory.OTHER, null), AbsenceSource.WEB, "krentsin");
+        ChangeDto change = commands.create(replaceOn(future, nepyivoda, absence.id()), "admin");
+
+        absences.cancelOwn(absence.id(), krentsin.getId(), "krentsin");
+
+        assertThat(absences.get(absence.id()).status()).isEqualTo(AbsenceStatus.CANCELLED);
+        assertThat(changes.findById(change.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.CANCELLED);
+    }
+
     @Test
     void teacherReportsOnlyFromTodayOnTheDispatcherAlsoThePast() {
         LocalDate today = LocalDate.now(clock);
@@ -535,6 +606,12 @@ class ChangeLifecycleIT {
     private CreateChangeRequest additional(int subgroup) {
         return new CreateChangeRequest(ChangeKind.ADDITIONAL, MONDAY, 5, null, group.getId(), subgroup, null,
                 stp.getId(), nepyivoda.getId(), null, null, ReasonCode.OTHER, "Відпрацювання", null);
+    }
+
+    private CreateChangeRequest replaceOn(Lesson target, Teacher substitute, UUID absenceId) {
+        return new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, target.getDate(), target.getPairNumber(), null,
+                group.getId(), null, target.getId(), null, substitute.getId(), null, null, ReasonCode.ABSENT, null,
+                absenceId);
     }
 
     private CreateChangeRequest replaceTeacher(Teacher substitute) {
