@@ -64,6 +64,34 @@ test.describe('редактор базового розкладу', () => {
     await expect(cell(grid, 1, 4).getByRole('button', { name: /Сучасні технології проєктування/ })).toHaveCount(0);
   });
 
+  test('картка пари не заважає перейти мишею до сусідньої: понеділок → вівторок показує картку вівторка', async ({ page }) => {
+    const grid = await openGroupGrid(page, '1ВЕ');
+    const monday = cell(grid, 1, 1).getByRole('button').first();
+    const tuesday = cell(grid, 2, 1).getByRole('button').first();
+    const from = await monday.boundingBox();
+    const to = await tuesday.boundingBox();
+    if (!from || !to) throw new Error('Пари не видно на екрані');
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    const card = page.locator('[data-hover-peek]');
+    await expect(card).toHaveCount(1);
+    const mondayCard = await card.innerText();
+
+    // картка відкрилась праворуч і накрила вівторок; курсор іде туди ж
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    const under = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x, y)?.closest('[data-lesson-id]')?.getAttribute('data-lesson-id') ?? null,
+      [to.x + to.width / 2, to.y + to.height / 2],
+    );
+    expect(under).toBe(await tuesday.getAttribute('data-lesson-id'));
+    // одна картка, уже вівторка, і без нової затримки
+    await expect(card).toHaveCount(1, { timeout: 150 });
+    await expect(card).not.toHaveText(mondayCard, { timeout: 150 });
+
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
+  });
+
   test('з клавіатури: Enter — підхопити, стрілки — слот, Enter — поставити', async ({ page }) => {
     const grid = await openGroupGrid(page, '4КІ3');
     const stp = cell(grid, 2, 4).getByRole('button', { name: /Сучасні технології проєктування/ });
