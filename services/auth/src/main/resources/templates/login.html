@@ -70,38 +70,44 @@
 </footer>
 
 <!-- Великий знак: контур малює себе, потім по ньому біжить світло (auth-page.css, «Шпиль»).
-     Кола записані дугами від верхньої точки, тож світло проходить кільце → шпиль → мале кільце
-     одним рухом проти годинникової стрілки; pathLength дорівнює справжній довжині фігури. -->
+     Знак зсунутий у правий нижній кут, частина кільця й основа шпиля за краєм екрана. Тому всі фігури
+     починаються там, де їх не видно: кільце знизу, шпиль з лівої ноги біля основи, і світло заходить
+     з-за краю. Мале кільце відгалужується від лівої ноги шпиля там, де та його перетинає, і після
+     повного оберту вливається в праву ногу. Кола йдуть за годинниковою стрілкою, як і шпиль (зліва направо);
+     pathLength дорівнює справжній довжині фігури. Світло біжить по окремих відкритих шляхах (*-run). -->
 <svg class="auth-spire" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor"
      stroke-linejoin="round" stroke-linecap="round">
   <defs>
-    <path id="auth-spire-outer" pathLength="73" d="M13 1.4A11.6 11.6 0 1 0 13 24.6A11.6 11.6 0 1 0 13 1.4"/>
+    <path id="auth-spire-outer" pathLength="72.88" d="M13 24.6A11.6 11.6 0 1 1 13 1.4A11.6 11.6 0 1 1 13 24.6"/>
     <path id="auth-spire-tower" pathLength="49.3"
-          d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z"/>
-    <path id="auth-spire-inner" pathLength="32.7" d="M13 3.7A5.2 5.2 0 1 0 13 14.1A5.2 5.2 0 1 0 13 3.7"/>
+          d="M7.2 21.6C11 16 12.5 10.4 13 4.2C13.5 10.4 15 16 18.8 21.6C15.4 19.5 10.6 19.5 7.2 21.6Z"/>
+    <path id="auth-spire-inner" pathLength="32.67"
+          d="M11.13 13.75A5.2 5.2 0 1 1 14.87 4.05A5.2 5.2 0 0 1 11.13 13.75"/>
+    <path id="auth-spire-tower-run" pathLength="37.13" d="M7.2 21.6C11 16 12.5 10.4 13 4.2C13.5 10.4 15 16 18.8 21.6"/>
+    <path id="auth-spire-inner-run" pathLength="28.85" d="M11.13 13.75A5.2 5.2 0 1 1 14.87 13.75"/>
   </defs>
   <g class="auth-spire-line">
     <use class="auth-spire-outer" href="#auth-spire-outer"/>
     <use class="auth-spire-tower" href="#auth-spire-tower"/>
     <use class="auth-spire-inner" href="#auth-spire-inner"/>
   </g>
-  <g class="auth-trace auth-spire-outer">
+  <g class="auth-trace auth-trace-outer">
     <use class="auth-trace-tail" href="#auth-spire-outer"/>
     <use class="auth-trace-fade" href="#auth-spire-outer"/>
     <use class="auth-trace-body" href="#auth-spire-outer"/>
     <use class="auth-trace-head" href="#auth-spire-outer"/>
   </g>
-  <g class="auth-trace auth-spire-tower">
-    <use class="auth-trace-tail" href="#auth-spire-tower"/>
-    <use class="auth-trace-fade" href="#auth-spire-tower"/>
-    <use class="auth-trace-body" href="#auth-spire-tower"/>
-    <use class="auth-trace-head" href="#auth-spire-tower"/>
+  <g class="auth-trace auth-trace-tower">
+    <use class="auth-trace-tail" href="#auth-spire-tower-run"/>
+    <use class="auth-trace-fade" href="#auth-spire-tower-run"/>
+    <use class="auth-trace-body" href="#auth-spire-tower-run"/>
+    <use class="auth-trace-head" href="#auth-spire-tower-run"/>
   </g>
-  <g class="auth-trace auth-spire-inner">
-    <use class="auth-trace-tail" href="#auth-spire-inner"/>
-    <use class="auth-trace-fade" href="#auth-spire-inner"/>
-    <use class="auth-trace-body" href="#auth-spire-inner"/>
-    <use class="auth-trace-head" href="#auth-spire-inner"/>
+  <g class="auth-trace auth-trace-inner">
+    <use class="auth-trace-tail" href="#auth-spire-inner-run"/>
+    <use class="auth-trace-fade" href="#auth-spire-inner-run"/>
+    <use class="auth-trace-body" href="#auth-spire-inner-run"/>
+    <use class="auth-trace-head" href="#auth-spire-inner-run"/>
   </g>
 </svg>
 </body>

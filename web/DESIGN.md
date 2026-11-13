@@ -905,16 +905,28 @@ These rules come from the admin audit:
 
 **≥ 1024:** the decorative spire mark (ring, inner ring, spire), bottom-right and `aria-hidden`.
 Nothing else: no blue panel, no photo.
-- Size comes from the free space right of the 400 px form column:
-  ring diameter `min(34rem, 50vw − 12.5rem − 3.5rem − 2rem, 100dvh − 4rem)`, so at least ~56 px stay
-  between the ring and the form from 1024×768 up, and the whole ring stays on screen (2rem from the edges).
-- Outline about 2 px, tinted slightly toward the brand
-  (`color-mix(in oklab, text 22%, brand 6%)` light, `text 20%, brand 8%` dark).
-- It draws itself in once. From 1.6 s, a short light (four stacked dashes in `--color-now`, the head
-  widest) runs along the outer ring, the spire and the inner ring as one stroke, in a 6 s linear cycle
-  with a ~0.9 s pause. This is the only decorative loop in the product.
-- The light fades while the form has focus. With `prefers-reduced-motion` or forced colours it is
-  hidden and the emblem is static.
+- It sits in the corner, partly off-screen: the screen edge crosses the mark at `--edge` = 20.7 of its
+  26 viewBox units on both axes, so about 3/4 of the mark shows and the bottom of the ring, the spire's
+  base and the ring's right side run past the bottom-right corner (the ring clears the corner itself, so
+  no stray arc piece is left there).
+- Size comes from the free space right of the 400 px form column: the visible part, from the ring's
+  left edge to the screen edge, is `min(50vw − 12.5rem − 3.5rem, 100dvh − 3rem)` (ring diameter capped
+  at 40rem), so 56 px stay between the ring and the form at every width from 1024 (about 48 px with a
+  scrollbar).
+- Outline about 2–2.5 px, tinted toward the brand
+  (`color-mix(in oklab, text 22%, brand 12%)` light, `text 22%, brand 14%` dark).
+- It draws itself in once, each figure from its hidden start; the inner ring starts growing only when
+  the spire's line reaches the point where it crosses it, so it branches off instead of appearing.
+- From 1.6 s, a light (four stacked dashes in `--color-now`, the head widest, a tail of 3/4 of the
+  figure) runs in a 5.6 s linear cycle at constant speed. Every run starts and ends off-screen, so the
+  viewer never sees where the light is born: it enters the ring from below, climbs the left side, goes
+  over the top and leaves past the right edge; when its head is back under the screen, the light rises
+  up the spire's left leg from the hidden base, over the apex and down the right leg. Where the left
+  leg crosses the inner ring the light forks: a second head runs clockwise around the inner ring and
+  merges into the right leg, which the spire's tail still lights. Then a pause of about 0.9 s.
+  This is the only decorative loop in the product.
+- The light fades to 40 % while the form has focus. With `prefers-reduced-motion` or forced colours it
+  is hidden and the emblem is static.
 - Styles live in `src/styles/auth-page.css` (`--auth-spire-k` keeps the line weight even across sizes).
 
 **Sign-in service page:** `/auth/login` is a Thymeleaf page of `services/auth` on the same origin. It
