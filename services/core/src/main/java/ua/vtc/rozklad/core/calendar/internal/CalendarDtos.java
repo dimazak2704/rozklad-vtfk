@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -136,7 +137,10 @@ public final class CalendarDtos {
     /**
      * {@code GET /api/public/meta}; week fields are {@code null} when today is outside the semester.
      * {@code nextStudyDay} is the first study day after today (holidays skipped), {@code null} when
-     * none is known within {@link PublicCalendarService#NEXT_STUDY_DAY_HORIZON_DAYS} days.
+     * none is known within {@link PublicCalendarService#NEXT_STUDY_DAY_HORIZON_DAYS} days. {@code now} is
+     * the server's instant (the stand time on a development stand); {@code standTime} is {@code true}
+     * only when that clock is shifted from real time and absent otherwise. Both are additive: an older
+     * core omits them, so clients fall back to their own clock.
      */
     public record PublicMetaDto(
             String collegeName,
@@ -148,7 +152,9 @@ public final class CalendarDtos {
             PairDto currentPair,
             PairDto nextPair,
             ProfileRefDto bellProfile,
-            StudyDayDto nextStudyDay) {
+            StudyDayDto nextStudyDay,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Instant now,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean standTime) {
     }
 
     /** A study day with its week: {@code weekday} ISO 1..5, parity NUMERATOR/DENOMINATOR. */

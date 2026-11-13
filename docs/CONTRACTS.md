@@ -40,7 +40,7 @@ deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELO
 
 | Method & path | Response |
 |---|---|
-| `GET /api/public/meta` | `{collegeName, semester:{id,name,startsOn,endsOn}, today, weekNumber, parity, studyDay:bool, currentPair:{number,startsAt,endsAt,minutesLeft}?, nextPair?, bellProfile:{id,name}, nextStudyDay:{date,weekday,weekNumber,parity}?}` |
+| `GET /api/public/meta` | `{collegeName, semester:{id,name,startsOn,endsOn}, today, weekNumber, parity, studyDay:bool, currentPair:{number,startsAt,endsAt,minutesLeft}?, nextPair?, bellProfile:{id,name}, nextStudyDay:{date,weekday,weekNumber,parity}?, now?, standTime?:true}` |
 | `GET /api/public/search?q=&limit=10` | `[{type: GROUP|TEACHER|ROOM, id, label, sublabel, url}]` (fuzzy, Latin/Cyrillic tolerant) |
 | `GET /api/public/groups` | `[{id, code, course, specialty:{letters,name}, department, shift}]` |
 | `GET /api/public/teachers` | `[{id, shortName, displayName, cycleCommission}]` |

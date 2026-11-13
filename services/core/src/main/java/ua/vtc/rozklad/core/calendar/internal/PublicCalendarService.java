@@ -24,10 +24,12 @@ import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SlotDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.StudyDayDto;
 import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
+import ua.vtc.rozklad.core.shared.time.StandClock;
 
 /**
  * {@code /api/public/meta} (header of every public page: semester, week, parity, current pair)
- * and {@code /api/public/bells}. "Today" and "now" come from the Kyiv {@link Clock}.
+ * and {@code /api/public/bells}. "Today" and "now" come from the Kyiv {@link Clock}, which a
+ * development stand may shift ({@link StandClock}); meta then says so ({@code standTime}).
  */
 @Service
 @Transactional(readOnly = true)
@@ -76,7 +78,9 @@ public class PublicCalendarService {
                 current,
                 next,
                 calendar.bellProfileOn(today).map(PublicCalendarService::profileRef).orElse(null),
-                nextStudyDay(today));
+                nextStudyDay(today),
+                now,
+                StandClock.isShifted(clock) ? Boolean.TRUE : null);
     }
 
     /**
