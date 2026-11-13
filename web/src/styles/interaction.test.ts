@@ -41,20 +41,34 @@ describe('interaction.css: риска наведення', () => {
     expect(outsideHover).not.toMatch(/:hover/);
   });
 
-  it('рух — лише transform і лише для тих, хто не вимикав руху', () => {
+  it('рух — лише transform (риска — clip-path) і лише для тих, хто не вимикав руху', () => {
     const transitions = css.match(/transition:[^;]+;/g) ?? [];
     expect(transitions.length).toBeGreaterThan(0);
-    for (const rule of transitions) expect(rule).toMatch(/transition: (transform\b|none)/);
+    for (const rule of transitions) expect(rule).toMatch(/transition: (transform\b|clip-path\b|none)/);
     const motionBlocks = [
       ...blocks(css, '@media (prefers-reduced-motion: no-preference)'),
       ...blocks(css, '@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)'),
     ].join('\n');
     const animated = transitions.filter((rule) => !rule.includes('none'));
     for (const rule of animated) expect(motionBlocks).toContain(rule);
+    const animations = (css.match(/animation: [^;]+;/g) ?? []).filter((rule) => !rule.includes('none'));
+    for (const rule of animations) expect(motionBlocks).toContain(rule);
+  });
+
+  it('риска не масштабується: однакова товщина під час руху й після (без scaleX і окремого шару)', () => {
+    for (const selector of ['.u-line::after', '.nav-link::after']) {
+      const rest = blocks(css, `  ${selector} {`)[0] ?? '';
+      expect(rest).toMatch(/clip-path: inset\(-1px 0 -1px 100%\)/);
+      expect(rest).not.toMatch(/transform|will-change/);
+    }
+    expect(css).not.toMatch(/scaleX\(/);
+    // вхід зліва — анімацією; перехід на наведенні вимкнено, інакше риска росла б від правого краю
+    expect(hoverBlocks).toMatch(/:hover \.u-line::after,[^{]*\{\s*transition: none;\s*animation: u-line-in/);
+    expect(css).toMatch(/@keyframes u-line-in\s*\{\s*from\s*\{\s*clip-path: inset\(-1px 100% -1px 0\);/);
   });
 
   it('фокус з клавіатури показує ту саму риску одразу, без переходу', () => {
-    expect(css).toMatch(/\.nav-link:focus-visible::after\s*\{\s*transform: scaleX\(1\);\s*transition: none;/);
+    expect(css).toMatch(/\.nav-link:focus-visible::after\s*\{\s*clip-path: inset\(-1px 0 -1px 0\);\s*transition: none;\s*animation: none;/);
     expect(css).toMatch(/:focus-visible \.u-line::after/);
   });
 

@@ -5,7 +5,10 @@
  * - Стрілка «далі» (→) зсувається на 3 px.
  * - Заняття в розкладі: крім тихого тла, крапка дисципліни трохи більшає (1 → 1,25).
  * - Доріжка дня: минулі пари — тонкі смуги (4 px); під мишею смуга стає на повну висоту, підказка каже час.
- * Лише transform. Наведення — тільки миша (hover + pointer: fine): на дотику не «залипає».
+ * Риска відкривається clip-path (як лінія закреслення), решта — transform. Не scaleX: під час transform-анімації
+ * Chrome малює риску окремим шаром із субпіксельним зсувом (при масштабі 125 % 1,5 px розмазуються на три
+ * рядки пікселів — «жирна»), а після кінця — у сітку пікселів («тонка»): товщина стрибала. clip-path риску не
+ * трансформує, тож вона однакова під час руху й після. Наведення — тільки миша (hover + pointer: fine).
  * Фокус з клавіатури показує ту саму риску одразу, без руху, плюс звичайний контур фокусу.
  * Без вподобання руху риска зʼявляється на місці (переходи лише в блоці no-preference, решту гасить base.css).
  */
@@ -24,8 +27,8 @@
     height: 1.5px;
     border-radius: 999px;
     background-color: currentColor;
-    transform: scaleX(0);
-    transform-origin: right center;
+    /* схована: стиснута до правого краю. Верх і низ із запасом 1 px, щоб обріз не зрізав краї самої риски */
+    clip-path: inset(-1px 0 -1px 100%);
     pointer-events: none;
   }
 
@@ -39,14 +42,13 @@
     border-radius: 999px;
     /* нейтральна риска наведення: синій лишається за активним розділом */
     background-color: var(--border-color-strong);
-    transform: scaleX(0);
-    transform-origin: right center;
+    clip-path: inset(-1px 0 -1px 100%);
     pointer-events: none;
   }
 
   .nav-link[aria-current='page']::after {
     background-color: var(--background-color-accent);
-    transform: scaleX(1);
+    clip-path: inset(-1px 0 -1px 0);
   }
 
   /* ---------- Стрілка «далі» ---------- */
@@ -65,10 +67,10 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    /* вихід: коротший і з ease-in (0,75× не дотягує до 100 мс — беремо 120) */
+    /* вихід: риска стискається до правого краю, коротше й з ease-in (0,75× не дотягує до 100 мс — беремо 120) */
     .u-line::after,
     .nav-link::after {
-      transition: transform 120ms var(--ease-in);
+      transition: clip-path 120ms var(--ease-in);
     }
 
     .more-arrow,
@@ -82,8 +84,7 @@
     .u-line:hover::after,
     :is(a, button, summary):hover .u-line::after,
     .nav-link:hover::after {
-      transform: scaleX(1);
-      transform-origin: left center;
+      clip-path: inset(-1px 0 -1px 0);
     }
 
     :is(a, button):hover .more-arrow {
@@ -104,10 +105,13 @@
   }
 
   @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    /* вхід — зліва: перехід ішов би від правого краю (там стоїть схована риска), тож вхід — анімація з лівого
+       краю, а перехід на наведенні вимкнено, щоб не перебив її */
     .u-line:hover::after,
     :is(a, button, summary):hover .u-line::after,
-    .nav-link:hover::after {
-      transition: transform var(--duration-base) var(--ease-out);
+    .nav-link:hover:not([aria-current='page'])::after {
+      transition: none;
+      animation: u-line-in var(--duration-base) var(--ease-out);
     }
 
     :is(a, button):hover .more-arrow {
@@ -124,8 +128,9 @@
   :is(a, button, summary):focus-visible .u-line::after,
   .u-line:focus-visible::after,
   .nav-link:focus-visible::after {
-    transform: scaleX(1);
+    clip-path: inset(-1px 0 -1px 0);
     transition: none;
+    animation: none;
   }
 
   .lesson-cell:focus-visible .lesson-dot {
@@ -137,5 +142,14 @@
     .nav-link::after {
       background-color: LinkText;
     }
+  }
+}
+
+@keyframes u-line-in {
+  from {
+    clip-path: inset(-1px 100% -1px 0);
+  }
+  to {
+    clip-path: inset(-1px 0 -1px 0);
   }
 }
