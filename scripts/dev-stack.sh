@@ -2,8 +2,10 @@
 # Local stack of «Розклад ВТФК» in Docker: infrastructure, the Java services, the sign-in service auth and
 # the web container (nginx: SPA, /api, /auth) (docs/RUNNING.md).
 #
-#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web] [--google-mock]
+#   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web] [--google-mock] [--time 2026-11-20T10:00]
 #                                  build jars and images, start everything detached, wait until healthy;
+#                                  --time starts core, importer and notification at that Kyiv date-time ("stand
+#                                  time", development only) and lets it tick on; without it they run on real time
 #                                  web starts by default (sign-in goes through it), --web is accepted as a no-op;
 #                                  --google-mock adds «Увійти через Google» against a local mock-oauth2-server
 #                                  (infra/docker-compose.google-mock.yml, http://localhost:8090/google);
@@ -104,17 +106,24 @@ stop_google_mock() {
 }
 
 cmd_up() {
-  local build=1 web=1 telegram=${TELEGRAM:-on} google_mock=0
-  for arg in "$@"; do
-    case $arg in
+  local build=1 web=1 telegram=${TELEGRAM:-on} google_mock=0 time_flag=0 stand_time=""
+  while (($#)); do
+    case $1 in
       --google-mock) google_mock=1 ;;
       --no-telegram) telegram=off ;;
       --no-build) build=0 ;;
       --web) web=1 ;;
       --no-web) web=0 ;;
-      *) echo "unknown option $arg" >&2; exit 2 ;;
+      --time) time_flag=1; stand_time=${2:-}; (($# > 1)) && shift ;;
+      --time=*) time_flag=1; stand_time=${1#--time=} ;;
+      *) echo "unknown option $1" >&2; exit 2 ;;
     esac
+    shift
   done
+  if ((time_flag)) && [[ ! $stand_time =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?$ ]]; then
+    echo "--time needs a Kyiv date-time like 2026-11-20T10:00, got '$stand_time'" >&2
+    exit 2
+  fi
   [[ $telegram == off ]] && compose_files+=(-f infra/docker-compose.no-telegram.yml)
   ((google_mock)) && compose_files+=(-f infra/docker-compose.google-mock.yml)
   local targets=("${services[@]}")
@@ -138,7 +147,12 @@ cmd_up() {
       compose build "$service"
     done
   fi
-  echo "== services (telegram: $telegram, google mock: $( ((google_mock)) && echo on || echo off))"
+  # stand time: one anchor (the real moment the stand time refers to) for every service, so their clocks agree;
+  # without --time the variables are empty and override a value left in .env
+  export ROZKLAD_STAND_TIME=$stand_time ROZKLAD_STAND_TIME_ANCHOR=""
+  [[ -n $stand_time ]] && ROZKLAD_STAND_TIME_ANCHOR=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  echo "== services (telegram: $telegram, google mock: $( ((google_mock)) && echo on || echo off)," \
+    "time: ${stand_time:-real})"
   ((google_mock)) && compose up -d mock-oidc
   compose up -d --no-build "${targets[@]}"
   wait_healthy "${services[@]}"
@@ -161,10 +175,28 @@ cmd_down() {
   stop_google_mock
 }
 
+# The stand time core runs with (empty = real time) and, when core already reports it, the current stand time.
+stand_time_status() {
+  local env standing anchor now
+  env=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' rozklad-core-1 2>/dev/null) || return 0
+  standing=$(sed -n 's/^ROZKLAD_STAND_TIME=//p' <<<"$env")
+  if [[ -z $standing ]]; then
+    echo "Time            real (scripts/dev-stack.sh up --no-build --time 2026-11-20T10:00 shifts it)"
+    return 0
+  fi
+  anchor=$(sed -n 's/^ROZKLAD_STAND_TIME_ANCHOR=//p' <<<"$env")
+  now=$(curl -fsS --max-time 3 http://127.0.0.1:8080/api/public/meta 2>/dev/null |
+    sed -n 's/.*"now":"\([^"]*\)".*/\1/p')
+  echo "Time            STAND TIME: $standing Kyiv at ${anchor:-the start of core} (real, UTC);" \
+    "on the stand now ${now:-unknown} (UTC); 'up' without --time returns to real time"
+}
+
 cmd_status() {
   docker ps --filter name=rozklad- --format 'table {{.Names}}\t{{.Status}}'
   echo
   docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' $(docker ps -q --filter name=rozklad-) 2>/dev/null || true
+  echo
+  stand_time_status
   cat <<'EOF'
 
 API (gateway)   http://localhost:8080   e.g. /api/public/meta, /api/public/schedule/group/{id}

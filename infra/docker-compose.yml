@@ -150,6 +150,9 @@ services:
       AUTH_INTERNAL_URL: http://auth:8085/auth/internal
       CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:-dev-core-auth-secret}
       # -Xmx у JAVA_TOOL_OPTIONS перекриває -XX:MaxRAMPercentage=75 з ENTRYPOINT образу
+      # «машина часу» стенду (StandClock): scripts/dev-stack.sh up --time 2026-11-20T10:00; порожньо — реальний час
+      ROZKLAD_STAND_TIME: ${ROZKLAD_STAND_TIME:-}
+      ROZKLAD_STAND_TIME_ANCHOR: ${ROZKLAD_STAND_TIME_ANCHOR:-}
       JAVA_TOOL_OPTIONS: -Xmx${CORE_HEAP:-512m}
     mem_limit: ${CORE_MEM_LIMIT:-900m}
     ports:
@@ -203,6 +206,9 @@ services:
       DB_PASSWORD: importer
       CORE_URL: http://core:8081
       IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:-dev-importer-secret}
+      # «машина часу» стенду (StandClock): scripts/dev-stack.sh up --time 2026-11-20T10:00; порожньо — реальний час
+      ROZKLAD_STAND_TIME: ${ROZKLAD_STAND_TIME:-}
+      ROZKLAD_STAND_TIME_ANCHOR: ${ROZKLAD_STAND_TIME_ANCHOR:-}
       # LibreOffice працює в тому ж контейнері поруч із JVM, тому купа менша за ліміт
       JAVA_TOOL_OPTIONS: -Xmx${IMPORTER_HEAP:-384m}
     mem_limit: ${IMPORTER_MEM_LIMIT:-900m}
@@ -232,6 +238,9 @@ services:
       IMPORTER_URL: http://importer:8083
       PUBLIC_WEB_URL: http://localhost:8088
       NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:-dev-notification-secret}
+      # «машина часу» стенду (StandClock): scripts/dev-stack.sh up --time 2026-11-20T10:00; порожньо — реальний час
+      ROZKLAD_STAND_TIME: ${ROZKLAD_STAND_TIME:-}
+      ROZKLAD_STAND_TIME_ANCHOR: ${ROZKLAD_STAND_TIME_ANCHOR:-}
       JAVA_TOOL_OPTIONS: -Xmx${NOTIFICATION_HEAP:-384m}
     mem_limit: ${NOTIFICATION_MEM_LIMIT:-900m}
     ports:

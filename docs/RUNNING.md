@@ -41,6 +41,7 @@ scripts/dev-stack.sh up --no-telegram   # the same, the bot stays off (empty tok
 scripts/dev-stack.sh up --no-build      # start from the images already built
 scripts/dev-stack.sh up --no-web        # without the nginx SPA on :8088 (then nobody can sign in)
 scripts/dev-stack.sh up --google-mock   # «Увійти через Google» against a local mock-oauth2-server (:8090)
+scripts/dev-stack.sh up --no-build --time 2026-11-20T10:00   # the stand lives at that Kyiv time (below)
 scripts/dev-stack.sh status             # containers, health, memory, URLs
 scripts/dev-stack.sh logs core          # follow one service
 scripts/dev-stack.sh seed               # real data through the API (idempotent, ~3 min)
@@ -56,6 +57,16 @@ A fresh demo database: `reset-data --yes`, `up --no-build`, `seed`.
 with the token from `.env`; stop any other copy (server, IDE run) first. `--no-telegram` (or `TELEGRAM=off`)
 adds `infra/docker-compose.no-telegram.yml`, which empties the token: the bot and the delivery worker stay off,
 everything else works. To switch the running stack later: `scripts/dev-stack.sh up --no-build`.
+
+**Stand time («машина часу»).** `up --time 2026-11-20T10:00` starts core, importer and notification as if it
+were Friday 20.11.2026 10:00 in Kyiv, and the time ticks on from there: the site shows the second pair as
+current, «сьогодні» is that Friday, the bot's «сьогодні», deadlines and reminders follow it, and the morning
+digest comes at 07:30 of the next stand weekday. `status` prints the stand time, and `GET /api/public/meta`
+adds `"now"` (the stand instant) and `"standTime": true`. `up` without `--time` returns to real time (the
+three containers are recreated, data stays). Sign-in, tokens, the delivery queue and the outbox keep real
+time; auth and scheduler are never shifted. Rows created under the stand time keep its dates, so after a
+session with it `reset-data --yes` + `seed` gives a clean demo again. It is for the development stand only:
+with an `https` issuer the services refuse to start. Details: `docs/ARCHITECTURE.md` §7.1.
 
 `up` also creates the database `auth` on an older Postgres volume and checks, through nginx, that discovery
 names the issuer `http://localhost:8088/auth` and that an authorize request without a session goes to

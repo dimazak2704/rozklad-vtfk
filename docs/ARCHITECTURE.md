@@ -96,7 +96,7 @@ Spring Modulith application modules = direct sub-packages of `ua.vtc.rozklad.cor
 
 | Module | Responsibility |
 |---|---|
-| `shared` | base classes, errors (ProblemDetail), time (`Europe/Kyiv` clock), SSE broadcaster, security helpers. Open module. |
+| `shared` | base classes, errors (ProblemDetail), time (`Europe/Kyiv` clock, development stand time §7.1), SSE broadcaster, security helpers. Open module. |
 | `catalog` | departments, specialties, groups, subgroups, teachers, cycle commissions, disciplines (+aliases), rooms, buildings, teacher↔discipline competence |
 | `calendar` | academic years, semesters, week parity (+overrides), bell profiles, calendar periods (holidays, practice, study modes) |
 | `load` | load items (навантаження): hours/week per group×discipline×semester, teachers, subgroup split |
@@ -210,6 +210,34 @@ Sign-in service `auth` (`services/auth`, details in `docs/modules/auth.md`):
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID` | notification | from `.env` |
 | `ANTHROPIC_API_KEY`, `AI_MODEL_TEXT`, `AI_MODEL_VISION`, `AI_DAILY_BUDGET_USD` | importer | key from `.env`, `claude-haiku-5-5`, `claude-sonnet-5-5`, `2.00` |
 | `SOFFICE_PATH` | importer, notification | `soffice` (container), empty on host ⇒ conversion disabled gracefully |
+| `ROZKLAD_STAND_TIME`, `ROZKLAD_STAND_TIME_ANCHOR` | core, importer, notification | empty = real time; development stand only, see §7.1 |
+
+### 7.1 Stand time (development only)
+
+`ROZKLAD_STAND_TIME=2026-11-20T10:00` (Kyiv local time) turns the `Clock` bean of core, importer and
+notification into a `StandClock`: real time plus a fixed offset, so the stand shows that moment at
+`ROZKLAD_STAND_TIME_ANCHOR` (an ISO instant; empty = the service's start) and keeps ticking.
+`scripts/dev-stack.sh up --time …` sets one anchor for all three services, so their clocks agree within
+seconds. It exists to click through live states (current pair, today's substitutions) at any moment.
+
+- **Follows the stand time:** everything that injects `Clock` for the domain: today, week, parity, current
+  pair, `GET /api/public/meta`, substitution deadlines and reminders, orders, absences, the bot's «сьогодні»,
+  `createdAt`/`updatedAt` auditing in core, the importer's daily AI budget. In notification the `@Scheduled`
+  scheduler gets the shifted clock too, so the morning digest comes at 07:30 of the *stand* weekday, and the
+  confirmation-deadline job compares deadlines with the stand time.
+- **Keeps real time:** token validation (`NimbusJwtDecoder` with `JwtValidators`, which use their own
+  `Clock.systemUTC()`; the bean is never wired in, `StandTimeTokenTest`), OAuth2 client-credential caching,
+  HTTP/Rabbit timeouts, Redis TTLs, Flyway, logs; and, through `StandClock.real(clock)`: the Modulith outbox
+  registry in core (`OutboxRealClock`: publication dates, staleness, resubmission, retention), dedup of
+  processed events, invites and password links, the Telegram delivery outbox (leases, retries, max age), the
+  Redis rate limiter, binding codes and the bot status check. Rows of those tables carry real timestamps.
+- **Not shifted at all:** auth (sessions, tokens, login throttling) and scheduler (generation jobs have no
+  domain dates, and its restart recovery compares job times with the process start).
+- **Production refuses it.** With a public `https` `AUTH_ISSUER` or the Spring profile `prod`, a set
+  `ROZKLAD_STAND_TIME` stops the service at startup (`StandClock.create`), like auth's `ProdGuard`.
+- **Switching back.** Rows written under the stand time (substitution history, orders, audit columns) keep
+  their future dates after a return to real time; use `reset-data` for a clean demo. Generation jobs started
+  under one clock and finished under another can look stuck until the next run.
 
 ## 8. Persistence conventions
 
