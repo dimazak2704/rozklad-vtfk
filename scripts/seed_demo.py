@@ -11,6 +11,7 @@ make, so the seed also exercises the APIs. The steps are idempotent; a second ru
   5. periods:   calendar periods from the notes of order №35
   6. accounts:  demo accounts of the sign-in service linked to the teachers «Кренцін» and «Непийвода»
   7. order 35:  the changes of 19.10.2026 -> confirmations -> notes -> publication as №35
+  8. names:     full names of the teachers from seed/teacher-names.csv (public college sources)
 
 Usage (stack running, see scripts/dev-stack.sh):  python scripts/seed_demo.py [step ...]
 Demo credentials come from infra/dev/demo-users.env (test values only); tokens come from the sign-in
@@ -18,8 +19,10 @@ service through scripts/rozklad_auth.py (AUTH_URL overrides its address).
 """
 from __future__ import annotations
 
+import csv
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -548,8 +551,69 @@ def step_order35(admin: Client) -> None:
     log("order35: ok")
 
 
+# ---------------------------------------------------------------- 8. full names of the teachers
+# Excel і розпорядження дають лише «Прізвище І.Б.» або прізвище. Повні імена взято з публічних сторінок
+# коледжу (циклові комісії) і з «Кадрового забезпечення» ОПП; джерело кожного рядка — у файлі.
+TEACHER_NAMES = ROOT / "seed" / "teacher-names.csv"
+INITIAL = re.compile(r"([А-ЯІЇЄҐA-Z][а-яіїєґa-z]?)\.")
+
+
+def initials_match(short_name: str, last_name: str, first_name: str, middle_name: str) -> bool:
+    """«Овчар Ін.М.» fits Інна Миколаївна, not Іван; a short name without initials fits any name."""
+    if not short_name.startswith(last_name):
+        return False
+    initials = INITIAL.findall(short_name[len(last_name):])
+    if len(initials) > 2:
+        return False
+    return all(name.startswith(initial) for initial, name in zip(initials, (first_name, middle_name)))
+
+
+def teacher_names(path: Path = TEACHER_NAMES) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as file:
+        rows = list(csv.DictReader(file))
+    seen = set()
+    for row in rows:
+        short = row["short_name"]
+        if short in seen:
+            raise SystemExit(f"{path.name}: «{short}» is listed twice")
+        seen.add(short)
+        if not (row["first_name"] and row["middle_name"] and row["source"].startswith("https://")):
+            raise SystemExit(f"{path.name}: «{short}» needs a first name, a patronymic and a source URL")
+        if not initials_match(short, row["last_name"], row["first_name"], row["middle_name"]):
+            raise SystemExit(f"{path.name}: «{row['first_name']} {row['middle_name']}» does not fit «{short}»")
+    return rows
+
+
+def teacher_request(teacher: dict, first_name: str, middle_name: str) -> dict:
+    """PUT body that changes only the name parts: short and display names stay as they are."""
+    return {"lastName": teacher["lastName"], "firstName": first_name, "middleName": middle_name,
+            "shortName": teacher["shortName"], "displayName": teacher["displayName"],
+            "cycleCommissionId": (teacher["cycleCommission"] or {}).get("id"),
+            "employment": teacher["employment"], "email": teacher["email"], "active": teacher["active"],
+            "needsReview": teacher["needsReview"], "version": teacher["version"]}
+
+
+def step_names(admin: Client) -> None:
+    teachers = {t["shortName"]: t for t in all_pages(admin, "/api/admin/teachers")}
+    filled = 0
+    for row in teacher_names():
+        teacher = teachers.get(row["short_name"])
+        if teacher is None:
+            raise SystemExit(f"teacher «{row['short_name']}» is missing (run the import and order35 first)")
+        current = (teacher["firstName"] or "", teacher["middleName"] or "")
+        if current == (row["first_name"], row["middle_name"]):
+            continue
+        if any(current):
+            log(f"  {row['short_name']}: kept «{' '.join(filter(None, current))}» set by hand")
+            continue
+        admin.put(f"/api/admin/teachers/{teacher['id']}", teacher_request(teacher, row["first_name"], row["middle_name"]))
+        filled += 1
+    log(f"names: ok ({filled} filled, {len(teachers)} teachers in the catalog)")
+
+
 STEPS = {"structure": step_structure, "calendar": step_calendar, "import": step_import,
-         "periods": step_periods, "publish": step_publish, "accounts": step_accounts, "order35": step_order35}
+         "periods": step_periods, "publish": step_publish, "accounts": step_accounts, "order35": step_order35,
+         "names": step_names}
 
 
 def main(argv: list[str]) -> None:

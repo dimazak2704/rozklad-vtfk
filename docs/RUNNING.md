@@ -127,6 +127,12 @@ Every step is a call to the running system (no SQL); a repeated run skips what e
    approval mode NOTIFY they are confirmed at once — in mode CONFIRM Непийвода confirms hers in the cabinet and the
    dispatcher confirms the rest), the 5 notes of the original, publication →
    №35. Printed sheet: `GET /api/documents/orders/{id}.pdf|png|docx`.
+8. **names** — first names and patronymics of 89 of the 109 real teachers from `seed/teacher-names.csv`
+   (`PUT /api/admin/teachers/{id}` with the version; short and display names stay). Sources are public: the
+   cycle commission pages of vtc.vn.ua (Wayback snapshots 2025-2026; the site itself does not answer from
+   here) and the «Кадрове забезпечення» PDFs of the OPPs on the college's Google Site. A row is used when the
+   initials of the schedule fit, or, for a surname without initials, when one current person has that surname
+   and the disciplines match; each row names its source. A name set by hand is kept.
 
 Differences from the paper original that the data does not allow to avoid: rows are sorted by course and
 group (the original is unsorted), «Ін. мова Крисак Л.» of a subgroup prints «Крисак Л. (п.)», ADDITIONAL rows
