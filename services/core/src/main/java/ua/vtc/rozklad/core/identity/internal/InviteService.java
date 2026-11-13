@@ -43,6 +43,7 @@ import ua.vtc.rozklad.core.shared.error.FieldErrors;
 import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
+import ua.vtc.rozklad.core.shared.time.StandClock;
 
 /**
  * Registration by invite (ARCHITECTURE §6). The admin creates an invite for a teacher and gets a
@@ -79,7 +80,7 @@ public class InviteService {
         this.identityProvider = identityProvider;
         this.properties = properties;
         this.appProperties = appProperties;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // expiry follows real time, not the stand time
     }
 
     @Transactional

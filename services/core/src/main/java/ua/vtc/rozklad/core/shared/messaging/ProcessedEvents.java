@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.core.shared.time.StandClock;
 
 /**
  * Deduplication of incoming integration events. Typical consumer:
@@ -34,7 +35,7 @@ public class ProcessedEvents {
 
     public ProcessedEvents(ProcessedEventRepository repository, Clock clock) {
         this.repository = repository;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // retention follows real time, not the stand time
     }
 
     /** @return {@code true} when the event is seen for the first time and must be handled */

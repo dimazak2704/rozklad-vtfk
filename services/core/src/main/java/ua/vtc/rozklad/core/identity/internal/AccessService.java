@@ -38,6 +38,7 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.CurrentUser;
 import ua.vtc.rozklad.core.shared.security.Roles;
+import ua.vtc.rozklad.core.shared.time.StandClock;
 
 /**
  * Access grants, the page «Доступи» (DESIGN §4.7). The data lives in {@code auth} (an enabled account is
@@ -66,7 +67,7 @@ public class AccessService {
         this.teachers = teachers;
         this.invites = invites;
         this.locks = locks;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // expiry follows real time, not the stand time
     }
 
     /** Everyone with an account, filtered by text (name, e-mail, username, teacher), role and status. */

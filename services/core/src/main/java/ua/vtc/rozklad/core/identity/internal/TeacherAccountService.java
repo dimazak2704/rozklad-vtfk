@@ -18,6 +18,7 @@ import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.security.Roles;
+import ua.vtc.rozklad.core.shared.time.StandClock;
 
 /**
  * Links a teacher of the catalog to an account that already exists in the sign-in service {@code auth}
@@ -43,7 +44,7 @@ public class TeacherAccountService {
         this.invites = invites;
         this.identityProvider = identityProvider;
         this.locks = locks;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // expiry follows real time, not the stand time
     }
 
     /** The linked account; {@code linked=false} without one, {@code username=null} when {@code auth} lost it. */
