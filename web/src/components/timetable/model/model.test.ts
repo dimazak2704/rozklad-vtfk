@@ -14,6 +14,7 @@ import {
 } from './grid';
 import { LessonLedger, slotOf } from './history';
 import { SlotIndex } from './occupancy';
+import { chipText } from './text';
 import { defaultEffectiveFrom, pickVersion } from './versions';
 
 const WINDOWS: ShiftWindowDto[] = [
@@ -255,5 +256,22 @@ describe('версії', () => {
     expect(defaultEffectiveFrom('2026-11-09', semester)).toBe('2026-11-16');
     expect(defaultEffectiveFrom('2026-08-20', semester)).toBe('2026-09-01');
     expect(defaultEffectiveFrom('2026-12-29', semester)).toBe('2026-12-29');
+  });
+});
+
+describe('текст клітинки дошки', () => {
+  it('група бачить викладача й аудиторію — і рядком, і по частинах для вузької доріжки підгрупи', () => {
+    const text = chipText(lesson({ subgroup: 1, teacher: 'Крисак', room: '110' }), 'group');
+    expect(text.title).toBe('СТП');
+    expect(text.lines).toEqual(['Крисак', 'ауд. 110']);
+    expect(text.detail).toBe('Крисак · ауд. 110');
+    expect(text.room).toBe('ауд. 110');
+  });
+
+  it('викладач бачить групу з підгрупою, а без аудиторії не лишається порожнього рядка', () => {
+    const text = chipText(lesson({ subgroup: 2, room: null }), 'teacher');
+    expect(text.title).toBe('4КІ1/2');
+    expect(text.lines).toEqual(['СТП']);
+    expect(text.room).toBeNull();
   });
 });

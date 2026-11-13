@@ -1,9 +1,10 @@
 import { useDraggable } from '@dnd-kit/core';
 import { Layers, MonitorSmartphone, Pin, TriangleExclamationPoint } from 'lucide-react';
-import { memo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { memo, type CSSProperties, type KeyboardEvent } from 'react';
 import type { TimetableConflict } from '@/api/timetable';
 import type { TemplateLessonDto } from '@/api/types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui';
+import { useHoverIntent } from '@/components/ui/hover-intent';
 import { cn } from '@/lib/cn';
 import { lineAttr } from '@/lib/discipline-color';
 import { weekdayName } from '@/lib/labels';
@@ -18,7 +19,7 @@ export interface LessonChipProps {
   view: BoardView;
   /** Половинка пари (чисельник чи знаменник) — один рядок тексту. */
   compact: boolean;
-  /** Вузька доріжка підгрупи — лише назва й аудиторія. */
+  /** Вузька доріжка підгрупи: назва, під нею викладач і аудиторія — кожне своїм рядком (у половинці пари — лише назва). */
   narrow: boolean;
   conflicts: readonly TimetableConflict[];
   selected: boolean;
@@ -59,13 +60,15 @@ export const LessonChip = memo(function LessonChip({
   const travelling = useDragState(store, (state) => state.activeIds.has(lesson.id));
   const dragging = useDragState(store, (state) => state.active !== null);
   const landed = useDragState(store, (state) => state.landedId === lesson.id);
-  const [hoverOpen, setHoverOpen] = useState(false);
-  // картку відкриває лише наведення миші: фокус (клавіатура, повернення після перетягування)
-  // показує ті самі відомості в панелі «Вибрана пара», без спливного вікна
-  const pointerInside = useRef(false);
+  // картку відкриває лише наведення миші: фокус (клавіатура, повернення після перетягування) показує
+  // ті самі відомості в панелі «Вибрана пара», без спливного вікна. Поки картка відкрита, сусідня пара
+  // показує свою одразу; сама картка мишу не ловить (лише читання), тож не накриває шлях до сусідньої клітинки
+  const hover = useHoverIntent({ openDelay: CARD_OPEN_DELAY_MS, closeDelay: CARD_CLOSE_DELAY_MS });
   const hasHard = conflicts.some((c) => c.severity === 'HARD');
-  const { title, detail } = chipText(lesson, view);
+  const { title, detail, lines, room } = chipText(lesson, view);
   const oneLine = compact || narrow;
+  // підгрупа на всю пару: під назвою — викладач і аудиторія окремими рядками, як у друкованому розкладі
+  const stacked = narrow && !compact;
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     // F2 — як у таблицях: редагувати; решту клавіш (Пробіл/Enter) обробляє сенсор перетягування
@@ -79,10 +82,13 @@ export const LessonChip = memo(function LessonChip({
 
   return (
     <HoverCard
-      open={hoverOpen && !dragging}
-      onOpenChange={(open) => setHoverOpen(open && pointerInside.current)}
-      openDelay={350}
-      closeDelay={120}
+      open={hover.open && !dragging}
+      // відкриває лише useHoverIntent; Radix тут лише закриває (Escape, курсор пішов)
+      onOpenChange={(open) => {
+        if (!open) hover.close();
+      }}
+      openDelay={CARD_OPEN_DELAY_MS}
+      closeDelay={CARD_CLOSE_DELAY_MS}
     >
       <HoverCardTrigger asChild>
         <button
@@ -93,10 +99,10 @@ export const LessonChip = memo(function LessonChip({
           aria-disabled={undefined}
           {...listeners}
           onPointerEnter={(event) => {
-            if (event.pointerType === 'mouse') pointerInside.current = true;
+            if (event.pointerType === 'mouse') hover.enter();
           }}
-          onPointerLeave={() => {
-            pointerInside.current = false;
+          onPointerLeave={(event) => {
+            if (event.pointerType === 'mouse') hover.leave();
           }}
           onKeyDown={onKeyDown}
           tabIndex={tabIndex}
@@ -117,6 +123,8 @@ export const LessonChip = memo(function LessonChip({
             'transition-[background-color,border-color,opacity] duration-150 ease-out',
             'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-focus',
             oneLine ? 'py-0.5' : 'py-1',
+            // у вузькій доріжці підгрупи кожен піксель — прізвищу
+            narrow && 'px-1',
             editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
             // у спокої пара — текст на клітинці без власної рамки (межі вже дає сітка); половинки підгрупи тримають
             // волосяну лінію, щоб «Інф. | Інф.» не злились. Наведення — нейтральне тоновання, колір несе лише крапка
@@ -159,14 +167,28 @@ export const LessonChip = memo(function LessonChip({
             </span>
           </span>
           {!oneLine && detail ? <span className="truncate text-meta font-normal text-secondary">{detail}</span> : null}
+          {stacked
+            ? lines.map((line) => (
+                // довге прізвище — з трикрапкою (повне — у картці й підписі для читача екрана): рядки клітинки
+                // лишаються рівними, а перенос посеред прізвища без дефіса читається гірше
+                <span key={line} className={cn('truncate text-meta leading-tight font-normal text-secondary', line === room && 'tabular-nums')}>
+                  {line}
+                </span>
+              ))
+            : null}
         </button>
       </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="p-3">
+      <HoverCardContent side="right" align="start" className="p-3" peek instant={hover.instant}>
         <LessonDetailsCard lesson={lesson} conflicts={conflicts} />
       </HoverCardContent>
     </HoverCard>
   );
 });
+
+/** Перша картка — після паузи на парі; далі, поки картка відкрита, сусідні показуються одразу. */
+const CARD_OPEN_DELAY_MS = 350;
+/** Курсор пішов з пари: картка зникає майже одразу — на неї саму миша не переходить. */
+const CARD_CLOSE_DELAY_MS = 80;
 
 /** Плаваюча копія пари під курсором під час перетягування. */
 export function LessonChipOverlay({ lesson, view }: { lesson: TemplateLessonDto; view: BoardView }) {

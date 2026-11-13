@@ -6,15 +6,24 @@ import { roomLabel } from '@/lib/schedule';
 import type { BoardView } from './grid';
 import { PARITY_SHORT } from './labels';
 
-/** Що писати в клітинці залежно від подання: групі — викладача, викладачу — групу, аудиторії — обох. */
-export function chipText(lesson: TemplateLessonDto, view: BoardView): { title: string; detail: string } {
+/**
+ * Що писати в клітинці залежно від подання: групі — викладача, викладачу — групу, аудиторії — обох.
+ * `lines` — те саме по частинах (вузька доріжка підгрупи ставить кожну окремим рядком), `detail` — одним рядком.
+ */
+export function chipText(
+  lesson: TemplateLessonDto,
+  view: BoardView,
+): { title: string; detail: string; lines: string[]; room: string | null } {
   const room = roomLabel(lesson.room?.name);
   const cohort = lesson.subgroup > 0 ? `${lesson.group.code}/${lesson.subgroup}` : lesson.group.code;
-  if (view === 'group') {
-    return { title: lesson.discipline.shortName, detail: [lesson.teacher?.displayName, room].filter(Boolean).join(' · ') };
-  }
-  if (view === 'teacher') return { title: cohort, detail: [lesson.discipline.shortName, room].filter(Boolean).join(' · ') };
-  return { title: cohort, detail: [lesson.discipline.shortName, lesson.teacher?.displayName].filter(Boolean).join(' · ') };
+  const parts =
+    view === 'group'
+      ? { title: lesson.discipline.shortName, lines: [lesson.teacher?.displayName, room] }
+      : view === 'teacher'
+        ? { title: cohort, lines: [lesson.discipline.shortName, room] }
+        : { title: cohort, lines: [lesson.discipline.shortName, lesson.teacher?.displayName] };
+  const lines = parts.lines.filter((line): line is string => Boolean(line));
+  return { title: parts.title, detail: lines.join(' · '), lines, room };
 }
 
 /** Усе, що видно в клітинці (і конфлікти), одним рядком для читача екрана. */
