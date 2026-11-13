@@ -51,6 +51,14 @@
     clip-path: inset(-1px 0 -1px 0);
   }
 
+  /* ---------- Картка-«підгляд» без дій (дошка розкладу) ----------
+     Миша проходить крізь картку й обгортку Radix до клітинок під нею: курсор, що йде до сусідньої пари,
+     потрапляє на неї, а не на картку. */
+  [data-radix-popper-content-wrapper]:has(> [data-hover-peek]),
+  [data-hover-peek] {
+    pointer-events: none;
+  }
+
   /* ---------- Стрілка «далі» ---------- */
   .more-arrow {
     transform: translateX(0);

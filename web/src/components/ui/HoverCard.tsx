@@ -1,6 +1,7 @@
 import { HoverCard as RadixHoverCard, Popover as RadixPopover } from 'radix-ui';
-import { useEffect, useRef, useState, type ComponentProps, type PointerEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ComponentProps, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useHoverIntent } from './hover-intent';
 import { HOVER_CARD_CLOSE_DELAY_MS, HOVER_CARD_DELAY_MS } from './Tooltip.helpers';
 
 const CARD =
@@ -11,22 +12,35 @@ export const HoverCard = RadixHoverCard.Root;
 export const HoverCardTrigger = RadixHoverCard.Trigger;
 
 /** Картка при наведенні (лише миша). Для вмісту, потрібного з клавіатури, — HoverDetails. */
-export function HoverCardContent({ className, sideOffset = 6, collisionPadding = 8, ...props }: ComponentProps<typeof RadixHoverCard.Content>) {
+export function HoverCardContent({
+  className,
+  sideOffset = 6,
+  collisionPadding = 8,
+  instant = false,
+  peek = false,
+  ...props
+}: ComponentProps<typeof RadixHoverCard.Content> & {
+  /** Перемикання з картки на картку (`useHoverIntent`): без анімації появи й зникнення. */
+  instant?: boolean;
+  /**
+   * Картка лише для читання, без дій: миша проходить крізь неї до клітинок під нею (interaction.css,
+   * `[data-hover-peek]`), тож картка не стає пасткою, коли курсор іде до сусідньої клітинки.
+   */
+  peek?: boolean;
+}) {
   return (
     <RadixHoverCard.Portal>
       <RadixHoverCard.Content
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
-        className={cn('anim-pop', CARD, className)}
+        data-hover-peek={peek || undefined}
+        data-hover-instant={instant || undefined}
+        className={cn(!instant && 'anim-pop', CARD, className)}
         {...props}
       />
     </RadixHoverCard.Portal>
   );
 }
-
-/** Коли закрилася остання картка: якщо щойно — наступна відкривається без затримки (огляд рядка мишею). */
-let lastClosedAt = 0;
-const WARM_UP_MS = 300;
 
 export interface HoverDetailsProps {
   /** Елемент-тригер (кнопка або посилання, що приймає ref). */
@@ -42,9 +56,9 @@ export interface HoverDetailsProps {
 }
 
 /**
- * Деталі, доступні всім: мишею — при наведенні (550 мс, а одразу після іншої картки — без затримки),
- * з клавіатури й на дотик — по Enter/тапу. Так влаштована картка заняття: повна назва, викладач,
- * аудиторія, що змінилося і чому.
+ * Деталі, доступні всім: мишею — при наведенні (550 мс; поки інша картка відкрита чи щойно закрилась —
+ * одразу, а та зникає), з клавіатури й на дотик — по Enter/тапу. Так влаштована картка заняття: повна назва,
+ * викладач, аудиторія, що змінилося і чому. У картці є посилання, тож на неї можна перейти мишею.
  */
 export function HoverDetails({
   children,
@@ -56,49 +70,30 @@ export function HoverDetails({
   label,
   contentClassName,
 }: HoverDetailsProps) {
-  const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intent = useHoverIntent({ openDelay, closeDelay });
   // картку відкрило наведення мишею: при закритті фокус на тригер не повертаємо, інакше Radix
   // ставить його скриптом і :focus-visible малює кільце на клітинці, якої ніхто не натискав
   const openedByHover = useRef(false);
-
-  const clear = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-  };
-  const change = (next: boolean) => {
-    if (!next) lastClosedAt = Date.now();
-    setOpen(next);
-  };
-  const schedule = (next: boolean, delay: number) => {
-    clear();
-    const warm = next && Date.now() - lastClosedAt < WARM_UP_MS;
-    timer.current = setTimeout(() => {
-      // відкрита картка лишається «від миші», доки її не відкрили заново клавіатурою чи дотиком
-      if (next && !open) openedByHover.current = true;
-      change(next);
-    }, warm ? 0 : delay);
-  };
-
-  useEffect(() => clear, []);
+  useEffect(() => {
+    if (intent.open) openedByHover.current = intent.byHover;
+  }, [intent.open, intent.byHover]);
 
   const hoverHandlers = {
     onPointerEnter: (event: PointerEvent) => {
-      if (event.pointerType === 'mouse') schedule(true, openDelay);
+      if (event.pointerType === 'mouse') intent.enter();
     },
     onPointerLeave: (event: PointerEvent) => {
-      if (event.pointerType === 'mouse') schedule(false, closeDelay);
+      if (event.pointerType === 'mouse') intent.leave();
     },
   };
 
   return (
     <RadixPopover.Root
-      open={open}
+      open={intent.open}
       onOpenChange={(next) => {
-        clear();
         // Enter, тап чи клік: фокус після закриття повертається на тригер, як годиться діалогу
-        if (next) openedByHover.current = false;
-        change(next);
+        if (next) intent.show();
+        else intent.close();
       }}
     >
       <RadixPopover.Trigger asChild {...hoverHandlers}>
@@ -111,12 +106,13 @@ export function HoverDetails({
           sideOffset={6}
           collisionPadding={8}
           aria-label={label}
+          data-hover-instant={intent.instant || undefined}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => {
             if (openedByHover.current) event.preventDefault();
             openedByHover.current = false;
           }}
-          className={cn('anim-pop', CARD, contentClassName)}
+          className={cn(!intent.instant && 'anim-pop', CARD, contentClassName)}
           {...hoverHandlers}
         >
           {content}

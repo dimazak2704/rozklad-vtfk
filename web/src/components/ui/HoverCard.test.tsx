@@ -2,11 +2,13 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { HoverDetails } from './HoverCard';
+import { HOVER_WARM_MS, resetHoverCards } from './hover-intent';
 import { HOVER_CARD_DELAY_MS, HOVER_DELAY_MS } from './Tooltip.helpers';
 
 describe('HoverDetails', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetHoverCards();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -101,5 +103,65 @@ describe('HoverDetails', () => {
     });
     expect(screen.queryByText('Повна назва')).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it('поки картка відкрита, сусідня клітинка показує свою одразу, а попередня зникає без анімації', () => {
+    renderWithProviders(
+      <>
+        <HoverDetails label="Понеділок" content={<p>Математика</p>}>
+          <button type="button">Матем.</button>
+        </HoverDetails>
+        <HoverDetails label="Вівторок" content={<p>Зарубіжна література</p>}>
+          <button type="button">Зар.літ.</button>
+        </HoverDetails>
+      </>,
+    );
+    const monday = screen.getByRole('button', { name: 'Матем.' });
+    const tuesday = screen.getByRole('button', { name: 'Зар.літ.' });
+    hover(monday);
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS);
+    });
+    expect(screen.getByText('Математика')).toBeInTheDocument();
+    // курсор переходить на сусідню клітинку, поки перша картка ще відкрита (вона закрилась би через 100 мс)
+    leave(monday);
+    hover(tuesday);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(screen.getByText('Зарубіжна література')).toBeInTheDocument();
+    expect(screen.queryByText('Математика')).not.toBeInTheDocument();
+  });
+
+  it('розігрів минає: після паузи без карток наступна знову чекає повну затримку', () => {
+    renderWithProviders(
+      <>
+        <HoverDetails label="Понеділок" content={<p>Математика</p>}>
+          <button type="button">Матем.</button>
+        </HoverDetails>
+        <HoverDetails label="Вівторок" content={<p>Зарубіжна література</p>}>
+          <button type="button">Зар.літ.</button>
+        </HoverDetails>
+      </>,
+    );
+    const monday = screen.getByRole('button', { name: 'Матем.' });
+    hover(monday);
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS);
+    });
+    leave(monday);
+    act(() => {
+      vi.advanceTimersByTime(HOVER_WARM_MS + 200);
+    });
+    expect(screen.queryByText('Математика')).not.toBeInTheDocument();
+    hover(screen.getByRole('button', { name: 'Зар.літ.' }));
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS - 50);
+    });
+    expect(screen.queryByText('Зарубіжна література')).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(screen.getByText('Зарубіжна література')).toBeInTheDocument();
   });
 });

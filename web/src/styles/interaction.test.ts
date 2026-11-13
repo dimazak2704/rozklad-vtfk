@@ -83,3 +83,11 @@ describe('interaction.css: риска наведення', () => {
     expect(theme).toMatch(/@custom-variant hover\s*\{\s*@media \(hover: hover\) and \(pointer: fine\)/);
   });
 });
+
+describe('interaction.css: картка-«підгляд»', () => {
+  it('картка без дій і обгортка Radix не ловлять мишу: курсор доходить до клітинки під карткою', () => {
+    expect(css).toMatch(
+      /\[data-radix-popper-content-wrapper\]:has\(> \[data-hover-peek\]\),\s*\[data-hover-peek\]\s*\{\s*pointer-events: none;/,
+    );
+  });
+});
