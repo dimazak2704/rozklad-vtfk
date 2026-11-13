@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.notification.config.DeliveryProperties;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 
 /**
@@ -77,7 +78,7 @@ public class RedisRateLimiter implements RateLimiter {
 
     public RedisRateLimiter(StringRedisTemplate redis, Clock clock, DeliveryProperties properties) {
         this.redis = redis;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
         this.global = new Bucket(properties.globalPerSecond(), properties.globalPerSecond() / 1000.0);
         this.groupChat = new Bucket(properties.burst(), properties.groupChatPerMinute() / 60_000.0);
         this.privateChat = new Bucket(properties.burst(), properties.privateChatPerSecond() / 1000.0);

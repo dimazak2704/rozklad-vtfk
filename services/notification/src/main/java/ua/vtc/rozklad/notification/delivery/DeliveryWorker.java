@@ -17,6 +17,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.config.DeliveryProperties;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.delivery.MediaResolver.MediaUnavailableException;
 import ua.vtc.rozklad.notification.delivery.RetryPolicy.Decision;
@@ -58,7 +59,7 @@ public class DeliveryWorker implements SmartLifecycle {
         this.bindings = bindings;
         this.properties = properties;
         this.telegram = telegram;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
         this.meters = meters;
         this.relevance = relevance;
     }

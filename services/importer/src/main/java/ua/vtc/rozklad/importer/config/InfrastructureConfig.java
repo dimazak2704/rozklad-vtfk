@@ -17,6 +17,7 @@ import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomize
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.env.Environment;
 import tools.jackson.databind.ext.javatime.ser.LocalTimeSerializer;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
@@ -35,9 +36,11 @@ public class InfrastructureConfig {
         LocaleContextHolder.setDefaultLocale(Locale.forLanguageTag("uk"));
     }
 
+    /** Kyiv time; on the development stand {@code app.stand-time.at} shifts it ({@link StandClock}). */
     @Bean
-    Clock clock() {
-        return Clock.system(KYIV);
+    Clock clock(Environment environment) {
+        return StandClock.create(Clock.system(KYIV), environment.getProperty("app.stand-time.at"),
+                environment.getProperty("app.stand-time.anchor"), StandClock.isProduction(environment));
     }
 
     @Bean

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.notification.binding.BindingCodes;
 import ua.vtc.rozklad.notification.config.DeliveryProperties;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageRepository;
 import ua.vtc.rozklad.notification.delivery.OutboundStatus;
@@ -86,7 +87,7 @@ public class ScheduledJobs {
     @Scheduled(cron = "0 40 3 * * *", zone = "Europe/Kyiv")
     @Transactional
     public void housekeeping() {
-        Instant now = clock.instant();
+        Instant now = StandClock.real(clock).instant(); // these rows are stamped in real time
         int deliveries = outbound.deleteFinishedBefore(List.of(OutboundStatus.SENT, OutboundStatus.FAILED),
                 now.minus(delivery.retention()));
         int events = processedEvents.purgeBefore(now.minus(PROCESSED_EVENTS_RETENTION));

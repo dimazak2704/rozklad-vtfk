@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatRef;
 import ua.vtc.rozklad.notification.config.BotProperties;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 
@@ -44,7 +45,7 @@ public class BindingCodes {
         this.bindings = bindings;
         this.telegram = telegram;
         this.bot = bot;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
     }
 
     @Transactional

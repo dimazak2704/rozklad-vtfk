@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.notification.config.StandClock;
 
 /**
  * Deduplication of incoming events. The mark joins the handler's transaction, so a failed handler
@@ -19,7 +20,7 @@ public class ProcessedEvents {
 
     public ProcessedEvents(ProcessedEventRepository repository, Clock clock) {
         this.repository = repository;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
     }
 
     /** @return {@code true} when the event is seen for the first time and must be handled */

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.telegram.TelegramApi.BotIdentity;
 
@@ -23,7 +24,7 @@ public class BotStatus {
         this.telegram = telegram;
         this.api = api;
         this.runner = runner;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
     }
 
     public Status status() {

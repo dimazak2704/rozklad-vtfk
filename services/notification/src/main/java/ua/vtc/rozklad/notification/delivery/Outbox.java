@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
 import ua.vtc.rozklad.notification.text.Html;
@@ -28,7 +29,7 @@ public class Outbox {
 
     public Outbox(OutboundMessageRepository repository, Clock clock) {
         this.repository = repository;
-        this.clock = clock;
+        this.clock = StandClock.real(clock); // real time, not the stand time
     }
 
     /** @return the queued messages (empty when the draft was a duplicate) */
