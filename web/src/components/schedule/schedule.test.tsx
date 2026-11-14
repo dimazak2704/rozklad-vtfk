@@ -274,7 +274,7 @@ describe('пара, звільнена перенесенням, і зміна �
     expect(screen.queryByText('Вікно — пари немає')).not.toBeInTheDocument();
     const vacated = document.querySelector('[data-vacated]') as HTMLElement;
     expect(vacated).toHaveTextContent('Пари не буде');
-    expect(vacated).toHaveTextContent(`Було: ${first.discipline.shortName}`);
+    expect(vacated).toHaveTextContent(`Було: ${first.discipline.name}`);
     expect(vacated).toHaveTextContent('перенесено на 1 пару');
     // зміна аудиторії називає себе словом стану, як заміна й додаткова пара
     expect(screen.getByRole('button', { name: /4 пара/ })).toHaveTextContent('Інша аудиторія');

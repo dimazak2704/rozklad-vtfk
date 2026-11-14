@@ -7,6 +7,8 @@ interface VacatedSlotProps {
   /** Заняття, перенесені з цієї пари (уже на новому місці). */
   lessons: readonly LessonView[];
   perspective?: Perspective;
+  /** Денний список — повна назва дисципліни, як у клітинках поруч; сітка — коротка. */
+  fullTitle?: boolean;
   className?: string;
 }
 
@@ -15,7 +17,7 @@ interface VacatedSlotProps {
  * клітинці) і куди його перенесли. Пара в парі з клітинкою «Перенесено · з 2-ї пари», тож людина бачить
  * обидва кінці перестановки, а не «вікно» на місці пари, яку розпорядження прямо скасовує.
  */
-export function VacatedSlot({ lessons, perspective = 'group', className }: VacatedSlotProps) {
+export function VacatedSlot({ lessons, perspective = 'group', fullTitle = false, className }: VacatedSlotProps) {
   const targets = [...new Set(lessons.map((lesson) => lesson.pair))].sort((a, b) => a - b);
   if (targets.length === 0) return null;
   return (
@@ -27,7 +29,7 @@ export function VacatedSlot({ lessons, perspective = 'group', className }: Vacat
           className="min-w-0 truncate text-cell font-[650] text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2"
         >
           <span className="sr-only">Було: </span>
-          {perspective === 'teacher' ? lesson.group.code : lesson.discipline.shortName}
+          {perspective === 'teacher' ? lesson.group.code : fullTitle ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName}
         </span>
       ))}
       <span className="flex items-center gap-1 text-caption text-secondary">

@@ -161,7 +161,7 @@ export function DayList({
 
                   <div className="flex min-w-0 flex-col py-1.5">
                     {slot.movedAway.length > 0 ? (
-                      <VacatedSlot lessons={slot.movedAway} perspective={perspective} className="py-1.5" />
+                      <VacatedSlot lessons={slot.movedAway} perspective={perspective} fullTitle className="py-1.5" />
                     ) : slot.isWindow ? (
                       <p className="px-3.5 py-1.5 text-caption text-muted">Вікно — пари немає</p>
                     ) : (
