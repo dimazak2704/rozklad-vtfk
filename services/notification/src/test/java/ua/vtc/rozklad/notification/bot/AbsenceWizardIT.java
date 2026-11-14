@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import ua.vtc.rozklad.contracts.AbsenceReasonCategory;
 import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.notification.core.CoreClient.AbsenceReport;
@@ -21,6 +23,9 @@ import ua.vtc.rozklad.notification.support.IntegrationTest;
 class AbsenceWizardIT extends IntegrationTest {
 
     private static final long TEACHER = 2001;
+
+    @Autowired
+    private StringRedisTemplate redis;
 
     private long wizardMessage;
 
@@ -162,6 +167,37 @@ class AbsenceWizardIT extends IntegrationTest {
         say(TEACHER, "1.10 не буду");
         assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("🤔 Дата 01.10 уже минула.");
         assertThat(core.absences()).isEmpty();
+    }
+
+    /**
+     * Every unclear text may cost a paid model call in the importer: one teacher's chat gets five parses a minute
+     * and twenty a day, then the date buttons, so a script in a bound chat cannot spend the college's AI budget.
+     */
+    @Test
+    void aFloodOfFreeTextGetsTheButtonsInsteadOfTheParser() {
+        for (int i = 1; i <= 6; i++) {
+            importer.answer(new AbsenceParse(null, null, null, null, 0.3, "Уточніть, будь ласка, дату."));
+            say(TEACHER, "не буду " + i);
+        }
+        assertThat(importer.requests()).hasSize(5);
+        Sent refused = telegram.lastSentTo(TEACHER);
+        assertThat(refused.text()).startsWith("✋ Забагато повідомлень поспіль");
+        assertThat(refused.buttons()).contains("📅 Інша дата");
+        Long minuteWindow = redis.getExpire("rozklad:notification:absence-parse:minute:" + CoreFixtures.TEACHER_NEPYIVODA);
+        assertThat(minuteWindow).isBetween(1L, 60L);
+
+        // хвилина минула, але денну норму вичерпано
+        redis.delete("rozklad:notification:absence-parse:minute:" + CoreFixtures.TEACHER_NEPYIVODA);
+        redis.opsForValue().set("rozklad:notification:absence-parse:day:" + CoreFixtures.TEACHER_NEPYIVODA, "20");
+        say(TEACHER, "не буду завтра");
+        assertThat(importer.requests()).hasSize(5);
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("✋ Забагато повідомлень поспіль");
+
+        // інший викладач має свою норму
+        teacherChat(2002, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        importer.answer(new AbsenceParse(null, null, null, null, 0.3, "Уточніть, будь ласка, дату."));
+        say(2002, "не буду завтра");
+        assertThat(importer.requests()).hasSize(6);
     }
 
     @Test

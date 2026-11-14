@@ -86,7 +86,10 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   ✖️ Скасувати. Free text of a teacher that reads like an absence («не буду», «лікарняний», «відпустка»…) or
   any text inside the wizard goes to importer `POST /api/import/ai/parse-absence`; the result is echoed
   («Я зрозумів так: …» [✅ Так, надіслати] [✏️ Змінити]); the teacher's words are passed as the private comment.
-  Unclear/low confidence (< 0.6)/past/far dates/importer down → explanation + date buttons.
+  Unclear/low confidence (< 0.6)/past/far dates/importer down → explanation + date buttons. The parser may call
+  the paid text model, so one teacher gets 5 parses a minute and 20 a rolling day (`AbsenceParseQuota`, Redis;
+  `app.bot.absence-parses-per-minute`, `app.bot.absence-parses-per-day`); over that, or without Redis, the text
+  is not parsed and «✋ Забагато повідомлень поспіль…» offers the date buttons.
 * **Substitution notice (NOTIFY, default — DOMAIN §7)**: «📌 Вам поставили заміну», the same details without a
   deadline, «Якщо не можете, натисніть «Не можу» — диспетчер обере інший варіант.», [👍 Добре] [❌ Не можу]
   (same callbacks `sr:c:`/`sr:d:` as a request; core knows the change's mode). Purpose `SUBSTITUTION_NOTICE`;
@@ -316,6 +319,7 @@ is rendered once per order no matter how many chats receive it.
 | `app.bot.admin-check-ttl` (property) | `1m` | how long a `getChatMember` answer is reused |
 | `app.bot.bind-attempts`, `app.bot.bind-attempts-window` (properties) | `5`, `15m` | wrong binding codes per chat and per user, then codes are not looked up until the window ends |
 | `app.bot.code-ttl`, `app.bot.personal-code-ttl` (properties) | `24h`, `15m` | life of binding codes: group chats and subscribers; a teacher's chat and service chats |
+| `app.bot.absence-parses-per-minute`, `app.bot.absence-parses-per-day` (properties) | `5`, `20` | free-text absences of one teacher sent to the importer's parser |
 | `EVENTS_LISTENER_ENABLED` | `true` | `false` = do not consume the shared queue (manual runs) |
 | `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them) |
 

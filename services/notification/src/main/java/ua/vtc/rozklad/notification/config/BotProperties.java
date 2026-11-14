@@ -21,6 +21,9 @@ import org.springframework.validation.annotation.Validated;
  * @param adminCheckTtl        how long the answer of {@code getChatMember} («is this user a chat admin?») is reused
  * @param bindAttempts         failed binding codes a chat (and a user) may send within {@code bindAttemptsWindow}
  * @param bindAttemptsWindow   window of the failed-attempt counter; after it the counter starts again
+ * @param absenceParsesPerMinute free-text absences of one teacher sent to the parser (maybe the paid text model)
+ *                             within a minute; more get the date buttons
+ * @param absenceParsesPerDay  the same within 24 hours
  */
 @Validated
 @ConfigurationProperties("app.bot")
@@ -32,5 +35,7 @@ public record BotProperties(
         @DefaultValue("2m") @NotNull Duration noTelegramNoticeDelay,
         @DefaultValue("1m") @NotNull Duration adminCheckTtl,
         @DefaultValue("5") @Positive int bindAttempts,
-        @DefaultValue("15m") @NotNull Duration bindAttemptsWindow) {
+        @DefaultValue("15m") @NotNull Duration bindAttemptsWindow,
+        @DefaultValue("5") @Positive int absenceParsesPerMinute,
+        @DefaultValue("20") @Positive int absenceParsesPerDay) {
 }

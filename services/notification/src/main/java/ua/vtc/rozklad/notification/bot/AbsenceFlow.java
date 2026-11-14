@@ -63,15 +63,17 @@ public class AbsenceFlow {
     private final BotReplies replies;
     private final CoreClient core;
     private final ImporterClient importer;
+    private final AbsenceParseQuota parseQuota;
     private final Clock clock;
 
     public AbsenceFlow(ChatBindings bindings, DialogStore dialogs, BotReplies replies, CoreClient core,
-                       ImporterClient importer, Clock clock) {
+                       ImporterClient importer, AbsenceParseQuota parseQuota, Clock clock) {
         this.bindings = bindings;
         this.dialogs = dialogs;
         this.replies = replies;
         this.core = core;
         this.importer = importer;
+        this.parseQuota = parseQuota;
         this.clock = clock;
     }
 
@@ -104,6 +106,11 @@ public class AbsenceFlow {
             return;
         }
         LocalDate today = today();
+        if (!parseQuota.tryAcquire(teacher.get().getTeacherId())) {
+            restartWithButtons(chatId, "✋ Забагато повідомлень поспіль — цей текст я не розпізнаватиму.\n"
+                    + "Оберіть дату кнопками:", today);
+            return;
+        }
         AbsenceParse parse;
         try {
             parse = importer.parseAbsence(message, teacher.get().getTeacherId(), today);
