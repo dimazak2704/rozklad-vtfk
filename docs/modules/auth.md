@@ -67,7 +67,7 @@ re-encodes a stored hash, and the synchroniser rewrites older cost-12 rows at th
   through per 2 s (longer as failures grow, at most 15 min) and refuses the rest without BCrypt, parallel
   requests included. A browser that already signed in as the identifier carries a device cookie
   (`RZ_DEVICE`, on the server `__Secure-RZ_DEVICE`; `HttpOnly`, `SameSite=Strict`, path `/auth/login`,
-  90 days, table `login_device`): its attempts have their own lockout key and skip the network throttle and
+  90 days from the last sign-in with it, table `login_device`): its attempts have their own lockout key and skip the network throttle and
   the gate, so a student spraying from the college NAT cannot lock teachers out. Every attempt is in
   `login_attempt`. The identifier is normalised once (`SignInIdentifier`: trimmed like the form login, so every
   character up to U+0020 goes, then lower case) for the account lookup and for every lockout key, so no spelling

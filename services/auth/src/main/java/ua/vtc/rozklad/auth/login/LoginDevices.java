@@ -24,12 +24,12 @@ import org.springframework.stereotype.Component;
  * only SHA-256 of the token and of the identifier. A later attempt that carries the cookie for the same
  * identifier is counted on its own key (the device) and skips the network throttle and the global gate, so
  * other people's failures on a shared network cannot lock the owner out. Failures from a trusted device still
- * lock that device.
+ * lock that device. Every successful sign-in with the device starts a new {@link #LIFETIME}.
  */
 @Component
 public class LoginDevices {
 
-    /** How long a device stays trusted; the same as the sign-in journal. */
+    /** How long a device stays trusted after its last successful sign-in; the same as the sign-in journal. */
     static final Duration LIFETIME = LoginAttemptRetention.RETENTION;
     /** Request attribute with the token hash of a trusted device for the submitted identifier. */
     static final String TRUSTED = LoginDevices.class.getName() + ".trusted";
@@ -63,18 +63,24 @@ public class LoginDevices {
         return request.getAttribute(TRUSTED) instanceof byte[] hash ? hash : null;
     }
 
-    /** Trusts this browser for {@code identifierHash}, unless it already is. */
+    /**
+     * Trusts this browser for {@code identifierHash}. A browser that already is trusted starts a new lifetime
+     * (the row and the cookie), so a device stays trusted while its owner keeps signing in with it.
+     */
     public void remember(HttpServletRequest request, HttpServletResponse response, byte[] identifierHash,
             Instant now) {
         byte[] current = trustedOf(request);
-        if (current != null) {
-            return;
+        String value = current == null ? null : token(request).orElse(null);
+        if (value != null) {
+            jdbc.sql("UPDATE login_device SET created_at = ? WHERE token_hash = ?")
+                    .params(Timestamp.from(now), current).update();
+        } else {
+            byte[] token = new byte[TOKEN_BYTES];
+            random.nextBytes(token);
+            value = Base64.getUrlEncoder().withoutPadding().encodeToString(token);
+            jdbc.sql("INSERT INTO login_device (token_hash, identifier_hash, created_at) VALUES (?, ?, ?)")
+                    .params(sha256(value), identifierHash, Timestamp.from(now)).update();
         }
-        byte[] token = new byte[TOKEN_BYTES];
-        random.nextBytes(token);
-        String value = Base64.getUrlEncoder().withoutPadding().encodeToString(token);
-        jdbc.sql("INSERT INTO login_device (token_hash, identifier_hash, created_at) VALUES (?, ?, ?)")
-                .params(sha256(value), identifierHash, Timestamp.from(now)).update();
         boolean secure = request.isSecure();
         ResponseCookie cookie = ResponseCookie.from(secure ? SECURE_NAME : NAME, value)
                 .httpOnly(true)

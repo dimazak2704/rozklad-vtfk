@@ -190,6 +190,34 @@ class LockoutIT {
         assertThat(Browser.location(own.signIn(teacher.username(), TestAccounts.PASSWORD))).doesNotContain("error");
     }
 
+    /**
+     * A device stays trusted while it is used: each sign-in from it starts a new lifetime, in the table and in the
+     * cookie, so a teacher who signs in at college now and then never falls back to the shared network's limits.
+     */
+    @Test
+    void signingInAgainKeepsTheDeviceTrustedForAnotherFullLifetime() {
+        TestAccounts.Created teacher = accounts.teacher();
+        Browser own = browsers.open("198.51.108.10");
+        own.signIn(teacher.username(), TestAccounts.PASSWORD);
+        String token = own.cookie("RZ_DEVICE").orElseThrow().getValue();
+        own.removeCookie("RZ_AUTH");
+        byte[] identifier = LoginAttempts.hash(teacher.username());
+        jdbc.sql("UPDATE login_device SET created_at = now() - interval '80 days' WHERE identifier_hash = ?")
+                .param(identifier).update();
+
+        HttpResponse<String> again = own.signIn(teacher.username(), TestAccounts.PASSWORD);
+
+        assertThat(Browser.location(again)).doesNotContain("error");
+        assertThat(Browser.setCookies(again)).anySatisfy(cookie -> assertThat(cookie)
+                .startsWith("RZ_DEVICE=" + token + ";").contains("Max-Age=7776000").contains("HttpOnly")
+                .contains("SameSite=Strict").contains("Path=/auth/login"));
+        assertThat(jdbc.sql("SELECT count(*) FROM login_device WHERE identifier_hash = ?").param(identifier)
+                .query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("""
+                SELECT created_at > now() - interval '1 minute' FROM login_device WHERE identifier_hash = ?
+                """).param(identifier).query(Boolean.class).single()).isTrue();
+    }
+
     @Test
     void aTrustedBrowserIsLockedByItsOwnFailures() {
         TestAccounts.Created teacher = accounts.teacher();
