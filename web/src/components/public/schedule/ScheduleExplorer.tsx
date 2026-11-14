@@ -188,16 +188,10 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
               ? `Без входу на сайті видно розклад з тижня ${formatDateRange(firstWeek, addDays(firstWeek, 4))} і на всі наступні. ${SCHEDULE_HISTORY_HINT}`
               : `Без входу на сайті видно розклад лише за останні тижні й на майбутнє. ${SCHEDULE_HISTORY_HINT}`
           }
+          // «До цього тижня» вже є під перемикачем тижня: тут — лише шлях до найранішого відкритого
           action={
-            firstWeek ? (
-              <Button variant="secondary" onClick={() => setDate(firstWeek)}>
-                Найраніший доступний тиждень
-              </Button>
-            ) : undefined
-          }
-          secondaryAction={
-            <Button variant="ghost" onClick={() => setDate(homeDate)}>
-              До поточного тижня
+            <Button variant="secondary" onClick={() => setDate(firstWeek ?? homeDate)}>
+              {firstWeek ? 'Найраніший доступний тиждень' : 'До поточного тижня'}
             </Button>
           }
         />
