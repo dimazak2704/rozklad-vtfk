@@ -4,8 +4,9 @@ import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
-import { lessonsByPair, pairRange, rowTimes, type Perspective } from '@/lib/schedule';
+import { lessonsByPair, pairRange, rowTimes, vacatedPairs, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
+import { VacatedSlot } from './VacatedSlot';
 
 export interface WeekGridProps {
   schedule: ScheduleDto;
@@ -154,9 +155,11 @@ function PairGutter({
  */
 export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, className }: WeekGridProps) {
   const days = schedule.days;
-  const range = useMemo(() => pairRange(days), [days]);
+  const range = useMemo(() => pairRange(days, { withVacated: true }), [days]);
   const times = useMemo(() => rowTimes(days), [days]);
   const byDay = useMemo(() => days.map((day) => lessonsByPair(day.lessons)), [days]);
+  // пари, які звільнило перенесення: «Пари не буде», а не порожня клітинка
+  const vacatedByDay = useMemo(() => days.map((day) => vacatedPairs(day.lessons)), [days]);
   const live = useNow();
   const nowMinutes = at ?? live.clock.minutes + live.clock.seconds / 60;
   const liveDate = at !== undefined ? today : live.clock.date;
@@ -285,6 +288,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                 </th>
                 {days.map((day, dayIndex) => {
                   const lessons = byDay[dayIndex]?.get(pair) ?? [];
+                  const movedAway = vacatedByDay[dayIndex]?.get(pair);
                   const isLiveDay = day.date === liveDate;
                   const isToday = isLiveDay || day.date === today;
                   if (!day.studyDay) {
@@ -317,7 +321,9 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                         </AtNow>
                       ) : null}
                       {lessons.length === 0 ? (
-                        isLiveDay && pair === freeRow ? (
+                        movedAway ? (
+                          <VacatedSlot lessons={movedAway} perspective={perspective} className={cn('relative h-full', cellBg)} />
+                        ) : isLiveDay && pair === freeRow ? (
                           <span className="flex h-full min-h-[6.5rem] items-center justify-center px-3.5">
                             <span className={cn('relative px-1.5 text-caption text-muted', cellBg)}>вільно до кінця дня</span>
                           </span>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LessonView } from '@/api/types';
-import { daySlots, lessonCounterpart, pairRange, roomLabel, rowTimes } from './schedule';
+import { daySlots, lessonCounterpart, pairRange, roomLabel, rowTimes, vacatedPairs } from './schedule';
 
 function lesson(pair: number, overrides: Partial<LessonView> = {}): LessonView {
   return {
@@ -21,6 +21,31 @@ function lesson(pair: number, overrides: Partial<LessonView> = {}): LessonView {
     ...overrides,
   };
 }
+
+describe('пара, звільнена перенесенням', () => {
+  // 1ВЕ, четвер 19.11 на стенді: ФіА перенесли з 2 пари на 1, на 2 нічого не стоїть
+  const moved = lesson(1, { id: 'moved', kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 2 } });
+
+  it('звільнена пара — «Пари не буде» з перенесеним заняттям, а не вікно; обмін двох пар нічого не звільняє', () => {
+    expect([...vacatedPairs([moved, lesson(3)])]).toEqual([[2, [moved]]]);
+    expect(vacatedPairs([moved, lesson(2)]).size).toBe(0);
+    const slots = daySlots({ lessons: [moved, lesson(3)] });
+    expect(slots.map((s) => [s.pair, s.isWindow, s.movedAway.map((l) => l.id)])).toEqual([
+      [1, false, []],
+      [2, true, ['moved']],
+      [3, false, []],
+    ]);
+    // справжнє вікно лишається вікном
+    expect(daySlots({ lessons: [lesson(1), lesson(3)] })[1]?.movedAway).toEqual([]);
+  });
+
+  it('звільнена пара за межами занять дня теж має рядок: у сітці — лише з withVacated', () => {
+    const late = lesson(1, { id: 'late', kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 4 } });
+    expect(daySlots({ lessons: [late] }).map((s) => s.pair)).toEqual([1, 2, 3, 4]);
+    expect(pairRange([{ lessons: [late] }])).toEqual({ first: 1, last: 1 });
+    expect(pairRange([{ lessons: [late] }], { withVacated: true })).toEqual({ first: 1, last: 4 });
+  });
+});
 
 describe('daySlots', () => {
   it('позначає порожню пару між заняттями як вікно', () => {

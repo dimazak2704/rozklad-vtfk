@@ -4,7 +4,7 @@
 import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, ScheduleDto, SemesterRef } from '@/api/types';
 import { compareIsoDates, diffDays, formatWeekdayDate, startOfWeek } from '@/lib/date';
 import { capitalize, PARITY_LABEL, REASON_CODE_HINT, ROOM_TYPE_LABEL } from '@/lib/labels';
-import { isChangedLesson, lessonCounterpart, roomLabel, type Perspective } from '@/lib/schedule';
+import { isChangedLesson, lessonCounterpart, roomLabel, vacatedPairs, type Perspective } from '@/lib/schedule';
 import { formatTeacherName } from '@/lib/teacher-name';
 
 /** «Компʼютерний клас · 30 місць · корпус 2», «Спортзал · до 3 груп одночасно»; невідоме не показуємо. */
@@ -96,19 +96,33 @@ export interface ChangedLesson {
   lesson: LessonView;
   /** Остання пара блоку («1–4»), коли одна зміна (блок пар) займає кілька пар поспіль. */
   pairTo?: number;
+  /** Пара, яку звільнило перенесення `lesson` («Пари не буде» на старому місці); інакше немає. */
+  vacatedPair?: number;
 }
 
-/** Змінені заняття в порядку днів і пар; блок пар однієї зміни — одним рядком. */
+/**
+ * Змінені заняття в порядку днів і пар; блок пар однієї зміни — одним рядком. Пара, звільнена перенесенням,
+ * — окремим рядком, як і в розпорядженні («1 пара · Заміна» і «2 пара · Пари не буде»): сітка показує обидві
+ * клітинки, тож і лічильник «N заміни» рахує обидві.
+ */
 export function changedLessons(schedule: ScheduleDto | undefined): ChangedLesson[] {
   const out: ChangedLesson[] = [];
   for (const day of schedule?.days ?? []) {
-    for (const lesson of [...day.lessons].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup)) {
-      if (!isChangedLesson(lesson)) continue;
+    const entries: Array<{ pair: number; lesson: LessonView; vacatedPair?: number }> = [
+      ...day.lessons.filter(isChangedLesson).map((lesson) => ({ pair: lesson.pair, lesson })),
+      ...[...vacatedPairs(day.lessons)].flatMap(([pair, moved]) => moved.map((lesson) => ({ pair, lesson, vacatedPair: pair }))),
+    ].sort((a, b) => a.pair - b.pair || a.lesson.subgroup - b.lesson.subgroup);
+    for (const { lesson, vacatedPair } of entries) {
+      if (vacatedPair !== undefined) {
+        out.push({ day, lesson, vacatedPair });
+        continue;
+      }
       const last = out.at(-1);
       if (
         lesson.kind === 'BLOCK' &&
         last &&
         last.day.date === day.date &&
+        last.vacatedPair === undefined &&
         last.lesson.kind === 'BLOCK' &&
         last.lesson.changeId != null &&
         last.lesson.changeId === lesson.changeId &&

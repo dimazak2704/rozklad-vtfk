@@ -255,3 +255,38 @@ describe('DayList і NowIndicator', () => {
     expect(screen.getByRole('img', { name: /Стан навчального дня/ })).toBeInTheDocument();
   });
 });
+
+describe('пара, звільнена перенесенням, і зміна аудиторії', () => {
+  // як 1ВЕ у четвер 19.11 на стенді: заняття з 2 пари перенесли на 1, на 2 нічого не стоїть; на 4 — інша аудиторія
+  const [first, second] = monday.lessons as [(typeof monday.lessons)[number], (typeof monday.lessons)[number]];
+  const moved = { ...first, id: 'moved', kind: 'MOVED' as const, original: { discipline: null, teacher: null, room: null, pair: 2 } };
+  const roomChanged = {
+    ...second,
+    id: 'room',
+    pair: 4,
+    kind: 'ROOM_CHANGED' as const,
+    original: { discipline: null, teacher: null, room: { id: 'r406', name: '406', type: 'CLASSROOM' as const }, pair: null },
+  };
+  const thursday: DayDto = { ...monday, lessons: [moved, { ...first, id: 'third', pair: 3, kind: 'REGULAR' }, roomChanged] };
+
+  it('у денному списку — «Пари не буде» і куди перенесли, а не «Вікно — пари немає»', () => {
+    renderWithProviders(<DayList day={thursday} bells={BELLS_MON_THU} today="2026-11-20" />);
+    expect(screen.queryByText('Вікно — пари немає')).not.toBeInTheDocument();
+    const vacated = document.querySelector('[data-vacated]') as HTMLElement;
+    expect(vacated).toHaveTextContent('Пари не буде');
+    expect(vacated).toHaveTextContent(`Було: ${first.discipline.shortName}`);
+    expect(vacated).toHaveTextContent('перенесено на 1 пару');
+    // зміна аудиторії називає себе словом стану, як заміна й додаткова пара
+    expect(screen.getByRole('button', { name: /4 пара/ })).toHaveTextContent('Інша аудиторія');
+  });
+
+  it('у сітці тижня звільнена клітинка — «Пари не буде» в рядку 2 пари', () => {
+    const week = { ...DEMO_WEEK, days: [thursday] };
+    renderWithProviders(<WeekGrid schedule={week} today="2026-11-20" at={8 * 60} />);
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    const pair2 = rows.find((row) => within(row).queryByRole('rowheader')?.textContent?.startsWith('2'));
+    expect(pair2).toBeDefined();
+    expect(pair2).toHaveTextContent('Пари не буде');
+    expect(pair2).toHaveTextContent('перенесено на 1 пару');
+  });
+});

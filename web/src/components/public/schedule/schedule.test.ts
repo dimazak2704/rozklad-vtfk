@@ -110,6 +110,28 @@ describe('логіка розкладу', () => {
     expect(changed.map((c) => [c.lesson.pair, c.pairTo ?? null])).toEqual([[1, 4], [5, null]]);
   });
 
+  it('пара, звільнена перенесенням, — окремий рядок змін, як у розпорядженні, і лічильник збігається з сіткою', () => {
+    const moved = lesson({ pair: 1, kind: 'MOVED', changeId: 'swap', original: { discipline: null, teacher: null, room: null, pair: 2 } });
+    const thursday: ScheduleDto = {
+      ...schedule,
+      days: [
+        day('2026-11-19', [
+          moved,
+          lesson({ pair: 4, kind: 'ROOM_CHANGED', changeId: 'room' }),
+          lesson({ pair: 5, kind: 'ADDITIONAL', changeId: 'add' }),
+        ]),
+      ],
+    };
+    const changed = changedLessons(thursday);
+    // 1 — перенесено, 2 — звільнена, 4 — інша аудиторія, 5 — додаткова: чотири рядки, як у розпорядженні
+    expect(changed.map((c) => [c.vacatedPair ?? c.lesson.pair, c.vacatedPair !== undefined])).toEqual([
+      [1, false],
+      [2, true],
+      [4, false],
+      [5, false],
+    ]);
+  });
+
   it('текст «Поділитися» містить день, парність, пари й зміни', () => {
     const text = dayShareText('4КІ1', schedule.days[0], 'group');
     expect(text.split('\n')[0]).toBe('4КІ1 — понеділок, 19 жовтня (знаменник)');

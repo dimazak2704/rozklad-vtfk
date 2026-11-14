@@ -57,6 +57,7 @@ const STATE_WORD = {
   change: 'text-change',
   cancel: 'text-cancel',
   add: 'text-add',
+  room: 'text-room',
 } as const;
 
 /** Закреслений оригінал: лінія кольору позначки заміни, текст тихий. */
@@ -128,7 +129,9 @@ function LessonCellView({
       : null;
   const movedFrom = moved && original?.pair ? original.pair : null;
   const isList = variant === 'list';
-  const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
+  // слово стану завжди видно (DESIGN §3.3), «Інша аудиторія» теж: інакше зміну аудиторії лічильник «N заміни»
+  // рахує, а клітинка її не називає
+  const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' || tone === 'room' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
   const title = lesson.discipline.name || lesson.discipline.shortName;
   // минула пара сьогодні «осідає»: назва вторинним чорнилом (контраст лишається AA), крапка на 40 %
   const titleTone = cn('anim-settle', past || cancelled ? 'text-secondary' : 'text-primary', cancelled && STRUCK_CANCEL);

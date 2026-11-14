@@ -8,6 +8,7 @@ import { daySlots, type DaySlot, type Perspective } from '@/lib/schedule';
 import { EmptyState } from '../ui/EmptyState';
 import { Skeleton } from '../ui/Skeleton';
 import { LessonCell } from './LessonCell';
+import { VacatedSlot } from './VacatedSlot';
 
 export interface DayListProps {
   day: DayDto;
@@ -159,7 +160,9 @@ export function DayList({
                   </div>
 
                   <div className="flex min-w-0 flex-col py-1.5">
-                    {slot.isWindow ? (
+                    {slot.movedAway.length > 0 ? (
+                      <VacatedSlot lessons={slot.movedAway} perspective={perspective} className="py-1.5" />
+                    ) : slot.isWindow ? (
                       <p className="px-3.5 py-1.5 text-caption text-muted">Вікно — пари немає</p>
                     ) : (
                       slot.lessons.map((lesson) => (

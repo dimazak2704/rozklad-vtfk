@@ -31,6 +31,8 @@ export interface DaySlot {
   lessons: LessonView[];
   /** Порожня пара між заняттями — «вікно». */
   isWindow: boolean;
+  /** Заняття, які перенесли з цієї пари на іншу (див. `vacatedPairs`); у «вікні» — замість слова «вікно». */
+  movedAway: LessonView[];
 }
 
 /** Заняття за номером пари; у межах пари — за підгрупою (вся група перед підгрупами). */
@@ -46,12 +48,30 @@ export function lessonsByPair(lessons: readonly LessonView[]): Map<number, Lesso
 }
 
 /**
- * Пари дня від першої до останньої із заняттями. Порожні пари всередині — «вікна».
- * Час береться з дзвінків, а якщо їх немає — із самих занять.
+ * Пари, які звільнило перенесення: заняття переставили на іншу пару (SWAP), а на старому місці нічого не стоїть.
+ * Розпорядження друкує такий слот як «Пари не буде», тож у розкладі він не «вікно». Ключ — звільнена пара,
+ * значення — заняття, перенесені з неї (уже на новому місці). Якщо на старому місці щось є (обмін двох пар,
+ * інша підгрупа, скасована пара) — пара не звільнена й тут її немає.
+ */
+export function vacatedPairs(lessons: readonly LessonView[]): Map<number, LessonView[]> {
+  const occupied = new Set(lessons.map((lesson) => lesson.pair));
+  const map = new Map<number, LessonView[]>();
+  for (const lesson of lessons) {
+    const from = lesson.kind === 'MOVED' ? lesson.original?.pair : null;
+    if (from == null || from === lesson.pair || occupied.has(from)) continue;
+    map.set(from, [...(map.get(from) ?? []), lesson]);
+  }
+  return map;
+}
+
+/**
+ * Пари дня від першої до останньої із заняттями (або звільненої перенесенням). Порожні пари всередині —
+ * «вікна»; звільнені перенесенням несуть `movedAway`. Час береться з дзвінків, а якщо їх немає — із самих занять.
  */
 export function daySlots(day: Pick<DayDto, 'lessons'>, bells?: readonly BellSlotDto[] | null): DaySlot[] {
   const byPair = lessonsByPair(day.lessons);
-  const pairs = [...byPair.keys()];
+  const vacated = vacatedPairs(day.lessons);
+  const pairs = [...byPair.keys(), ...vacated.keys()];
   if (pairs.length === 0) return [];
   const first = Math.min(...pairs);
   const last = Math.max(...pairs);
@@ -67,19 +87,27 @@ export function daySlots(day: Pick<DayDto, 'lessons'>, bells?: readonly BellSlot
       endsAt: bell?.endsAt ?? sample?.endsAt ?? null,
       lessons,
       isWindow: lessons.length === 0,
+      movedAway: lessons.length === 0 ? (vacated.get(pair) ?? []) : [],
     });
   }
   return slots;
 }
 
-/** Діапазон пар для рядків сітки тижня. Порожній тиждень — null. */
-export function pairRange(days: ReadonlyArray<Pick<DayDto, 'lessons'>>): { first: number; last: number } | null {
+/**
+ * Діапазон пар для рядків сітки тижня. Порожній тиждень — null. `withVacated` — рахувати й пари, звільнені
+ * перенесенням (сітка на екрані показує їх як «Пари не буде»; друкований бланк — ні).
+ */
+export function pairRange(
+  days: ReadonlyArray<Pick<DayDto, 'lessons'>>,
+  { withVacated = false }: { withVacated?: boolean } = {},
+): { first: number; last: number } | null {
   let first = Number.POSITIVE_INFINITY;
   let last = Number.NEGATIVE_INFINITY;
   for (const day of days) {
-    for (const lesson of day.lessons) {
-      first = Math.min(first, lesson.pair);
-      last = Math.max(last, lesson.pair);
+    const pairs = [...day.lessons.map((lesson) => lesson.pair), ...(withVacated ? vacatedPairs(day.lessons).keys() : [])];
+    for (const pair of pairs) {
+      first = Math.min(first, pair);
+      last = Math.max(last, pair);
     }
   }
   return Number.isFinite(first) ? { first, last } : null;

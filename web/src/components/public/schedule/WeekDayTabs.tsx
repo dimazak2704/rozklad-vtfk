@@ -3,7 +3,7 @@ import type { DayDto, IsoDate } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { addDays, formatWeekdayDate, isoWeekday, parseIsoDate } from '@/lib/date';
 import { countLabel, PAIR_FORMS, weekdayShort } from '@/lib/labels';
-import { isChangedLesson } from '@/lib/schedule';
+import { isChangedLesson, vacatedPairs } from '@/lib/schedule';
 
 interface WeekDayTabsProps {
   /** Понеділок тижня на екрані. */
@@ -37,7 +37,8 @@ export function WeekDayTabs({ weekStart, days, value, today, onChange, className
       {dates.map((date) => {
         const day = days?.find((d) => d.date === date);
         const count = day?.studyDay ? new Set(day.lessons.filter((l) => l.kind !== 'CANCELLED').map((l) => l.pair)).size : null;
-        const changes = day?.lessons.filter(isChangedLesson).length ?? 0;
+        // пара, звільнена перенесенням, — теж зміна дня (у розпорядженні це «Пари не буде»)
+        const changes = day ? day.lessons.filter(isChangedLesson).length + vacatedPairs(day.lessons).size : 0;
         const isToday = date === today;
         const studyDay = day ? day.studyDay : true;
         const weekday = parseIsoDate(date);

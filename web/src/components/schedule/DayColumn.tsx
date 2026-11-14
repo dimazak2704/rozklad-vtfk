@@ -6,6 +6,7 @@ import { formatDayMonth, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, weekdayName } from '@/lib/labels';
 import { daySlots, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
+import { VacatedSlot } from './VacatedSlot';
 
 export interface DayColumnProps {
   day: DayDto;
@@ -71,7 +72,9 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
                   ) : null}
                 </div>
                 <div className="flex min-w-0 flex-col divide-y divide-[var(--border-color-separator)]">
-                  {slot.isWindow ? (
+                  {slot.movedAway.length > 0 ? (
+                    <VacatedSlot lessons={slot.movedAway} perspective={perspective} className="px-3 py-2" />
+                  ) : slot.isWindow ? (
                     <p className="px-3 py-2 text-caption text-muted">Вікно</p>
                   ) : (
                     slot.lessons.map((lesson) => (
