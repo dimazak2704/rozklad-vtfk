@@ -2,14 +2,15 @@
 # (lint, tests with coverage, build), the production deployment config (compose overlay, Caddyfile,
 # scripts) and the SonarCloud analysis with its quality gate (sonar-project.properties).
 #
-# Runs on pull requests and on pushes to branches other than main. For main the Deploy workflow
-# calls this one (workflow_call) and rolls out only when it passes, so main is tested exactly once.
+# Runs on pull requests (feature branches are tested through their PR, once per push) and on pushes to
+# develop. For main the Deploy workflow calls this one (workflow_call) and rolls out only when it passes,
+# so main is tested exactly once.
 name: CI
 
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    branches: [develop]
   workflow_dispatch:
   workflow_call:
     secrets:
