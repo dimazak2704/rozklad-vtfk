@@ -8,7 +8,18 @@ infra/deploy/secrets/
 rozklad-backup.key
 *.sql.gz
 *.sql.gz.age
+*.dump
 /*.sql
+/backups/
+# private keys and certificates (deploy keys, the LAN dev CA in infra/dev/certs)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+rozklad_github*
+infra/dev/certs/
 
 # Збірка (target-*/ — окремі каталоги паралельних збірок: -Dbuild.dir='${project.basedir}/target-<name>')
 target/
