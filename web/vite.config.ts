@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { offlineShellPlugin } from './src/api/offline-shell-plugin.ts';
+import { isCachedPageNavigation } from './src/api/page-cache-route.ts';
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -67,12 +68,8 @@ function pwa(): Plugin[] {
       clientsClaim: true,
       runtimeCaching: [
         {
-          // /api (ICS, файли розпоряджень), сервіс входу /auth і повернення після входу завжди йдуть у мережу
-          urlPattern: ({ request, url, sameOrigin }) =>
-            sameOrigin &&
-            request.mode === 'navigate' &&
-            !/^\/(api|auth)\//.test(url.pathname) &&
-            !/^\/login\/(callback|silent)/.test(url.pathname),
+          // /api, /auth, повернення після входу й сторінки з одноразовим токеном завжди йдуть у мережу
+          urlPattern: isCachedPageNavigation,
           handler: 'NetworkFirst',
           options: {
             cacheName: 'rozklad-pages',
