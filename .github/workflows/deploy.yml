@@ -31,6 +31,9 @@ jobs:
   ci:
     name: CI
     uses: ./.github/workflows/ci.yml
+    # SonarCloud's branch analysis of main; nothing else of the caller's secrets
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   config:
     name: Deployment settings
