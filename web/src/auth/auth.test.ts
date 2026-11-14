@@ -83,4 +83,23 @@ describe('куди вести після входу', () => {
     expect(returnToFromState({ returnTo: '//x' })).toBeUndefined();
     expect(returnToFromState({ returnTo: '/g/4КІ1' })).toBe('/g/4КІ1');
   });
+
+  // Парсер URL браузера викидає табуляцію і переведення рядка: '/\t/evil.example' стає '//evil.example',
+  // тобто адресою іншого сайту. Такий returnTo має відкидатися ще до входу.
+  it('відкидає шляхи, які браузер перетворює на адресу іншого сайту', () => {
+    for (const path of ['/\t/evil.example/phish', '/\n/evil.example', '/\r//evil.example', '/\\evil.example', '/..//evil.example']) {
+      expect(isSafeReturnPath(path), JSON.stringify(path)).toBe(false);
+      expect(returnToFromState({ returnTo: path }), JSON.stringify(path)).toBeUndefined();
+      expect(postLoginPath(['ADMIN'], path), JSON.stringify(path)).toBe('/admin');
+    }
+    expect(isSafeReturnPath('/\u0000/evil.example')).toBe(false);
+    expect(isSafeReturnPath('/\u007f/evil.example')).toBe(false);
+  });
+
+  it('пропускає звичайні внутрішні шляхи, зокрема закодовані символи й кирилицю', () => {
+    expect(isSafeReturnPath('/%09/evil.example')).toBe(true);
+    expect(isSafeReturnPath('/g/4КІ1?week=2026-11-16#mon')).toBe(true);
+    expect(isSafeReturnPath('/admin/orders?date=2026-10-19')).toBe(true);
+    expect(isSafeReturnPath('/a//b')).toBe(true);
+  });
 });

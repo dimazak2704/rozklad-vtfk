@@ -1,8 +1,26 @@
 import type { Role } from '@/api/types';
 
+/**
+ * Керівні символи і зворотна скісна. Парсер URL браузера викидає табуляцію й переведення рядка,
+ * а `\` читає як `/`, тож `/\t/evil.example` і `/\evil.example` стають адресою іншого сайту.
+ */
+// eslint-disable-next-line no-control-regex -- саме керівні символи тут і шукаємо
+const UNSAFE_PATH_CHARS = /[\u0000-\u001F\u007F\\]/;
+/** Умовне походження для розбору шляху: важить лише, чи шлях лишається на ньому. */
+const PARSE_BASE = 'https://rozklad.invalid';
+
 /** Чи безпечний шлях повернення (лише внутрішній, без `//host` і протоколів). */
 export function isSafeReturnPath(path: unknown): path is string {
-  return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !path.includes('\\');
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || UNSAFE_PATH_CHARS.test(path)) {
+    return false;
+  }
+  try {
+    const url = new URL(path, PARSE_BASE);
+    // `/..//evil.example` після нормалізації дає `//evil.example`: роутер прочитав би це як інший сайт
+    return url.origin === PARSE_BASE && !url.pathname.startsWith('//');
+  } catch {
+    return false;
+  }
 }
 
 /** Куди може зайти користувач з цими ролями. */
