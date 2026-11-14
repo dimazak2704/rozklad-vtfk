@@ -3,13 +3,17 @@
 # the web container (nginx: SPA, /api, /auth) (docs/RUNNING.md).
 #
 #   scripts/dev-stack.sh up [--no-telegram] [--no-build] [--no-web] [--google-mock] [--time 2026-11-20T10:00]
+#                           [--lan[=192.168.1.20]]
 #                                  build jars and images, start everything detached, wait until healthy;
 #                                  --time starts core, importer and notification at that Kyiv date-time ("stand
 #                                  time", development only) and lets it tick on; without it they run on real time
 #                                  web starts by default (sign-in goes through it), --web is accepted as a no-op;
 #                                  --google-mock adds «Увійти через Google» against a local mock-oauth2-server
 #                                  (infra/docker-compose.google-mock.yml, http://localhost:8090/google);
-#                                  GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua turns the domain rule on
+#                                  GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua turns the domain rule on;
+#                                  --lan opens the stand to phones on the local network: https://<this PC's IP>
+#                                  through Caddy with a local CA (infra/docker-compose.lan.yml); the address is
+#                                  detected, or given as --lan=<ip>; sign-in then works only at that address
 #   scripts/dev-stack.sh down      stop the app services (infrastructure and data stay)
 #   scripts/dev-stack.sh down --all   stop everything incl. postgres/rabbitmq/redis (data kept in volumes)
 #   scripts/dev-stack.sh status    containers, health, memory, URLs
@@ -97,6 +101,64 @@ auth_smoke() {
   echo "  auth: discovery and sign-in redirect through nginx are correct"
 }
 
+# The IPv4 address of this machine on the local network: the interface with the default route.
+detect_lan_ip() {
+  if command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command "(Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway -and \$_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1).IPv4Address.IPAddress" 2>/dev/null |
+      tr -d '\r' | head -1
+  elif command -v ip >/dev/null 2>&1; then
+    ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1
+  fi
+}
+
+# auth treats an https issuer as development only on a private IPv4 address (ROZKLAD_LAN_DEV)
+is_private_ipv4() {
+  [[ $1 =~ ^(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+}
+
+lan_ca=infra/dev/certs/rozklad-dev-ca.crt
+
+# The root of Caddy's local CA, for phones to trust: Caddy creates it with the first certificate.
+export_lan_ca() {
+  local deadline=$((SECONDS + 60))
+  mkdir -p "$(dirname "$lan_ca")"
+  until docker cp rozklad-lan-edge-1:/data/caddy/pki/authorities/local/root.crt "$lan_ca" >/dev/null 2>&1; do
+    if ((SECONDS > deadline)); then
+      echo "  lan-edge: no local CA after 60 s — see: docker logs rozklad-lan-edge-1" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  echo "  lan-edge: local CA root copied to $lan_ca"
+}
+
+# The stand through Caddy the way a phone reaches it: the certificate verifies against the local CA, discovery
+# names the LAN issuer, and an authorize request without a session lands on /auth/login of the same origin.
+lan_smoke() {
+  local base="https://$1" issuer location
+  issuer=$(curl -fsS --cacert "$lan_ca" "$base/auth/.well-known/openid-configuration" |
+    sed -n 's/.*"issuer":"\([^"]*\)".*/\1/p')
+  if [[ $issuer != "$base/auth" ]]; then
+    echo "  lan smoke: discovery issuer is '$issuer', expected $base/auth" >&2
+    return 1
+  fi
+  location=$(curl -sS --cacert "$lan_ca" -o /dev/null -w '%{redirect_url}' -H 'Accept: text/html' \
+    "$base/auth/oauth2/authorize?response_type=code&client_id=rozklad-web&scope=openid&state=smoke&redirect_uri=https%3A%2F%2F$1%2Flogin%2Fcallback&code_challenge=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU&code_challenge_method=S256")
+  if [[ $location != "$base/auth/login" ]]; then
+    echo "  lan smoke: authorize without a session redirects to '$location', expected $base/auth/login" >&2
+    return 1
+  fi
+  echo "  lan: certificate, discovery and sign-in redirect through Caddy are correct"
+}
+
+# The Caddy of an earlier `up --lan`: stopped when the stack comes up or goes down without it.
+stop_lan_edge() {
+  if docker ps -q --filter name=rozklad-lan-edge-1 | grep -q .; then
+    docker stop rozklad-lan-edge-1 >/dev/null
+    echo "  lan-edge: stopped (https://<IP> is closed)"
+  fi
+}
+
 # The mock of an earlier `up --google-mock`: stopped when the stack comes up without it.
 stop_google_mock() {
   if docker ps -q --filter name=rozklad-mock-oidc-1 | grep -q .; then
@@ -106,7 +168,7 @@ stop_google_mock() {
 }
 
 cmd_up() {
-  local build=1 web=1 telegram=${TELEGRAM:-on} google_mock=0 time_flag=0 stand_time=""
+  local build=1 web=1 telegram=${TELEGRAM:-on} google_mock=0 time_flag=0 stand_time="" lan=0 lan_ip=""
   while (($#)); do
     case $1 in
       --google-mock) google_mock=1 ;;
@@ -116,6 +178,8 @@ cmd_up() {
       --no-web) web=0 ;;
       --time) time_flag=1; stand_time=${2:-}; (($# > 1)) && shift ;;
       --time=*) time_flag=1; stand_time=${1#--time=} ;;
+      --lan) lan=1 ;;
+      --lan=*) lan=1; lan_ip=${1#--lan=} ;;
       *) echo "unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -124,11 +188,24 @@ cmd_up() {
     echo "--time needs a Kyiv date-time like 2026-11-20T10:00, got '$stand_time'" >&2
     exit 2
   fi
+  if ((lan)); then
+    ((web)) || { echo "--lan needs the web container (Caddy passes everything to it)" >&2; exit 2; }
+    [[ -n $lan_ip ]] || lan_ip=$(detect_lan_ip)
+    if ! is_private_ipv4 "$lan_ip"; then
+      echo "--lan needs this PC's private IPv4 address (10.x, 172.16-31.x, 192.168.x), got '$lan_ip';" \
+        "give it as --lan=<ip>" >&2
+      exit 2
+    fi
+    export ROZKLAD_LAN_IP=$lan_ip
+  fi
   [[ $telegram == off ]] && compose_files+=(-f infra/docker-compose.no-telegram.yml)
   ((google_mock)) && compose_files+=(-f infra/docker-compose.google-mock.yml)
+  ((lan)) && compose_files+=(-f infra/docker-compose.lan.yml)
   local targets=("${services[@]}")
   ((web)) && targets+=(web)
+  ((lan)) && targets+=(lan-edge)
   ((google_mock)) || stop_google_mock
+  ((lan)) || stop_lan_edge
 
   recreate_old_network
   echo "== infrastructure"
@@ -144,6 +221,7 @@ cmd_up() {
     mvn -q -DskipTests package -pl "$(printf 'services/%s,' "${services[@]}" | sed 's/,$//')" -am
     echo "== images"
     for service in "${targets[@]}"; do
+      [[ $service == lan-edge ]] && continue # a stock image
       compose build "$service"
     done
   fi
@@ -152,11 +230,15 @@ cmd_up() {
   export ROZKLAD_STAND_TIME=$stand_time ROZKLAD_STAND_TIME_ANCHOR=""
   [[ -n $stand_time ]] && ROZKLAD_STAND_TIME_ANCHOR=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   echo "== services (telegram: $telegram, google mock: $( ((google_mock)) && echo on || echo off)," \
-    "time: ${stand_time:-real})"
+    "time: ${stand_time:-real}, lan: ${lan_ip:-off})"
   ((google_mock)) && compose up -d mock-oidc
   compose up -d --no-build "${targets[@]}"
   wait_healthy "${services[@]}"
-  if ((web)); then
+  if ((web)) && ((lan)); then
+    wait_healthy lan-edge
+    export_lan_ca
+    lan_smoke "$lan_ip"
+  elif ((web)); then
     wait_healthy web
     auth_smoke
   fi
@@ -166,6 +248,20 @@ cmd_up() {
   fi
 }
 
+# The phone stand: the address, the CA a phone has to trust, and the one firewall rule it needs.
+lan_status() {
+  local ip
+  docker ps -q --filter name=rozklad-lan-edge-1 | grep -q . || return 0
+  ip=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' rozklad-lan-edge-1 | sed -n 's/^LAN_IP=//p')
+  cat <<EOF
+
+PHONE STAND     https://$ip   (sign-in works only here; http://localhost:8088 shows the site without sign-in)
+Local CA        $lan_ca   (trust it once on the phone: docs/RUNNING.md «Phone on the LAN»)
+Firewall        once, in an elevated PowerShell: New-NetFirewallRule -DisplayName "Rozklad LAN stand (443)"
+                -Direction Inbound -Protocol TCP -LocalPort 443 -Profile Private -Action Allow
+EOF
+}
+
 cmd_down() {
   if [[ ${1:-} == --all ]]; then
     docker compose "${env_args[@]}" "${compose_files[@]}" --profile app --profile infra stop
@@ -173,6 +269,7 @@ cmd_down() {
     compose stop "${services[@]}" web
   fi
   stop_google_mock
+  stop_lan_edge
 }
 
 # The stand time core runs with (empty = real time) and, when core already reports it, the current stand time.
@@ -197,6 +294,7 @@ cmd_status() {
   docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' $(docker ps -q --filter name=rozklad-) 2>/dev/null || true
   echo
   stand_time_status
+  lan_status
   cat <<'EOF'
 
 API (gateway)   http://localhost:8080   e.g. /api/public/meta, /api/public/schedule/group/{id}

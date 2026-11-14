@@ -16,7 +16,7 @@ DEV = ["infra/docker-compose.yml"]
 PROD = DEV + ["infra/deploy/compose.prod.yml"]
 PROD_ENV = "infra/deploy/.env.example"
 # variables of the developer's shell that would change the render
-OVERRIDES = ("WEB_BIND_ADDRESS", "DOMAIN", "IMAGE_PREFIX", "IMAGE_TAG")
+OVERRIDES = ("WEB_BIND_ADDRESS", "DOMAIN", "IMAGE_PREFIX", "IMAGE_TAG", "ROZKLAD_LAN_IP")
 SECRET_NAME = re.compile(r"PASSWORD|SECRET|TOKEN|KEY|PASS$")
 
 
@@ -65,6 +65,36 @@ class DevelopmentStack(unittest.TestCase):
         self.assertEqual([("0.0.0.0", "8088", 80)], ports["web"])
         others = {name for name, p in ports.items() if name != "web" and any(h != "127.0.0.1" for h, _, _ in p)}
         self.assertEqual(set(), others)
+
+
+class PhoneStand(unittest.TestCase):
+    """dev-stack.sh up --lan: phones reach the stand through Caddy's https and nothing else."""
+
+    LAN_IP = "192.168.31.112"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.config = render(DEV + ["infra/docker-compose.lan.yml"], ROZKLAD_LAN_IP=cls.LAN_IP)
+
+    def test_only_the_https_edge_is_on_the_lan(self):
+        exposed = {name: p for name, p in published(self.config).items() if any(h != "127.0.0.1" for h, _, _ in p)}
+        self.assertEqual({"lan-edge": [("0.0.0.0", "443", 443)]}, exposed)
+
+    def test_every_token_issuer_and_validator_uses_the_lan_address(self):
+        for name in ("auth", "core", "scheduler", "importer", "notification"):
+            with self.subTest(service=name):
+                environment = self.config["services"][name]["environment"]
+                self.assertEqual(f"https://{self.LAN_IP}/auth", environment["AUTH_ISSUER"])
+                self.assertEqual("true", environment["ROZKLAD_LAN_DEV"])
+
+    def test_google_sign_in_is_off(self):
+        # Google refuses redirect URIs on private addresses
+        self.assertEqual("", self.config["services"]["auth"]["environment"]["AUTH_GOOGLE_CLIENT_ID"])
+
+    def test_production_never_gets_the_lan_switch(self):
+        for name, service in render(PROD, PROD_ENV)["services"].items():
+            with self.subTest(service=name):
+                self.assertNotIn("ROZKLAD_LAN_DEV", service.get("environment") or {})
 
 
 class ProductionEdge(unittest.TestCase):

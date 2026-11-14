@@ -1,0 +1,67 @@
+# Накладка «стенд для телефона в локальній мережі»: scripts/dev-stack.sh up --lan (docs/RUNNING.md).
+# Телефону потрібен https: вхід (PKCE, crypto.subtle) працює лише в захищеному контексті, а http://192.168.x.x
+# ним не є. Caddy (lan-edge) видає сертифікат на IP ноутбука своїм локальним CA і передає все nginx web, як Caddy
+# у production. Видавець auth стає https://<IP>/auth, тож увесь стенд, і з ноутбука теж, відкривається за
+# https://<IP>; http://localhost:8088 показує сайт, але вхід там не працює (інший видавець).
+# ROZKLAD_LAN_DEV лишає https-видавця на приватній IPv4-адресі розробкою: демо-акаунти й час стенду працюють;
+# з доменом чи публічною адресою auth не стартує (ProdGuard).
+# Вхід через Google тут вимкнено: Google не приймає приватні IP-адреси в адресах повернення.
+# Назовні відкрито лише 443; решта портів, як і раніше, лише на 127.0.0.1.
+x-lan-issuer: &lan-issuer
+  AUTH_ISSUER: https://${ROZKLAD_LAN_IP:?ROZKLAD_LAN_IP is set by dev-stack.sh up --lan}/auth
+  ROZKLAD_LAN_DEV: "true"
+
+services:
+  lan-edge:
+    image: caddy:2.11-alpine
+    profiles: [app]
+    restart: unless-stopped
+    environment:
+      LAN_IP: ${ROZKLAD_LAN_IP:?}
+    ports:
+      # IPv4 only, like the production Caddy (one address per client for the sign-in limit)
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./dev/lan:/etc/caddy:ro
+      - caddy_lan_data:/data # the local CA: keep it, or every phone has to trust a new one
+      - caddy_lan_config:/config
+    depends_on:
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    mem_limit: 128m
+
+  auth:
+    environment:
+      <<: *lan-issuer
+      PUBLIC_WEB_URL: https://${ROZKLAD_LAN_IP:?}
+      AUTH_WEB_ORIGINS: https://${ROZKLAD_LAN_IP:?},http://localhost:5180,http://localhost:5181,http://localhost:8088
+      # Google refuses redirect URIs on private addresses: no «Увійти через Google» on this stand
+      AUTH_GOOGLE_CLIENT_ID: ""
+
+  core:
+    environment:
+      <<: *lan-issuer
+      PUBLIC_WEB_URL: https://${ROZKLAD_LAN_IP:?}
+
+  scheduler:
+    environment:
+      <<: *lan-issuer
+
+  importer:
+    environment:
+      <<: *lan-issuer
+
+  notification:
+    environment:
+      <<: *lan-issuer
+      PUBLIC_WEB_URL: https://${ROZKLAD_LAN_IP:?}
+
+volumes:
+  caddy_lan_data:
+  caddy_lan_config:

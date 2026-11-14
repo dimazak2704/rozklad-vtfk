@@ -1,0 +1,18 @@
+# Caddy of the phone stand (infra/docker-compose.lan.yml, scripts/dev-stack.sh up --lan): https on the laptop's
+# LAN address with Caddy's own local CA. Its root lives in the caddy_lan_data volume, so a phone trusts it once;
+# dev-stack.sh copies it to infra/dev/certs/rozklad-dev-ca.crt (gitignored).
+{
+	local_certs
+	skip_install_trust
+	# a client that connects to an IP address sends no SNI: answer with the certificate of that address
+	default_sni {$LAN_IP}
+	# https only: nothing listens on 80 and no redirect is needed
+	auto_https disable_redirects
+}
+
+https://{$LAN_IP} {
+	tls internal
+	# like Caddy in production: nginx web gets everything (the SPA, /api to the gateway, /auth/* to auth with its
+	# per-client limit); Caddy sets X-Forwarded-For/Proto/Host, and nginx trusts them from the compose ip_range
+	reverse_proxy web:80
+}

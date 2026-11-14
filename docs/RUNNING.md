@@ -21,10 +21,9 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 
 Every port is published on `127.0.0.1` only. The stand runs the real bot token from `.env` with public
 development credentials (`rozklad`/`rozklad`, `postgres`/`postgres`, Redis without a password), so on a
-shared network (college or café Wi-Fi) nobody else may reach it. To show the site to a phone or another PC
-on purpose, start with `WEB_BIND_ADDRESS=0.0.0.0 scripts/dev-stack.sh up --no-telegram`: only the web
-container (8088) is opened, and sign-in works only on this PC (the issuer is `http://localhost:8088/auth`).
-For a demo away from home prefer the deployed site, or at least `--no-telegram`.
+shared network (college or café Wi-Fi) nobody else may reach it. To use the stand from a phone, sign-in
+included, start it with `--lan` (below, «Phone on the LAN»): only Caddy's https port 443 is opened. For a demo
+away from home prefer the deployed site, or at least `--no-telegram`.
 
 Heaps are set with `JAVA_TOOL_OPTIONS=-Xmx…` (wins over `-XX:MaxRAMPercentage=75` of the images) and
 can be changed with `CORE_HEAP`, `CORE_MEM_LIMIT`, … in the shell or `.env`. The whole stack takes about
@@ -49,6 +48,7 @@ scripts/dev-stack.sh up --no-build      # start from the images already built
 scripts/dev-stack.sh up --no-web        # without the nginx SPA on :8088 (then nobody can sign in)
 scripts/dev-stack.sh up --google-mock   # «Увійти через Google» against a local mock-oauth2-server (:8090)
 scripts/dev-stack.sh up --no-build --time 2026-11-20T10:00   # the stand lives at that Kyiv time (below)
+scripts/dev-stack.sh up --no-build --lan                     # phones on the LAN: https://<this PC's IP> (below)
 scripts/dev-stack.sh status             # containers, health, memory, URLs
 scripts/dev-stack.sh logs core          # follow one service
 scripts/dev-stack.sh seed               # real data through the API (idempotent, ~3 min)
@@ -74,6 +74,28 @@ three containers are recreated, data stays). Sign-in, tokens, the delivery queue
 time; auth and scheduler are never shifted. Rows created under the stand time keep its dates, so after a
 session with it `reset-data --yes` + `seed` gives a clean demo again. It is for the development stand only:
 with an `https` issuer the services refuse to start. Details: `docs/ARCHITECTURE.md` §7.1.
+
+**Phone on the LAN.** `up --lan` (or `--lan=192.168.1.20` when detection picks the wrong adapter) adds
+`infra/docker-compose.lan.yml`: Caddy (`lan-edge`) listens on `0.0.0.0:443` with a certificate from its own
+local CA and passes everything to nginx web, the way Caddy does in production. Why https: sign-in uses PKCE,
+which needs `crypto.subtle`, and browsers give it only to secure contexts (https or localhost), so
+`http://192.168.x.x:8088` can never sign in. The issuer becomes `https://<IP>/auth` for auth and every service,
+so while the mode is on, sign in at `https://<IP>` only, on the laptop too; `http://localhost:8088` still shows
+the site. `ROZKLAD_LAN_DEV=true` keeps an https issuer on a private IPv4 address a development stand (demo
+accounts, stand time); with a domain or a public address auth refuses to start. Google sign-in is off in this
+mode (Google does not accept private addresses as redirect URIs): use the demo passwords. `up` without `--lan`
+returns to `http://localhost:8088` and stops `lan-edge`.
+
+Once per PC and phone:
+1. Windows Firewall, in an elevated PowerShell: `New-NetFirewallRule -DisplayName "Rozklad LAN stand (443)"
+   -Direction Inbound -Protocol TCP -LocalPort 443 -Profile Private -Action Allow`. The Wi-Fi must have the
+   Private profile; on a public network nothing gets in, which is the point.
+2. `up --lan` copies the root of Caddy's CA to `infra/dev/certs/rozklad-dev-ca.crt` (gitignored; the CA itself
+   stays in the `caddy_lan_data` volume, so the phone trusts it once). Send the file to the phone.
+3. iPhone: open the file, Settings → «Profile Downloaded» → Install; then Settings → General → About →
+   Certificate Trust Settings → turn the root on. Android: Settings → Security → Encryption & credentials →
+   Install a certificate → CA certificate. Without this the browser warns, and the PWA cannot be installed.
+4. Open `https://<IP>` (printed by `up` and `status`).
 
 `up` also creates the database `auth` on an older Postgres volume and checks, through nginx, that discovery
 names the issuer `http://localhost:8088/auth` and that an authorize request without a session goes to
