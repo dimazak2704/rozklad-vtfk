@@ -630,6 +630,44 @@ body.auth {
   }
 }
 
+/*
+ * Вхід форми: поки знак малює себе, заголовок, підказка, кнопки й підвал по черзі піднімаються на 8 px і
+ * проявляються (крок 50 мс, 280 мс кожен, усе — за ~0,65 с). Один раз на завантаження; разом зі знаком це
+ * два рухи одночасно, не більше (DESIGN §6). Після помилки входу сторінка приходить з повідомленням — тоді
+ * без входу: людина вже посеред справи, повідомлення має стояти одразу.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  body.auth:not(:has(.auth-alert)) .auth-column > :not(.auth-mark),
+  body.auth:not(:has(.auth-alert)) .auth-footer {
+    animation: auth-enter var(--duration-slow) var(--auth-ease-out) backwards;
+    animation-delay: calc(120ms + var(--auth-enter-step, 0) * 50ms);
+  }
+
+  .auth-column > :nth-child(3) {
+    --auth-enter-step: 1;
+  }
+
+  .auth-column > :nth-child(4) {
+    --auth-enter-step: 2;
+  }
+
+  .auth-column > :nth-child(5) {
+    --auth-enter-step: 3;
+  }
+
+  .auth-column > :nth-child(n + 6),
+  .auth-footer {
+    --auth-enter-step: 4;
+  }
+}
+
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @keyframes auth-mark-draw {
   from {
     stroke-dasharray: 1;

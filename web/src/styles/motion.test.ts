@@ -46,3 +46,24 @@ describe('prefers-reduced-motion у motion.css', () => {
     expect(outside).toMatch(/\.anim-digit-out\s*\{\s*display:\s*none;/);
   });
 });
+
+describe('вхід форми на сторінці входу (auth-page.css)', () => {
+  const authCss = readFileSync(new URL('./auth-page.css', import.meta.url), 'utf8');
+  const block = (() => {
+    const at = authCss.indexOf('animation: auth-enter');
+    return authCss.slice(authCss.lastIndexOf('@media', at), authCss.indexOf('@keyframes auth-enter'));
+  })();
+
+  it('лише для тих, хто рух не вимикав, без знака (він малює себе сам) і без повтору після помилки входу', () => {
+    expect(block.startsWith('@media (prefers-reduced-motion: no-preference)')).toBe(true);
+    expect(block).toMatch(/body\.auth:not\(:has\(\.auth-alert\)\) \.auth-column > :not\(\.auth-mark\)/);
+    expect(authCss.match(/animation:\s*auth-enter\b/g)).toHaveLength(1);
+  });
+
+  it('рухає лише opacity і transform', () => {
+    const keyframes = authCss.slice(authCss.indexOf('@keyframes auth-enter'));
+    const body = keyframes.slice(0, keyframes.indexOf('}\n}') + 3);
+    const props = [...body.matchAll(/^\s*([a-z-]+):/gm)].map((m) => m[1]);
+    expect(props.sort()).toEqual(['opacity', 'transform']);
+  });
+});

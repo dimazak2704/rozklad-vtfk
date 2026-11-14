@@ -533,6 +533,16 @@ Animate only `transform` and `opacity`, plus `clip-path` for the strike line. Bu
 except the spinner and the sign-in emblem trace (§10.5, the owner's request). This is the repo's
 existing rule; keep `--animate-live` at 2 iterations.
 
+**Rules for every new motion (review checklist):**
+- At most two things move at once on a screen. An entrance counts as one thing however many items it staggers.
+- Only composite properties: `transform` and `opacity` (plus the existing `clip-path` strike and the emblem's
+  stroke). No height, width, top or margin animation, so no layout shift and no per-frame layout.
+- A signature moment plays once per mount or per state change, never on a timer. The admin gets none:
+  it keeps the functional motions only (popovers, dialogs, reveal, arrival wash).
+- `prefers-reduced-motion: reduce` turns it off; content is simply there.
+- Hover effects only with a fine pointer (below).
+- 60 fps on a mid-range laptop: no long task (> 50 ms) and CLS 0 during the motion.
+
 Hover styles apply only with a fine pointer that can hover. `theme.css` redefines the built-in
 `hover:` variant as `@media (hover: hover) and (pointer: fine)` and keeps `hover-fine:` as the same
 thing for new code, so a tap on a phone never leaves a tint or an underline behind. Keyboard focus
@@ -562,6 +572,30 @@ gets an equivalent `focus-visible` state.
 7. **Disclosures reveal.** Content opened by a disclosure (`anim-reveal` on an un-`hidden` panel, or a
    `<details open>` body) drops 4 px and fades in over 200 ms `--ease-out`. The height changes at once:
    no height animation, no per-frame layout.
+8. **First appearance (entrance).** When a schedule or the changes list first shows on a page
+   (`useEntrance`, `components/public/entrance.ts`), its parts fade in and rise 6 px over 280 ms
+   `--ease-out`, 40 ms apart, capped at 6 steps (≤ 520 ms in all):
+   - the week grid by columns, left to right (pair column first, then Пн … Сб; a practice cell that spans
+     rows keeps its own column);
+   - the day list and the phone week by rows, top down; the changes list by groups.
+   - It plays once per mount. Switching to another group remounts the page, so the new group enters the
+     same way; paging weeks, День ↔ Тиждень and live updates keep their own motion (slide 8 px or fade,
+     `useNavTransition`) and do not replay it.
+   - Web Animations with `fill: backwards`: nothing stays on the cells afterwards.
+9. **The sign-in form enters** while the mark draws (`auth-page.css`, `auth-enter`): the title, lead,
+   buttons and footer rise 8 px and fade in, 50 ms apart from 120 ms, 280 ms each. The small mark is not
+   part of it (it draws itself). When the page returns with an error message there is no entrance.
+
+**Considered and left out (do not add without a new decision):**
+- Slow ambient shapes drifting behind the sign-in form: a second decorative loop that would compete with
+  the emblem light, which is the only one (§10.5).
+- A progress fill on the current pair in the week grid: the gliding now-line already shows the same thing;
+  two indicators of one fact is noise. The day track keeps its fill.
+- The View Transitions API for day/week and group switches: it snapshots the whole page (sticky header
+  included) and blocks input for the duration; `useNavTransition` and the entrance do the same with
+  composite animations on the content only. View Transitions stay for the theme swap.
+- A celebratory "day is over" state: people open the page in the evening for tomorrow's first pair
+  (`afterDay`), and a motion every evening visit would turn into noise.
 
 **Hover delays (`Tooltip.helpers.ts`)**
 
@@ -925,6 +959,7 @@ Nothing else: no blue panel, no photo.
   leg crosses the inner ring the light forks: a second head runs clockwise around the inner ring and
   merges into the right leg, which the spire's tail still lights. Then a pause of about 0.9 s.
   This is the only decorative loop in the product.
+- The form column enters with a short stagger while the mark draws (§6, item 9).
 - The light fades to 40 % while the form has focus. With `prefers-reduced-motion` or forced colours it
   is hidden and the emblem is static.
 - Styles live in `src/styles/auth-page.css` (`--auth-spire-k` keeps the line weight even across sizes).
