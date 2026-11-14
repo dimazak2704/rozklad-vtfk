@@ -40,6 +40,9 @@ class PublicChangesControllerTest {
     /** Wednesday 21.10.2026, 10:00 in Kyiv: with 7 days of history visitors see 14.10 and later. */
     private static final Instant NOW = Instant.parse("2026-10-21T07:00:00Z");
 
+    /** Spring Security's default for a response that sets no Cache-Control of its own (visitors, as before). */
+    private static final String VISITOR_CACHE_CONTROL = "no-cache, no-store, max-age=0, must-revalidate";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -82,6 +85,7 @@ class PublicChangesControllerTest {
         mockMvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.VARY, HttpHeaders.AUTHORIZATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, VISITOR_CACHE_CONTROL))
                 .andExpect(jsonPath("$.parity").value("DENOMINATOR"))
                 .andExpect(jsonPath("$.studyDay").value(true))
                 .andExpect(jsonPath("$.order.number").value(35))
@@ -121,21 +125,32 @@ class PublicChangesControllerTest {
         verify(changes, never()).of(any());
     }
 
+    /** Staff answers are private, as the schedule's: a shared cache must not hand an old day to a visitor. */
     @Test
-    void staffSeeTheWholeArchive() throws Exception {
+    void staffSeeTheWholeArchiveAsAPrivateAnswer() throws Exception {
         mockMvc.perform(get("/api/public/changes").param("date", "2025-09-01").with(TestJwts.teacher()))
                 .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, private"))
                 .andExpect(header().string(HttpHeaders.VARY, HttpHeaders.AUTHORIZATION))
                 .andExpect(jsonPath("$.date").value("2025-09-01"));
         mockMvc.perform(get("/api/public/changes").param("date", "2025-09-01").with(TestJwts.admin()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, private"));
+        // і на сьогодні: відповідь персоналу та сама приватна, хоч вікно тут нічого не обмежує
+        mockMvc.perform(get("/api/public/changes").with(TestJwts.teacher()))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, private"));
     }
 
     /** The bot asks for its teacher and admin chats and limits other chats itself. */
     @Test
     void theBotSeesTheWholeArchiveButTheImporterDoesNot() throws Exception {
         mockMvc.perform(get("/api/public/changes").param("date", "2025-09-01").with(TestJwts.service()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache, private"));
+        mockMvc.perform(get("/api/public/changes").param("date", "2026-10-21").with(TestJwts.importerService()))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, VISITOR_CACHE_CONTROL));
         mockMvc.perform(get("/api/public/changes").param("date", "2025-09-01").with(TestJwts.importerService()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("HISTORY_NOT_PUBLIC"));
