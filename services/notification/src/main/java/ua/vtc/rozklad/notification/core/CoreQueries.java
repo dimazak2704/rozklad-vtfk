@@ -193,6 +193,14 @@ public class CoreQueries {
         cache.evict("meta");
     }
 
+    /**
+     * core refused a date the cached meta still let through: its public history window moved meanwhile (midnight, an
+     * admin lowered the days), so the next read asks core again.
+     */
+    public void invalidateMeta() {
+        cache.evict("meta");
+    }
+
     /** One day of one owner (group, teacher or room) with the owner's display label. */
     public record DaySchedule(OwnerType ownerType, UUID ownerId, String ownerLabel, ScheduleDay day) {
     }

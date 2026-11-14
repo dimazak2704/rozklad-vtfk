@@ -106,35 +106,64 @@ public class ScheduleViews {
      */
     public void showDay(long chatId, Long editMessageId, OwnerType type, UUID ownerId, LocalDate date,
                         boolean privateChat) {
-        String text;
-        InlineKeyboard keyboard;
+        Card card;
         try {
-            Window window = window(chatId, StudyDays.previous(date));
-            if (window.closes(date)) {
-                text = BotTexts.ARCHIVED_DAY;
-                keyboard = archived(type, ownerId, window.firstDay());
-            } else {
-                boolean archive = window.archive(date);
-                DaySchedule schedule = queries.day(type, ownerId, date, archive);
-                LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date, archive);
-                text = ScheduleCards.day(schedule, nextStudyDay, queries.teacherLabels());
-                keyboard = navigation(chatId, type, ownerId, date, nextStudyDay, privateChat, window);
-            }
+            card = card(chatId, type, ownerId, date, privateChat);
         } catch (UpstreamUnavailableException e) {
-            text = BotTexts.CORE_DOWN;
-            keyboard = InlineKeyboard.rows(List.of(InlineButton.callback("🔄 Спробувати ще раз",
-                    CallbackData.day(type, ownerId, date))));
+            card = new Card(BotTexts.CORE_DOWN, InlineKeyboard.rows(List.of(InlineButton.callback(
+                    "🔄 Спробувати ще раз", CallbackData.day(type, ownerId, date)))));
         } catch (UpstreamRejectedException e) {
-            // межа вікна щойно зсунулася (meta в кеші до 30 с): core сам каже, що день уже в архіві
-            text = e.isHistoryNotPublic() ? BotTexts.ARCHIVED_DAY
-                    : "Розклад не знайдено 🤷 Можливо, групу чи викладача вже вилучили з каталогу.";
-            keyboard = null;
+            card = new Card("Розклад не знайдено 🤷 Можливо, групу чи викладача вже вилучили з каталогу.", null);
         }
         if (editMessageId != null) {
-            replies.edit(chatId, editMessageId, text, keyboard);
+            replies.edit(chatId, editMessageId, card.text(), card.keyboard());
         } else {
-            replies.send(chatId, text, keyboard);
+            replies.send(chatId, card.text(), card.keyboard());
         }
+    }
+
+    private record Card(String text, InlineKeyboard keyboard) {
+    }
+
+    /** The day, or the archive card for a chat that may not open it. */
+    private Card card(long chatId, OwnerType type, UUID ownerId, LocalDate date, boolean privateChat) {
+        Window window = window(chatId, date);
+        if (window.closes(date)) {
+            return new Card(BotTexts.ARCHIVED_DAY, archived(type, ownerId, window.firstDay()));
+        }
+        try {
+            return dayCard(chatId, type, ownerId, date, privateChat, window, window.archive(date));
+        } catch (UpstreamRejectedException e) {
+            if (!e.isHistoryNotPublic()) {
+                throw e;
+            }
+            return movedWindow(chatId, type, ownerId, date, privateChat, window);
+        }
+    }
+
+    private Card dayCard(long chatId, OwnerType type, UUID ownerId, LocalDate date, boolean privateChat,
+                         Window window, boolean archive) {
+        DaySchedule schedule = queries.day(type, ownerId, date, archive);
+        LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date, archive);
+        return new Card(ScheduleCards.day(schedule, nextStudyDay, queries.teacherLabels()),
+                navigation(chatId, type, ownerId, date, nextStudyDay, privateChat, window));
+    }
+
+    /**
+     * core refused a day the bot's window let through without the token: the window moved meanwhile (meta is cached
+     * for 30 s; midnight, or an admin lowered the days). The stale meta goes; a staff chat gets the day with the
+     * service token, another chat the archive card with the button to the first day of the moved window.
+     */
+    private Card movedWindow(long chatId, OwnerType type, UUID ownerId, LocalDate date, boolean privateChat,
+                             Window window) {
+        queries.invalidateMeta();
+        if (bindings.isStaffChat(chatId)) {
+            return dayCard(chatId, type, ownerId, date, privateChat, window, true);
+        }
+        // межа з core, а не з годинника бота: core відмовив, тож вона вже після цього дня
+        LocalDate from = queries.meta().publicHistoryFrom();
+        LocalDate firstDay = from == null ? StudyDays.weekStart(today()) : StudyDays.weekStart(from);
+        return new Card(BotTexts.ARCHIVED_DAY, archived(type, ownerId, firstDay));
     }
 
     /** Hint for a day without lessons; a failed lookup only loses the hint, not the card. */
@@ -151,7 +180,7 @@ public class ScheduleViews {
      * to every chat, so they need neither core's meta nor the chat's bindings.
      */
     private Window window(long chatId, LocalDate earliest) {
-        if (!earliest.isBefore(StudyDays.weekStart(today()))) {
+        if (!isBeforeCurrentWeek(earliest)) {
             return Window.OPEN;
         }
         LocalDate from = queries.meta().publicHistoryFrom();
@@ -159,6 +188,26 @@ public class ScheduleViews {
             return Window.OPEN; // старший core: вікна немає, усе публічне
         }
         return new Window(StudyDays.weekStart(from), bindings.isStaffChat(chatId));
+    }
+
+    private boolean isBeforeCurrentWeek(LocalDate date) {
+        return date.isBefore(StudyDays.weekStart(today()));
+    }
+
+    /**
+     * The window that decides ◀️ to {@code previous}: the card's own when the card is before the current week (it
+     * read the meta already), else the previous day's, which needs the meta only on the current week's Monday. core
+     * unreachable there shows ◀️: the card must not fail over a button, and pressing it checks the window again.
+     */
+    private Window backWindow(long chatId, LocalDate date, LocalDate previous, Window card) {
+        if (isBeforeCurrentWeek(date)) {
+            return card;
+        }
+        try {
+            return window(chatId, previous);
+        } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
+            return Window.OPEN;
+        }
     }
 
     /** «🗄 … в архіві» with a button to the first day the chat may open. */
@@ -194,7 +243,7 @@ public class ScheduleViews {
         LocalDate next = nextStudyDay != null ? nextStudyDay : StudyDays.next(date);
         List<List<InlineButton>> rows = new ArrayList<>();
         InlineButton forward = InlineButton.callback(dayLabel(next) + " ▶️", CallbackData.day(type, ownerId, next));
-        rows.add(window.closes(previous) ? List.of(forward) : List.of(
+        rows.add(backWindow(chatId, date, previous, window).closes(previous) ? List.of(forward) : List.of(
                 InlineButton.callback("◀️ " + dayLabel(previous), CallbackData.day(type, ownerId, previous)),
                 forward));
         if (privateChat && type == OwnerType.GROUP) {
