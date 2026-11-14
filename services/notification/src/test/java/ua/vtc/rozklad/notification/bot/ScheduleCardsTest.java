@@ -10,6 +10,7 @@ import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
+import ua.vtc.rozklad.notification.text.TeacherLabels;
 
 class ScheduleCardsTest {
 
@@ -45,6 +46,21 @@ class ScheduleCardsTest {
                 .contains("4КІ1 · НДКС · ауд. 6")
                 .contains("замість <s>СТП</s>")
                 .doesNotContain("Непийвода М. В. · ауд");
+    }
+
+    @Test
+    void teachersWithoutInitialsInTheShortFormGetThemFromTheLabels() {
+        // the lookup knows Непийвода by id; the replaced teacher in the fixture is plain text without an id
+        TeacherLabels labels = (id, shortName) -> CoreFixtures.TEACHER_NEPYIVODA.equals(id)
+                ? "Непийвода Максим В."
+                : id == null ? shortName + "?" : TeacherLabels.SHORT_FORM.label(id, shortName);
+        String card = ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1",
+                CoreFixtures.day4ki1(MONDAY)), null, labels);
+        assertThat(card).contains("НДКС · Непийвода Максим В. · ауд. 6", "Комп. мережі · Колесник А. І. · ауд. 6",
+                "замість <s>СТП · Кренцін М.Д.?</s>");
+        String teacherCard = ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", CoreFixtures.teacherDay(MONDAY)), null, labels);
+        assertThat(teacherCard).startsWith("🧑‍🏫 <b>Непийвода Максим В.</b>");
     }
 
     @Test

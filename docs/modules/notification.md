@@ -59,6 +59,9 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   study day (edits the same message) and «⭐ Зробити моєю групою» for groups found by search.
   Teachers in schedule cards (title, lesson lines, the replaced teacher, inline results, morning digest) read
   «Прізвище І. Б.» (`text.TeacherNames.initials`: «Кренцін М.Д.» → «Кренцін М. Д.», «ХарченкоГ.» → «Харченко Г.»).
+  A short form without (or with fewer) initials is completed by id from the cached `/api/public/teachers`
+  (`CoreQueries.teacherLabels`, `fullName`/`firstName` present only with `showTeacherFullNames`): «Алексєєнко» →
+  «Алексєєнко О. А.». Two-letter initials of namesakes stay; core down → the short form.
   Changed lessons: «🔁 заміна» + «замість <s>СТП · Кренцін М. Д.</s>», «❌ пари не буде» (struck through),
   «➕ додаткова», «↪️ перенесено з N пари», «🚪 інша аудиторія», reason in italics **in words**
   («Зв.зам.» → «Взаємна заміна», «Відп.» → «Викладач відсутній», as `REASON_CODE_HINT` of the public web;

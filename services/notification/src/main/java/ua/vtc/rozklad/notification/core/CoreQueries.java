@@ -3,8 +3,10 @@ package ua.vtc.rozklad.notification.core;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,8 @@ import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
 import ua.vtc.rozklad.notification.core.CoreDtos.Schedule;
 import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreDtos.SearchHit;
+import ua.vtc.rozklad.notification.text.TeacherLabels;
+import ua.vtc.rozklad.notification.text.TeacherNames;
 
 /**
  * Cached reads of core's public API for the bot. Schedules are cached per day under a
@@ -76,6 +80,28 @@ public class CoreQueries {
     public List<PublicTeacher> teachers() {
         return cache.get("teachers", new TypeReference<List<PublicTeacher>>() {
         }, CATALOG_TTL, core::teachers);
+    }
+
+    /**
+     * «Прізвище І. Б.» for schedule cards: initials from the short form, completed from the cached public
+     * teacher list (first and middle names, present only when {@code showTeacherFullNames} is on). Core being
+     * down leaves the short form: a card must not fail over a name.
+     */
+    public TeacherLabels teacherLabels() {
+        List<PublicTeacher> known;
+        try {
+            known = teachers();
+        } catch (UpstreamUnavailableException e) {
+            return TeacherLabels.SHORT_FORM;
+        }
+        Map<UUID, PublicTeacher> byId = new HashMap<>();
+        known.forEach(teacher -> byId.put(teacher.id(), teacher));
+        return (id, shortName) -> {
+            PublicTeacher teacher = id == null ? null : byId.get(id);
+            return teacher == null
+                    ? TeacherNames.initials(shortName)
+                    : TeacherNames.initials(shortName, teacher.fullName(), teacher.firstName());
+        };
     }
 
     /** A teacher missing from the cached catalog reloads it, with the same rules as {@link #group(UUID)}. */

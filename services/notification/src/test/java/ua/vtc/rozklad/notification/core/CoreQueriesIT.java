@@ -10,6 +10,7 @@ import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
 import ua.vtc.rozklad.notification.support.IntegrationTest;
+import ua.vtc.rozklad.notification.text.TeacherLabels;
 
 /** The catalog cache (1 h) must not hide a teacher or group the dispatcher has just created. */
 class CoreQueriesIT extends IntegrationTest {
@@ -39,6 +40,23 @@ class CoreQueriesIT extends IntegrationTest {
 
         assertThat(queries.group(NEW_GROUP)).get().extracting(PublicGroup::code).isEqualTo("1КІ9");
         assertThat(queries.groups()).extracting(PublicGroup::code).contains("1КІ9");
+    }
+
+    @Test
+    void teacherLabelsCompleteInitialsFromThePublicFullName() {
+        core.addTeacher(new PublicTeacher(NEW_TEACHER, "Сумісник", "Сумісник", "Сумісник Олег Петрович", "Олег"));
+
+        TeacherLabels labels = queries.teacherLabels();
+        assertThat(labels.label(NEW_TEACHER, "Сумісник")).isEqualTo("Сумісник О. П.");
+        assertThat(labels.label(CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.")).isEqualTo("Кренцін М. Д.");
+        assertThat(labels.label(null, "Гість")).isEqualTo("Гість");
+    }
+
+    @Test
+    void teacherLabelsFallBackToTheShortFormWhileCoreIsDown() {
+        core.setUnavailable(true);
+
+        assertThat(queries.teacherLabels().label(CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.")).isEqualTo("Кренцін М. Д.");
     }
 
     @Test

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.notification.core.CoreDtos.LessonItem;
@@ -18,13 +19,13 @@ import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.text.Plurals;
 import ua.vtc.rozklad.notification.text.Reasons;
-import ua.vtc.rozklad.notification.text.TeacherNames;
+import ua.vtc.rozklad.notification.text.TeacherLabels;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /**
  * A day of a group, teacher or room as a compact Telegram card: pair number and time, what and
  * who, and for changed lessons what it replaced (struck through) and why. Teachers read as
- * «Прізвище І. Б.» ({@link TeacherNames#initials}).
+ * «Прізвище І. Б.» ({@link TeacherLabels}, completed from the public teacher list when it has the names).
  */
 public final class ScheduleCards {
 
@@ -42,10 +43,14 @@ public final class ScheduleCards {
      * holiday card says where the lessons continue.
      */
     public static String day(DaySchedule schedule, LocalDate nextStudyDay) {
+        return day(schedule, nextStudyDay, TeacherLabels.SHORT_FORM);
+    }
+
+    public static String day(DaySchedule schedule, LocalDate nextStudyDay, TeacherLabels teachers) {
         ScheduleDay day = schedule.day();
         StringBuilder text = new StringBuilder()
                 .append(icon(schedule.ownerType())).append(' ')
-                .append(b(label(schedule)))
+                .append(b(label(schedule, teachers)))
                 .append(" · ").append(escape(UaDates.weekdayDayMonth(day.date())));
         String parity = UaDates.parity(day.parity());
         if (parity != null) {
@@ -60,7 +65,7 @@ public final class ScheduleCards {
         } else {
             text.append(day.lessons().stream()
                     .sorted(Comparator.comparingInt(LessonItem::pair).thenComparingInt(LessonItem::subgroup))
-                    .map(lesson -> lesson(lesson, schedule.ownerType()))
+                    .map(lesson -> lesson(lesson, schedule.ownerType(), teachers))
                     .collect(Collectors.joining("\n\n")));
         }
         if (day.note() != null && !day.note().isBlank()) {
@@ -86,7 +91,7 @@ public final class ScheduleCards {
         return changes == 0 ? text : text + " · змін: " + changes;
     }
 
-    static String lesson(LessonItem lesson, OwnerType perspective) {
+    static String lesson(LessonItem lesson, OwnerType perspective, TeacherLabels teachers) {
         String kind = kind(lesson);
         StringBuilder text = new StringBuilder(b(Integer.toString(lesson.pair())));
         String time = UaDates.timeRange(lesson.startsAt(), lesson.endsAt());
@@ -97,9 +102,9 @@ public final class ScheduleCards {
         if (lesson.online()) {
             text.append(" · 💻 онлайн");
         }
-        String what = what(lesson, perspective);
+        String what = what(lesson, perspective, teachers);
         text.append('\n').append("CANCELLED".equals(kind) ? s(what) : escape(what));
-        String original = original(lesson, kind, perspective);
+        String original = original(lesson, kind, perspective, teachers);
         if (original != null) {
             text.append('\n').append(original);
         }
@@ -110,7 +115,7 @@ public final class ScheduleCards {
     }
 
     /** Who/what/where from the owner's point of view (the owner itself is not repeated). */
-    private static String what(LessonItem lesson, OwnerType perspective) {
+    private static String what(LessonItem lesson, OwnerType perspective, TeacherLabels teachers) {
         List<String> parts = new ArrayList<>(4);
         String group = lesson.group() == null ? null : lesson.group().code();
         if (perspective != OwnerType.GROUP && group != null) {
@@ -121,7 +126,7 @@ public final class ScheduleCards {
             parts.add(perspective == OwnerType.GROUP ? discipline + subgroup(lesson) : discipline);
         }
         if (perspective != OwnerType.TEACHER && lesson.teacher() != null && lesson.teacher().label() != null) {
-            parts.add(TeacherNames.initials(lesson.teacher().label()));
+            parts.add(teachers.label(lesson.teacher().id(), lesson.teacher().label()));
         }
         if (perspective != OwnerType.ROOM && lesson.room() != null && lesson.room().name() != null) {
             parts.add("ауд. " + lesson.room().name());
@@ -129,7 +134,7 @@ public final class ScheduleCards {
         return parts.isEmpty() ? "—" : String.join(" · ", parts);
     }
 
-    private static String original(LessonItem lesson, String kind, OwnerType perspective) {
+    private static String original(LessonItem lesson, String kind, OwnerType perspective, TeacherLabels teachers) {
         JsonNode original = lesson.original();
         if (original == null || original.isNull() || original.isMissingNode()) {
             return null;
@@ -139,9 +144,10 @@ public final class ScheduleCards {
                 List<String> parts = new ArrayList<>(2);
                 addLabel(parts, original.get("discipline"));
                 if (perspective != OwnerType.TEACHER) {
-                    String teacher = label(original.get("teacher"));
+                    JsonNode node = original.get("teacher");
+                    String teacher = label(node);
                     if (teacher != null) {
-                        parts.add(TeacherNames.initials(teacher));
+                        parts.add(teachers.label(idOf(node), teacher));
                     }
                 }
                 yield parts.isEmpty() ? null : "замість " + s(String.join(" · ", parts));
@@ -155,6 +161,19 @@ public final class ScheduleCards {
             }
             default -> null;
         };
+    }
+
+    /** The {@code id} of a ref node, or {@code null} for plain text or a malformed id. */
+    private static UUID idOf(JsonNode node) {
+        JsonNode id = node == null ? null : node.get("id");
+        if (id == null || !id.isString()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(id.asString());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static void addLabel(List<String> parts, JsonNode node) {
@@ -210,10 +229,10 @@ public final class ScheduleCards {
         };
     }
 
-    private static String label(DaySchedule schedule) {
+    private static String label(DaySchedule schedule, TeacherLabels teachers) {
         if (schedule.ownerLabel() != null && !schedule.ownerLabel().isBlank()) {
             return schedule.ownerType() == OwnerType.TEACHER
-                    ? TeacherNames.initials(schedule.ownerLabel())
+                    ? teachers.label(schedule.ownerId(), schedule.ownerLabel())
                     : schedule.ownerLabel();
         }
         return switch (schedule.ownerType()) {

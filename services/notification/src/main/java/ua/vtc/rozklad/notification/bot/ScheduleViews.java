@@ -106,7 +106,7 @@ public class ScheduleViews {
         try {
             DaySchedule schedule = queries.day(type, ownerId, date);
             LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date);
-            text = ScheduleCards.day(schedule, nextStudyDay);
+            text = ScheduleCards.day(schedule, nextStudyDay, queries.teacherLabels());
             keyboard = navigation(chatId, type, ownerId, date, nextStudyDay, privateChat);
         } catch (UpstreamUnavailableException e) {
             text = BotTexts.CORE_DOWN;

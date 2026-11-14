@@ -90,7 +90,9 @@ Positive direction — «Повітря» з живим часом (round 8; the
   (who replaced whom, reason), parity explanation. The kind line («Вид») is shown for a lecture, practice, lab
   or seminar only; `MIXED` (unknown or combined, e.g. load derived from the timetable) hides it.
 - Teacher names, one formatter (`web/src/lib/teacher-name.ts`): grid cells, change lists and chips write
-  «Прізвище І. Б.» (initials from the college short form, else from the first and middle names); the hover card,
+  «Прізвище І. Б.» (initials from the college short form, completed by id from the name directory — public
+  teachers with `showTeacherFullNames`, the admin catalog on the board — when the short form has fewer; two-letter
+  initials of namesakes stay); the hover card,
   lists and the teacher page title write «Прізвище Імʼя По батькові» when the name is known and, on public pages,
   `showTeacherFullNames` is on, otherwise «Прізвище І. Б.». Orders and print keep the college short form.
 - Dated audit lines: an event of another day shows the date, «відмовився 14.11 о 01:15»; today only the time.

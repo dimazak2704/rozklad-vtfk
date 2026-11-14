@@ -88,7 +88,7 @@ public class MorningDigest {
             if (day.day().lessons().isEmpty()) {
                 continue;
             }
-            String text = "☀️ Доброго ранку! Розклад на сьогодні:\n\n" + ScheduleCards.day(day);
+            String text = "☀️ Доброго ранку! Розклад на сьогодні:\n\n" + ScheduleCards.day(day, null, queries.teacherLabels());
             for (ChatBinding subscriber : group.getValue()) {
                 queued += outbox.enqueue(OutboundDraft.text(Recipient.of(subscriber), DeliveryPurpose.DIGEST, text)
                         .dedupBy("digest:" + date + ":" + subscriber.getChatId())).size();

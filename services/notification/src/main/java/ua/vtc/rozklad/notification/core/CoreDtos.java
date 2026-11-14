@@ -54,7 +54,12 @@ public final class CoreDtos {
 
     /** {@code GET /api/public/teachers} item. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record PublicTeacher(UUID id, String shortName, String displayName) {
+    public record PublicTeacher(UUID id, String shortName, String displayName, String fullName, String firstName) {
+
+        /** {@code fullName}/{@code firstName} come only when the setting {@code showTeacherFullNames} is on. */
+        public PublicTeacher(UUID id, String shortName, String displayName) {
+            this(id, shortName, displayName, null, null);
+        }
 
         public String label() {
             if (shortName != null && !shortName.isBlank()) {

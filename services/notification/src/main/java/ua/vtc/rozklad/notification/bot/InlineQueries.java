@@ -16,7 +16,7 @@ import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.telegram.TelegramApi.InlineArticle;
-import ua.vtc.rozklad.notification.text.TeacherNames;
+import ua.vtc.rozklad.notification.text.TeacherLabels;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /**
@@ -59,11 +59,12 @@ public class InlineQueries {
                     .filter(hit -> hit.ownerType() != null && hit.id() != null)
                     .limit(MAX_OWNERS)
                     .toList();
+            TeacherLabels teachers = queries.teacherLabels();
             for (SearchHit hit : hits) {
                 for (LocalDate date : dates) {
                     DaySchedule day = queries.day(hit.ownerType(), hit.id(), date);
-                    articles.add(new InlineArticle(articleId(hit, date), title(hit, day, today),
-                            ScheduleCards.summary(day.day()), ScheduleCards.day(day)));
+                    articles.add(new InlineArticle(articleId(hit, date), title(hit, day, today, teachers),
+                            ScheduleCards.summary(day.day()), ScheduleCards.day(day, null, teachers)));
                 }
             }
         } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
@@ -79,7 +80,7 @@ public class InlineQueries {
                 + date.format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 
-    private static String title(SearchHit hit, DaySchedule day, LocalDate today) {
+    private static String title(SearchHit hit, DaySchedule day, LocalDate today, TeacherLabels teachers) {
         LocalDate date = day.day().date();
         String when = UaDates.weekdayShort(date) + " " + UaDates.shortDate(date);
         if (date.equals(today)) {
@@ -88,6 +89,6 @@ public class InlineQueries {
             when = "завтра, " + when;
         }
         String label = day.ownerLabel() == null || day.ownerLabel().isBlank() ? hit.label() : day.ownerLabel();
-        return (day.ownerType() == OwnerType.TEACHER ? TeacherNames.initials(label) : label) + " — " + when;
+        return (day.ownerType() == OwnerType.TEACHER ? teachers.label(day.ownerId(), label) : label) + " — " + when;
     }
 }
