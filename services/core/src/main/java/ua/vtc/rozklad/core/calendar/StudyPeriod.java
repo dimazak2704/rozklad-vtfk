@@ -15,7 +15,8 @@ import java.util.UUID;
  * add up: the most specific one decides ({@link #decidingStudyMode}), so a group OFFLINE period inside a
  * course ONLINE period brings that group back to classes.
  *
- * @param id id of the calendar period; {@code null} only in hand-made test periods
+ * @param id            id of the calendar period; {@code null} only in hand-made test periods
+ * @param supervisorIds teachers supervising a PRACTICE period (керівники практики); empty otherwise
  */
 public record StudyPeriod(
         CalendarPeriodKind kind,
@@ -26,7 +27,8 @@ public record StudyPeriod(
         PeriodScope scope,
         Set<Integer> courses,
         Set<UUID> groupIds,
-        UUID id) {
+        UUID id,
+        Set<UUID> supervisorIds) {
 
     /** Groups over courses over everybody, then the later start, then the id (DOMAIN §2). */
     private static final Comparator<StudyPeriod> STUDY_MODE_PRECEDENCE =
@@ -42,18 +44,27 @@ public record StudyPeriod(
         Objects.requireNonNull(scope, "scope");
         courses = courses == null ? Set.of() : Set.copyOf(courses);
         groupIds = groupIds == null ? Set.of() : Set.copyOf(groupIds);
+        supervisorIds = supervisorIds == null ? Set.of() : Set.copyOf(supervisorIds);
+    }
+
+    /** A period without supervisors. */
+    public StudyPeriod(CalendarPeriodKind kind, String title, LocalDate startsOn, LocalDate endsOn, StudyMode studyMode,
+                       PeriodScope scope, Set<Integer> courses, Set<UUID> groupIds, UUID id) {
+        this(kind, title, startsOn, endsOn, studyMode, scope, courses, groupIds, id, Set.of());
     }
 
     /** A period without an id (tests and previews). */
     public StudyPeriod(CalendarPeriodKind kind, String title, LocalDate startsOn, LocalDate endsOn, StudyMode studyMode,
                        PeriodScope scope, Set<Integer> courses, Set<UUID> groupIds) {
-        this(kind, title, startsOn, endsOn, studyMode, scope, courses, groupIds, null);
+        this(kind, title, startsOn, endsOn, studyMode, scope, courses, groupIds, null, Set.of());
     }
 
+    /** Supervisors are read only for PRACTICE: other kinds never touch that (lazy) collection. */
     public static StudyPeriod of(CalendarPeriod period) {
+        Set<UUID> supervisors = period.getKind() == CalendarPeriodKind.PRACTICE ? period.getSupervisorIds() : Set.of();
         return new StudyPeriod(period.getKind(), period.getTitle(), period.getStartsOn(), period.getEndsOn(),
                 period.getStudyMode(), period.getScope(), Set.copyOf(period.getCourses()), period.getGroupIds(),
-                period.getId());
+                period.getId(), supervisors);
     }
 
     /**

@@ -252,6 +252,70 @@ class CalendarApiIT {
     }
 
     @Test
+    void practiceSupervisorsAreValidatedAndShownInGroupAndTeacherSchedules() throws Exception {
+        UUID semester = id(create("/api/admin/semesters", SEMESTER_I).andReturn());
+        create("/api/admin/specialties", "{\"letters\":\"КІ\",\"name\":\"Комп’ютерна інженерія\"}");
+        UUID group = id(create("/api/admin/groups", "{\"code\":\"2КІ3\"}").andReturn());
+        UUID krentsin = id(create("/api/admin/teachers",
+                "{\"lastName\":\"Кренцін\",\"firstName\":\"Микола\",\"middleName\":\"Дмитрович\"}").andReturn());
+        UUID nepyivoda = id(create("/api/admin/teachers",
+                "{\"lastName\":\"Непийвода\",\"firstName\":\"Микола\",\"middleName\":\"Васильович\"}").andReturn());
+        UUID retired = id(create("/api/admin/teachers",
+                "{\"lastName\":\"Архівна\",\"firstName\":\"Олена\",\"middleName\":\"Петрівна\"}").andReturn());
+        jdbc.update("UPDATE teacher SET active = false WHERE id = ?", retired);
+        String practice = """
+                {"semesterId":"%s","kind":"%s","title":"Електрорадіомонтажна практика",
+                 "startsOn":"2026-10-19","endsOn":"2026-10-30","scope":"GROUPS","groupIds":["%s"],
+                 "supervisorIds":%s}""";
+
+        create("/api/admin/calendar-periods", practice.formatted(semester, "NO_CLASSES", group,
+                "[\"%s\"]".formatted(krentsin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("supervisorIds"));
+        create("/api/admin/calendar-periods", practice.formatted(semester, "PRACTICE", group,
+                "[\"%s\",\"%s\",\"%s\",\"%s\"]".formatted(krentsin, krentsin, retired, UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("supervisorIds[1]"))
+                .andExpect(jsonPath("$.errors[1].field").value("supervisorIds[2]"))
+                .andExpect(jsonPath("$.errors[1].message").value(containsString("неактивний")))
+                .andExpect(jsonPath("$.errors[2].field").value("supervisorIds[3]"));
+
+        UUID period = id(create("/api/admin/calendar-periods", practice.formatted(semester, "PRACTICE", group,
+                "[\"%s\",\"%s\"]".formatted(nepyivoda, krentsin)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.supervisors[0].shortName").value("Кренцін М.Д."))
+                .andExpect(jsonPath("$.supervisors[1].shortName").value("Непийвода М.В."))
+                .andExpect(jsonPath("$.supervisorIds", hasSize(2)))
+                .andReturn());
+
+        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-25", group))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.days", hasSize(5)))
+                .andExpect(jsonPath("$.days[0].studyDay").value(false))
+                .andExpect(jsonPath("$.days[0].practices[0].title").value("Електрорадіомонтажна практика"))
+                .andExpect(jsonPath("$.days[0].practices[0].supervisors[0].shortName").value("Кренцін М.Д."))
+                .andExpect(jsonPath("$.days[0].practices[0].groups[0].code").value("2КІ3"))
+                .andExpect(jsonPath("$.days[4].practices", hasSize(1)));
+        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-30&to=2026-11-02", krentsin))
+                .andExpect(jsonPath("$.days", hasSize(2)))
+                .andExpect(jsonPath("$.days[0].practices[0].title").value("Електрорадіомонтажна практика"))
+                .andExpect(jsonPath("$.days[0].practices[0].groups[0].code").value("2КІ3"))
+                .andExpect(jsonPath("$.days[1].practices", hasSize(0)));
+
+        // зняти всіх керівників: практика лишається, у розкладі викладача її більше немає
+        mvc.perform(put("/api/admin/calendar-periods/{id}", period).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(practice.formatted(semester, "PRACTICE", group, "[]")
+                                .replace("}", ",\"version\":0}")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supervisors", hasSize(0)));
+        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-19&to=2026-10-19", krentsin))
+                .andExpect(jsonPath("$.days[0].practices", hasSize(0)));
+        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-19", group))
+                .andExpect(jsonPath("$.days[0].practices[0].supervisors", hasSize(0)));
+    }
+
+    @Test
     void publicMetaAndBellsUseTheProfileInEffect() throws Exception {
         LocalDate today = LocalDate.now(clock);
         create("/api/admin/semesters", """

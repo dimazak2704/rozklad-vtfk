@@ -54,7 +54,10 @@ deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELO
 
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
-DayDto      { date, weekday (1..5), weekdayLabel, parity, studyDay, note?, lessons:[LessonView] }
+DayDto      { date, weekday (1..5), weekdayLabel, parity, studyDay, note?, lessons:[LessonView], practices:[PracticeDto] }
+PracticeDto { periodId, title, startsOn, endsOn, supervisors:[TeacherRef], groups:[GroupRef], courses:[int] }
+            # group schedule: the practice the group is at; teacher schedule: practices the teacher supervises
+            # (керівник практики); room schedule and days off: []
 LessonView  { id, pair, startsAt, endsAt, discipline:DisciplineRef, teacher:TeacherRef?, room:RoomRef?,
               group:GroupRef, subgroup (0..n), kind: REGULAR|SUBSTITUTED|CANCELLED|ADDITIONAL|MOVED|ROOM_CHANGED|BLOCK,
               online:bool, original:{discipline?,teacher?,room?,pair?}?, reasonText?, changeId? }
@@ -214,3 +217,7 @@ units:[{unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight: 
 pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?, online?}] }`
 (`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7;
 `online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5)
+
+Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники практики:
+only for `kind=PRACTICE`, active teachers, each once; field errors `supervisorIds` / `supervisorIds[i]`);
+`CalendarPeriodDto` adds `supervisorIds:[uuid]` and `supervisors:[TeacherRef]` (empty for other kinds).

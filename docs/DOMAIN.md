@@ -32,7 +32,9 @@ discipline programs) and the college site (bells, curriculum).
 - `parity(week n)` = `firstWeekParity` (default NUMERATOR) for odd n, the other for even n;
   `week_parity_override` wins. **Verified**: semester start 01.09.2026 (Tue) ⇒ week of 19.10.2026 is week 8 ⇒ ЗНАМЕННИК (matches order №35).
 - A date has lessons if inside the semester and not inside a global `HOLIDAY`/`NO_CLASSES` period.
-  Group-scoped `PRACTICE` periods remove that group's lessons. `STUDY_MODE` periods (ONLINE/MIXED) keep
+  Group-scoped `PRACTICE` periods remove that group's lessons. A practice may have supervisors (керівники
+  практики, teachers assigned by the dispatcher); the group's schedule shows the practice with them on its
+  days, a supervisor's schedule shows «Керівництво практикою». How practice hours are counted is an open question. `STUDY_MODE` periods (ONLINE/MIXED) keep
   lessons but mark them online and produce notes for orders (e.g. «Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»).
 - Bell profiles (from Excel sheets «дзвінки (2 зм)», «дзвінки» and the college site). Active default = **«2 зміни, 60 хв»**:
   - Mon–Thu: 1 08:30–09:30, 2 09:40–10:40, 3 11:00–12:00, 4 12:10–13:10, 5 13:30–14:30, 6 14:40–15:40, 7 16:00–17:00, 8 17:10–18:10
@@ -68,7 +70,7 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 - `week_parity_override(semester_id, week_start, parity)`
 - `bell_profile(name, active)`; `bell_slot(profile_id, weekday 1..5, pair_number, starts_at time, ends_at time)`
 - `shift_window(shift, weekday, first_pair, last_pair)`
-- `calendar_period(semester_id, kind HOLIDAY|NO_CLASSES|PRACTICE|STUDY_MODE|EXAM_SESSION, title, starts_on, ends_on, study_mode OFFLINE|ONLINE|MIXED null, order_note text null, scope ALL|COURSES|GROUPS, courses smallint[] null)` + `calendar_period_group(period_id, group_id)`
+- `calendar_period(semester_id, kind HOLIDAY|NO_CLASSES|PRACTICE|STUDY_MODE|EXAM_SESSION, title, starts_on, ends_on, study_mode OFFLINE|ONLINE|MIXED null, order_note text null, scope ALL|COURSES|GROUPS, courses smallint[] null)` + `calendar_period_group(period_id, group_id)` + `calendar_period_supervisor(period_id, teacher_id)` (PRACTICE only)
 
 **load**
 - `load_item(semester_id, group_id, discipline_id, lesson_kind LECTURE|PRACTICE|LAB|SEMINAR|MIXED, hours_per_week numeric(4,1), planned_hours int, split_subgroups bool, required_room_type null, preferred_room_id null, control_form EXAM|CREDIT|NONE, stream_id null, source MANUAL|CURRICULUM|PROGRAM|TIMETABLE_DERIVED, note)`

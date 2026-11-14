@@ -10,6 +10,7 @@ import static ua.vtc.rozklad.core.calendar.CalendarFixtures.studyModeForGroups;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.Parity;
@@ -116,6 +117,28 @@ class StudyCalendarTest {
             assertThat(day.parity()).isNull();
             assertThat(day.semesterId()).isNull();
         });
+    }
+
+    @Test
+    void practiceIsShownToItsGroupAndItsSupervisorsOnWorkingDaysOnly() {
+        UUID supervisor = UUID.randomUUID();
+        StudyPeriod practice = new StudyPeriod(CalendarPeriodKind.PRACTICE, "Електрорадіомонтажна практика",
+                LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 30), null, PeriodScope.GROUPS, Set.of(),
+                Set.of(GROUP_2KI3.groupId()), UUID.randomUUID(), Set.of(supervisor));
+        StudyCalendar withSupervisor = calendar(List.of(practice,
+                holiday("Осінні канікули", LocalDate.of(2026, 10, 26), LocalDate.of(2026, 10, 30))));
+        LocalDate tuesday = LocalDate.of(2026, 10, 20);
+
+        assertThat(withSupervisor.practices(tuesday, GROUP_2KI3)).containsExactly(practice);
+        assertThat(withSupervisor.practices(tuesday, GROUP_4KI1)).as("інша група").isEmpty();
+        assertThat(withSupervisor.practices(tuesday, null)).isEmpty();
+        assertThat(withSupervisor.supervisedPractices(tuesday, supervisor)).containsExactly(practice);
+        assertThat(withSupervisor.supervisedPractices(tuesday, UUID.randomUUID())).isEmpty();
+        assertThat(withSupervisor.practices(LocalDate.of(2026, 10, 24), GROUP_2KI3)).as("субота").isEmpty();
+        assertThat(withSupervisor.supervisedPractices(LocalDate.of(2026, 10, 24), supervisor)).isEmpty();
+        assertThat(withSupervisor.practices(LocalDate.of(2026, 10, 27), GROUP_2KI3)).as("канікули").isEmpty();
+        assertThat(withSupervisor.supervisedPractices(LocalDate.of(2026, 10, 27), supervisor)).isEmpty();
+        assertThat(withSupervisor.practices(LocalDate.of(2026, 11, 2), GROUP_2KI3)).as("після практики").isEmpty();
     }
 
     @Test

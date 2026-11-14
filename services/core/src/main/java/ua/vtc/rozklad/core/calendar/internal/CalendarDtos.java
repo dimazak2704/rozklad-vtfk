@@ -18,6 +18,7 @@ import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.shared.web.Ref;
 
 /** DTOs of the calendar admin API and its public endpoints. */
@@ -96,6 +97,10 @@ public final class CalendarDtos {
             @NotNull LocalTime endsAt) {
     }
 
+    /**
+     * {@code supervisorIds} / {@code supervisors} (additive): керівники практики of a PRACTICE period,
+     * empty for other kinds and for a practice nobody is assigned to yet.
+     */
     public record CalendarPeriodDto(
             UUID id,
             UUID semesterId,
@@ -109,12 +114,15 @@ public final class CalendarDtos {
             List<Integer> courses,
             List<UUID> groupIds,
             List<GroupRef> groups,
-            long version) {
+            long version,
+            List<UUID> supervisorIds,
+            List<TeacherRef> supervisors) {
     }
 
     /**
-     * @param studyMode required for STUDY_MODE, empty for other kinds
-     * @param scope     ALL when empty; COURSES needs {@code courses}, GROUPS needs {@code groupIds}
+     * @param studyMode     required for STUDY_MODE, empty for other kinds
+     * @param scope         ALL when empty; COURSES needs {@code courses}, GROUPS needs {@code groupIds}
+     * @param supervisorIds керівники практики: active teachers, only for PRACTICE (additive; empty = none)
      */
     public record CalendarPeriodRequest(
             @NotNull UUID semesterId,
@@ -127,7 +135,16 @@ public final class CalendarDtos {
             PeriodScope scope,
             List<@NotNull @Min(1) @Max(6) Integer> courses,
             List<@NotNull UUID> groupIds,
-            Long version) {
+            Long version,
+            @Size(max = 20) List<@NotNull UUID> supervisorIds) {
+
+        /** A request without supervisors. */
+        public CalendarPeriodRequest(UUID semesterId, CalendarPeriodKind kind, String title, LocalDate startsOn,
+                                     LocalDate endsOn, StudyMode studyMode, String orderNote, PeriodScope scope,
+                                     List<Integer> courses, List<UUID> groupIds, Long version) {
+            this(semesterId, kind, title, startsOn, endsOn, studyMode, orderNote, scope, courses, groupIds, version,
+                    null);
+        }
     }
 
     /** Element of the bare JSON array of {@code GET/PUT /api/admin/shift-windows}; validated by the service. */

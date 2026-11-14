@@ -19,7 +19,7 @@ import ua.vtc.rozklad.core.calendar.WeekParityOverride;
 
 /**
  * Builds a {@link StudyCalendar} from the calendar module's data with a constant number of
- * queries (semesters, parity overrides, periods with their groups), whatever the date range.
+ * queries (semesters, parity overrides, periods with their groups and supervisors), whatever the date range.
  * Call inside a transaction.
  */
 @Component
@@ -64,9 +64,10 @@ class StudyCalendarLoader {
     }
 
     private Map<UUID, List<StudyPeriod>> periodsBySemester(Collection<UUID> semesterIds) {
-        // fetch join: групи періодів приходять тим самим запитом, без N+1
+        // fetch join: групи й керівники практики приходять тим самим запитом, без N+1
         List<CalendarPeriod> periods = entityManager.createQuery("""
                         select distinct p from CalendarPeriod p left join fetch p.groups
+                        left join fetch p.supervisorIds
                         where p.semesterId in :ids
                         """, CalendarPeriod.class)
                 .setParameter("ids", semesterIds)

@@ -1,15 +1,19 @@
 package ua.vtc.rozklad.core.calendar;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -23,7 +27,8 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 /**
  * Holiday, practice, study mode … in a semester. Scope ALL / COURSES ({@code courses}) /
  * GROUPS (rows of {@code calendar_period_group}). {@code orderNote} is copied into orders
- * («Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»).
+ * («Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»). A PRACTICE period may name its
+ * supervisors (керівники практики, rows of {@code calendar_period_supervisor}); other kinds have none.
  */
 @Entity
 @Table(name = "calendar_period")
@@ -62,6 +67,11 @@ public class CalendarPeriod extends BaseEntity {
 
     @OneToMany(mappedBy = "period", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CalendarPeriodGroup> groups = new HashSet<>();
+
+    @ElementCollection
+    @CollectionTable(name = "calendar_period_supervisor", joinColumns = @JoinColumn(name = "period_id"))
+    @Column(name = "teacher_id", nullable = false)
+    private Set<UUID> supervisorIds = new HashSet<>();
 
     protected CalendarPeriod() {
     }
@@ -171,5 +181,20 @@ public class CalendarPeriod extends BaseEntity {
         Set<UUID> present = getGroupIds();
         wanted.stream().filter(id -> !present.contains(id))
                 .forEach(id -> groups.add(new CalendarPeriodGroup(this, id)));
+    }
+
+    /** Teachers supervising a PRACTICE period (empty for other kinds). */
+    public Set<UUID> getSupervisorIds() {
+        return Collections.unmodifiableSet(supervisorIds);
+    }
+
+    /** Replaces the supervisors; only a PRACTICE period may have them. */
+    public void setSupervisors(Collection<UUID> teacherIds) {
+        Set<UUID> wanted = teacherIds == null ? Set.of() : Set.copyOf(teacherIds);
+        if (!wanted.isEmpty() && kind != CalendarPeriodKind.PRACTICE) {
+            throw new IllegalArgumentException("only a PRACTICE period has supervisors");
+        }
+        supervisorIds.retainAll(wanted);
+        supervisorIds.addAll(wanted);
     }
 }
