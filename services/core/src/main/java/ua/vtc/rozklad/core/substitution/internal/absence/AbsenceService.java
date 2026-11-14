@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.absence;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
@@ -36,6 +37,11 @@ import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
  * notifies dispatchers; cancelling or shrinking an absence cancels the changes made for the lessons
  * it no longer covers. Overlapping absences of one teacher are rejected; writes of one teacher are
  * serialized by {@link AbsenceRepository#lockTeacher}, so parallel requests cannot both pass the check.
+ * <p>
+ * The teacher's own reports (cabinet, bot) start today at the earliest and at most {@value #MAX_DAYS_AHEAD} days
+ * ahead (the bot's calendar offers the same), and one teacher reports at most {@value #MAX_SELF_REPORTS_PER_DAY}
+ * absences in 24 hours, cancelled ones included: every report is a Telegram message to every admin chat, so a
+ * hijacked teacher account cannot flood them or fill the list. The dispatcher is not limited.
  */
 @Service
 @Transactional
@@ -43,6 +49,11 @@ public class AbsenceService {
 
     /** SSE event after an absence was edited or cancelled (additive to CONTRACTS, data: {@link AbsenceDto.Summary}). */
     public static final String ABSENCE_UPDATED = "absence.updated";
+    /** How far ahead a teacher reports an absence himself; later dates go through the dispatcher. */
+    public static final int MAX_DAYS_AHEAD = 90;
+    /** Own reports of one teacher in {@link #SELF_REPORT_WINDOW}, cancelled ones included. */
+    public static final int MAX_SELF_REPORTS_PER_DAY = 10;
+    private static final Duration SELF_REPORT_WINDOW = Duration.ofHours(24);
 
     private final AbsenceRepository absences;
     private final CatalogLookup catalog;
@@ -93,11 +104,20 @@ public class AbsenceService {
             throw new BusinessRuleException("ABSENCE_IN_PAST", ("Відсутність можна повідомити лише з сьогодні (%s). "
                     + "Про минулі дні повідомте диспетчера.").formatted(today.format(SubstitutionCalendar.DATE)));
         }
+        LocalDate latest = today.plusDays(MAX_DAYS_AHEAD);
+        if (source != AbsenceSource.ADMIN && data.dateFrom().isAfter(latest)) {
+            throw new BusinessRuleException("ABSENCE_TOO_FAR", ("Відсутність можна повідомити щонайбільше на %d днів "
+                    + "наперед (до %s). Про пізніші дати повідомте диспетчера.")
+                    .formatted(MAX_DAYS_AHEAD, latest.format(SubstitutionCalendar.DATE)));
+        }
         Absence absence = new Absence(teacher.getId(), data.dateFrom(), data.dateTo(), data.reasonCategory(), source,
                 actor);
         absence.setPairs(data.pairs());
         absence.setComment(data.cleanComment());
         absences.lockTeacher(teacher.getId());
+        if (source != AbsenceSource.ADMIN) {
+            requireSelfReportQuota(teacher.getId());
+        }
         requireNoOverlap(absence);
         absences.save(absence);
         events.publishEvent(new AbsenceReported(EventEnvelope.create(clock), absence.getId(), teacher.getId(),
@@ -169,6 +189,16 @@ public class AbsenceService {
 
     private Absence find(UUID id) {
         return absences.findById(id).orElseThrow(() -> NotFoundException.of("Відсутність", id));
+    }
+
+    /** Counted under the teacher's lock, so parallel reports cannot all pass. */
+    private void requireSelfReportQuota(UUID teacherId) {
+        long recent = absences.countByTeacherIdAndSourceNotAndCreatedAtAfter(teacherId, AbsenceSource.ADMIN,
+                clock.instant().minus(SELF_REPORT_WINDOW));
+        if (recent >= MAX_SELF_REPORTS_PER_DAY) {
+            throw new BusinessRuleException("ABSENCE_LIMIT", ("За добу можна повідомити щонайбільше про %d "
+                    + "відсутностей. Решту передайте через диспетчера.").formatted(MAX_SELF_REPORTS_PER_DAY));
+        }
     }
 
     /** One teacher cannot be absent twice at the same pair. */

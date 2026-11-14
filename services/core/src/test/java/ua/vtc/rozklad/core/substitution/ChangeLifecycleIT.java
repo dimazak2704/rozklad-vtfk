@@ -577,6 +577,58 @@ class ChangeLifecycleIT {
     }
 
     @Test
+    void teacherReportsAtMostNinetyDaysAheadTheDispatcherFurther() {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate tooFar = today.plusDays(91);
+        AbsenceRequests.AbsenceData far = new AbsenceRequests.AbsenceData(tooFar, tooFar, null,
+                AbsenceReasonCategory.OTHER, null);
+
+        for (AbsenceSource teacherSource : List.of(AbsenceSource.WEB, AbsenceSource.BOT)) {
+            assertThatThrownBy(() -> absences.report(nepyivoda.getId(), far, teacherSource, "nepyivoda"))
+                    .isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                        assertThat(error.getCode()).isEqualTo("ABSENCE_TOO_FAR");
+                        assertThat(error.getMessage()).contains("90 днів");
+                    });
+        }
+        assertThat(absences.ofTeacher(nepyivoda.getId())).isEmpty();
+        LocalDate lastAllowed = today.plusDays(90);
+        AbsenceRequests.AbsenceData lastDay = new AbsenceRequests.AbsenceData(lastAllowed, lastAllowed.plusDays(5),
+                null, AbsenceReasonCategory.OTHER, null);
+        assertThat(absences.report(nepyivoda.getId(), lastDay, AbsenceSource.WEB, "nepyivoda").dateFrom())
+                .isEqualTo(lastAllowed);
+        assertThat(absences.report(krentsin.getId(), far, AbsenceSource.ADMIN, "admin").dateFrom()).isEqualTo(tooFar);
+    }
+
+    @Test
+    void teacherReportsAtMostTenAbsencesADayEvenIfHeCancelsThem() {
+        LocalDate tomorrow = LocalDate.now(clock).plusDays(1);
+        for (int day = 0; day < 10; day++) {
+            AbsenceDto reported = absences.report(nepyivoda.getId(), new AbsenceRequests.AbsenceData(
+                    tomorrow.plusDays(day), tomorrow.plusDays(day), List.of(1), AbsenceReasonCategory.OTHER, null),
+                    day % 2 == 0 ? AbsenceSource.WEB : AbsenceSource.BOT, "nepyivoda");
+            if (day < 5) {
+                // скасування не повертає ліміт: інакше «повідомив — скасував» знову й знову слав би адмінам Telegram
+                absences.cancelOwn(reported.id(), nepyivoda.getId(), "nepyivoda");
+            }
+        }
+        AbsenceRequests.AbsenceData eleventh = new AbsenceRequests.AbsenceData(tomorrow.plusDays(20),
+                tomorrow.plusDays(20), null, AbsenceReasonCategory.OTHER, null);
+
+        for (AbsenceSource teacherSource : List.of(AbsenceSource.WEB, AbsenceSource.BOT)) {
+            assertThatThrownBy(() -> absences.report(nepyivoda.getId(), eleventh, teacherSource, "nepyivoda"))
+                    .isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                        assertThat(error.getCode()).isEqualTo("ABSENCE_LIMIT");
+                        assertThat(error.getMessage()).contains("диспетчера");
+                    });
+        }
+        assertThat(absences.ofTeacher(nepyivoda.getId())).hasSize(10);
+        assertThat(absences.report(nepyivoda.getId(), eleventh, AbsenceSource.ADMIN, "admin").dateFrom())
+                .as("the dispatcher is not limited").isEqualTo(tomorrow.plusDays(20));
+        assertThat(absences.report(krentsin.getId(), eleventh, AbsenceSource.WEB, "krentsin").dateFrom())
+                .as("the limit is per teacher").isEqualTo(tomorrow.plusDays(20));
+    }
+
+    @Test
     void absenceEditNeedsTheVersionItWasMadeFrom() {
         AbsenceRequests.AbsenceData data = new AbsenceRequests.AbsenceData(MONDAY, MONDAY, List.of(3),
                 AbsenceReasonCategory.OTHER, "R3");

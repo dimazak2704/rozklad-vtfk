@@ -148,7 +148,8 @@ reconnects with a fresh token. 429 (`too-many-requests`) above 10 streams of one
 ## 3. Core — teacher (role TEACHER)
 
 `GET /api/me` → `{userId, username, roles, teacher:{id,shortName,displayName}?}`;
-`GET /api/me/schedule?from&to` → `ScheduleDto`; `GET/POST /api/me/absences`, `DELETE /api/me/absences/{id}` (own only, future only);
+`GET /api/me/schedule?from&to` → `ScheduleDto`; `GET/POST /api/me/absences`, `DELETE /api/me/absences/{id}` (own only, future only;
+a report starts today to 90 days ahead and at most 10 reports per teacher in 24 hours: 422 `ABSENCE_TOO_FAR`, `ABSENCE_LIMIT`);
 `GET /api/me/changes?status` → changes where I am the new teacher; `POST /api/me/changes/{id}/confirm|decline` `{comment?}`;
 `GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`.
 
