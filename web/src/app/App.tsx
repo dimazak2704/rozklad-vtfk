@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { User } from 'oidc-client-ts';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from 'react-oidc-context';
 import { RouterProvider } from 'react-router';
 import { queryClient } from '@/api/queryClient';
@@ -8,6 +8,7 @@ import { postLoginPath, returnToFromState } from '@/auth/postLogin';
 import { rolesFromAccessToken } from '@/auth/roles';
 import { userManager } from '@/auth/userManager';
 import { TooltipProvider } from '@/components/ui/Tooltip';
+import { installRoutePrefetch } from './prefetch';
 import { router } from './router';
 
 // Панель TanStack Query — лише в dev і лише за бажанням (VITE_QUERY_DEVTOOLS=1), щоб не заважала на скриншотах
@@ -23,6 +24,7 @@ function handleSigninCallback(user: User | undefined): void {
 }
 
 export function App() {
+  useEffect(() => installRoutePrefetch(), []);
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider userManager={userManager} onSigninCallback={handleSigninCallback}>
