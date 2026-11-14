@@ -68,6 +68,9 @@ class SubstitutionFlowIT {
     private static final Duration WAIT = Duration.ofSeconds(15);
 
     @Autowired
+    private ua.vtc.rozklad.core.support.TestClock clock;
+
+    @Autowired
     private AbsenceService absences;
 
     @Autowired
@@ -150,7 +153,22 @@ class SubstitutionFlowIT {
 
     @AfterEach
     void cleanUp() {
+        clock.reset();
         fixture.cleanUp();
+    }
+
+    /**
+     * CONFIRM asks the teacher only while the pair is ahead (DOMAIN §7), and {@link #MONDAY} is in the past:
+     * the request is made on the Friday before, the rest of the test runs at the real time.
+     */
+    private <T> T beforeMonday(java.util.function.Supplier<T> call) {
+        clock.stopAt(java.time.LocalDate.of(2026, 10, 16).atTime(10, 0)
+                .atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant());
+        try {
+            return call.get();
+        } finally {
+            clock.reset();
+        }
     }
 
     @Test
@@ -211,9 +229,9 @@ class SubstitutionFlowIT {
     @Test
     void decisionCoversTheLessonAndCountsInTheStatistics() {
         AbsenceDto absence = reportAbsence();
-        ChangeDto change = changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2, null,
-                ki41.getId(), null, stpLesson.getId(), null, nepyivoda.getId(), null, null, ReasonCode.ABSENT, null,
-                absence.id()), "admin");
+        ChangeDto change = beforeMonday(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER,
+                MONDAY, 2, null, ki41.getId(), null, stpLesson.getId(), null, nepyivoda.getId(), null, null,
+                ReasonCode.ABSENT, null, absence.id()), "admin"));
 
         List<AffectedLessonDto> affected = affectedLessons.of(absence.id());
         assertThat(affected.getFirst().decision().status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
@@ -348,9 +366,9 @@ class SubstitutionFlowIT {
     }
 
     private ChangeDto replaceWithHanza() {
-        return changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2, null,
-                ki41.getId(), null, stpLesson.getId(), null, hanza.getId(), null, null, ReasonCode.OTHER, "тест",
-                null), "admin");
+        return beforeMonday(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_TEACHER, MONDAY, 2,
+                null, ki41.getId(), null, stpLesson.getId(), null, hanza.getId(), null, null, ReasonCode.OTHER, "тест",
+                null), "admin"));
     }
 
     private AbsenceDto reportWholeDay(Teacher teacher) {

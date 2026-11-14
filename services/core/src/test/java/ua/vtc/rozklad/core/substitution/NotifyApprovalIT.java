@@ -64,6 +64,9 @@ class NotifyApprovalIT {
     private static final Duration WAIT = Duration.ofSeconds(15);
 
     @Autowired
+    private ua.vtc.rozklad.core.support.TestClock clock;
+
+    @Autowired
     private ChangeCommands commands;
 
     @Autowired
@@ -126,7 +129,22 @@ class NotifyApprovalIT {
 
     @AfterEach
     void cleanUp() {
+        clock.reset();
         fixture.cleanUp();
+    }
+
+    /**
+     * CONFIRM asks the teacher only while the pair is ahead (DOMAIN §7), and {@link #MONDAY} is in the past:
+     * the request is made on the Friday before, the rest of the test runs at the real time.
+     */
+    private <T> T beforeMonday(java.util.function.Supplier<T> call) {
+        clock.stopAt(java.time.LocalDate.of(2026, 10, 16).atTime(10, 0)
+                .atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant());
+        try {
+            return call.get();
+        } finally {
+            clock.reset();
+        }
     }
 
     @Test
@@ -232,7 +250,7 @@ class NotifyApprovalIT {
         // диспетчер не може підтвердити відхилену заміну за викладача, лише попросити ще раз або обрати інше
         assertThatThrownBy(() -> commands.confirm(created.id(), "admin"))
                 .isInstanceOf(ua.vtc.rozklad.core.shared.error.BusinessRuleException.class);
-        assertThat(commands.requestConfirmation(created.id(), "admin").status())
+        assertThat(beforeMonday(() -> commands.requestConfirmation(created.id(), "admin")).status())
                 .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
     }
 
@@ -414,7 +432,8 @@ class NotifyApprovalIT {
         fixture.setting("substitution.approvalMode", "CONFIRM");
         EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
                 RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED, RozkladEvents.SUBSTITUTION_DETAILS_CHANGED);
-        ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.MUTUAL), "admin");
+        ChangeDto created = beforeMonday(() -> commands.create(otherDiscipline(stpLesson(MONDAY, 2),
+                ReasonCode.MUTUAL), "admin"));
         assertThat(probe.await(SubstitutionConfirmationRequested.class,
                 event -> event.changeId().equals(created.id()), 1, WAIT)).singleElement()
                 .satisfies(event -> assertThat(event.mode()).isEqualTo(SubstitutionRequestMode.CONFIRM));

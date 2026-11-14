@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ChangeStatus;
@@ -24,22 +25,27 @@ public class ChangeWorkflow {
     private final ChangeNotifications notifications;
     private final SettingsService settings;
     private final DatedLessonRefresh lessonRefresh;
+    private final ConfirmationWindow window;
     private final Clock clock;
 
     public ChangeWorkflow(ChangeHistoryRepository history, ChangeNotifications notifications,
-                          SettingsService settings, DatedLessonRefresh lessonRefresh, Clock clock) {
+                          SettingsService settings, DatedLessonRefresh lessonRefresh, ConfirmationWindow window,
+                          Clock clock) {
         this.history = history;
         this.notifications = notifications;
         this.settings = settings;
         this.lessonRefresh = lessonRefresh;
+        this.window = window;
         this.clock = clock;
     }
 
     /**
      * Approval rules for a new change. Without a teacher to assign it is confirmed at once (AUTO). With
      * one, the setting decides: CONFIRM waits for the teacher (DRAFT → PENDING_CONFIRMATION, deadline,
-     * request); NOTIFY confirms at once and informs the teacher (no deadline, no reminders); AUTO
-     * confirms at once without a message. One history entry records the creation.
+     * request; the deadline is not later than the start of the pair); NOTIFY confirms at once and informs the
+     * teacher (no deadline, no reminders); AUTO confirms at once without a message. A CONFIRM change for a pair
+     * that is already over asks nobody: it is confirmed at once like AUTO (the dispatcher records what
+     * happened). One history entry records the creation.
      */
     public void open(Change change, String actor) {
         ApprovalMode mode = change.getNewTeacherId() == null ? ApprovalMode.AUTO : switch (settings.approvalMode()) {
@@ -47,17 +53,23 @@ public class ChangeWorkflow {
             case CONFIRM -> ApprovalMode.CONFIRM;
             case NOTIFY -> ApprovalMode.NOTIFY;
         };
+        // просити підтвердити пару, що вже минула, запізно: диспетчер вносить її для обліку
+        boolean lessonOver = mode == ApprovalMode.CONFIRM && window.lessonOver(change, clock.instant());
+        if (lessonOver) {
+            mode = ApprovalMode.AUTO;
+        }
         ChangeStatus target = mode == ApprovalMode.CONFIRM ? ChangeStatus.PENDING_CONFIRMATION : ChangeStatus.CONFIRMED;
         ChangeStatusMachine.requireTransition(change.getStatus(), target);
         change.setStatus(target);
         change.setApprovalMode(mode);
         if (mode == ApprovalMode.CONFIRM) {
-            change.startConfirmationRound(clock.instant().plus(settings.current().confirmTimeout()));
+            change.startConfirmationRound(deadline(change));
         }
         history.save(new ChangeHistory(change.getId(), clock.instant(), actor, null, target, switch (mode) {
             case CONFIRM -> "Створено, очікує підтвердження викладача";
             case NOTIFY -> "Створено і підтверджено, викладачу надіслано повідомлення";
-            case AUTO -> "Створено і підтверджено";
+            case AUTO -> lessonOver ? "Створено і підтверджено: пара вже минула, викладача не питали"
+                    : "Створено і підтверджено";
         }));
         switch (mode) {
             case CONFIRM -> notifications.confirmationRequested(change);
@@ -118,12 +130,17 @@ public class ChangeWorkflow {
 
     /**
      * Asks the assigned teacher (again): a new confirmation round with a fresh deadline. Allowed for
-     * DRAFT, PENDING_CONFIRMATION (re-send) and DECLINED (ask once more, whatever mode the change had).
+     * DRAFT, PENDING_CONFIRMATION (re-send) and DECLINED (ask once more, whatever mode the change had), and
+     * only while the pair is not over (422 {@code CHANGE_LESSON_OVER}).
      */
     public void requestConfirmation(Change change, String actor) {
         if (change.getNewTeacherId() == null) {
             throw new BusinessRuleException("CHANGE_WITHOUT_TEACHER",
                     "Ця зміна не призначає викладача, тому підтвердження не потрібне.");
+        }
+        if (window.lessonOver(change, clock.instant())) {
+            throw new BusinessRuleException("CHANGE_LESSON_OVER",
+                    "Пара вже минула — просити викладача підтвердити заміну запізно.");
         }
         ChangeStatus from = change.getStatus();
         if (from != ChangeStatus.PENDING_CONFIRMATION) {
@@ -133,7 +150,12 @@ public class ChangeWorkflow {
                     ChangeStatus.PENDING_CONFIRMATION, "Запит на підтвердження надіслано повторно"));
         }
         change.setApprovalMode(ApprovalMode.CONFIRM);
-        change.startConfirmationRound(clock.instant().plus(settings.current().confirmTimeout()));
+        change.startConfirmationRound(deadline(change));
         notifications.confirmationRequested(change);
+    }
+
+    /** {@code substitution.confirmTimeoutMinutes} from now, but not past the start of the pair. */
+    private Instant deadline(Change change) {
+        return window.deadline(change, clock.instant(), settings.current().confirmTimeout());
     }
 }

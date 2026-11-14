@@ -282,6 +282,12 @@ picks every substitution; the substitute is **assigned first and informed afterw
   про заміну самі» per teacher and date (never for past lessons).
 - **CONFIRM**: DRAFT → PENDING_CONFIRMATION → CONFIRMED | DECLINED (declined returns the lesson to «needs
   decision»); pending longer than `substitution.confirmTimeoutMinutes` ⇒ reminder (SSE + admin chat).
+  The answer is due before the lesson: `confirm_deadline` = now + `confirmTimeoutMinutes`, but not later than the
+  start of the change's first pair (a pair already going on: not later than the end of its last pair). Nobody is
+  asked about a pair that is already over: a new change for it is confirmed at once like AUTO (history «пара вже
+  минула, викладача не питали»), «ask again» is refused (422 `CHANGE_LESSON_OVER`), and a request still pending
+  when the pair ends gets no reminder from core or the bot — the dispatcher confirms or cancels it. The bot sends
+  no request, notice or reminder about a lesson that is over (an earlier day, or today after the pair's end).
 - **AUTO**: DRAFT → CONFIRMED, the teacher learns from the published order.
 Kinds without a new teacher are confirmed at once in every mode.
 

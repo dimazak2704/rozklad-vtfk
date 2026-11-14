@@ -58,13 +58,17 @@ public interface ChangeRepository extends JpaRepository<Change, UUID> {
             """)
     List<Change> findOverduePending(Instant now);
 
-    /** Overdue pending confirmations of the current round that have not been reminded yet. */
+    /**
+     * Overdue pending confirmations of the current round that have not been reminded yet, for lessons from
+     * {@code today} on (an earlier day's pair is over: nobody is reminded about it).
+     */
     @Query("""
             select c.id from Change c
             where c.status = ua.vtc.rozklad.contracts.ChangeStatus.PENDING_CONFIRMATION
               and c.confirmDeadline < :now
               and c.remindedAt is null
+              and c.date >= :today
             order by c.confirmDeadline
             """)
-    List<UUID> findIdsToRemind(Instant now);
+    List<UUID> findIdsToRemind(Instant now, LocalDate today);
 }

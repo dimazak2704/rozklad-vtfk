@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.persistence.EntityManager;
-import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
@@ -72,7 +71,9 @@ import ua.vtc.rozklad.core.substitution.internal.change.ConfirmationReminders;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.substitution.internal.change.UpdateChangeRequest;
 import ua.vtc.rozklad.core.substitution.internal.options.LessonOptions;
+import ua.vtc.rozklad.core.shared.time.TimeConfig;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
+import ua.vtc.rozklad.core.support.TestClock;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.timetable.Lesson;
 
@@ -85,6 +86,9 @@ import ua.vtc.rozklad.core.timetable.Lesson;
 class ChangeLifecycleIT {
 
     private static final LocalDate MONDAY = LocalDate.of(2026, 10, 19);
+    /** Friday before {@link #MONDAY}: the pairs of the tests are still ahead, so the teacher is asked. */
+    private static final Instant FRIDAY_BEFORE = LocalDate.of(2026, 10, 16).atTime(10, 0)
+            .atZone(TimeConfig.KYIV).toInstant();
     private static final Duration WAIT = Duration.ofSeconds(15);
 
     @Autowired
@@ -127,7 +131,7 @@ class ChangeLifecycleIT {
     private RabbitTemplate rabbitTemplate;
 
     @Autowired
-    private Clock clock;
+    private TestClock clock;
 
     @Autowired
     private WebApplicationContext context;
@@ -143,6 +147,7 @@ class ChangeLifecycleIT {
 
     @BeforeEach
     void schedule() {
+        clock.stopAt(FRIDAY_BEFORE);
         fixture = new ScheduleFixture(transaction, entityManager, jdbc);
         semester = fixture.semester();
         group = fixture.group("4КІ1", 4);
@@ -157,6 +162,7 @@ class ChangeLifecycleIT {
 
     @AfterEach
     void cleanUp() {
+        clock.reset();
         fixture.cleanUp();
     }
 
@@ -269,6 +275,64 @@ class ChangeLifecycleIT {
         assertThat(askedAgain.history()).extracting(ChangeDto.HistoryEntry::to).containsExactly(
                 ChangeStatus.PENDING_CONFIRMATION, ChangeStatus.DECLINED, ChangeStatus.PENDING_CONFIRMATION);
         assertThat(overview.summarize(MONDAY).declined()).isZero();
+    }
+
+    @Test
+    void deadlineIsNotLaterThanTheStartOfThePair() {
+        // понеділок 08:30: за типовим строком (120 хв) відповідь чекали б до 10:30, а 2 пара починається о 09:40
+        clock.stopAt(MONDAY.atTime(8, 30).atZone(TimeConfig.KYIV).toInstant());
+
+        ChangeDto created = commands.create(replaceTeacher(nepyivoda), "admin");
+
+        assertThat(created.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+        assertThat(created.confirmDeadline()).isEqualTo(MONDAY.atTime(9, 40).atZone(TimeConfig.KYIV).toInstant());
+
+        // пара вже йде (10:00): відповідь ще має сенс до її кінця, не довше
+        commands.cancel(created.id(), "admin");
+        clock.stopAt(MONDAY.atTime(10, 0).atZone(TimeConfig.KYIV).toInstant());
+        ChangeDto during = commands.create(replaceTeacher(nepyivoda), "admin");
+        assertThat(during.confirmDeadline()).isEqualTo(MONDAY.atTime(10, 40).atZone(TimeConfig.KYIV).toInstant());
+    }
+
+    @Test
+    void pairThatIsAlreadyOverIsConfirmedAtOnceWithoutAskingTheTeacher() {
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+        // понеділок 12:00: 2 пара (09:40–10:40) уже минула — диспетчер вносить заміну для обліку
+        clock.stopAt(MONDAY.atTime(12, 0).atZone(TimeConfig.KYIV).toInstant());
+
+        ChangeDto created = commands.create(replaceTeacher(nepyivoda), "admin");
+
+        assertThat(created.status()).isEqualTo(ChangeStatus.CONFIRMED);
+        assertThat(created.approvalMode()).isEqualTo(ApprovalMode.AUTO);
+        assertThat(created.confirmDeadline()).isNull();
+        assertThat(created.history()).singleElement().extracting(ChangeDto.HistoryEntry::comment)
+                .isEqualTo("Створено і підтверджено: пара вже минула, викладача не питали");
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+    }
+
+    @Test
+    void endedPairIsNeitherAskedAgainNorReminded() {
+        EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate,
+                RozkladEvents.SUBSTITUTION_CONFIRMATION_REQUESTED);
+        ChangeDto created = commands.create(replaceTeacher(nepyivoda), "admin");
+        probe.await(SubstitutionConfirmationRequested.class, event -> event.changeId().equals(created.id()), 1, WAIT);
+
+        // викладач не відповів, а пара вже минула: ні нагадування, ні нового запиту
+        clock.stopAt(MONDAY.atTime(12, 0).atZone(TimeConfig.KYIV).toInstant());
+        assertThat(reminders.remindOverdue()).isZero();
+        assertThat(changes.findById(created.id()).orElseThrow().getRemindedAt()).isNull();
+        assertThatThrownBy(() -> commands.requestConfirmation(created.id(), "admin"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("CHANGE_LESSON_OVER"));
+        // наступного дня — так само
+        clock.stopAt(MONDAY.plusDays(1).atTime(9, 0).atZone(TimeConfig.KYIV).toInstant());
+        assertThat(reminders.remindOverdue()).isZero();
+        assertThat(probe.await(SubstitutionConfirmationRequested.class,
+                event -> event.changeId().equals(created.id()), 1, Duration.ofSeconds(2))).isEmpty();
+        // диспетчер підтверджує сам
+        assertThat(commands.confirm(created.id(), "admin").status()).isEqualTo(ChangeStatus.CONFIRMED);
     }
 
     @Test

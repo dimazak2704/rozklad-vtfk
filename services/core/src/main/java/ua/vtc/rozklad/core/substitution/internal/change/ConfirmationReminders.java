@@ -2,6 +2,7 @@ package ua.vtc.rozklad.core.substitution.internal.change;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -11,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.core.shared.time.TimeConfig;
 import ua.vtc.rozklad.core.substitution.Change;
 import ua.vtc.rozklad.core.substitution.ChangeRepository;
 
@@ -19,7 +21,9 @@ import ua.vtc.rozklad.core.substitution.ChangeRepository;
  * (DOMAIN §7): the request is sent to the teacher again ({@code substitution.confirmation-requested}
  * with the same change id and the passed deadline) and dispatchers get an SSE update. Idempotent:
  * {@code reminded_at} marks the round in the same transaction as the event, and a concurrent run
- * loses on the optimistic lock, so every confirmation round is reminded exactly once.
+ * loses on the optimistic lock, so every confirmation round is reminded exactly once. A pair that is already
+ * over is not reminded about: the reminder would come after the lesson (the deadline itself is not later than
+ * the pair's start, see {@link ConfirmationWindow}).
  */
 @Component
 public class ConfirmationReminders {
@@ -29,13 +33,15 @@ public class ConfirmationReminders {
     private final ChangeRepository changes;
     private final ChangeNotifications notifications;
     private final TransactionTemplate transaction;
+    private final ConfirmationWindow window;
     private final Clock clock;
 
     public ConfirmationReminders(ChangeRepository changes, ChangeNotifications notifications,
-                                 TransactionTemplate transaction, Clock clock) {
+                                 TransactionTemplate transaction, ConfirmationWindow window, Clock clock) {
         this.changes = changes;
         this.notifications = notifications;
         this.transaction = transaction;
+        this.window = window;
         this.clock = clock;
     }
 
@@ -51,7 +57,8 @@ public class ConfirmationReminders {
     /** @return how many reminders were sent by this call */
     public int remindOverdue() {
         Instant now = clock.instant();
-        List<UUID> due = transaction.execute(status -> changes.findIdsToRemind(now));
+        LocalDate today = LocalDate.ofInstant(now, TimeConfig.KYIV);
+        List<UUID> due = transaction.execute(status -> changes.findIdsToRemind(now, today));
         int sent = 0;
         for (UUID changeId : due == null ? List.<UUID>of() : due) {
             try {
@@ -70,7 +77,7 @@ public class ConfirmationReminders {
         // стан міг змінитися між вибіркою і цією транзакцією
         if (change == null || change.getStatus() != ChangeStatus.PENDING_CONFIRMATION
                 || change.getRemindedAt() != null || change.getConfirmDeadline() == null
-                || !change.getConfirmDeadline().isBefore(now)) {
+                || !change.getConfirmDeadline().isBefore(now) || window.lessonOver(change, now)) {
             return false;
         }
         change.markReminded(now);

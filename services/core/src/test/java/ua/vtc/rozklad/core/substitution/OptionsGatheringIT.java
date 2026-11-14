@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assumptions.assumeThat;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
-import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
@@ -94,7 +93,7 @@ class OptionsGatheringIT {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private Clock clock;
+    private ua.vtc.rozklad.core.support.TestClock clock;
 
     private ScheduleFixture fixture;
     private Semester semester;
@@ -153,7 +152,22 @@ class OptionsGatheringIT {
 
     @AfterEach
     void cleanUp() {
+        clock.reset();
         fixture.cleanUp();
+    }
+
+    /**
+     * CONFIRM asks the teacher only while the pair is ahead (DOMAIN §7), and {@link #MONDAY} is in the past:
+     * the request is made on the Friday before, the rest of the test runs at the real time.
+     */
+    private <T> T beforeMonday(java.util.function.Supplier<T> call) {
+        clock.stopAt(java.time.LocalDate.of(2026, 10, 16).atTime(10, 0)
+                .atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant());
+        try {
+            return call.get();
+        } finally {
+            clock.reset();
+        }
     }
 
     /** 1КІ1 pair 2 (Матем., Бадунь); Ганза's own pair 2 is cancelled by an open decision; Остапюк is busy. */
@@ -164,9 +178,9 @@ class OptionsGatheringIT {
         fixture.lesson(semester, MONDAY, 2, ki12, 0, informatics, ostapiuk, fixture.room("31"));
         changeCommands.create(new CreateChangeRequest(ChangeKind.CANCEL, MONDAY, 2, null, ki21.getId(), null,
                 hanzaElsewhere.getId(), null, null, null, null, ReasonCode.ABSENT, null, null), "admin");
-        ChangeDto asked = changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE, MONDAY, 2, null,
-                ki11.getId(), null, target.getId(), chemistry.getId(), vernyhora.getId(), null, null,
-                ReasonCode.MUTUAL, null, null), "admin");
+        ChangeDto asked = beforeMonday(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE,
+                MONDAY, 2, null, ki11.getId(), null, target.getId(), chemistry.getId(), vernyhora.getId(), null, null,
+                ReasonCode.MUTUAL, null, null), "admin"));
         assertThat(asked.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
         replies.replyFromBot(asked.id(), vernyhora.getId(), ConfirmationDecision.DECLINE, "Не можу");
         return target;
@@ -215,9 +229,9 @@ class OptionsGatheringIT {
     void aFreedTeacherCanBeAssigned() {
         Lesson target = mondayWithAFreedTeacherABusyOneAndADecliner();
 
-        ChangeDto change = changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE, MONDAY, 2,
-                null, ki11.getId(), null, target.getId(), informatics.getId(), hanza.getId(), null, null,
-                ReasonCode.MUTUAL, null, null), "admin");
+        ChangeDto change = beforeMonday(() -> changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE,
+                MONDAY, 2, null, ki11.getId(), null, target.getId(), informatics.getId(), hanza.getId(), null, null,
+                ReasonCode.MUTUAL, null, null), "admin"));
 
         assertThat(change.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
     }
@@ -255,9 +269,9 @@ class OptionsGatheringIT {
         assertThat(lessonOptions.of(first.getId()).options())
                 .anyMatch(option -> option.kind() == ChangeKind.REPLACE_DISCIPLINE
                         && option.teacher().id().equals(nepyivoda.getId()));
-        ChangeDto together = changeCommands.create(new CreateChangeRequest(ChangeKind.REPLACE_DISCIPLINE, MONDAY, 4,
-                null, ki11.getId(), null, first.getId(), physics.getId(), nepyivoda.getId(), null, null,
-                ReasonCode.MUTUAL, null, null), "admin");
+        ChangeDto together = beforeMonday(() -> changeCommands.create(new CreateChangeRequest(
+                ChangeKind.REPLACE_DISCIPLINE, MONDAY, 4, null, ki11.getId(), null, first.getId(), physics.getId(),
+                nepyivoda.getId(), null, null, ReasonCode.MUTUAL, null, null), "admin"));
         assertThat(together.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
     }
 
