@@ -19,9 +19,11 @@
     }
   }
 
-  // фокус на логіні, якщо форма видима (згорнута під «Увійти з паролем» — не чіпаємо)
+  // фокус на логіні, коли форма — єдиний спосіб входу або пароль щойно не підійшов;
+  // коли головна дія «Увійти через Google», фокус лишається на початку сторінки
   var username = document.getElementById('username');
-  if (username && username.offsetParent !== null) {
+  var google = document.querySelector('.auth-providers');
+  if (username && (!google || username.getAttribute('aria-invalid') === 'true')) {
     username.focus();
   }
 })();

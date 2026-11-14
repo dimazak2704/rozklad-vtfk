@@ -39,12 +39,10 @@ export function credentials(role: Role): { username: string; password: string } 
 export const isSignInPage = (url: URL) => url.pathname === '/auth/login';
 
 /**
- * Заповнює форму сторінки входу сервісу auth: «Логін або e-mail», «Пароль», «Увійти». Коли ввімкнено вхід через
- * Google (`dev-stack.sh up --google-mock`), форма пароля згорнута під «Увійти з паролем» — спершу розгортаємо.
+ * Заповнює форму сторінки входу сервісу auth: «Логін або e-mail», «Пароль», «Увійти». Форма видима одразу,
+ * і з увімкненим входом через Google (`dev-stack.sh up --google-mock`) — під розділювачем «або».
  */
 export async function fillSignInForm(page: Page, username: string, password: string): Promise<void> {
-  const field = page.getByLabel('Логін або e-mail', { exact: true });
-  if (!(await field.isVisible())) await page.getByText('Увійти з паролем', { exact: true }).click();
   await page.getByLabel('Логін або e-mail', { exact: true }).fill(username);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Увійти', exact: true }).click();

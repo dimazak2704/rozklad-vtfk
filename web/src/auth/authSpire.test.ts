@@ -130,10 +130,9 @@ function keyframes(name: string): [number, number][] {
 
 const outer = sample(pathOf('auth-spire-outer').d);
 const tower = sample(pathOf('auth-spire-tower').d);
-const towerRun = sample(pathOf('auth-spire-tower-run').d);
-const innerRun = sample(pathOf('auth-spire-inner-run').d);
 const inner = sample(pathOf('auth-spire-inner').d);
 const offScreen = ([x, y]: Point) => x > edge || y > edge;
+const samePoint = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.002;
 
 /**
  * Великий знак сторінки входу (login.html + auth-page.css): частина за краєм екрана, світло народжується
@@ -141,26 +140,26 @@ const offScreen = ([x, y]: Point) => x > edge || y > edge;
  */
 describe('великий знак на сторінці входу', () => {
   it('pathLength кожної фігури — її справжня довжина, і CSS рахує штрихи з тих самих чисел', () => {
-    expect([...paths.keys()].sort()).toEqual([
-      'auth-spire-inner',
-      'auth-spire-inner-run',
-      'auth-spire-outer',
-      'auth-spire-tower',
-      'auth-spire-tower-run',
-    ]);
+    expect([...paths.keys()].sort()).toEqual(['auth-spire-inner', 'auth-spire-outer', 'auth-spire-tower']);
     for (const [id, { length, d }] of paths) {
       expect(lengthOf(sample(d)), id).toBeCloseTo(length, 1);
     }
     expect(lenOf('.auth-spire-outer')).toBe(pathOf('auth-spire-outer').length);
     expect(lenOf('.auth-spire-tower')).toBe(pathOf('auth-spire-tower').length);
     expect(lenOf('.auth-spire-inner')).toBe(pathOf('auth-spire-inner').length);
-    expect(lenOf('.auth-trace-tower')).toBe(pathOf('auth-spire-tower-run').length);
-    expect(lenOf('.auth-trace-inner')).toBe(pathOf('auth-spire-inner-run').length);
-    // кожна група світла біжить по своєму шляху
+    expect(lenOf('.auth-trace-tower')).toBe(pathOf('auth-spire-tower').length);
+    expect(lenOf('.auth-trace-inner')).toBe(pathOf('auth-spire-inner').length);
+    // світло біжить по тих самих шляхах, що й контур: лежить точно на лініях, а не поруч
+    const line = /<g class="auth-spire-line">([\s\S]*?)<\/g>/.exec(loginHtml)?.[1] ?? '';
+    expect([...line.matchAll(/href="#([\w-]+)"/g)].map((match) => match[1])).toEqual([
+      'auth-spire-outer',
+      'auth-spire-tower',
+      'auth-spire-inner',
+    ]);
     for (const [group, id] of [
       ['auth-trace-outer', 'auth-spire-outer'],
-      ['auth-trace-tower', 'auth-spire-tower-run'],
-      ['auth-trace-inner', 'auth-spire-inner-run'],
+      ['auth-trace-tower', 'auth-spire-tower'],
+      ['auth-trace-inner', 'auth-spire-inner'],
     ] as const) {
       const block = new RegExp(`<g class="auth-trace ${group}">([\\s\\S]*?)</g>`).exec(loginHtml)?.[1] ?? '';
       const hrefs = [...block.matchAll(/href="#([\w-]+)"/g)].map((match) => match[1]);
@@ -177,39 +176,60 @@ describe('великий знак на сторінці входу', () => {
     expect(edge).toBeLessThan(21.6 - 0.5);
   });
 
+  it('мале кільце — справжнє коло (центр і радіус як у малому знаку), повний оберт за годинниковою стрілкою', () => {
+    // кола малого знака: зовнішнє (13; 13; 11,6) і внутрішнє — його й повторює мале кільце шпиля
+    const circles = [...loginHtml.matchAll(/<circle class="auth-stroke" pathLength="1" cx="13" cy="([\d.]+)" r="([\d.]+)"\/>/g)];
+    const [cy, r] = [Number(circles[1]?.[1]), Number(circles[1]?.[2])];
+    expect([cy, r]).toEqual([8.9, 5.2]);
+    // кожна точка шляху лежить на колі: жодна дуга не з'їжджає з центру
+    const worst = Math.max(...inner.map(([x, y]) => Math.abs(Math.hypot(x - 13, y - cy) - r)));
+    expect(worst).toBeLessThan(0.002);
+    expect(lengthOf(inner)).toBeCloseTo(2 * Math.PI * r, 1);
+    expect(samePoint(inner[0]!, inner.at(-1)!)).toBe(true);
+    // за годинниковою стрілкою на екрані (вісь y донизу): площа за формулою шнурка додатна
+    const area = inner.slice(1).reduce((sum, [x, y], index) => sum + inner[index]![0] * y - x * inner[index]![1], 0);
+    expect(area).toBeGreaterThan(0);
+    // проходить і нижню дугу, що всередині шпиля
+    expect(Math.max(...inner.map(([, y]) => y))).toBeCloseTo(cy + r, 2);
+  });
+
   it('кожен біг світла починається й закінчується за краєм екрана або на вже освітленій лінії', () => {
     // кільце й шпиль починаються й закінчуються за екраном
-    for (const run of [outer, towerRun]) {
+    for (const run of [outer, tower]) {
       expect(offScreen(run[0]!)).toBe(true);
       expect(offScreen(run.at(-1)!)).toBe(true);
     }
-    // контур шпиля малюється з тієї ж прихованої точки, з якої біжить світло
-    expect(tower[0]).toEqual(towerRun[0]);
-    // мале кільце відгалужується від лівої ноги шпиля і вливається в праву
-    const fork = locate(towerRun, innerRun[0]!);
-    const merge = locate(towerRun, innerRun.at(-1)!);
+    // шпиль замкнений: після ніг світло проходить і основу, видиму над краєм екрана
+    expect(samePoint(tower[0]!, tower.at(-1)!)).toBe(true);
+    const rightFoot = locate(tower, [18.8, 21.6]);
+    expect(rightFoot.miss).toBeLessThan(0.002);
+    let along = 0;
+    const base = tower.filter((point, index) => {
+      if (index > 0) along += Math.hypot(point[0] - tower[index - 1]![0], point[1] - tower[index - 1]![1]);
+      return along > rightFoot.along + 0.01;
+    });
+    expect(base.some((point) => !offScreen(point))).toBe(true);
+    // мале кільце відгалужується від лівої ноги шпиля і після повного оберту повертається в ту ж точку
+    const fork = locate(tower, inner[0]!);
     expect(fork.miss).toBeLessThan(0.02);
-    expect(merge.miss).toBeLessThan(0.02);
-    expect(fork.along).toBeLessThan(lengthOf(towerRun) / 2);
-    expect(merge.along).toBeGreaterThan(lengthOf(towerRun) / 2);
-    // контур малого кільця теж починається в точці розгалуження й росте лише тоді, коли туди дійшов шпиль
-    expect(inner[0]).toEqual(innerRun[0]);
+    expect(fork.along).toBeLessThan(rightFoot.along / 2);
+    // контур малого кільця росте лише тоді, коли туди дійшов контур шпиля
     const from = Number(/\.auth-spire-line \.auth-spire-inner \{\s*--from: ([\d.]+);/.exec(css)?.[1]);
     expect(from).toBeCloseTo((fork.along + 1) / (pathOf('auth-spire-tower').length + 1), 2);
   });
 
   it('таймінг: стала швидкість, шпиль стартує з кінцем кільця, мале кільце — коли голова шпиля в точці розгалуження', () => {
     const lo = pathOf('auth-spire-outer').length;
-    const lt = pathOf('auth-spire-tower-run').length;
-    const li = pathOf('auth-spire-inner-run').length;
-    const forkAt = locate(towerRun, innerRun[0]!).along;
+    const lt = pathOf('auth-spire-tower').length;
+    const li = pathOf('auth-spire-inner').length;
+    const forkAt = locate(tower, inner[0]!).along;
     const outerFrames = keyframes('auth-trace-outer');
     const towerFrames = keyframes('auth-trace-tower');
     const innerFrames = keyframes('auth-trace-inner');
     // голова від −1 до 1,75 × довжини + 1: хвіст 3/4 фігури повністю зійшов
     expect(outerFrames.map(([, head]) => head)).toEqual([-1, 128.54]);
-    expect(towerFrames.map(([, head]) => head)).toEqual([-1, 65.98]);
-    expect(innerFrames.map(([, head]) => head)).toEqual([-1, 51.49]);
+    expect(towerFrames.map(([, head]) => head)).toEqual([-1, 87.28]);
+    expect(innerFrames.map(([, head]) => head)).toEqual([-1, 58.17]);
     expect(outerFrames[1]![1]).toBeCloseTo(1.75 * lo + 1, 1);
     expect(towerFrames[1]![1]).toBeCloseTo(1.75 * lt + 1, 1);
     expect(innerFrames[1]![1]).toBeCloseTo(1.75 * li + 1, 1);

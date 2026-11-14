@@ -65,10 +65,25 @@ class GoogleLoginIT {
         String html = browsers.open().get("/auth/login").body();
 
         assertThat(html).contains("Увійти через Google").contains("href=\"/auth/oauth2/authorization/google\"")
-                .contains("Використовуйте корпоративну пошту коледжу.").contains("<details");
+                .contains("Використовуйте корпоративну пошту коледжу.");
+        // the password form is shown right under «або», not hidden behind an extra «Увійти з паролем» click
+        assertThat(html).contains(">або</div>").contains("autocomplete=\"username\"")
+                .contains("autocomplete=\"current-password\"").contains(">Увійти</button>")
+                .doesNotContain("<details").doesNotContain("Увійти з паролем");
+        assertThat(html.indexOf("Увійти через Google")).isLessThan(html.indexOf(">або</div>"));
+        assertThat(html.indexOf(">або</div>")).isLessThan(html.indexOf("autocomplete=\"username\""));
         assertThat(browsers.open().get("/auth/login?error=throttled").body())
                 .contains("Забагато спроб. Спробуйте пізніше або, якщо ваш вхід прив")
                 .contains("язано до Google, увійдіть через Google.");
+    }
+
+    @Test
+    void aWrongPasswordNextToGoogleMarksTheAlwaysVisibleForm() {
+        String html = browsers.open().get("/auth/login?error").body();
+
+        assertThat(html).contains("Увійти через Google").contains("Неправильний логін або пароль.")
+                .contains("aria-invalid=\"true\"").contains("aria-describedby=\"auth-message\"")
+                .doesNotContain("<details");
     }
 
     @Test

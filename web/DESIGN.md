@@ -932,7 +932,8 @@ These rules come from the admin audit:
    circle on the left.
 5. The hint «Використовуйте корпоративну пошту коледжу.» (caption, muted). **No domain** until it is
    confirmed; the «…@vtc.vn.ua» in was an assumption.
-6. A divider «або» and the text button «Увійти з паролем». It expands in 280 ms into:
+6. A divider «або» and, right under it, the password form, always visible (no extra «Увійти з паролем»
+   click; without Google the form stands alone):
    - Логін (label above), Пароль with a show/hide icon button;
    - the row «Забули пароль?» (link) and «Увійти» (**secondary**, because Google stays the primary).
 7. Footer row: «← До розкладу» · «Вінницький технічний фаховий коледж» (caption, muted).
@@ -952,12 +953,14 @@ Nothing else: no blue panel, no photo.
 - It draws itself in once, each figure from its hidden start; the inner ring starts growing only when
   the spire's line reaches the point where it crosses it, so it branches off instead of appearing.
 - From 1.6 s, a light (four stacked dashes in `--color-now`, the head widest, a tail of 3/4 of the
-  figure) runs in a 5.6 s linear cycle at constant speed. Every run starts and ends off-screen, so the
-  viewer never sees where the light is born: it enters the ring from below, climbs the left side, goes
-  over the top and leaves past the right edge; when its head is back under the screen, the light rises
-  up the spire's left leg from the hidden base, over the apex and down the right leg. Where the left
-  leg crosses the inner ring the light forks: a second head runs clockwise around the inner ring and
-  merges into the right leg, which the spire's tail still lights. Then a pause of about 0.9 s.
+  figure) runs in a 6.4 s linear cycle at constant speed. It runs on the very paths the outline draws
+  (the same `<use>` targets), so it lies exactly on the lines. The ring and the spire start and end
+  off-screen: the light enters the ring from below, climbs the left side, goes over the top and leaves
+  past the right edge; when its head is back under the screen, it rises up the spire's left leg from the
+  hidden base, over the apex, down the right leg and back along the base. Where the left leg crosses the
+  inner ring (a true circle, centre and radius as in the small mark) the light forks: a second head runs
+  a full clockwise turn around the inner ring, the arc inside the spire included, back to the fork.
+  Then a pause of about 0.9 s.
   This is the only decorative loop in the product.
 - The form column enters with a short stagger while the mark draws (§6, item 9).
 - The light fades to 40 % while the form has focus. With `prefers-reduced-motion` or forced colours it
