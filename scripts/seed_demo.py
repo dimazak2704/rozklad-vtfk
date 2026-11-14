@@ -564,13 +564,15 @@ INITIAL = re.compile(r"([А-ЯІЇЄҐA-Z][а-яіїєґa-z]?)\.")
 
 
 def initials_match(short_name: str, last_name: str, first_name: str, middle_name: str) -> bool:
-    """«Овчар Ін.М.» fits Інна Миколаївна, not Іван; a short name without initials fits any name."""
+    """«Овчар Ін.М.» fits Інна Миколаївна, not Іван; a short name without initials fits any name. A patronymic
+    the public sources do not give (empty) is not checked against its initial."""
     if not short_name.startswith(last_name):
         return False
     initials = INITIAL.findall(short_name[len(last_name):])
     if len(initials) > 2:
         return False
-    return all(name.startswith(initial) for initial, name in zip(initials, (first_name, middle_name)))
+    return all(name.startswith(initial) if name else index == 1
+               for index, (initial, name) in enumerate(zip(initials, (first_name, middle_name))))
 
 
 def teacher_names(path: Path = TEACHER_NAMES) -> list[dict[str, str]]:
@@ -582,8 +584,9 @@ def teacher_names(path: Path = TEACHER_NAMES) -> list[dict[str, str]]:
         if short in seen:
             raise SystemExit(f"{path.name}: «{short}» is listed twice")
         seen.add(short)
-        if not (row["first_name"] and row["middle_name"] and row["source"].startswith("https://")):
-            raise SystemExit(f"{path.name}: «{short}» needs a first name, a patronymic and a source URL")
+        # the patronymic may be unknown: some teachers appear in public sources by first name only
+        if not (row["first_name"] and row["source"].startswith("https://")):
+            raise SystemExit(f"{path.name}: «{short}» needs a first name and a source URL")
         if not initials_match(short, row["last_name"], row["first_name"], row["middle_name"]):
             raise SystemExit(f"{path.name}: «{row['first_name']} {row['middle_name']}» does not fit «{short}»")
     return rows
@@ -591,7 +594,7 @@ def teacher_names(path: Path = TEACHER_NAMES) -> list[dict[str, str]]:
 
 def teacher_request(teacher: dict, first_name: str, middle_name: str) -> dict:
     """PUT body that changes only the name parts: short and display names stay as they are."""
-    return {"lastName": teacher["lastName"], "firstName": first_name, "middleName": middle_name,
+    return {"lastName": teacher["lastName"], "firstName": first_name, "middleName": middle_name or None,
             "shortName": teacher["shortName"], "displayName": teacher["displayName"],
             "cycleCommissionId": (teacher["cycleCommission"] or {}).get("id"),
             "employment": teacher["employment"], "email": teacher["email"], "active": teacher["active"],
@@ -608,7 +611,8 @@ def step_names(admin: Client) -> None:
         current = (teacher["firstName"] or "", teacher["middleName"] or "")
         if current == (row["first_name"], row["middle_name"]):
             continue
-        if any(current):
+        # a patronymic found later completes a first name the seed set before; anything else was set by hand
+        if any(current) and current != (row["first_name"], ""):
             log(f"  {row['short_name']}: kept «{' '.join(filter(None, current))}» set by hand")
             continue
         admin.put(f"/api/admin/teachers/{teacher['id']}", teacher_request(teacher, row["first_name"], row["middle_name"]))

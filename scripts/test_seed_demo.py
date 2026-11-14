@@ -32,6 +32,11 @@ class InitialsMatchTest(unittest.TestCase):
         self.assertTrue(seed_demo.initials_match("Поліщук М.", "Поліщук", "Микола", "Іванович"))
         self.assertFalse(seed_demo.initials_match("Поліщук М.", "Поліщук", "Олександр", "Васильович"))
 
+    def test_an_unknown_patronymic_is_not_checked_but_the_first_name_is(self):
+        self.assertTrue(seed_demo.initials_match("Заколесник О.В.", "Заколесник", "Олена", ""))
+        self.assertFalse(seed_demo.initials_match("Заколесник О.В.", "Заколесник", "Марія", ""))
+        self.assertFalse(seed_demo.initials_match("Заколесник О.В.", "Заколесник", "", ""))
+
     def test_surname_only_and_other_surname(self):
         self.assertTrue(seed_demo.initials_match("Кренцін", "Кренцін", "Михайло", "Дмитрович"))
         self.assertFalse(seed_demo.initials_match("Кренцін", "Непийвода", "Максим", "Васильович"))
@@ -54,6 +59,17 @@ class TeacherNamesFileTest(unittest.TestCase):
 
     def test_rejects_a_row_without_a_source(self):
         path = write_csv("Кренцін,Кренцін,Михайло,Дмитрович,surname+discipline,,\n")
+        self.addCleanup(path.unlink)
+        with self.assertRaises(SystemExit):
+            seed_demo.teacher_names(path)
+
+    def test_accepts_a_first_name_without_a_patronymic(self):
+        path = write_csv("Прокопчук,Прокопчук,Марія,,surname+discipline,https://vtc.vn.ua/x,\n")
+        self.addCleanup(path.unlink)
+        self.assertEqual("Марія", seed_demo.teacher_names(path)[0]["first_name"])
+
+    def test_rejects_a_row_without_a_first_name(self):
+        path = write_csv("Прокопчук,Прокопчук,,,surname+discipline,https://vtc.vn.ua/x,\n")
         self.addCleanup(path.unlink)
         with self.assertRaises(SystemExit):
             seed_demo.teacher_names(path)
