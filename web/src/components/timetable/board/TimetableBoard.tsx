@@ -21,7 +21,6 @@ import { previewMove, type TimetableConflict } from '@/api/timetable';
 import type { MoveLessonRequest, Parity, PublicRoomDto, ShiftWindowDto, TemplateLessonDto, Uuid, Weekday } from '@/api/types';
 import { GridNamesScope } from '@/components/schedule/GridNames';
 import { roomLabel } from '@/lib/schedule';
-import { ambiguousGridNames } from '@/lib/teacher-name';
 import {
   acceptsLesson,
   dropTargetId,
@@ -140,8 +139,8 @@ export function TimetableBoard({
   const previewAbort = useRef<AbortController | null>(null);
   const landedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const index = useMemo(() => new SlotIndex(lessons), [lessons]);
-  // однофамільці на дошці — у клітинках з ініціалами
-  const ambiguousNames = useMemo(() => ambiguousGridNames(lessons.map((lesson) => lesson.teacher)), [lessons]);
+  // викладачі на дошці — для підписів «Прізвище І. Б.» (GridNamesScope)
+  const boardTeachers = useMemo(() => lessons.map((lesson) => lesson.teacher), [lessons]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -374,7 +373,7 @@ export function TimetableBoard({
       : null;
 
   return (
-    <GridNamesScope ambiguous={ambiguousNames}>
+    <GridNamesScope teachers={boardTeachers}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}

@@ -2,6 +2,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import type { LessonView, ScheduleDto } from '@/api/types';
+import { useGridNames } from '@/components/schedule/grid-names';
+import { GridNamesProvider } from '@/components/schedule/GridNames';
 import { now as clockNow } from '@/lib/clock';
 import { formatDateRange, formatInstant, parseIsoDate } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName } from '@/lib/labels';
@@ -37,7 +39,8 @@ function usePrintedAt(): Date | null {
 function PrintedLesson({ lesson, perspective }: { lesson: LessonView; perspective: Perspective }) {
   const cancelled = lesson.kind === 'CANCELLED';
   const changed = lesson.kind !== 'REGULAR';
-  const counterpart = lessonCounterpart(lesson, perspective);
+  const names = useGridNames();
+  const counterpart = lessonCounterpart(lesson, perspective, names);
   return (
     <div className="flex flex-col gap-px leading-tight">
       <span className="flex items-baseline gap-1">
@@ -50,7 +53,7 @@ function PrintedLesson({ lesson, perspective }: { lesson: LessonView; perspectiv
       </span>
       {changed ? (
         <span className="text-meta font-semibold">
-          {cancelled ? 'ПАРИ НЕ БУДЕ' : `ЗМІНА: ${changeSummary(lesson)}`}
+          {cancelled ? 'ПАРИ НЕ БУДЕ' : `ЗМІНА: ${changeSummary(lesson, names)}`}
           {lesson.reasonText ? ` (${lesson.reasonText})` : ''}
         </span>
       ) : null}
@@ -179,7 +182,9 @@ export function SchedulePrint(props: SchedulePrintProps) {
   return createPortal(
     <div data-theme="light" className={`print-sheet print-sheet--${mode} bg-surface`} aria-hidden="true">
       {mode === 'week' && schedule ? (
-        <WeekSheet {...props} schedule={schedule} printedAt={printedAt} />
+        <GridNamesProvider days={schedule.days}>
+          <WeekSheet {...props} schedule={schedule} printedAt={printedAt} />
+        </GridNamesProvider>
       ) : (
         <DoorSheet kindLabel={props.kindLabel} title={props.title} url={props.url} />
       )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ambiguousGridNames, formatTeacherName, teacherSurname } from './teacher-name';
+import { ambiguousGridNames, formatTeacherName, namePartsFromFull, teacherSurname } from './teacher-name';
 
 const KRENTSIN = { id: 't1', shortName: 'Кренцін М.Д.', displayName: 'Кренцін' };
 const OVCHAR_INNA = { id: 't2', shortName: 'Овчар Ін.М.', displayName: 'Овчар' };
@@ -68,5 +68,54 @@ describe('formatTeacherName', () => {
   it('прізвище — з каталогу, а без нього — з короткої форми', () => {
     expect(teacherSurname({ shortName: 'Кренцін М.Д.', lastName: 'Кренцін' })).toBe('Кренцін');
     expect(teacherSurname({ shortName: 'Овчар Ін.М.' })).toBe('Овчар');
+  });
+});
+
+describe('довідник імен', () => {
+  const ALEKS = { id: 'a1', shortName: 'Алексєєнко', displayName: 'Алексєєнко' };
+  const names = new Map([['a1', namePartsFromFull('Алексєєнко Олександра Анатоліївна', 'Олександра')]]);
+
+  it('частини імені з публічного «Прізвище Імʼя По батькові»', () => {
+    expect(namePartsFromFull('Алексєєнко Олександра Анатоліївна', 'Олександра')).toEqual({
+      fullName: 'Алексєєнко Олександра Анатоліївна',
+      firstName: 'Олександра',
+      lastName: 'Алексєєнко',
+      middleName: 'Анатоліївна',
+    });
+    // без по батькові
+    expect(namePartsFromFull('Коваль Олена', 'Олена')).toMatchObject({ lastName: 'Коваль', middleName: null });
+    // налаштування вимкнене — нічого не вгадуємо
+    expect(namePartsFromFull(null, null)).toEqual({ fullName: null, firstName: null });
+    // імʼя не знайшлося в повному — лише готові поля
+    expect(namePartsFromFull('Коваль Олена Петрівна', 'Оксана')).toEqual({ fullName: 'Коваль Олена Петрівна', firstName: 'Оксана' });
+  });
+
+  it('коротка форма без ініціалів — ініціали з довідника', () => {
+    expect(formatTeacherName(ALEKS, 'grid', { names })).toBe(`Алексєєнко О.${NB}А.`);
+    expect(formatTeacherName(ALEKS, 'full', { names })).toBe('Алексєєнко Олександра Анатоліївна');
+    // довідника немає (або імені в ньому немає) — коротка форма як є
+    expect(formatTeacherName(ALEKS, 'grid')).toBe('Алексєєнко');
+    expect(formatTeacherName({ ...ALEKS, id: 'other' }, 'grid', { names })).toBe('Алексєєнко');
+  });
+
+  it('ініціали короткої форми мають перевагу над довідником', () => {
+    const krentsin = { id: 'k', shortName: 'Кренцін М.Д.' };
+    const directory = new Map([['k', namePartsFromFull('Кренцін Михайло Дмитрович', 'Михайло')]]);
+    expect(formatTeacherName(krentsin, 'grid', { names: directory })).toBe(`Кренцін М.${NB}Д.`);
+    // двобуквений ініціал однофамільця лишається, навіть коли імʼя відоме
+    expect(formatTeacherName({ shortName: 'Овчар Ін.М.', firstName: 'Інна', middleName: 'Миколаївна' }, 'grid')).toBe(`Овчар Ін.${NB}М.`);
+  });
+
+  it('неповні ініціали короткої форми доповнює довідник', () => {
+    const kolesnyk = { id: 'kl', shortName: 'Колесник А.' };
+    const directory = new Map([['kl', namePartsFromFull('Колесник Анатолій Іванович', 'Анатолій')]]);
+    expect(formatTeacherName(kolesnyk, 'grid', { names: directory })).toBe(`Колесник А.${NB}І.`);
+    expect(formatTeacherName(kolesnyk, 'grid')).toBe('Колесник А.');
+  });
+
+  it('однофамільців рахує вже з ініціалами з довідника', () => {
+    const other = { id: 'a2', shortName: 'Алексєєнко' };
+    expect(ambiguousGridNames([ALEKS, other], names).size).toBe(0);
+    expect([...ambiguousGridNames([ALEKS, other])]).toEqual(['Алексєєнко']);
   });
 });

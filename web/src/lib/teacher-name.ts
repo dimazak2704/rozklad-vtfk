@@ -49,11 +49,16 @@ export function teacherSurname(teacher: TeacherNameSource): string {
   return clean(teacher.lastName) || splitShortName(teacher.shortName).surname;
 }
 
-/** Ініціали: з короткої форми коледжу, а без них — з імені й по батькові. */
+/**
+ * Ініціали: з імені й по батькові, коли вони дають більше, ніж коротка форма коледжу («Колесник А.» →
+ * «Колесник А. І.»), інакше з короткої форми. Двобуквені ініціали короткої форми («Овчар Ін.М.») розрізняють
+ * однофамільців — їх лишаємо завжди.
+ */
 function teacherInitials(teacher: TeacherNameSource): string[] {
   const fromShort = splitShortName(teacher.shortName).initials;
-  if (fromShort.length > 0) return fromShort;
-  return [clean(teacher.firstName), clean(teacher.middleName)].filter(Boolean).map(initialOf);
+  if (fromShort.some((initial) => initial.length > 2)) return fromShort;
+  const fromNames = [clean(teacher.firstName), clean(teacher.middleName)].filter(Boolean).map(initialOf);
+  return fromNames.length > fromShort.length ? fromNames : fromShort;
 }
 
 /** «Кренцін М. Д.»: ініціали не розриваються, рядок може перенестися лише після прізвища. */
@@ -72,11 +77,50 @@ function fullNameOf(teacher: TeacherNameSource): string | null {
   return [teacherSurname(teacher), first, clean(teacher.middleName)].filter(Boolean).join(' ');
 }
 
+/** Імена з довідника за id: посилання на викладача в розкладі (TeacherRef) несе лише коротку форму. */
+export type TeacherNameParts = Pick<TeacherNameSource, 'lastName' | 'firstName' | 'middleName' | 'fullName'>;
+export type TeacherNameDirectory = ReadonlyMap<string, TeacherNameParts>;
+
+export interface TeacherNameOptions {
+  /** Підписи сітки, які на цьому екрані носять різні викладачі (`ambiguousGridNames`). */
+  ambiguous?: ReadonlySet<string>;
+  /** Довідник імен: публічний (з налаштуванням повних імен) або каталог адмінки. */
+  names?: TeacherNameDirectory;
+}
+
+/**
+ * Частини імені з публічного довідника: `firstName` і готове `fullName` («Прізвище Імʼя По батькові»).
+ * По батькові — те, що в `fullName` стоїть після імені; прізвище — те, що перед ним.
+ */
+export function namePartsFromFull(fullName: string | null | undefined, firstName: string | null | undefined): TeacherNameParts {
+  const full = clean(fullName);
+  const first = clean(firstName);
+  if (!full || !first) return { fullName: full || null, firstName: first || null };
+  const words = full.split(' ');
+  const at = words.indexOf(first, 1);
+  if (at < 1) return { fullName: full, firstName: first };
+  return { fullName: full, firstName: first, lastName: words.slice(0, at).join(' '), middleName: words.slice(at + 1).join(' ') || null };
+}
+
+/** Викладач, доповнений іменами з довідника (власні поля DTO мають перевагу). */
+function withDirectory(teacher: TeacherNameSource & { id?: string }, names: TeacherNameDirectory | undefined): TeacherNameSource {
+  const known = teacher.id ? names?.get(teacher.id) : undefined;
+  if (!known) return teacher;
+  return {
+    ...teacher,
+    lastName: clean(teacher.lastName) || known.lastName,
+    firstName: clean(teacher.firstName) || known.firstName,
+    middleName: clean(teacher.middleName) || known.middleName,
+    fullName: clean(teacher.fullName) || known.fullName,
+  };
+}
+
 export function formatTeacherName(
-  teacher: TeacherNameSource,
+  source: TeacherNameSource & { id?: string },
   style: TeacherNameStyle,
-  options: { ambiguous?: ReadonlySet<string> } = {},
+  options: TeacherNameOptions = {},
 ): string {
+  const teacher = withDirectory(source, options.names);
   switch (style) {
     case 'formal':
       return teacher.shortName;
@@ -98,12 +142,13 @@ export function formatTeacherName(
  */
 export function ambiguousGridNames(
   teachers: Iterable<(TeacherNameSource & { id: string }) | null | undefined>,
+  names?: TeacherNameDirectory,
 ): ReadonlySet<string> {
   const owners = new Map<string, string>();
   const ambiguous = new Set<string>();
   for (const teacher of teachers) {
     if (!teacher) continue;
-    const label = initialsLabel(teacher);
+    const label = initialsLabel(withDirectory(teacher, names));
     const owner = owners.get(label);
     if (owner === undefined) owners.set(label, teacher.id);
     else if (owner !== teacher.id) ambiguous.add(label);

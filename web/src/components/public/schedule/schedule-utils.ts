@@ -5,7 +5,7 @@ import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, ScheduleD
 import { compareIsoDates, diffDays, formatWeekdayDate, startOfWeek } from '@/lib/date';
 import { capitalize, PARITY_LABEL, REASON_CODE_HINT, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { isChangedLesson, lessonCounterpart, roomLabel, vacatedPairs, type Perspective } from '@/lib/schedule';
-import { formatTeacherName } from '@/lib/teacher-name';
+import { formatTeacherName, type TeacherNameOptions } from '@/lib/teacher-name';
 
 /** «Компʼютерний клас · 30 місць · корпус 2», «Спортзал · до 3 груп одночасно»; невідоме не показуємо. */
 export function roomDetails(room: PublicRoomDto): string {
@@ -142,23 +142,23 @@ function who(discipline: string | undefined | null, teacher: string | undefined 
   return [discipline, teacher].filter(Boolean).join(', ');
 }
 
-/** Що змінилося, одним рядком: «НДЕКСМ, Непийвода замість СТП, Кренцін». */
-export function changeSummary(lesson: LessonView): string {
+/** Що змінилося, одним рядком: «НДЕКСМ, Непийвода М. В. замість СТП, Кренцін М. Д.». */
+export function changeSummary(lesson: LessonView, names: TeacherNameOptions = {}): string {
   const original = lesson.original;
   switch (lesson.kind) {
     case 'SUBSTITUTED': {
       const disciplineChanged = Boolean(original?.discipline && original.discipline.id !== lesson.discipline.id);
       const before = who(
         disciplineChanged ? original?.discipline?.shortName : null,
-        original?.teacher && original.teacher.id !== lesson.teacher?.id ? formatTeacherName(original.teacher, 'grid') : null,
+        original?.teacher && original.teacher.id !== lesson.teacher?.id ? formatTeacherName(original.teacher, 'grid', names) : null,
       );
-      const after = who(disciplineChanged ? lesson.discipline.shortName : null, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null);
+      const after = who(disciplineChanged ? lesson.discipline.shortName : null, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', names) : null);
       return before ? `${after || lesson.discipline.shortName} замість ${before}` : `${lesson.discipline.shortName}: заміна`;
     }
     case 'CANCELLED':
       return `${lesson.discipline.shortName}: пари не буде`;
     case 'ADDITIONAL':
-      return `додаткова пара: ${who(lesson.discipline.shortName, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null)}`;
+      return `додаткова пара: ${who(lesson.discipline.shortName, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', names) : null)}`;
     case 'ROOM_CHANGED':
       return `${lesson.discipline.shortName}: ${roomLabel(original?.room?.name) ?? 'аудиторія'} → ${roomLabel(lesson.room?.name) ?? '?'}`;
     case 'MOVED':
@@ -170,15 +170,15 @@ export function changeSummary(lesson: LessonView): string {
   }
 }
 
-/** Рядок заняття для тексту «Поділитися»: «2 пара, 09:40 — СТП, Кренцін, ауд. 301». */
-function lessonLine(lesson: LessonView, perspective: Perspective): string {
-  const counterpart = lessonCounterpart(lesson, perspective);
+/** Рядок заняття для тексту «Поділитися»: «2 пара, 09:40 — СТП, Кренцін М. Д., ауд. 301». */
+function lessonLine(lesson: LessonView, perspective: Perspective, names: TeacherNameOptions): string {
+  const counterpart = lessonCounterpart(lesson, perspective, names);
   const parts = [lesson.discipline.shortName, counterpart, roomLabel(lesson.room?.name)].filter(Boolean).join(', ');
   const subgroup = lesson.subgroup > 0 ? ` (${lesson.subgroup} п/г)` : '';
   const online = lesson.online ? ', онлайн' : '';
   let note = '';
   if (lesson.kind === 'CANCELLED') note = ' — пари не буде';
-  else if (lesson.kind !== 'REGULAR') note = ` — ${changeSummary(lesson)}`;
+  else if (lesson.kind !== 'REGULAR') note = ` — ${changeSummary(lesson, names)}`;
   if (lesson.reasonText && lesson.kind !== 'REGULAR') note += ` (${lesson.reasonText})`;
   const at = lesson.startsAt ? `, ${lesson.startsAt}` : '';
   return `${lesson.pair} пара${at} — ${parts}${subgroup}${online}${note}`;
@@ -188,7 +188,7 @@ function lessonLine(lesson: LessonView, perspective: Perspective): string {
  * Текст для Web Share: день, парність і всі пари з часом і змінами — щоб у чаті групи все було видно
  * навіть без переходу за посиланням.
  */
-export function dayShareText(label: string, day: DayDto | undefined, perspective: Perspective): string {
+export function dayShareText(label: string, day: DayDto | undefined, perspective: Perspective, names: TeacherNameOptions = {}): string {
   if (!day) return `Розклад ${label}`;
   const date = formatWeekdayDate(day.date).toLocaleLowerCase('uk');
   // поза семестром парності немає — не вигадуємо її в тексті
@@ -196,7 +196,7 @@ export function dayShareText(label: string, day: DayDto | undefined, perspective
   if (!day.studyDay) return `${header}: не навчальний день.`;
   const lessons = [...day.lessons].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup);
   if (lessons.length === 0) return `${header}: пар немає.`;
-  return [header, ...lessons.map((lesson) => lessonLine(lesson, perspective))].join('\n');
+  return [header, ...lessons.map((lesson) => lessonLine(lesson, perspective, names))].join('\n');
 }
 
 export function dayOf(schedule: ScheduleDto | undefined, date: IsoDate): DayDto | undefined {

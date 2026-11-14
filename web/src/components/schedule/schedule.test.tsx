@@ -120,6 +120,27 @@ describe('імена викладачів', () => {
   });
 });
 
+describe('імена з довідника в сітці', () => {
+  it('коротка форма без ініціалів — «Прізвище І. Б.» з публічного довідника', async () => {
+    const base = monday.lessons[0]!;
+    const teacher = { id: 't-aleks', shortName: 'Алексєєнко', displayName: 'Алексєєнко' };
+    const lesson = { ...base, id: 'l-aleks', teacher };
+    const named: PublicTeacherDto = {
+      ...teacher,
+      cycleCommission: null,
+      fullName: 'Алексєєнко Олександра Анатоліївна',
+      firstName: 'Олександра',
+    };
+    server.use(http.get(apiPath('/public/teachers'), () => HttpResponse.json([named])));
+    renderWithProviders(
+      <GridNamesProvider days={[{ ...monday, lessons: [lesson] }]}>
+        <LessonCell lesson={lesson} perspective="group" />
+      </GridNamesProvider>,
+    );
+    expect(await screen.findByText('Алексєєнко О. А.')).toBeInTheDocument();
+  });
+});
+
 describe('WeekGrid', () => {
   it('будує таблицю: дні — стовпці, пари — рядки з часом, сьогодні позначено', () => {
     renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);

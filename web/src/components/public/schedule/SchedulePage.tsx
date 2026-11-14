@@ -6,6 +6,7 @@ import type { ScheduleDto } from '@/api/types';
 import { NowIndicator } from '@/components/schedule';
 import { PageErrorScope, PageHeader } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useTeacherNameDirectory } from '@/hooks/useTeacherNames';
 import type { Perspective } from '@/lib/schedule';
 import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
 import { SchedulePrint } from '../print/SchedulePrint';
@@ -96,11 +97,13 @@ export function SchedulePage({
     useFavoritesStore.getState().rememberView({ type: target.type, id: target.id, label: target.label, url: target.url });
   }, [target.type, target.id, target.label, target.url]);
 
+  // текст «Поділитися» пише викладачів «Прізвище І. Б.», як клітинки
+  const teacherNames = useTeacherNameDirectory();
   const more = useScheduleMenuItems({
     target,
     share: {
       title: `Розклад ${target.label}`,
-      text: () => dayShareText(target.label, dayOf(visible, params.date), perspective),
+      text: () => dayShareText(target.label, dayOf(visible, params.date), perspective, { names: teacherNames }),
       url,
     },
     onCalendar: ics ? () => setCalendarOpen(true) : null,

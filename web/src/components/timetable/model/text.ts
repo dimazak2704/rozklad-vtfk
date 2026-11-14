@@ -3,7 +3,7 @@ import type { TimetableConflict } from '@/api/timetable';
 import type { MoveLessonRequest, TemplateLessonDto } from '@/api/types';
 import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
-import { formatTeacherName } from '@/lib/teacher-name';
+import { formatTeacherName, type TeacherNameOptions } from '@/lib/teacher-name';
 import type { BoardView } from './grid';
 import { PARITY_SHORT } from './labels';
 
@@ -14,12 +14,12 @@ import { PARITY_SHORT } from './labels';
 export function chipText(
   lesson: TemplateLessonDto,
   view: BoardView,
-  ambiguous?: ReadonlySet<string>,
+  names: TeacherNameOptions = {},
 ): { title: string; detail: string; lines: string[]; room: string | null } {
   const room = roomLabel(lesson.room?.name);
   const cohort = lesson.subgroup > 0 ? `${lesson.group.code}/${lesson.subgroup}` : lesson.group.code;
-  // викладач у клітинці — прізвищем; однофамільці на дошці — з ініціалами (lib/teacher-name)
-  const teacher = lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', { ambiguous }) : null;
+  // викладач у клітинці — «Прізвище І. Б.» (lib/teacher-name)
+  const teacher = lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', names) : null;
   const parts =
     view === 'group'
       ? { title: lesson.discipline.shortName, lines: [teacher, room] }

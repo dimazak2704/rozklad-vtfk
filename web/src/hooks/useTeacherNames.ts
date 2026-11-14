@@ -2,49 +2,49 @@ import { useCallback, useMemo } from 'react';
 import { useCatalogOptions } from '@/api/catalog';
 import { usePublicTeachers } from '@/api/public';
 import type { Uuid } from '@/api/types';
-import { formatTeacherName, type TeacherNameSource } from '@/lib/teacher-name';
+import {
+  formatTeacherName,
+  namePartsFromFull,
+  type TeacherNameDirectory,
+  type TeacherNameParts,
+  type TeacherNameSource,
+} from '@/lib/teacher-name';
 
 type TeacherLike = TeacherNameSource & { id: Uuid };
 
 /**
- * «Прізвище Імʼя По батькові» для викладача з будь-якого DTO. Посилання на викладача в розкладі й замінах (TeacherRef)
- * імені не має, тож беремо його з довідника за id: на публічних сторінках — з /api/public/teachers (імʼя там
- * є, лише коли налаштування «показувати повні імена» увімкнене), в адмінці — з каталогу. Поки довідник не
- * прийшов чи імені немає — прізвище з ініціалами («Кренцін М. Д.»), як у сітці.
+ * Імена викладачів за id. Посилання на викладача в розкладі й замінах (TeacherRef) несе лише коротку форму,
+ * тож імʼя й по батькові беремо з довідника: на публічних сторінках — з /api/public/teachers (там вони є, лише
+ * коли налаштування «показувати повні імена» увімкнене), в адмінці — з каталогу. Поки довідник не прийшов —
+ * порожньо, і формати падають на коротку форму.
  */
-export function useTeacherFullName(scope: 'public' | 'admin' = 'public'): (teacher: TeacherLike) => string {
+export function useTeacherNameDirectory(scope: 'public' | 'admin' = 'public'): TeacherNameDirectory {
   const publicTeachers = usePublicTeachers();
   // каталог адмінки — лише в адмінці: на публічних сторінках цей запит дав би 401
   const catalog = useCatalogOptions('teachers', {}, { enabled: scope === 'admin' });
-  const source = scope === 'admin' ? catalog.items : publicTeachers.data;
+  const catalogItems = catalog.items;
+  const publicItems = scope === 'admin' ? undefined : publicTeachers.data;
 
-  const firstNames = useMemo(() => {
-    const out = new Map<Uuid, Pick<TeacherNameSource, 'firstName' | 'lastName' | 'middleName' | 'fullName'>>();
-    for (const teacher of source ?? []) {
+  return useMemo(() => {
+    const out = new Map<Uuid, TeacherNameParts>();
+    for (const teacher of catalogItems ?? []) {
       out.set(teacher.id, {
-        firstName: teacher.firstName ?? null,
-        lastName: 'lastName' in teacher ? teacher.lastName : null,
-        middleName: 'middleName' in teacher ? teacher.middleName : null,
-        fullName: 'fullName' in teacher ? teacher.fullName : null,
+        lastName: teacher.lastName,
+        firstName: teacher.firstName,
+        middleName: teacher.middleName,
+        fullName: null,
       });
     }
+    for (const teacher of publicItems ?? []) out.set(teacher.id, namePartsFromFull(teacher.fullName, teacher.firstName));
     return out;
-  }, [source]);
+  }, [catalogItems, publicItems]);
+}
 
-  return useCallback(
-    (teacher: TeacherLike) => {
-      const known = firstNames.get(teacher.id);
-      return formatTeacherName(
-        {
-          ...teacher,
-          firstName: teacher.firstName ?? known?.firstName,
-          lastName: teacher.lastName ?? known?.lastName,
-          middleName: teacher.middleName ?? known?.middleName,
-          fullName: teacher.fullName ?? known?.fullName,
-        },
-        'full',
-      );
-    },
-    [firstNames],
-  );
+/**
+ * «Прізвище Імʼя По батькові» для викладача з будь-якого DTO, з довідника імен (`useTeacherNameDirectory`).
+ * Поки довідник не прийшов чи імені немає — прізвище з ініціалами («Кренцін М. Д.»), як у сітці.
+ */
+export function useTeacherFullName(scope: 'public' | 'admin' = 'public'): (teacher: TeacherLike) => string {
+  const names = useTeacherNameDirectory(scope);
+  return useCallback((teacher: TeacherLike) => formatTeacherName(teacher, 'full', { names }), [names]);
 }

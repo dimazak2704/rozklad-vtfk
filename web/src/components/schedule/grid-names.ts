@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react';
+import type { TeacherNameOptions } from '@/lib/teacher-name';
 
-const EMPTY: ReadonlySet<string> = new Set();
+const EMPTY: TeacherNameOptions = {};
 
-/** Однофамільці на екрані (див. GridNames.tsx); без провайдера — нікого. */
-export const GridNamesContext = createContext<ReadonlySet<string>>(EMPTY);
+/** Як писати викладачів у клітинках цього екрана (див. GridNames.tsx); без провайдера — коротка форма. */
+export const GridNamesContext = createContext<TeacherNameOptions>(EMPTY);
 
-/** Підписи сітки, які в цьому розкладі належать різним викладачам. */
-export function useGridNames(): ReadonlySet<string> {
+/** Довідник імен і однофамільці для `formatTeacherName(teacher, 'grid', options)`. */
+export function useGridNames(): TeacherNameOptions {
   return useContext(GridNamesContext);
 }
