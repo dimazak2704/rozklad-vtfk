@@ -7,7 +7,17 @@ import { activePairs } from '@/components/public/schedule/schedule-utils';
 import { NowIndicator } from '@/components/schedule';
 import { useNow } from '@/hooks/useNow';
 import { addDays, formatWeekdayDate, isWeekend } from '@/lib/date';
-import { lessonPhrase, nextDaySentence, nextOwnDay, nextRequest, ownLessons, withRequest } from './my-day';
+import {
+  assignmentPairs,
+  assignmentPhrase,
+  confirmedAssignments,
+  lessonPhrase,
+  nextDaySentence,
+  nextOwnDay,
+  nextRequest,
+  ownLessons,
+  withRequest,
+} from './my-day';
 
 interface MyNowProps {
   teacherId: string;
@@ -33,28 +43,36 @@ function DayDone({ title, dateLine, next }: { title: string; dateLine: string; n
 }
 
 /**
- * «Зараз» для викладача: відлік до дзвінка, доріжка його власних пар і одне речення про те, що він веде
- * зараз або далі. Єдине, що рухається на сторінці. Після останньої пари й у дні без пар — що буде далі:
+ * «Зараз» для викладача: відлік до дзвінка, доріжка його власних пар (разом із підтвердженими замінами, яких
+ * ще немає в опублікованому розкладі) і одне речення про те, що він веде зараз або далі. Єдине, що рухається на сторінці. Після останньої пари й у дні без пар — що буде далі:
  * перша пара наступного дня з парами (за потреби дивимося й наступний тиждень) і запит на заміну, якщо він
  * чекає відповіді раніше: його пари ще немає в розкладі, а «Завтра пар немає» поруч із ним заплутує.
  */
 export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   const day = days.find((d) => d.date === today);
   const lessons = useMemo(() => ownLessons(day, teacherId), [day, teacherId]);
-  const pairs = useMemo(() => activePairs(day ? { ...day, lessons } : undefined), [day, lessons]);
+  // той самий кеш, що й у списку запитів нижче: окремого запиту до сервера немає
+  const changes = useMyChanges();
+  // підтверджена заміна сьогодні — теж моя пара, хоч розпорядження ще не опубліковане
+  const assignments = useMemo(() => confirmedAssignments(changes.data ?? [], today), [changes.data, today]);
+  const pairs = useMemo(
+    () => [...new Set([...activePairs(day ? { ...day, lessons } : undefined), ...assignmentPairs(assignments)])].sort((a, b) => a - b),
+    [day, lessons, assignments],
+  );
   const onlyPairs = useMemo(() => new Set(pairs), [pairs]);
-  const { status } = useNow(bells, { date: today, onlyPairs });
+  const { status, clock } = useNow(bells, { date: today, onlyPairs });
 
   const done = status === null || status.kind === 'after-day' || status.kind === 'no-classes';
   const thisWeek = done ? nextDaySentence(days, today, teacherId) : null;
   // у цьому тижні моїх пар більше немає — перша пара наступного тижня
   const nextWeek = studyWeek(addDays(studyWeek(today).from, 7));
   const later = useMySchedule(nextWeek.from, nextWeek.to, { enabled: done && thisWeek === null });
-  // той самий кеш, що й у списку запитів нижче: окремого запиту до сервера немає
-  const changes = useMyChanges();
-  const request = done && changes.data ? nextRequest(changes.data, today) : null;
+  const request = done && changes.data ? nextRequest(changes.data, today, { bells, minutes: clock.minutes }) : null;
   const requestBells = useBells(request?.date);
   const requestStart = requestBells.data?.slots.find((slot) => slot.pair === request?.pairFrom)?.startsAt;
+
+  // доки не знаємо моїх замін, не кажемо «пар немає»: підтверджена заміна сьогодні це речення спростувала б
+  if (done && changes.isPending) return null;
 
   if (done) {
     const laterData = later.data && !later.isPlaceholderData ? later.data : null;
@@ -70,12 +88,15 @@ export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
 
   // що саме веду зараз або веду наступним: без цього відлік не каже, куди йти
   const focusPair = status.kind === 'in-pair' ? status.current.pair : status.next.pair;
-  const focus = lessons.filter((lesson) => lesson.pair === focusPair);
+  const focus = [
+    ...lessons.filter((lesson) => lesson.pair === focusPair).map(lessonPhrase),
+    ...assignments.filter((c) => c.pairFrom <= focusPair && focusPair <= c.pairTo).map(assignmentPhrase),
+  ];
   const aside =
     focus.length > 0 ? (
       <>
         {status.kind === 'in-pair' ? 'Зараз у вас ' : status.kind === 'break' ? 'Далі у вас ' : 'У вас '}
-        <span className="font-[650] text-primary">{focus.map(lessonPhrase).join('; ')}</span>
+        <span className="font-[650] text-primary">{focus.join('; ')}</span>
       </>
     ) : null;
 

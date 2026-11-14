@@ -14,7 +14,8 @@ import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
 import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
-import { endSentence, lessonPhrase, nextDaySentence, nextRequest, withRequest } from './my-day';
+import { assignmentPairs, assignmentPhrase, confirmedAssignments, endSentence, lessonPhrase, nextDaySentence, nextRequest, withRequest } from './my-day';
+import { MyNow } from './MyNow';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
@@ -764,6 +765,104 @@ describe('мій день реченням', () => {
     ] as ChangeDto[];
     expect(nextRequest(list, '2026-11-12')?.id).toBe('first');
     expect(nextRequest(list.slice(0, 3), '2026-11-12')).toBeNull();
+  });
+
+  it('сьогоднішній запит на пару, що вже скінчилася, не «найближчий»: є пізніший — він, немає — нічого', () => {
+    const base = { status: 'PENDING_CONFIRMATION', supersededBy: null } as unknown as ChangeDto;
+    const bells: BellSlotDto[] = [
+      { pair: 1, startsAt: '08:30', endsAt: '09:30' },
+      { pair: 2, startsAt: '09:40', endsAt: '10:40' },
+      { pair: 3, startsAt: '11:00', endsAt: '12:00' },
+    ];
+    const list = [
+      { ...base, id: 'over', date: '2026-11-20', pairFrom: 1, pairTo: 1 },
+      { ...base, id: 'later', date: '2026-11-20', pairFrom: 3, pairTo: 3 },
+      { ...base, id: 'monday', date: '2026-11-23', pairFrom: 1, pairTo: 1 },
+    ] as ChangeDto[];
+    const at = (time: string) => ({ bells, minutes: Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) });
+    expect(nextRequest(list, '2026-11-20', at('08:00'))?.id).toBe('over');
+    expect(nextRequest(list, '2026-11-20', at('10:10'))?.id).toBe('later');
+    expect(nextRequest(list, '2026-11-20', at('12:00'))?.id).toBe('monday');
+    // пара сьогодні ще йде: запит лишається; без дзвінків не знаємо, що пара минула
+    expect(nextRequest([list[1] as ChangeDto], '2026-11-20', at('11:30'))?.id).toBe('later');
+    expect(nextRequest([list[0] as ChangeDto], '2026-11-20', { bells: [], minutes: 900 })?.id).toBe('over');
+  });
+
+  it('підтверджені заміни дня — мої пари, доки розпорядження не опубліковане', () => {
+    const base = {
+      date: '2026-11-20',
+      status: 'CONFIRMED',
+      supersededBy: null,
+      teacherAnswer: null,
+      group: { code: '4КІ1' },
+      original: { discipline: { shortName: 'КБ' }, teacher: null, room: { name: '14' } },
+      new: { discipline: { shortName: 'СТП' }, teacher: null, room: null },
+    } as unknown as ChangeDto;
+    const list = [
+      { ...base, id: 'block', pairFrom: 4, pairTo: 5 },
+      { ...base, id: 'notice', pairFrom: 2, pairTo: 2, approvalMode: 'NOTIFY' },
+      { ...base, id: 'asked', pairFrom: 1, pairTo: 1, status: 'PENDING_CONFIRMATION' },
+      { ...base, id: 'declined', pairFrom: 3, pairTo: 3, teacherAnswer: 'DECLINE' },
+      { ...base, id: 'published', pairFrom: 3, pairTo: 3, status: 'APPLIED' },
+      { ...base, id: 'gone', pairFrom: 3, pairTo: 3, supersededBy: { changeId: 'x', kind: 'CANCEL', orderId: 'o' } },
+      { ...base, id: 'tomorrow', date: '2026-11-21', pairFrom: 1, pairTo: 1 },
+    ] as ChangeDto[];
+    const today = confirmedAssignments(list, '2026-11-20');
+    expect(today.map((c) => c.id)).toEqual(['notice', 'block']);
+    expect(assignmentPairs(today)).toEqual([2, 4, 5]);
+    // аудиторія лишається тією самою, якщо рішення її не міняло
+    expect(assignmentPhrase(today[0] as ChangeDto)).toBe('заміна: СТП, 4КІ1, ауд. 14');
+  });
+});
+
+describe('MyNow: підтверджена заміна сьогодні', () => {
+  const today = '2026-11-20';
+  const bells: BellSlotDto[] = [
+    { pair: 1, startsAt: '08:30', endsAt: '09:30' },
+    { pair: 2, startsAt: '09:40', endsAt: '10:40' },
+    { pair: 3, startsAt: '11:00', endsAt: '12:00' },
+  ];
+  const friday = { date: today, weekday: 5, weekdayLabel: 'ПЯТНИЦЯ', parity: 'DENOMINATOR', studyDay: true, note: null, lessons: [] } as unknown as DayDto;
+  const change = (patch: Partial<ChangeDto>): ChangeDto =>
+    ({
+      id: 'c',
+      kind: 'REPLACE_DISCIPLINE',
+      date: today,
+      pairFrom: 2,
+      pairTo: 2,
+      subgroup: 0,
+      status: 'CONFIRMED',
+      approvalMode: 'NOTIFY',
+      teacherAnswer: null,
+      supersededBy: null,
+      group: { id: 'g', code: '4КІ1' },
+      original: { discipline: { id: 'd1', shortName: 'КБ', name: 'Кібербезпека' }, teacher: null, room: { id: 'r', name: '14' } },
+      new: { discipline: { id: 'd2', shortName: 'СТП', name: 'СТП' }, teacher: { id: krentsin.id }, room: null },
+      ...patch,
+    }) as unknown as ChangeDto;
+  const pastRequest = () => change({ id: 'old', status: 'PENDING_CONFIRMATION', approvalMode: 'CONFIRM', pairFrom: 1, pairTo: 1 });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // пʼятниця, 10:10 за Києвом — посеред 2 пари
+    vi.setSystemTime(new Date('2026-11-20T08:10:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('у розкладі пар немає, але є підтверджена заміна — «зараз» про неї, а не «Сьогодні пар немає»', async () => {
+    server.use(http.get(apiPath('/me/changes'), () => Response.json([change({}), pastRequest()])));
+    renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
+    expect(await screen.findByText('заміна: СТП, 4КІ1, ауд. 14')).toBeInTheDocument();
+    expect(screen.getByText(/Зараз у вас/)).toBeInTheDocument();
+    expect(screen.queryByText('Сьогодні пар немає')).not.toBeInTheDocument();
+    expect(screen.queryByText(/запит на заміну/)).not.toBeInTheDocument();
+  });
+
+  it('без замін на сьогодні — «Сьогодні пар немає» і без запиту на пару, що вже минула', async () => {
+    server.use(http.get(apiPath('/me/changes'), () => Response.json([pastRequest()])));
+    renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
+    expect(await screen.findByText('Сьогодні пар немає')).toBeInTheDocument();
+    expect(screen.queryByText(/Сьогодні ще є запит/)).not.toBeInTheDocument();
   });
 });
 

@@ -1,6 +1,15 @@
 /** Мій день як речення: що я веду і коли наступна пара. Чиста логіка без React — для тестів. */
-import type { ChangeDto, DayDto, IsoDate, LessonView } from '@/api/types';
-import { addDays, compareIsoDates, formatDayMonth, formatWeekdayDateAfterNa, isoWeekday, isWeekend, relativeDayLabel } from '@/lib/date';
+import type { BellSlotDto, ChangeDto, DayDto, IsoDate, LessonView } from '@/api/types';
+import {
+  addDays,
+  compareIsoDates,
+  formatDayMonth,
+  formatWeekdayDateAfterNa,
+  isoWeekday,
+  isWeekend,
+  relativeDayLabel,
+  timeToMinutes,
+} from '@/lib/date';
 import { WEEKDAY_ACCUSATIVE } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 
@@ -44,10 +53,55 @@ export function nextDaySentence(days: readonly DayDto[], today: IsoDate, teacher
   return endSentence(isWeekend(tomorrow) ? when : `Завтра пар немає. ${when}`);
 }
 
-/** Найближчий запит на заміну (прохання CONFIRM), що ще чекає моєї відповіді: сьогодні чи пізніше. */
-export function nextRequest(changes: readonly ChangeDto[], today: IsoDate): ChangeDto | null {
-  const open = changes.filter((c) => c.status === 'PENDING_CONFIRMATION' && !c.supersededBy && compareIsoDates(c.date, today) >= 0);
+/** Що показує годинник сьогодні: дзвінки дня і хвилини від півночі. */
+export interface DayClock {
+  bells: readonly BellSlotDto[];
+  minutes: number;
+}
+
+/** Чи пара з `pair` уже скінчилася за дзвінками; без дзвінка на цю пару — ні (не знаємо). */
+function pairOver(pair: number, clock: DayClock): boolean {
+  const slot = clock.bells.find((s) => s.pair === pair);
+  return slot ? timeToMinutes(slot.endsAt) <= clock.minutes : false;
+}
+
+/**
+ * Найближчий запит на заміну (прохання CONFIRM), що ще чекає моєї відповіді: сьогодні чи пізніше.
+ * Сьогоднішній запит на пару, що вже скінчилася, не рахуємо: відповідати на нього пізно, і «що далі»
+ * не має вказувати на пару, яка минула.
+ */
+export function nextRequest(changes: readonly ChangeDto[], today: IsoDate, clock?: DayClock): ChangeDto | null {
+  const open = changes.filter(
+    (c) =>
+      c.status === 'PENDING_CONFIRMATION' &&
+      !c.supersededBy &&
+      compareIsoDates(c.date, today) >= 0 &&
+      !(clock && c.date === today && pairOver(c.pairTo, clock)),
+  );
   return open.sort((a, b) => compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom)[0] ?? null;
+}
+
+/**
+ * Мої заміни на день, яких ще немає в опублікованому розкладі: я погодився (або мене повідомили, NOTIFY), але
+ * розпорядження на цей день ще не опубліковане. Вести пару все одно мені, тож «зараз» має її знати.
+ * Опубліковані (APPLIED) уже стоять серед моїх пар; відхилені й передані доповненням — не мої.
+ */
+export function confirmedAssignments(changes: readonly ChangeDto[], date: IsoDate): ChangeDto[] {
+  return changes
+    .filter((c) => c.date === date && c.status === 'CONFIRMED' && !c.supersededBy && c.teacherAnswer !== 'DECLINE')
+    .sort((a, b) => a.pairFrom - b.pairFrom);
+}
+
+/** Пари, які займають заміни (BLOCK/ADDITIONAL — кілька поспіль). */
+export function assignmentPairs(assignments: readonly ChangeDto[]): number[] {
+  return assignments.flatMap((c) => Array.from({ length: Math.max(c.pairTo - c.pairFrom + 1, 1) }, (_, i) => c.pairFrom + i));
+}
+
+/** «заміна: СТП, 4КІ1, ауд. 14» — пара із заміни так само, як власна пара в реченні «зараз». */
+export function assignmentPhrase(change: ChangeDto): string {
+  const discipline = (change.new.discipline ?? change.original.discipline)?.shortName;
+  const room = roomLabel((change.new.room ?? change.original.room)?.name);
+  return `заміна: ${[discipline, change.group.code, room].filter(Boolean).join(', ')}`;
 }
 
 /**
