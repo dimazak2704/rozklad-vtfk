@@ -31,7 +31,8 @@ domain (the SPA signs in at `<its origin>/auth`).
 | `infra/deploy/caddy/Caddyfile` | The site, TLS, routing of `/api` and `/auth`, the internal API of `auth` closed, forged forwarding headers removed |
 | `infra/deploy/.env.example` → `infra/deploy/.env` | Every setting with comments. `.env` is gitignored |
 | `infra/deploy/secrets/auth-signing-key.pem` | Token signing key of `auth` (RSA, created by `gen-secrets.sh`; gitignored) |
-| `infra/deploy/postgres/20-prod-passwords.sh` | Replaces the dev passwords of `init.sql` on the first start |
+| `infra/deploy/postgres/20-prod-passwords.sh` | Replaces the dev passwords of `init.sql` on the first start, and every password again after a restore |
+| `infra/deploy/rabbitmq/20-rozklad.conf` | The broker user gets no management tag |
 | `infra/deploy/scripts/` | `deploy.sh`, `gen-secrets.sh`, `compose.sh`, `backup-db.sh`, `restore-db.sh`, `ci-entry.sh` (what the GitHub key may run) |
 | `infra/deploy/.env.images` | Written by `deploy.sh`: which images run now (gitignored, do not edit) |
 | `.github/workflows/ci.yml`, `deploy.yml` | CI and auto-deploy |
@@ -301,6 +302,11 @@ infra/deploy/scripts/compose.sh exec rabbitmq rabbitmqctl list_queues name messa
 docker stats --no-stream                                     # memory per container
 ```
 
+The broker user `RABBIT_USER` has no management tag (`infra/deploy/rabbitmq/20-rozklad.conf`): the
+services need AMQP only, and a leaked password must not open the management API. Use `rabbitmqctl` in
+the container as above. Only `core`, `scheduler` and `notification` get the broker password; `importer`
+has no AMQP client and `scheduler` no Redis client, so they do not get those passwords.
+
 The Java services log JSON (ECS). Readable view: `sudo apt-get install -y jq`, then
 `infra/deploy/scripts/compose.sh logs --no-log-prefix core | jq -r '"\(.["@timestamp"]) \(.["log.level"]) \(.message)"'`.
 Docker rotates the logs: 5 files × 10 MB per container.
@@ -387,8 +393,8 @@ infra/deploy/scripts/restore-db.sh /var/backups/rozklad/rozklad-20261107-031500.
 
 It first checks that the recorded images are on the server (otherwise it stops before touching
 anything), then stops everything except PostgreSQL, loads the dump (two errors about the role
-`postgres` are expected), sets the service passwords from the current `.env` again, starts the same
-images; `auth` applies the client secrets and demo teachers of `.env` when it starts. On a new
+`postgres` are expected), sets every database password from the current `.env` again (the dump carries
+the old cluster's, the superuser's included), starts the same images; `auth` applies the client secrets and demo teachers of `.env` when it starts. On a new
 server: deploy first, then restore.
 
 Volumes: `pgdata` holds all data. `rabbitdata` (queued messages), `redisdata` (caches, bot dialogs)

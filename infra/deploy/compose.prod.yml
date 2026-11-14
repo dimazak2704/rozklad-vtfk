@@ -25,12 +25,18 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
-# Production values shared by the Java services (they override the dev values of x-java-env).
-x-prod-java-env: &prod-java-env
+# Production values shared by the Java services (they override the dev values of x-java-env). The
+# broker and Redis credentials are separate: a service gets only those of a client it has (importer
+# has no AMQP client, scheduler no Redis client), so a compromised parser cannot publish bot events.
+x-prod-rabbit-env: &prod-rabbit-env
   RABBIT_USER: ${RABBIT_USER:-rozklad}
   RABBIT_PASSWORD: ${RABBIT_PASSWORD:?}
+
+x-prod-redis-env: &prod-redis-env
   # Spring Boot binds SPRING_DATA_REDIS_PASSWORD to spring.data.redis.password
   SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+
+x-prod-java-env: &prod-java-env
   # Browsers get tokens from the sign-in service at https://<domain>/auth, so that is the issuer to
   # validate. Keys and service tokens come from auth inside the network (AUTH_JWKS_URI, AUTH_TOKEN_URI
   # and AUTH_AUDIENCE stay as in the base file).
@@ -93,6 +99,9 @@ services:
       # applied when the rabbitdata volume is created
       RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-rozklad}
       RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?}
+    volumes:
+      # the user above without the administrator tag (no management API); also applied at volume creation
+      - ./deploy/rabbitmq/20-rozklad.conf:/etc/rabbitmq/conf.d/20-rozklad.conf:ro
     mem_limit: ${RABBITMQ_MEM_LIMIT:-512m}
     logging: *logging
 
@@ -163,7 +172,7 @@ services:
     env_file: !reset []
     ports: !reset []
     environment:
-      <<: *prod-java-env
+      <<: [*prod-java-env, *prod-rabbit-env, *prod-redis-env]
       DB_PASSWORD: ${CORE_DB_PASSWORD:?}
       PUBLIC_WEB_URL: https://${DOMAIN:?}
       # accounts live in the sign-in service auth (internal API on the container network only)
@@ -181,7 +190,7 @@ services:
     env_file: !reset []
     ports: !reset []
     environment:
-      <<: *prod-java-env
+      <<: [*prod-java-env, *prod-rabbit-env]
       DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?}
       JAVA_TOOL_OPTIONS: -Xmx${SCHEDULER_HEAP:-384m}
     stop_grace_period: 30s
@@ -193,7 +202,10 @@ services:
     env_file: !reset []
     ports: !reset []
     environment:
-      <<: *prod-java-env
+      <<: [*prod-java-env, *prod-redis-env]
+      # no AMQP client: drop the broker account of the base file's x-java-env
+      RABBIT_USER: !reset null
+      RABBIT_PASSWORD: !reset null
       DB_PASSWORD: ${IMPORTER_DB_PASSWORD:?}
       IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:?}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -211,7 +223,7 @@ services:
     env_file: !reset []
     ports: !reset []
     environment:
-      <<: *prod-java-env
+      <<: [*prod-java-env, *prod-rabbit-env, *prod-redis-env]
       DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?}
       NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?}
       PUBLIC_WEB_URL: https://${DOMAIN:?}
