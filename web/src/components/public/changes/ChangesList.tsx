@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { roomLabel } from '@/lib/schedule';
 import { GroupHint } from '../GroupHint';
 import { reasonHint } from '../schedule/schedule-utils';
+import { changeRowText, ROOM_CHANGE_TITLE, sortByPair } from './change-rows';
 import { changeGroupKey, isMyGroup, type ChangeGroup } from './changes-filter';
 
 /** Слово стану над рядком — у кольорі стану, без «таблички». Звичайні рядки розпорядження — тихо. */
@@ -20,10 +21,6 @@ const STATE: Record<OrderRowType, { word: string; tone: string }> = {
 
 const STRUCK = 'line-through decoration-[var(--text-decoration-color-change)]';
 
-function joined(discipline?: string | null, teacher?: string | null): string {
-  return [discipline, teacher].filter(Boolean).join(', ');
-}
-
 /** Один рядок розпорядження реченням: що тепер (головне), що було (закреслено), де. */
 function ChangeRow({
   item,
@@ -35,13 +32,9 @@ function ChangeRow({
   commonReason: string | null;
 }) {
   const state = STATE[item.rowType];
-  const before = joined(item.from.discipline, item.from.teacher);
-  const after = joined(item.to.discipline, item.to.teacher);
   const cancelled = item.rowType === 'CANCELLATION';
   const roomChange = item.rowType === 'ROOM_CHANGE';
-  // головний рядок: нове заняття; для скасування й зміни аудиторії — те, що було в розкладі
-  const title = cancelled || roomChange || !after ? before : after;
-  const old = !cancelled && !roomChange && after && before && before !== after ? before : null;
+  const { title, old } = changeRowText(item);
   const room = cancelled ? null : roomLabel(item.room);
   const reason = reasonHint(item.reasonText);
   const hint = reason && reason !== commonReason ? reason : null;
@@ -62,9 +55,9 @@ function ChangeRow({
           </span>
           <span className={state.tone}>{state.word}</span>
         </span>
-        <span className={cn('text-cell font-[650] text-pretty', cancelled ? cn('text-secondary', 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2') : 'text-primary')}>
+        <span className={cn('text-cell font-[650] text-pretty', cancelled ? cn('text-secondary', 'line-through decoration-[var(--text-decoration-color-cancel)] decoration-2') : title === ROOM_CHANGE_TITLE ? 'font-[500] text-secondary' : 'text-primary')}>
           {cancelled ? <span className="sr-only">Було: </span> : null}
-          {title || '—'}
+          {title}
           {item.rowType === 'MERGE_SUBGROUPS' ? <span className="font-normal text-secondary"> — обидві підгрупи</span> : null}
         </span>
         {old ? (
@@ -123,7 +116,7 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
               </Link>
             </GroupHint>
             <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
-              {items.map((item, index) => (
+              {sortByPair(items).map((item, index) => (
                 <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} commonReason={commonReason} />
               ))}
             </ol>
