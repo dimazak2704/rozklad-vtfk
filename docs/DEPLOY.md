@@ -450,24 +450,38 @@ and `caddy_data` (certificates, re-issued automatically) can be lost without har
 - **CI** (`.github/workflows/ci.yml`) runs on pull requests and on pushes to other branches: Maven
   `verify` on JDK 25 (unit tests and Testcontainers integration tests with the runner's Docker),
   web `npm ci`, lint, tests, build, and checks of this deployment setup (compose overlay, Caddyfile,
-  shell scripts).
+  shell scripts, and `infra/deploy/tests/run.sh`: the deploy-key checks of `ci-entry.sh`, the
+  backups, Caddy routing and the broker and database users in throwaway containers, and the
+  rendered compose files: ports, credentials per service, container hardening, pinned actions).
 - **Deploy** (`.github/workflows/deploy.yml`) runs on every push to `main` and by hand: it calls CI,
   and only if CI passes builds the images for `linux/amd64` and `linux/arm64`, pushes them to
   `ghcr.io/<owner>/rozklad/<service>:<commit-sha>` and `:latest`, then connects to the server over
-  SSH and runs `infra/deploy/scripts/ci-entry.sh`, which runs `deploy.sh --pull-images` with that
-  tag. A manual run on any branch other than `main` runs CI only.
+  SSH and runs `infra/deploy/scripts/ci-entry.sh`, which runs `deploy.sh --pull-images --fresh` with
+  that tag. A manual run on any branch other than `main` runs CI only.
+- **Weekly rebuild.** Every Monday at 02:23 UTC Deploy runs for the current `main` without a push:
+  the images are built again on the current base images (JRE, nginx, Alpine and Ubuntu packages) and
+  rolled out, so their security fixes reach the server; `--fresh` makes the server pull them although
+  the commit tag is the same. The services restart once (a minute or two at night). GitHub pauses
+  scheduled runs after 60 days without commits; Actions → Deploy shows it.
+- **Dependabot** (`.github/dependabot.yml`) opens weekly pull requests for Maven, npm, the base images
+  of the Dockerfiles, the images of the compose files and the actions. Third-party actions are pinned
+  to a commit SHA (Dependabot updates the SHA), because the image job can push packages. PostgreSQL
+  majors are ignored (a new major cannot read the data volume).
 
-Deploy does nothing but CI until it is configured (GitHub → repository → Settings → Secrets and
-variables → Actions):
+Deploy does nothing but CI until the variable `DOMAIN` is set. Create the environment `production`
+first (step 1 of "Repository settings" below) and put the secrets there (Settings → Environments →
+`production` → Environment secrets); the variables go to Settings → Secrets and variables → Actions →
+Variables. Only the deploy job, which names `production`, reads the secrets; repository secrets
+still work but any workflow on any branch could read those.
 
 | Kind | Name | Value |
 |---|---|---|
-| secret | `VPS_HOST` | server IP or DOMAIN |
-| secret | `VPS_USER` | `ubuntu` (the user that owns `~/rozklad` and is in the `docker` group) |
-| secret | `VPS_SSH_KEY` | private key of a key pair made for GitHub (below) |
-| secret | `VPS_KNOWN_HOSTS` | the server's host key (below); the deploy job fails without it |
-| secret, optional | `VPS_PORT` | SSH port if not 22 |
-| variable | `DOMAIN` | the same value as in `.env` (the deployment URL; `ci-entry.sh` compares them) |
+| environment secret | `VPS_HOST` | server IP or DOMAIN |
+| environment secret | `VPS_USER` | `ubuntu` (the user that owns `~/rozklad` and is in the `docker` group) |
+| environment secret | `VPS_SSH_KEY` | private key of a key pair made for GitHub (below) |
+| environment secret | `VPS_KNOWN_HOSTS` | the server's host key (below); the deploy job fails without it |
+| environment secret, optional | `VPS_PORT` | SSH port if not 22 |
+| variable | `DOMAIN` | switches deployment on; the same value as in `.env` (the deployment URL; `ci-entry.sh` compares them) |
 | variable, optional | `IMAGE_PLATFORMS` | `linux/arm64` for Oracle A1 only: about half the build time |
 | variable, optional | `VPS_APP_DIR` | clone directory on the server, default `rozklad` (= `~/rozklad`) |
 | variable, optional | `TELEGRAM_BOT_USERNAME` | bot link on the About page |
@@ -510,8 +524,22 @@ Host key: on the server run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`; 
 output that the fingerprint is the same, and paste the `ssh-keyscan` line into `VPS_KNOWN_HOSTS`. The
 runner never trusts a key it has not been given.
 
-Also, in GitHub → Settings → Environments → `production` → Deployment branches and tags, allow only
-`main`. The workflow already skips other branches; the rule makes GitHub enforce it too.
+**Repository settings, before the secrets go in** (the repository is public, and a push to `main`
+deploys):
+
+1. Settings → Environments → New environment `production` → Deployment branches and tags: "Selected
+   branches and tags", add `main`. Put `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` (and
+   `VPS_PORT`) here as **environment secrets**, not repository secrets: then only a job of `main` that
+   names this environment can read them, not a workflow pushed to some other branch. Optionally add
+   yourself as a required reviewer, so every deploy waits for your click (the weekly rebuild too).
+2. Settings → Rules → Rulesets → New branch ruleset for `main`: block force pushes and deletion,
+   require a pull request (you can allow yourself to bypass it) and the status checks of CI
+   (Backend, Web, Deployment config).
+3. Settings → Code security: Dependabot alerts and Dependabot security updates on; secret scanning
+   and push protection stay on.
+4. Settings → Actions → General: allow GitHub's actions and actions of verified creators only (the
+   workflows use `actions/*` and `docker/*`), and keep the default `GITHUB_TOKEN` permission
+   read-only.
 
 Leave `IMAGE_PREFIX`/`IMAGE_TAG` unset in the server's `.env`. `deploy.sh` records what the workflow
 deployed in `infra/deploy/.env.images`, and manual runs start those images again. The workflow logs

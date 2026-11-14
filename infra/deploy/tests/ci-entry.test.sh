@@ -57,7 +57,8 @@ deploy_with() {
   detail="exit $status; stderr: $(cat "$sb/log/err")"
 }
 
-deployed() { [[ $status == 0 && $(cat "$sb/log/deploy" 2>/dev/null) == "$1 $2 --pull-images" ]]; }
+# --fresh: a scheduled run rebuilds the images of the same commit on newer base images
+deployed() { [[ $status == 0 && $(cat "$sb/log/deploy" 2>/dev/null) == "$1 $2 --pull-images --fresh" ]]; }
 refused() { [[ $status != 0 && ! -e $sb/log/deploy ]] && ! grep -q '^login' "$sb/log/docker" 2>/dev/null; }
 
 # ---- prefix pinned in .env -------------------------------------------------------------------------

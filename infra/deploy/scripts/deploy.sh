@@ -5,6 +5,7 @@
 #   infra/deploy/scripts/deploy.sh --no-pull       deploy the working tree as it is
 #   infra/deploy/scripts/deploy.sh --pull-images   use prebuilt images (IMAGE_PREFIX, IMAGE_TAG)
 #   infra/deploy/scripts/deploy.sh --build         build here even if IMAGE_PREFIX is a registry
+#   ... --pull-images --fresh                      pull even if the images of a commit are here (rebuilt)
 #
 # Images: IMAGE_PREFIX/IMAGE_TAG from the environment (the GitHub workflow), else from .env, else
 # the ones the last deploy recorded in infra/deploy/.env.images, else localhost/rozklad:prod (built
@@ -21,12 +22,14 @@ usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 original_args=("$@")
 git_pull=1
+fresh=0
 mode=auto
 while (($#)); do
   case $1 in
     --no-pull) git_pull=0 ;;
     --pull-images) mode=pull ;;
     --build) mode=build ;;
+    --fresh) fresh=1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; die "unknown option: $1" ;;
   esac
@@ -303,7 +306,7 @@ if [[ $mode == build ]]; then
   compose build --pull
   # patch releases of the pinned third-party images (Caddy, PostgreSQL, RabbitMQ, Redis)
   compose pull --ignore-buildable --quiet
-elif [[ $tag =~ ^[0-9a-f]{40}$ ]] && app_images_present; then
+elif ((!fresh)) && [[ $tag =~ ^[0-9a-f]{40}$ ]] && app_images_present; then
   # a commit tag never changes: no registry login needed to deploy it again
   log "$prefix/<service>:$tag is already here; pulling only the third-party images"
   compose pull --ignore-buildable --quiet

@@ -74,7 +74,8 @@ main() {
 
   printf '%s' "$token" | docker login ghcr.io -u "$user" --password-stdin >/dev/null
   trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
-  IMAGE_PREFIX=$prefix IMAGE_TAG=$tag bash "$here/deploy.sh" --pull-images
+  # --fresh: the weekly run rebuilds this commit's images on newer base images under the same tag
+  IMAGE_PREFIX=$prefix IMAGE_TAG=$tag bash "$here/deploy.sh" --pull-images --fresh
 }
 
 main "$@"

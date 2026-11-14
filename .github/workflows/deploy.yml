@@ -1,11 +1,15 @@
 # Deploy: on every push to main (or by hand) run CI, build the images for amd64 and arm64 with
 # buildx, push them to GHCR and roll them out on the VPS over SSH (infra/deploy/scripts/deploy.sh).
+# Once a week it does the same for the current main, so security fixes of the base images (JRE,
+# nginx, Ubuntu/Alpine packages) reach the server even when nobody pushes.
 #
-# Inert until configured: without the repository secrets VPS_HOST, VPS_USER and VPS_SSH_KEY only
-# CI runs. Settings (docs/DEPLOY.md, "GitHub Actions"):
-#   secrets   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), VPS_KNOWN_HOSTS, optional VPS_PORT
-#   variables DOMAIN (required: the deployment URL, checked against the server), optional
-#             IMAGE_PLATFORMS, VPS_APP_DIR, TELEGRAM_BOT_USERNAME
+# Inert until configured: without the repository variable DOMAIN only CI runs. Settings
+# (docs/DEPLOY.md, "GitHub Actions"):
+#   variables DOMAIN (switches deployment on; the deployment URL, checked against the server),
+#             optional IMAGE_PLATFORMS, VPS_APP_DIR, TELEGRAM_BOT_USERNAME
+#   secrets   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key), VPS_KNOWN_HOSTS, optional VPS_PORT,
+#             best as secrets of the environment "production" (deployment branch main): only the
+#             deploy job, which names that environment, reads them
 # Only main is deployed: a manual run on another branch runs CI and nothing else.
 name: Deploy
 
@@ -13,6 +17,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "23 2 * * 1" # Mondays 02:23 UTC; GitHub pauses it after 60 days without commits
 
 permissions:
   contents: read
@@ -33,12 +39,10 @@ jobs:
       enabled: ${{ steps.check.outputs.enabled }}
       image-prefix: ${{ steps.check.outputs.image-prefix }}
     steps:
+      # Reads no secret: the VPS secrets may be secrets of the environment "production", which only
+      # the deploy job sees (it checks them before connecting).
       - id: check
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           DOMAIN: ${{ vars.DOMAIN }}
         run: |
           # GHCR wants lower-case names
@@ -48,19 +52,10 @@ jobs:
             echo "::notice title=Not deployed::Only main is deployed; $GITHUB_REF ran CI only."
             exit 0
           fi
-          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Deployment is off::Add the repository secrets VPS_HOST, VPS_USER and VPS_SSH_KEY to deploy (docs/DEPLOY.md)."
-            exit 0
-          fi
-          # a runner is new on every run: without a pinned host key it would trust whatever answers
-          if [ -z "$VPS_KNOWN_HOSTS" ]; then
-            echo "::error title=VPS_KNOWN_HOSTS is missing::Add the secret VPS_KNOWN_HOSTS: the output of ssh-keyscan -t ed25519 <host>, checked against the host key the provider console shows (docs/DEPLOY.md, section 13)."
-            exit 1
-          fi
           if [ -z "$DOMAIN" ]; then
-            echo "::error title=DOMAIN is missing::Add the repository variable DOMAIN (same value as DOMAIN in infra/deploy/.env on the VPS)."
-            exit 1
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deployment is off::Add the repository variable DOMAIN and the VPS secrets to deploy (docs/DEPLOY.md, section 13)."
+            exit 0
           fi
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
@@ -117,16 +112,17 @@ jobs:
           name: jars
           path: services
 
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      # third-party actions are pinned to a commit (Dependabot updates them): this job can push packages
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.service == 'web' && 'web' || format('services/{0}', matrix.service) }}
           platforms: ${{ vars.IMAGE_PLATFORMS || 'linux/amd64,linux/arm64' }}
@@ -164,6 +160,15 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
+            echo "::error title=VPS secrets are missing::DOMAIN is set, so this run deploys: add VPS_HOST, VPS_USER and VPS_SSH_KEY as secrets of the environment production (docs/DEPLOY.md, section 13)."
+            exit 1
+          fi
+          # a runner is new on every run: without a pinned host key it would trust whatever answers
+          if [ -z "$VPS_KNOWN_HOSTS" ]; then
+            echo "::error title=VPS_KNOWN_HOSTS is missing::Add the secret VPS_KNOWN_HOSTS: the output of ssh-keyscan -t ed25519 <host>, checked against the host key the provider console shows (docs/DEPLOY.md, section 13)."
+            exit 1
+          fi
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key

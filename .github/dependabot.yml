@@ -1,0 +1,62 @@
+# Dependency and base image updates (docs/DEPLOY.md, section 13). Version updates come weekly as
+# grouped pull requests; CI tests them before anything reaches main. Security updates come as soon as
+# an advisory is published once "Dependabot security updates" is on in the repository settings.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      maven-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Base images of the service images. nginx stays on a stable branch (an even minor version): close a
+  # pull request to an odd, mainline one; CI refuses it (infra/deploy/tests/config_test.py).
+  - package-ecosystem: "docker"
+    directories:
+      - "/web"
+      - "/services/auth"
+      - "/services/core"
+      - "/services/scheduler"
+      - "/services/importer"
+      - "/services/notification"
+      - "/services/gateway"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # a new Java or Node.js major is a code change, not a patch
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
+  # PostgreSQL, RabbitMQ, Redis and Caddy of the compose files
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/infra"
+      - "/infra/deploy"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # a new PostgreSQL major cannot read the existing data volume (dump and restore instead)
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

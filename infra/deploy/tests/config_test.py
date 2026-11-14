@@ -189,5 +189,43 @@ class Images(unittest.TestCase):
                 self.assertEqual("app", users[-1] if users else None)
 
 
+class Workflows(unittest.TestCase):
+    """The repository is public and main deploys itself: third-party code in the pipeline is pinned,
+    dependencies are watched, and images are rebuilt on fresh base images even without a push."""
+
+    def text(self, path):
+        return (ROOT / path).read_text(encoding="utf-8")
+
+    def test_third_party_actions_are_pinned_to_a_commit(self):
+        # a moved tag of an action with packages:write would run in the image build; GitHub's own
+        # actions/* are trusted like the runner itself
+        for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            for ref in re.findall(r"^\s*-?\s*uses:\s*([^\s#]+)", workflow.read_text(encoding="utf-8"), re.MULTILINE):
+                if ref.startswith(("actions/", "./")):
+                    continue
+                with self.subTest(workflow=workflow.name, uses=ref):
+                    self.assertRegex(ref, r"@[0-9a-f]{40}$")
+
+    def test_dependabot_watches_every_ecosystem(self):
+        config = self.text(".github/dependabot.yml")
+        for ecosystem in ("github-actions", "maven", "npm", "docker", "docker-compose"):
+            with self.subTest(ecosystem=ecosystem):
+                self.assertRegex(config, r'package-ecosystem:\s*"%s"' % re.escape(ecosystem))
+        # a PostgreSQL major version cannot read the data volume of the previous one
+        self.assertRegex(config, r'dependency-name:\s*"postgres"[^-]*?update-types:\s*\["version-update:semver-major"\]')
+
+    def test_deploy_secrets_are_read_only_by_the_production_environment_job(self):
+        # Environment secrets of "production" (deployment branch main) are out of reach for a workflow
+        # pushed to another branch; that works only if no other job needs them.
+        text = self.text(".github/workflows/deploy.yml")
+        jobs = re.split(r"(?m)^  (?=[a-z][a-z0-9_-]*:\s*$)", text.split("\njobs:\n", 1)[1])
+        readers = {job.split(":", 1)[0]: job for job in jobs if "secrets.VPS_" in job}
+        self.assertEqual({"deploy"}, set(readers))
+        self.assertRegex(readers["deploy"], r"(?m)^    environment:\s*\n\s+name: production$")
+
+    def test_images_are_rebuilt_on_a_schedule(self):
+        self.assertRegex(self.text(".github/workflows/deploy.yml"), r"(?m)^\s+schedule:\s*\n\s+- cron:")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
