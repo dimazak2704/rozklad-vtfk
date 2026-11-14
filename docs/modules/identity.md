@@ -70,7 +70,8 @@ account gets none.
 ## Logs
 
 The tokens are bearer credentials. `ApiExceptionHandler` writes `/api/public/invites/***/…` instead of the
-token when it logs a request path; nginx masks the SPA pages `/invite/` and `/password/` in its access log.
+token when it logs a request path, and so does the gateway's `GatewayErrorHandler` when core is down or
+slow; nginx masks the SPA pages `/invite/` and `/password/` in its access log.
 
 ## Demo seed (profile `demo`)
 

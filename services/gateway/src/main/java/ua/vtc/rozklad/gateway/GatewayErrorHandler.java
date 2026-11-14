@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.webflux.error.ErrorWebExceptionHandler;
@@ -33,6 +34,12 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GatewayErrorHandler.class);
 
+    /**
+     * The one-time token of an invite or a password link ({@code /api/public/invites/{token}/…}): a bearer
+     * credential that must not reach the log. Same pattern as core's {@code ApiExceptionHandler}.
+     */
+    private static final Pattern INVITE_TOKEN = Pattern.compile("(/api/public/invites/)[^/]+");
+
     private final JsonMapper jsonMapper;
 
     public GatewayErrorHandler(JsonMapper jsonMapper) {
@@ -49,10 +56,15 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
         if (problem.status().is5xxServerError()) {
             // WebFlux без MDC: id запиту прямо в рядку, як у тілі відповіді й у логах сервісів
             log.warn("[{}] Gateway error {} on {} {}: {}", exchange.getAttributeOrDefault(RequestIdWebFilter.ATTRIBUTE, "-"),
-                    problem.status().value(), exchange.getRequest().getMethod(), exchange.getRequest().getPath(),
-                    error.toString());
+                    problem.status().value(), exchange.getRequest().getMethod(),
+                    masked(exchange.getRequest().getPath().value()), masked(error.toString()));
         }
         return write(exchange, response, problem);
+    }
+
+    /** {@code text} for the log, with the token of an invite or a password link masked. */
+    static String masked(String text) {
+        return INVITE_TOKEN.matcher(text).replaceAll("$1***");
     }
 
     /** Writes {@code problem} as {@code application/problem+json} into {@code response}. */

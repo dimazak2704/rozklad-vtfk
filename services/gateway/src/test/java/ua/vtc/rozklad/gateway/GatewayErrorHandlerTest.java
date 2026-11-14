@@ -33,6 +33,23 @@ class GatewayErrorHandlerTest {
     }
 
     @Test
+    void theLogNeverCarriesTheTokenOfAnInviteOrPasswordLink(CapturedOutput output) {
+        String token = "Abcd" + "x".repeat(39);
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/public/invites/{token}/accept", token));
+
+        // core is down, and the error text itself names the path (as a client exception may)
+        new GatewayErrorHandler(JsonMapper.builder().build()).handle(exchange, new IllegalStateException(
+                "POST http://core:8081/api/public/invites/" + token + "/accept failed",
+                new ConnectException("Connection refused"))).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(output.getAll()).contains("Gateway error 503 on POST /api/public/invites/***/accept")
+                .contains("http://core:8081/api/public/invites/***/accept failed")
+                .doesNotContain(token);
+    }
+
+    @Test
     void stoppedContainerWhoseNameNoLongerResolvesIsUnavailable() {
         // Docker removes the DNS name of a stopped container: Netty reports UnknownHostException
         Throwable error = new IllegalStateException("routing failed",
