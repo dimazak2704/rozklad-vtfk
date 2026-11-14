@@ -59,7 +59,7 @@ class Dashboard {
                 generation, null, alerts(date, semester.isPresent(), summary));
     }
 
-    private static List<DashboardDto.Alert> alerts(LocalDate date, boolean inSemester, SubstitutionDaySummary summary) {
+    static List<DashboardDto.Alert> alerts(LocalDate date, boolean inSemester, SubstitutionDaySummary summary) {
         String changesLink = "/admin/changes?date=" + date;
         List<DashboardDto.Alert> alerts = new ArrayList<>();
         if (!inSemester) {
@@ -85,8 +85,9 @@ class Dashboard {
         if (summary.overduePending() > 0) {
             int count = summary.overduePending();
             alerts.add(new DashboardDto.Alert("PENDING_OVERDUE", DashboardDto.Severity.WARN,
-                    "%d %s довше встановленого часу чекають підтвердження".formatted(count,
-                            UkrainianText.plural(count, "заміна", "заміни", "замін")), changesLink));
+                    "%d %s довше встановленого часу %s підтвердження".formatted(count,
+                            UkrainianText.plural(count, "заміна", "заміни", "замін"),
+                            UkrainianText.plural(count, "чекає", "чекають", "чекають")), changesLink));
         }
         if (summary.confirmed() > 0) {
             int count = summary.confirmed();
