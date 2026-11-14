@@ -134,7 +134,21 @@ One host name points to the server: `DOMAIN`.
 | sslip.io (free, nothing to register) | `203-0-113-10.sslip.io` for IP 203.0.113.10 | none |
 | DuckDNS (free) | `rozklad-vtfk.duckdns.org` | create the name at duckdns.org with the server IP |
 | GitHub Student Developer Pack | a free domain for a year from a partner registrar (see education.github.com/pack for the current offer) | an A record |
-| Own domain | `rozklad.example.org` | an A record `rozklad` → server IP |
+| Own domain | `rozklad.example.org` | an A record `rozklad` → server IP (no AAAA, see below) |
+
+Create an **A record only, no AAAA (IPv6) record**. Caddy publishes its ports on IPv4 only
+(`compose.prod.yml`): the compose network has no IPv6, so Docker would pass every IPv6 visitor to Caddy
+under one internal address, and they would all share one bucket of the per-IP rate limit and one
+sign-in throttle. Turning IPv6 on needs `enable_ipv6` with its own subnet on the compose network and a
+check with `curl -6` that the gateway and `auth` logs show the real addresses.
+
+Do not put a CDN or proxy such as Cloudflare (orange cloud) in front without changing the Caddyfile:
+Caddy would see only the CDN's addresses, and every visitor would share their buckets. If you need one,
+in the Caddyfile's global options set `servers { trusted_proxies static <the CDN's published ranges>
+client_ip_headers CF-Connecting-IP }` and add `header_up X-Forwarded-For {client_ip}` to every
+`reverse_proxy`, so the gateway and `auth` get exactly one address that Caddy has checked. Simply
+trusting the CDN is not enough: the gateway reads the leftmost `X-Forwarded-For` value, which the
+client controls. "DNS only" (grey cloud) needs no change.
 
 Check before deploying: `getent hosts rozklad.example.org` on the server (or `nslookup` on Windows).
 sslip.io depends on the IP never changing (reserve it) and on a public DNS service; Let's Encrypt raised

@@ -67,6 +67,17 @@ class DevelopmentStack(unittest.TestCase):
         self.assertEqual(set(), others)
 
 
+class ProductionEdge(unittest.TestCase):
+    def test_only_caddy_publishes_and_only_on_ipv4(self):
+        # The compose network is IPv4-only: an IPv6 client would reach Caddy through docker-proxy as the
+        # network gateway, and every IPv6 visitor would share one rate-limit bucket and one sign-in
+        # throttle. Publishing on 0.0.0.0 keeps IPv6 out (and DEPLOY.md says: no AAAA record).
+        ports = published(render(PROD, PROD_ENV))
+        self.assertEqual({"caddy"}, set(ports))
+        self.assertEqual({("0.0.0.0", "80", 80), ("0.0.0.0", "443", 443)}, {p for p in ports["caddy"]})
+        self.assertEqual(3, len(ports["caddy"]))  # 443/tcp and 443/udp
+
+
 class ProductionSecrets(unittest.TestCase):
     """Each container gets only the credentials it uses (rendered with .env.example, where every
     secret is the placeholder "change-me")."""

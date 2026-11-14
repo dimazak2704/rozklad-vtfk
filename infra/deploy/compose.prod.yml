@@ -51,10 +51,12 @@ services:
     image: caddy:2.11-alpine
     profiles: [app]
     restart: unless-stopped
+    # IPv4 only: the compose network has no IPv6, so docker-proxy would hand Caddy every IPv6 client as
+    # the network gateway (one shared rate-limit bucket and sign-in throttle). No AAAA record either.
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp" # HTTP/3; browsers fall back to TCP if the cloud firewall blocks UDP
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:443:443/udp" # HTTP/3; browsers fall back to TCP if the cloud firewall blocks UDP
     environment:
       DOMAIN: ${DOMAIN:?}
       ACME_EMAIL: ${ACME_EMAIL:?}
