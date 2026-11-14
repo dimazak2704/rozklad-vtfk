@@ -21,7 +21,9 @@ CONTRACTS §1, §2 (timetable, generation, import apply), §7 (events). Deviatio
   kept and their conflicts with the new version reported; events `timetable.version.published` and
   `schedule.changed` (outbox) and SSE `schedule.changed`.
 - **Public schedules** for a group, teacher or room (one SQL query per range, ETag), `LessonView` kinds with the
-  original taken from the change row, and **ICS** subscriptions for groups and teachers.
+  original taken from the change row, and **ICS** subscriptions for groups and teachers. Both carry substitutions,
+  so visitors get whole weeks from the Monday of the public history window (`settings.PublicHistory`, owner
+  decision 14.11.2026); staff tokens get everything.
 - **Import apply** of a recognized timetable → DRAFT (source IMPORT), names resolved through catalog names and
   aliases with the normalization of DOMAIN §10.
 - **Generation orchestration**: builds the `ProblemSnapshot`, sends `generation.requested` (outbox), consumes
@@ -37,8 +39,8 @@ CONTRACTS §1, §2 (timetable, generation, import apply), §7 (events). Deviatio
 
 | Method & path | Answer |
 |---|---|
-| `GET /api/public/schedule/{group\|teacher\|room}/{id}?from&to` | `ScheduleDto`; default range = current week; ≤ 31 days else 400; `Cache-Control: no-cache, public` + ETag (304) |
-| `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` of the current semester (scheduled lessons, UTC times) |
+| `GET /api/public/schedule/{group\|teacher\|room}/{id}?from&to` | `ScheduleDto`; default range = current week; ≤ 31 days else 400; a visitor's `from` before the Monday of the week of `publicHistoryFrom` → 404 `history-not-public`; `Cache-Control: no-cache, public` (staff: `private`) + `Vary: Authorization` + ETag (304) |
+| `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` of the current semester (scheduled lessons, UTC times); visitors from the Monday of the week of `publicHistoryFrom`, staff the whole semester; `Vary: Authorization` |
 | `GET /api/admin/timetable/versions?semesterId` | versions with `lessonCount`, `hardConflicts`, `softWarnings`, `metrics` (active semester by default) |
 | `POST /api/admin/timetable/versions` | 201 draft (`copyFromVersionId` copies lessons) |
 | `GET` / `DELETE /api/admin/timetable/versions/{id}` | one version / delete a draft (204, 409 otherwise) |

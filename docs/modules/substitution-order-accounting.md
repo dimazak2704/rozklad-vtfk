@@ -48,7 +48,7 @@ accounting  ← substitution ← order
 | `GET /api/admin/orders`, `GET /draft?date=`, `GET /{id}`, `PUT /{id}/notes`, `POST /{id}/publish` | ADMIN | orders |
 | `GET /api/admin/dashboard?date` | ADMIN | daily figures and alerts |
 | `GET /api/admin/accounting?semesterId&groupId`, `GET /api/admin/accounting/teachers?month=2026-10` | ADMIN | accounting |
-| `GET /api/public/changes?date` | anyone | published changes of a date |
+| `GET /api/public/changes?date` | anyone | published changes of a date; a visitor's date before `publicHistoryFrom` (today − `changesHistoryDays`) → 404 `history-not-public`, staff tokens see every date; `Vary: Authorization` |
 | `GET /api/me/changes?status`, `POST /api/me/changes/{id}/confirm\|decline` | TEACHER/ADMIN with a linked teacher | «мої заміни» |
 | `GET/POST /api/me/absences`, `DELETE /api/me/absences/{id}` | same | own absences (cancel only before they start); a report starts today to 90 days ahead (422 `ABSENCE_IN_PAST` / `ABSENCE_TOO_FAR`) and one teacher reports at most 10 absences in 24 hours, cancelled ones included (422 `ABSENCE_LIMIT`); a teacher marked inactive reports nothing himself (422 `TEACHER_INACTIVE`); the bot (`POST /api/internal/absences`) has the same limits, the dispatcher none |
 | `GET/PUT /api/me/preferences?semesterId` | same | unwanted/unavailable grid (PUT replaces it) |
@@ -196,7 +196,8 @@ teacher gets 403 on `/api/me/*`.
   check read once per order (load items, preferences, calendar, absences of the date), not per row:
   `OrderPublicationIT.publicationReadsWithABoundedNumberOfStatements`, order №35 ≤ 100 statements (89 measured,
   130–160 before).
-* **Public changes**: rows of the published documents of the date (main first), grouped by group.
+* **Public changes**: rows of the published documents of the date (main first), grouped by group. Visitors see
+  the public history window and the future (`settings.PublicHistory`, owner decision 14.11.2026).
 
 ## 6. Accounting (DOMAIN §9)
 

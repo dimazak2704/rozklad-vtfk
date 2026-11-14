@@ -326,6 +326,11 @@ Numbering: per semester, sequential from 1, assigned on publication (evidence: �
 school day since 01.09). Changes after publication ⇒ AMENDMENT («ДОПОВНЕННЯ до розпорядження №N»), next number,
 only new rows, distributed as a diff.
 
+Public history (owner decision 14.11.2026): visitors of the site and the bot's non-staff chats see substitutions and
+orders from today − N days on (setting `public.changesHistoryDays`, default 7) and every future date; schedules, which
+carry substitutions, by whole weeks from the Monday of that week. Signed-in staff (ADMIN, TEACHER) and staff chats in the
+bot keep the whole archive. Full teacher names and absence reasons stay as public as before.
+
 Delivery to group chats (round 7, owner's decision): a bound group chat always receives its group's rows when an
 order or amendment is PUBLISHED — there is no switch for that. The morning schedule at 07:30 is extra and opt-in for
 group chats: a new GROUP_CHAT binding starts without it; chat administrators switch it with `/rozklad_on` /

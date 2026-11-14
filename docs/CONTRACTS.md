@@ -40,17 +40,25 @@ deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELO
 
 | Method & path | Response |
 |---|---|
-| `GET /api/public/meta` | `{collegeName, semester:{id,name,startsOn,endsOn}, today, weekNumber, parity, studyDay:bool, currentPair:{number,startsAt,endsAt,minutesLeft}?, nextPair?, bellProfile:{id,name}, nextStudyDay:{date,weekday,weekNumber,parity}?, now?, standTime?:true}` |
+| `GET /api/public/meta` | `{collegeName, semester:{id,name,startsOn,endsOn}, today, weekNumber, parity, studyDay:bool, currentPair:{number,startsAt,endsAt,minutesLeft}?, nextPair?, bellProfile:{id,name}, nextStudyDay:{date,weekday,weekNumber,parity}?, publicHistoryFrom, now?, standTime?:true}`; `publicHistoryFrom` = today − `changesHistoryDays`, the same for every caller |
 | `GET /api/public/search?q=&limit=10` | `[{type: GROUP|TEACHER|ROOM, id, label, sublabel, url}]` (fuzzy, Latin/Cyrillic tolerant) |
 | `GET /api/public/groups` | `[{id, code, course, specialty:{letters,name}, department, shift}]` |
 | `GET /api/public/teachers` | `[{id, shortName, displayName, cycleCommission, fullName, firstName}]`; `fullName` («Кренцін Михайло Дмитрович») and `firstName` are `null` unless the setting `showTeacherFullNames` is on and the first name is known |
 | `GET /api/public/rooms` | `[{id, name, type, capacity, building, maxParallel}]` |
 | `GET /api/public/bells?date=` | `{profile:{id,name}, weekday, slots:[{pair, startsAt, endsAt}]}` (+ `profiles` list when no date) |
-| `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
-| `GET /api/public/changes?date=` | `{date, parity, studyDay, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}` |
-| `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` for the semester (published lessons) |
+| `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days); visitors: `from` ≥ the Monday of the week of `publicHistoryFrom`, else 404 `history-not-public` |
+| `GET /api/public/changes?date=` | `{date, parity, studyDay, weekdayLabel, order:{id,number,publishedAt}?, amendments:[{id,number,publishedAt}], groups:[{group:GroupRef, items:[ChangeView]}]}`; visitors: `date` ≥ `publicHistoryFrom`, else 404 `history-not-public` |
+| `GET /api/public/ics/{group\|teacher}/{id}.ics` | `text/calendar` for the semester (published lessons); visitors get it from the Monday of the week of `publicHistoryFrom` |
 | `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt, kind: INVITE\|PASSWORD, username?}` (also password links, page `/password/:token`) |
 | `POST /api/public/invites/{token}/accept` `{username, password}` | 201 `{username}`; 409 username taken; 410 expired/used/revoked or access revoked (`inviteStatus`) |
+
+**Public history window** (owner decision 14.11.2026). Visitors see substitutions and orders from
+`publicHistoryFrom` (meta) on, every future date included; schedules and ICS, which carry substitutions, by whole
+weeks from the Monday of that date's week. A request with a valid token of ADMIN or TEACHER (and the bot's
+SERVICE_NOTIFICATION, which limits its other chats itself) has no limit. An invalid or expired token is 401 as on
+every path. Refusal: 404 ProblemDetail `{type: "urn:rozklad:problem:history-not-public", title: "Архів недоступний",
+detail, code: "HISTORY_NOT_PUBLIC", publicHistoryFrom}`. Changes, schedules, ICS and order documents answer with
+`Vary: Authorization`; schedule, ICS and document answers to staff are `private`.
 
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
@@ -131,7 +139,7 @@ displayName?, roles, teacherId?}` → 201, `PATCH /{accountId}`, `POST /{account
 `DELETE /{accountId}/google`;
 `GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing account of the sign-in service → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
-`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409).
+`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, changesHistoryDays, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409; `changesHistoryDays` 0..365, default 7, days of substitution history visitors see; a PUT without it keeps the stored value).
 
 Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
@@ -189,7 +197,7 @@ Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SE
 | `POST /api/notify/test` | sends a test message to `TELEGRAM_OWNER_CHAT_ID` |
 | `GET /api/notify/events/dead-letters` (ADMIN) | `{queue, count}`: events in `notification.q.events.dlq` (failed every retry); 503 when RabbitMQ cannot be asked |
 | `POST /api/notify/events/dead-letters/replay` (ADMIN) | `{replayed}`: moves the messages now in the DLQ back to `notification.q.events`, each once; 503 when RabbitMQ cannot be asked |
-| `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` (public for PUBLISHED orders) | file |
+| `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` (public for PUBLISHED orders; visitors only for orders dated from core's `publicHistoryFrom`, else 404 `history-not-public`; ADMIN or TEACHER token: any; `Vary: Authorization`, staff answers `private`; core unreachable for a past-dated order of a visitor → 503) | file |
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` (ADMIN, drafts) | file |
 
 ## 7. Events (exchange `rozklad.events`, topic; JSON; every payload has `eventId`, `occurredAt`, `version`=1)

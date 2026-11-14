@@ -7,7 +7,7 @@ depends on nothing but `shared`).
 
 - `SettingsService`: `current()` → `SystemSettings`, `update(settings, actor)`, convenience accessors
   (`approvalMode()`, `requiresConfirmation()`, `confirmTimeoutMinutes()`, `signatoryPosition()`,
-  `signatoryName()`, `collegeName()`, `hoursPerPair()`, `showTeacherFullNames()`,
+  `signatoryName()`, `collegeName()`, `hoursPerPair()`, `showTeacherFullNames()`, `changesHistoryDays()`,
   `activeBellProfileId()`). Inside a transaction the table is read once: `current()` is kept as a
   transaction resource until the transaction ends, and `update` in the same transaction drops it. Outside a
   transaction each call reads the table.
@@ -16,6 +16,13 @@ depends on nothing but `shared`).
   only.
 - `SettingsConstraint` (SPI): rules that need another module's data, e.g. calendar checks that the
   default bell profile exists and is active.
+- `PublicHistory` (owner decision 14.11.2026): the public history window. `from()` = today of core's `Clock` −
+  `changesHistoryDays` (meta's `publicHistoryFrom`), `weekFrom()` its Monday; `fullArchive()` is true for a token
+  with ADMIN, TEACHER or SERVICE_NOTIFICATION (the bot limits its other chats itself); `requireDate(date)` (public
+  changes) and `requireScheduleFrom(from)` (public schedules) throw `HistoryNotPublicException` (shared, 404
+  `history-not-public` with `code` and `publicHistoryFrom`) for a visitor before the window; `scheduleLimit()` is the
+  ICS start. Today and the current week are open without reading the settings, so the hot public requests cost no
+  extra query. Implementation `internal.PublicHistoryWindow`; slices import `PublicHistoryTestConfiguration`.
 
 ## Keys and defaults
 
@@ -28,6 +35,7 @@ depends on nothing but `shared`).
 | `general.collegeName` | `collegeName` | «Вінницький технічний фаховий коледж» |
 | `accounting.hoursPerPair` | `hoursPerPair` (1..4) | `2` |
 | `public.showTeacherFullNames` | `showTeacherFullNames` | `false` |
+| `public.changesHistoryDays` | `changesHistoryDays` (0..365) | `7` (no migration row) |
 | `calendar.activeBellProfileId` | `activeBellProfileId` | profile «2 зміни, 60 хв» (migration) |
 
 Migration `V1_802__setting_defaults.sql` inserts the rows (only missing keys); `SystemSettings.DEFAULTS`
@@ -37,9 +45,12 @@ wrong type is an error (500 + log), never silently replaced by the default.
 ## Endpoints
 
 `GET/PUT /api/admin/settings` (ADMIN) — the `SettingsDto` of CONTRACTS §2; PUT replaces all values
-(`activeBellProfileId` may be `null`); only changed keys get a new `updated_by`/`updated_at`.
+(`activeBellProfileId` may be `null`; a PUT without `changesHistoryDays`, from an older client, keeps the stored
+value); only changed keys get a new `updated_by`/`updated_at`.
 
 ## How to test
 
-`PersistentSettingsServiceTest`, `AdminSettingsControllerTest`; defaults in the database are checked
-by `CalendarApiIT.referenceDataIsSeededByMigrations`.
+`PersistentSettingsServiceTest`, `AdminSettingsControllerTest`, `PublicHistoryWindowTest` (bounds, staff, the
+bot, other tokens, no settings read for today); defaults in the database are checked by
+`CalendarApiIT.referenceDataIsSeededByMigrations`, the meta's `publicHistoryFrom` by
+`CalendarApiIT.publicMetaAndBellsUseTheProfileInEffect`.
