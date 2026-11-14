@@ -27,7 +27,7 @@ public final class OrderTexts {
     public static String forGroup(OrderPayload order, String groupCode, List<Item> rows) {
         StringBuilder text = new StringBuilder()
                 .append("📢 ").append(b(groupCode)).append(" · зміни на ")
-                .append(escape(UaDates.weekdayDayMonth(order.date())))
+                .append(escape(UaDates.weekdayDayMonthAccusative(order.date())))
                 .append('\n').append(escape(orderLabel(order))).append(parityPart(order))
                 .append("\n\n");
         text.append(rows.stream().map(row -> describe(row, false)).collect(Collectors.joining("\n\n")));
@@ -39,7 +39,7 @@ public final class OrderTexts {
     public static String forTeacher(OrderPayload order, List<Item> rows) {
         StringBuilder text = new StringBuilder()
                 .append("📢 ").append(b("Ваші зміни")).append(" на ")
-                .append(escape(UaDates.weekdayDayMonth(order.date())))
+                .append(escape(UaDates.weekdayDayMonthAccusative(order.date())))
                 .append('\n').append(escape(orderLabel(order))).append(parityPart(order))
                 .append("\n\n");
         text.append(rows.stream().map(row -> describe(row, true)).collect(Collectors.joining("\n\n")));

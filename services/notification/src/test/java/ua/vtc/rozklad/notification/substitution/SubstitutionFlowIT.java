@@ -880,6 +880,43 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.sentTo(TEACHER)).hasSize(1);
     }
 
+    /**
+     * CONFIRM: a request for a pair that is already over (an earlier day, or today after its end) is not sent,
+     * and neither the teacher nor admins get a reminder about it; a pair that ends later still gets both.
+     */
+    @Test
+    void requestAndReminderForAPairThatAlreadyEndedAreNotSent() {
+        clock.set(Instant.parse("2026-10-19T09:00:00Z")); // 12:00 у Києві, 2 пара 09:40–10:40 минула
+        handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2,
+                Instant.parse("2026-10-19T09:30:00Z")));
+        handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE.minusDays(3), 2,
+                Instant.parse("2026-10-19T09:30:00Z")));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+
+        // строк минув, core нагадує тим самим запитом — і все одно нічого
+        clock.set(Instant.parse("2026-10-19T09:31:00Z"));
+        handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2,
+                Instant.parse("2026-10-19T09:30:00Z")));
+        substitutions.remindOverdue();
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).isEmpty();
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+
+        // пара ще попереду (завтра): прохання й нагадування йдуть, як і раніше
+        handlers.handle(requested(CHANGE_3, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE.plusDays(1), 2,
+                Instant.parse("2026-10-19T09:40:00Z")));
+        worker.drain();
+        assertThat(telegram.sentTo(TEACHER)).singleElement().extracting(Sent::text).asString()
+                .startsWith("🙋 <b>Прохання про заміну</b>");
+        clock.set(Instant.parse("2026-10-19T09:41:00Z"));
+        assertThat(substitutions.remindOverdue()).isPositive();
+        worker.drain();
+        assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("⏰ <b>Нагадування");
+        assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
+                .startsWith("⏰ <b>Немає відповіді щодо заміни</b>");
+    }
+
     @Test
     void noticeIsAnsweredWithOkAndTheChangeStays() {
         handlers.handle(statusChanged(ChangeStatus.CONFIRMED));

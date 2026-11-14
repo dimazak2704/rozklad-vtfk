@@ -63,6 +63,10 @@ class TextUtilitiesTest {
         assertThat(UaDates.weekdayDayMonth(monday)).isEqualTo("понеділок, 19 жовтня");
         assertThat(UaDates.weekday(LocalDate.of(2026, 10, 23))).isEqualTo("п’ятниця");
         assertThat(UaDates.weekdayShort(monday)).isEqualTo("Пн");
+        // після «у» / «на» — знахідний відмінок: «у п’ятницю», а не «у п’ятниця»
+        assertThat(java.util.stream.IntStream.range(0, 7).mapToObj(i -> UaDates.weekdayAccusative(monday.plusDays(i))))
+                .containsExactly("понеділок", "вівторок", "середу", "четвер", "п’ятницю", "суботу", "неділю");
+        assertThat(UaDates.weekdayDayMonthAccusative(LocalDate.of(2026, 10, 23))).isEqualTo("п’ятницю, 23 жовтня");
         assertThat(UaDates.range(monday, monday)).isEqualTo("понеділок, 19 жовтня");
         assertThat(UaDates.range(monday, LocalDate.of(2026, 10, 21))).isEqualTo("19–21 жовтня");
         assertThat(UaDates.range(LocalDate.of(2026, 10, 30), LocalDate.of(2026, 11, 2)))

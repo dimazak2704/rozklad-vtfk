@@ -109,8 +109,9 @@ public class SubstitutionRequests implements OutboundRelevance {
     /**
      * {@code substitution.confirmation-requested}. A repeated request for a pending change is a reminder; when
      * what the teacher sees changed (core re-sends it after the dispatcher edited the room) it is
-     * «✏️ Заміну змінено» instead, a request or notice again with the same deadline. A notice (NOTIFY) about a
-     * lesson that is already over is not sent. A teacher without Telegram is not reported right away:
+     * «✏️ Заміну змінено» instead, a request or notice again with the same deadline. Nothing is sent about a
+     * lesson that is already over: neither a notice (NOTIFY) nor a request or its reminder (CONFIRM). A teacher
+     * without Telegram is not reported right away:
      * {@link #reportTeachersWithoutTelegram()} tells admins once per teacher and date about requests and notices
      * that are still unanswered.
      */
@@ -152,8 +153,9 @@ public class SubstitutionRequests implements OutboundRelevance {
         // comes first. An update (a new room) is its own message and is never swallowed by that key.
         boolean deadlineReminder = reminder && sameDeadlinePassed;
 
-        if (notice && lessonOver(event.date(), event.endsAt())) {
-            // пара вже минула (і сьогоднішня теж): повідомляти нема про що, диспетчер вносить це для обліку
+        if (lessonOver(event.date(), event.endsAt())) {
+            // пара вже минула (і сьогоднішня теж): ні повідомляти, ні просити, ні нагадувати нема про що —
+            // диспетчер вносить це для обліку
             return;
         }
         Optional<ChatBinding> chat = bindings.teacherChat(event.teacherId());
@@ -498,7 +500,8 @@ public class SubstitutionRequests implements OutboundRelevance {
     /**
      * Deadline passed without an answer: one reminder to the teacher and a notice to admins. Requests
      * that never reached the teacher (no Telegram) were already reported by
-     * {@link #reportTeachersWithoutTelegram()}; past lessons are not worth a notice. Teacher names are
+     * {@link #reportTeachersWithoutTelegram()}; lessons already over (an earlier day, or today after the pair's
+     * end) are not worth a reminder or a notice. Teacher names are
      * looked up before the rows are locked, so no call to core holds the locks.
      */
     public int remindOverdue() {
@@ -511,11 +514,10 @@ public class SubstitutionRequests implements OutboundRelevance {
     }
 
     private int remindOverdue(Instant now, Map<UUID, String> names) {
-        LocalDate today = LocalDate.now(clock);
         List<SubstitutionRequest> overdue = requests.findOverdue(now);
         for (SubstitutionRequest request : overdue) {
             request.markReminded(now);
-            if (request.isWithoutTelegram() || request.getLessonDate().isBefore(today)) {
+            if (request.isWithoutTelegram() || lessonOver(request.getLessonDate(), request.details().endsAt())) {
                 continue;
             }
             String key = request.getChangeId() + ":" + request.getDeadline().toEpochMilli();

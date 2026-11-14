@@ -225,6 +225,11 @@ class SubstitutionTextsTest {
         assertThat(SubstitutionTexts.adminDeclinedUnknown("Непийвода М.В.", Order35.DATE, "4КІ1", ""))
                 .isEqualTo("❌ <b>Відмова від заміни</b>\nНепийвода М.В. не може взяти пару 4КІ1 у понеділок, "
                         + "19 жовтня. Оберіть інший варіант на сторінці змін.");
+        // день тижня після «у» — у знахідному відмінку
+        assertThat(SubstitutionTexts.adminDeclinedUnknown("Непийвода М.В.", java.time.LocalDate.of(2026, 10, 23),
+                "4КІ1", "")).contains("не може взяти пару 4КІ1 у п’ятницю, 23 жовтня.");
+        assertThat(SubstitutionTexts.adminObjection("Непийвода М.В.", 3, "4КІ1", java.time.LocalDate.of(2026, 10, 21),
+                "")).contains("не може взяти 3 пару 4КІ1 у середу, 21 жовтня, а заміна");
         assertThat(SubstitutionTexts.adminObjection("Непийвода М.В.", 2, "4КІ1", Order35.DATE, ""))
                 .isEqualTo("❗ <b>Потрібне доповнення до розпорядження</b>\nНепийвода М.В. не може взяти 2 пару 4КІ1 "
                         + "у понеділок, 19 жовтня, а заміна вже в опублікованому розпорядженні. Оберіть інший варіант "

@@ -277,7 +277,7 @@ public class ScheduleViews {
         boolean isToday = date.equals(today);
         StringBuilder text = new StringBuilder("🔔 ").append(b("Дзвінки"))
                 .append(isToday ? " · " + escape(UaDates.weekday(date))
-                        : " на " + escape(UaDates.weekdayDayMonth(date)));
+                        : " на " + escape(UaDates.weekdayDayMonthAccusative(date)));
         if (bells.slots().isEmpty()) {
             return text.append("\n\nРозклад дзвінків на цей день не задано.").toString();
         }

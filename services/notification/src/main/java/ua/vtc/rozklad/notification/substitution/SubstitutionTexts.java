@@ -296,7 +296,7 @@ public final class SubstitutionTexts {
             text.append(' ').append(groupCode);
         }
         if (date != null) {
-            text.append(" у ").append(UaDates.weekdayDayMonth(date));
+            text.append(" у ").append(UaDates.weekdayDayMonthAccusative(date));
         }
         return escape(text.toString());
     }

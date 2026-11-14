@@ -16,6 +16,9 @@ public final class UaDates {
             "травень", "червень", "липень", "серпень", "вересень", "жовтень", "листопад", "грудень");
     private static final List<String> WEEKDAYS = List.of("понеділок", "вівторок", "середа", "четвер", "п’ятниця",
             "субота", "неділя");
+    /** Accusative, the form after «у» / «на»: «у п’ятницю», «на середу». */
+    private static final List<String> WEEKDAYS_ACCUSATIVE = List.of("понеділок", "вівторок", "середу", "четвер",
+            "п’ятницю", "суботу", "неділю");
     private static final List<String> WEEKDAYS_SHORT = List.of("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter SHORT = DateTimeFormatter.ofPattern("dd.MM");
@@ -43,6 +46,11 @@ public final class UaDates {
         return WEEKDAYS.get(day.getValue() - 1);
     }
 
+    /** {@code п’ятницю} — after «у» / «на» («у п’ятницю», «на середу»). */
+    public static String weekdayAccusative(LocalDate date) {
+        return WEEKDAYS_ACCUSATIVE.get(date.getDayOfWeek().getValue() - 1);
+    }
+
     /** {@code Пн}. */
     public static String weekdayShort(LocalDate date) {
         return WEEKDAYS_SHORT.get(date.getDayOfWeek().getValue() - 1);
@@ -51,6 +59,11 @@ public final class UaDates {
     /** {@code понеділок, 19 жовтня}. */
     public static String weekdayDayMonth(LocalDate date) {
         return weekday(date) + ", " + dayMonth(date);
+    }
+
+    /** {@code п’ятницю, 23 жовтня} — after «у» / «на» («зміни на п’ятницю, 23 жовтня»). */
+    public static String weekdayDayMonthAccusative(LocalDate date) {
+        return weekdayAccusative(date) + ", " + dayMonth(date);
     }
 
     /** {@code жовтень 2026}. */
