@@ -89,3 +89,21 @@ export function formatBytes(bytes: number): string {
 export function usesVision(kind: ImportKind, fileName: string): boolean {
   return (kind === 'ORDER_DOCUMENT' || kind === 'CURRICULUM') && ['jpg', 'jpeg', 'png', 'pdf'].includes(extensionOf(fileName));
 }
+
+/** Після стількох секунд розбір вважаємо довшим, ніж зазвичай (ШІ — до хвилини, решта — секунди). */
+export const SLOW_PARSE_SECONDS = { ai: 90, plain: 30 } as const;
+
+/**
+ * Чи файл читає модель ШІ: фото, скан чи PDF розпорядження й навчального плану (модель зору),
+ * а також план у Excel (текстова модель). Програми читаємо самі, ШІ — лише як запасний варіант.
+ */
+export function readByAi(job: { kind: ImportKind; fileName: string }): boolean {
+  return job.kind === 'CURRICULUM' || usesVision(job.kind, job.fileName);
+}
+
+/** «8 с», «1 хв 05 с». */
+export function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds} с`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} хв ${String(seconds % 60).padStart(2, '0')} с`;
+}

@@ -7,7 +7,6 @@ import {
   LoadingRegion,
   PageErrorBanner,
   Skeleton,
-  Spinner,
   Tabs,
   TabsContent,
   TabsList,
@@ -25,6 +24,7 @@ import { TimetablePreview } from './drafts/TimetablePreview';
 import { IMPORT_KIND_LABEL, summarySentence, usdShort } from './labels';
 import { JobStatusBadge } from './JobStatus';
 import { LoadOptionsPanel } from './LoadOptionsPanel';
+import { ParsingProgress } from './ParsingProgress';
 import { MappingPanel } from './MappingPanel';
 import { ReportTable } from './ReportTable';
 import { FileIcon } from './UploadPanel';
@@ -95,6 +95,8 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
   const draft = typedDraft(data);
   const decisions = decisionRows(data);
   const parsing = data.status === 'UPLOADED' || data.status === 'PARSING';
+  // файл не розібрано: вкладки були б порожні, усе сказано в панелі з причиною
+  const nothingParsed = data.status === 'FAILED' && !draft && data.report.length === 0;
   const active: Tab = tab ?? (data.summary.conflicts > 0 ? blockingReason(data).tab : 'draft');
 
   return (
@@ -120,15 +122,7 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
       </header>
 
       {parsing ? (
-        <div aria-live="polite" className="flex items-center gap-3 rounded-panel border border-default bg-surface px-4 py-6">
-          <Spinner size="lg" label="Розбираємо файл" />
-          <div className="flex flex-col gap-0.5">
-            <p className="text-ui font-semibold text-primary">Розбираємо файл…</p>
-            <p className="text-caption text-secondary">
-              Читаємо таблиці, зіставляємо назви з каталогом. Сторінка оновиться сама — можна піти й повернутися.
-            </p>
-          </div>
-        </div>
+        <ParsingProgress job={data} />
       ) : (
         <>
           {/* підсумок одним реченням замість чотирьох плиток з числами */}
@@ -136,6 +130,7 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
 
           <ApplyPanel job={data} onShowTab={setTab} activeTab={active} />
 
+          {nothingParsed ? null : (
           <Tabs value={active} onValueChange={(value) => setTab(value as Tab)}>
             <TabsList aria-label="Розділи імпорту">
               <TabsTrigger value="decisions" count={decisions.length}>
@@ -174,6 +169,7 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
               )}
             </TabsContent>
           </Tabs>
+          )}
         </>
       )}
     </div>

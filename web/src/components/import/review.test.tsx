@@ -10,6 +10,7 @@ import { ApplyPanel } from './ApplyPanel';
 import { blockingReason, creates } from './decisions';
 import { LoadOptionsPanel } from './LoadOptionsPanel';
 import { MappingPanel } from './MappingPanel';
+import { ParsingProgress } from './ParsingProgress';
 
 const row = (patch: Partial<ImportReportRow>): ImportReportRow => ({
   severity: 'INFO',
@@ -157,5 +158,52 @@ describe('параметри застосування', () => {
 
     await waitFor(() => expect(sent).toHaveBeenCalledOnce());
     expect(sent).toHaveBeenCalledWith({ version: 3, options: { groupCodes: ['4КІ1'], hoursPerWeek: 2 } });
+  });
+});
+
+describe('панель застосування після невдалого розбору', () => {
+  it('замість вимкненої кнопки веде до нового завантаження', () => {
+    const failed = job({
+      status: 'FAILED',
+      summary: { recognized: 0, unknown: 0, conflicts: 0, warnings: 0 },
+      error: 'Файл зображення пошкоджений — його не вдалося прочитати.',
+      canApply: false,
+    });
+    renderWithProviders(<ApplyPanel job={failed} onShowTab={vi.fn()} />);
+
+    expect(screen.getByText(/Файл зображення пошкоджений/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Завантажити файл ще раз' })).toHaveAttribute('href', '/admin/import');
+    expect(screen.queryByRole('button', { name: 'Спробувати ще раз' })).not.toBeInTheDocument();
+  });
+});
+
+describe('хід розбору файлу', () => {
+  const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+
+  it('фото читає ШІ: пояснює, скільки це триває, і показує, скільки минуло', () => {
+    renderWithProviders(<ParsingProgress job={{ kind: 'ORDER_DOCUMENT', fileName: 'фото.jpg', status: 'PARSING', createdAt: ago(12) }} />);
+
+    const region = screen.getByRole('region', { name: 'Розбір файлу' });
+    expect(region).toHaveTextContent('ШІ читає документ…');
+    expect(region).toHaveTextContent('зазвичай 15–60 секунд');
+    expect(region).toHaveTextContent(/минуло 1[2-3] с/);
+    expect(region).not.toHaveTextContent('Довше, ніж зазвичай');
+  });
+
+  it('довгий розбір каже, що це довше, ніж зазвичай', () => {
+    renderWithProviders(<ParsingProgress job={{ kind: 'ORDER_DOCUMENT', fileName: 'скан.pdf', status: 'PARSING', createdAt: ago(95) }} />);
+    expect(screen.getByRole('region', { name: 'Розбір файлу' })).toHaveTextContent(/Довше, ніж зазвичай: сервіс ШІ/);
+  });
+
+  it('таблицю читаємо самі, а файл у черзі так і названо', () => {
+    const { unmount } = renderWithProviders(
+      <ParsingProgress job={{ kind: 'TIMETABLE_XLSX', fileName: 'розклад.xlsx', status: 'PARSING', createdAt: ago(2) }} />,
+    );
+    expect(screen.getByRole('region', { name: 'Розбір файлу' })).toHaveTextContent('Розбираємо файл…');
+    expect(screen.getByRole('region', { name: 'Розбір файлу' })).not.toHaveTextContent('ШІ');
+    unmount();
+
+    renderWithProviders(<ParsingProgress job={{ kind: 'TIMETABLE_XLSX', fileName: 'розклад.xlsx', status: 'UPLOADED', createdAt: ago(40) }} />);
+    expect(screen.getByRole('region', { name: 'Розбір файлу' })).toHaveTextContent('Файл у черзі на розбір…');
   });
 });

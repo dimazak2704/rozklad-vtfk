@@ -40,12 +40,18 @@ export function usdShort(value: number): string {
 }
 
 /**
- * Що в звіті одним реченням: «74 рядки розпізнано, 9 нових записів, 1 чекає рішення, 3 попередження.»
+ * `summary.unknown` — назви без збігу в каталозі: для розкладу їх створять, для розпорядження вони лише
+ * довідкові (воно зберігається текстом), а можливий дублікат ще чекає рішення. Тож не «нові записи».
+ */
+export const UNKNOWN_FORMS = ['назва не з каталогу', 'назви не з каталогу', 'назв не з каталогу'] as const;
+
+/**
+ * Що в звіті одним реченням: «74 рядки розпізнано, 9 назв не з каталогу, 1 чекає рішення, 3 попередження.»
  * Нулі не називаємо.
  */
 export function summarySentence(summary: { recognized: number; unknown: number; conflicts: number; warnings: number }): string {
   const parts = [countLabel(summary.recognized, ['рядок', 'рядки', 'рядків']) + ' розпізнано'];
-  if (summary.unknown > 0) parts.push(countLabel(summary.unknown, ['новий запис', 'нові записи', 'нових записів']));
+  if (summary.unknown > 0) parts.push(countLabel(summary.unknown, UNKNOWN_FORMS));
   if (summary.conflicts > 0) parts.push(`${summary.conflicts} ${summary.conflicts % 10 === 1 && summary.conflicts % 100 !== 11 ? 'чекає' : 'чекають'} рішення`);
   if (summary.warnings > 0) parts.push(countLabel(summary.warnings, ['попередження', 'попередження', 'попереджень']));
   return `${parts.join(', ')}.`;

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ImportReportRow } from '@/api/import';
 import { needsDecision, typedDraft } from '@/api/import';
 import { decisionRows, initialDecision, isComplete, toMapping, type EntityReportRow } from './decisions';
-import { detectImportKind, fileProblem, formatBytes, kindAccepts, MAX_IMPORT_BYTES, usesVision } from './detect';
+import { detectImportKind, fileProblem, formatBytes, formatElapsed, kindAccepts, MAX_IMPORT_BYTES, readByAi, usesVision } from './detect';
+import { summarySentence } from './labels';
 
 describe('визначення виду імпорту', () => {
   it.each([
@@ -39,6 +40,25 @@ describe('визначення виду імпорту', () => {
     expect(usesVision('TIMETABLE_XLSX', 'розклад.xlsx')).toBe(false);
     expect(formatBytes(1_468_006)).toBe('1,4 МБ');
     expect(formatBytes(512)).toBe('1 КБ');
+  });
+
+  it('хто читає файл під час розбору і скільки минуло', () => {
+    expect(readByAi({ kind: 'ORDER_DOCUMENT', fileName: 'фото.jpg' })).toBe(true);
+    expect(readByAi({ kind: 'CURRICULUM', fileName: 'план.xlsx' })).toBe(true);
+    expect(readByAi({ kind: 'ORDER_DOCUMENT', fileName: 'розпорядження.docx' })).toBe(false);
+    expect(readByAi({ kind: 'TIMETABLE_XLSX', fileName: 'розклад.xlsx' })).toBe(false);
+    expect(formatElapsed(8)).toBe('8 с');
+    expect(formatElapsed(65)).toBe('1 хв 05 с');
+  });
+});
+
+describe('підсумок імпорту', () => {
+  // назва без збігу — не завжди «новий запис»: розпорядження каталог не змінює, дублікат ще чекає рішення
+  it('не обіцяє нових записів для назв без збігу', () => {
+    const sentence = summarySentence({ recognized: 1, unknown: 1, conflicts: 1, warnings: 2 });
+    expect(sentence).toBe('1 рядок розпізнано, 1 назва не з каталогу, 1 чекає рішення, 2 попередження.');
+    expect(summarySentence({ recognized: 74, unknown: 9, conflicts: 0, warnings: 0 })).toContain('9 назв не з каталогу');
+    expect(sentence).not.toContain('нов');
   });
 });
 

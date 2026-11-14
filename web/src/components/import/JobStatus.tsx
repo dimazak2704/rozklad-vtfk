@@ -4,7 +4,7 @@ import type { ImportJobStatus } from '@/api/types';
 import { Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
-import { IMPORT_STATUS_LABEL, summarySentence } from './labels';
+import { IMPORT_STATUS_LABEL, summarySentence, UNKNOWN_FORMS } from './labels';
 
 const STATUS_DOT: Record<ImportJobStatus, string> = {
   UPLOADED: 'bg-[var(--fill-muted)]',
@@ -54,7 +54,7 @@ export function JobSummary({ job }: { job: Pick<ImportJob, 'status' | 'summary' 
   }
   return (
     <span className="text-caption text-secondary" title={full}>
-      {unknown > 0 ? countLabel(unknown, ['новий запис', 'нові записи', 'нових записів']) : countLabel(recognized, ['рядок', 'рядки', 'рядків'])}
+      {unknown > 0 ? countLabel(unknown, UNKNOWN_FORMS) : countLabel(recognized, ['рядок', 'рядки', 'рядків'])}
     </span>
   );
 }

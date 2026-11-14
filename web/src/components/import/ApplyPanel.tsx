@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck, CircleX, Play } from 'lucide-react';
+import { ArrowRight, CircleCheck, CircleX, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { isSkipped, useApplyImport, type ImportApplyResult, type ImportJob } from '@/api/import';
@@ -193,7 +193,7 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
         ) : null}
         <p className={cn('text-caption text-secondary', blocked && here && 'sr-only')}>
           {failed && !canApply
-            ? 'Чернетки немає — завантажте файл ще раз.'
+            ? 'Чернетки немає: файл не розібрано, тож застосовувати нічого.'
             : rejected && canApply
               ? 'Виправте чернетку за цим повідомленням або усуньте причину в системі й застосуйте ще раз.'
               : APPLY_EFFECT[job.kind]}
@@ -204,15 +204,23 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
           {TAB_BUTTON[reason.tab]}
         </Button>
       ) : null}
-      <Button
-        variant="primary"
-        disabled={!canApply}
-        loading={apply.isPending}
-        iconStart={<Play aria-hidden="true" className="size-4" />}
-        onClick={() => void start()}
-      >
-        {failed || rejected ? 'Спробувати ще раз' : 'Застосувати'}
-      </Button>
+      {failed && !canApply ? (
+        // розбір не вдався — повторювати нічого, тож замість вимкненої кнопки шлях до нового завантаження
+        <Link to="/admin/import" className={buttonClass({ variant: 'secondary' })}>
+          <Upload aria-hidden="true" className="size-4" />
+          Завантажити файл ще раз
+        </Link>
+      ) : (
+        <Button
+          variant="primary"
+          disabled={!canApply}
+          loading={apply.isPending}
+          iconStart={<Play aria-hidden="true" className="size-4" />}
+          onClick={() => void start()}
+        >
+          {failed || rejected ? 'Спробувати ще раз' : 'Застосувати'}
+        </Button>
+      )}
     </section>
   );
 }
