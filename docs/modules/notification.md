@@ -11,7 +11,7 @@ internal REST, schedules are read from core's public REST.
 |---|---|
 | `telegram` | `TelegramApi` port (the only Bot API surface the code uses), `OkHttpTelegramApi` adapter over telegrambots-client 10.3 (Jackson 2 lives only here), `UpdateMapper` (library `Update` → `BotUpdate`), `TelegramBotRunner` (start/stop, long polling or webhook, command menus), `PerChatExecutor`, `TelegramWebhookController`, `BotStatus`, `web/BotController` |
 | `bot` | conversation: `UpdateDispatcher` → `PrivateChats` / `GroupChats` / `CallbackRouter` / `InlineQueries`; flows `ScheduleViews`, `MyGroupFlow`, `SearchFlow`, `AbsenceFlow`, `SubstitutionReplyFlow`, `BindingFlow`; `BotReplies` (immediate answers), `DialogStore` (Redis), `ScheduleCards` (day card HTML), `ChatAccess` (who the bot talks to), `ChatAdmins` (is the author a chat admin, `getChatMember` cached 1 min in Redis) |
-| `binding` | `ChatBinding`, `BindingCode` (one-time codes, SHA-256 only), `ChatBindings`, `BindingCodes`, `BindingAttempts` (limit on wrong codes, Redis), `BindingCodeRequests`, `web/BindingController` |
+| `binding` | `ChatBinding`, `BindingCode` (one-time codes, SHA-256 only), `ChatBindings`, `BindingCodes`, `BindingAttempts` (limit on wrong codes, Redis), `BindingCodeRequests`, `InactiveTeacherChats` (nightly offboarding), `web/BindingController` |
 | `delivery` | persistent queue `OutboundMessage` (= delivery log), `Outbox` (enqueue, idempotent), `DeliveryWorker` (claim → limit → send → record), `RetryPolicy`, `RedisRateLimiter` (Lua token buckets), `MessageSender`, `TestMessages`, `web/DeliveryController` |
 | `events` | `EventsListener` (`notification.q.events`), `EventHandlers` (exactly-once via `processed_event`), `AdminNotices` |
 | `orders` | `OrderDistribution` (order.published), `OrderRows` (rows per group/teacher), `OrderTexts` (compact HTML) |
@@ -361,6 +361,11 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
   (`getChatMember`, як для `/rozklad_on`; без відповіді Telegram не прив’язуємо). Будь-хто з учасників може лише
   прив’язати новий, ще не прив’язаний чат до групи. Тип коду перевіряється без його витрати, тож після відмови
   адміністратор застосовує той самий код.
+* **Викладач, який звільнився, втрачає чат сам.** Прив’язка належить викладачу з каталогу, а не обліковому
+  запису, тому щоночі о 03:20 (`InactiveTeacherChats`) чати викладачів звіряються зі списком активних викладачів
+  core. Кого в списку немає, перепитуємо поодинці (`GET /api/internal/teachers/{id}`), і відв’язуємо лише того,
+  кого core назвав неактивним або не знає (404). Неповний чи недоступний список нікого не відв’язує
+  (`InactiveTeacherChatsIT`).
 * **Диспетчер бачить і видаляє прив’язки** (`GET`/`DELETE /api/notify/bindings`, лише ADMIN; id чатів
   замасковано). Якщо бота вилучили з чату, прив’язки цього чату видаляються самі.
 * **Бот ігнорує неприв’язані чати** (`TELEGRAM_ACCESS=BOUND_ONLY`, типово): відповідає лише чату власника і

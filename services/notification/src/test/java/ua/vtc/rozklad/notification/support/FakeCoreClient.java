@@ -37,6 +37,7 @@ public class FakeCoreClient implements CoreClient {
     private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final List<PublicGroup> addedGroups = new CopyOnWriteArrayList<>();
     private final List<PublicTeacher> addedTeachers = new CopyOnWriteArrayList<>();
+    private final java.util.Map<UUID, TeacherStatus> teacherStatuses = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile boolean unavailable;
     private volatile RuntimeException replyFailure;
     private volatile RuntimeException absenceFailure;
@@ -52,6 +53,7 @@ public class FakeCoreClient implements CoreClient {
         holidays.clear();
         addedGroups.clear();
         addedTeachers.clear();
+        teacherStatuses.clear();
         unavailable = false;
         replyFailure = null;
         absenceFailure = null;
@@ -75,6 +77,11 @@ public class FakeCoreClient implements CoreClient {
     /** A teacher the dispatcher created after the fixtures (core's catalog changed). */
     public void addTeacher(PublicTeacher teacher) {
         addedTeachers.add(teacher);
+    }
+
+    /** The dispatcher made the teacher inactive ({@code INACTIVE}) or removed him ({@code GONE}). */
+    public void setTeacherStatus(UUID teacherId, TeacherStatus status) {
+        teacherStatuses.put(teacherId, status);
     }
 
     public void setUnavailable(boolean value) {
@@ -134,7 +141,17 @@ public class FakeCoreClient implements CoreClient {
             teacherCallsInTransaction.incrementAndGet();
         }
         available();
-        return java.util.stream.Stream.concat(CoreFixtures.teachers().stream(), addedTeachers.stream()).toList();
+        // як core: у публічному списку лише активні викладачі
+        return java.util.stream.Stream.concat(CoreFixtures.teachers().stream(), addedTeachers.stream())
+                .filter(teacher -> teacherStatuses.getOrDefault(teacher.id(), TeacherStatus.ACTIVE)
+                        == TeacherStatus.ACTIVE)
+                .toList();
+    }
+
+    @Override
+    public TeacherStatus teacherStatus(UUID teacherId) {
+        available();
+        return teacherStatuses.getOrDefault(teacherId, TeacherStatus.ACTIVE);
     }
 
     @Override

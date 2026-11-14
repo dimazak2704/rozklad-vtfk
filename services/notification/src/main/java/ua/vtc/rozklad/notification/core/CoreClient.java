@@ -43,6 +43,18 @@ public interface CoreClient {
     /** {@code POST /api/internal/absences} with {@code source = BOT}. */
     void reportAbsence(AbsenceReport report);
 
+    /**
+     * {@code GET /api/internal/teachers/{id}}: is the teacher still active in the catalog? {@link TeacherStatus#GONE}
+     * when core does not know the id (404).
+     */
+    TeacherStatus teacherStatus(UUID teacherId);
+
+    enum TeacherStatus {
+        ACTIVE,
+        INACTIVE,
+        GONE
+    }
+
     /** Body of {@code POST /api/internal/absences}; {@code pairs == null} means the whole day. */
     record AbsenceReport(UUID teacherId, LocalDate dateFrom, LocalDate dateTo, List<Integer> pairs,
                          AbsenceReasonCategory reasonCategory, String comment, AbsenceSource source) {

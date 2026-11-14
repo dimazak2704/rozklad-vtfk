@@ -99,6 +99,23 @@ public class RestCoreClient implements CoreClient {
     }
 
     @Override
+    public TeacherStatus teacherStatus(UUID teacherId) {
+        record InternalTeacher(UUID id, boolean active) {
+        }
+        try {
+            InternalTeacher teacher = UpstreamCalls.call(CORE, "teacher", () -> serviceClient.get()
+                    .uri("/api/internal/teachers/{id}", teacherId)
+                    .retrieve().body(InternalTeacher.class));
+            return teacher != null && teacher.active() ? TeacherStatus.ACTIVE : TeacherStatus.INACTIVE;
+        } catch (UpstreamRejectedException e) {
+            if (e.status() == 404) {
+                return TeacherStatus.GONE;
+            }
+            throw e;
+        }
+    }
+
+    @Override
     public void reportAbsence(AbsenceReport report) {
         UpstreamCalls.run(CORE, "absence", () -> serviceClient.post()
                 .uri("/api/internal/absences")
