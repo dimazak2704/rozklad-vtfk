@@ -35,6 +35,8 @@ function DocumentTitle() {
  * «увійшов» і поверне сюди ж — нескінченне коло), ведемо на вхід і повертаємо сюди ж. Кілька запитів
  * сторінки отримують 401 одночасно, а ті, що ще в дорозі, відповідають уже після переходу на вхід, —
  * реагуємо один раз на сторінку (вхід через сервіс входу однаково перезавантажує застосунок).
+ * На публічній сторінці 401 буває лише в персоналу (розклад і заміни він просить з токеном, щоб бачити архів):
+ * токен забуваємо без переходу на вхід — сторінка перепитує як гість, а «Увійти» лишається в шапці.
  */
 export function UnauthorizedRedirect() {
   const navigate = useNavigate();
@@ -49,7 +51,11 @@ export function UnauthorizedRedirect() {
     () =>
       onUnauthorized(() => {
         const path = location.pathname;
-        if (!isProtected(path) || handling.current) return;
+        if (handling.current) return;
+        if (!isProtected(path)) {
+          void userManager.removeUser().catch(() => undefined);
+          return;
+        }
         handling.current = true;
         const repeated = noteRejectedToken();
         void userManager

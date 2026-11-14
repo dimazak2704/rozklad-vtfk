@@ -74,10 +74,13 @@ describe('UnauthorizedRedirect', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('rejected=1'));
   });
 
-  it('на публічних сторінках 401 нічого не робить', () => {
-    renderAt('/changes');
+  it('на публічній сторінці відхилений токен забуває без переходу на вхід: сторінка перепитує як гість', async () => {
+    // персонал питає розклад і заміни з токеном (архів); 401 тут — сервер токена не прийняв
+    renderAt('/changes?date=2026-10-19');
     act(() => mocks.handler?.(new ApiError({ status: 401, title: 'Потрібна автентифікація' })));
-    expect(mocks.removeUser).not.toHaveBeenCalled();
-    expect(screen.getByTestId('location')).toHaveTextContent('/changes');
+    await waitFor(() => expect(mocks.removeUser).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('location')).toHaveTextContent('/changes?date=2026-10-19');
+    // це не повторна відмова при вході: автоматичний вхід на захищених сторінках не зупиняється
+    expect(window.sessionStorage.getItem('rozklad.auth.rejectedAt')).toBeNull();
   });
 });
