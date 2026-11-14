@@ -15,6 +15,9 @@ require_server
 
 dump=${1:-}
 [[ -n $dump && -f $dump ]] || die "usage: restore-db.sh <rozklad-YYYYmmdd-HHMMSS.sql.gz> --yes"
+[[ $dump != *.age ]] || die "$dump is encrypted. Decrypt it on your PC, where the private key is, and copy the plain
+       dump here (docs/DEPLOY.md, section 12):
+         age -d -i rozklad-backup.key $(basename "$dump") | ssh <user>@<server> 'umask 077; cat >/tmp/restore.sql.gz'"
 [[ ${2:-} == --yes ]] || die "this replaces every database with $dump; run again with --yes to confirm"
 gzip -t "$dump" || die "$dump is not a valid gzip file"
 # nothing is stopped yet: a missing image would otherwise leave the stack down after the restore

@@ -378,32 +378,62 @@ infra/deploy/scripts/compose.sh restart core scheduler importer notification
 ## 12. Backups and restore
 
 ```bash
-infra/deploy/scripts/backup-db.sh        # all databases incl. auth → /var/backups/rozklad/rozklad-<date>.sql.gz
+infra/deploy/scripts/backup-db.sh        # all databases incl. auth → /var/backups/rozklad/rozklad-<date>.sql.gz[.age]
 crontab -e                               # daily at 03:15, keeps BACKUP_KEEP_DAYS (14) days:
 15 3 * * * $HOME/rozklad/infra/deploy/scripts/backup-db.sh >>$HOME/rozklad-backup.log 2>&1
 ```
 
 A dump is the whole cluster: every account with its password hash, the sign-in sessions and the
-Telegram chat bindings. On the server the files are readable by your user only. Copy them off now and then,
-but **encrypted**, and never next to `.env` (that file belongs in a password manager, section 5).
-With [age](https://age-encryption.org) (Windows: `winget install FiloSottile.age`), on your PC:
+Telegram chat bindings. On the server the files are readable by your user only. Dumps that stay on the
+VM are lost with it (a deleted or reclaimed Always Free VM, a failed disk), so set up the encrypted
+off-site copy below before real data goes in, and never keep the dumps next to `.env` (that file
+belongs in a password manager, section 5).
+
+**1. Encrypt on the server.** With [age](https://age-encryption.org) the server gets only the public
+key; the private key stays on your PC and in the password manager, so even a stolen server cannot read
+its own backups. On your PC (Windows: `winget install FiloSottile.age`), outside the repository:
 
 ```bash
-age-keygen -o rozklad-backup.key        # once; keep this file in the password manager, not with the dumps
+mkdir -p ~/rozklad-backups && cd ~/rozklad-backups
+age-keygen -o rozklad-backup.key        # once; keep it in the password manager, never on the server
 # the public key is the "public key: age1..." line it printed
-ssh ubuntu@<ip> 'cat /var/backups/rozklad/rozklad-20261107-031500.sql.gz' |
-  age -r age1... -o rozklad-20261107-031500.sql.gz.age      # the plain dump never lands on the PC
-age -d -i rozklad-backup.key -o rozklad-20261107-031500.sql.gz rozklad-20261107-031500.sql.gz.age   # to restore
 ```
 
-A password-protected 7-Zip archive with encrypted file names (`7z a -p -mhe=on`) works too; delete the
-plain `.sql.gz` copies afterwards.
+On the server: `sudo apt-get install -y age`, then in `infra/deploy/.env`:
+`BACKUP_AGE_RECIPIENT=age1...` (the public key). From now on every dump is
+`rozklad-<date>.sql.gz.age`; the plain dump exists only in the pipe.
+
+**2. Copy off-site on every run.** Install [rclone](https://rclone.org/install/) on the server
+(`sudo apt-get install -y rclone`, or the official script for a current version), run `rclone config`
+and create a remote for any storage you have: Oracle Object Storage (S3-compatible, free tier),
+Backblaze B2, Google Drive of the college account. Then in `.env`:
+`BACKUP_RCLONE_REMOTE=<remote>:<bucket or folder>`. The script refuses an off-site copy without
+`BACKUP_AGE_RECIPIENT`. It only copies; let the storage delete old copies with a lifecycle rule (for
+example after 60 days) and, where the storage allows it, give the server a key that can write but not
+delete: then even an attacker on the server cannot wipe the off-site copies. A failed copy makes the
+run fail, and the local dump stays.
+
+**3. Notice when it stops.** `BACKUP_PING_URL=https://hc-ping.com/<uuid>` (a free healthchecks.io
+check with a period of 1 day): the script fetches it only after a fully successful run, so a broken
+cron, a full disk or a failed copy turns into an e-mail. Also turn on the provider's volume backups
+if they are free (Oracle: boot volume backup policy).
+
+**4. Try a restore once per term** on a copy, not on production: on your PC
+`age -d -i rozklad-backup.key -o test.sql.gz rozklad-<date>.sql.gz.age`, then load it into a
+throwaway PostgreSQL (`docker run --rm -d --name pg-restore-test -e POSTGRES_PASSWORD=x postgres:18-alpine`,
+`gunzip -c test.sql.gz | docker exec -i pg-restore-test psql -q -U postgres`), look at a few rows,
+remove the container and the plain file, and note the date in section 16.
 
 Restore (destructive: every database is replaced):
 
 ```bash
 infra/deploy/scripts/restore-db.sh /var/backups/rozklad/rozklad-20261107-031500.sql.gz --yes
 ```
+
+An encrypted dump is decrypted on your PC (the private key never goes to the server) and the plain
+dump is streamed to the server: `age -d -i rozklad-backup.key rozklad-20261107-031500.sql.gz.age |
+ssh ubuntu@<ip> 'umask 077; cat >/tmp/restore.sql.gz'`, then `restore-db.sh /tmp/restore.sql.gz
+--yes` and `rm /tmp/restore.sql.gz`. `restore-db.sh` refuses an `.age` file with this hint.
 
 It first checks that the recorded images are on the server (otherwise it stops before touching
 anything), then stops everything except PostgreSQL, loads the dump (two errors about the role
