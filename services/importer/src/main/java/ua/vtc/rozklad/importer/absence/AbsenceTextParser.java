@@ -32,6 +32,8 @@ import ua.vtc.rozklad.importer.text.TextNormalizer;
 public class AbsenceTextParser {
 
     static final double ASSUMED_DATE_PENALTY = 0.45;
+    /** Part of the day without pair numbers: alone it puts the answer below the AI threshold. */
+    static final double PART_OF_DAY_PENALTY = 0.35;
     /** Confidence of a message the answer's shape cannot carry; below the bot's minimum. */
     static final double UNREPRESENTABLE = 0.4;
     static final int FIRST_PAIR = 1;
@@ -76,6 +78,13 @@ public class AbsenceTextParser {
             "перш", 1, "друг", 2, "трет", 3, "четверт", 4, "п'ят", 5, "шост", 6, "сьом", 7, "восьм", 8);
     private static final Pattern WHOLE_DAY = Pattern.compile("(?:весь|цілий|увесь)\\s+день|всі\\s+пари|усі\\s+пари");
     private static final Pattern UNCERTAIN = Pattern.compile("можливо|мабуть|не знаю|ймовірно|може бути");
+    /**
+     * Words that say only part of the day is missed («запізнюсь», «не встигну на початок», «після обіду»). Without pair
+     * numbers the rules would answer «the whole day», which such a message does not say.
+     */
+    private static final Pattern PART_OF_DAY = Pattern.compile(
+            "запізн|не встигн|не встига|почат(?:ок|ку)\\s+(?:занять|пар)|після\\s+обід|до\\s+обід|з\\s+обід"
+                    + "|зранку|з\\s+ранку|на\\s+ранок|вранці|ввечері|раніше\\s+піду|піти\\s+раніше|піду\\s+раніше");
 
     /** The parser's answer and whether it is final: {@code settled} — asking the AI cannot improve it. */
     public record Reading(ParsedAbsence parsed, boolean settled) {
@@ -112,6 +121,10 @@ public class AbsenceTextParser {
         }
         boolean wholeDay = WHOLE_DAY.matcher(key).find();
         Pairs pairs = wholeDay ? Pairs.NONE : pairs(key);
+        if (!wholeDay && pairs.valid() == null && pairs.invalid().isEmpty() && PART_OF_DAY.matcher(key).find()) {
+            confidence -= PART_OF_DAY_PENALTY;
+            questions.add("на яких парах");
+        }
         AbsenceReasonCategory reason = reason(key);
         if (reason == AbsenceReasonCategory.OTHER) {
             confidence -= 0.1;

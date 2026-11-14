@@ -208,7 +208,9 @@ more than 14 days ago is next year's; an explicit year is kept («1 січня 2
 answer is one range with one set of pairs: separate days with a study day between them, different pairs on
 different days («10 листопада 3 пара, 11 листопада 1 пара») and pair numbers outside 1–8 get a clarification and
 confidence 0.4 and the AI is not asked (it answers in the same shape). `today` must lie in 2000–2100 (400). Pairs: «1-2 пари», «з 1 по 3 пару», «2 і 3 пари», «4 пару», ordinals «на
-першій парі», «першу і другу пари»; «весь день» → whole day (`pairs` null). Reasons: лікарняний/хворію/приболів
+першій парі», «першу і другу пари»; «весь день» → whole day (`pairs` null); no pair numbers also means the whole day, except when the text names only part of
+the day («запізнюсь», «не встигну на початок занять», «після обіду», «піду раніше», «зранку»): then the answer asks
+«на яких парах» and the confidence drops by 0.35, so the text model is asked. Reasons: лікарняний/хворію/приболів
 → SICK_LEAVE, відпустка → VACATION, відрядження/конференція → BUSINESS_TRIP, сімейні/особисті обставини →
 PERSONAL, else OTHER. Confidence starts at 1 and drops when the date is assumed (−0.45), the reason is unknown
 (−0.1), the text is uncertain («можливо») or the range was reversed. Below **0.7** the text model is asked

@@ -58,6 +58,28 @@ class AbsenceTextParserTest {
         assertThat(parser.parse("завтра весь день на лікарняному", TODAY).pairs()).isNull();
     }
 
+    // «не встигну на початок» без номерів пар — не «весь день»: правила питають пари й передають ШІ
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', textBlock = """
+            Можливо, не встигну на початок занять у понеділок, бо записалась до лікаря на ранок
+            завтра запізнюсь, лікарняний
+            у понеділок піду раніше, сімейні обставини
+            в середу після обіду мене не буде, відрядження
+            """)
+    void partOfTheDayWithoutPairNumbersIsAskedAbout(String text) {
+        ParsedAbsence parsed = parser.parse(text, TODAY);
+        assertThat(parsed.pairs()).isNull();
+        assertThat(parsed.confidence()).isLessThan(ParseAbsenceService.AI_THRESHOLD);
+        assertThat(parsed.clarification()).contains("на яких парах");
+        assertThat(parser.read(text, TODAY).settled()).isFalse();
+    }
+
+    @Test
+    void partOfTheDayWithPairNumbersOrAWholeDayStaysConfident() {
+        assertThat(parser.parse("завтра запізнюсь, не буде на 1 парі, лікарняний", TODAY).confidence()).isEqualTo(1.0);
+        assertThat(parser.parse("4.11 зранку і весь день на лікарняному", TODAY).confidence()).isEqualTo(1.0);
+    }
+
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', textBlock = """
             завтра лікарняний              | SICK_LEAVE
