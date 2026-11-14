@@ -13,7 +13,9 @@ The main audience is students, parents and teachers who just want *the schedule 
 /g/:code                  Group schedule (e.g. /g/4КІ1) — day / week view, changes highlighted
 /t/:id                    Teacher schedule (public short names only)
 /r/:id                    Room schedule + occupancy
-/changes                  Changes (заміни) today / tomorrow / any date, grouped by group, filterable
+/changes                  Changes (заміни) today / tomorrow / another date, grouped by group, filterable. Guests:
+                          dates from publicHistoryFrom on (an older one shows «Цей день уже в архіві»); staff: any
+                          date. /g, /t, /r follow the same window by whole weeks (CONTRACTS §1 «Public history window»)
 /bells                    Bell schedule (profile in effect, today's highlighted)
 /about                    About the system (methodology requires an «about» page) + Telegram bot link
 /invite/:token            Teacher registration by invite
@@ -120,7 +122,7 @@ Positive direction — «Повітря» з живим часом (round 8; the
 10. **QR codes**: group schedule QR to print on the classroom door; Telegram deep link QR for binding.
 11. **Calendar subscription** (ICS) for a group/teacher — «Додати в Google Календар».
 12. **Share** today's schedule (Web Share API) and print-friendly A4 week view.
-13. **PWA** for public pages (installable, last viewed group cached offline).
+13. **PWA** for public pages (installable, last viewed group cached offline; only token-less answers are cached).
 14. **View Transitions** for theme switch and page changes where supported.
 
 ## 5. Telegram bot (@scheduler_vtfk_bot) flows
