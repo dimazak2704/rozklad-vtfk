@@ -461,36 +461,38 @@ export function buildFeed(changes: readonly ChangeDto[], absences: readonly Abse
   }
   for (const change of changes) {
     change.history.forEach((entry, index) => {
-      const teacher = change.new.teacher?.shortName ?? 'викладач';
+      // хто веде пару: новий викладач, а коли зміна його не міняє (аудиторія, вичитана дисципліна) — свій
+      const teacher = change.new.teacher?.shortName ?? change.original.teacher?.shortName ?? null;
+      const who = teacher ? `${teacher} — ` : '';
       let kind: FeedKind | null = null;
       let text = '';
       if (entry.from === 'APPLIED' && entry.to === 'APPLIED') {
         // NOTIFY: «Не можу» після публікації — розпорядження лишається, потрібне доповнення
         kind = 'declined';
-        text = `Не може, потрібне доповнення: ${teacher} — ${changeLine(change)}`;
+        text = `Не може, потрібне доповнення: ${who}${changeLine(change)}`;
       } else if (entry.from === 'CONFIRMED' && entry.to === 'CONFIRMED') {
         kind = 'confirmed';
-        text = `«Добре»: ${teacher} — ${changeLine(change)}`;
+        text = `«Добре»: ${who}${changeLine(change)}`;
       } else if (entry.from === null && entry.to === 'CONFIRMED' && change.approvalMode === 'NOTIFY') {
         kind = 'confirmed';
-        text = `Призначено: ${teacher} — ${changeLine(change)}`;
+        text = `Призначено: ${who}${changeLine(change)}`;
       } else if (entry.to === 'PENDING_CONFIRMATION' && entry.from === 'PENDING_CONFIRMATION') {
         kind = 'reminder';
-        text = `Нагадування в Telegram: ${teacher} — ${changeLine(change)}`;
+        text = `Нагадування в Telegram: ${who}${changeLine(change)}`;
       } else if (entry.to === 'PENDING_CONFIRMATION') {
         kind = 'request';
-        text = `Прохання в Telegram: ${teacher} — ${changeLine(change)}`;
+        text = `Прохання в Telegram: ${who}${changeLine(change)}`;
       } else if (entry.to === 'CONFIRMED') {
         kind = 'confirmed';
         text =
           change.kind === 'CANCEL'
             ? `Пари не буде: ${changeLine(change)}`
-            : entry.actor === teacher
-              ? `Підтверджено в Telegram: ${teacher} — ${changeLine(change)}`
-              : `Підтверджено: ${teacher} — ${changeLine(change)}`;
+            : change.new.teacher && entry.actor === change.new.teacher.shortName
+              ? `Підтверджено в Telegram: ${who}${changeLine(change)}`
+              : `Підтверджено: ${who}${changeLine(change)}`;
       } else if (entry.to === 'DECLINED') {
         kind = 'declined';
-        text = `Відмова: ${teacher} — ${changeLine(change)}`;
+        text = `Відмова: ${who}${changeLine(change)}`;
       } else if (entry.to === 'CANCELLED') {
         kind = 'cancelled';
         text = `Рішення скасовано: ${changeLine(change)}`;

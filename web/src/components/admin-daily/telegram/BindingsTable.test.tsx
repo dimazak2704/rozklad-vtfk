@@ -41,6 +41,15 @@ function renderTable() {
   renderWithProviders(<BindingsTable bindings={[GROUP_CHAT, TEACHER]} loading={false} error={null} onRetry={() => {}} />);
 }
 
+describe('BindingsTable: назва чату', () => {
+  it('особистий чат викладача названо його імʼям, а не «Особистий чат»', () => {
+    renderTable();
+    const header = screen.getByRole('rowheader', { name: /Непийвода М\.В\./ });
+    expect(header).toHaveTextContent('особистий чат · •••1234');
+    expect(screen.queryByText('Особистий чат')).not.toBeInTheDocument();
+  });
+});
+
 describe('BindingsTable: ранковий розклад', () => {
   it('перемикач лише в чаті групи, з тією самою назвою, що й у боті', () => {
     renderTable();

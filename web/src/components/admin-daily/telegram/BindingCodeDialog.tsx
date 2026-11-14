@@ -15,7 +15,7 @@ type CodeType = Exclude<BindingType, 'SUBSCRIBER'>;
 
 const TYPE_OPTIONS: ReadonlyArray<{ value: CodeType; label: string; description: string }> = [
   { value: 'GROUP_CHAT', label: 'Чат групи', description: 'Група отримуватиме свої рядки розпорядження й зображення документа.' },
-  { value: 'TEACHER', label: 'Викладач', description: 'Особисті запити на заміни з кнопками «Підтверджую» / «Не можу».' },
+  { value: 'TEACHER', label: 'Викладач', description: 'Особисті повідомлення про заміни з кнопками для відповіді.' },
   { value: 'ADMIN_CHAT', label: 'Чат диспетчерів', description: 'Нові відсутності, відмови, прострочені підтвердження, публікації.' },
 ];
 

@@ -418,6 +418,17 @@ describe('налаштування', () => {
     expect(screen.getByRole('spinbutton', { name: /^Годин за пару/ }).parentElement).not.toHaveTextContent(/год/);
   });
 
+  it('підказка до повних імен описує поточний стан перемикача', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);
+    const fullNames = screen.getByRole('switch', { name: 'Показувати повні імена викладачів' });
+    expect(fullNames).not.toBeChecked();
+    expect(fullNames).toHaveAccessibleDescription(/^Вимкнено — на сайті лише прізвище та ініціали/);
+    await user.click(fullNames);
+    expect(fullNames).toBeChecked();
+    expect(fullNames).toHaveAccessibleDescription(/^Увімкнено — пошук на сайті показує й повне імʼя/);
+  });
+
   it('помилки сервера стають помилками полів', async () => {
     server.use(
       http.put(apiPath('/admin/settings'), () =>

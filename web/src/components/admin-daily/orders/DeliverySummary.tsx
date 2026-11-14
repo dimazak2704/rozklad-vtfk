@@ -1,11 +1,31 @@
 import { Link } from 'react-router';
 import { MAX_DELIVERIES_PAGE, useDeliveries } from '@/api/telegram';
-import type { Uuid } from '@/api/types';
+import type { DeliveryDto, Uuid } from '@/api/types';
 import { SkeletonText, StatusDot } from '@/components/ui';
 import { countLabel } from '@/lib/labels';
 import { deliveryChat } from '../telegram/labels';
 
 const CHATS = ['чат', 'чати', 'чатів'] as const;
+const MESSAGES = ['повідомлення', 'повідомлення', 'повідомлень'] as const;
+
+type ChatState = 'sent' | 'queued' | 'failed';
+
+/**
+ * Стан кожного чату за його повідомленнями: чат отримує текст і зображення, тож рахуємо чати, а не рядки
+ * журналу. Хоч одне не доставлено — чат «не доставлено»; щось ще в черзі — «у черзі»; інакше — надіслано.
+ */
+function chatStates(list: readonly DeliveryDto[]): Array<{ chat: DeliveryDto; state: ChatState }> {
+  const chats = new Map<string, { chat: DeliveryDto; state: ChatState }>();
+  for (const delivery of list) {
+    const key = `${delivery.chatId}|${delivery.chatTitle ?? ''}`;
+    const state: ChatState =
+      delivery.status === 'FAILED' ? 'failed' : delivery.status === 'QUEUED' || delivery.status === 'RETRYING' ? 'queued' : 'sent';
+    const known = chats.get(key);
+    if (!known) chats.set(key, { chat: delivery, state });
+    else if (state === 'failed' || (state === 'queued' && known.state === 'sent')) known.state = state;
+  }
+  return [...chats.values()];
+}
 
 /** Як розійшлося розпорядження в Telegram: скільки чатів отримали, що ще в черзі, де помилки. */
 export function DeliverySummary({ orderId }: { orderId: Uuid }) {
@@ -18,12 +38,18 @@ export function DeliverySummary({ orderId }: { orderId: Uuid }) {
   if (list.length === 0) {
     return <p className="text-caption text-secondary">Жодна група з цими змінами не привʼязала чат до бота — розсилки не було.</p>;
   }
-  const sent = list.filter((d) => d.status === 'SENT').length;
-  const queued = list.filter((d) => d.status === 'QUEUED' || d.status === 'RETRYING').length;
-  const failed = list.filter((d) => d.status === 'FAILED');
+  const chats = chatStates(list);
+  const sent = chats.filter((c) => c.state === 'sent').length;
+  const queued = chats.filter((c) => c.state === 'queued').length;
+  const failed = chats.filter((c) => c.state === 'failed').map((c) => c.chat);
+  const sentMessages = list.filter((d) => d.status === 'SENT').length;
   return (
     <div className="flex flex-col gap-1.5 text-ui">
-      <StatusDot tone="add" label={`Надіслано: ${countLabel(sent, CHATS)}`} showLabel />
+      <StatusDot
+        tone="add"
+        label={`Надіслано: ${countLabel(sent, CHATS)}${sentMessages !== sent ? ` (${countLabel(sentMessages, MESSAGES)})` : ''}`}
+        showLabel
+      />
       {queued > 0 ? <StatusDot tone="change" pulse label={`У черзі: ${countLabel(queued, CHATS)}`} showLabel /> : null}
       {failed.length > 0 ? (
         <StatusDot tone="cancel" label={`Не доставлено: ${failed.map(deliveryChat).join(', ')}`} showLabel />

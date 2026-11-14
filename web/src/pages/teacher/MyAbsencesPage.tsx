@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router';
 import { useMe, useMyAbsences } from '@/api/me';
+import { usePublicMeta } from '@/api/meta';
 import { AbsenceForm } from '@/components/teacher/AbsenceForm';
 import { AbsenceList } from '@/components/teacher/AbsenceList';
 import { EmptyState, PageErrorScope, PageHeader, Skeleton } from '@/components/ui';
@@ -14,7 +15,9 @@ export default function MyAbsencesPage() {
   const me = useMe();
   const absences = useMyAbsences();
   const [params] = useSearchParams();
-  const today = todayInKyiv();
+  const meta = usePublicMeta();
+  // «сьогодні» стенду (core meta), як на інших сторінках; до відповіді — годинник застосунку
+  const today = meta.data?.today ?? todayInKyiv();
   const teacher = me.data?.teacher;
   const reporting = params.get('new') === '1';
 

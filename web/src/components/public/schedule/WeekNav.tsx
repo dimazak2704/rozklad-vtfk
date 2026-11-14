@@ -98,6 +98,7 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
           <DayPicker
             mode="single"
             locale={uk}
+            today={localDateFromIso(today)}
             required
             selected={localDateFromIso(value)}
             defaultMonth={localDateFromIso(value)}

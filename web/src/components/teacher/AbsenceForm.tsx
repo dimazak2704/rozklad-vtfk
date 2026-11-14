@@ -287,6 +287,8 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             <DayPicker
               mode="range"
               locale={uk}
+              // «Сьогодні» в календарі (і в підписі дня для читачів екрана) — за годинником застосунку, як і решта
+              today={localDateFromIso(today)}
               selected={selected}
               defaultMonth={localDateFromIso(first)}
               resetOnSelect

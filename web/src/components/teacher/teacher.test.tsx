@@ -439,6 +439,14 @@ describe('AbsenceForm: дні', () => {
     expect(within(group).getAllByRole('radio')[0]).toHaveFocus();
   });
 
+  it('«Сьогодні» в календарі — день застосунку (стенду), а не справжня дата браузера', () => {
+    // 09.11.2026 не збігається зі справжньою датою запуску тестів
+    renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
+    const todays = screen.getAllByRole('button', { name: /^Сьогодні, / });
+    expect(todays).toHaveLength(1);
+    expect(todays[0]).toHaveAccessibleName(/понеділок, 9-е листопада 2026/);
+  });
+
   it('два кліки в календарі обирають кілька днів, третій починає новий вибір', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);

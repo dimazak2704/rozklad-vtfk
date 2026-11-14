@@ -320,6 +320,21 @@ describe('стрічка подій', () => {
     expect(teacherAnswered(null, 'CONFIRMED', 'NOTIFY')).toBe(false);
   });
 
+  it('зміна без нового викладача (аудиторія) називає того, хто веде пару, а не «викладач»', () => {
+    const roomChange: ChangeDto = {
+      ...change,
+      id: 'c-room',
+      kind: 'ROOM_CHANGE',
+      status: 'CONFIRMED',
+      original: { ...change.original, teacher: { id: 't-own', shortName: 'Кренцін', displayName: 'Кренцін' } },
+      new: { ...change.new, teacher: null },
+      history: [{ at: '2026-11-09T05:00:00Z', actor: 'admin', from: null, to: 'CONFIRMED', comment: null }],
+    };
+    expect(buildFeed([roomChange], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: Кренцін — 1КІ2, 2 пара (Ін.мова)']);
+    const nobody: ChangeDto = { ...roomChange, original: { ...roomChange.original, teacher: null } };
+    expect(buildFeed([nobody], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: 1КІ2, 2 пара (Ін.мова)']);
+  });
+
   it('найновіші події першими, відповідь з Telegram названо прямо', () => {
     const feed = buildFeed([change], [absence], [order], '2026-11-09');
     expect(feed.map((f) => f.kind)).toEqual(['order', 'confirmed', 'request', 'absence']);

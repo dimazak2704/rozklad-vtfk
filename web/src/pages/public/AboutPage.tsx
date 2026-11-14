@@ -179,7 +179,7 @@ export default function AboutPage() {
             </a>
             <p className="text-ui text-secondary">
               Розклад групи на сьогодні й завтра у два дотики, а групові чати отримують свої рядки розпорядження одразу
-              після публікації. Викладачам бот надсилає запити на заміну з кнопками «Підтверджую» / «Не можу».
+              після публікації. Викладачам бот повідомляє про заміни, а відповісти можна однією кнопкою.
             </p>
             <QrPlate value={TELEGRAM_BOT_URL} size={152} label={`QR-код: бот ${TELEGRAM_BOT_HANDLE}`} className="self-start max-md:hidden" />
           </section>

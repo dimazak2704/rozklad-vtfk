@@ -31,6 +31,7 @@ export function ChangesDatePicker({ value, today, onChange, minDate = null }: Ch
         <DayPicker
           mode="single"
           locale={uk}
+          today={localDateFromIso(today)}
           required
           selected={localDateFromIso(value)}
           defaultMonth={localDateFromIso(value)}

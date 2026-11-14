@@ -15,7 +15,7 @@ import type {
 } from '@/api/calendar';
 import type { BellProfileSlotDto, CalendarPeriodKind, FieldErrorDto, IsoDate, PeriodScope, StudyMode, Uuid, WeekParity } from '@/api/types';
 import { addDays, compareIsoDates, diffDays, formatNumericDate, isIsoDate, isoWeekday, startOfWeek, timeToMinutes } from '@/lib/date';
-import { weekdayName } from '@/lib/labels';
+import { WEEKDAY_ACCUSATIVE } from '@/lib/labels';
 import { ACADEMIC_YEAR, BELL_PROFILES, CALENDAR_PERIODS, SEMESTERS, SHIFT_WINDOWS } from '../fixtures';
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, problem, readJson } from '../kit';
@@ -207,7 +207,7 @@ function validateSlots(slots: unknown): BellProfileSlotDto[] {
       errors.add(`slots[${i}].endsAt`, 'Пара має закінчуватися пізніше, ніж починається.');
     }
     const key = `${slot.weekday}:${slot.pair}`;
-    if (seen.has(key)) errors.add(`slots[${i}].pair`, `Пара ${slot.pair} у ${weekdayName(slot.weekday)} повторюється.`);
+    if (seen.has(key)) errors.add(`slots[${i}].pair`, `Пара ${slot.pair} у ${WEEKDAY_ACCUSATIVE[slot.weekday] ?? ''} повторюється.`);
     seen.add(key);
   });
   for (let weekday = 1; weekday <= 5; weekday += 1) {
@@ -221,7 +221,7 @@ function validateSlots(slots: unknown): BellProfileSlotDto[] {
       if (previous && current && timeToMinutes(current.slot.startsAt) < timeToMinutes(previous.slot.endsAt)) {
         errors.add(
           `slots[${current.index}].startsAt`,
-          `Пара ${current.slot.pair} у ${weekdayName(weekday)} починається раніше, ніж закінчується пара ${previous.slot.pair}.`,
+          `Пара ${current.slot.pair} у ${WEEKDAY_ACCUSATIVE[weekday] ?? ''} починається раніше, ніж закінчується пара ${previous.slot.pair}.`,
         );
       }
     }

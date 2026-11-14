@@ -105,10 +105,11 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
       sortable: true,
       cell: (row) => (
         <span className="flex min-w-0 flex-col">
-          {/* особистий чат викладача названий так само, як і він сам: не дублюємо імʼя в двох колонках */}
-          {/* назва чату — головне в рядку: жирніше за дату й тип, що стоять поруч */}
-          <span className="truncate font-[600]">{row.type === 'TEACHER' && row.title === target(row) ? 'Особистий чат' : row.title}</span>
-          <span className="text-meta font-normal text-muted figures">{row.chatId}</span>
+          {/* назва чату — головне в рядку: жирніше за дату й тип, що стоять поруч; у викладача це його імʼя */}
+          <span className="truncate font-[600]">{row.title}</span>
+          <span className="text-meta font-normal text-muted figures">
+            {row.type === 'TEACHER' ? `особистий чат · ${row.chatId}` : row.chatId}
+          </span>
         </span>
       ),
     },
