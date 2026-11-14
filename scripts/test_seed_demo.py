@@ -79,5 +79,37 @@ class TeacherRequestTest(unittest.TestCase):
                                 "version": 7})
 
 
+LESSON = {"id": "l1", "pair": 3, "subgroup": 0, "group": {"id": "g1"}}
+ABSENCE = {"id": "a1", "reasonCategory": "SICK_LEAVE"}
+
+
+class RecentChangesTest(unittest.TestCase):
+    """`seed recent` turns the system's proposals into changes the way the dispatcher's screen does."""
+
+    def test_another_discipline_of_the_group_is_a_mutual_replacement_in_the_suggested_room(self):
+        option = {"kind": "REPLACE_DISCIPLINE", "teacher": {"id": "t2"}, "discipline": {"id": "d2"},
+                  "suggestedRoom": {"id": "r9"}}
+        request = seed_demo.option_request(option, LESSON, seed_demo.date(2026, 11, 3), ABSENCE)
+        self.assertEqual({"kind": "REPLACE_DISCIPLINE", "date": "2026-11-03", "pairFrom": 3, "groupId": "g1",
+                          "subgroup": 0, "originalLessonId": "l1", "reasonCode": "MUTUAL", "absenceId": "a1",
+                          "newTeacherId": "t2", "newDisciplineId": "d2", "newRoomId": "r9"}, request)
+
+    def test_a_cancelled_pair_is_an_absence_and_a_business_trip_keeps_its_own_reason(self):
+        day = seed_demo.date(2026, 11, 3)
+        self.assertEqual("ABSENT", seed_demo.option_request({"kind": "CANCEL"}, LESSON, day, ABSENCE)["reasonCode"])
+        trip = {**ABSENCE, "reasonCategory": "BUSINESS_TRIP"}
+        swap = seed_demo.option_request({"kind": "SWAP", "swapLesson": {"id": "l7"}}, LESSON, day, trip)
+        self.assertEqual(("BUSINESS_TRIP", "l7"), (swap["reasonCode"], swap["swapLessonId"]))
+
+    def test_incomplete_or_manual_options_are_skipped(self):
+        day = seed_demo.date(2026, 11, 3)
+        self.assertIsNone(seed_demo.option_request({"kind": "MERGE_SUBGROUPS"}, LESSON, day, ABSENCE))
+        self.assertIsNone(seed_demo.option_request({"kind": "ADDITIONAL"}, LESSON, day, ABSENCE))
+
+    def test_study_days_are_the_weekdays(self):
+        days = seed_demo.study_days(seed_demo.date(2026, 11, 13), seed_demo.date(2026, 11, 17))
+        self.assertEqual(["2026-11-13", "2026-11-16", "2026-11-17"], [d.isoformat() for d in days])
+
+
 if __name__ == "__main__":
     unittest.main()

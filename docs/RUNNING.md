@@ -58,7 +58,7 @@ scripts/dev-stack.sh reset-data --yes   # empty the four app databases, queues a
 scripts/dev-stack.sh reset-auth --yes   # drop the auth database; the next `up` creates the demo accounts again
 ```
 
-A fresh demo database: `reset-data --yes`, `up --no-build`, `seed`.
+A fresh demo database: `reset-data --yes`, `up --no-build`, `seed` (a living one: §5, «A living stand»).
 
 **Telegram.** One bot token can be polled by one process only. `up` without `--no-telegram` starts the bot
 with the token from `.env`; stop any other copy (server, IDE run) first. `--no-telegram` (or `TELEGRAM=off`)
@@ -185,6 +185,18 @@ Every step is a call to the running system (no SQL); a repeated run skips what e
    here) and the «Кадрове забезпечення» PDFs of the OPPs on the college's Google Site. A row is used when the
    initials of the schedule fit, or, for a surname without initials, when one current person has that surname
    and the disciplines match; each row names its source. A name set by hand is kept.
+
+A living stand (by name, not in the default run; the stand time `--time 2026-11-20T10:00` fits the dates):
+- **`seed recent`** — every study day from 20.10 to 18.11: 1–3 new absences (sick leave over 2–4 days, personal,
+  business trip, other), the system's own plan for each absence accepted (`GET /api/admin/absences/{id}/plan`:
+  another discipline of the group by its own teacher «Зв.зам.», merged subgroups, a cancelled pair), and the
+  order of the day published (№36…). Deterministic (seeded by the date) and resumable.
+- **`python scripts/demo_day.py --publish --allow-chat='<masked id>'`** — then Thursday 19.11 (published) and
+  Friday 20.11 with every kind of decision and four lessons left «Потрібне рішення» (the docstring lists them).
+
+The owner's chat (`TELEGRAM_OWNER_CHAT_ID`) is bound as the dispatchers' chat at start-up, so it gets a message
+for every absence and every order the seed creates. For a quiet seed run the three commands on a stand started
+with `--no-telegram`, then `up` again with the bot.
 
 Differences from the paper original that the data does not allow to avoid: rows are sorted by course and
 group (the original is unsorted), «Ін. мова Крисак Л.» of a subgroup prints «Крисак Л. (п.)», ADDITIONAL rows

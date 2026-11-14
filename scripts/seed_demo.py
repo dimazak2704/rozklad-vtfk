@@ -13,6 +13,9 @@ make, so the seed also exercises the APIs. The steps are idempotent; a second ru
   7. order 35:  the changes of 19.10.2026 -> confirmations -> notes -> publication as №35
   8. names:     full names of the teachers from seed/teacher-names.csv (public college sources)
 
+By name only (not in the default run): `recent` — absences and published orders for the study days after №35 up to
+18.11.2026 (then scripts/demo_day.py takes Thursday 19.11 and Friday 20.11): a living stand.
+
 Usage (stack running, see scripts/dev-stack.sh):  python scripts/seed_demo.py [step ...]
 Demo credentials come from infra/dev/demo-users.env (test values only); tokens come from the sign-in
 service through scripts/rozklad_auth.py (AUTH_URL overrides its address).
@@ -22,12 +25,14 @@ from __future__ import annotations
 import csv
 import json
 import os
+import random
 import re
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import date, timedelta
 from pathlib import Path
 
 import rozklad_auth
@@ -542,7 +547,7 @@ def step_order35(admin: Client) -> None:
         admin.post(f"/api/admin/changes/{change['id']}/confirm")
     draft = admin.get(f"/api/admin/orders/draft?date={ORDER_DATE}")
     if draft["notes"] != ORDER_35_NOTES:
-        draft = admin.put(f"/api/admin/orders/{draft['id']}/notes", {"notes": ORDER_35_NOTES})
+        draft = admin.put(f"/api/admin/orders/{draft['id']}/notes", {"notes": ORDER_35_NOTES, "version": draft["version"]})
     order = admin.post(f"/api/admin/orders/{draft['id']}/publish")
     log(f"  published: {order['title']}, {order['weekdayLabel']} - {order['parityLabel']}, "
         f"{len(order['items'])} rows, {len(order['notes'])} notes")
@@ -616,12 +621,181 @@ STEPS = {"structure": step_structure, "calendar": step_calendar, "import": step_
          "names": step_names}
 
 
+# ---------------------------------------------------------------- extra: a living stand (by name only)
+# `seed recent` fills the study days after order №35 with absences and published orders, up to yesterday of the
+# stand's clock but not into 19–20.11, which scripts/demo_day.py owns (every kind of decision, Friday's order left
+# for the dispatcher). Run it before demo_day.py, so the order numbers follow the dates. Every change is the system's own proposal for the absence (GET
+# /absences/{id}/plan, the college's rules: another discipline of the same group by its own teacher, merged
+# subgroups, a cancelled pair when nothing fits), accepted as a dispatcher would. Not in the default run: the
+# dates follow the stand's clock, and the e2e suites expect a stand with order №35 only. Run `recent` before the
+# Telegram chats are bound (or with the bot off): publishing past orders would message the bound group chats.
+RECENT_FROM = date(2026, 10, 20)  # the day after order №35
+RECENT_UNTIL = date(2026, 11, 18)  # the day before scripts/demo_day.py's Thursday
+# (category, share, study days of the absence)
+ABSENCE_KINDS = [("SICK_LEAVE", 0.5, (2, 4)), ("PERSONAL", 0.2, (1, 1)), ("BUSINESS_TRIP", 0.2, (1, 2)),
+                 ("OTHER", 0.1, (1, 1))]
+DEMO_TEACHER_NAMES = ("Кренцін", "Непийвода")
+
+
+def study_days(start: date, end: date) -> list[date]:
+    """Weekdays from start to end; days without lessons (holidays) simply get an empty plan and no order."""
+    days, day = [], start
+    while day <= end:
+        if day.weekday() < 5:
+            days.append(day)
+        day += timedelta(days=1)
+    return days
+
+
+def stand_today(admin: Client) -> date:
+    return date.fromisoformat(admin.get("/api/public/meta")["today"])
+
+
+def set_approval_mode(admin: Client, mode: str) -> str:
+    settings = admin.get("/api/admin/settings")
+    previous = settings["approvalMode"]
+    if previous != mode:
+        settings["approvalMode"] = mode
+        admin.put("/api/admin/settings", settings)
+    return previous
+
+
+def option_request(option: dict, lesson: dict, day: date, absence: dict) -> dict | None:
+    """The change a dispatcher creates from a proposed option (web: components/admin-daily/model.ts)."""
+    kind = option["kind"]
+    reason = "MUTUAL" if kind == "REPLACE_DISCIPLINE" else "ABSENT" if kind == "CANCEL" else (
+        "BUSINESS_TRIP" if absence["reasonCategory"] == "BUSINESS_TRIP" else "ABSENT")
+    request = {"kind": kind, "date": day.isoformat(), "pairFrom": lesson["pair"], "groupId": lesson["group"]["id"],
+               "subgroup": lesson["subgroup"], "originalLessonId": lesson["id"], "reasonCode": reason,
+               "absenceId": absence["id"]}
+    room = {"newRoomId": option["suggestedRoom"]["id"]} if option.get("suggestedRoom") else {}
+    if kind == "REPLACE_DISCIPLINE" and option.get("teacher") and option.get("discipline"):
+        return {**request, "newTeacherId": option["teacher"]["id"], "newDisciplineId": option["discipline"]["id"], **room}
+    if kind == "MERGE_SUBGROUPS" and option.get("swapLesson"):
+        return {**request, "swapLessonId": option["swapLesson"]["id"], **room}
+    if kind == "SWAP" and option.get("swapLesson"):
+        return {**request, "swapLessonId": option["swapLesson"]["id"]}
+    if kind == "CANCEL":
+        return request
+    return None
+
+
+def apply_plan(admin: Client, absence: dict, day: date, limit: int | None = None) -> int:
+    """Accepts the proposed option of every undecided lesson (the next ones if the proposal now conflicts)."""
+    plan = admin.get(f"/api/admin/absences/{absence['id']}/plan?date={day.isoformat()}")
+    created = 0
+    for entry in plan["lessons"]:
+        if limit is not None and created >= limit:
+            break
+        options = entry["options"]
+        order = list(range(len(options)))
+        if entry.get("proposedIndex") is not None:
+            order.remove(entry["proposedIndex"])
+            order.insert(0, entry["proposedIndex"])
+        for index in order:
+            request = option_request(options[index], entry["lesson"], day, absence)
+            if request is None:
+                continue
+            try:
+                admin.post("/api/admin/changes", request)
+            except ApiError as failed:
+                if failed.status in (400, 409, 422):
+                    continue
+                raise
+            created += 1
+            break
+    return created
+
+
+def teachers_with_lessons(admin: Client, day: date, candidates: list[dict], wanted: int, rng: random.Random,
+                          minimum: int = 2) -> list[dict]:
+    """Random teachers who have at least `minimum` regular lessons on the day (staff token: any date)."""
+    chosen = []
+    for teacher in rng.sample(candidates, len(candidates)):
+        if len(chosen) >= wanted:
+            break
+        week = admin.get(f"/api/public/schedule/teacher/{teacher['id']}?from={day}&to={day}")
+        lessons = [lesson for d in week["days"] for lesson in d["lessons"] if lesson["kind"] == "REGULAR"]
+        if len(lessons) >= minimum:
+            chosen.append(teacher)
+    return chosen
+
+
+def absence_for(admin: Client, teacher: dict, first: date, days: list[date], rng: random.Random,
+                category: str | None = None) -> tuple[dict, list[date]]:
+    if category is None:
+        roll, category, span = rng.random(), None, (1, 1)
+        for name, share, length in ABSENCE_KINDS:
+            roll -= share
+            if roll <= 0:
+                category, span = name, length
+                break
+        category = category or "OTHER"
+    else:
+        span = next(length for name, _, length in ABSENCE_KINDS if name == category)
+    start = days.index(first)
+    covered = days[start:start + rng.randint(*span)]
+    absence = admin.post("/api/admin/absences", {"teacherId": teacher["id"], "dateFrom": covered[0].isoformat(),
+                                                 "dateTo": covered[-1].isoformat(), "reasonCategory": category})
+    return absence, covered
+
+
+def publish_day(admin: Client, day: date) -> dict | None:
+    draft = admin.get(f"/api/admin/orders/draft?date={day.isoformat()}")
+    if not draft["items"]:
+        admin.call("DELETE", f"/api/admin/orders/{draft['id']}", expect_json=False)
+        return None
+    return admin.post(f"/api/admin/orders/{draft['id']}/publish")
+
+
+def plan_days(admin: Client, days: list[date], publish_until: date, seed: int) -> None:
+    """New absences on each day (1–3 teachers), the plan accepted for every day an absence covers, the order
+    published for every day up to publish_until."""
+    teachers = [t for t in admin.get("/api/public/teachers") if t["shortName"] not in DEMO_TEACHER_NAMES]
+    for day in days:
+        if day > publish_until:
+            break
+        published = [o for o in items(admin.get(f"/api/admin/orders?from={day}&to={day}&status=PUBLISHED"))
+                     if o["kind"] == "ORDER"]
+        if published:
+            log(f"  {day}: order №{published[0]['number']} is already published, skipped")
+            continue
+        rng = random.Random(f"{seed}-{day.isoformat()}")
+        # absences that cover the day (some began on an earlier day); new ones start once per day, so a second
+        # run after a failure goes on where it stopped
+        active = [a for a in items(admin.get(f"/api/admin/absences?from={day}&to={day}")) if a["status"] == "ACTIVE"]
+        if not any(a["dateFrom"] == day.isoformat() for a in active):
+            busy = {a["teacher"]["id"] for a in active}
+            free = [t for t in teachers if t["id"] not in busy]
+            for teacher in teachers_with_lessons(admin, day, free, rng.choice((1, 1, 2, 2, 3)), rng):
+                active.append(absence_for(admin, teacher, day, days, rng)[0])
+        created = sum(apply_plan(admin, absence, day) for absence in active)
+        order = publish_day(admin, day)
+        if order:
+            log(f"  {day}: {created} changes, order №{order['number']} ({len(order['items'])} rows)")
+        else:
+            log(f"  {day}: no lessons to change, no order")
+
+
+def step_recent(admin: Client) -> None:
+    last = min(stand_today(admin) - timedelta(days=1), RECENT_UNTIL)
+    previous = set_approval_mode(admin, "AUTO")  # past days: nobody is asked any more
+    try:
+        plan_days(admin, study_days(RECENT_FROM, last), last, seed=7)
+    finally:
+        set_approval_mode(admin, previous)
+    log(f"recent: ok (study days {RECENT_FROM} – {last})")
+
+
+EXTRA_STEPS = {"recent": step_recent}
+
+
 def main(argv: list[str]) -> None:
     credentials = demo_credentials()
     admin = Client(credentials["ADMIN_USERNAME"], credentials["ADMIN_PASSWORD"])
     for name in argv or list(STEPS):
         log(f"== {name}")
-        STEPS[name](admin)
+        (STEPS.get(name) or EXTRA_STEPS[name])(admin)
 
 
 if __name__ == "__main__":
