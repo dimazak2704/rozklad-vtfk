@@ -44,6 +44,7 @@ public final class PropertiesFixture {
                 URI.create("http://localhost:8088"));
         private List<String> corsOrigins = List.of("http://localhost:5180", "http://localhost:5181");
         private boolean cliEnabled;
+        private boolean lanDev;
         private Map<String, ServiceClient> serviceClients = new LinkedHashMap<>(Map.of(
                 "rozklad-notification", new ServiceClient("dev-notification-secret", Set.of("SERVICE"), Set.of()),
                 "rozklad-core", new ServiceClient("dev-core-auth-secret", Set.of(), Set.of("accounts.manage"))));
@@ -74,6 +75,11 @@ public final class PropertiesFixture {
 
         public Builder cliEnabled(boolean value) {
             this.cliEnabled = value;
+            return this;
+        }
+
+        public Builder lanDev(boolean value) {
+            this.lanDev = value;
             return this;
         }
 
@@ -112,7 +118,7 @@ public final class PropertiesFixture {
                             Duration.ofMinutes(15)),
                     new AuthServerProperties.Password(12),
                     bootstrap,
-                    new AuthServerProperties.DemoSeed(demoSeed, null, demoAccounts));
+                    new AuthServerProperties.DemoSeed(demoSeed, null, demoAccounts), lanDev);
         }
     }
 }

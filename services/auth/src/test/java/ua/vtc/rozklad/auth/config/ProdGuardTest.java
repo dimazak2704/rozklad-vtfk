@@ -142,6 +142,48 @@ class ProdGuardTest {
     }
 
     @Test
+    void theLanModeOnAPrivateAddressIsDevelopment() {
+        for (String issuer : List.of("https://192.168.31.112/auth", "https://10.0.0.5/auth", "https://172.16.0.1/auth",
+                "https://172.31.255.254:8443/auth")) {
+            var properties = PropertiesFixture.builder().issuer(issuer).lanDev(true).demoSeed(true).build();
+
+            assertThat(properties.lanDevelopment()).as(issuer).isTrue();
+            assertThat(properties.secure()).as(issuer).isFalse();
+            assertThat(ProdGuard.violations(properties, false)).as(issuer).isEmpty();
+        }
+    }
+
+    @Test
+    void aPrivateAddressWithoutTheSwitchIsProduction() {
+        var properties = PropertiesFixture.builder().issuer("https://192.168.31.112/auth").build();
+
+        assertThat(properties.lanDevelopment()).isFalse();
+        assertThat(properties.secure()).isTrue();
+        assertThat(ProdGuard.violations(properties, false)).isNotEmpty();
+    }
+
+    @Test
+    void theLanSwitchNeverRelaxesAPublicIssuer() {
+        for (String issuer : List.of("https://rozklad.example.ua/auth", "https://8.8.8.8/auth",
+                "https://172.32.0.1/auth", "https://192.169.0.1/auth", "https://192.168.1.1.example.com/auth",
+                "https://192.168.1.300/auth")) {
+            var properties = PropertiesFixture.prod().issuer(issuer).lanDev(true).build();
+
+            assertThat(properties.secure()).as(issuer).isTrue();
+            assertThat(ProdGuard.violations(properties, true)).as(issuer)
+                    .anySatisfy(v -> assertThat(v).contains("ROZKLAD_LAN_DEV"));
+        }
+    }
+
+    @Test
+    void theLanSwitchIsIgnoredOnAnHttpIssuer() {
+        var properties = PropertiesFixture.builder().lanDev(true).build();
+
+        assertThat(properties.lanDevelopment()).isFalse();
+        assertThat(ProdGuard.violations(properties, false)).isEmpty();
+    }
+
+    @Test
     void developmentMayUseTheMockWithoutADomain() {
         var google = google("rozklad-dev", "dev-google-secret", "", false, true, "http://mock-oidc:8090/google");
 

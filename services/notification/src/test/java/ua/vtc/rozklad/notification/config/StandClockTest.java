@@ -103,6 +103,19 @@ class StandClockTest {
     }
 
     @Test
+    void theLanModeOnAPrivateAddressIsNotProduction() {
+        assertThat(StandClock.isProduction(lan("https://192.168.31.112/auth"))).isFalse();
+        assertThat(StandClock.isProduction(lan("https://10.0.0.5:8443/auth"))).isFalse();
+        assertThat(StandClock.isProduction(issuer("https://192.168.31.112/auth"))).isTrue();
+        assertThat(StandClock.isProduction(lan("https://rozklad.vtc.vn.ua/auth"))).isTrue();
+        assertThat(StandClock.isProduction(lan("https://192.168.1.1.example.com/auth"))).isTrue();
+        assertThat(StandClock.isProduction(lan("https://172.32.0.1/auth"))).isTrue();
+        MockEnvironment prod = lan("https://192.168.31.112/auth");
+        prod.setActiveProfiles("prod");
+        assertThat(StandClock.isProduction(prod)).isTrue();
+    }
+
+    @Test
     void theClockBeanRefusesTheStandTimeWithAnHttpsIssuer() {
         MockEnvironment environment = issuer("https://rozklad.vtc.vn.ua/auth")
                 .withProperty("app.stand-time.at", "2026-11-20T10:00");
@@ -111,6 +124,10 @@ class StandClockTest {
         assertThat(new InfrastructureConfig().clock(issuer("https://rozklad.vtc.vn.ua/auth"))).isNotInstanceOf(StandClock.class);
         assertThat(new InfrastructureConfig().clock(new MockEnvironment().withProperty("app.stand-time.at", "2026-11-20T10:00")))
                 .isInstanceOf(StandClock.class);
+    }
+
+    private static MockEnvironment lan(String issuer) {
+        return issuer(issuer).withProperty("app.lan-dev", "true");
     }
 
     private static MockEnvironment issuer(String issuer) {

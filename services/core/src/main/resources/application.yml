@@ -114,6 +114,9 @@ app:
   stand-time:
     at: ${ROZKLAD_STAND_TIME:}
     anchor: ${ROZKLAD_STAND_TIME_ANCHOR:}
+  # dev-стенд для телефонів у локальній мережі (scripts/dev-stack.sh up --lan): https-видавець на приватній
+  # IPv4-адресі не вважається production, тож час стенду дозволений
+  lan-dev: ${ROZKLAD_LAN_DEV:false}
 
 management:
   endpoints:

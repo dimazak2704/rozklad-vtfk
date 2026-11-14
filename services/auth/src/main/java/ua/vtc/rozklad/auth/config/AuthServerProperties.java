@@ -23,6 +23,8 @@ import org.springframework.validation.annotation.Validated;
  * @param webOrigins origins of the SPA; each gets its callback, silent-renew and post-logout URIs
  * @param corsOrigins origins allowed to call the protocol endpoints from a browser
  * @param cliEnabled whether the public client {@code rozklad-cli} (scripts, e2e) exists
+ * @param lanDev {@code ROZKLAD_LAN_DEV}: the development stand opened to phones on the local network
+ *     ({@link #lanDevelopment()})
  */
 @Validated
 @ConfigurationProperties("app.auth")
@@ -39,11 +41,48 @@ public record AuthServerProperties(
         @Valid @NotNull Lockout lockout,
         @Valid @NotNull Password password,
         @NotNull Bootstrap bootstrap,
-        @NotNull DemoSeed demoSeed) {
+        @NotNull DemoSeed demoSeed,
+        boolean lanDev) {
 
-    /** True for an {@code https} issuer: production rules apply (startup guards, no dev shortcuts). */
+    /**
+     * True for an {@code https} issuer: production rules apply (startup guards, no dev shortcuts). The one
+     * exception is the development LAN mode, {@link #lanDevelopment()}.
+     */
     public boolean secure() {
+        return https() && !lanDevelopment();
+    }
+
+    /**
+     * The development stand opened to phones on the local network ({@code scripts/dev-stack.sh up --lan}): the
+     * switch {@code ROZKLAD_LAN_DEV} is on and the issuer is https on a private IPv4 address (10/8, 172.16/12,
+     * 192.168/16). Phones need https for PKCE, and a private address cannot get a public certificate, so this is
+     * never a production server. A domain or a public address never counts, whatever the switch says: ProdGuard
+     * refuses that combination.
+     */
+    public boolean lanDevelopment() {
+        return lanDev && https() && isPrivateIpv4(issuer.getHost());
+    }
+
+    private boolean https() {
         return "https".equalsIgnoreCase(issuer.getScheme());
+    }
+
+    /** A literal private IPv4 address; a name (even {@code 192.168.1.1.example.com}) never is. */
+    static boolean isPrivateIpv4(String host) {
+        if (host == null || !host.matches("\\d{1,3}(\\.\\d{1,3}){3}")) {
+            return false;
+        }
+        int[] octets = new int[4];
+        String[] parts = host.split("\\.");
+        for (int i = 0; i < 4; i++) {
+            octets[i] = Integer.parseInt(parts[i]);
+            if (octets[i] > 255) {
+                return false;
+            }
+        }
+        return octets[0] == 10
+                || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                || (octets[0] == 192 && octets[1] == 168);
     }
 
     /** The issuer without a trailing slash, as it appears in {@code iss}. */

@@ -73,6 +73,9 @@ app:
     cli-enabled: ${AUTH_CLI_ENABLED:false}
     # з https-видавцем rozklad-cli потребує ще й явної згоди (ProdGuard), лише для разового запуску
     cli-allow-prod: ${AUTH_CLI_ALLOW_PROD:false}
+    # dev-стенд для телефонів у локальній мережі (scripts/dev-stack.sh up --lan): https-видавець на приватній
+    # IPv4-адресі лишається розробкою; з доменом чи публічною адресою ProdGuard відмовить стартувати
+    lan-dev: ${ROZKLAD_LAN_DEV:false}
     tokens:
       web-access: ${AUTH_ACCESS_TOKEN_TTL:15m}
       cli-access: 15m

@@ -57,6 +57,10 @@ public class ProdGuard implements InitializingBean {
             throw new IllegalStateException("auth refuses to start with an https issuer:\n - "
                     + String.join("\n - ", violations));
         }
+        if (properties.lanDevelopment()) {
+            log.warn("development LAN mode (ROZKLAD_LAN_DEV): the https issuer {} is on a private address, so the "
+                    + "production guards are off and the development accounts stay", properties.issuerValue());
+        }
         if (properties.secure() && properties.cliEnabled()) {
             log.warn("the development client rozklad-cli is registered on a production issuer (AUTH_CLI_ENABLED and "
                     + "AUTH_CLI_ALLOW_PROD are on): switch both off after the one-off run");
@@ -79,6 +83,10 @@ public class ProdGuard implements InitializingBean {
         List<String> violations = new ArrayList<>();
         if (!properties.secure()) {
             return violations;
+        }
+        if (properties.lanDev()) {
+            violations.add("ROZKLAD_LAN_DEV is on, but the issuer is not on a private IPv4 address (the LAN mode is "
+                    + "for the development stand only)");
         }
         if (!StringUtils.hasText(properties.signingKey().file())) {
             violations.add("AUTH_SIGNING_KEY_FILE is not set (an in-memory key is for development only)");

@@ -69,7 +69,8 @@ public final class StandClock extends Clock {
 
     /**
      * Production, as auth's ProdGuard sees it: an https issuer that is not local, or the Spring
-     * profile {@code prod}.
+     * profile {@code prod}. The development LAN mode ({@code app.lan-dev}, {@code ROZKLAD_LAN_DEV}) is not
+     * production when the issuer is on a private IPv4 address: the stand opened to phones keeps its stand time.
      */
     public static boolean isProduction(Environment environment) {
         if (environment.matchesProfiles("prod")) {
@@ -81,9 +82,30 @@ public final class StandClock extends Clock {
         }
         URI uri = URI.create(issuer.strip());
         String host = uri.getHost();
+        if (environment.getProperty("app.lan-dev", Boolean.class, false) && isPrivateIpv4(host)) {
+            return false;
+        }
         return "https".equalsIgnoreCase(uri.getScheme()) && host != null
                 && !host.equalsIgnoreCase("localhost") && !host.endsWith(".localhost")
                 && !host.startsWith("127.") && !host.equals("[::1]");
+    }
+
+    /** A literal private IPv4 address (10/8, 172.16/12, 192.168/16); a name never is. */
+    static boolean isPrivateIpv4(String host) {
+        if (host == null || !host.matches("\\d{1,3}(\\.\\d{1,3}){3}")) {
+            return false;
+        }
+        int[] octets = new int[4];
+        String[] parts = host.split("\\.");
+        for (int i = 0; i < 4; i++) {
+            octets[i] = Integer.parseInt(parts[i]);
+            if (octets[i] > 255) {
+                return false;
+            }
+        }
+        return octets[0] == 10
+                || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                || (octets[0] == 192 && octets[1] == 168);
     }
 
     /** The real clock behind a stand clock; any other clock (a test's fixed clock) as it is. */
