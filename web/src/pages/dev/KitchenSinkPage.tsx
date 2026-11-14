@@ -511,7 +511,7 @@ export default function KitchenSinkPage() {
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Годин на тиждень">
-                <NumberInput value={hours} onValueChange={setHours} min={0} max={10} step={1} unit="год" />
+                <NumberInput value={hours} onValueChange={setHours} min={0} max={10} step={1} />
               </Field>
               <Field label="Режим погодження">
                 <Select

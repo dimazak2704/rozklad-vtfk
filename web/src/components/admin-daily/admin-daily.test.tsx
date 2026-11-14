@@ -367,6 +367,14 @@ describe('налаштування', () => {
     expect(screen.getByText('Лише для режиму «Чекати згоди викладача».')).toBeInTheDocument();
   });
 
+  it('одиниці степперів стоять у підписі поля, а не поруч із числом', () => {
+    renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);
+    const timeout = screen.getByRole('spinbutton', { name: /^Скільки чекати відповіді, хв/ });
+    expect(timeout).toHaveValue(String(settings.confirmTimeoutMinutes));
+    expect(timeout.parentElement).not.toHaveTextContent(/хв/);
+    expect(screen.getByRole('spinbutton', { name: /^Годин за пару/ }).parentElement).not.toHaveTextContent(/год/);
+  });
+
   it('помилки сервера стають помилками полів', async () => {
     server.use(
       http.put(apiPath('/admin/settings'), () =>

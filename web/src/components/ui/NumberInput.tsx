@@ -14,8 +14,6 @@ export interface NumberInputProps
   /** Скільки знаків після коми дозволено (0 — лише цілі). */
   precision?: number;
   size?: ControlSize;
-  /** Підпис одиниць праворуч від числа: «год», «хв». */
-  unit?: string;
   /** Підписи кнопок для читачів екрана. */
   decrementLabel?: string;
   incrementLabel?: string;
@@ -38,7 +36,11 @@ function formatNumber(value: number | null, precision: number): string {
   return precision > 0 ? String(roundTo(value, precision)).replace('.', ',') : String(Math.round(value));
 }
 
-/** Число з кнопками −/+ і стрілками. Кома й крапка як роздільник; межі застосовуються при виході з поля. */
+/**
+ * Число з кнопками −/+ і стрілками. Кома й крапка як роздільник; межі застосовуються при виході з поля.
+ * Одиниці («хв», «год») пишіть у підписі поля («Скільки чекати відповіді, хв»), а не всередині:
+ * число стоїть посередині між − і +.
+ */
 export function NumberInput({
   ref,
   value,
@@ -48,7 +50,6 @@ export function NumberInput({
   step = 1,
   precision = 0,
   size = 'md',
-  unit,
   decrementLabel = 'Зменшити',
   incrementLabel = 'Збільшити',
   className,
@@ -116,9 +117,7 @@ export function NumberInput({
       >
         <Minus aria-hidden="true" className="size-3.5" />
       </button>
-      {/* число й одиниця стоять разом праворуч: «4 год», а не «4 … год» */}
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-1 pe-3">
-        <input
+      <input
         ref={ref}
         type="text"
         inputMode={precision > 0 ? 'decimal' : 'numeric'}
@@ -136,14 +135,8 @@ export function NumberInput({
           onBlur?.(event);
         }}
         onKeyDown={handleKeyDown}
-        className="w-full min-w-0 bg-transparent text-end figures outline-none disabled:cursor-not-allowed"
+        className="w-full min-w-0 flex-1 bg-transparent px-2 text-center figures outline-none disabled:cursor-not-allowed"
       />
-      {unit ? (
-        <span className="shrink-0 text-muted" aria-hidden="true">
-          {unit}
-        </span>
-      ) : null}
-      </div>
       <button
         type="button"
         tabIndex={-1}

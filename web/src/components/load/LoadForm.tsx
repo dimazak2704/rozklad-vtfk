@@ -229,19 +229,19 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
               control={form.control}
               name="hoursPerWeek"
               render={({ field }) => (
-                <NumberInput value={field.value} onValueChange={(value) => field.onChange(value ?? 0)} min={0} max={40} step={0.5} precision={1} unit="год" />
+                <NumberInput value={field.value} onValueChange={(value) => field.onChange(value ?? 0)} min={0} max={40} step={0.5} precision={1} />
               )}
             />
           </Field>
           <Field
-            label="За семестр"
+            label="За семестр, год"
             error={errors.plannedHours?.message}
             hint={plannedDefault !== null ? `Порожньо — ${formatHours(hoursPerWeek)} × ${semester.teachingWeeks} = ${plannedDefault} год` : undefined}
           >
             <Controller
               control={form.control}
               name="plannedHours"
-              render={({ field }) => <NumberInput value={field.value} onValueChange={field.onChange} min={0} max={2000} unit="год" />}
+              render={({ field }) => <NumberInput value={field.value} onValueChange={field.onChange} min={0} max={2000} />}
             />
           </Field>
           {/* як години лягають у тиждень — одним реченням під полями, без схеми з квадратиків */}

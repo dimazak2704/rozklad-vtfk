@@ -62,6 +62,15 @@ describe('NumberInput', () => {
     await user.tab();
     expect(input).toHaveValue('0');
   });
+
+  it('між − і + лише число, без одиниць', () => {
+    renderWithProviders(<Harness />);
+    const input = screen.getByRole('spinbutton', { name: 'Годин' });
+    const control = input.parentElement!;
+    expect(control.children).toHaveLength(3);
+    expect(control.children[1]).toBe(input);
+    expect(control).toHaveTextContent(/^$/);
+  });
 });
 
 interface Row {

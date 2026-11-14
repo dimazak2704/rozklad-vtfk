@@ -160,7 +160,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
           )}
         />
         <Field
-          label="Скільки чекати відповіді"
+          label="Скільки чекати відповіді, хв"
           hint={
             mode !== 'CONFIRM'
               ? 'Лише для режиму «Чекати згоди викладача».'
@@ -180,8 +180,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
                 min={LIMITS.confirmTimeoutMinutes.min}
                 max={LIMITS.confirmTimeoutMinutes.max}
                 step={5}
-                unit="хв"
-                className="w-40"
+                className="w-36"
                 disabled={mode !== 'CONFIRM'}
               />
             )}
@@ -250,7 +249,6 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
                 onBlur={field.onBlur}
                 min={LIMITS.hoursPerPair.min}
                 max={LIMITS.hoursPerPair.max}
-                unit="год"
                 className="w-36"
               />
             )}

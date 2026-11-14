@@ -108,7 +108,7 @@ export function RoomFormDialog({ room, open, onOpenChange }: RoomFormDialogProps
             />
           </Field>
           <Field
-            label="Місткість"
+            label="Місткість, місць"
             error={errors.capacity?.message}
             hint="Порожньо — невідомо, тоді місткість не перевіряють"
           >
@@ -116,7 +116,7 @@ export function RoomFormDialog({ room, open, onOpenChange }: RoomFormDialogProps
               control={form.control}
               name="capacity"
               render={({ field }) => (
-                <NumberInput value={field.value} onValueChange={field.onChange} min={0} max={1000} unit="місць" />
+                <NumberInput value={field.value} onValueChange={field.onChange} min={0} max={1000} />
               )}
             />
           </Field>
