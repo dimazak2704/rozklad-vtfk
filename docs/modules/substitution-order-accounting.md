@@ -48,7 +48,7 @@ accounting  ← substitution ← order
 | `GET /api/admin/orders`, `GET /draft?date=`, `GET /{id}`, `PUT /{id}/notes`, `POST /{id}/publish` | ADMIN | orders |
 | `GET /api/admin/dashboard?date` | ADMIN | daily figures and alerts |
 | `GET /api/admin/accounting?semesterId&groupId`, `GET /api/admin/accounting/teachers?month=2026-10` | ADMIN | accounting |
-| `GET /api/public/changes?date` | anyone | published changes of a date; a visitor's date before `publicHistoryFrom` (today − `changesHistoryDays`) → 404 `history-not-public`, staff tokens see every date; `Vary: Authorization` |
+| `GET /api/public/changes?date` | anyone | published changes of a date; a visitor's date before `publicHistoryFrom` (today − `changesHistoryDays`) → 404 `history-not-public`, staff tokens see every date; `Vary: Authorization`; staff answers `Cache-Control: no-cache, private` (as schedules), a visitor's sets none of its own (Spring Security's `no-cache, no-store, max-age=0, must-revalidate`) |
 | `GET /api/me/changes?status`, `POST /api/me/changes/{id}/confirm\|decline` | TEACHER/ADMIN with a linked teacher | «мої заміни» |
 | `GET/POST /api/me/absences`, `DELETE /api/me/absences/{id}` | same | own absences (cancel only before they start); a report starts today to 90 days ahead (422 `ABSENCE_IN_PAST` / `ABSENCE_TOO_FAR`) and one teacher reports at most 10 absences in 24 hours, cancelled ones included (422 `ABSENCE_LIMIT`); a teacher marked inactive reports nothing himself (422 `TEACHER_INACTIVE`); the bot (`POST /api/internal/absences`) has the same limits, the dispatcher none |
 | `GET/PUT /api/me/preferences?semesterId` | same | unwanted/unavailable grid (PUT replaces it) |

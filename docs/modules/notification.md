@@ -39,7 +39,7 @@ from `V1`).
 | `DELETE /api/notify/bindings/me` | TEACHER, ADMIN with a linked teacher | 204 (also when nothing is bound): the caller unlinks his own TEACHER chat, for example an account he does not recognise; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status&page&size` | ADMIN | page `{items,page,size,total}` of `{id, orderId, chatId (masked), chatTitle, bindingType, purpose, kind, status QUEUED/RETRYING/SENT/FAILED, attempts, error, createdAt, sentAt, nextAttemptAt}`; newest first; size ≤ 200 |
 | `POST /api/notify/test` | ADMIN | sends «Тест: бот Розклад ВТФК підключено ✅» to `TELEGRAM_OWNER_CHAT_ID` right away and returns the delivery (200); 503 bot disabled, 422 no owner chat, 502 Telegram refused |
-| `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` | public | only orders received in `order.published` (PUBLISHED); 404 otherwise; a visitor's order dated before core's `publicHistoryFrom` → 404 `history-not-public` (`PublicHistoryGate`: meta cached 30 s, orders of today and later need none, core unreachable → 503), an ADMIN or TEACHER token opens any; `ETag`, `Vary: Authorization`, `Cache-Control: public, max-age=300` (staff: `private`); DOCX as attachment, PDF/PNG inline; ASCII file names `rozporiadzhennia-35-2026-10-19.pdf`, `dopovnennia-36-…` |
+| `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` | public | only orders received in `order.published` (PUBLISHED); 404 otherwise; a visitor's order dated before core's `publicHistoryFrom` → 404 `history-not-public` (`PublicHistoryGate`: meta cached 30 s, orders of today and later need none, core unreachable → 503), an ADMIN or TEACHER token opens any (service tokens are visitors here; an invalid or expired token → 401); `ETag`, `Vary: Authorization`, `Cache-Control: public, max-age=300` (staff: `private`); DOCX as attachment, PDF/PNG inline; ASCII file names `rozporiadzhennia-35-2026-10-19.pdf`, `dopovnennia-36-…` |
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` | ADMIN | draft preview, `no-store`; 400 `errors[format]` |
 | `GET /api/notify/events/dead-letters` | ADMIN | `{queue, count}`: events in `notification.q.events.dlq`; 503 RabbitMQ unreachable (§5) |
 | `POST /api/notify/events/dead-letters/replay` | ADMIN | `{replayed}`: moves the messages now in the DLQ back to the consumer, each once (§5) |
@@ -63,8 +63,12 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   forged callback) shows «🗄 Цей день уже в архіві. Старіші заміни бачить лише персонал коледжу.» with a button to
   the first open day; staff chats (`ChatBindings.isStaffChat`: the owner chat, a teacher's own chat, admin chats) go
   further back, and the bot asks core for those days with its service token (`CoreClient.archiveSchedule`, needs
-  auth for the token). The current week and later need neither the meta nor the bindings. An older core without
-  `publicHistoryFrom` limits nothing. `HistoryWindowIT`.
+  auth for the token). A card of the current week and later needs neither the meta nor the bindings; only the ◀️ on
+  the current week's Monday reads them, and with core unreachable that ◀️ is shown (pressing it checks again), so a
+  cached card still renders. When core refuses a day the bot's window let through (`HISTORY_NOT_PUBLIC`: the window
+  moved within the 30 s meta cache, at midnight or after an admin lowered the days), the cached meta is dropped: a
+  staff chat gets the day with the service token, another chat the archive card with the button to the first open
+  day. An older core without `publicHistoryFrom` limits nothing. `HistoryWindowIT`.
   Teachers in schedule cards (title, lesson lines, the replaced teacher, inline results, morning digest) read
   «Прізвище І. Б.» (`text.TeacherNames.initials`: «Кренцін М.Д.» → «Кренцін М. Д.», «ХарченкоГ.» → «Харченко Г.»).
   A short form without (or with fewer) initials is completed by id from the cached `/api/public/teachers`
@@ -279,7 +283,7 @@ this module.
 
 | Event | Effect |
 |---|---|
-| `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit |
+| `order.published` | stores the order (only PUBLISHED); each bound group chat of `affectedGroups` gets **only its rows** (compact HTML; a MERGE_SUBGROUPS row reads «👥 2 пара: обидві підгрупи разом — Ін.мова · Можаровська, ауд. 12 / замість …») + the order PNG; each affected teacher with Telegram gets his rows (matched by name: same surname, compatible initials — «Поліщук Л.» ≠ «Поліщук М.»); admin chats get a summary (counts, who has no Telegram) + PNG; schedules cache invalidated; PNG pre-rendered after commit. Group chats are visitors (14.11.2026): an order dated before core's `publicHistoryFrom` (back-filled or amended later; the documents' day rule, `PublicHistoryGate`) skips them, teachers and admin chats still get theirs and the summary says «ℹ️ Чатам груп не надсилалося…»; the window is read before the event's transaction (meta cached 30 s, orders of today and later need none); core unreachable → group chats get it as before (WARN). `OrderDistributionIT` |
 | `substitution.confirmation-requested` | request to the teacher's chat (or reminder; «✏️ Заміну змінено» when the details he sees changed); no Telegram → the request is marked, admins are told later once per teacher and date if it is still pending (§3); reassigned change → old message «неактуальний» |
 | `substitution.details-changed` | a CONFIRM request already confirmed got a new room: info-only «✏️ Заміну змінено» to the teacher's chat, no buttons, no deadline; the stored request takes the new details, status and answer stay; a copy still pending here is confirmed (§3) |
 | `substitution.status-changed` | final states (CONFIRMED/DECLINED/CANCELLED/APPLIED) edit all request messages (an unanswered NOTIFY notice of an APPLIED change keeps its buttons); a late event that would move the copy back is ignored (§3); DECLINED → admin chats «Оберіть інший варіант на сторінці змін.» |
@@ -411,6 +415,7 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 | `GET /api/notify/deliveries` | paged `{items,page,size,total}`; item `{id, orderId, chatId, chatTitle, bindingType, purpose, kind, status, attempts, error, createdAt, sentAt, nextAttemptAt}`; statuses `QUEUED/RETRYING/SENT/FAILED` | The contract only says «delivery log»; matches the SPA's inferred `DeliveryDto` plus extras. |
 | `POST /api/notify/test` | 200 with the delivery; 503/422/502 | Synchronous: the admin wants to see the result. |
 | `GET /api/documents/orders/{id}.{fmt}` | only orders received via `order.published`; ETag + 5 min cache; unknown format → 404; visitors only within core's public history window (14.11.2026, see CHANGELOG-CONTRACTS) | Drafts are never public; core offers no public order payload. |
+| `order.published` to group chats (14.11.2026) | an order dated before core's `publicHistoryFrom` skips group chats (teacher and admin chats keep theirs); core unreachable → sent as before | Group chats are visitors (owner rule): a push must not show what the same chat cannot open in the bot or on the site. |
 | `POST …/render` | `format` default `pdf`; invalid → 400 `errors[format]` | — |
 | Webhook | `POST /api/notify/telegram/webhook` 404 unless WEBHOOK mode | Reserved path from the foundation. |
 | `GET …/{id}.png` | cropped to the content, not an A4 page (08.11.2026) | Readable on a phone; PDF/DOCX stay A4. |

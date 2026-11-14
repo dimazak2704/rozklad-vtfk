@@ -54,11 +54,17 @@ deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELO
 
 **Public history window** (owner decision 14.11.2026). Visitors see substitutions and orders from
 `publicHistoryFrom` (meta) on, every future date included; schedules and ICS, which carry substitutions, by whole
-weeks from the Monday of that date's week. A request with a valid token of ADMIN or TEACHER (and the bot's
-SERVICE_NOTIFICATION, which limits its other chats itself) has no limit. An invalid or expired token is 401 as on
+weeks from the Monday of that date's week. A request with a valid token of ADMIN or TEACHER has no limit; so has
+the bot's SERVICE_NOTIFICATION on changes, schedules and ICS (the bot limits its other chats itself). Order
+documents are the exception: there only ADMIN and TEACHER are staff, and every service token is a visitor (the bot
+renders its pictures internally and never fetches them over this endpoint). An invalid or expired token is 401 as on
 every path. Refusal: 404 ProblemDetail `{type: "urn:rozklad:problem:history-not-public", title: "Архів недоступний",
 detail, code: "HISTORY_NOT_PUBLIC", publicHistoryFrom}`. Changes, schedules, ICS and order documents answer with
-`Vary: Authorization`; schedule, ICS and document answers to staff are `private`.
+`Vary: Authorization`; answers to staff are `private` (changes and schedules `no-cache, private`; a visitor's changes
+answer sets no Cache-Control of its own, so Spring Security's `no-store` default applies). The Telegram bot applies the
+window to its chats that are not staff's, and bound group chats are visitors: an `order.published` dated before
+`publicHistoryFrom` (back-filled or amended later; the documents' day rule) goes to teacher and admin chats only
+(core unreachable: as before).
 
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
