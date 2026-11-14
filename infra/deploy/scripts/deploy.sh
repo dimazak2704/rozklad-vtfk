@@ -214,6 +214,12 @@ smoke_checks() {
   else
     warn "https://$domain/auth/internal answered ${status:-nothing}, expected 404 (Caddyfile, auth_routes)"
   fi
+  status=$(probe "$domain" /api/internal/catalog/snapshot -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
+  if [[ $status == 404 ]]; then
+    ok "API          /api/internal is closed (404)"
+  else
+    warn "https://$domain/api/internal answered ${status:-nothing}, expected 404 (Caddyfile, api_routes)"
+  fi
 
   if probe "$domain" / -o /dev/null 2>/dev/null; then
     ok "TLS          trusted certificate for $domain"

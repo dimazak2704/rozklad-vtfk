@@ -17,6 +17,7 @@ Internet ──► :80 / :443  Caddy (TLS, HTTP/2 + HTTP/3, security headers, co
               ├─ https://DOMAIN/            → web:80        nginx + Vite build, SPA fallback
               ├─ https://DOMAIN/api/*       → gateway:8080  → core, scheduler, importer, notification
               └─ https://DOMAIN/auth/*      → auth:8085     sign-in page, OIDC, keys (/auth/internal/* → 404)
+              (/api/internal/* and /api/import/ai/parse-absence → 404: service-to-service only)
 
 Internal network only (no published ports): postgres, rabbitmq, redis, the services, auth's actuator.
 ```
@@ -196,8 +197,8 @@ What it does:
    requests the certificate.
 5. `caddy reload` (a changed Caddyfile takes effect).
 6. Smoke checks through Caddy (SPA, API, per-client rate limit with forged `Forwarded` headers, the
-   issuer `https://DOMAIN/auth`, the sign-in redirect on this origin, `/auth/internal` closed,
-   certificate) and a summary.
+   issuer `https://DOMAIN/auth`, the sign-in redirect on this origin, `/auth/internal` and
+   `/api/internal` closed, certificate) and a summary.
    In pull mode it then removes the images of older deploys, keeping the current and the previous
    one.
 
