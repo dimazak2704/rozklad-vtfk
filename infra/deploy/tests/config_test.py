@@ -71,14 +71,39 @@ class PhoneStand(unittest.TestCase):
     """dev-stack.sh up --lan: phones reach the stand through Caddy's https and nothing else."""
 
     LAN_IP = "192.168.31.112"
+    LAN_KEY = "test-gate-key0"
 
     @classmethod
     def setUpClass(cls):
-        cls.config = render(DEV + ["infra/docker-compose.lan.yml"], ROZKLAD_LAN_IP=cls.LAN_IP)
+        cls.config = render(DEV + ["infra/docker-compose.lan.yml"], ROZKLAD_LAN_IP=cls.LAN_IP,
+                            ROZKLAD_LAN_KEY=cls.LAN_KEY)
 
     def test_only_the_https_edge_is_on_the_lan(self):
+        # on the LAN address only: on another network the address is gone and the edge cannot start
         exposed = {name: p for name, p in published(self.config).items() if any(h != "127.0.0.1" for h, _, _ in p)}
-        self.assertEqual({"lan-edge": [("0.0.0.0", "443", 443)]}, exposed)
+        self.assertEqual({"lan-edge": [(self.LAN_IP, "443", 443)]}, exposed)
+
+    def test_the_edge_never_comes_back_by_itself(self):
+        # after a reboot (maybe on a college Wi-Fi) the stand stays closed until the next `up --lan`
+        self.assertEqual("no", self.config["services"]["lan-edge"]["restart"])
+
+    def test_the_edge_needs_the_gate_key(self):
+        self.assertEqual(self.LAN_KEY, self.config["services"]["lan-edge"]["environment"]["LAN_KEY"])
+        with self.assertRaises(subprocess.CalledProcessError):
+            render(DEV + ["infra/docker-compose.lan.yml"], ROZKLAD_LAN_IP=self.LAN_IP)
+
+    def test_the_gate_stands_before_the_proxy(self):
+        # Docker Desktop lets its ports through Windows Firewall on every profile, and the demo passwords and dev
+        # client secrets are public: without the key cookie Caddy answers 403 to everything but static SPA files
+        caddyfile = (ROOT / "infra/dev/lan/Caddyfile").read_text(encoding="utf-8")
+        code = "\n".join(line for line in caddyfile.splitlines() if not line.lstrip().startswith("#"))
+        self.assertIn("not header Cookie *rozklad_lan={$LAN_KEY}*", code)
+        self.assertRegex(code, r"@unlock query lan_key=\{\$LAN_KEY\}")
+        self.assertRegex(code, r"Set-Cookie \"rozklad_lan=\{\$LAN_KEY\};[^\"]*Secure; HttpOnly")
+        locked = code[code.index("@locked {"):code.index("handle @locked")]
+        self.assertNotRegex(locked, r"/auth|/api|/login|index\.html")
+        self.assertLess(code.index("handle @locked"), code.index("reverse_proxy web:80"))
+        self.assertEqual(1, code.count("reverse_proxy"))
 
     def test_every_token_issuer_and_validator_uses_the_lan_address(self):
         for name in ("auth", "core", "scheduler", "importer", "notification"):

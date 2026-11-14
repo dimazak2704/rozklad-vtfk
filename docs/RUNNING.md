@@ -22,7 +22,7 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 Every port is published on `127.0.0.1` only. The stand runs the real bot token from `.env` with public
 development credentials (`rozklad`/`rozklad`, `postgres`/`postgres`, Redis without a password), so on a
 shared network (college or café Wi-Fi) nobody else may reach it. To use the stand from a phone, sign-in
-included, start it with `--lan` (below, «Phone on the LAN»): only Caddy's https port 443 is opened. For a demo
+included, start it with `--lan` (below, «Phone on the LAN»): only Caddy's https port 443 is opened, behind a key. For a demo
 away from home prefer the deployed site, or at least `--no-telegram`.
 
 Heaps are set with `JAVA_TOOL_OPTIONS=-Xmx…` (wins over `-XX:MaxRAMPercentage=75` of the images) and
@@ -76,7 +76,7 @@ session with it `reset-data --yes` + `seed` gives a clean demo again. It is for 
 with an `https` issuer the services refuse to start. Details: `docs/ARCHITECTURE.md` §7.1.
 
 **Phone on the LAN.** `up --lan` (or `--lan=192.168.1.20` when detection picks the wrong adapter) adds
-`infra/docker-compose.lan.yml`: Caddy (`lan-edge`) listens on `0.0.0.0:443` with a certificate from its own
+`infra/docker-compose.lan.yml`: Caddy (`lan-edge`) listens on `<IP>:443` with a certificate from its own
 local CA and passes everything to nginx web, the way Caddy does in production. Why https: sign-in uses PKCE,
 which needs `crypto.subtle`, and browsers give it only to secure contexts (https or localhost), so
 `http://192.168.x.x:8088` can never sign in. The issuer becomes `https://<IP>/auth` for auth and every service,
@@ -84,18 +84,31 @@ so while the mode is on, sign in at `https://<IP>` only, on the laptop too; `htt
 the site. `ROZKLAD_LAN_DEV=true` keeps an https issuer on a private IPv4 address a development stand (demo
 accounts, stand time); with a domain or a public address auth refuses to start. Google sign-in is off in this
 mode (Google does not accept private addresses as redirect URIs): use the demo passwords. `up` without `--lan`
-returns to `http://localhost:8088` and stops `lan-edge`.
+returns to `http://localhost:8088` and stops `lan-edge`. The edge never restarts by itself: after a reboot it
+stays down until the next `up --lan` (and on another network its address is gone, so it cannot start).
+
+The key gate. The demo passwords (`infra/dev/demo-users.env`) and the dev client secrets are public in this
+repository, and Docker Desktop lets its ports through Windows Firewall on every network profile (its own rules
+for `com.docker.backend`), so a firewall rule limited to Private networks protects nothing. What keeps other
+devices on the same Wi-Fi out is a key: without the cookie `rozklad_lan`, Caddy answers 403 with a small form
+to every page, sign-in and the API, and serves only the static files of the SPA (the web manifest and its
+icons are fetched without cookies). A device gets in by opening the unlock link once (`status` prints it) or
+by typing the key into the form; the cookie lasts 90 days. The key is made once and kept in
+`infra/dev/certs/lan-key` (gitignored); delete the file and run `up --lan` again to lock every device out.
+An installed iPhone web app keeps its own cookies, so it asks for the key once more. `up --lan` warns when
+Windows marks the network as Public; the gate holds there too, but prefer a home network or the deployed site.
 
 Once per PC and phone:
-1. Windows Firewall, in an elevated PowerShell: `New-NetFirewallRule -DisplayName "Rozklad LAN stand (443)"
-   -Direction Inbound -Protocol TCP -LocalPort 443 -Profile Private -Action Allow`. The Wi-Fi must have the
-   Private profile; on a public network nothing gets in, which is the point.
+1. Windows Firewall: Docker Desktop's own rules already let port 443 in. Only if the phone cannot connect,
+   add a rule in an elevated PowerShell: `New-NetFirewallRule -DisplayName "Rozklad LAN stand (443)"
+   -Direction Inbound -Protocol TCP -LocalPort 443 -Profile Private -Action Allow`.
 2. `up --lan` copies the root of Caddy's CA to `infra/dev/certs/rozklad-dev-ca.crt` (gitignored; the CA itself
    stays in the `caddy_lan_data` volume, so the phone trusts it once). Send the file to the phone.
 3. iPhone: open the file, Settings → «Profile Downloaded» → Install; then Settings → General → About →
    Certificate Trust Settings → turn the root on. Android: Settings → Security → Encryption & credentials →
    Install a certificate → CA certificate. Without this the browser warns, and the PWA cannot be installed.
-4. Open `https://<IP>` (printed by `up` and `status`).
+4. Open the unlock link `https://<IP>/?lan_key=<key>` printed by `status` (or open `https://<IP>` and type
+   the key into the form).
 
 `up` also creates the database `auth` on an older Postgres volume and checks, through nginx, that discovery
 names the issuer `http://localhost:8088/auth` and that an authorize request without a session goes to

@@ -1,6 +1,15 @@
 # Caddy of the phone stand (infra/docker-compose.lan.yml, scripts/dev-stack.sh up --lan): https on the laptop's
 # LAN address with Caddy's own local CA. Its root lives in the caddy_lan_data volume, so a phone trusts it once;
 # dev-stack.sh copies it to infra/dev/certs/rozklad-dev-ca.crt (gitignored).
+#
+# The key gate. The dev stand has public demo passwords (infra/dev/demo-users.env is in the public repository)
+# and public dev client secrets, and Docker Desktop lets its ports through Windows Firewall on every network
+# profile. So every other device on the same Wi-Fi could sign in as the demo admin. Here a device gets in only
+# after opening the unlock link once (https://<IP>/?lan_key=<key>, printed by `dev-stack.sh status`) or typing
+# the key into the form below: Caddy then sets a cookie for 90 days. Without it, sign-in, the API and every page
+# answer 403 with the form; only the static files of the SPA (the same in the public repository) stay open, because
+# browsers fetch the web manifest and its icons without cookies. The key lives in infra/dev/certs/lan-key
+# (gitignored) and comes in as LAN_KEY; compose refuses to start lan-edge without it.
 {
 	local_certs
 	skip_install_trust
@@ -12,7 +21,59 @@
 
 https://{$LAN_IP} {
 	tls internal
-	# like Caddy in production: nginx web gets everything (the SPA, /api to the gateway, /auth/* to auth with its
-	# per-client limit); Caddy sets X-Forwarded-For/Proto/Host, and nginx trusts them from the compose ip_range
-	reverse_proxy web:80
+
+	# the unlock link or the form: remember the key in a cookie and reload the same path without the key in it
+	@unlock query lan_key={$LAN_KEY}
+	handle @unlock {
+		header Set-Cookie "rozklad_lan={$LAN_KEY}; Path=/; Max-Age=7776000; Secure; HttpOnly; SameSite=Lax"
+		header Cache-Control "no-store"
+		redir {path} 303
+	}
+
+	@locked {
+		not header Cookie *rozklad_lan={$LAN_KEY}*
+		not path /assets/* /brand/* /manifest.webmanifest /sw.js /registerSW.js /workbox-* /favicon.svg /apple-touch-icon.png /pwa-*
+	}
+	handle @locked {
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store"
+		respond 403 {
+			body <<HTML
+				<!doctype html>
+				<html lang="uk">
+				<head>
+				<meta charset="utf-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1">
+				<title>Розклад ВТФК — стенд розробки</title>
+				<style>
+				body { font: 17px/1.5 system-ui, sans-serif; margin: 0; padding: 32px 20px; color: #1b2430; background: #f6f8fb; }
+				main { max-width: 420px; margin: 0 auto; }
+				h1 { font-size: 22px; margin: 0 0 8px; }
+				p { margin: 0 0 20px; color: #4a5565; }
+				label { display: block; font-weight: 600; margin-bottom: 6px; }
+				input { box-sizing: border-box; width: 100%; font: inherit; padding: 12px; border: 1px solid #b8c2d0; border-radius: 10px; }
+				button { margin-top: 12px; width: 100%; font: inherit; font-weight: 600; padding: 12px; border: 0; border-radius: 10px; background: #0b66b0; color: #fff; }
+				</style>
+				</head>
+				<body>
+				<main>
+				<h1>Стенд розробки</h1>
+				<p>Цей стенд відкритий лише для пристроїв власника. Відкрийте посилання з ключем або введіть ключ: його показує <code>scripts/dev-stack.sh status</code> на ноутбуці.</p>
+				<form method="get">
+				<label for="lan_key">Ключ стенду</label>
+				<input id="lan_key" name="lan_key" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="xxxx-xxxx-xxxx" required>
+				<button type="submit">Відкрити</button>
+				</form>
+				</main>
+				</body>
+				</html>
+				HTML
+		}
+	}
+
+	handle {
+		# like Caddy in production: nginx web gets everything (the SPA, /api to the gateway, /auth/* to auth with its
+		# per-client limit); Caddy sets X-Forwarded-For/Proto/Host, and nginx trusts them from the compose ip_range
+		reverse_proxy web:80
+	}
 }

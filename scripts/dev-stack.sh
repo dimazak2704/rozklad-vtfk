@@ -117,6 +117,28 @@ is_private_ipv4() {
 }
 
 lan_ca=infra/dev/certs/rozklad-dev-ca.crt
+lan_key_file=infra/dev/certs/lan-key
+
+# The key of the phone stand's gate (infra/dev/lan/Caddyfile): made once, kept in a gitignored file, so a phone
+# unlocked once stays unlocked. Twelve letters and digits without look-alikes, in groups of four for typing.
+lan_key() {
+  local key=""
+  if [[ ! -s $lan_key_file ]]; then
+    mkdir -p "$(dirname "$lan_key_file")"
+    while ((${#key} < 12)); do
+      key+=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'abcdefghjkmnpqrstuvwxyz23456789')
+    done
+    printf '%s-%s-%s\n' "${key:0:4}" "${key:4:4}" "${key:8:4}" >"$lan_key_file"
+  fi
+  tr -d '\r\n' <"$lan_key_file"
+}
+
+# Windows' category of the network that holds the address (Private, Public, DomainAuthenticated); empty elsewhere.
+lan_network_category() {
+  command -v powershell.exe >/dev/null 2>&1 || return 0
+  powershell.exe -NoProfile -Command "(Get-NetConnectionProfile -InterfaceIndex (Get-NetIPAddress -IPAddress '$1' -ErrorAction SilentlyContinue).InterfaceIndex -ErrorAction SilentlyContinue).NetworkCategory" 2>/dev/null |
+    tr -d '\r' | head -1
+}
 
 # The root of Caddy's local CA, for phones to trust: Caddy creates it with the first certificate.
 export_lan_ca() {
@@ -135,20 +157,34 @@ export_lan_ca() {
 # The stand through Caddy the way a phone reaches it: the certificate verifies against the local CA, discovery
 # names the LAN issuer, and an authorize request without a session lands on /auth/login of the same origin.
 lan_smoke() {
-  local base="https://$1" issuer location
-  issuer=$(curl -fsS --cacert "$lan_ca" "$base/auth/.well-known/openid-configuration" |
+  local base="https://$1" key issuer location code cookie
+  key=$(lan_key)
+  for path in / /auth/login /api/public/meta; do
+    code=$(curl -sS --cacert "$lan_ca" -o /dev/null -w '%{http_code}' "$base$path")
+    if [[ $code != 403 ]]; then
+      echo "  lan smoke: $path without the key answered $code, expected 403 from the gate" >&2
+      return 1
+    fi
+  done
+  cookie=$(curl -sS --cacert "$lan_ca" -o /dev/null -D - "$base/?lan_key=$key" | tr -d '\r' |
+    sed -n 's/^[Ss]et-[Cc]ookie: \(rozklad_lan=[^;]*\).*/\1/p')
+  if [[ $cookie != "rozklad_lan=$key" ]]; then
+    echo "  lan smoke: the unlock link did not set the gate cookie" >&2
+    return 1
+  fi
+  issuer=$(curl -fsS --cacert "$lan_ca" -b "$cookie" "$base/auth/.well-known/openid-configuration" |
     sed -n 's/.*"issuer":"\([^"]*\)".*/\1/p')
   if [[ $issuer != "$base/auth" ]]; then
     echo "  lan smoke: discovery issuer is '$issuer', expected $base/auth" >&2
     return 1
   fi
-  location=$(curl -sS --cacert "$lan_ca" -o /dev/null -w '%{redirect_url}' -H 'Accept: text/html' \
+  location=$(curl -sS --cacert "$lan_ca" -b "$cookie" -o /dev/null -w '%{redirect_url}' -H 'Accept: text/html' \
     "$base/auth/oauth2/authorize?response_type=code&client_id=rozklad-web&scope=openid&state=smoke&redirect_uri=https%3A%2F%2F$1%2Flogin%2Fcallback&code_challenge=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU&code_challenge_method=S256")
   if [[ $location != "$base/auth/login" ]]; then
     echo "  lan smoke: authorize without a session redirects to '$location', expected $base/auth/login" >&2
     return 1
   fi
-  echo "  lan: certificate, discovery and sign-in redirect through Caddy are correct"
+  echo "  lan: the key gate holds; certificate, discovery and sign-in redirect through Caddy are correct"
 }
 
 # The Caddy of an earlier `up --lan`: stopped when the stack comes up or goes down without it.
@@ -190,6 +226,10 @@ cmd_up() {
   fi
   if ((lan)); then
     ((web)) || { echo "--lan needs the web container (Caddy passes everything to it)" >&2; exit 2; }
+    if ((google_mock)); then
+      echo "--lan turns Google sign-in off (Google refuses private addresses), so --google-mock has nothing to do" >&2
+      exit 2
+    fi
     [[ -n $lan_ip ]] || lan_ip=$(detect_lan_ip)
     if ! is_private_ipv4 "$lan_ip"; then
       echo "--lan needs this PC's private IPv4 address (10.x, 172.16-31.x, 192.168.x), got '$lan_ip';" \
@@ -197,6 +237,12 @@ cmd_up() {
       exit 2
     fi
     export ROZKLAD_LAN_IP=$lan_ip
+    ROZKLAD_LAN_KEY=$(lan_key)
+    export ROZKLAD_LAN_KEY
+    if [[ $(lan_network_category "$lan_ip") == Public ]]; then
+      echo "== warning: Windows marks this network as Public (a college or café Wi-Fi?). Docker Desktop still lets" \
+        "port 443 in; only devices with the key get past the gate, but prefer a home network or the deployed site." >&2
+    fi
   fi
   [[ $telegram == off ]] && compose_files+=(-f infra/docker-compose.no-telegram.yml)
   ((google_mock)) && compose_files+=(-f infra/docker-compose.google-mock.yml)
@@ -248,17 +294,18 @@ cmd_up() {
   fi
 }
 
-# The phone stand: the address, the CA a phone has to trust, and the one firewall rule it needs.
+# The phone stand: the address, the unlock link every device opens once, and the CA a phone has to trust.
 lan_status() {
-  local ip
+  local env ip key
   docker ps -q --filter name=rozklad-lan-edge-1 | grep -q . || return 0
-  ip=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' rozklad-lan-edge-1 | sed -n 's/^LAN_IP=//p')
+  env=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' rozklad-lan-edge-1)
+  ip=$(sed -n 's/^LAN_IP=//p' <<<"$env")
+  key=$(sed -n 's/^LAN_KEY=//p' <<<"$env")
   cat <<EOF
 
 PHONE STAND     https://$ip   (sign-in works only here; http://localhost:8088 shows the site without sign-in)
+Unlock link     https://$ip/?lan_key=$key   (open once on each device; the key is in $lan_key_file)
 Local CA        $lan_ca   (trust it once on the phone: docs/RUNNING.md «Phone on the LAN»)
-Firewall        once, in an elevated PowerShell: New-NetFirewallRule -DisplayName "Rozklad LAN stand (443)"
-                -Direction Inbound -Protocol TCP -LocalPort 443 -Profile Private -Action Allow
 EOF
 }
 

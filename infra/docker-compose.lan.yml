@@ -6,7 +6,9 @@
 # ROZKLAD_LAN_DEV лишає https-видавця на приватній IPv4-адресі розробкою: демо-акаунти й час стенду працюють;
 # з доменом чи публічною адресою auth не стартує (ProdGuard).
 # Вхід через Google тут вимкнено: Google не приймає приватні IP-адреси в адресах повернення.
-# Назовні відкрито лише 443; решта портів, як і раніше, лише на 127.0.0.1.
+# Назовні відкрито лише 443 на LAN-адресі ноутбука; решта портів, як і раніше, лише на 127.0.0.1. Docker Desktop
+# пропускає свої порти крізь брандмауер Windows у будь-якій мережі, тож захищає стенд ключ: без нього Caddy
+# відповідає 403 на вхід, API і сторінки (infra/dev/lan/Caddyfile, ключ у infra/dev/certs/lan-key).
 x-lan-issuer: &lan-issuer
   AUTH_ISSUER: https://${ROZKLAD_LAN_IP:?ROZKLAD_LAN_IP is set by dev-stack.sh up --lan}/auth
   ROZKLAD_LAN_DEV: "true"
@@ -15,12 +17,15 @@ services:
   lan-edge:
     image: caddy:2.11-alpine
     profiles: [app]
-    restart: unless-stopped
+    # never by itself: after a reboot on another network the edge stays down until the next `up --lan`
+    restart: "no"
     environment:
       LAN_IP: ${ROZKLAD_LAN_IP:?}
+      LAN_KEY: ${ROZKLAD_LAN_KEY:?ROZKLAD_LAN_KEY is set by dev-stack.sh up --lan}
     ports:
-      # IPv4 only, like the production Caddy (one address per client for the sign-in limit)
-      - "0.0.0.0:443:443"
+      # IPv4 on the LAN address only (one address per client for the sign-in limit, like the production Caddy);
+      # if the laptop is on another network, the address is gone and the edge cannot start
+      - "${ROZKLAD_LAN_IP:?}:443:443"
     volumes:
       - ./dev/lan:/etc/caddy:ro
       - caddy_lan_data:/data # the local CA: keep it, or every phone has to trust a new one
