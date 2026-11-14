@@ -15,13 +15,16 @@ import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
+import ua.vtc.rozklad.auth.account.SignInIdentifier;
 import ua.vtc.rozklad.auth.config.AuthServerProperties;
 
 /**
  * Runs before the password check of {@code POST /login} and applies {@link LockoutPolicy}. A refused attempt
  * never reaches BCrypt; it is recorded as {@code LOCKED} or {@code THROTTLED} and sent to
  * {@code /login?error=throttled}. Behind the global gate only one attempt per gate delay goes on to the
- * password check, however many arrive in parallel. Google sign-in does not pass here, so password failures
+ * password check, however many arrive in parallel. An allowed attempt whose identifier no account can have
+ * (blank, longer than an e-mail, a control character inside; {@link SignInIdentifier#plausible}) fails at once
+ * as {@code BAD_CREDENTIALS}, also without BCrypt. Google sign-in does not pass here, so password failures
  * never block it.
  */
 public class LoginThrottleFilter extends OncePerRequestFilter {
@@ -69,6 +72,15 @@ public class LoginThrottleFilter extends OncePerRequestFilter {
             attempts.record(LoginAttempts.Method.PASSWORD, hash, null, address, device, outcome, now);
             log.info("password sign-in refused: {} from {}", outcome, address.prefix());
             redirect.sendRedirect(request, response, "/login?error=throttled");
+            return;
+        }
+        if (!SignInIdentifier.plausible(SignInIdentifier.normalise(request.getParameter("username")))) {
+            // жоден акаунт не має такого логіна: звичайна невдача, але без BCrypt
+            attempts.record(LoginAttempts.Method.PASSWORD, hash, null, address, device,
+                    LoginAttempts.Outcome.BAD_CREDENTIALS, now);
+            log.info("password sign-in failed: {} (an identifier no account can have)",
+                    LoginAttempts.Outcome.BAD_CREDENTIALS);
+            redirect.sendRedirect(request, response, "/login?error");
             return;
         }
         chain.doFilter(request, response);

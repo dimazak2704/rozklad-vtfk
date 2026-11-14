@@ -134,6 +134,16 @@ class InternalAccountsApiIT {
                 "username-taken");
     }
 
+    /** The sign-in form refuses identifiers with control characters, so no account may get one. */
+    @Test
+    void anEmailWithAControlCharacterIsRefused() {
+        // JSON-екранування: сервер отримує справжній U+0001 / U+0085 усередині адреси
+        assertProblem(put(path(UUID.randomUUID()), newAccount("ctl" + suffix(), "a\\u0001b" + suffix() + "@vtc.vn.ua",
+                STRONG), null), 400, "validation");
+        assertProblem(put(path(UUID.randomUUID()), newAccount("ctl" + suffix(), "a" + suffix() + "@vtc\\u0085.vn.ua",
+                STRONG), null), 400, "validation");
+    }
+
     @Test
     void passwordsAreCheckedByThePolicyAndRejectionsCarryTheReason() {
         String username = "pass" + suffix();

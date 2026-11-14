@@ -34,4 +34,17 @@ class LoginUnitsTest {
         assertThat(LoginAttempts.hash("  Krentsin ")).isEqualTo(LoginAttempts.hash("krentsin")).hasSize(32);
         assertThat(LoginAttempts.hash(null)).isEqualTo(LoginAttempts.hash(""));
     }
+
+    /**
+     * Spring's form login passes {@code username.trim()} to the account lookup: every character up to U+0020,
+     * control characters included, goes. A spelling that reaches the account must land on its lockout key.
+     */
+    @Test
+    void everyCharacterTheFormLoginTrimsIsTrimmedFromTheLockoutKey() {
+        for (char c = 0; c <= ' '; c++) {
+            assertThat(LoginAttempts.hash(c + "Krentsin" + c)).as("U+%04X", (int) c)
+                    .isEqualTo(LoginAttempts.hash("krentsin"));
+        }
+        assertThat(LoginAttempts.hash("\u0002\u0003krentsin\u001b")).isEqualTo(LoginAttempts.hash("krentsin"));
+    }
 }

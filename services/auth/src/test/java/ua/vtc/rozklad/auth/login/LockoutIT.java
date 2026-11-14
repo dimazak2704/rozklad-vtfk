@@ -75,6 +75,39 @@ class LockoutIT {
         assertThat(Browser.location(browser.signIn(teacher.username(), TestAccounts.PASSWORD))).doesNotContain("error");
     }
 
+    /**
+     * The form login trims every character up to U+0020 before the account lookup, so these spellings reach the
+     * same account and must meet the same lock (they used to get fresh counters and a fresh global gate).
+     */
+    @Test
+    void controlCharacterSpellingsOfALockedIdentifierAreLockedToo() {
+        TestAccounts.Created teacher = accounts.teacher();
+        Browser attacker = browsers.open("198.51.106.7");
+        for (int i = 0; i < 3; i++) {
+            attacker.signIn(teacher.username(), "wrong-" + i);
+        }
+
+        for (String spelling : List.of("\u0001" + teacher.username(), teacher.username() + "\u001b",
+                "\u0002\u0003" + teacher.username().toUpperCase() + "\u001f")) {
+            assertThat(Browser.location(attacker.signIn(spelling, TestAccounts.PASSWORD))).as(spelling)
+                    .isEqualTo("/auth/login?error=throttled");
+        }
+        // з іншої мережі та сама «химерна» форма — це звичайний вхід у той самий акаунт
+        assertThat(Browser.location(browsers.open("192.0.2.66").signIn("\u0001" + teacher.username(),
+                TestAccounts.PASSWORD))).doesNotContain("error");
+    }
+
+    @Test
+    void anIdentifierNoAccountCanHaveFailsLikeAWrongPassword() {
+        TestAccounts.Created teacher = accounts.teacher();
+        String inside = teacher.username().substring(0, 2) + "\u0001" + teacher.username().substring(2);
+
+        assertThat(Browser.location(browsers.open("198.51.107.7").signIn(inside, TestAccounts.PASSWORD)))
+                .isEqualTo("/auth/login?error");
+        assertThat(jdbc.sql("SELECT outcome FROM login_attempt WHERE identifier_hash = ?")
+                .param(LoginAttempts.hash(inside)).query(String.class).list()).containsExactly("BAD_CREDENTIALS");
+    }
+
     @Test
     void unknownIdentifiersAreLockedTheSameWay() {
         Browser browser = browsers.open("198.51.102.7");

@@ -31,8 +31,9 @@ import ua.vtc.rozklad.auth.account.AccountRuleException.Rule;
 public class AccountAdministration {
 
     static final Pattern USERNAME = Pattern.compile("^[a-z][a-z0-9._-]{2,49}$");
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+$");
-    private static final int MAX_EMAIL = 254;
+    /** No control characters: the sign-in form refuses them ({@link SignInIdentifier#plausible}). */
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s\\p{Cc}]+@[^@\\s\\p{Cc}]+$");
+    private static final int MAX_EMAIL = SignInIdentifier.MAX_LENGTH;
     private static final int MAX_DISPLAY_NAME = 200;
     private static final int MAX_ACTOR = 100;
     private static final Logger log = LoggerFactory.getLogger(AccountAdministration.class);

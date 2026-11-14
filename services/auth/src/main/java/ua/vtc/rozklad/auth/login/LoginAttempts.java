@@ -6,15 +6,17 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import ua.vtc.rozklad.auth.account.SignInIdentifier;
 import ua.vtc.rozklad.auth.config.AuthServerProperties;
 
 /**
  * The {@code login_attempt} journal: input of the lockout rules and the audit of sign-in decisions.
- * Identifiers are stored as SHA-256 of the trimmed lower-case value; passwords never.
+ * Identifiers are stored as SHA-256 of the value the account lookup sees ({@link SignInIdentifier}); passwords
+ * never.
  */
 @Repository
 public class LoginAttempts {
@@ -115,8 +117,9 @@ public class LoginAttempts {
         return jdbc.sql("DELETE FROM login_attempt WHERE occurred_at < ?").param(Timestamp.from(cutoff)).update();
     }
 
+    /** SHA-256 of the identifier normalised exactly like the account lookup ({@link SignInIdentifier}). */
     public static byte[] hash(String identifier) {
-        String normalised = identifier == null ? "" : identifier.strip().toLowerCase(Locale.ROOT);
+        String normalised = Objects.requireNonNullElse(SignInIdentifier.normalise(identifier), "");
         try {
             return MessageDigest.getInstance("SHA-256").digest(normalised.getBytes(StandardCharsets.UTF_8));
         } catch (NoSuchAlgorithmException ex) {

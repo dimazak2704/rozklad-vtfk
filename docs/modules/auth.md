@@ -62,8 +62,12 @@ There is no password grant and no refresh token for the SPA.
   (`RZ_DEVICE`, on the server `__Secure-RZ_DEVICE`; `HttpOnly`, `SameSite=Strict`, path `/auth/login`,
   90 days, table `login_device`): its attempts have their own lockout key and skip the network throttle and
   the gate, so a student spraying from the college NAT cannot lock teachers out. Every attempt is in
-  `login_attempt`. The client IP comes from `X-Forwarded-For` only from `AUTH_TRUSTED_PROXIES` (loopback by
-  default; the compose network's container range in compose).
+  `login_attempt`. The identifier is normalised once (`SignInIdentifier`: trimmed like the form login, so every
+  character up to U+0020 goes, then lower case) for the account lookup and for every lockout key, so no spelling
+  reaches an account with fresh counters; an identifier no account can have (blank, longer than 254
+  characters, a control character inside) fails as `BAD_CREDENTIALS` without BCrypt, and e-mails with control
+  characters are refused when an account is saved. The client IP comes from `X-Forwarded-For` only from
+  `AUTH_TRUSTED_PROXIES` (loopback by default; the compose network's container range in compose).
 - **Google** (`docs/GOOGLE_SIGNIN.md`): only verified addresses that have access in «Доступи»; an address on
   the college domain must come with the matching `hd`; a binding is kept by Google's `sub`. A refusal shows
   «Цієї адреси немає у списку доступу. Зверніться до навчальної частини.» Development uses a mock provider
