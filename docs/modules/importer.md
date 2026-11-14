@@ -42,7 +42,9 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
 ```
 
 * **Upload** checks size (≤ `app.import.max-file-size`, 20 MB), sniffs the real type by magic bytes / OOXML
-  entries / OLE2 `WordDocument` stream (never the extension), validates `options`, checks AI availability and
+  entry names / OLE2 `WordDocument` stream (never the extension; OOXML names come from the zip's central directory,
+  nothing is inflated, so a zip bomb costs the upload request nothing; only a cut package without a central
+  directory is read entry by entry, inflating at most 32 MB, `FileTypeSnifferTest`), validates `options`, checks AI availability and
   the daily budget when the kind needs AI, stores the bytes (DB `bytea` or a volume directory) and publishes
   `ImportJobQueued`; after commit the job runs on a bounded pool (`app.import.workers`, default 2) with the
   MDC of the request that queued it (MDC `requestId` and `importJob`), so its calls to core forward the same
@@ -83,7 +85,13 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
 ### TIMETABLE_XLSX parser (DOMAIN §11, tested on the real file)
 
 Structure is found by content, not by fixed rows or colours (the real file differs from DOMAIN's row numbers:
-course labels of courses 2–3 are empty merged cells, the curators row of courses 2–4 has the header colour):
+course labels of courses 2–3 are empty merged cells, the curators row of courses 2–4 has the header colour).
+The scans go cell by cell, so a sheet is bounded first (`SheetGrid`): at most 2 million cells in the used area,
+50 000 merged ranges and 500 000 merged cells inside it; merges are indexed only inside the used area. A bigger
+sheet stops the import with «Аркуш «…» завеликий для розкладу…» (a bell sheet that big is skipped with a warning;
+while looking for the timetable sheet such sheets are skipped, at most 30 sheets are tried). The real file is about
+640 × 160 cells with 3 200 merges (`SheetGridLimitsTest`). Before this a few kilobytes of XML with one merge over
+the sheet or a cell at `XFD1048576` exhausted the heap or held a worker for hours.
 
 * **group header row** = a row with ≥ 3 group codes in the first column of 3-column blocks, mostly starting with a
   digit (so a lesson row with «ІГ», «ІКТ» never becomes a header); home room = the block's third cell; curators
@@ -146,7 +154,8 @@ matching is informative only (text import), so ambiguities do not block.
 
 ### DISCIPLINE_PROGRAM
 
-DOCX via XWPF (cells expanded by `gridSpan`), DOC via HWPF (`poi-scratchpad`), PDF via PDFBox (text only).
+DOCX via XWPF (cells expanded by `gridSpan`, at most 63, Word's column limit; a crafted span of two billion
+filled the heap, as it did in the order parser), DOC via HWPF (`poi-scratchpad`), PDF via PDFBox (text only).
 The structure table is found by header labels (bottom-most non-empty label per column: Всього, На заняттях,
 СРС, Лекції, Практ., Лабор., Семінар., Іспит, Залік, Конс.); the first numeric row is the data row («90 (в тому
 числі 30-підготовка…» → 90, «-» → empty, «+»/«х»/a digit in Іспит/Залік → yes). Checks (warnings): total ≠

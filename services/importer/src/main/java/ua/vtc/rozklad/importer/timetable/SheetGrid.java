@@ -15,27 +15,51 @@ import ua.vtc.rozklad.importer.text.TextNormalizer;
  * Read-only view of a POI sheet that knows merged regions (0-based rows/columns). A cell covered by
  * a vertical merge returns the region's text; a cell covered from the left (horizontal merge)
  * returns empty text, because the value belongs to the region's first column.
+ * <p>
+ * The parsers scan the sheet cell by cell up to its last row and column, and merged regions are indexed per
+ * cell, so a sheet's size is bounded before anything is read: a few kilobytes of XML can declare a cell at
+ * {@code XFD1048576} or one merge over the whole sheet (about 1.7e10 cells), which would hold an import worker
+ * for hours or exhaust the heap. Regions are indexed only inside the used area (the scans never look outside
+ * it). The college's timetable is about 640 x 160 cells with 3 200 merges covering 6 700 cells.
  */
 final class SheetGrid {
+
+    /** Rows x columns of the used area. */
+    static final long MAX_CELLS = 2_000_000;
+    static final int MAX_MERGED_REGIONS = 50_000;
+    /** Cells covered by merges inside the used area (overlapping merges count every time). */
+    static final long MAX_MERGED_CELLS = 500_000;
 
     private final Sheet sheet;
     private final Map<Long, CellRangeAddress> regions = new HashMap<>();
     private final int lastColumn;
 
+    /** @throws SheetTooLargeException the sheet is bigger than any timetable (see the class comment) */
     SheetGrid(Sheet sheet) {
         this.sheet = sheet;
-        for (CellRangeAddress region : sheet.getMergedRegions()) {
-            for (int row = region.getFirstRow(); row <= region.getLastRow(); row++) {
-                for (int column = region.getFirstColumn(); column <= region.getLastColumn(); column++) {
-                    regions.put(key(row, column), region);
-                }
-            }
-        }
+        int lastRow = sheet.getLastRowNum();
         int maxColumn = 0;
         for (Row row : sheet) {
             maxColumn = Math.max(maxColumn, row.getLastCellNum());
         }
         this.lastColumn = maxColumn - 1;
+        if ((long) (lastRow + 1) * (lastColumn + 1) > MAX_CELLS
+                || sheet.getNumMergedRegions() > MAX_MERGED_REGIONS) {
+            throw new SheetTooLargeException(sheet.getSheetName());
+        }
+        long merged = 0;
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            int bottom = Math.min(region.getLastRow(), lastRow + 1);
+            int right = Math.min(region.getLastColumn(), lastColumn + 1);
+            for (int row = Math.max(0, region.getFirstRow()); row <= bottom; row++) {
+                for (int column = Math.max(0, region.getFirstColumn()); column <= right; column++) {
+                    if (++merged > MAX_MERGED_CELLS) {
+                        throw new SheetTooLargeException(sheet.getSheetName());
+                    }
+                    regions.put(key(row, column), region);
+                }
+            }
+        }
     }
 
     String sheetName() {

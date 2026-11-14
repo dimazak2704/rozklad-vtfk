@@ -47,7 +47,12 @@ final class BellSheetParser {
         List<Table> tables = new ArrayList<>();
         for (Sheet sheet : workbook) {
             if (TextNormalizer.key(sheet.getSheetName()).contains("дзвінк")) {
-                tables.addAll(tables(new SheetGrid(sheet)));
+                try {
+                    tables.addAll(tables(new SheetGrid(sheet)));
+                } catch (SheetTooLargeException tooLarge) {
+                    issues.warn(RowType.BELLS, null, sheet.getSheetName(), tooLarge.getMessage()
+                            + " Дзвінки з цього аркуша не прочитано.");
+                }
             }
         }
         Map<Integer, Map<Integer, List<BellSlot>>> byLength = new TreeMap<>((a, b) -> Integer.compare(b, a));

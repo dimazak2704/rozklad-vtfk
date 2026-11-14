@@ -118,6 +118,24 @@ class OrderDocxParserTest {
                 .hasMessageContaining("таблиці розпорядження");
     }
 
+    /** A crafted grid span (two billion columns) is cut to Word's 63 instead of filling the heap. */
+    @Test
+    @org.junit.jupiter.api.Timeout(value = 30, threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    void aCraftedGridSpanDoesNotExhaustMemory() throws IOException {
+        XWPFDocument document = new XWPFDocument();
+        paragraph(document, "Р О З П О Р Я Д Ж Е Н Н Я  №35");
+        paragraph(document, "На 19 жовтня 2026 рік");
+        paragraph(document, "ПОНЕДІЛОК - ЗНАМЕННИК");
+        XWPFTable table = document.createTable(1, 8);
+        fill(table.getRow(0), "Група", "Пара", "За розкладом", "", "Причина заміни", "По заміні", "", "Ауд");
+        XWPFTableRow crafted = row(table, "4КІ1", "2", "СТП", "Кренцін", "Зв.зам.", "НДКС", "Непийвода", "6");
+        crafted.getCell(7).getCTTc().addNewTcPr().addNewGridSpan().setVal(BigInteger.valueOf(2_000_000_000));
+
+        OrderDraft draft = parser.parse(bytes(document), new Issues());
+
+        assertThat(draft.rows()).extracting(Row::groupCode, Row::roomText).containsExactly(tuple("4КІ1", "6"));
+    }
+
     private static byte[] collegeOrder(String title) throws IOException {
         XWPFDocument document = new XWPFDocument();
         paragraph(document, title);

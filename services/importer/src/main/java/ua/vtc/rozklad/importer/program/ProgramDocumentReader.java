@@ -31,6 +31,9 @@ import ua.vtc.rozklad.importer.text.TextNormalizer;
 @Component
 public class ProgramDocumentReader {
 
+    /** Word allows at most 63 columns in a table. */
+    static final int MAX_GRID_SPAN = 63;
+
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u0007]");
 
     public ProgramDocument read(FileType type, byte[] content) {
@@ -87,7 +90,15 @@ public class ProgramDocumentReader {
         if (properties == null || properties.getGridSpan() == null || properties.getGridSpan().getVal() == null) {
             return 1;
         }
-        return Math.max(1, properties.getGridSpan().getVal().intValue());
+        return clampSpan(properties.getGridSpan().getVal().intValue());
+    }
+
+    /**
+     * Word allows at most {@value #MAX_GRID_SPAN} columns in a table; a larger {@code gridSpan} (a crafted file asks
+     * for two billion) would repeat the cell text until the heap is gone.
+     */
+    static int clampSpan(int span) {
+        return Math.min(MAX_GRID_SPAN, Math.max(1, span));
     }
 
     private static ProgramDocument readDoc(byte[] content) throws IOException {

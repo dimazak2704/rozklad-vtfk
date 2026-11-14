@@ -34,6 +34,9 @@ import ua.vtc.rozklad.importer.text.TextNormalizer;
 @Component
 public class OrderDocxParser {
 
+    /** Word allows at most 63 columns in a table. */
+    static final int MAX_GRID_SPAN = 63;
+
     private static final Pattern SIGNATURE = Pattern.compile("^(.*?(?:директора|директор)[^\\t]*?)(?:\\t+|\\s{2,})\\s*(\\S.*)$");
 
     public OrderDraft parse(byte[] content, Issues issues) {
@@ -232,8 +235,9 @@ public class OrderDocxParser {
             });
             String text = String.join(" / ", lines);
             CTTcPr properties = cell.getCTTc().getTcPr();
+            // у Word не більше 63 стовпців: більший gridSpan (2 млрд у підробленому файлі) вичерпав би пам'ять
             int span = properties == null || properties.getGridSpan() == null || properties.getGridSpan().getVal() == null
-                    ? 1 : Math.max(1, properties.getGridSpan().getVal().intValue());
+                    ? 1 : Math.min(MAX_GRID_SPAN, Math.max(1, properties.getGridSpan().getVal().intValue()));
             for (int i = 0; i < span; i++) {
                 cells.add(text);
             }

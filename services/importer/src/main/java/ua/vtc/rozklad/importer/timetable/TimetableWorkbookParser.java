@@ -24,6 +24,9 @@ public class TimetableWorkbookParser {
     static final String DAMAGED = "Файл Excel пошкоджений або має інший формат — його не вдалося прочитати. Відкрийте "
             + "його в Excel, збережіть ще раз як .xlsx і завантажте знову.";
 
+    /** Without «Розклад друк» the sheets are tried one by one, each a full scan; a workbook has a handful. */
+    static final int MAX_PROBED_SHEETS = 30;
+
     public record Result(TimetableDraft draft, List<ReportRow> issues) {
     }
 
@@ -56,10 +59,18 @@ public class TimetableWorkbookParser {
         if (preferred != null) {
             return preferred;
         }
+        int probed = 0;
         for (Sheet sheet : workbook) {
+            if (++probed > MAX_PROBED_SHEETS) {
+                break;
+            }
             Issues probe = new Issues();
-            if (!new TimetableSheetParser(new SheetGrid(sheet), probe).parse().groups().isEmpty()) {
-                return sheet;
+            try {
+                if (!new TimetableSheetParser(new SheetGrid(sheet), probe).parse().groups().isEmpty()) {
+                    return sheet;
+                }
+            } catch (SheetTooLargeException tooLarge) {
+                // завеликий аркуш розкладом не буває (довідка, обчислення): шукаємо далі
             }
         }
         throw new ImportParseException("У файлі немає аркуша з розкладом груп. Аркуші файлу: " + sheetNames(workbook) + ".");
