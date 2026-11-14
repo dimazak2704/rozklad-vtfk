@@ -81,20 +81,21 @@ const lessonPath = (versionId: Uuid, lessonId: Uuid) => `${versionPath(versionId
 // ───────────────────────── Довідники ─────────────────────────
 
 const CATALOG_STALE_MS = 10 * 60_000;
-const DISCIPLINE_PAGE_SIZE = 100;
+/** Найбільша сторінка, яку приймає сервер (PageQuery.MAX_SIZE): увесь каталог коледжу — один запит. */
+const DISCIPLINE_PAGE_SIZE = 200;
 
-/** Усі дисципліни каталогу: список сторінковий, тож читаємо сторінки, доки не зберемо `total`. */
+/**
+ * Усі дисципліни каталогу: список сторінковий, тож після першої сторінки (вона каже `total`) решту
+ * читаємо паралельно, а не по черзі.
+ */
 export async function fetchAllDisciplines(signal?: AbortSignal): Promise<DisciplineDto[]> {
-  const all: DisciplineDto[] = [];
-  for (let page = 0; ; page += 1) {
-    const chunk = await api.get<Page<DisciplineDto>>(
-      '/admin/disciplines',
-      { page, size: DISCIPLINE_PAGE_SIZE, sort: 'shortName,asc' },
-      { signal },
-    );
-    all.push(...chunk.items);
-    if (chunk.items.length === 0 || all.length >= chunk.total) return all;
-  }
+  const page = (number: number) =>
+    api.get<Page<DisciplineDto>>('/admin/disciplines', { page: number, size: DISCIPLINE_PAGE_SIZE, sort: 'shortName,asc' }, { signal });
+  const first = await page(0);
+  if (first.items.length === 0 || first.items.length >= first.total) return first.items;
+  const pages = Math.ceil(first.total / DISCIPLINE_PAGE_SIZE);
+  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 1)));
+  return [first, ...rest].flatMap((chunk) => chunk.items);
 }
 
 export function usePlanningCatalog() {
@@ -147,11 +148,31 @@ export function useVersionConflicts(versionId: Uuid | undefined) {
   });
 }
 
+/**
+ * Метрики версії зі списку версій у кеші: сервер рахує їх тим самим аналізом, що й `/metrics`.
+ * Редактор відкривається одразу після списку, тож окремий запит (ще один повний аналіз версії на
+ * сервері поряд із конфліктами) не потрібен, поки список свіжий.
+ */
+export function metricsFromVersionList(
+  queryClient: QueryClient,
+  versionId: Uuid | undefined,
+): { data: MetricsDto; updatedAt: number } | undefined {
+  if (!versionId) return undefined;
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: [...qk.admin.timetable.all, 'versions'] })) {
+    const metrics = (query.state.data as TimetableVersionDto[] | undefined)?.find((v) => v.id === versionId)?.metrics;
+    if (metrics) return { data: metrics, updatedAt: query.state.dataUpdatedAt };
+  }
+  return undefined;
+}
+
 export function useVersionMetrics(versionId: Uuid | undefined) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: qk.admin.timetable.metrics(versionId ?? ''),
     queryFn: ({ signal }) => api.get<MetricsDto>(`${versionPath(versionId ?? '')}/metrics`, undefined, { signal }),
     enabled: Boolean(versionId),
+    initialData: () => metricsFromVersionList(queryClient, versionId)?.data,
+    initialDataUpdatedAt: () => metricsFromVersionList(queryClient, versionId)?.updatedAt,
   });
 }
 
