@@ -1,10 +1,12 @@
 package ua.vtc.rozklad.core.settings.web;
 
+import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_COLLEGE_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CONFIRM_TIMEOUT_MINUTES;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_HOURS_PER_PAIR;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_POSITION_LENGTH;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CONFIRM_TIMEOUT_MINUTES;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_HOURS_PER_PAIR;
 
@@ -20,6 +22,8 @@ import ua.vtc.rozklad.core.settings.SystemSettings;
 /**
  * {@code SettingsDto} of CONTRACTS §2; the same shape is read by GET and written by PUT. {@code version}
  * (additive) is the revision GET returned; PUT with an older one is a 409 {@code stale-data}.
+ * {@code changesHistoryDays} (additive) is always in GET; a PUT without it keeps the stored value, so a
+ * client that does not know the field cannot reset it.
  * Field messages are shown next to the fields of the settings form, so they say what to enter (as the web form does).
  */
 record SettingsDto(
@@ -40,21 +44,27 @@ record SettingsDto(
         @Min(value = MIN_HOURS_PER_PAIR, message = HOURS_RANGE)
         @Max(value = MAX_HOURS_PER_PAIR, message = HOURS_RANGE) Integer hoursPerPair,
         @NotNull Boolean showTeacherFullNames,
+        @Min(value = MIN_CHANGES_HISTORY_DAYS, message = HISTORY_RANGE)
+        @Max(value = MAX_CHANGES_HISTORY_DAYS, message = HISTORY_RANGE) Integer changesHistoryDays,
         UUID activeBellProfileId,
         @NotNull(message = "Оновіть сторінку: бракує версії налаштувань") Long version) {
 
     static final String TIMEOUT_RANGE =
             "Від " + MIN_CONFIRM_TIMEOUT_MINUTES + " до " + MAX_CONFIRM_TIMEOUT_MINUTES + " хвилин";
     static final String HOURS_RANGE = "Від " + MIN_HOURS_PER_PAIR + " до " + MAX_HOURS_PER_PAIR + " годин";
+    static final String HISTORY_RANGE = "Від " + MIN_CHANGES_HISTORY_DAYS + " до " + MAX_CHANGES_HISTORY_DAYS + " днів";
 
     static SettingsDto from(SystemSettings settings, long version) {
         return new SettingsDto(settings.approvalMode(), settings.confirmTimeoutMinutes(),
                 settings.signatoryPosition(), settings.signatoryName(), settings.collegeName(),
-                settings.hoursPerPair(), settings.showTeacherFullNames(), settings.activeBellProfileId(), version);
+                settings.hoursPerPair(), settings.showTeacherFullNames(), settings.changesHistoryDays(),
+                settings.activeBellProfileId(), version);
     }
 
-    SystemSettings toSettings() {
+    /** @param stored the settings in force: an absent {@code changesHistoryDays} keeps their value */
+    SystemSettings toSettings(SystemSettings stored) {
         return new SystemSettings(approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName,
-                hoursPerPair, showTeacherFullNames, activeBellProfileId);
+                hoursPerPair, showTeacherFullNames,
+                changesHistoryDays != null ? changesHistoryDays : stored.changesHistoryDays(), activeBellProfileId);
     }
 }

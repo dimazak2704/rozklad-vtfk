@@ -64,6 +64,10 @@ public interface SettingsService {
         return current().showTeacherFullNames();
     }
 
+    default int changesHistoryDays() {
+        return current().changesHistoryDays();
+    }
+
     default Optional<UUID> activeBellProfileId() {
         return Optional.ofNullable(current().activeBellProfileId());
     }

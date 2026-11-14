@@ -15,6 +15,8 @@ import java.util.UUID;
  * @param collegeName           shown on public pages and documents
  * @param hoursPerPair          academic hours counted per pair (accounting, load patterns)
  * @param showTeacherFullNames  public pages may show full teacher names (otherwise short names only)
+ * @param changesHistoryDays    how many days back anonymous visitors see substitutions and orders
+ *                              ({@link PublicHistory}); 0 = today and the future only
  * @param activeBellProfileId   bell profile used when the semester has none ({@code null} = not set)
  */
 public record SystemSettings(
@@ -25,6 +27,7 @@ public record SystemSettings(
         String collegeName,
         int hoursPerPair,
         boolean showTeacherFullNames,
+        int changesHistoryDays,
         UUID activeBellProfileId) {
 
     public static final int MIN_CONFIRM_TIMEOUT_MINUTES = 5;
@@ -34,10 +37,13 @@ public record SystemSettings(
     public static final int MAX_SIGNATORY_POSITION_LENGTH = 200;
     public static final int MAX_SIGNATORY_NAME_LENGTH = 100;
     public static final int MAX_COLLEGE_NAME_LENGTH = 200;
+    public static final int MIN_CHANGES_HISTORY_DAYS = 0;
+    public static final int MAX_CHANGES_HISTORY_DAYS = 365;
 
     /**
      * Values from the college documents (orders №35, №96, №105) and DOMAIN §7–§9. The approval mode is
      * NOTIFY: the dispatcher assigns and the teacher is told afterwards (college workflow, 08.11.2026).
+     * Anonymous visitors see a week of substitution history (owner decision 14.11.2026).
      */
     public static final SystemSettings DEFAULTS = new SystemSettings(
             ChangeApprovalMode.NOTIFY,
@@ -47,6 +53,7 @@ public record SystemSettings(
             "Вінницький технічний фаховий коледж",
             2,
             false,
+            7,
             null);
 
     public SystemSettings {

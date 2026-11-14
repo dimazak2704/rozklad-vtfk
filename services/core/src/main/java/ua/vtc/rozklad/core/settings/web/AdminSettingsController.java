@@ -26,9 +26,13 @@ class AdminSettingsController {
         return SettingsDto.from(settings.current(), settings.version());
     }
 
+    /**
+     * Replaces all values. The stored values read here only fill fields an older client does not send; a
+     * save in between changes the version, so {@code update} refuses this one (409) rather than mixing them.
+     */
     @PutMapping
     SettingsDto update(@Valid @RequestBody SettingsDto body, CurrentUser user) {
-        SystemSettings saved = settings.update(body.toSettings(), body.version(), user.username());
+        SystemSettings saved = settings.update(body.toSettings(settings.current()), body.version(), user.username());
         return SettingsDto.from(saved, settings.version());
     }
 }

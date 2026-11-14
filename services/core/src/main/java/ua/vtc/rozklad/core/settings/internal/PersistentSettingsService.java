@@ -85,6 +85,8 @@ class PersistentSettingsService implements SettingsService {
                 read(stored, SettingKey.HOURS_PER_PAIR, defaults.hoursPerPair(), PersistentSettingsService::integer),
                 read(stored, SettingKey.SHOW_TEACHER_FULL_NAMES, defaults.showTeacherFullNames(),
                         PersistentSettingsService::bool),
+                read(stored, SettingKey.CHANGES_HISTORY_DAYS, defaults.changesHistoryDays(),
+                        PersistentSettingsService::integer),
                 read(stored, SettingKey.ACTIVE_BELL_PROFILE_ID, defaults.activeBellProfileId(),
                         PersistentSettingsService::uuidOrNull));
     }
@@ -116,7 +118,8 @@ class PersistentSettingsService implements SettingsService {
         TransactionSynchronizationManager.unbindResourceIfPossible(TRANSACTION_KEY);
         SystemSettings normalized = new SystemSettings(proposed.approvalMode(), proposed.confirmTimeoutMinutes(),
                 proposed.signatoryPosition().strip(), proposed.signatoryName().strip(), proposed.collegeName().strip(),
-                proposed.hoursPerPair(), proposed.showTeacherFullNames(), proposed.activeBellProfileId());
+                proposed.hoursPerPair(), proposed.showTeacherFullNames(), proposed.changesHistoryDays(),
+                proposed.activeBellProfileId());
         FieldErrors errors = new FieldErrors();
         SettingsRules.check(normalized, errors);
         constraints.forEach(constraint -> constraint.check(normalized, errors));
@@ -129,6 +132,7 @@ class PersistentSettingsService implements SettingsService {
         write(SettingKey.COLLEGE_NAME, JSON.stringNode(normalized.collegeName()), actor);
         write(SettingKey.HOURS_PER_PAIR, JSON.numberNode(normalized.hoursPerPair()), actor);
         write(SettingKey.SHOW_TEACHER_FULL_NAMES, JSON.booleanNode(normalized.showTeacherFullNames()), actor);
+        write(SettingKey.CHANGES_HISTORY_DAYS, JSON.numberNode(normalized.changesHistoryDays()), actor);
         write(SettingKey.ACTIVE_BELL_PROFILE_ID, normalized.activeBellProfileId() == null
                 ? JSON.nullNode()
                 : JSON.stringNode(normalized.activeBellProfileId().toString()), actor);

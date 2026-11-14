@@ -1,10 +1,12 @@
 package ua.vtc.rozklad.core.settings.internal;
 
+import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_COLLEGE_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CONFIRM_TIMEOUT_MINUTES;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_HOURS_PER_PAIR;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_POSITION_LENGTH;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CONFIRM_TIMEOUT_MINUTES;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_HOURS_PER_PAIR;
 
@@ -26,6 +28,11 @@ final class SettingsRules {
         if (settings.hoursPerPair() < MIN_HOURS_PER_PAIR || settings.hoursPerPair() > MAX_HOURS_PER_PAIR) {
             errors.add("hoursPerPair", "Кількість академічних годин за пару має бути від %d до %d."
                     .formatted(MIN_HOURS_PER_PAIR, MAX_HOURS_PER_PAIR));
+        }
+        if (settings.changesHistoryDays() < MIN_CHANGES_HISTORY_DAYS
+                || settings.changesHistoryDays() > MAX_CHANGES_HISTORY_DAYS) {
+            errors.add("changesHistoryDays", "Історія замін для відвідувачів має бути від %d до %d днів."
+                    .formatted(MIN_CHANGES_HISTORY_DAYS, MAX_CHANGES_HISTORY_DAYS));
         }
         text(settings.signatoryPosition(), MAX_SIGNATORY_POSITION_LENGTH, "signatoryPosition", "Посаду підписанта",
                 errors);
