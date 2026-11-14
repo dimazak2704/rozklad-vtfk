@@ -104,12 +104,32 @@ public final class CoreDtos {
     public record ScheduleOwner(String type, UUID id, String label) {
     }
 
+    /** {@code practices}: the group's practice or the teacher's supervised practices; absent from an older core. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ScheduleDay(LocalDate date, int weekday, String weekdayLabel, Parity parity, boolean studyDay,
-                              String note, List<LessonItem> lessons) {
+                              String note, List<LessonItem> lessons, List<Practice> practices) {
 
         public ScheduleDay {
             lessons = lessons == null ? List.of() : List.copyOf(lessons);
+            practices = practices == null ? List.of() : List.copyOf(practices);
+        }
+
+        /** A day without practice. */
+        public ScheduleDay(LocalDate date, int weekday, String weekdayLabel, Parity parity, boolean studyDay,
+                           String note, List<LessonItem> lessons) {
+            this(date, weekday, weekdayLabel, parity, studyDay, note, lessons, List.of());
+        }
+    }
+
+    /** A practice period on a day: its title, supervisors (керівники) and groups or courses. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Practice(UUID periodId, String title, List<TeacherRef> supervisors, List<GroupRef> groups,
+                           List<Integer> courses) {
+
+        public Practice {
+            supervisors = supervisors == null ? List.of() : List.copyOf(supervisors);
+            groups = groups == null ? List.of() : List.copyOf(groups);
+            courses = courses == null ? List.of() : List.copyOf(courses);
         }
     }
 

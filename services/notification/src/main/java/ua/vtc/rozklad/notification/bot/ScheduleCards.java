@@ -7,13 +7,17 @@ import static ua.vtc.rozklad.notification.text.Html.s;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
+import ua.vtc.rozklad.notification.core.CoreDtos.GroupRef;
 import ua.vtc.rozklad.notification.core.CoreDtos.LessonItem;
+import ua.vtc.rozklad.notification.core.CoreDtos.Practice;
 import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
@@ -57,8 +61,9 @@ public final class ScheduleCards {
             text.append('\n').append(i(UaDates.capitalize(parity)));
         }
         text.append("\n\n");
+        String practices = practices(day.practices(), schedule.ownerType(), teachers);
         if (day.lessons().isEmpty()) {
-            text.append(day.studyDay() ? "Пар немає 🙂" : "🌿 Навчання немає");
+            text.append(practices != null ? practices : day.studyDay() ? "Пар немає 🙂" : "🌿 Навчання немає");
             if (!day.studyDay() && nextStudyDay != null) {
                 text.append("\nНаступний навчальний день: ").append(b(dayName(nextStudyDay)));
             }
@@ -67,11 +72,61 @@ public final class ScheduleCards {
                     .sorted(Comparator.comparingInt(LessonItem::pair).thenComparingInt(LessonItem::subgroup))
                     .map(lesson -> lesson(lesson, schedule.ownerType(), teachers))
                     .collect(Collectors.joining("\n\n")));
+            if (practices != null) {
+                text.append("\n\n").append(practices);
+            }
         }
-        if (day.note() != null && !day.note().isBlank()) {
-            text.append("\n\nℹ️ ").append(escape(day.note()));
+        String note = noteWithoutPractices(day);
+        if (note != null) {
+            text.append("\n\nℹ️ ").append(escape(note));
         }
         return text.toString();
+    }
+
+    /**
+     * A group at practice: «🛠 Практика: назва» with its supervisors; a teacher: «🛠 Керівництво
+     * практикою: назва, група». {@code null} when the day has no practice.
+     */
+    static String practices(List<Practice> practices, OwnerType perspective, TeacherLabels teachers) {
+        if (practices.isEmpty() || perspective == OwnerType.ROOM) {
+            return null;
+        }
+        return practices.stream().map(practice -> {
+            if (perspective == OwnerType.TEACHER) {
+                String whom = whom(practice);
+                return "🛠 " + b("Керівництво практикою") + ": "
+                        + escape(whom.isEmpty() ? practice.title() : practice.title() + ", " + whom);
+            }
+            String text = "🛠 " + b(escape("Практика: " + practice.title()));
+            List<String> names = practice.supervisors().stream()
+                    .map(teacher -> teachers.label(teacher.id(), teacher.label()))
+                    .toList();
+            return names.isEmpty() ? text
+                    : text + "\n" + (names.size() == 1 ? "Керівник: " : "Керівники: ") + escape(String.join(", ", names));
+        }).collect(Collectors.joining("\n\n"));
+    }
+
+    /** «2КІ3, 2КІ4» or «2 курс»; empty for a college-wide practice. */
+    private static String whom(Practice practice) {
+        if (!practice.groups().isEmpty()) {
+            return practice.groups().stream().map(GroupRef::code).collect(Collectors.joining(", "));
+        }
+        if (!practice.courses().isEmpty()) {
+            return practice.courses().stream().map(String::valueOf).collect(Collectors.joining(", ")) + " курс";
+        }
+        return "";
+    }
+
+    /** The day's note without the practice titles the practice block already shows. */
+    private static String noteWithoutPractices(ScheduleDay day) {
+        if (day.note() == null || day.note().isBlank()) {
+            return null;
+        }
+        Set<String> shown = day.practices().stream().map(Practice::title).collect(Collectors.toSet());
+        String rest = Arrays.stream(day.note().split("; "))
+                .filter(part -> !shown.contains(part.strip()))
+                .collect(Collectors.joining("; "));
+        return rest.isBlank() ? null : rest;
     }
 
     /** {@code пн, 9 листопада}. */
@@ -82,6 +137,10 @@ public final class ScheduleCards {
     /** Short summary for inline results: «5 пар · 1 заміна». */
     public static String summary(ScheduleDay day) {
         if (day.lessons().isEmpty()) {
+            if (!day.practices().isEmpty()) {
+                // група на практиці не має навчального дня, у керівника день навчальний
+                return day.studyDay() ? "Керівництво практикою" : "Практика";
+            }
             return day.studyDay() ? "Пар немає" : "Навчання немає";
         }
         long pairs = day.lessons().stream().filter(lesson -> !"CANCELLED".equals(kind(lesson)))
