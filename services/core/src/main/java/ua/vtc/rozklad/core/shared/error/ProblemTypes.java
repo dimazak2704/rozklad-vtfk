@@ -16,6 +16,9 @@ public final class ProblemTypes {
     public static final URI UNAUTHORIZED = of("unauthorized");
     public static final URI FORBIDDEN = of("forbidden");
     public static final URI INTERNAL = of("internal");
+    public static final URI TOO_MANY_REQUESTS = of("too-many-requests");
+    /** The same type the gateway gives when a service is down. */
+    public static final URI SERVICE_UNAVAILABLE = of("service-unavailable");
 
     private ProblemTypes() {
     }

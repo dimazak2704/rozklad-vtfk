@@ -295,8 +295,9 @@ Roles, TokenRoles, AuthProperties `app.auth.{issuer,jwks-uri,audience}`) ·
 `web.*` (RequestIdFilter + MDC `requestId`, `PageResponse.of(page, mapper)`
 → `{items,page,size,total}`, JacksonConfig: `LocalTime` written as `HH:mm`, OpenApiConfig, WebConfig)
 · `sse.*` (`SseBroadcaster.sendToUser(uuid, type, data)`, `sendToRole("ADMIN", …)`, `broadcast(…)`,
-`SseEventTypes`, `GET /api/events/stream`, 25 s `ping`, 30 min emitter timeout — EventSource
-reconnects) · `messaging.*` (topology, outbox config, ProcessedEvents) · `AppProperties`
+`SseEventTypes`, `GET /api/events/stream`, 25 s `ping`; a stream ends when its access token expires
+(at most 30 min, measured in real time) and the client reconnects with a fresh token; at most 10 streams per
+account (429) and 1000 in all (503), both with `Retry-After: 30`) · `messaging.*` (topology, outbox config, ProcessedEvents) · `AppProperties`
 (`app.public-web-url`) · `SchedulingConfig` (`@EnableScheduling`, off with `app.scheduling.enabled=false`).
 
 ## 10. Tests

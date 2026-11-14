@@ -141,6 +141,9 @@ Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` 
 
 SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `absence.created`, `generation.progress`,
 `generation.completed`, `order.published`, `schedule.changed`, `ping` (every 25 s). Data = JSON of the related DTO.
+The server ends a stream when the access token it was opened with expires (at most 30 min); the client
+reconnects with a fresh token. 429 (`too-many-requests`) above 10 streams of one account, 503
+(`service-unavailable`) above 1000 in all, both with `Retry-After: 30`.
 
 ## 3. Core — teacher (role TEACHER)
 
