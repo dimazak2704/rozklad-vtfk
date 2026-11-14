@@ -231,6 +231,9 @@ services:
     <<: *java-service
     build: ../services/notification
     image: rozklad/notification:dev
+    # an init process reaps the children LibreOffice leaves behind (gpg and others); without it they stay
+    # zombies under the JVM and the container hits pids_limit after a few hundred conversions
+    init: true
     environment:
       <<: *java-env
       DB_NAME: notification

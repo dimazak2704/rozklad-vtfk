@@ -197,6 +197,10 @@ class ProductionHardening(unittest.TestCase):
         # so the default must fit a one-CPU VPS too
         self.assertTrue(0 < float(self.services["auth"].get("cpus", 0)) <= 1, self.services["auth"].get("cpus"))
 
+    def test_document_conversion_leaves_no_zombies(self):
+        # LibreOffice forks helpers it never waits for; an init process reaps them before pids_limit is reached
+        self.assertTrue(self.services["notification"].get("init"))
+
 
 class Images(unittest.TestCase):
     """Base images that keep getting security fixes, and no tools an image does not use."""

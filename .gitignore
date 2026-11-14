@@ -4,6 +4,11 @@
 !.env.example
 # ключ підпису токенів сервісу auth на сервері (infra/deploy/scripts/gen-secrets.sh)
 infra/deploy/secrets/
+# backups and their key (infra/deploy/scripts/backup-db.sh, DEPLOY.md «Backups»); the key belongs in a password manager
+rozklad-backup.key
+*.sql.gz
+*.sql.gz.age
+/*.sql
 
 # Збірка (target-*/ — окремі каталоги паралельних збірок: -Dbuild.dir='${project.basedir}/target-<name>')
 target/
