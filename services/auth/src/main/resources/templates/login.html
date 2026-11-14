@@ -74,7 +74,11 @@
      й основа назад до лівої ноги. Мале кільце (центр 13; 8,9, радіус 5,2, як у малому знаку)
      починається там, де його перетинає ліва нога шпиля, і робить повний оберт до тієї ж точки.
      Усі фігури йдуть за годинниковою стрілкою; pathLength дорівнює справжній довжині фігури.
-     Мале кільце складено з трьох дуг по 120°: дуга в 180° не задає центр однозначно, і контур з'їжджав. -->
+     Мале кільце складено з трьох дуг по 120°: дуга в 180° не задає центр однозначно, і контур з'їжджав.
+     Світло кожної фігури — один суцільний штрих (хвіст) і ширша голова над ним; яскравість уздовж лінії
+     задає маска-градієнт. Шпиль має по копії на кожну свою криву (ліва нога, права нога, основа): маски
+     копій ділять знак на ділянки без перекриття, а копії в ізольованій групі складаються (plus-lighter),
+     тож на межах ділянок частки пікселя дають рівно один штрих, без шва. -->
 <svg class="auth-spire" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor"
      stroke-linejoin="round" stroke-linecap="round">
   <defs>
@@ -91,20 +95,22 @@
   </g>
   <g class="auth-trace auth-trace-outer">
     <use class="auth-trace-tail" href="#auth-spire-outer"/>
-    <use class="auth-trace-fade" href="#auth-spire-outer"/>
-    <use class="auth-trace-body" href="#auth-spire-outer"/>
     <use class="auth-trace-head" href="#auth-spire-outer"/>
   </g>
   <g class="auth-trace auth-trace-tower">
-    <use class="auth-trace-tail" href="#auth-spire-tower"/>
-    <use class="auth-trace-fade" href="#auth-spire-tower"/>
-    <use class="auth-trace-body" href="#auth-spire-tower"/>
-    <use class="auth-trace-head" href="#auth-spire-tower"/>
+    <g class="auth-trace-regions">
+      <use class="auth-trace-tail auth-trace-left" href="#auth-spire-tower"/>
+      <use class="auth-trace-tail auth-trace-right" href="#auth-spire-tower"/>
+      <use class="auth-trace-tail auth-trace-base" href="#auth-spire-tower"/>
+    </g>
+    <g class="auth-trace-regions">
+      <use class="auth-trace-head auth-trace-left" href="#auth-spire-tower"/>
+      <use class="auth-trace-head auth-trace-right" href="#auth-spire-tower"/>
+      <use class="auth-trace-head auth-trace-base" href="#auth-spire-tower"/>
+    </g>
   </g>
   <g class="auth-trace auth-trace-inner">
     <use class="auth-trace-tail" href="#auth-spire-inner"/>
-    <use class="auth-trace-fade" href="#auth-spire-inner"/>
-    <use class="auth-trace-body" href="#auth-spire-inner"/>
     <use class="auth-trace-head" href="#auth-spire-inner"/>
   </g>
 </svg>

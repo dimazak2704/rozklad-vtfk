@@ -358,7 +358,7 @@ body.auth {
 }
 
 /* ---------- Декоративний шпиль (≥ 1024 px) ----------
- * Три фігури (login.html, <defs>) малюються через <use>: спокійний контур і чотири шари світла на кожну
+ * Три фігури (login.html, <defs>) малюються через <use>: спокійний контур і світло (хвіст і голова) на кожну
  * фігуру. Розміри в одиницях viewBox (1 одиниця ≈ 13–28 px), без vector-effect: non-scaling-stroke —
  * з ним Chromium міряє штрихи в пікселях екрана, і світло розсипається на крапки. pathLength кожної
  * фігури дорівнює її справжній довжині (--len), тож ціна одиниці штриха однакова на всьому знаку.
@@ -415,43 +415,215 @@ body.auth {
   }
 }
 
-/* Світло: чотири штрихи з однаковою передньою точкою (--auth-trace-head). Хвіст — три чверті фігури,
-   тож світиться майже весь контур, а попереду голови лишається короткий темний проміжок; голова ≈ 4 px.
-   Градієнт уздовж кривої SVG не вміє, тож хвіст складено з шарів (довжини — частки --len фігури);
-   голова ширша за тіло, тож читається як яскрава точка попереду, без фільтрів.
-   Період пунктиру 2 × --len + 4: поки голова йде від −1 до 1,75 × --len + 1, друга риска на фігуру не лягає. */
+/* Світло: один суцільний штрих, яскравість якого плавно спадає від голови до кінця хвоста (справжній
+   градієнт уздовж лінії, без окремих рисок і сходинок). Пунктир лише обмежує світло відрізком
+   [голова − хвіст; голова] (хвіст — три чверті фігури), а яскравість задає маска, що рухається разом
+   із головою (--auth-trace-head): для кілець — конічний градієнт навколо центру кільця, для шпиля —
+   лінійні градієнти вздовж хорд його трьох кривих. Над хвостом (0,17) лежить ширша голова (0,24) з тим
+   самим пунктиром і коротшим спадом (3,5 одиниці), тож попереду читається яскрава точка, а ширина
+   сходить нанівець плавно.
+   Період пунктиру 2 × --len + 4: поки голова йде від −1 до 1,75 × --len + 1, друга риска на фігуру не лягає.
+   Маска в одиницях viewBox (mask-origin: view-box, 1px маски = 1 одиниця). Спад хвоста (1 − u)^1,5,
+   голови (1 − u)^2, де u — частка шляху від голови до кінця спаду; між точками градієнта яскравість
+   змінюється лінійно, тож сходинок немає. */
 .auth-trace {
   display: none;
   stroke: var(--stroke-now);
+  --tail-90: color-mix(in srgb, black 3.16%, transparent);
+  --tail-80: color-mix(in srgb, black 8.94%, transparent);
+  --tail-70: color-mix(in srgb, black 16.43%, transparent);
+  --tail-60: color-mix(in srgb, black 25.3%, transparent);
+  --tail-50: color-mix(in srgb, black 35.36%, transparent);
+  --tail-40: color-mix(in srgb, black 46.48%, transparent);
+  --tail-30: color-mix(in srgb, black 58.57%, transparent);
+  --tail-20: color-mix(in srgb, black 71.55%, transparent);
+  --tail-15: color-mix(in srgb, black 78.37%, transparent);
+  --tail-10: color-mix(in srgb, black 85.38%, transparent);
+  --tail-5: color-mix(in srgb, black 92.59%, transparent);
+  --head-875: color-mix(in srgb, black 1.5625%, transparent);
+  --head-750: color-mix(in srgb, black 6.25%, transparent);
+  --head-625: color-mix(in srgb, black 14.0625%, transparent);
+  --head-500: color-mix(in srgb, black 25%, transparent);
+  --head-375: color-mix(in srgb, black 39.0625%, transparent);
+  --head-250: color-mix(in srgb, black 56.25%, transparent);
+  --head-125: color-mix(in srgb, black 76.5625%, transparent);
 }
 
 .auth-trace use {
-  stroke-dasharray: calc(var(--d) * 1px) calc((var(--len) * 2 + 4 - var(--d)) * 1px);
-  stroke-dashoffset: calc((var(--d) - var(--auth-trace-head)) * 1px);
+  stroke-dasharray: calc(var(--len) * 0.75 * 1px) calc((var(--len) * 1.25 + 4) * 1px);
+  stroke-dashoffset: calc((var(--len) * 0.75 - var(--auth-trace-head)) * 1px);
   stroke-width: calc(var(--w) * var(--auth-spire-k) * 1px);
+  mask-origin: view-box;
+  mask-clip: no-clip;
+  mask-repeat: no-repeat;
+  mask-size: 26px 26px;
+  mask-position: 0 0;
 }
 
 .auth-trace-tail {
-  --d: calc(var(--len) * 0.75);
-  --w: 0.15;
-  stroke-opacity: 0.2;
-}
-
-.auth-trace-fade {
-  --d: calc(var(--len) * 0.45);
-  --w: 0.165;
-  stroke-opacity: 0.3;
-}
-
-.auth-trace-body {
-  --d: calc(var(--len) * 0.18);
-  --w: 0.19;
-  stroke-opacity: 0.6;
+  --w: 0.17;
 }
 
 .auth-trace-head {
-  --d: 2.5;
   --w: 0.24;
+}
+
+/* Кільця: кут голови (від верху за годинниковою стрілкою) — кут початку шляху (--start) плюс пройдена
+   частка кола. Конус починається на голові: 0,4 одиниці попереду непрозорі (заокруглений кінець голови),
+   далі темний проміжок, а позаду голови яскравість спадає до нуля. */
+.auth-trace-outer {
+  --cx: 13px;
+  --cy: 13px;
+  --start: 180deg;
+}
+
+.auth-trace-inner {
+  --cx: 13px;
+  --cy: 8.9px;
+  --start: 201.063deg;
+}
+
+.auth-trace-outer use,
+.auth-trace-inner use {
+  --from: calc(var(--start) + var(--auth-trace-head) / var(--len) * 360deg);
+}
+
+.auth-trace-outer .auth-trace-tail,
+.auth-trace-inner .auth-trace-tail {
+  /* slop-allow: маска яскравості світла вздовж лінії, не декоративна заливка */
+  mask-image: conic-gradient(
+    from var(--from) at var(--cx) var(--cy),
+    black 0deg calc(144deg / var(--len)),
+    transparent 0 90deg,
+    var(--tail-90) 117deg,
+    var(--tail-80) 144deg,
+    var(--tail-70) 171deg,
+    var(--tail-60) 198deg,
+    var(--tail-50) 225deg,
+    var(--tail-40) 252deg,
+    var(--tail-30) 279deg,
+    var(--tail-20) 306deg,
+    var(--tail-15) 319.5deg,
+    var(--tail-10) 333deg,
+    var(--tail-5) 346.5deg,
+    black 360deg
+  );
+}
+
+.auth-trace-outer .auth-trace-head,
+.auth-trace-inner .auth-trace-head {
+  /* slop-allow: маска яскравості світла вздовж лінії, не декоративна заливка */
+  mask-image: conic-gradient(
+    from var(--from) at var(--cx) var(--cy),
+    black 0deg calc(144deg / var(--len)),
+    transparent 0 calc(360deg - 1260deg / var(--len)),
+    var(--head-875) calc(360deg - 1102.5deg / var(--len)),
+    var(--head-750) calc(360deg - 945deg / var(--len)),
+    var(--head-625) calc(360deg - 787.5deg / var(--len)),
+    var(--head-500) calc(360deg - 630deg / var(--len)),
+    var(--head-375) calc(360deg - 472.5deg / var(--len)),
+    var(--head-250) calc(360deg - 315deg / var(--len)),
+    var(--head-125) calc(360deg - 157.5deg / var(--len)),
+    black 360deg
+  );
+}
+
+/* Шпиль: кожна з трьох кривих (ліва нога, права нога, основа) має свій лінійний градієнт уздовж хорди
+   (--dir) і свою ділянку маски. Позиція s на шляху лягає в точку градієнта p = --a + s × --k
+   (--k — хорда / довжина кривої; на видимій частині це відходить від справжньої довжини дуги не більше
+   ніж на 0,12 одиниці). Ділянки: основа — прямокутник B (x 8,8–17,2, y від 19,6), ліва нога — ліва
+   половина знака (до бісектриси вершини x = 13; права половина R) без B, права нога — права половина
+   (ліва L) без B. Кожен піксель бере значення найближчої кривої, тож на вершині, де штрихи ніг
+   перекриваються, світло переходить з ноги на ногу; ноги з основою стикуються за краєм екрана.
+   Без шва: межа ділянки рідко лягає на межу пікселя, і крайній піксель кожна копія малює з часткою
+   покриття: ліва c, права 1 − c. Звичайне накладання копій дало б c + (1 − c)(1 − c·α) < 1 — світлішу
+   чи темнішу лінію на вершині. Тому копії складаються (mix-blend-mode: plus-lighter в ізольованій групі):
+   частки дають рівно c + (1 − c) = 1. Кожна ділянка — «увесь знак без сусідніх», тож межі між ними
+   задають ті самі прямокутники.
+   Попереду голови градієнт лишається непрозорим (заокруглений кінець голови), позаду кінця хвоста —
+   прозорим. */
+.auth-trace-regions {
+  isolation: isolate;
+}
+
+.auth-trace-regions use {
+  mix-blend-mode: plus-lighter;
+}
+
+/* шари знизу вгору: B, прямокутник сусідньої ноги, увесь знак, градієнт. Ноги — «увесь знак без
+   (сусідньої половини або B)»: (1 − R)·(1 − B) і (1 − L)·(1 − B). Інші порядки (наприклад «L без B»)
+   Chromium растеризує з розмитим на 2 пікселі краєм, і він уже не доповнює сусідню ділянку. */
+.auth-trace-tower use {
+  mask-size: 26px 26px, 26px 26px, 13px 26px, 8.4px 6.4px;
+  mask-composite: intersect, subtract, add;
+}
+
+.auth-trace-tower .auth-trace-left {
+  --dir: 18.435deg;
+  --a: 6.451;
+  --k: 0.98806;
+  mask-position: 0 0, 0 0, 13px 0, 8.8px 19.6px;
+}
+
+.auth-trace-tower .auth-trace-right {
+  --dir: 161.565deg;
+  --a: -10.2458;
+  --k: 0.98806;
+  mask-position: 0 0, 0 0, 0 0, 8.8px 19.6px;
+}
+
+/* основа — лише B (третій шар тут на весь знак) */
+.auth-trace-tower .auth-trace-base {
+  --dir: 270deg;
+  --a: -28.1794;
+  --k: 0.95296;
+  mask-size: 26px 26px, 26px 26px, 26px 26px, 8.4px 6.4px;
+  mask-position: 0 0, 0 0, 0 0, 8.8px 19.6px;
+  mask-composite: intersect, intersect, intersect;
+}
+
+.auth-trace-tower .auth-trace-tail {
+  mask-image:
+    /* slop-allow: маска яскравості світла вздовж лінії, не декоративна заливка */
+    linear-gradient(
+      var(--dir),
+      transparent calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.75) * var(--k)) * 1px),
+      var(--tail-90) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.675) * var(--k)) * 1px),
+      var(--tail-80) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.6) * var(--k)) * 1px),
+      var(--tail-70) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.525) * var(--k)) * 1px),
+      var(--tail-60) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.45) * var(--k)) * 1px),
+      var(--tail-50) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.375) * var(--k)) * 1px),
+      var(--tail-40) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.3) * var(--k)) * 1px),
+      var(--tail-30) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.225) * var(--k)) * 1px),
+      var(--tail-20) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.15) * var(--k)) * 1px),
+      var(--tail-15) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.1125) * var(--k)) * 1px),
+      var(--tail-10) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.075) * var(--k)) * 1px),
+      var(--tail-5) calc((var(--a) + (var(--auth-trace-head) - var(--len) * 0.0375) * var(--k)) * 1px),
+      black calc((var(--a) + var(--auth-trace-head) * var(--k)) * 1px)
+    ),
+    linear-gradient(black 0 0), /* slop-allow: суцільний прямокутник ділянки маски */
+    linear-gradient(black 0 0), /* slop-allow: суцільний прямокутник ділянки маски */
+    linear-gradient(black 0 0); /* slop-allow: суцільний прямокутник ділянки маски */
+}
+
+.auth-trace-tower .auth-trace-head {
+  mask-image:
+    /* slop-allow: маска яскравості світла вздовж лінії, не декоративна заливка */
+    linear-gradient(
+      var(--dir),
+      transparent calc((var(--a) + (var(--auth-trace-head) - 3.5) * var(--k)) * 1px),
+      var(--head-875) calc((var(--a) + (var(--auth-trace-head) - 3.0625) * var(--k)) * 1px),
+      var(--head-750) calc((var(--a) + (var(--auth-trace-head) - 2.625) * var(--k)) * 1px),
+      var(--head-625) calc((var(--a) + (var(--auth-trace-head) - 2.1875) * var(--k)) * 1px),
+      var(--head-500) calc((var(--a) + (var(--auth-trace-head) - 1.75) * var(--k)) * 1px),
+      var(--head-375) calc((var(--a) + (var(--auth-trace-head) - 1.3125) * var(--k)) * 1px),
+      var(--head-250) calc((var(--a) + (var(--auth-trace-head) - 0.875) * var(--k)) * 1px),
+      var(--head-125) calc((var(--a) + (var(--auth-trace-head) - 0.4375) * var(--k)) * 1px),
+      black calc((var(--a) + var(--auth-trace-head) * var(--k)) * 1px)
+    ),
+    linear-gradient(black 0 0), /* slop-allow: суцільний прямокутник ділянки маски */
+    linear-gradient(black 0 0), /* slop-allow: суцільний прямокутник ділянки маски */
+    linear-gradient(black 0 0); /* slop-allow: суцільний прямокутник ділянки маски */
 }
 
 /* Знак заходить у правий нижній кут: край екрана проходить по --edge одиницях viewBox (центр кільця 13,
@@ -519,7 +691,7 @@ body.auth {
 /* ---------- Рух: знаки малюють себе один раз, потім по шпилю біжить світло ----------
  * Єдиний нескінченний рух інтерфейсу (DESIGN.md §6, виняток для сторінки входу). Одночасно рухаються
  * не більше двох речей: 0–1,4 с малий знак і контур шпиля, з 1,6 с лише світло.
- * Анімуються зареєстровані числа (@property): штрихи шарів перераховуються з них, тож усі три шари
+ * Анімуються зареєстровані числа (@property): пунктир і маски світла перераховуються з них, тож усі копії
  * однієї фігури мають спільну передню точку. Ключові кадри з var() у stroke-dashoffset не інтерполюються.
  */
 @property --auth-spire-draw {
@@ -690,6 +862,14 @@ body.auth {
   81.07%,
   100% {
     --auth-trace-head: 58.17;
+  }
+}
+
+/* Без стандартних масок CSS світло було б рівним непрозорим штрихом на три чверті фігури, а без
+   plus-lighter на вершині шпиля лишився б шов: тоді лишається статичний контур, як і без руху */
+@supports not ((mask-composite: intersect) and (mix-blend-mode: plus-lighter)) {
+  .auth-trace {
+    display: none;
   }
 }
 

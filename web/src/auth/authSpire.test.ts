@@ -128,6 +128,81 @@ function keyframes(name: string): [number, number][] {
   }).map(({ stops, head }, index) => [(index === 0 ? stops.at(-1) : stops[0]) ?? NaN, head]);
 }
 
+/** <use> світла у групі `auth-trace <group>`: класи й ціль. */
+function traceUses(group: string) {
+  // група закривається на своєму відступі: вкладені <g> (ділянки шпиля) усередині не обривають її
+  const block = new RegExp(`<g class="auth-trace ${group}">([\\s\\S]*?)\\n  </g>`).exec(loginHtml)?.[1] ?? '';
+  return [...block.matchAll(/<use class="([^"]+)" href="#([\w-]+)"\/>/g)].map((match) => ({
+    classes: (match[1] ?? '').split(' '),
+    href: match[2] ?? '',
+  }));
+}
+
+/** Тіло правила, селектор якого (повністю) — `selector`. */
+function rule(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // саме правило з цим селектором, а не продовження списку («.a,\n.b {»)
+  const match = new RegExp(`(?<!,)\\n${escaped} \\{([\\s\\S]*?)\\n\\}`).exec(css);
+  if (!match) throw new Error(`немає правила ${selector}`);
+  return match[1] ?? '';
+}
+
+const prop = (body: string, name: string) => {
+  const match = new RegExp(`${name}: ([^;]+);`).exec(body);
+  if (!match) throw new Error(`немає ${name}`);
+  return match[1] ?? '';
+};
+
+const propOr = (body: string, name: string, fallback: string) => (body.includes(`${name}:`) ? prop(body, name) : fallback);
+
+/** Позиції вздовж шляху (накопичена довжина) для точок sample(). */
+function alongOf(points: readonly Point[]) {
+  let along = 0;
+  return points.map((point, index) => {
+    if (index > 0) along += Math.hypot(point[0] - points[index - 1]![0], point[1] - points[index - 1]![1]);
+    return along;
+  });
+}
+
+type Rect = [number, number, number, number];
+type MaskLayers = { rect: Rect; op: string }[];
+
+/**
+ * Шари маски копії шпиля (без першого — градієнта яскравості): прямокутник [x, y, ширина, висота]
+ * і оператор, яким шар лягає на нижчі (mask-composite; перший оператор — для градієнта).
+ */
+function towerLayers(name: 'left' | 'right' | 'base'): MaskLayers {
+  const shared = rule('.auth-trace-tower use');
+  const body = rule(`.auth-trace-tower .auth-trace-${name}`);
+  const list = (value: string) => value.split(', ');
+  const sizes = list(propOr(body, 'mask-size', prop(shared, 'mask-size')));
+  const positions = list(propOr(body, 'mask-position', propOr(shared, 'mask-position', '0 0')));
+  const ops = list(propOr(body, 'mask-composite', prop(shared, 'mask-composite')));
+  expect(sizes[0], `${name}: градієнт на весь viewBox`).toBe('26px 26px');
+  expect(positions[0]).toBe('0 0');
+  expect(ops[0], `${name}: градієнт лише вирізає ділянку`).toBe('intersect');
+  expect(positions).toHaveLength(sizes.length);
+  expect(ops).toHaveLength(sizes.length - 1);
+  return sizes.slice(1).map((size, i) => {
+    const [w, h] = size.split(' ').map((v) => parseFloat(v));
+    const [x, y] = positions[i + 1]!.split(' ').map((v) => parseFloat(v));
+    // оператор шару з mask-composite; найнижчий шар ні на що не лягає
+    return { rect: [x!, y!, w!, h!] as Rect, op: ops[i + 1] ?? 'add' };
+  });
+}
+
+/** Маска копії (без градієнта): шари знизу вгору, кожен своїм оператором лягає на нижчі (mask-composite). */
+function composeMask(layers: MaskLayers, cover: (rect: Rect) => number): number {
+  return layers.reduceRight((below, { rect, op }, index) => {
+    const s = cover(rect);
+    if (index === layers.length - 1) return s;
+    if (op === 'add') return s + below * (1 - s);
+    if (op === 'subtract') return s * (1 - below);
+    if (op === 'intersect') return s * below;
+    throw new Error(`невідомий оператор ${op}`);
+  }, 0);
+}
+
 const outer = sample(pathOf('auth-spire-outer').d);
 const tower = sample(pathOf('auth-spire-tower').d);
 const inner = sample(pathOf('auth-spire-inner').d);
@@ -161,9 +236,9 @@ describe('великий знак на сторінці входу', () => {
       ['auth-trace-tower', 'auth-spire-tower'],
       ['auth-trace-inner', 'auth-spire-inner'],
     ] as const) {
-      const block = new RegExp(`<g class="auth-trace ${group}">([\\s\\S]*?)</g>`).exec(loginHtml)?.[1] ?? '';
-      const hrefs = [...block.matchAll(/href="#([\w-]+)"/g)].map((match) => match[1]);
-      expect(hrefs, group).toEqual([id, id, id, id]);
+      const hrefs = traceUses(group).map((use) => use.href);
+      expect(hrefs.length, group).toBeGreaterThan(0);
+      expect(new Set(hrefs), group).toEqual(new Set([id]));
     }
   });
 
@@ -246,6 +321,194 @@ describe('великий знак на сторінці входу', () => {
     // мале кільце гасне раніше за шпиль, а після шпиля лишається пауза
     expect(innerFrames[1]![0]).toBeLessThan(towerFrames[1]![0]);
     expect(towerFrames[1]![0]).toBeLessThanOrEqual(95);
+  });
+
+  it('світло — один суцільний штрих на фігуру (хвіст і ширша голова з тим самим пунктиром), без шарів-рисок', () => {
+    for (const group of ['auth-trace-outer', 'auth-trace-inner']) {
+      expect(traceUses(group).map((use) => use.classes), group).toEqual([['auth-trace-tail'], ['auth-trace-head']]);
+    }
+    // шпиль: по копії хвоста й голови на кожну криву, маски копій ділять знак без перекриття
+    expect(traceUses('auth-trace-tower').map((use) => use.classes.join(' '))).toEqual([
+      'auth-trace-tail auth-trace-left',
+      'auth-trace-tail auth-trace-right',
+      'auth-trace-tail auth-trace-base',
+      'auth-trace-head auth-trace-left',
+      'auth-trace-head auth-trace-right',
+      'auth-trace-head auth-trace-base',
+    ]);
+    // старих шарів зі своїми довжинами рисок і прозорістю немає
+    expect(css).not.toMatch(/auth-trace-(fade|body)/);
+    expect(loginHtml).not.toMatch(/auth-trace-(fade|body)/);
+    const traceStroke = css.slice(css.indexOf('.auth-trace {'), css.indexOf('/* Знак заходить'));
+    expect(traceStroke.match(/stroke-dasharray/g)).toHaveLength(1);
+    expect(traceStroke).not.toMatch(/stroke-opacity/);
+    // одна риска завдовжки хвіст (3/4 фігури), спільна для всіх копій
+    const use = rule('.auth-trace use');
+    expect(prop(use, 'stroke-dasharray')).toBe('calc(var(--len) * 0.75 * 1px) calc((var(--len) * 1.25 + 4) * 1px)');
+    expect(prop(use, 'stroke-dashoffset')).toBe('calc((var(--len) * 0.75 - var(--auth-trace-head)) * 1px)');
+    expect(prop(use, 'mask-origin')).toBe('view-box');
+    const tail = Number(prop(rule('.auth-trace-tail'), '--w'));
+    const head = Number(prop(rule('.auth-trace-head'), '--w'));
+    expect(head).toBeGreaterThan(tail);
+  });
+
+  it('яскравість спадає плавно: точки градієнта йдуть по кривій (1 − u)^1,5 для хвоста й (1 − u)^2 для голови', () => {
+    const alpha = (name: string) =>
+      Number(new RegExp(`${name}: color-mix\\(in srgb, black ([\\d.]+)%, transparent\\);`).exec(css)?.[1]) / 100;
+    const tails = [90, 80, 70, 60, 50, 40, 30, 20, 15, 10, 5];
+    const heads = [875, 750, 625, 500, 375, 250, 125];
+    // від кінця хвоста до голови яскравість лише зростає, а сусідні точки близькі
+    const tailRamp = [0, ...tails.map((n) => alpha(`--tail-${n}`)), 1];
+    const headRamp = [0, ...heads.map((n) => alpha(`--head-${n}`)), 1];
+    // (спад голови — 3,5 одиниці, тож її точки й так стоять тісно)
+    for (const [ramp, step] of [
+      [tailRamp, 0.15],
+      [headRamp, 0.25],
+    ] as const) {
+      ramp.slice(1).forEach((value, index) => {
+        expect(value).toBeGreaterThan(ramp[index]!);
+        expect(value - ramp[index]!).toBeLessThan(step);
+      });
+    }
+    tails.forEach((n) => expect(alpha(`--tail-${n}`)).toBeCloseTo((1 - n / 100) ** 1.5, 3));
+    heads.forEach((n) => expect(alpha(`--head-${n}`)).toBeCloseTo((1 - n / 1000) ** 2, 3));
+
+    // кільця: позиції в конусі (від голови назад) відповідають тим самим частками хвоста
+    const conicTail = rule('.auth-trace-outer .auth-trace-tail,\n.auth-trace-inner .auth-trace-tail');
+    const conicTailStops = [...conicTail.matchAll(/var\(--tail-(\d+)\) ([\d.]+)deg/g)];
+    expect(conicTailStops.map((match) => Number(match[1]))).toEqual(tails);
+    conicTailStops.forEach((match) => expect(Number(match[2])).toBeCloseTo(360 - 270 * (Number(match[1]) / 100), 6));
+    expect(conicTail).toMatch(/transparent 0 90deg,/);
+    expect(conicTail).toMatch(/black 360deg/);
+    const conicHead = rule('.auth-trace-outer .auth-trace-head,\n.auth-trace-inner .auth-trace-head');
+    const conicHeadStops = [...conicHead.matchAll(/var\(--head-(\d+)\) calc\(360deg - ([\d.]+)deg \/ var\(--len\)\)/g)];
+    expect(conicHeadStops.map((match) => Number(match[1]))).toEqual(heads);
+    conicHeadStops.forEach((match) => expect(Number(match[2])).toBeCloseTo((3.5 * Number(match[1])) / 1000 * 360, 6));
+
+    // шпиль: ті самі частки, лише в одиницях шляху
+    const linearTail = rule('.auth-trace-tower .auth-trace-tail');
+    const linearTailStops = [...linearTail.matchAll(/var\(--tail-(\d+)\) calc\(\(var\(--a\) \+ \(var\(--auth-trace-head\) - var\(--len\) \* ([\d.]+)\)/g)];
+    expect(linearTailStops.map((match) => Number(match[1]))).toEqual(tails);
+    linearTailStops.forEach((match) => expect(Number(match[2])).toBeCloseTo(0.75 * (Number(match[1]) / 100), 6));
+    const linearHead = rule('.auth-trace-tower .auth-trace-head');
+    const linearHeadStops = [...linearHead.matchAll(/var\(--head-(\d+)\) calc\(\(var\(--a\) \+ \(var\(--auth-trace-head\) - ([\d.]+)\)/g)];
+    expect(linearHeadStops.map((match) => Number(match[1]))).toEqual(heads);
+    linearHeadStops.forEach((match) => expect(Number(match[2])).toBeCloseTo((3.5 * Number(match[1])) / 1000, 6));
+  });
+
+  it('конус кілець стоїть у центрі кола й повертається з головою від точки початку шляху', () => {
+    for (const [group, points, cx, cy] of [
+      ['.auth-trace-outer', outer, 13, 13],
+      ['.auth-trace-inner', inner, 13, 8.9],
+    ] as const) {
+      const body = rule(group);
+      expect(prop(body, '--cx')).toBe(`${cx}px`);
+      expect(prop(body, '--cy')).toBe(`${cy}px`);
+      // кут CSS: від верху за годинниковою стрілкою (вісь y донизу)
+      const [x, y] = points[0]!;
+      const start = ((Math.atan2(x - cx, -(y - cy)) * 180) / Math.PI + 360) % 360;
+      expect(Number(prop(body, '--start').replace('deg', ''))).toBeCloseTo(start, 2);
+    }
+    expect(prop(rule('.auth-trace-outer use,\n.auth-trace-inner use'), '--from')).toBe(
+      'calc(var(--start) + var(--auth-trace-head) / var(--len) * 360deg)',
+    );
+  });
+
+  it('градієнти шпиля відображають позицію на кожній кривій у маску точно, а ділянки ділять знак без перекриття', () => {
+    const along = alongOf(tower);
+    const apex = locate(tower, [13, 4.2]).along;
+    const rightFoot = locate(tower, [18.8, 21.6]).along;
+    const regions = (['left', 'right', 'base'] as const).map((name) => {
+      const body = rule(`.auth-trace-tower .auth-trace-${name}`);
+      const [from, to] = name === 'left' ? [0, apex] : name === 'right' ? [apex, rightFoot] : [rightFoot, along.at(-1)!];
+      return {
+        name,
+        dir: parseFloat(prop(body, '--dir')),
+        a: Number(prop(body, '--a')),
+        k: Number(prop(body, '--k')),
+        layers: towerLayers(name),
+        from,
+        to,
+      };
+    });
+    // маска ділянки в точці (прямокутники з різким краєм: 1 усередині, 0 поза)
+    const coverage = ([x, y]: Point, layers: MaskLayers) =>
+      composeMask(layers, ([rx, ry, w, h]) => (x > rx && x < rx + w && y > ry && y < ry + h ? 1 : 0));
+
+    // ділянки разом вкривають увесь viewBox рівно один раз
+    for (let gx = 0.05; gx < 26; gx += 0.25) {
+      for (let gy = 0.05; gy < 26; gy += 0.25) {
+        expect(regions.map(({ layers }) => coverage([gx, gy], layers)).sort()).toEqual([0, 0, 1]);
+      }
+    }
+
+    for (const region of regions) {
+      const angle = (region.dir * Math.PI) / 180;
+      const dir: Point = [Math.sin(angle), -Math.cos(angle)];
+      const gradientLength = 26 * (Math.abs(Math.sin(angle)) + Math.abs(Math.cos(angle)));
+      let checked = 0;
+      tower.forEach((point, index) => {
+        const s = along[index]!;
+        if (s < region.from + 0.01 || s > region.to - 0.01 || offScreen(point)) return;
+        checked++;
+        // видима точка кривої лежить у своїй ділянці, а не в чужій
+        expect(coverage(point, region.layers), `${region.name} ${point.join(',')}`).toBe(1);
+        for (const other of regions) {
+          if (other !== region) expect(coverage(point, other.layers), `${region.name} у ${other.name}`).toBe(0);
+        }
+        // точка градієнта p → позиція на шляху s = (p − a) / k збігається з довжиною дуги
+        const p = (point[0] - 13) * dir[0] + (point[1] - 13) * dir[1] + gradientLength / 2;
+        expect(Math.abs((p - region.a) / region.k - s), `${region.name} s=${s.toFixed(2)}`).toBeLessThan(0.15);
+      });
+      expect(checked, region.name).toBeGreaterThan(500);
+    }
+  });
+
+  it('на межах ділянок шпиля немає шва: часткові покриття крайнього пікселя складаються рівно в 1', () => {
+    // копії однієї частини світла (хвіст, голова) — в ізольованій групі й складаються (plus-lighter),
+    // а не накладаються: при накладанні c і 1 − c дали б c + (1 − c)(1 − c·α) < 1, тобто лінію на вершині
+    const groups = [...loginHtml.matchAll(/<g class="auth-trace-regions">([\s\S]*?)<\/g>/g)].map((match) =>
+      [...(match[1] ?? '').matchAll(/<use class="([^"]+)"/g)].map((use) => use[1]),
+    );
+    expect(groups).toEqual([
+      ['auth-trace-tail auth-trace-left', 'auth-trace-tail auth-trace-right', 'auth-trace-tail auth-trace-base'],
+      ['auth-trace-head auth-trace-left', 'auth-trace-head auth-trace-right', 'auth-trace-head auth-trace-base'],
+    ]);
+    expect(prop(rule('.auth-trace-regions'), 'isolation')).toBe('isolate');
+    expect(prop(rule('.auth-trace-regions use'), 'mix-blend-mode')).toBe('plus-lighter');
+
+    // межі задають ті самі прямокутники: x = 13 ділить знак на половини L і R, B — основа
+    const layers = (['left', 'right', 'base'] as const).map((name) => towerLayers(name));
+    const keys = new Set(layers.flat().map(({ rect }) => rect.join(',')));
+    expect(keys.has('0,0,13,26') && keys.has('13,0,13,26'), 'половини знака по бісектрисі вершини').toBe(true);
+    // будь-які часткові покриття крайніх пікселів: L і R ділять піксель на межі (c і 1 − c),
+    // B перетинає що завгодно; сума трьох ділянок — рівно 1
+    for (const cL of [0, 0.13, 0.5, 0.79, 1]) {
+      for (const cB of [0, 0.27, 0.5, 0.93, 1]) {
+        const cover = (rect: Rect) => {
+          const key = rect.join(',');
+          if (key === '0,0,13,26') return cL;
+          if (key === '13,0,13,26') return 1 - cL;
+          if (key === '0,0,26,26') return 1;
+          return cB;
+        };
+        const sum = layers.reduce((total, layer) => total + composeMask(layer, cover), 0);
+        expect(sum, `cL=${cL} cB=${cB}`).toBeCloseTo(1, 9);
+      }
+    }
+    // Chromium розмиває на 2 пікселі край прямокутника, який сам віднімає нижчі шари (наприклад «L без B»),
+    // і такий край уже не доповнює сусідній. Тому віднімає лише шар на весь знак.
+    for (const layer of layers) {
+      layer.forEach(({ rect, op }) => {
+        if (op === 'subtract') expect(rect).toEqual([0, 0, 26, 26]);
+      });
+    }
+  });
+
+  it('без масок CSS світла немає (інакше хвіст був би рівним непрозорим штрихом)', () => {
+    expect(css).toMatch(
+      /@supports not \(\(mask-composite: intersect\) and \(mix-blend-mode: plus-lighter\)\) \{\s*\.auth-trace \{\s*display: none;/,
+    );
   });
 
   it('без руху й у примусових кольорах світла немає, лише статичний контур', () => {

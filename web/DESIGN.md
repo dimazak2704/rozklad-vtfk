@@ -604,6 +604,10 @@ gets an equivalent `focus-visible` state.
 - `HoverDetails` (the lesson card and other detail cards) opens after 550 ms (`HOVER_CARD_DELAY_MS`)
   and closes 100 ms after the pointer leaves (`HOVER_CARD_CLOSE_DELAY_MS`), so the pointer can cross to
   the card. Right after another card was open it opens at once.
+- While a card is open, the pointer that leaves its trigger towards the card stays in a safe triangle
+  (exit point → the card's near side, `hover-intent.ts`): a lesson crossed on the way takes the card only
+  if the pointer rests on it for 150 ms (`HOVER_SWITCH_REST_MS`) or leaves the triangle; the card stays open
+  while the pointer is on it.
 - The delays apply to the mouse only. Enter or a tap toggles the card at once.
 - Admin `HoverCard`s (lesson list, order sheet, board chip) set their own: 350–400 ms open,
   100–120 ms close.
@@ -768,9 +772,14 @@ days of the week stay normal.
 
 **Hover/focus card** (`HoverCard` on pointer, `Drawer` bottom sheet on touch):
 - The full title (`heading`).
-- A `dl` with «Веде», «Де», «Коли» (caption labels in muted, values in primary).
+- A `dl` with «Веде», «Де», «Коли», «Група» (caption labels in muted, values in primary).
+- The teacher, room and group values are links to their schedules (same view and date), primary ink with
+  a thin `decoration-accent` underline, accent on hover; the page's own entity stays plain text. No
+  separate link row.
+- «Коли» from a grid or day list is only «3-тя пара · 11:00–12:00»; elsewhere (change lists, search) it
+  keeps the date. A lesson that runs only on one parity gets a small tag «лише по знаменниках»; the
+  week's parity is not repeated (it is in the page header).
 - For a change: «Було: ~~КМ · Колесник А.~~», «Причина: …» and «Розпорядження №39».
-- Two text links: «Розклад викладача» and «Аудиторія 14».
 
 **Day view and phones (< 1024):**
 - `WeekDayTabs` shows Пн–Пт as plain day numbers; today gets the accent pill.
@@ -952,8 +961,16 @@ Nothing else: no blue panel, no photo.
   (`color-mix(in oklab, text 22%, brand 12%)` light, `text 22%, brand 14%` dark).
 - It draws itself in once, each figure from its hidden start; the inner ring starts growing only when
   the spire's line reaches the point where it crosses it, so it branches off instead of appearing.
-- From 1.6 s, a light (four stacked dashes in `--color-now`, the head widest, a tail of 3/4 of the
-  figure) runs in a 6.4 s linear cycle at constant speed. It runs on the very paths the outline draws
+- From 1.6 s, a light in `--color-now` runs in a 6.4 s linear cycle at constant speed. It is one
+  continuous stroke whose brightness fades smoothly from the head to the end of a tail of 3/4 of the
+  figure (`(1 − u)^1.5`), with a slightly wider head that tapers into it over 3.5 units: a true gradient
+  along the line, no separate dashes or steps. A dash only bounds the lit stretch; a CSS mask that moves
+  with the head sets the brightness (a conic gradient round each ring's centre; a linear gradient along
+  the chord of each of the spire's three curves, each curve on its own mask region split at the apex
+  bisector). The three copies sit in an isolated group and add up (`mix-blend-mode: plus-lighter`), and
+  each region is "the whole mark minus its neighbours", so the partial pixels on a region edge sum to
+  exactly one stroke: the light turns the apex without a seam at any zoom. Browsers without standard CSS
+  masks or `plus-lighter` show the static outline. It runs on the very paths the outline draws
   (the same `<use>` targets), so it lies exactly on the lines. The ring and the spire start and end
   off-screen: the light enters the ring from below, climbs the left side, goes over the top and leaves
   past the right edge; when its head is back under the screen, it rises up the spire's left leg from the
