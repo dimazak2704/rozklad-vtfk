@@ -164,9 +164,11 @@ jobs:
   sonar:
     name: SonarCloud
     needs: [backend, web]
+    # pull requests from this repository, develop and main; a push to a feature branch is analysed in its PR
     if: >-
       github.actor != 'dependabot[bot]' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository ||
+       github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
