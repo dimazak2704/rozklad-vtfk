@@ -87,7 +87,13 @@ Positive direction — «Повітря» з живим часом (round 8; the
 
 - Every icon-only button has a tooltip (Radix Tooltip, 300 ms delay) and `aria-label`.
 - Every lesson cell has a hover card: full discipline name, teacher full name, room, time, change details
-  (who replaced whom, reason), parity explanation.
+  (who replaced whom, reason), parity explanation. The kind line («Вид») is shown for a lecture, practice, lab
+  or seminar only; `MIXED` (unknown or combined, e.g. load derived from the timetable) hides it.
+- Teacher names, one formatter (`web/src/lib/teacher-name.ts`): grid cells, change lists and chips write
+  «Прізвище І. Б.» (initials from the college short form, else from the first and middle names); the hover card,
+  lists and the teacher page title write «Прізвище Імʼя По батькові» when the name is known and, on public pages,
+  `showTeacherFullNames` is on, otherwise «Прізвище І. Б.». Orders and print keep the college short form.
+- Dated audit lines: an event of another day shows the date, «відмовився 14.11 о 01:15»; today only the time.
 - Loading = skeletons shaped like the content; errors = inline with retry; empty states = explain + next action.
 - Forms: react-hook-form + zod, inline Ukrainian messages, keep input on server errors, disable submit while pending.
 - Optimistic updates for small edits with undo toast; destructive actions confirm with the object name.

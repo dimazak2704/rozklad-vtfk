@@ -57,7 +57,9 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   /absence /help /cancel` are registered as the command menu.
 * **Сьогодні/Завтра** show the subscribed group (or the teacher's own lessons), with ◀️ ▶️ to the previous/next
   study day (edits the same message) and «⭐ Зробити моєю групою» for groups found by search.
-  Changed lessons: «🔁 заміна» + «замість <s>СТП · Кренцін</s>», «❌ пари не буде» (struck through),
+  Teachers in schedule cards (title, lesson lines, the replaced teacher, inline results, morning digest) read
+  «Прізвище І. Б.» (`text.TeacherNames.initials`: «Кренцін М.Д.» → «Кренцін М. Д.», «ХарченкоГ.» → «Харченко Г.»).
+  Changed lessons: «🔁 заміна» + «замість <s>СТП · Кренцін М. Д.</s>», «❌ пари не буде» (struck through),
   «➕ додаткова», «↪️ перенесено з N пари», «🚪 інша аудиторія», reason in italics **in words**
   («Зв.зам.» → «Взаємна заміна», «Відп.» → «Викладач відсутній», as `REASON_CODE_HINT` of the public web;
   the codes stay only in the order document), day note «ℹ️ …». A day without lessons that is not a study day
