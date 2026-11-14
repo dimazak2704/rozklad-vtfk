@@ -1,5 +1,5 @@
 import { HoverCard as RadixHoverCard, Popover as RadixPopover } from 'radix-ui';
-import { useEffect, useRef, type ComponentProps, type PointerEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ComponentProps, type MouseEvent, type PointerEvent, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useHoverIntent } from './hover-intent';
 import { HOVER_CARD_CLOSE_DELAY_MS, HOVER_CARD_DELAY_MS } from './Tooltip.helpers';
@@ -96,7 +96,19 @@ export function HoverDetails({
         else intent.close();
       }}
     >
-      <RadixPopover.Trigger asChild {...hoverHandlers}>
+      <RadixPopover.Trigger
+        asChild
+        {...hoverHandlers}
+        onClick={(event: MouseEvent<HTMLElement>) => {
+          // картку вже відкрило наведення (з «розігрітої» сітки — одразу): клік по кнопці означає «відкрий»,
+          // а не «закрий», тож лишаємо її відкритою, тепер як діалог (фокус потім повернеться на тригер).
+          // Посилання не чіпаємо: клік по ньому — перехід.
+          if (intent.open && intent.byHover && !event.currentTarget.closest('a[href]')) {
+            event.preventDefault();
+            intent.show();
+          }
+        }}
+      >
         {children}
       </RadixPopover.Trigger>
       <RadixPopover.Portal>

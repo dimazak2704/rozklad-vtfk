@@ -39,6 +39,28 @@ describe('HoverDetails', () => {
     expect(screen.queryByText('Повна назва')).not.toBeInTheDocument();
   });
 
+  it('клік по кнопці, чию картку вже відкрило наведення, лишає картку відкритою, а другий клік закриває', () => {
+    renderWithProviders(
+      <HoverDetails label="Джерело" content={<p>Розпорядження №43</p>}>
+        <button type="button">Джерело</button>
+      </HoverDetails>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Джерело' });
+    hover(trigger);
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS);
+    });
+    expect(screen.getByText('Розпорядження №43')).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.getByText('Розпорядження №43')).toBeInTheDocument();
+    fireEvent.click(trigger);
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(screen.queryByText('Розпорядження №43')).not.toBeInTheDocument();
+  });
+
   it('курсор затримався на клітинці — картка відкривається', () => {
     renderWithProviders(
       <HoverDetails label="Деталі заняття" content={<p>Повна назва</p>}>
