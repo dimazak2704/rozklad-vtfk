@@ -7,7 +7,7 @@ import { useBells } from '@/api/meta';
 import { publicSchedulePath } from '@/api/public';
 import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
 import type { ScheduleDto } from '@/api/types';
-import { DayList, NowIndicator, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
+import { DayList, GridNamesProvider, NowIndicator, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -290,7 +290,9 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
         aria-busy={(placeholder && !unavailableOffline) || undefined}
         className={cn('transition-opacity duration-150', placeholder && !unavailableOffline && 'opacity-60')}
       >
-        <div ref={enterRef}>{content}</div>
+        <div ref={enterRef}>
+          <GridNamesProvider days={schedule?.days}>{content}</GridNamesProvider>
+        </div>
       </div>
     </section>
   );

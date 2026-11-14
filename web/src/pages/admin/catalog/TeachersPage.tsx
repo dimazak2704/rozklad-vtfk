@@ -30,15 +30,18 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { toSortParam } from '@/lib/sort';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { useRegisterCommands } from '@/stores/commands';
 
 const NOUN = ['викладач', 'викладачі', 'викладачів'] as const;
 const ALL = 'all';
 
-/** Повне ПІБ, коли воно більше за саме прізвище; інакше нічого — прізвище вже є в назві рядка. */
-function fullName(t: CatalogTeacher): string | null {
-  const parts = [t.lastName, t.firstName, t.middleName].filter(Boolean);
-  return parts.length > 1 ? parts.join(' ') : null;
+/**
+ * Підпис під іменем: як викладача написано в розкладі («Кренцін М.Д.»), коли рядок уже називає його
+ * «Прізвище Імʼя»; без імені назва рядка й так з ініціалами — підпису немає. По батькові — у формі.
+ */
+function scheduleName(t: CatalogTeacher): string | null {
+  return t.firstName ? t.shortName : null;
 }
 
 /** Довідник викладачів: імена для розкладу й сайту, комісії, псевдоніми з таблиць, дисципліни для замін. */
@@ -88,11 +91,11 @@ export default function TeachersPage() {
         cell: (t) => (
           <span className="flex flex-col">
             <span className="flex flex-wrap items-baseline gap-x-2">
-              <span className="font-[650]">{t.shortName}</span>
+              <span className="font-[650]">{formatTeacherName(t, 'full')}</span>
               {t.active ? null : <span className="text-caption font-normal text-muted">неактивний</span>}
               {t.needsReview ? <span className="text-caption font-normal text-change">перевірити дані</span> : null}
             </span>
-            {fullName(t) ? <span className="text-caption font-normal text-muted">{fullName(t)}</span> : null}
+            {scheduleName(t) ? <span className="text-caption font-normal text-muted">{scheduleName(t)}</span> : null}
           </span>
         ),
       },
@@ -201,8 +204,8 @@ export default function TeachersPage() {
         rowClassName={(t) => (t.active ? undefined : 'text-muted')}
         // на телефоні — рядок списку: «⋯» по центру поруч з іменем, без порожніх рядків сітки стосу
         mobileRow={(t) => ({
-          title: t.shortName,
-          caption: fullName(t) ?? t.cycleCommission?.label ?? null,
+          title: formatTeacherName(t, 'full'),
+          caption: scheduleName(t) ?? t.cycleCommission?.label ?? null,
           status: t.needsReview ? (
             <span className="text-change">перевірити дані</span>
           ) : t.active ? null : (

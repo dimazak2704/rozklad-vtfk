@@ -10,6 +10,7 @@ import { CompetenceEditor } from './CompetenceEditor';
 import { applyServerErrors, blankToNull } from './forms';
 import { FormAlert, FormDialog } from './FormParts';
 import { EMPLOYMENT_OPTIONS } from './labels';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { shortNameOf } from './names';
 import { useCatalogJournal } from './useCatalogJournal';
 
@@ -125,7 +126,7 @@ export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDi
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={teacher ? teacher.shortName : 'Новий викладач'}
+      title={teacher ? formatTeacherName(teacher, 'full') : 'Новий викладач'}
       description={
         teacher
           ? teacher.linked

@@ -1,6 +1,6 @@
 import { useBells } from '@/api/meta';
 import { usePublicSchedule } from '@/api/public';
-import { DayList } from '@/components/schedule';
+import { DayList, GridNamesProvider } from '@/components/schedule';
 import { EmptyState, ErrorState, useErrorCovered } from '@/components/ui';
 import { MoreLink } from '../MoreLink';
 import { ScheduleSkeleton } from '../schedule/ScheduleSkeleton';
@@ -27,7 +27,11 @@ export function LastViewedDay() {
 
   let body;
   if (day && day.lessons.length > 0) {
-    body = <DayList day={day} bells={bells.data?.slots} perspective="group" today={home.today} showHeader={false} />;
+    body = (
+      <GridNamesProvider days={query.data?.days}>
+        <DayList day={day} bells={bells.data?.slots} perspective="group" today={home.today} showHeader={false} />
+      </GridNamesProvider>
+    );
   } else if (day) {
     body = <EmptyState size="sm" title={`У ${group.label} ${when}${dated ? ',' : ''} пар немає.`} className="py-2" />;
   } else if (query.isError) {

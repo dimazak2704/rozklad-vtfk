@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { IsoDate, LessonView, WeekParity } from '@/api/types';
 import { paths } from '@/app/routes';
+import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
@@ -51,6 +52,7 @@ const LINK =
  * розклад викладача й аудиторії.
  */
 export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
+  const teacherName = useTeacherFullName();
   const tone = LESSON_TONE[lesson.kind];
   const original = lesson.original;
   const subgroup = subgroupLabel(lesson.subgroup);
@@ -80,7 +82,7 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
       </div>
 
       <dl className="flex flex-col gap-1.5">
-        <Row label="Веде">{lesson.teacher ? lesson.teacher.shortName : <span className="text-muted">не призначено</span>}</Row>
+        <Row label="Веде">{lesson.teacher ? teacherName(lesson.teacher) : <span className="text-muted">не призначено</span>}</Row>
         <Row label="Де">
           {lesson.room ? (
             <>
@@ -115,7 +117,9 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           {replacedDiscipline || replacedTeacher ? (
             <Row label="Було">
               <s className="text-secondary decoration-[var(--text-decoration-color-change)]">
-                {[original?.discipline?.shortName ?? lesson.discipline.shortName, original?.teacher?.shortName].filter(Boolean).join(' · ')}
+                {[original?.discipline?.shortName ?? lesson.discipline.shortName, original?.teacher ? teacherName(original.teacher) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
               </s>
             </Row>
           ) : null}

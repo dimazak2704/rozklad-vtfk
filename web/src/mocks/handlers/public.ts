@@ -65,6 +65,7 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, notFound, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { printedReason } from './admin-daily/printed';
+import { currentSettings } from './settings';
 
 const UK = new Intl.Collator('uk');
 
@@ -869,7 +870,7 @@ export const handlers = [
   http.get(apiPath('/public/groups'), () => HttpResponse.json(GROUPS.filter((g) => g.active).map(toPublicGroup))),
 
   http.get(apiPath('/public/teachers'), () =>
-    HttpResponse.json(TEACHERS.filter((t) => t.active).map(toPublicTeacher)),
+    HttpResponse.json(TEACHERS.filter((t) => t.active).map((t) => toPublicTeacher(t, currentSettings().showTeacherFullNames))),
   ),
 
   http.get(apiPath('/public/rooms'), () => HttpResponse.json(ROOMS.filter((r) => r.active).map(toPublicRoom))),

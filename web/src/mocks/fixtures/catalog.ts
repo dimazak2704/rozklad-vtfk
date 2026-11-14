@@ -119,6 +119,15 @@ const teacherNames = new Set<string>();
 for (const [, , , , , , teacher] of RAW_LESSONS) if (teacher) teacherNames.add(teacher);
 for (const [, , , curator] of RAW_GROUPS) if (curator) teacherNames.add(curator);
 
+/**
+ * Імена й по батькові, відомі для демо-викладачів (з seed/teacher-names.csv, публічні сторінки циклових
+ * комісій коледжу). Решта — без імені, як більшість записів після імпорту розкладу.
+ */
+const KNOWN_NAMES: Readonly<Record<string, readonly [string, string]>> = {
+  Кренцін: ['Михайло', 'Дмитрович'],
+  Непийвода: ['Максим', 'Васильович'],
+};
+
 const surnameCount = new Map<string, number>();
 for (const name of teacherNames) surnameCount.set(surnameOf(name), (surnameCount.get(surnameOf(name)) ?? 0) + 1);
 
@@ -127,8 +136,8 @@ export const TEACHERS: readonly TeacherDto[] = [...teacherNames].sort((a, b) => 
   return {
     id: mockId('teacher', shortName),
     lastName,
-    firstName: null,
-    middleName: null,
+    firstName: KNOWN_NAMES[shortName]?.[0] ?? null,
+    middleName: KNOWN_NAMES[shortName]?.[1] ?? null,
     shortName,
     displayName: (surnameCount.get(lastName) ?? 0) > 1 ? withFirstInitial(shortName) : lastName,
     cycleCommission: null,
@@ -325,16 +334,20 @@ export function toPublicGroup(group: GroupDto): PublicGroupDto {
 }
 
 /**
- * Як у core: `fullName` лише тоді, коли налаштування showTeacherFullNames це дозволяє й імʼя відоме.
- * Мок не читає налаштувань (типово false), тож повного імені не дає — як core з типовими налаштуваннями.
+ * Як у core: `fullName` і `firstName` лише тоді, коли налаштування showTeacherFullNames це дозволяє
+ * й імʼя відоме (обробник передає значення налаштування; типово false — лише короткі імена).
  */
-export const toPublicTeacher = (teacher: TeacherDto): PublicTeacherDto => ({
-  id: teacher.id,
-  shortName: teacher.shortName,
-  displayName: teacher.displayName,
-  cycleCommission: teacher.cycleCommission?.label ?? null,
-  fullName: null,
-});
+export const toPublicTeacher = (teacher: TeacherDto, showFullNames = false): PublicTeacherDto => {
+  const named = showFullNames && Boolean(teacher.firstName);
+  return {
+    id: teacher.id,
+    shortName: teacher.shortName,
+    displayName: teacher.displayName,
+    cycleCommission: teacher.cycleCommission?.label ?? null,
+    fullName: named ? [teacher.lastName, teacher.firstName, teacher.middleName].filter(Boolean).join(' ') : null,
+    firstName: named ? teacher.firstName : null,
+  };
+};
 
 export const toPublicRoom = (room: RoomDto): PublicRoomDto => ({
   id: room.id,

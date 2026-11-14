@@ -7,7 +7,7 @@ import type { ScheduleParams, ScheduleView } from '@/components/public/schedule/
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
 import { WeekDayTabs } from '@/components/public/schedule/WeekDayTabs';
 import { WeekNav } from '@/components/public/schedule/WeekNav';
-import { DayList, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
+import { DayList, GridNamesProvider, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
 import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -153,7 +153,9 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
         aria-busy={placeholder || undefined}
         className={cn('transition-opacity duration-150', view === 'day' && 'max-w-3xl', placeholder && 'opacity-60')}
       >
-        <div ref={enterRef}>{content}</div>
+        <div ref={enterRef}>
+          <GridNamesProvider days={schedule?.days}>{content}</GridNamesProvider>
+        </div>
       </div>
     </section>
   );

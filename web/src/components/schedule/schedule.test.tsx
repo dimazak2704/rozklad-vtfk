@@ -1,9 +1,14 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import type { DayDto, PublicTeacherDto } from '@/api/types';
+import { apiPath } from '@/mocks/kit';
+import { server } from '@/mocks/server';
 import { BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
 import { renderWithProviders } from '@/test/render';
 import { DayList } from './DayList';
+import { GridNamesProvider } from './GridNames';
 import { LessonCell } from './LessonCell';
 import { NowIndicator } from './NowIndicator';
 import { WeekGrid } from './WeekGrid';
@@ -28,7 +33,8 @@ describe('LessonCell', () => {
     await user.keyboard('{Enter}');
     const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
     expect(within(details).getByText('Надійність, діагностика та експлуатація компʼютерних систем і мереж')).toBeInTheDocument();
-    expect(within(details).getByText('Непийвода М.В.')).toBeInTheDocument();
+    // у картці — «Прізвище Імʼя»; імені в довіднику немає (налаштування повних імен вимкнене) — з ініціалами
+    expect(within(details).getByText(/^Непийвода\sМ\.\sВ\.$/)).toBeInTheDocument();
     // код розпорядження в публічній картці розгорнуто словами
     expect(within(details).getByText('взаємна заміна')).toBeInTheDocument();
     expect(within(details).getByText(/чисельник/)).toBeInTheDocument();
@@ -63,6 +69,51 @@ describe('LessonCell', () => {
     const lesson = monday.lessons[0]!;
     renderWithProviders(<LessonCell lesson={lesson} perspective="group" />);
     expect(screen.getByText(lesson.teacher!.displayName)).not.toHaveClass('font-display');
+  });
+});
+
+describe('імена викладачів', () => {
+  it('у картці — «Прізвище Імʼя», коли довідник віддає імʼя (налаштування повних імен увімкнене)', async () => {
+    const teacher = substituted.teacher!;
+    const named: PublicTeacherDto = {
+      id: teacher.id,
+      shortName: teacher.shortName,
+      displayName: teacher.displayName,
+      cycleCommission: null,
+      fullName: 'Непийвода Максим Васильович',
+      firstName: 'Максим',
+    };
+    server.use(http.get(apiPath('/public/teachers'), () => HttpResponse.json([named])));
+    const user = userEvent.setup();
+    renderWithProviders(<LessonCell lesson={substituted} date={monday.date} />);
+    await user.tab();
+    await user.keyboard('{Enter}');
+    const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ/ });
+    // по батькові в картці не потрібне
+    expect(await within(details).findByText(/^Непийвода\sМаксим$/)).toBeInTheDocument();
+  });
+
+  it('у сітці однофамільців розрізняють ініціали, а решту пишуть прізвищем', () => {
+    const base = monday.lessons[0]!;
+    const inna = { ...base, id: 'l-inna', pair: 1, teacher: { id: 't-inna', shortName: 'Овчар Ін.М.', displayName: 'Овчар' } };
+    const ivan = { ...base, id: 'l-ivan', pair: 2, teacher: { id: 't-ivan', shortName: 'Овчар Ів.М.', displayName: 'Овчар' } };
+    const days: DayDto[] = [{ ...monday, lessons: [inna, ivan] }];
+    renderWithProviders(
+      <GridNamesProvider days={days}>
+        <LessonCell lesson={inna} />
+        <LessonCell lesson={ivan} />
+      </GridNamesProvider>,
+    );
+    expect(screen.getByText('Овчар Ін.М.')).toBeInTheDocument();
+    expect(screen.getByText('Овчар Ів.М.')).toBeInTheDocument();
+
+    // в іншому розкладі, де Овчар один, — лише прізвище
+    renderWithProviders(
+      <GridNamesProvider days={[{ ...monday, lessons: [inna] }]}>
+        <LessonCell lesson={inna} />
+      </GridNamesProvider>,
+    );
+    expect(screen.getByText('Овчар')).toBeInTheDocument();
   });
 });
 

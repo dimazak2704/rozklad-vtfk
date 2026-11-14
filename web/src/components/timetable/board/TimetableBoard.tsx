@@ -19,7 +19,9 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { errorMessage } from '@/api/errors';
 import { previewMove, type TimetableConflict } from '@/api/timetable';
 import type { MoveLessonRequest, Parity, PublicRoomDto, ShiftWindowDto, TemplateLessonDto, Uuid, Weekday } from '@/api/types';
+import { GridNamesScope } from '@/components/schedule/GridNames';
 import { roomLabel } from '@/lib/schedule';
+import { ambiguousGridNames } from '@/lib/teacher-name';
 import {
   acceptsLesson,
   dropTargetId,
@@ -138,6 +140,8 @@ export function TimetableBoard({
   const previewAbort = useRef<AbortController | null>(null);
   const landedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const index = useMemo(() => new SlotIndex(lessons), [lessons]);
+  // однофамільці на дошці — у клітинках з ініціалами
+  const ambiguousNames = useMemo(() => ambiguousGridNames(lessons.map((lesson) => lesson.teacher)), [lessons]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -370,62 +374,64 @@ export function TimetableBoard({
       : null;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={collisionDetection}
-      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      // сторінка довга, а ціль зазвичай поруч: прокручуємо лише біля самого краю вікна
-      autoScroll={{ threshold: { x: 0, y: 0.08 }, acceleration: 6 }}
-      accessibility={{
-        announcements,
-        screenReaderInstructions: {
-          draggable:
-            'Щоб перенести пару, натисніть Пробіл або Enter, стрілками оберіть новий слот і натисніть Пробіл або Enter ще раз. Escape — скасувати. F2 — редагувати.',
-        },
-      }}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      onDragCancel={finishDrag}
-    >
-      <div ref={listRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-        {virtualizer.getVirtualItems().map((item) => {
-          const row = rows[item.index] ?? [];
-          return (
-            <div
-              key={item.key}
-              data-index={item.index}
-              ref={virtualizer.measureElement}
-              className="absolute inset-x-0 top-0"
-              style={{ transform: `translateY(${item.start - scrollMargin}px)`, paddingBottom: ROW_GAP }}
-            >
-              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-                {row.map((entity) => (
-                  <EntityGrid
-                    key={entity.id}
-                    entity={entity}
-                    windows={windows}
-                    editable={editable}
-                    conflictsByLesson={conflictsByLesson}
-                    selectedLessonId={selectedLessonId}
-                    store={store}
-                    focus={resolvedFocus}
-                    onSelect={onSelect}
-                    onOpen={onOpen}
-                    onAdd={onAdd}
-                    days={days}
-                  />
-                ))}
+    <GridNamesScope ambiguous={ambiguousNames}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        // сторінка довга, а ціль зазвичай поруч: прокручуємо лише біля самого краю вікна
+        autoScroll={{ threshold: { x: 0, y: 0.08 }, acceleration: 6 }}
+        accessibility={{
+          announcements,
+          screenReaderInstructions: {
+            draggable:
+              'Щоб перенести пару, натисніть Пробіл або Enter, стрілками оберіть новий слот і натисніть Пробіл або Enter ще раз. Escape — скасувати. F2 — редагувати.',
+          },
+        }}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDragCancel={finishDrag}
+      >
+        <div ref={listRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((item) => {
+            const row = rows[item.index] ?? [];
+            return (
+              <div
+                key={item.key}
+                data-index={item.index}
+                ref={virtualizer.measureElement}
+                className="absolute inset-x-0 top-0"
+                style={{ transform: `translateY(${item.start - scrollMargin}px)`, paddingBottom: ROW_GAP }}
+              >
+                <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+                  {row.map((entity) => (
+                    <EntityGrid
+                      key={entity.id}
+                      entity={entity}
+                      windows={windows}
+                      editable={editable}
+                      conflictsByLesson={conflictsByLesson}
+                      selectedLessonId={selectedLessonId}
+                      store={store}
+                      focus={resolvedFocus}
+                      onSelect={onSelect}
+                      onOpen={onOpen}
+                      onAdd={onAdd}
+                      days={days}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
 
-      <DragOverlay dropAnimation={null}>{active ? <LessonChipOverlay lesson={active} view={view} /> : null}</DragOverlay>
-      {active && overTarget && cardPosition ? (
-        <DropPreviewCard target={overTarget} check={overCheck} position={cardPosition} roomChange={roomChange} />
-      ) : null}
-    </DndContext>
+        <DragOverlay dropAnimation={null}>{active ? <LessonChipOverlay lesson={active} view={view} /> : null}</DragOverlay>
+        {active && overTarget && cardPosition ? (
+          <DropPreviewCard target={overTarget} check={overCheck} position={cardPosition} roomChange={roomChange} />
+        ) : null}
+      </DndContext>
+    </GridNamesScope>
   );
 }

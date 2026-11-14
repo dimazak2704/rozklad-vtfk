@@ -2,6 +2,7 @@ import { Layers, MonitorSmartphone, Pin, TriangleExclamationPoint } from 'lucide
 import type { TimetableConflict } from '@/api/timetable';
 import type { TemplateLessonDto } from '@/api/types';
 import { ParityMark } from '@/components/ui';
+import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { lineAttr } from '@/lib/discipline-color';
 import { capitalize, LESSON_KIND_LABEL, weekdayName } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
@@ -14,6 +15,7 @@ interface LessonDetailsCardProps {
 
 /** Повні відомості про пару шаблону: назва, хто, де, коли, парність простими словами, конфлікти. */
 export function LessonDetailsCard({ lesson, conflicts }: LessonDetailsCardProps) {
+  const teacherName = useTeacherFullName('admin');
   const hard = conflicts.filter((c) => c.severity === 'HARD');
   const soft = conflicts.filter((c) => c.severity === 'SOFT');
   return (
@@ -35,7 +37,7 @@ export function LessonDetailsCard({ lesson, conflicts }: LessonDetailsCardProps)
           {lesson.subgroup > 0 ? <span className="font-normal text-secondary"> · {lesson.subgroup} підгрупа</span> : null}
         </dd>
         <dt className="text-muted">Викладач</dt>
-        <dd className="text-primary">{lesson.teacher?.shortName ?? <span className="text-muted">не призначено</span>}</dd>
+        <dd className="text-primary">{lesson.teacher ? teacherName(lesson.teacher) : <span className="text-muted">не призначено</span>}</dd>
         <dt className="text-muted">Аудиторія</dt>
         <dd className="text-primary figures">{roomLabel(lesson.room?.name) ?? <span className="text-muted">не призначено</span>}</dd>
         <dt className="text-muted">Коли</dt>

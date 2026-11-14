@@ -3,6 +3,7 @@ import type { TimetableConflict } from '@/api/timetable';
 import type { MoveLessonRequest, TemplateLessonDto } from '@/api/types';
 import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
+import { formatTeacherName } from '@/lib/teacher-name';
 import type { BoardView } from './grid';
 import { PARITY_SHORT } from './labels';
 
@@ -13,15 +14,18 @@ import { PARITY_SHORT } from './labels';
 export function chipText(
   lesson: TemplateLessonDto,
   view: BoardView,
+  ambiguous?: ReadonlySet<string>,
 ): { title: string; detail: string; lines: string[]; room: string | null } {
   const room = roomLabel(lesson.room?.name);
   const cohort = lesson.subgroup > 0 ? `${lesson.group.code}/${lesson.subgroup}` : lesson.group.code;
+  // викладач у клітинці — прізвищем; однофамільці на дошці — з ініціалами (lib/teacher-name)
+  const teacher = lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', { ambiguous }) : null;
   const parts =
     view === 'group'
-      ? { title: lesson.discipline.shortName, lines: [lesson.teacher?.displayName, room] }
+      ? { title: lesson.discipline.shortName, lines: [teacher, room] }
       : view === 'teacher'
         ? { title: cohort, lines: [lesson.discipline.shortName, room] }
-        : { title: cohort, lines: [lesson.discipline.shortName, lesson.teacher?.displayName] };
+        : { title: cohort, lines: [lesson.discipline.shortName, teacher] };
   const lines = parts.lines.filter((line): line is string => Boolean(line));
   return { title: parts.title, detail: lines.join(' · '), lines, room };
 }

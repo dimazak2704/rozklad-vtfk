@@ -239,6 +239,8 @@ export interface PublicTeacherDto {
   cycleCommission: Nullable<string>;
   /** Повне імʼя — лише коли налаштування `showTeacherFullNames` це дозволяє і імʼя відоме. */
   fullName: Nullable<string>;
+  /** Імʼя без по батькові — за тим самим правилом, що й `fullName` (старий core поля не має). */
+  firstName?: Nullable<string>;
 }
 
 /** GET /api/public/rooms */

@@ -7,6 +7,7 @@ import { paths } from '@/app/routes';
 import { capitalize, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { groupSpecialtyName } from '@/lib/names';
 import { roomLabel } from '@/lib/schedule';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { matchScore } from '@/lib/search';
 
 export interface FinderItem {
@@ -43,10 +44,10 @@ export function teacherItems(teachers: readonly PublicTeacherDto[]): FinderItem[
     key: `TEACHER:${teacher.id}`,
     type: 'TEACHER',
     id: teacher.id,
-    label: teacher.shortName,
+    label: formatTeacherName(teacher, 'full'),
     sublabel: teacher.cycleCommission,
     url: paths.teacher(teacher.id),
-    texts: [teacher.shortName, teacher.displayName],
+    texts: [teacher.shortName, teacher.displayName, teacher.fullName].filter((text): text is string => Boolean(text)),
   }));
 }
 

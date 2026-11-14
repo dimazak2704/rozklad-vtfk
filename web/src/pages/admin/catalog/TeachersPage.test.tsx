@@ -20,6 +20,16 @@ describe('довідники на телефоні', () => {
     expect(item).not.toHaveTextContent(/Вхід у систему/);
   });
 
+  it('викладач з відомим імʼям — «Прізвище Імʼя», під ним — як його написано в розкладі', async () => {
+    renderWithProviders(<TeachersPage />, { route: '/admin/catalog/teachers?q=Кренцін' });
+
+    const list = await screen.findByRole('list', { name: 'Викладачі коледжу' });
+    const item = within(list).getByText(/^Кренцін\sМихайло$/).closest('li') as HTMLElement;
+    // по батькові — у формі викладача, не в списку
+    expect(item).not.toHaveTextContent('Дмитрович');
+    expect(within(item).getByText('Кренцін')).toBeInTheDocument();
+  });
+
   it('аудиторія — рядок списку з номером і кнопкою дій', async () => {
     renderWithProviders(<RoomsPage />, { route: '/admin/catalog/rooms?q=301' });
 

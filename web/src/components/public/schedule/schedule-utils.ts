@@ -5,6 +5,7 @@ import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, ScheduleD
 import { compareIsoDates, diffDays, formatWeekdayDate, startOfWeek } from '@/lib/date';
 import { capitalize, PARITY_LABEL, REASON_CODE_HINT, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { isChangedLesson, lessonCounterpart, roomLabel, type Perspective } from '@/lib/schedule';
+import { formatTeacherName } from '@/lib/teacher-name';
 
 /** «Компʼютерний клас · 30 місць · корпус 2», «Спортзал · до 3 груп одночасно»; невідоме не показуємо. */
 export function roomDetails(room: PublicRoomDto): string {
@@ -135,15 +136,15 @@ export function changeSummary(lesson: LessonView): string {
       const disciplineChanged = Boolean(original?.discipline && original.discipline.id !== lesson.discipline.id);
       const before = who(
         disciplineChanged ? original?.discipline?.shortName : null,
-        original?.teacher && original.teacher.id !== lesson.teacher?.id ? original.teacher.displayName : null,
+        original?.teacher && original.teacher.id !== lesson.teacher?.id ? formatTeacherName(original.teacher, 'grid') : null,
       );
-      const after = who(disciplineChanged ? lesson.discipline.shortName : null, lesson.teacher?.displayName);
+      const after = who(disciplineChanged ? lesson.discipline.shortName : null, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null);
       return before ? `${after || lesson.discipline.shortName} замість ${before}` : `${lesson.discipline.shortName}: заміна`;
     }
     case 'CANCELLED':
       return `${lesson.discipline.shortName}: пари не буде`;
     case 'ADDITIONAL':
-      return `додаткова пара: ${who(lesson.discipline.shortName, lesson.teacher?.displayName)}`;
+      return `додаткова пара: ${who(lesson.discipline.shortName, lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null)}`;
     case 'ROOM_CHANGED':
       return `${lesson.discipline.shortName}: ${roomLabel(original?.room?.name) ?? 'аудиторія'} → ${roomLabel(lesson.room?.name) ?? '?'}`;
     case 'MOVED':

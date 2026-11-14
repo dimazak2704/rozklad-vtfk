@@ -19,6 +19,7 @@ import {
   SHIFT_WINDOWS,
   SPECIALTIES,
   TEACHERS,
+  toPublicTeacher,
   teacherNamed,
   TEMPLATE_LESSONS,
   roomNamed,
@@ -218,5 +219,15 @@ describe('генератор розкладу', () => {
     const forNepyivoda = buildSchedule('TEACHER', nepyivoda.id, date, date, { overlay })?.days[0]?.lessons ?? [];
     expect(forKrentsin.find((l) => l.id === target?.id)?.kind).toBe('SUBSTITUTED');
     expect(forNepyivoda.find((l) => l.id === target?.id)?.teacher?.id).toBe(nepyivoda.id);
+  });
+});
+
+describe('публічний довідник викладачів', () => {
+  it('як core: імʼя й повне імʼя — лише з дозволу налаштування і лише коли імʼя відоме', () => {
+    const krentsin = TEACHERS.find((t) => t.shortName === 'Кренцін')!;
+    expect(toPublicTeacher(krentsin)).toMatchObject({ fullName: null, firstName: null });
+    expect(toPublicTeacher(krentsin, true)).toMatchObject({ fullName: 'Кренцін Михайло Дмитрович', firstName: 'Михайло' });
+    const unnamed = TEACHERS.find((t) => !t.firstName)!;
+    expect(toPublicTeacher(unnamed, true)).toMatchObject({ fullName: null, firstName: null });
   });
 });

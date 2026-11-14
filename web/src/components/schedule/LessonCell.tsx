@@ -6,8 +6,10 @@ import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { pairOrdinalGenitive } from '@/lib/ordinal';
 import { LESSON_TONE, lessonCounterpart, lessonSummary, lessonTime, roomLabel, type Perspective } from '@/lib/schedule';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { Drawer, DrawerContent, DrawerTrigger } from '../ui/Drawer';
 import { HoverDetails } from '../ui/HoverCard';
+import { useGridNames } from './grid-names';
 import { LessonDetails } from './LessonDetails';
 import { usePhoneLayout } from './usePhoneLayout';
 
@@ -111,7 +113,8 @@ function LessonCellView({
   const tone = LESSON_TONE[lesson.kind];
   const cancelled = tone === 'cancel';
   const moved = lesson.kind === 'MOVED';
-  const counterpart = lessonCounterpart(lesson, perspective);
+  const ambiguous = useGridNames();
+  const counterpart = lessonCounterpart(lesson, perspective, ambiguous);
   const room = roomLabel(lesson.room?.name);
   const originalRoom = lesson.kind === 'ROOM_CHANGED' ? roomLabel(lesson.original?.room?.name) : null;
   const original = lesson.original;
@@ -119,7 +122,7 @@ function LessonCellView({
   const changedTeacher = lesson.kind === 'SUBSTITUTED' && original?.teacher && original.teacher.id !== lesson.teacher?.id;
   const replacedText =
     lesson.kind === 'SUBSTITUTED'
-      ? [changedDiscipline ? original?.discipline?.shortName : null, changedTeacher ? original?.teacher?.displayName : null]
+      ? [changedDiscipline ? original?.discipline?.shortName : null, changedTeacher && original?.teacher ? formatTeacherName(original.teacher, 'grid', { ambiguous }) : null]
           .filter(Boolean)
           .join(' · ')
       : null;
@@ -148,7 +151,7 @@ function LessonCellView({
     >
       <button
         type="button"
-        aria-label={`${lessonSummary(lesson, perspective)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
+        aria-label={`${lessonSummary(lesson, perspective, ambiguous)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
         className={cn(
           'lesson-cell group/lesson relative isolate flex w-full min-w-0 flex-col items-stretch gap-1 text-start',
           // тло стану — псевдоелемент з відступом 4 px (у сітці) і радіусом 10
@@ -208,7 +211,7 @@ function LessonCellView({
               <span className={cn('font-display font-semibold tracking-[0.01em]', !past && !cancelled && 'text-primary')}>
                 {lesson.group.code}
               </span>
-              {perspective === 'room' && lesson.teacher ? ` · ${lesson.teacher.displayName}` : null}
+              {perspective === 'room' && lesson.teacher ? ` · ${formatTeacherName(lesson.teacher, 'grid', { ambiguous })}` : null}
             </span>
           ) : counterpart ? (
             <span className="min-w-0 truncate">{counterpart}</span>

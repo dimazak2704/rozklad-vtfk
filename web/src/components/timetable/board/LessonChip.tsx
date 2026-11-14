@@ -3,6 +3,7 @@ import { Layers, MonitorSmartphone, Pin, TriangleExclamationPoint } from 'lucide
 import { memo, type CSSProperties, type KeyboardEvent } from 'react';
 import type { TimetableConflict } from '@/api/timetable';
 import type { TemplateLessonDto } from '@/api/types';
+import { useGridNames } from '@/components/schedule/grid-names';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui';
 import { useHoverIntent } from '@/components/ui/hover-intent';
 import { cn } from '@/lib/cn';
@@ -65,7 +66,7 @@ export const LessonChip = memo(function LessonChip({
   // показує свою одразу; сама картка мишу не ловить (лише читання), тож не накриває шлях до сусідньої клітинки
   const hover = useHoverIntent({ openDelay: CARD_OPEN_DELAY_MS, closeDelay: CARD_CLOSE_DELAY_MS });
   const hasHard = conflicts.some((c) => c.severity === 'HARD');
-  const { title, detail, lines, room } = chipText(lesson, view);
+  const { title, detail, lines, room } = chipText(lesson, view, useGridNames());
   const oneLine = compact || narrow;
   // підгрупа на всю пару: під назвою — викладач і аудиторія окремими рядками, як у друкованому розкладі
   const stacked = narrow && !compact;
@@ -192,7 +193,7 @@ const CARD_CLOSE_DELAY_MS = 80;
 
 /** Плаваюча копія пари під курсором під час перетягування. */
 export function LessonChipOverlay({ lesson, view }: { lesson: TemplateLessonDto; view: BoardView }) {
-  const { title, detail } = chipText(lesson, view);
+  const { title, detail } = chipText(lesson, view, useGridNames());
   return (
     <div
       {...lineAttr(lesson.discipline)}

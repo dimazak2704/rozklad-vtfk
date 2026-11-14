@@ -3,6 +3,7 @@
  * (п'ятниця має інші дзвінки — такі клітинки показують свій час окремо).
  */
 import type { BellSlotDto, DayDto, LessonView, LessonViewKind } from '@/api/types';
+import { formatTeacherName } from './teacher-name';
 
 /** Чий це розклад — від цього залежить, що писати в клітинці. */
 export type Perspective = 'group' | 'teacher' | 'room';
@@ -123,15 +124,19 @@ export function rowTimes(days: ReadonlyArray<Pick<DayDto, 'lessons'>>): Map<numb
   return out;
 }
 
-/** Що показати в другому рядку клітинки залежно від того, чий розклад. */
-export function lessonCounterpart(lesson: LessonView, perspective: Perspective): string | null {
+/**
+ * Що показати в другому рядку клітинки залежно від того, чий розклад. Викладач — прізвищем; `ambiguous` —
+ * однофамільці цього розкладу (lib/teacher-name `ambiguousGridNames`), їх пишемо з ініціалами.
+ */
+export function lessonCounterpart(lesson: LessonView, perspective: Perspective, ambiguous?: ReadonlySet<string>): string | null {
+  const teacher = lesson.teacher ? formatTeacherName(lesson.teacher, 'grid', { ambiguous }) : null;
   switch (perspective) {
     case 'group':
-      return lesson.teacher?.displayName ?? null;
+      return teacher;
     case 'teacher':
       return lesson.group.code;
     case 'room':
-      return [lesson.group.code, lesson.teacher?.displayName].filter(Boolean).join(' · ') || null;
+      return [lesson.group.code, teacher].filter(Boolean).join(' · ') || null;
   }
 }
 
@@ -142,10 +147,10 @@ export function roomLabel(name: string | null | undefined): string | null {
 }
 
 /** Текст для читача екрана: усе, що видно в клітинці, одним реченням. */
-export function lessonSummary(lesson: LessonView, perspective: Perspective = 'group'): string {
+export function lessonSummary(lesson: LessonView, perspective: Perspective = 'group', ambiguous?: ReadonlySet<string>): string {
   const time = lessonTime(lesson);
   const parts: string[] = [`${lesson.pair} пара${time ? `, ${time}` : ''}.`];
-  const who = lessonCounterpart(lesson, perspective);
+  const who = lessonCounterpart(lesson, perspective, ambiguous);
   const room = lesson.room ? `аудиторія ${lesson.room.name}` : null;
   parts.push(`${[lesson.discipline.name || lesson.discipline.shortName, who, room].filter(Boolean).join(', ')}.`);
   if (lesson.subgroup > 0) parts.push(`${lesson.subgroup} підгрупа.`);
@@ -154,7 +159,9 @@ export function lessonSummary(lesson: LessonView, perspective: Perspective = 'gr
       parts.push('Пари не буде.');
       break;
     case 'SUBSTITUTED': {
-      const before = [lesson.original?.discipline?.shortName, lesson.original?.teacher?.displayName].filter(Boolean).join(', ');
+      const before = [lesson.original?.discipline?.shortName, lesson.original?.teacher ? formatTeacherName(lesson.original.teacher, 'grid', { ambiguous }) : null]
+        .filter(Boolean)
+        .join(', ');
       parts.push(before ? `Заміна, замість: ${before}.` : 'Заміна.');
       break;
     }

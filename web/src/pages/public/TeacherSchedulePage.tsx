@@ -9,8 +9,9 @@ import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton'
 import { useScheduleParams } from '@/components/public/schedule/schedule-params';
 import { mainDisciplines } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
+import { formatTeacherName } from '@/lib/teacher-name';
 
-/** Розклад викладача /t/:id — публічні короткі імена (UI.md §1). */
+/** Розклад викладача /t/:id — «Прізвище Імʼя» лише з дозволу налаштувань, інакше з ініціалами (UI.md §1). */
 export default function TeacherSchedulePage() {
   const { id = '' } = useParams();
   const params = useScheduleParams();
@@ -18,7 +19,8 @@ export default function TeacherSchedulePage() {
   // id відомий з адреси — розклад вантажимо одразу, паралельно з довідником
   const query = usePublicSchedule('TEACHER', id, params.week.from, params.week.to);
   const teacher = teachers.data?.find((t) => t.id === id);
-  const label = teacher?.shortName ?? query.data?.owner.label;
+  // «Прізвище Імʼя», якщо імʼя відоме й налаштування дозволяє його показувати; інакше «Кренцін М. Д.»
+  const label = teacher ? formatTeacherName(teacher, 'full') : query.data?.owner.label;
   const loaded = query.isPlaceholderData ? undefined : query.data;
   // одна-дві дисципліни — повними назвами: клітинки кажуть лише скорочення, а підзаголовок має місце
   const disciplines = useMemo(() => {
@@ -50,10 +52,8 @@ export default function TeacherSchedulePage() {
     );
   }
 
-  // повне імʼя core надсилає лише тоді, коли це дозволено налаштуванням showTeacherFullNames; інакше — імʼя з
-  // ініціалами чи циклова комісія. Поруч — що викладач веде цього тижня («СТП, ДК»): прізвище саме по собі мало каже
-  const who = teacher?.fullName ?? (teacher?.displayName && teacher.displayName !== label ? teacher.displayName : null) ?? teacher?.cycleCommission ?? null;
-  const details = [who, disciplines ? `Веде ${disciplines}` : null].filter(Boolean).join(' · ');
+  // під іменем — циклова комісія і що викладач веде цього тижня («СТП, ДК»): імʼя саме по собі мало каже
+  const details = [teacher?.cycleCommission, disciplines ? `Веде ${disciplines}` : null].filter(Boolean).join(' · ');
 
   return (
     <SchedulePage
