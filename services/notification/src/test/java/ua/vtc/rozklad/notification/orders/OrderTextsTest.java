@@ -53,18 +53,26 @@ class OrderTextsTest {
 
     @Test
     void adminSummaryCountsWhatWasSent() {
-        String summary = OrderTexts.adminSummary(Order35.payload(), 2, 5, List.of("Ганза"), true, "");
+        String summary = OrderTexts.adminSummary(Order35.payload(), 2, 5, List.of("Ганза"), true, false, "");
         assertThat(summary).startsWith("📄 <b>Опубліковано розпорядження №35</b>\nПонеділок, 19 жовтня 2026 · знаменник")
                 .contains("Змін: 16 · заміна аудиторій: 0 · приміток: 5")
                 .contains("Надіслано: 2 чатам груп, 5 викладачам")
                 .contains("⚠️ Без Telegram: Ганза")
-                .doesNotContain("конвертер");
-        assertThat(OrderTexts.adminSummary(Order35.payload(), 1, 1, List.of(), false, ""))
+                .doesNotContain("конвертер", "Чатам груп не надсилалося");
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 1, 1, List.of(), false, false, ""))
                 .contains("1 чату групи, 1 викладачу")
                 .contains("Зображення не надсилалося");
-        assertThat(OrderTexts.adminSummary(Order35.payload(), 5, 21, List.of(), true, ""))
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 5, 21, List.of(), true, false, ""))
                 .contains("Надіслано: 5 чатам груп, 21 викладачу");
-        assertThat(OrderTexts.adminSummary(Order35.payload(), 21, 0, List.of(), true, ""))
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 21, 0, List.of(), true, false, ""))
                 .contains("Надіслано: 21 чату групи, 0 викладачам");
+    }
+
+    /** A past-dated order skips group chats: admins are told why they got none. */
+    @Test
+    void adminSummaryOfAnOrderBeforeThePublicWindowSaysWhyNoGroupChatGotIt() {
+        assertThat(OrderTexts.adminSummary(Order35.payload(), 0, 2, List.of(), true, true, ""))
+                .contains("Надіслано: 0 чатам груп, 2 викладачам\nℹ️ Чатам груп не надсилалося: цей день уже в архіві, "
+                        + "його бачить лише персонал.");
     }
 }

@@ -48,7 +48,7 @@ public final class OrderTexts {
 
     /** Summary for admin chats. */
     public static String adminSummary(OrderPayload order, int groupChats, int teachers, List<String> withoutTelegram,
-                                      boolean picture, String link) {
+                                      boolean picture, boolean beforePublicWindow, String link) {
         StringBuilder text = new StringBuilder()
                 .append("📄 ").append(b("Опубліковано " + orderLabel(order).toLowerCase(UK)))
                 .append('\n').append(escape(UaDates.capitalize(UaDates.weekdayDayMonth(order.date()))))
@@ -60,6 +60,9 @@ public final class OrderTexts {
                         "чатам груп", "чатам груп"))
                 .append(", ").append(teachers).append(' ').append(plural(teachers, "викладачу", "викладачам",
                         "викладачам"));
+        if (beforePublicWindow) {
+            text.append("\nℹ️ Чатам груп не надсилалося: цей день уже в архіві, його бачить лише персонал.");
+        }
         if (!withoutTelegram.isEmpty()) {
             text.append("\n⚠️ Без Telegram: ").append(escape(String.join(", ", withoutTelegram)));
         }

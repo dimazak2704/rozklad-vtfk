@@ -40,6 +40,8 @@ public class FakeCoreClient implements CoreClient {
     private final AtomicInteger archiveCalls = new AtomicInteger();
     private final AtomicInteger teacherCalls = new AtomicInteger();
     private final AtomicInteger teacherCallsInTransaction = new AtomicInteger();
+    private final AtomicInteger metaCalls = new AtomicInteger();
+    private final AtomicInteger metaCallsInTransaction = new AtomicInteger();
     private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final List<PublicGroup> addedGroups = new CopyOnWriteArrayList<>();
     private final List<PublicTeacher> addedTeachers = new CopyOnWriteArrayList<>();
@@ -59,6 +61,8 @@ public class FakeCoreClient implements CoreClient {
         historyDays = 7;
         teacherCalls.set(0);
         teacherCallsInTransaction.set(0);
+        metaCalls.set(0);
+        metaCallsInTransaction.set(0);
         holidays.clear();
         addedGroups.clear();
         addedTeachers.clear();
@@ -141,8 +145,22 @@ public class FakeCoreClient implements CoreClient {
         return teacherCallsInTransaction.get();
     }
 
+    /** Calls of {@link #meta()}, the HTTP request behind the public history window. */
+    public int metaCalls() {
+        return metaCalls.get();
+    }
+
+    /** Calls of {@link #meta()} made while the calling thread had a database transaction open. */
+    public int metaCallsInTransaction() {
+        return metaCallsInTransaction.get();
+    }
+
     @Override
     public PublicMeta meta() {
+        metaCalls.incrementAndGet();
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            metaCallsInTransaction.incrementAndGet();
+        }
         available();
         return CoreFixtures.meta(today, publicHistoryFrom());
     }

@@ -23,8 +23,9 @@ import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 
 /**
  * Handles one event exactly once: the event id is recorded in {@code processed_event} in the same
- * transaction that queues the resulting messages. Teacher names for admin texts are looked up in core
- * before that transaction, so no HTTP call runs while the handlers hold a row lock.
+ * transaction that queues the resulting messages. Teacher names for admin texts and the public history window
+ * of a past-dated order are looked up in core before that transaction, so no HTTP call runs while the handlers
+ * hold a row lock.
  */
 @Service
 public class EventHandlers {
@@ -51,16 +52,17 @@ public class EventHandlers {
 
     public void handle(RozkladEvent event) {
         String teacherName = substitutions.adminNameFor(event);
-        transactions.executeWithoutResult(tx -> handle(event, teacherName));
+        boolean orderBeforePublicWindow = orders.beforePublicWindow(event);
+        transactions.executeWithoutResult(tx -> handle(event, teacherName, orderBeforePublicWindow));
     }
 
-    private void handle(RozkladEvent event, String teacherName) {
+    private void handle(RozkladEvent event, String teacherName, boolean orderBeforePublicWindow) {
         if (!processedEvents.markProcessed(event.eventId())) {
             log.debug("Event {} ({}) was already processed", event.eventId(), event.getClass().getSimpleName());
             return;
         }
         switch (event) {
-            case OrderPublished published -> orders.onPublished(published);
+            case OrderPublished published -> orders.onPublished(published, orderBeforePublicWindow);
             case SubstitutionConfirmationRequested requested -> substitutions.onConfirmationRequested(requested);
             case SubstitutionStatusChanged changed -> substitutions.onStatusChanged(changed, teacherName);
             case SubstitutionTeacherReplied replied -> substitutions.onTeacherReplied(replied, teacherName);

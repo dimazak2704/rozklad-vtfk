@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.ByteArrayInputStream;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -199,6 +200,61 @@ class OrderDistributionIT extends IntegrationTest {
         }
     }
 
+    /**
+     * Group chats are visitors (owner rule): an order dated before core's public history window (today 19.10, visitors
+     * see from 12.10) — back-filled or amended later — reaches teachers and admins but no group chat. The window is
+     * read before the event's transaction.
+     */
+    @Test
+    void anOrderBeforeThePublicWindowSkipsGroupChats() {
+        OrderPayload friday = dated(LocalDate.of(2026, 10, 9));
+        handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()), friday));
+        worker.drain();
+
+        assertThat(telegram.sentTo(CHAT_4KI1)).isEmpty();
+        assertThat(telegram.photosTo(CHAT_4KI1)).isEmpty();
+        assertThat(telegram.sentTo(CHAT_4KI2)).isEmpty();
+        assertThat(telegram.lastSentTo(NEPYIVODA).text()).startsWith("📢 <b>Ваші зміни</b>").contains("9 жовтня");
+        assertThat(telegram.lastSentTo(KRENTSIN).text()).contains("<b>4КІ1, 2 пара</b>");
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text())
+                .contains("Надіслано: 0 чатам груп, 2 викладачам")
+                .contains("Чатам груп не надсилалося");
+        assertThat(telegram.photosTo(OWNER_CHAT)).hasSize(1);
+        assertThat(core.metaCalls()).isPositive();
+        assertThat(core.metaCallsInTransaction()).isZero();
+    }
+
+    /** The first day of the window, like the documents' day rule, still goes to the group chats. */
+    @Test
+    void anOrderOfTheFirstDayOfTheWindowReachesGroupChats() {
+        handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()), dated(LocalDate.of(2026, 10, 12))));
+        worker.drain();
+
+        assertThat(telegram.lastSentTo(CHAT_4KI1).text()).startsWith("📢 <b>4КІ1</b> · зміни на понеділок, 12 жовтня");
+        assertThat(telegram.photosTo(CHAT_4KI1)).hasSize(1);
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text()).doesNotContain("Чатам груп не надсилалося");
+    }
+
+    /** core unreachable: the window is unknown and the order goes out as before (fail open). */
+    @Test
+    void anOrderBeforeThePublicWindowGoesOutAsBeforeWhenCoreIsDown() {
+        core.setUnavailable(true);
+
+        handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()), dated(LocalDate.of(2026, 10, 9))));
+        worker.drain();
+
+        assertThat(telegram.lastSentTo(CHAT_4KI1).text()).startsWith("📢 <b>4КІ1</b> · зміни на").contains("9 жовтня");
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text()).contains("Надіслано: 2 чатам груп");
+    }
+
+    /** Today's order (and later) never reads core's meta. */
+    @Test
+    void todaysOrderNeedsNoWindow() {
+        handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()), Order35.payload()));
+
+        assertThat(core.metaCalls()).isZero();
+    }
+
     @Test
     void draftEventsAreNeverPublished() throws Exception {
         handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()),
@@ -206,5 +262,14 @@ class OrderDistributionIT extends IntegrationTest {
         worker.drain();
         assertThat(telegram.messageCount()).isZero();
         mockMvc.perform(get("/api/documents/orders/" + Order35.ORDER_ID + ".docx")).andExpect(status().isNotFound());
+    }
+
+    /** Order №35's rows and recipients, dated {@code date}. */
+    private static OrderPayload dated(LocalDate date) {
+        OrderPayload order = Order35.payload();
+        return new OrderPayload(UUID.randomUUID(), 30, date, order.kind(), null, order.status(), "РОЗПОРЯДЖЕННЯ №30",
+                order.weekdayLabel(), order.parityLabel(), order.items(), order.roomChanges(), order.notes(),
+                order.signatoryPosition(), order.signatoryName(), order.semesterName(), order.affectedGroups(),
+                order.affectedTeachers());
     }
 }

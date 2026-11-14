@@ -16,22 +16,27 @@ import ua.vtc.rozklad.contracts.events.OrderPayload;
 import ua.vtc.rozklad.contracts.events.OrderPayload.AffectedTeacher;
 import ua.vtc.rozklad.contracts.events.OrderPayload.Item;
 import ua.vtc.rozklad.contracts.events.OrderPublished;
+import ua.vtc.rozklad.contracts.events.RozkladEvent;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
 import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.core.CoreQueries;
+import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
+import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.delivery.DeliveryPurpose;
 import ua.vtc.rozklad.notification.delivery.OutboundDraft;
 import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
 import ua.vtc.rozklad.notification.documents.DocumentPrerenderer;
 import ua.vtc.rozklad.notification.documents.OrderDocuments;
+import ua.vtc.rozklad.notification.documents.PublicHistoryGate;
 import ua.vtc.rozklad.notification.documents.PublishedOrders;
 import ua.vtc.rozklad.notification.text.WebLinks;
 
 /**
  * {@code order.published}: stores the order for public documents and queues its distribution —
  * each bound group chat gets only its rows plus the order picture, each affected teacher with
- * Telegram gets his rows, admin chats get a summary with the picture.
+ * Telegram gets his rows, admin chats get a summary with the picture. Group chats are visitors: an order dated
+ * before core's public history window (back-filled or amended later) skips them ({@link #beforePublicWindow}).
  */
 @Service
 public class OrderDistribution {
@@ -44,22 +49,45 @@ public class OrderDistribution {
     private final ChatBindings bindings;
     private final Outbox outbox;
     private final CoreQueries queries;
+    private final PublicHistoryGate history;
     private final WebLinks links;
 
     public OrderDistribution(PublishedOrders publishedOrders, OrderDocuments documents,
                              DocumentPrerenderer prerenderer, ChatBindings bindings, Outbox outbox,
-                             CoreQueries queries, WebLinks links) {
+                             CoreQueries queries, PublicHistoryGate history, WebLinks links) {
         this.publishedOrders = publishedOrders;
         this.documents = documents;
         this.prerenderer = prerenderer;
         this.bindings = bindings;
         this.outbox = outbox;
         this.queries = queries;
+        this.history = history;
         this.links = links;
     }
 
+    /**
+     * Whether the order of an {@code order.published} is dated before core's public history window, which visitors
+     * and so bound group chats do not see (owner rule, the same day rule as the order documents). Called before the
+     * event's transaction: a past-dated order reads core's meta (cached 30 s), on a cache miss an HTTP call that must
+     * not run while a row is locked. core unreachable: false, the order goes out as before (logged).
+     */
+    public boolean beforePublicWindow(RozkladEvent event) {
+        if (!(event instanceof OrderPublished published) || published.order().status() != OrderStatus.PUBLISHED) {
+            return false;
+        }
+        OrderPayload order = published.order();
+        try {
+            return history.closedFrom(order.date()).isPresent();
+        } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
+            log.warn("Order {} of {}: core's public history window is unknown ({}), group chats get it as before",
+                    order.id(), order.date(), e.getMessage());
+            return false;
+        }
+    }
+
+    /** {@code beforePublicWindow}: worked out by {@link #beforePublicWindow(RozkladEvent)} before the transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void onPublished(OrderPublished event) {
+    public void onPublished(OrderPublished event, boolean beforePublicWindow) {
         OrderPayload order = event.order();
         if (order.status() != OrderStatus.PUBLISHED) {
             log.warn("order.published {} carries order {} in status {}: ignored", event.eventId(), order.id(),
@@ -74,7 +102,8 @@ public class OrderDistribution {
         int groupChats = 0;
         Map<UUID, String> codes = new LinkedHashMap<>();
         order.affectedGroups().forEach(group -> codes.put(group.groupId(), group.code()));
-        for (ChatBinding chat : bindings.groupChatsFor(codes.keySet())) {
+        List<ChatBinding> groupChatsOfOrder = beforePublicWindow ? List.of() : bindings.groupChatsFor(codes.keySet());
+        for (ChatBinding chat : groupChatsOfOrder) {
             String code = codes.getOrDefault(chat.getGroupId(), chat.getGroupCode());
             List<Item> rows = OrderRows.forGroup(order, code);
             if (rows.isEmpty()) {
@@ -112,7 +141,7 @@ public class OrderDistribution {
         }
 
         String summary = OrderTexts.adminSummary(order, groupChats, teachers, withoutTelegram, picture,
-                links.changes(order.date()));
+                beforePublicWindow, links.changes(order.date()));
         List<ChatBinding> adminChats = bindings.adminChats();
         for (ChatBinding admin : adminChats) {
             Recipient recipient = Recipient.of(admin);
@@ -129,7 +158,8 @@ public class OrderDistribution {
         } else {
             log.warn("Order {} is distributed without the picture: PDF converter is not available", order.id());
         }
-        log.info("Order {} (№{}) queued for {} group chat(s), {} teacher(s), {} admin chat(s)", order.id(),
-                order.number(), groupChats, teachers, adminChats.size());
+        log.info("Order {} (№{}) queued for {} group chat(s){}, {} teacher(s), {} admin chat(s)", order.id(),
+                order.number(), groupChats, beforePublicWindow ? " (before the public history window)" : "", teachers,
+                adminChats.size());
     }
 }
