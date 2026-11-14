@@ -1,9 +1,12 @@
 /**
  * Як писати імʼя викладача. Одне правило на весь сайт:
- * - `grid` — клітинка розкладу, де місця мало: прізвище («Кренцін»); якщо в тому самому розкладі є
- *   однофамільці — коротке імʼя з ініціалами («Овчар Ін.М.»), щоб їх розрізнити;
- * - `full` — картка заняття, заголовок сторінки викладача, списки й форми: «Прізвище Імʼя», коли імʼя
- *   відоме, інакше прізвище з ініціалами через пробіл («Кренцін М. Д.»). По батькові тут не потрібне;
+ * - `grid` — клітинка розкладу, списки замін: прізвище з ініціалами («Кренцін М. Д.»). Ініціали —
+ *   з короткої форми коледжу (вона розрізняє однофамільців: «Овчар Ін. М.»), а якщо в ній їх немає —
+ *   з імені й по батькові, коли вони відомі. Якщо на екрані все ж двоє з тим самим підписом —
+ *   для них пишемо імʼя повністю («Коваль Олена П.»), коли воно відоме;
+ * - `full` — картка заняття, заголовок сторінки викладача, списки й форми: повне імʼя
+ *   «Прізвище Імʼя По батькові», коли воно відоме (публічно — лише з налаштуванням `showTeacherFullNames`),
+ *   інакше те саме, що в сітці («Кренцін М. Д.»);
  * - `formal` — документи (розпорядження, друк): коротке імʼя як у паперах коледжу («Кренцін М.Д.»).
  */
 
@@ -11,11 +14,14 @@ export type TeacherNameStyle = 'grid' | 'full' | 'formal';
 
 export interface TeacherNameSource {
   shortName: string;
-  /** Підпис для клітинок з каталогу (зазвичай прізвище). */
+  /** Підпис для клітинок з каталогу (зазвичай прізвище). Сітка його не бере: там завжди прізвище з ініціалами. */
   displayName?: string | null;
   lastName?: string | null;
   /** Імʼя — лише там, де сервер його віддає (адмінка, публічні сторінки з налаштуванням повних імен). */
   firstName?: string | null;
+  middleName?: string | null;
+  /** Готове «Прізвище Імʼя По батькові» (GET /api/public/teachers) — лише з дозволу налаштувань. */
+  fullName?: string | null;
 }
 
 const NBSP = ' ';
@@ -34,14 +40,36 @@ function splitShortName(shortName: string): { surname: string; initials: string[
   return { surname: (match[1] ?? cleaned).trim(), initials };
 }
 
+const clean = (value: string | null | undefined): string => value?.trim().replace(/\s+/g, ' ') ?? '';
+
+const initialOf = (name: string): string => `${name.charAt(0).toLocaleUpperCase('uk')}.`;
+
 /** Прізвище викладача: з каталогу, а якщо його немає — з короткої форми. */
 export function teacherSurname(teacher: TeacherNameSource): string {
-  return teacher.lastName?.trim() || splitShortName(teacher.shortName).surname;
+  return clean(teacher.lastName) || splitShortName(teacher.shortName).surname;
 }
 
-/** Підпис клітинки сітки без урахування однофамільців. */
-function gridLabel(teacher: TeacherNameSource): string {
-  return teacher.displayName?.trim() || teacherSurname(teacher);
+/** Ініціали: з короткої форми коледжу, а без них — з імені й по батькові. */
+function teacherInitials(teacher: TeacherNameSource): string[] {
+  const fromShort = splitShortName(teacher.shortName).initials;
+  if (fromShort.length > 0) return fromShort;
+  return [clean(teacher.firstName), clean(teacher.middleName)].filter(Boolean).map(initialOf);
+}
+
+/** «Кренцін М. Д.»: ініціали не розриваються, рядок може перенестися лише після прізвища. */
+function initialsLabel(teacher: TeacherNameSource): string {
+  const surname = teacherSurname(teacher);
+  const initials = teacherInitials(teacher);
+  return initials.length > 0 ? `${surname} ${initials.join(NBSP)}` : surname;
+}
+
+/** «Прізвище Імʼя По батькові» або null, коли імені не знаємо. */
+function fullNameOf(teacher: TeacherNameSource): string | null {
+  const ready = clean(teacher.fullName);
+  if (ready) return ready;
+  const first = clean(teacher.firstName);
+  if (!first) return null;
+  return [teacherSurname(teacher), first, clean(teacher.middleName)].filter(Boolean).join(' ');
 }
 
 export function formatTeacherName(
@@ -53,20 +81,19 @@ export function formatTeacherName(
     case 'formal':
       return teacher.shortName;
     case 'grid': {
-      const label = gridLabel(teacher);
-      return options.ambiguous?.has(label) ? teacher.shortName : label;
+      const label = initialsLabel(teacher);
+      const first = clean(teacher.firstName);
+      if (!options.ambiguous?.has(label) || !first) return label;
+      const middle = clean(teacher.middleName);
+      return `${teacherSurname(teacher)} ${first}${middle ? ` ${initialOf(middle)}` : ''}`;
     }
-    case 'full': {
-      const first = teacher.firstName?.trim();
-      if (first) return `${teacherSurname(teacher)}${NBSP}${first}`;
-      const { surname, initials } = splitShortName(teacher.shortName);
-      return initials.length > 0 ? `${surname}${NBSP}${initials.join(NBSP)}` : surname;
-    }
+    case 'full':
+      return fullNameOf(teacher) ?? initialsLabel(teacher);
   }
 }
 
 /**
- * Підписи сітки, які в цьому розкладі носять різні викладачі (однофамільці): для них `grid` пише ініціали.
+ * Підписи сітки, які в цьому розкладі носять різні викладачі: для них `grid` пише імʼя повністю, якщо воно відоме.
  * Передайте всіх викладачів, видимих на екрані (повтори й null — можна).
  */
 export function ambiguousGridNames(
@@ -76,7 +103,7 @@ export function ambiguousGridNames(
   const ambiguous = new Set<string>();
   for (const teacher of teachers) {
     if (!teacher) continue;
-    const label = gridLabel(teacher);
+    const label = initialsLabel(teacher);
     const owner = owners.get(label);
     if (owner === undefined) owners.set(label, teacher.id);
     else if (owner !== teacher.id) ambiguous.add(label);

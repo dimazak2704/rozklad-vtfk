@@ -6,6 +6,7 @@ import type { DayDto, PublicTeacherDto } from '@/api/types';
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { renderWithProviders } from '@/test/render';
 import { DayList } from './DayList';
 import { GridNamesProvider } from './GridNames';
@@ -14,16 +15,18 @@ import { NowIndicator } from './NowIndicator';
 import { WeekGrid } from './WeekGrid';
 
 const monday = DEMO_WEEK.days[0]!;
+// підпис сітки так, як його бачить getByText: нерозривні пробіли — звичайними
+const gridName = (teacher: Parameters<typeof formatTeacherName>[0]) => formatTeacherName(teacher, 'grid').replace(/\s/g, ' ');
 const substituted = monday.lessons[1]!;
 
 describe('LessonCell', () => {
   it('показує заміну поверх розкладу: новий предмет, бейдж і закреслений оригінал', () => {
     renderWithProviders(<LessonCell lesson={substituted} />);
     const cell = screen.getByRole('button', { name: /2 пара/ });
-    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\. Причина: Зв\.зам\./);
+    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\sМ\.\sД\.\. Причина: Зв\.зам\./);
     expect(within(cell).getByText('НДЕКСМ')).toBeInTheDocument();
     expect(within(cell).getByText('Заміна')).toBeInTheDocument();
-    expect(within(cell).getByText('СТП · Кренцін').tagName).toBe('S');
+    expect(within(cell).getByText('СТП · Кренцін М. Д.').tagName).toBe('S');
   });
 
   it('відкриває повні деталі з клавіатури', async () => {
@@ -33,7 +36,7 @@ describe('LessonCell', () => {
     await user.keyboard('{Enter}');
     const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
     expect(within(details).getByText('Надійність, діагностика та експлуатація компʼютерних систем і мереж')).toBeInTheDocument();
-    // у картці — «Прізвище Імʼя»; імені в довіднику немає (налаштування повних імен вимкнене) — з ініціалами
+    // у картці — повне імʼя; імені в довіднику немає (налаштування повних імен вимкнене) — з ініціалами
     expect(within(details).getByText(/^Непийвода\sМ\.\sВ\.$/)).toBeInTheDocument();
     // код розпорядження в публічній картці розгорнуто словами
     expect(within(details).getByText('взаємна заміна')).toBeInTheDocument();
@@ -62,18 +65,18 @@ describe('LessonCell', () => {
     renderWithProviders(<LessonCell lesson={lesson} perspective="room" />);
     const code = screen.getByText('4КІ1');
     expect(code).toHaveClass('font-display', 'font-semibold');
-    expect(code.parentElement).toHaveTextContent(`4КІ1 · ${lesson.teacher!.displayName}`);
+    expect(code.parentElement).toHaveTextContent(`4КІ1 · ${gridName(lesson.teacher!)}`);
   });
 
   it('для групи викладач — тихий підпис без шрифту цифр', () => {
     const lesson = monday.lessons[0]!;
     renderWithProviders(<LessonCell lesson={lesson} perspective="group" />);
-    expect(screen.getByText(lesson.teacher!.displayName)).not.toHaveClass('font-display');
+    expect(screen.getByText(gridName(lesson.teacher!))).not.toHaveClass('font-display');
   });
 });
 
 describe('імена викладачів', () => {
-  it('у картці — «Прізвище Імʼя», коли довідник віддає імʼя (налаштування повних імен увімкнене)', async () => {
+  it('у картці — «Прізвище Імʼя По батькові», коли довідник віддає імʼя (налаштування повних імен увімкнене)', async () => {
     const teacher = substituted.teacher!;
     const named: PublicTeacherDto = {
       id: teacher.id,
@@ -89,11 +92,10 @@ describe('імена викладачів', () => {
     await user.tab();
     await user.keyboard('{Enter}');
     const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ/ });
-    // по батькові в картці не потрібне
-    expect(await within(details).findByText(/^Непийвода\sМаксим$/)).toBeInTheDocument();
+    expect(await within(details).findByText(/^Непийвода\sМаксим\sВасильович$/)).toBeInTheDocument();
   });
 
-  it('у сітці однофамільців розрізняють ініціали, а решту пишуть прізвищем', () => {
+  it('у сітці — завжди прізвище з ініціалами: однофамільців розрізняє коротка форма', () => {
     const base = monday.lessons[0]!;
     const inna = { ...base, id: 'l-inna', pair: 1, teacher: { id: 't-inna', shortName: 'Овчар Ін.М.', displayName: 'Овчар' } };
     const ivan = { ...base, id: 'l-ivan', pair: 2, teacher: { id: 't-ivan', shortName: 'Овчар Ів.М.', displayName: 'Овчар' } };
@@ -104,16 +106,17 @@ describe('імена викладачів', () => {
         <LessonCell lesson={ivan} />
       </GridNamesProvider>,
     );
-    expect(screen.getByText('Овчар Ін.М.')).toBeInTheDocument();
-    expect(screen.getByText('Овчар Ів.М.')).toBeInTheDocument();
+    expect(screen.getByText('Овчар Ін. М.')).toBeInTheDocument();
+    expect(screen.getByText('Овчар Ів. М.')).toBeInTheDocument();
 
-    // в іншому розкладі, де Овчар один, — лише прізвище
+    // і там, де Овчар один, — не голе прізвище
     renderWithProviders(
       <GridNamesProvider days={[{ ...monday, lessons: [inna] }]}>
         <LessonCell lesson={inna} />
       </GridNamesProvider>,
     );
-    expect(screen.getByText('Овчар')).toBeInTheDocument();
+    expect(screen.getAllByText('Овчар Ін. М.')).toHaveLength(2);
+    expect(screen.queryByText('Овчар')).not.toBeInTheDocument();
   });
 });
 

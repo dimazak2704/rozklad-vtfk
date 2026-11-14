@@ -268,12 +268,10 @@ describe('текст клітинки дошки', () => {
     expect(text.room).toBe('ауд. 110');
   });
 
-  it('однофамільці на дошці — з ініціалами, решта — прізвищем', () => {
+  it('викладач на дошці — завжди прізвище з ініціалами', () => {
     const inna = { ...lesson({}), teacher: { id: 't-inna', shortName: 'Овчар Ін.М.', displayName: 'Овчар' } };
-    const ambiguous = new Set(['Овчар']);
-    expect(chipText(inna, 'group', ambiguous).lines[0]).toBe('Овчар Ін.М.');
-    expect(chipText(inna, 'room', ambiguous).lines).toEqual(['СТП', 'Овчар Ін.М.']);
-    expect(chipText(inna, 'group').lines[0]).toBe('Овчар');
+    expect(chipText(inna, 'group').lines[0]).toBe('Овчар Ін. М.');
+    expect(chipText(inna, 'room').lines).toEqual(['СТП', 'Овчар Ін. М.']);
   });
 
   it('викладач бачить групу з підгрупою, а без аудиторії не лишається порожнього рядка', () => {

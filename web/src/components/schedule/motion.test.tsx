@@ -162,7 +162,7 @@ describe('LessonCell: зміна прийшла наживо', () => {
     const cell = screen.getByRole('button', { name: /2 пара/ });
     expect(cell.className).toMatch(/anim-wash-in/);
     expect(within(cell).getByText('Заміна').className).toMatch(/anim-word-in/);
-    expect(within(cell).getByText('СТП · Кренцін').className).toMatch(/anim-strike/);
+    expect(within(cell).getByText('СТП · Кренцін М. Д.').className).toMatch(/anim-strike/);
   });
 
   it('інша аудиторія закреслює стару аудиторію', () => {

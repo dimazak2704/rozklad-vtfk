@@ -94,9 +94,10 @@ describe('межі та час сітки тижня', () => {
 
 describe('підписи клітинки', () => {
   it('показує викладача для групи і групу для викладача', () => {
-    expect(lessonCounterpart(lesson(1), 'group')).toBe('Кренцін');
+    // у клітинці — завжди прізвище з ініціалами
+    expect(lessonCounterpart(lesson(1), 'group')).toBe('Кренцін М. Д.');
     expect(lessonCounterpart(lesson(1), 'teacher')).toBe('4КІ1');
-    expect(lessonCounterpart(lesson(1), 'room')).toBe('4КІ1 · Кренцін');
+    expect(lessonCounterpart(lesson(1), 'room')).toBe('4КІ1 · Кренцін М. Д.');
   });
 
   it('додає «ауд.» лише до номерів', () => {

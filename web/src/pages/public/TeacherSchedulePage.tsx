@@ -11,7 +11,7 @@ import { mainDisciplines } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
 import { formatTeacherName } from '@/lib/teacher-name';
 
-/** Розклад викладача /t/:id — «Прізвище Імʼя» лише з дозволу налаштувань, інакше з ініціалами (UI.md §1). */
+/** Розклад викладача /t/:id — «Прізвище Імʼя По батькові» лише з дозволу налаштувань, інакше з ініціалами (UI.md §1). */
 export default function TeacherSchedulePage() {
   const { id = '' } = useParams();
   const params = useScheduleParams();
@@ -19,7 +19,7 @@ export default function TeacherSchedulePage() {
   // id відомий з адреси — розклад вантажимо одразу, паралельно з довідником
   const query = usePublicSchedule('TEACHER', id, params.week.from, params.week.to);
   const teacher = teachers.data?.find((t) => t.id === id);
-  // «Прізвище Імʼя», якщо імʼя відоме й налаштування дозволяє його показувати; інакше «Кренцін М. Д.»
+  // «Прізвище Імʼя По батькові», якщо імʼя відоме й налаштування дозволяє його показувати; інакше «Кренцін М. Д.»
   const label = teacher ? formatTeacherName(teacher, 'full') : query.data?.owner.label;
   const loaded = query.isPlaceholderData ? undefined : query.data;
   // одна-дві дисципліни — повними назвами: клітинки кажуть лише скорочення, а підзаголовок має місце
