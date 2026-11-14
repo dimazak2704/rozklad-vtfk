@@ -88,14 +88,32 @@ class TokenIssuerTest {
                 .isInstanceOf(JwtValidationException.class);
     }
 
+    /** An expired token of the right issuer and key is refused: on a public path that is a 401, not a visitor. */
+    @Test
+    void expiredTokenIsRejected() throws Exception {
+        RSAKey active = key("dev-1");
+        published.set(new JWKSet(active.toPublicJWK()));
+        Instant issued = Instant.now().minusSeconds(3600);
+
+        assertThatThrownBy(() -> decoder.decode(token(active, ISSUER, List.of("rozklad-api"), issued,
+                issued.plusSeconds(900))))
+                .isInstanceOf(JwtValidationException.class)
+                .hasMessageContaining("expired");
+    }
+
     private static RSAKey key(String kid) throws Exception {
         return new RSAKeyGenerator(2048).keyID(kid).generate();
     }
 
     private static String token(RSAKey key, String issuer, List<String> audience) {
+        return token(key, issuer, audience, Instant.now(), Instant.now().plusSeconds(300));
+    }
+
+    private static String token(RSAKey key, String issuer, List<String> audience, Instant issuedAt,
+                                Instant expiresAt) {
         NimbusJwtEncoder encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(key)));
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer(issuer).subject("a0000000-0000-4000-8000-000000000001")
-                .audience(audience).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300))
+                .audience(audience).issuedAt(issuedAt).expiresAt(expiresAt)
                 .claim("roles", List.of("ADMIN")).build();
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(key.getKeyID()).build();
         return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
