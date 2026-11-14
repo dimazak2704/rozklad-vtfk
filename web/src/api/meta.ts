@@ -3,7 +3,9 @@
  * у власних файлах src/api/<область>.ts (див. src/api/README.md).
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { usePublicViewer } from '@/auth/usePublicViewer';
 import { syncClock } from '@/lib/clock';
+import { isIsoDate } from '@/lib/date';
 import { api, buildUrl } from './client';
 import { qk } from './queryKeys';
 import { isSavedCopy } from './saved-copy';
@@ -30,6 +32,17 @@ export function usePublicMeta() {
     // у шапці: одна повторна спроба, щоб недоступний сервер не тримав силует довго
     retry: 1,
   });
+}
+
+/**
+ * З якої дати гість бачить заміни й розпорядження (`publicHistoryFrom` у meta; розклад — з понеділка того
+ * тижня). `null` — обмежень немає: увійшов персонал, вхід ще визначається, meta не завантажилась або старіший
+ * core поля не віддає. Межу на сторінках лише підказують — остаточно вирішує сервер (404 `history-not-public`).
+ */
+export function usePublicHistoryFrom(): IsoDate | null {
+  const viewer = usePublicViewer();
+  const from = usePublicMeta().data?.publicHistoryFrom;
+  return viewer === 'guest' && isIsoDate(from) ? from : null;
 }
 
 /** GET /api/public/search — нечіткий пошук груп, викладачів, аудиторій. */

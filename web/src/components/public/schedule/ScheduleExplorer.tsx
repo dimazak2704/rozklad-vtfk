@@ -1,9 +1,9 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { RotateCcw, WifiOff } from 'lucide-react';
+import { Archive, RotateCcw, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { buildUrl } from '@/api/client';
 import { isApiError } from '@/api/errors';
-import { useBells } from '@/api/meta';
+import { useBells, usePublicHistoryFrom } from '@/api/meta';
 import { publicSchedulePath } from '@/api/public';
 import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
 import type { ScheduleDto } from '@/api/types';
@@ -12,8 +12,10 @@ import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/u
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { addDays, formatDateRange, startOfWeek } from '@/lib/date';
 import type { Perspective } from '@/lib/schedule';
 import { useEntrance } from '../entrance';
+import { historyBound, isHistoryClosed, SCHEDULE_HISTORY_HINT } from '../history';
 import { SavedCopyNote } from '../SavedCopyNote';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
@@ -59,6 +61,8 @@ export function ScheduleControls({
   phone?: boolean;
 }) {
   const { date, today, view, setView, setDate } = params;
+  // гість гортає лише до тижня `publicHistoryFrom`; персоналу межі немає
+  const historyFrom = usePublicHistoryFrom();
   useHotkeys([
     { keys: 'd', handler: () => setView('day'), description: 'Подання «День»', group: 'Розклад', enabled: hotkeys && !phone },
     { keys: 'w', handler: () => setView('week'), description: 'Подання «Тиждень»', group: 'Розклад', enabled: hotkeys && !phone },
@@ -67,7 +71,7 @@ export function ScheduleControls({
   return (
     <>
       <SegmentedControl<ScheduleView> aria-label="Подання розкладу" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
-      <WeekNav value={date} onChange={setDate} today={today} hotkeys={hotkeys} />
+      <WeekNav value={date} onChange={setDate} today={today} hotkeys={hotkeys} minDate={historyFrom} />
     </>
   );
 }
@@ -79,10 +83,11 @@ export function ScheduleControls({
 function PhoneWeekBar({ params }: { params: ScheduleParams }) {
   const { date, today, homeDate, view, week, setDate, setView } = params;
   const offWeek = homeDate < week.from || homeDate > week.to;
+  const historyFrom = usePublicHistoryFrom();
   return (
     <div className="flex flex-col items-start gap-0.5">
       <div className="flex w-full items-center justify-between gap-2">
-        <WeekNav value={date} onChange={setDate} today={today} returnLink="none" compact className="-ms-2" />
+        <WeekNav value={date} onChange={setDate} today={today} returnLink="none" compact minDate={historyFrom} className="-ms-2" />
         <SegmentedControl<ScheduleView>
           size="sm"
           aria-label="Подання розкладу"
@@ -114,6 +119,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
   const online = useOnline();
   const phone = useMediaQuery(PHONE_QUERY);
+  const historyFrom = usePublicHistoryFrom();
   // сітка або дні списком — що одне видно, те й рендеримо: «тік» часу не перемальовує прихований варіант
   const wide = useMediaQuery(WIDE_QUERY);
   const bells = useBells(date);
@@ -169,7 +175,34 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       />
     );
   } else if (!schedule) {
-    if (query.isError) {
+    if (isHistoryClosed(query.error)) {
+      // не збій: гостю давній розклад не показують — пояснюємо й ведемо до найранішого відкритого тижня
+      const bound = historyBound(query.error, historyFrom);
+      const firstWeek = bound ? startOfWeek(bound) : null;
+      content = (
+        <EmptyState
+          icon={<Archive aria-hidden="true" className="size-5" />}
+          title={view === 'day' ? 'Цей день уже в архіві' : 'Цей тиждень уже в архіві'}
+          description={
+            firstWeek
+              ? `Без входу на сайті видно розклад з тижня ${formatDateRange(firstWeek, addDays(firstWeek, 4))} і на всі наступні. ${SCHEDULE_HISTORY_HINT}`
+              : `Без входу на сайті видно розклад лише за останні тижні й на майбутнє. ${SCHEDULE_HISTORY_HINT}`
+          }
+          action={
+            firstWeek ? (
+              <Button variant="secondary" onClick={() => setDate(firstWeek)}>
+                Найраніший доступний тиждень
+              </Button>
+            ) : undefined
+          }
+          secondaryAction={
+            <Button variant="ghost" onClick={() => setDate(homeDate)}>
+              До поточного тижня
+            </Button>
+          }
+        />
+      );
+    } else if (query.isError) {
       const missing = isApiError(query.error) && query.error.isNotFound;
       content = (
         <ErrorState

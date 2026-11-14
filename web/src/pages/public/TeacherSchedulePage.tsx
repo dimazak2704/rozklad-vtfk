@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { usePublicSchedule, usePublicTeachers } from '@/api/public';
 import { paths } from '@/app/routes';
+import { isHistoryClosed } from '@/components/public/history';
 import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
@@ -28,7 +29,9 @@ export default function TeacherSchedulePage() {
     return (short.length <= 2 ? mainDisciplines(loaded, 2, 'full') : short).join(', ');
   }, [loaded]);
 
-  const missing = (isApiError(query.error) && query.error.isNotFound) || (teachers.isSuccess && !teacher);
+  // 404 «архів недоступний» (давній тиждень для гостя) — не «такого викладача немає»: пояснює сам розклад
+  const historyClosed = isHistoryClosed(query.error);
+  const missing = (isApiError(query.error) && query.error.isNotFound && !historyClosed) || (teachers.isSuccess && !teacher);
   if (missing) {
     return (
       <TargetNotFound
@@ -39,7 +42,7 @@ export default function TeacherSchedulePage() {
   }
 
   if (!label) {
-    if (query.isError) {
+    if (query.isError && !historyClosed) {
       return (
         <ScheduleLoadError heading="Розклад викладача" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );

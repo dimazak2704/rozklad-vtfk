@@ -12,6 +12,7 @@ import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
 import { SchedulePrint } from '../print/SchedulePrint';
 import { usePrintMode } from '../print/usePrintMode';
 import { HeaderParity } from '../HeaderParity';
+import { isHistoryClosed } from '../history';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { CalendarDialog } from './CalendarDialog';
 import { ChangesNote } from './ChangesNote';
@@ -149,7 +150,8 @@ export function SchedulePage({
   );
 
   return (
-    <PageErrorScope queries={[query]} title={`Розклад ${target.label} не завантажився`}>
+    // «архів недоступний» гостю — не помилка сторінки: пояснення стоїть на місці розкладу
+    <PageErrorScope queries={[isHistoryClosed(query.error) ? null : query]} title={`Розклад ${target.label} не завантажився`}>
       <PageHeader
         size="display"
         title={

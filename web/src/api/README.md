@@ -55,7 +55,10 @@ export function useCreateChange() {
    інвалідація з SSE (`live.ts`) і з мутацій працює префіксом.
 2. **`signal` передавайте завжди** (`queryFn: ({ signal }) => api.get(..., { signal })`) — скасовані запити не
    перетирають свіжі дані.
-3. **Публічні ендпоінти** (`/public/**`) — з `{ auth: false }`: токен там не потрібен.
+3. **Публічні ендпоінти** (`/public/**`) — з `{ auth: false }`: токен там не потрібен. Виняток — розклад і заміни:
+   гостю сервер віддає лише останні дні (`publicHistoryFrom` у meta), персоналу — увесь архів. Там
+   `auth: viewer === 'staff'` і `viewer` у ключі запиту (`usePublicViewer`, `qk.public.schedule|changes`), а 404
+   `history-not-public` (`error.isHistoryNotPublic`) сторінка показує як межу архіву, не як збій.
 4. **Помилки не ховайте.** У компоненті — `<ErrorState error={query.error} onRetry={query.refetch} />` або стан
    таблиці; у мутаціях — `notify.error(error, 'Що не вдалося')`. Помилки полів форми: `error.fieldErrors()` →
    `form.setError(field, { message })`. Конфлікти розкладу: `error.conflicts` (масив `Conflict`).
@@ -69,7 +72,9 @@ export function useCreateChange() {
 ## Файли й завантаження
 
 - Завантаження: `api.upload<ImportJobDto>('/import/jobs', form)` (multipart, тайм-аут 120 с).
-- Файли розпоряджень: `api.blob('/documents/orders/' + id + '.pdf')` → `URL.createObjectURL(blob)`.
+- Файли розпоряджень: `api.blob('/documents/orders/' + id + '.pdf')` → `URL.createObjectURL(blob)`. На публічній
+  сторінці персоналу — `openOrderDocument(id, format, fileName)` (вкладка відкривається в тому ж натисканні), гостю —
+  звичайне посилання `orderDocumentUrl(id, format)`.
 
 ## Чого не робити
 

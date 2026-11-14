@@ -1,13 +1,16 @@
-import { FileImage, FileText, Info, Search, WifiOff, X } from 'lucide-react';
+import { Archive, FileImage, FileText, Info, Search, WifiOff, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { buildUrl } from '@/api/client';
-import { orderDocumentUrl, usePublicChanges } from '@/api/public';
+import { usePublicHistoryFrom } from '@/api/meta';
+import { openOrderDocument, orderDocumentUrl, usePublicChanges } from '@/api/public';
 import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
-import type { IsoDate } from '@/api/types';
+import type { DocumentFormat, IsoDate, Uuid } from '@/api/types';
+import { usePublicViewer } from '@/auth/usePublicViewer';
 import { ChangesDatePicker } from '@/components/public/changes/ChangesDatePicker';
 import { ChangesList } from '@/components/public/changes/ChangesList';
 import { HeaderParity } from '@/components/public/HeaderParity';
+import { CHANGES_HISTORY_HINT, historyBound, isHistoryClosed } from '@/components/public/history';
 import { SavedCopyNote } from '@/components/public/SavedCopyNote';
 import { dominantReason, filterChangeGroups, hasMyTargets, myTargets } from '@/components/public/changes/changes-filter';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
@@ -19,6 +22,7 @@ import {
   HoverDetails,
   Input,
   LoadingRegion,
+  notify,
   PageErrorScope,
   PageHeader,
   SegmentedControl,
@@ -28,8 +32,10 @@ import {
 } from '@/components/ui';
 import {
   compareIsoDates,
+  formatDayMonth,
   formatInstant,
   formatInstantTime,
+  formatNumericDate,
   formatShortWeekdayDate,
   formatWeekdayDate,
   formatWeekdayDateAfterNa,
@@ -75,10 +81,16 @@ function ChangesSkeleton() {
   );
 }
 
+/** «Розпорядження №35 від 19.10.2026.pdf» — назва файлу, якщо вкладку не дали відкрити і він зберігається. */
+function documentFileName(kind: 'Розпорядження' | 'Доповнення', number: number | null, date: IsoDate, format: DocumentFormat): string {
+  return `${kind} №${number ?? 'без номера'} від ${formatNumericDate(date)}.${format}`;
+}
+
 /**
  * «Заміни»: сьогодні, наступний день чи будь-яка дата. Під заголовком — лише дата й парність; над списком —
  * один рядок підсумку («4 заміни у 4 групах»); файли розпорядження — у «⋯»; номер і час публікації —
- * у картці «Джерело» під списком, поруч зі спільною причиною.
+ * у картці «Джерело» під списком, поруч зі спільною причиною. Гість бачить заміни лише з `publicHistoryFrom`
+ * (давнішу дату календар не дає обрати, а посилання на неї пояснює, що архів — для персоналу).
  */
 export default function ChangesPage() {
   const [params, setParams] = useSearchParams();
@@ -93,6 +105,11 @@ export default function ChangesPage() {
   const favorites = useFavoritesStore((state) => state.favorites);
   const mine = useMemo(() => myTargets(favorites), [favorites]);
   const changes = usePublicChanges(date, { refetchInterval: date === today ? 60_000 : undefined });
+  const staff = usePublicViewer() === 'staff';
+  // з якої дати гість бачить заміни (null — без меж); сервер давнішу дату гостю не віддає
+  const historyFrom = usePublicHistoryFrom();
+  const historyClosed = isHistoryClosed(changes.error);
+  const openFrom = (iso: IsoDate) => historyFrom === null || compareIsoDates(iso, historyFrom) >= 0;
 
   // сервер не відповів за 5 с чи недоступний, а Service Worker віддав збережену копію: це не «наживо»
   const savedCopy = useSavedCopy(buildUrl('/public/changes', { date }));
@@ -113,9 +130,14 @@ export default function ChangesPage() {
       { replace: true },
     );
   const setDate = (next: IsoDate) => patch({ date: nearestStudyDay(next) === home ? null : nearestStudyDay(next) });
+  const previousDay = () => {
+    const previous = shiftStudyDay(date, -1);
+    if (openFrom(previous)) setDate(previous);
+    else notify.info(CHANGES_HISTORY_HINT);
+  };
   // ←/→ — попередній і наступний навчальний день; окремих кнопок для цього на екрані немає
   useHotkeys([
-    { keys: 'arrowleft', handler: () => setDate(shiftStudyDay(date, -1)), description: 'Попередній день', group: 'Заміни' },
+    { keys: 'arrowleft', handler: previousDay, description: 'Попередній день', group: 'Заміни' },
     { keys: 'arrowright', handler: () => setDate(shiftStudyDay(date, 1)), description: 'Наступний день', group: 'Заміни' },
   ]);
 
@@ -154,6 +176,27 @@ export default function ChangesPage() {
     );
   } else if (changes.isPending) {
     content = <ChangesSkeleton />;
+  } else if (historyClosed) {
+    // не збій: гостю давні заміни не показують — пояснюємо й ведемо до найранішої відкритої дати
+    const bound = historyBound(changes.error, historyFrom);
+    const earliest = bound ? nearestStudyDay(bound) : null;
+    content = (
+      <EmptyState
+        className={EMPTY_BOX}
+        icon={<Archive aria-hidden="true" className="size-5" />}
+        title="Цей день уже в архіві"
+        description={
+          bound
+            ? `Без входу на сайті видно заміни з ${formatDayMonth(bound)} і на всі наступні дні. ${CHANGES_HISTORY_HINT}`
+            : `Без входу на сайті видно заміни лише за останні дні й на майбутнє. ${CHANGES_HISTORY_HINT}`
+        }
+        action={
+          <Button variant="secondary" onClick={() => setDate(earliest ?? home)}>
+            {`Заміни на ${quickDay(earliest ?? home).toLocaleLowerCase('uk')}`}
+          </Button>
+        }
+      />
+    );
   } else if (changes.isError) {
     content = (
       <ErrorState
@@ -223,15 +266,40 @@ export default function ChangesPage() {
     );
   }
 
+  // гість — звичайним посиланням; персонал — запитом з токеном (давні файли сервер віддає лише йому)
+  const documentItem = (
+    label: string,
+    icon: MoreMenuItem['icon'],
+    file: { id: Uuid; number: number | null; kind: 'Розпорядження' | 'Доповнення' },
+    format: DocumentFormat,
+  ): MoreMenuItem =>
+    staff
+      ? {
+          label,
+          icon,
+          onSelect: () =>
+            void openOrderDocument(file.id, format, documentFileName(file.kind, file.number, date, format)).catch((error: unknown) =>
+              notify.error(error, 'Не вдалося відкрити розпорядження'),
+            ),
+        }
+      : { label, icon, href: orderDocumentUrl(file.id, format) };
   const more: MoreMenuItem[] = [];
   if (order && !order.imported) {
+    const main = { id: order.id, number: order.number, kind: 'Розпорядження' as const };
     more.push(
-      { label: `Розпорядження №${order.number} — зображення`, icon: <FileImage aria-hidden="true" className="size-4" />, href: orderDocumentUrl(order.id, 'png') },
-      { label: `Розпорядження №${order.number} — PDF`, icon: <FileText aria-hidden="true" className="size-4" />, href: orderDocumentUrl(order.id, 'pdf') },
+      documentItem(`Розпорядження №${order.number} — зображення`, <FileImage aria-hidden="true" className="size-4" />, main, 'png'),
+      documentItem(`Розпорядження №${order.number} — PDF`, <FileText aria-hidden="true" className="size-4" />, main, 'pdf'),
     );
   }
   for (const amendment of amendments.filter((item) => !item.imported)) {
-    more.push({ label: `Доповнення №${amendment.number} — PDF`, icon: <FileText aria-hidden="true" className="size-4" />, href: orderDocumentUrl(amendment.id, 'pdf') });
+    more.push(
+      documentItem(
+        `Доповнення №${amendment.number} — PDF`,
+        <FileText aria-hidden="true" className="size-4" />,
+        { id: amendment.id, number: amendment.number, kind: 'Доповнення' },
+        'pdf',
+      ),
+    );
   }
 
   const totalRows = groups.reduce((sum, g) => sum + g.items.length, 0);
@@ -305,7 +373,8 @@ export default function ChangesPage() {
   return (
     // шапка — на всю ширину сторінки, як на /g/: перемикач днів і календар закінчуються на правому краї контейнера;
     // фільтри й список — колонкою для читання (max-w-4xl)
-    <PageErrorScope queries={[changes]} title="Заміни зараз не завантажуються">
+    // «архів недоступний» — не помилка сторінки: про нього каже сам список
+    <PageErrorScope queries={[historyClosed ? null : changes]} title="Заміни зараз не завантажуються">
       <PageHeader
         size="headline"
         title={
@@ -336,7 +405,7 @@ export default function ChangesPage() {
                 { value: 'next', label: quickDay(following) },
               ]}
             />
-            <ChangesDatePicker value={date} today={today} onChange={setDate} />
+            <ChangesDatePicker value={date} today={today} onChange={setDate} minDate={historyFrom} />
           </>
         }
         more={more}

@@ -3,10 +3,22 @@ import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
 import type { IsoDate } from '@/api/types';
-import { Button, IconButton, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
+import { Button, IconButton, notify, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
-import { addDays, formatDateRange, formatDayMonthShort, isoFromLocalDate, isWeekend, localDateFromIso, nearestStudyDay, parseIsoDate } from '@/lib/date';
+import {
+  addDays,
+  compareIsoDates,
+  formatDateRange,
+  formatDayMonthShort,
+  isoFromLocalDate,
+  isWeekend,
+  localDateFromIso,
+  nearestStudyDay,
+  parseIsoDate,
+  startOfWeek,
+} from '@/lib/date';
+import { SCHEDULE_HISTORY_HINT } from '../history';
 import { DAY_PICKER_CLASSES } from './day-picker-classes';
 import { studyWeek } from './schedule-params';
 
@@ -25,6 +37,11 @@ interface WeekNavProps {
   returnLink?: 'below' | 'none';
   /** Телефон: «9–13 лист.» замість «9–13 листопада», щоб поруч умістився «День / Тиждень». */
   compact?: boolean;
+  /**
+   * Найраніша дата, яку бачить гість (`publicHistoryFrom`): гортати можна до понеділка її тижня
+   * (розклад віддається цілими тижнями). null — без межі (персонал, кабінет викладача).
+   */
+  minDate?: IsoDate | null;
   className?: string;
 }
 
@@ -34,15 +51,25 @@ function shortRange(from: IsoDate, to: IsoDate): string {
   return `${formatDayMonthShort(from)}–${formatDayMonthShort(to)}`;
 }
 
-/** Перемикач тижня: ‹ 9–13 листопада › з календарем під датами; день тижня при гортанні зберігається. */
-export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 'below', compact = false, className }: WeekNavProps) {
+/**
+ * Перемикач тижня: ‹ 9–13 листопада › з календарем під датами; день тижня при гортанні зберігається.
+ * З межею (`minDate`) «‹» на першому відкритому тижні тьмяніє, але лишається у фокусі з підказкою, а натискання
+ * пояснює, чому далі не можна (на дотику підказок немає).
+ */
+export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 'below', compact = false, minDate = null, className }: WeekNavProps) {
   const [open, setOpen] = useState(false);
   const week = studyWeek(value);
   const home = nearestStudyDay(today);
   const isCurrent = studyWeek(home).from === week.from;
+  const firstWeek = minDate ? startOfWeek(minDate) : null;
+  const atFirstWeek = firstWeek !== null && compareIsoDates(week.from, firstWeek) <= 0;
+  const previousWeek = () => {
+    if (atFirstWeek) notify.info(SCHEDULE_HISTORY_HINT);
+    else onChange(addDays(value, -7));
+  };
 
   useHotkeys([
-    { keys: 'arrowleft', handler: () => onChange(addDays(value, -7)), description: 'Попередній тиждень', group: 'Розклад', enabled: hotkeys },
+    { keys: 'arrowleft', handler: previousWeek, description: 'Попередній тиждень', group: 'Розклад', enabled: hotkeys },
     { keys: 'arrowright', handler: () => onChange(addDays(value, 7)), description: 'Наступний тиждень', group: 'Розклад', enabled: hotkeys },
     { keys: 't', handler: () => onChange(home), description: 'Цей тиждень', group: 'Розклад', enabled: hotkeys },
   ]);
@@ -50,10 +77,12 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
   return (
     <div className={cn('relative inline-flex min-w-0 items-center gap-1', className)} role="group" aria-label="Вибір тижня">
       <IconButton
-        label="Попередній тиждень"
-        shortcut={hotkeys ? 'arrowleft' : undefined}
+        label={atFirstWeek ? 'Попередній тиждень — лише для персоналу коледжу' : 'Попередній тиждень'}
+        shortcut={hotkeys && !atFirstWeek ? 'arrowleft' : undefined}
         icon={<ChevronLeft aria-hidden="true" className="size-4 rtl:rotate-180" />}
-        onClick={() => onChange(addDays(value, -7))}
+        aria-disabled={atFirstWeek || undefined}
+        className={atFirstWeek ? 'text-disabled hover:bg-transparent hover:text-disabled active:bg-transparent' : undefined}
+        onClick={previousWeek}
       />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -72,6 +101,8 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
             required
             selected={localDateFromIso(value)}
             defaultMonth={localDateFromIso(value)}
+            startMonth={firstWeek ? localDateFromIso(firstWeek) : undefined}
+            disabled={firstWeek ? { before: localDateFromIso(firstWeek) } : undefined}
             onSelect={(date: Date | undefined) => {
               if (!date) return;
               onChange(nearestStudyDay(isoFromLocalDate(date)));
@@ -90,6 +121,8 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
             showOutsideDays
             classNames={DAY_PICKER_CLASSES}
           />
+          {/* ширина — як у календаря: текст переноситься, а не розтягує спливне вікно */}
+          {firstWeek ? <p className="w-0 min-w-full px-1 pb-2 text-caption text-muted">{SCHEDULE_HISTORY_HINT}</p> : null}
           <div className="flex justify-between gap-2 border-t border-separator px-1 pt-2">
             <Button
               size="sm"

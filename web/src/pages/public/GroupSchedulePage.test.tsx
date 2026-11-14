@@ -19,7 +19,13 @@ function renderGroup(path = '/g/4КІ1?view=week&date=2026-11-11') {
 beforeEach(() => {
   localStorage.clear();
   useFavoritesStore.setState({ favorites: [], recent: [], lastViewed: null });
+  // «зараз» — середа того самого тижня: гостю розклад відкритий лише за останні дні, тож справжня дата запуску
+  // тестів за кілька тижнів зробила б тиждень 11.11 «архівом»
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-11T08:00:00Z'));
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe('Сторінка групи', () => {
   it('має шлях назад, код групи заголовком і без «1 зміна», що читалося як «одна заміна»', async () => {

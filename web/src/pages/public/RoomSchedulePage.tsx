@@ -4,6 +4,7 @@ import { isApiError } from '@/api/errors';
 import { useBellProfiles, usePublicRooms, usePublicSchedule } from '@/api/public';
 import { paths } from '@/app/routes';
 import { RoomNowStatus } from '@/components/public/schedule/RoomOccupancy';
+import { isHistoryClosed } from '@/components/public/history';
 import { ScheduleHeaderSkeleton, ScheduleLoadError } from '@/components/public/schedule/ScheduleHeader';
 import { SchedulePage } from '@/components/public/schedule/SchedulePage';
 import { ScheduleSkeleton } from '@/components/public/schedule/ScheduleSkeleton';
@@ -36,7 +37,9 @@ export default function RoomSchedulePage() {
   const loaded = query.isPlaceholderData ? undefined : query.data;
   const disciplines = useMemo(() => roomDisciplinesLine(loaded), [loaded]);
 
-  const missing = (isApiError(query.error) && query.error.isNotFound) || (rooms.isSuccess && !room);
+  // 404 «архів недоступний» (давній тиждень для гостя) — не «такої аудиторії немає»: пояснює сам розклад
+  const historyClosed = isHistoryClosed(query.error);
+  const missing = (isApiError(query.error) && query.error.isNotFound && !historyClosed) || (rooms.isSuccess && !room);
   if (missing) {
     return (
       <TargetNotFound
@@ -46,7 +49,7 @@ export default function RoomSchedulePage() {
     );
   }
   if (!name) {
-    if (query.isError) {
+    if (query.isError && !historyClosed) {
       return (
         <ScheduleLoadError heading="Розклад аудиторії" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );

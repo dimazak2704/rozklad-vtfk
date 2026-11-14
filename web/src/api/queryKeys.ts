@@ -3,6 +3,7 @@
  * `queryClient.invalidateQueries({ queryKey: qk.admin.changes.all })`.
  * Нові області додавайте сюди (одна гілка на область), а не пишіть ключі в компонентах.
  */
+import type { PublicViewer } from '@/auth/usePublicViewer';
 import type { EntityType, IsoDate, Uuid } from './types';
 
 type Params = Record<string, unknown>;
@@ -23,9 +24,13 @@ export const qk = {
     rooms: () => ['public', 'rooms'] as const,
     bells: (date?: IsoDate) => ['public', 'bells', date ?? 'profiles'] as const,
     scheduleAll: ['public', 'schedule'] as const,
-    schedule: (owner: EntityType, id: Uuid, from: IsoDate, to: IsoDate) =>
-      ['public', 'schedule', owner, id, { from, to }] as const,
-    changes: (date: IsoDate) => ['public', 'changes', date] as const,
+    /**
+     * Розклад і заміни залежать від того, хто питає: гість бачить лише останні дні, персонал — увесь архів.
+     * `viewer` у ключі не дає гостю після виходу побачити з памʼяті те, що отримав персонал, і навпаки.
+     */
+    schedule: (owner: EntityType, id: Uuid, from: IsoDate, to: IsoDate, viewer: PublicViewer) =>
+      ['public', 'schedule', owner, id, { from, to }, viewer] as const,
+    changes: (date: IsoDate, viewer: PublicViewer) => ['public', 'changes', date, viewer] as const,
     invite: (token: string) => ['public', 'invite', token] as const,
   },
   me: {
