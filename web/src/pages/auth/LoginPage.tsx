@@ -1,15 +1,19 @@
-import { KeyRound, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { isSilentRenewError, loginErrorText } from '@/auth/authErrors';
 import { isSafeReturnPath, postLoginPath } from '@/auth/postLogin';
 import { clearRejectedToken } from '@/auth/rejectedToken';
 import { useCurrentUser } from '@/auth/useCurrentUser';
+import { BrandMark } from '@/components/shell/Wordmark';
 import { Button } from '@/components/ui/Button';
+import { AuthTransition } from './AuthTransition';
+import { useSlowTransition } from './useSlowTransition';
 
 /**
- * Вхід для викладачів і диспетчерів (UI.md: «/login → сервіс входу»). Сторінка одразу веде на сторінку
- * входу коледжу /auth/login (PKCE); якщо сервер входу недоступний — пояснює і дає спробувати ще раз.
+ * Вхід для викладачів і диспетчерів (UI.md: «/login → сервіс входу»). Сторінка лише готує PKCE і одразу веде
+ * на сторінку входу коледжу /auth/login, тож показує мить переходу: знак, рядок і кільце, без великої розмітки.
+ * Якщо перехід затягнувся (понад 3 с) — пропонує спробувати ще раз; якщо сервер входу недоступний — пояснює.
  * Після повернення диспетчер потрапляє в /admin, викладач — у /me, або на сторінку, з якої прийшли.
  */
 export default function LoginPage() {
@@ -24,6 +28,9 @@ export default function LoginPage() {
   );
   const [attempt, setAttempt] = useState(0);
   const started = useRef(rejected ? 0 : -1);
+
+  // поки сторінка входу не відкрилася, а помилки немає — чекаємо; затягнулося — пропонуємо ще раз
+  const slow = useSlowTransition(!failure && status !== 'authenticated', attempt);
 
   const begin = useEffectEvent(() => {
     signIn(safeReturn).catch((cause: unknown) => setFailure(loginErrorText(cause)));
@@ -40,48 +47,41 @@ export default function LoginPage() {
 
   // збій фонового тихого оновлення — не причина показувати помилку на сторінці входу
   const problem = failure ?? (error && !isSilentRenewError(error) ? loginErrorText(error) : null);
-  const waiting = !problem;
+  const retry = () => {
+    clearRejectedToken();
+    setFailure(null);
+    setAttempt((value) => value + 1);
+  };
+
+  if (!problem) {
+    return (
+      <AuthTransition
+        text="Відкриваємо сторінку входу…"
+        slow={
+          slow ? (
+            <>
+              <p className="text-caption text-muted">Сторінка входу відкривається довше, ніж зазвичай.</p>
+              <Button variant="secondary" size="sm" iconStart={<LogIn aria-hidden="true" className="size-4" />} onClick={retry}>
+                Спробувати ще раз
+              </Button>
+            </>
+          ) : null
+        }
+      />
+    );
+  }
 
   return (
-    <section className="mx-auto grid max-w-4xl gap-8 py-6 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:py-14">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-headline font-semibold tracking-[-0.01em] text-primary">Вхід для викладачів і диспетчерів</h1>
-        <p className="max-w-prose text-body text-secondary">
-          Розклад, заміни й дзвінки відкриті для всіх без входу. Обліковий запис потрібен, щоб підтверджувати заміни,
-          повідомляти про відсутність і керувати розкладом.
-        </p>
-        <p className="max-w-prose text-ui text-muted">
-          Немає облікового запису? Викладач отримує запрошення від диспетчера й сам задає логін і пароль.
-        </p>
-      </div>
-      <div className="flex flex-col gap-4 rounded-panel border border-default bg-surface p-5">
-        <p className="flex items-center gap-2 text-heading font-semibold text-primary">
-          <KeyRound aria-hidden="true" className="size-[1.125rem] text-accent" />
-          Обліковий запис коледжу
-        </p>
-        <p className="text-ui text-secondary" aria-live="polite">
-          {waiting ? 'Відкриваємо сторінку входу коледжу…' : 'Сторінка входу не відкрилася.'}
-        </p>
-        {problem ? (
-          <p role="alert" className="rounded-control border border-cancel bg-danger-subtle px-3 py-2 text-caption text-danger">
-            {problem} Перевірте, чи працює сервер входу, і спробуйте ще раз.
-          </p>
-        ) : null}
-        <Button
-          variant="primary"
-          size="lg"
-          loading={waiting}
-          loadingLabel="Відкриваємо сторінку входу"
-          iconStart={<LogIn aria-hidden="true" className="size-4" />}
-          onClick={() => {
-            clearRejectedToken();
-            setFailure(null);
-            setAttempt((value) => value + 1);
-          }}
-        >
-          {waiting ? 'Відкриваємо…' : 'Спробувати ще раз'}
-        </Button>
-      </div>
+    <section className="mx-auto flex min-h-[min(60dvh,28rem)] w-full max-w-sm flex-col items-center justify-center gap-4 px-4 text-center">
+      <BrandMark size={40} />
+      <h1 className="text-title font-semibold text-primary">Сторінка входу не відкрилася</h1>
+      <p role="alert" className="text-ui text-balance text-secondary">
+        {problem} Перевірте, чи працює сервер входу, і спробуйте ще раз.
+      </p>
+      <Button variant="primary" iconStart={<LogIn aria-hidden="true" className="size-4" />} onClick={retry}>
+        Спробувати ще раз
+      </Button>
+      <p className="text-caption text-muted">Розклад, заміни й дзвінки відкриті для всіх без входу.</p>
     </section>
   );
 }

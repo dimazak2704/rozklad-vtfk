@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -119,6 +119,21 @@ describe('AuthCallbackPage', () => {
     renderCallback('/login/callback?code=x&state=y');
     expect(screen.getByText('Завершуємо вхід…')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    auth.status = 'authenticated';
+  });
+
+  it('обмін коду затягнувся понад 3 с — тихо пропонує почати вхід знову', async () => {
+    vi.useFakeTimers();
+    auth.status = 'loading';
+    signIn.mockClear();
+    renderCallback('/login/callback?code=x&state=y');
+    expect(screen.getByRole('status')).toHaveTextContent('Завершуємо вхід…');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+    expect(screen.getByText('Вхід завершується довше, ніж зазвичай.')).toBeInTheDocument();
+    vi.useRealTimers();
+    await userEvent.click(screen.getByRole('button', { name: 'Почати вхід знову' }));
+    expect(signIn).toHaveBeenCalledTimes(1);
     auth.status = 'authenticated';
   });
 });

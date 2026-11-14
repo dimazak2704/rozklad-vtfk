@@ -13,6 +13,8 @@ import {
   isObjection,
   isOpen,
   LESSON_STATE,
+  lessonApprovalMode,
+  lessonIsOver,
   lessonState,
   matchesFilter,
   manualTeacherRequest,
@@ -107,6 +109,19 @@ describe('стан пари', () => {
     expect(pendingInfo(null, 0)).toBeNull();
   });
 
+  it('пара минула — як lessonOver у core: давніший день або сьогодні з кінця пари за Києвом', () => {
+    // 09.11.2026 у Києві UTC+2: пара 11:00–12:00 закінчується о 10:00Z
+    expect(lessonIsOver('2026-11-09', '12:00', new Date('2026-11-09T09:59:59Z'))).toBe(false);
+    expect(lessonIsOver('2026-11-09', '12:00', new Date('2026-11-09T10:00:00Z'))).toBe(true);
+    expect(lessonIsOver('2026-11-06', '12:00', new Date('2026-11-09T05:00:00Z'))).toBe(true);
+    // 22:30Z — уже 10.11 за Києвом, хоч за UTC ще 9-те
+    expect(lessonIsOver('2026-11-09', '23:50', new Date('2026-11-09T22:30:00Z'))).toBe(true);
+    expect(lessonIsOver('2026-11-10', '08:00', new Date('2026-11-09T22:30:00Z'))).toBe(false);
+    expect(lessonIsOver('2026-11-10', '12:00', new Date('2026-11-09T12:00:00Z'))).toBe(false);
+    // без дзвінків сьогоднішня пара не вважається минулою (core теж вирішує лише датою)
+    expect(lessonIsOver('2026-11-09', null, new Date('2026-11-09T20:00:00Z'))).toBe(false);
+  });
+
   it('причина за замовчуванням: відрядження — «Відр.», решта — «Відп.»', () => {
     expect(defaultReason('BUSINESS_TRIP')).toBe('BUSINESS_TRIP');
     expect(defaultReason('SICK_LEAVE')).toBe('ABSENT');
@@ -194,6 +209,13 @@ describe('подання варіантів', () => {
     expect(actionLabel(option({ kind: 'CANCEL', teacher: null }), 'CONFIRM')).toBe('Застосувати');
     expect(planActionLabel(3, 'CONFIRM')).toBe('Надіслати всі (3)');
     expect(planActionLabel(2, 'AUTO')).toBe('Призначити всі (2)');
+  });
+
+  it('напис дії на минулу пару: core підтверджує одразу, тож «Призначити», а не «Надіслати прохання»', () => {
+    expect(actionLabel(option({}), lessonApprovalMode('CONFIRM', true))).toBe('Призначити');
+    expect(actionLabel(option({}), lessonApprovalMode('CONFIRM', false))).toBe('Надіслати прохання');
+    expect(lessonApprovalMode('NOTIFY', true)).toBe('NOTIFY');
+    expect(lessonApprovalMode(null, true)).toBeNull();
   });
 
   it('заголовок: минула пара, рівноцінні варіанти або нічого, коли є рекомендація', () => {

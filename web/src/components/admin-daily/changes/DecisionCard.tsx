@@ -4,14 +4,14 @@ import { Link } from 'react-router';
 import { useUpdateChange } from '@/api/admin-daily';
 import { useBindings, useBotStatus } from '@/api/telegram';
 import { isApiError, STALE_DATA_MESSAGE } from '@/api/errors';
-import type { ChangeDto, ReasonCode } from '@/api/types';
+import type { ChangeDto, IsoTime, ReasonCode } from '@/api/types';
 import { Button, buttonClass, MoreMenu, notify, type MoreMenuItem } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatDayMonth, formatInstantTime } from '@/lib/date';
 import { ChangeTimeline } from '../ChangeTimeline';
 import { reasonWords } from '../format';
-import { noticeAnswer, pendingInfo, type LessonState } from '../model';
+import { lessonIsOver, noticeAnswer, pendingInfo, type LessonState } from '../model';
 import { StateText } from '../StateBadge';
 import { ReasonPicker } from './ReasonPicker';
 
@@ -67,6 +67,8 @@ function ReasonEditor({ change, onDone }: { change: ChangeDto; onDone: () => voi
 interface DecisionCardProps {
   change: ChangeDto;
   state: LessonState;
+  /** Кінець пари за дзвінками (для блоку — останньої): після нього викладача вже не питають. */
+  lessonEndsAt?: IsoTime | null;
   busy: 'resend' | 'confirm' | 'cancel' | null;
   onResend: () => void;
   onConfirm: () => void;
@@ -109,12 +111,15 @@ type Sentence = { text: ReactNode; tone: 'plain' | 'warn' | 'alert' };
  * Ухвалене рішення щодо пари: стан словом, «було → стало» (старе закреслено), одне речення про те, що
  * далі, і до двох дій; рідші дії (змінити причину, скасувати рішення) — у «⋯». Історія — на вимогу.
  */
-export function DecisionCard({ change, state, busy, onResend, onConfirm, onCancel }: DecisionCardProps) {
+export function DecisionCard({ change, state, lessonEndsAt = null, busy, onResend, onConfirm, onCancel }: DecisionCardProps) {
   const { now } = useNow();
   const answer = noticeAnswer(change);
   const delivery = useRequestDelivery(change.new.teacher?.id, state === 'pending' || answer === 'waiting');
   const undelivered = delivery === 'noTelegram' || delivery === 'botOff';
-  const pending = state === 'pending' && !undelivered ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
+  // пара вже минула: core не просить і не нагадує (422 CHANGE_LESSON_OVER) — лишаємо «Підтвердити за викладача»
+  const over = (state === 'pending' || state === 'declined') && lessonIsOver(change.date, lessonEndsAt, now);
+  const canAsk = !over && (state === 'declined' || (state === 'pending' && !undelivered));
+  const pending = state === 'pending' && !undelivered && !over ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
   const substitute = change.new.teacher?.shortName ?? 'Викладач';
   const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled' || state === 'substituteAbsent';
   const [editingReason, setEditingReason] = useState(false);
@@ -130,6 +135,10 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
       tone: 'alert',
       text: `${substitute} не може провести пару, а розпорядження вже опубліковане. Додайте відсутність цього викладача на цю пару — нове рішення піде в доповнення.`,
     };
+  } else if (state === 'pending' && over) {
+    sentence = { tone: 'warn', text: 'Пара вже минула, а відповіді так і не було. Якщо пару провели, підтвердьте за викладача.' };
+  } else if (state === 'declined' && over) {
+    sentence = { tone: 'plain', text: 'Пара вже минула, тож просити ще раз запізно. Позначте нижче, що було насправді.' };
   } else if (state === 'pending' && undelivered) {
     sentence = {
       tone: 'warn',
@@ -238,9 +247,9 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
           <FileText aria-hidden="true" className="size-4" />
           Відкрити розпорядження
         </Link>
-      ) : state === 'pending' || state === 'declined' || state === 'substituteAbsent' ? (
+      ) : state === 'pending' || (state === 'declined' && canAsk) || state === 'substituteAbsent' ? (
         <div className="flex flex-wrap gap-2">
-          {state === 'pending' && !undelivered ? (
+          {state === 'pending' && canAsk ? (
             <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={onResend} iconStart={<BellRing aria-hidden="true" className="size-4" />}>
               Нагадати в Telegram
             </Button>
@@ -248,7 +257,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
           {state === 'pending' ? (
             <Button
               size="sm"
-              variant={undelivered ? 'primary' : 'secondary'}
+              variant={undelivered || over ? 'primary' : 'secondary'}
               loading={busy === 'confirm'}
               disabled={busy !== null}
               onClick={onConfirm}
@@ -257,7 +266,7 @@ export function DecisionCard({ change, state, busy, onResend, onConfirm, onCance
               Підтвердити за викладача
             </Button>
           ) : null}
-          {state === 'declined' ? (
+          {state === 'declined' && canAsk ? (
             // core не дає підтвердити відхилену заміну (422 CHANGE_DECLINED): викладача питаємо ще раз
             <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={onResend} iconStart={<BellRing aria-hidden="true" className="size-4" />}>
               Надіслати прохання ще раз

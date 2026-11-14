@@ -13,6 +13,7 @@ import type {
   CreateChangeRequest,
   IsoDate,
   IsoInstant,
+  IsoTime,
   LessonView,
   OrderSummaryDto,
   ReasonCode,
@@ -21,6 +22,7 @@ import type {
   Uuid,
 } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
+import { compareIsoDates, kyivClock, timeToMinutes } from '@/lib/date';
 import { countLabel, durationLabel } from '@/lib/labels';
 
 // ───────────────────────── Стан пари ─────────────────────────
@@ -191,6 +193,17 @@ export interface PendingInfo {
   label: string;
 }
 
+/**
+ * Чи пара вже скінчилася на годиннику застосунку (на стенді — серверному), як `lessonOver` у core: давніший день
+ * або сьогодні після кінця пари за дзвінками. Без часу кінця (немає профілю дзвінків) сьогоднішня пара не вважається
+ * минулою — так само вирішує core. Тоді просити викладача вже запізно: core відповідає 422 CHANGE_LESSON_OVER.
+ */
+export function lessonIsOver(date: IsoDate, endsAt: IsoTime | null | undefined, now: Date): boolean {
+  const clock = kyivClock(now);
+  if (date !== clock.date) return compareIsoDates(date, clock.date) < 0;
+  return endsAt ? timeToMinutes(endsAt) * 60 <= clock.minutes * 60 + clock.seconds : false;
+}
+
 export function pendingInfo(deadline: IsoInstant | null | undefined, nowMs: number): PendingInfo | null {
   if (!deadline) return null;
   const diff = Date.parse(deadline) - nowMs;
@@ -344,6 +357,14 @@ export function assignsTeacher(option: Pick<ChangeOption, 'kind' | 'teacher'>): 
  */
 export function actionLabel(option: Pick<ChangeOption, 'kind' | 'teacher'>, approvalMode: string | null | undefined): string {
   return assignsTeacher(option) ? assignLabel(approvalMode) : 'Застосувати';
+}
+
+/**
+ * Режим погодження для написів дій конкретної пари. На минулу пару core нікого не просить, а підтверджує
+ * зміну одразу (CONFIRM діє лише до кінця пари), тож напис має бути «Призначити», а не «Надіслати прохання».
+ */
+export function lessonApprovalMode(approvalMode: string | null | undefined, lessonOver: boolean): string | null | undefined {
+  return lessonOver && approvalMode === 'CONFIRM' ? 'AUTO' : approvalMode;
 }
 
 /** Напис дії, що призначає викладача: «Надіслати прохання» лише в режимі CONFIRM. */

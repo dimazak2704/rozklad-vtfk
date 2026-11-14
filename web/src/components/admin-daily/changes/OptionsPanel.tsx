@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode, TeacherRef } from '@/api/types';
 import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui';
+import { useNow } from '@/hooks/useNow';
 import { formatInstantTime } from '@/lib/date';
 import { plural } from '@/lib/labels';
 import {
@@ -11,6 +12,8 @@ import {
   effectiveOptionKey,
   EMPTY_POOL_TEXT,
   isOpen,
+  lessonApprovalMode,
+  lessonIsOver,
   optionButtonId,
   optionKey,
   optionsHeading,
@@ -87,6 +90,9 @@ export function OptionsPanel(props: OptionsPanelProps) {
   const [teacherDialog, setTeacherDialog] = useState(false);
   const [planDialog, setPlanDialog] = useState(false);
   const listId = useId();
+  const { now } = useNow();
+  // минулу пару core підтверджує одразу, без прохання: тоді й кнопки кажуть «Призначити»
+  const approvalMode = lessonApprovalMode(props.approvalMode, lessonIsOver(entry.item.date, entry.item.lesson.endsAt, now));
 
   const list = options.data?.options ?? [];
   const past = options.data?.past ?? false;
@@ -105,6 +111,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
         <DecisionCard
           change={entry.change}
           state={entry.state}
+          lessonEndsAt={entry.item.lesson.endsAt}
           busy={props.decisionBusy}
           onResend={props.onResend}
           onConfirm={props.onConfirm}
@@ -156,7 +163,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
                           best={best}
                           busy={pickingKey === key}
                           disabled={pickingKey !== null}
-                          actionLabel={actionLabel(option, props.approvalMode)}
+                          actionLabel={actionLabel(option, approvalMode)}
                           onSelect={onSelect}
                           onAct={props.onAct}
                           actionExtra={
@@ -204,7 +211,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
             onOpenChange={setTeacherDialog}
             lessonId={lessonId}
             pair={entry.item.lesson.pair}
-            approvalMode={props.approvalMode}
+            approvalMode={approvalMode}
             busy={pickingKey === MANUAL_KEY}
             onAssign={(teacher) => {
               void props.onAssignManual(teacher).then((done) => done && setTeacherDialog(false));

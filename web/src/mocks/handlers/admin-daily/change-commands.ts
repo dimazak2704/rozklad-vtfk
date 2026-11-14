@@ -36,7 +36,7 @@ import { mockId } from '../../ids';
 import { badRequest, businessRule, conflict, problem } from '../../kit';
 import { currentSettings } from '../settings';
 import { isTeacherBound, recordConfirmationRequest } from '../telegram';
-import { makeChange, transition } from './factory';
+import { confirmDeadline, lessonOver, makeChange, transition } from './factory';
 import { printedReason } from './printed';
 import { findTemplateLesson } from './lessons';
 import { decisionFor, groupPairs, isAbsent, isCovered, teacherSlots } from './rules';
@@ -460,14 +460,22 @@ export function cancelChange(id: Uuid, now: Date): ChangeRecord {
 
 /**
  * POST …/request-confirmation: нагадування в Telegram і новий строк відповіді. Як у core, запит можна надіслати
- * й після відмови (DECLINED → PENDING_CONFIRMATION) — наприклад, коли диспетчер домовився телефоном.
+ * й після відмови (DECLINED → PENDING_CONFIRMATION) — наприклад, коли диспетчер домовився телефоном. Про пару,
+ * що вже минула, не питають (422 CHANGE_LESSON_OVER); строк — не пізніше за початок пари (`confirmDeadline`).
  */
 export function resendConfirmation(id: Uuid, now: Date): ChangeRecord {
   const change = getChange(id);
+  if (!change.new.teacher) {
+    throw businessRule('CHANGE_WITHOUT_TEACHER', 'Ця зміна не призначає викладача, тому підтвердження не потрібне.');
+  }
+  // порядок перевірок — як у ChangeWorkflow.requestConfirmation: спершу «пара минула», потім перехід стану
+  if (lessonOver(change, now)) {
+    throw businessRule('CHANGE_LESSON_OVER', 'Пара вже минула — просити викладача підтвердити заміну запізно.');
+  }
   if (change.status !== 'PENDING_CONFIRMATION' && change.status !== 'DECLINED') {
     throw businessRule('CHANGE_ILLEGAL_TRANSITION', 'Запит можна надіслати лише для заміни, що чекає відповіді або була відхилена.');
   }
-  const deadline = new Date(now.getTime() + currentSettings().confirmTimeoutMinutes * 60_000).toISOString();
+  const deadline = confirmDeadline(change, now, currentSettings().confirmTimeoutMinutes);
   const next = saveChange(
     transition(change, 'PENDING_CONFIRMATION', now, ADMIN_ACTOR, 'Запит надіслано повторно', { confirmDeadline: deadline }),
   );

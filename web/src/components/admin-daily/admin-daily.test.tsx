@@ -426,7 +426,11 @@ describe('налаштування', () => {
     expect(fullNames).toHaveAccessibleDescription(/^Вимкнено — на сайті лише прізвище та ініціали/);
     await user.click(fullNames);
     expect(fullNames).toBeChecked();
-    expect(fullNames).toHaveAccessibleDescription(/^Увімкнено — пошук на сайті показує й повне імʼя/);
+    // підказка каже, де саме видно повне імʼя, і що клітинки розкладу його не беруть
+    const on = fullNames.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent ?? '').join(' ') ?? '';
+    expect(on).toMatch(/^Увімкнено — повне імʼя/);
+    expect(on).toContain('в заголовку сторінки викладача, у картці заняття («Веде») і в пошуку');
+    expect(on).toContain('Клітинки розкладу лишають «Кренцін М. Д.»');
   });
 
   it('помилки сервера стають помилками полів', async () => {

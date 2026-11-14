@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from './LoginPage';
 
 const signIn = vi.hoisted(() => vi.fn<(returnTo?: string) => Promise<void>>());
@@ -36,6 +37,41 @@ describe('LoginPage', () => {
     renderLogin();
     await vi.waitFor(() => expect(signIn).toHaveBeenCalledWith('/admin'));
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByText('Відкриваємо сторінку входу коледжу…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Відкриваємо сторінку входу…');
+  });
+
+  describe('мить переходу', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('лише знак, рядок і кільце — без великої сторінки з поясненнями й кнопкою', async () => {
+      auth.error = null;
+      signIn.mockReset();
+      signIn.mockReturnValue(new Promise(() => undefined));
+      renderLogin();
+      await vi.waitFor(() => expect(signIn).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole('status')).toHaveTextContent('Відкриваємо сторінку входу…');
+      expect(screen.queryByRole('heading')).toBeNull();
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.queryByText(/Обліковий запис коледжу/)).toBeNull();
+    });
+
+    it('перехід затягнувся понад 3 с — пропонує спробувати ще раз, і спроба знову веде на вхід', async () => {
+      vi.useFakeTimers();
+      auth.error = null;
+      signIn.mockReset();
+      signIn.mockReturnValue(new Promise(() => undefined));
+      renderLogin();
+      expect(signIn).toHaveBeenCalledTimes(1);
+      await act(() => vi.advanceTimersByTimeAsync(2_900));
+      expect(screen.queryByRole('button', { name: 'Спробувати ще раз' })).toBeNull();
+      await act(() => vi.advanceTimersByTimeAsync(200));
+      expect(screen.getByText('Сторінка входу відкривається довше, ніж зазвичай.')).toBeInTheDocument();
+      vi.useRealTimers();
+      await userEvent.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
+      expect(signIn).toHaveBeenCalledTimes(2);
+      expect(signIn).toHaveBeenLastCalledWith('/admin');
+      // нова спроба знову дає повні 3 с, тож підказка ховається
+      expect(screen.queryByText('Сторінка входу відкривається довше, ніж зазвичай.')).toBeNull();
+    });
   });
 });

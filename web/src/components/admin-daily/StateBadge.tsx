@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import type { IsoInstant } from '@/api/types';
+import type { IsoDate, IsoInstant, IsoTime } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { LESSON_STATE, pendingInfo, type LessonState } from './model';
+import { LESSON_STATE, lessonIsOver, pendingInfo, type LessonState } from './model';
 
 /** Крапка стану: колір лише підсилює слово (стан читається й у відтінках сірого). */
 const DOT: Record<LessonState, string> = {
@@ -48,12 +48,18 @@ export function StateText({ state, children, className }: StateTextProps) {
 
 interface PendingCountdownProps {
   deadline: IsoInstant | null | undefined;
+  /** Пара, на яку чекаємо відповідь: коли вона вже минула, строк не підганяє — показуємо спокійне «пара минула». */
+  lesson?: { date: IsoDate; endsAt: IsoTime | null | undefined };
   className?: string;
 }
 
 /** «ще 11 хв» до строку відповіді або «прострочено 7 хв» — оновлюється разом зі спільним годинником. */
-export function PendingCountdown({ deadline, className }: PendingCountdownProps) {
+export function PendingCountdown({ deadline, lesson, className }: PendingCountdownProps) {
   const { now } = useNow();
+  // core уже не нагадує про минулу пару (422 CHANGE_LESSON_OVER), тож червоне «прострочено» тут лише лякає
+  if (deadline && lesson && lessonIsOver(lesson.date, lesson.endsAt, now)) {
+    return <span className={cn('whitespace-nowrap text-secondary', className)}>пара минула</span>;
+  }
   const info = pendingInfo(deadline, now.getTime());
   if (!info) return null;
   return <span className={cn('whitespace-nowrap figures', info.overdue ? 'text-danger' : 'text-secondary', className)}>{info.label}</span>;

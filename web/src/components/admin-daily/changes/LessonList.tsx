@@ -63,7 +63,7 @@ function StatusLine({ entry }: { entry: LessonEntry }) {
                 <span className="max-sm:hidden"> </span>
                 <span className="font-normal whitespace-nowrap text-secondary max-sm:block">
                   <span className="max-sm:hidden">·&nbsp;</span>
-                  <PendingCountdown deadline={change.confirmDeadline} />
+                  <PendingCountdown deadline={change.confirmDeadline} lesson={{ date: entry.item.date, endsAt: entry.item.lesson.endsAt }} />
                 </span>
               </>
             ) : null}

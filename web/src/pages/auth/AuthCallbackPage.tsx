@@ -6,12 +6,15 @@ import { openAfterLogin, postLoginPath, returnToFromState } from '@/auth/postLog
 import { rolesFromAccessToken } from '@/auth/roles';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { userManager } from '@/auth/userManager';
+import { BrandMark } from '@/components/shell/Wordmark';
 import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
+import { AuthTransition } from './AuthTransition';
+import { useSlowTransition } from './useSlowTransition';
 
 /**
  * Повернення зі сторінки входу коледжу. Обмін коду на токени робить AuthProvider, а він же веде далі
- * (див. src/app/App.tsx). Тут — стан очікування і зрозуміла помилка. Стару адресу повернення
+ * (див. src/app/App.tsx). Тут — мить очікування (знак, рядок і кільце; затягнулося понад 3 с — можна почати
+ * вхід знову) і зрозуміла помилка. Стару адресу повернення
  * (кнопка «Назад» після входу) AuthProvider не може обробити вдруге й лишає користувача
  * «невідомим», хоча сесія в цій вкладці є: тоді відкриваємо сторінку за роллю, а не помилку.
  * Адресу без даних входу (`code`/`error` + `state`) AuthProvider не обробляє і помилки не дає:
@@ -25,6 +28,8 @@ export default function AuthCallbackPage() {
   const { search, hash } = useLocation();
   // відкрито /login/callback без даних входу (закладка, ручний перехід): завершувати нічого
   const nothingToFinish = status === 'anonymous' && !error && !hasCallbackParams(search, hash);
+  const failed = Boolean(error && storedChecked) || nothingToFinish;
+  const slow = useSlowTransition(status !== 'authenticated' && !failed);
 
   useEffect(() => {
     if (!error || status === 'authenticated') return;
@@ -44,27 +49,36 @@ export default function AuthCallbackPage() {
 
   if (status === 'authenticated') return <Navigate to={postLoginPath(roles, returnTo)} replace />;
 
-  if ((error && storedChecked) || nothingToFinish) {
+  if (failed) {
     const text = error
       ? `${callbackErrorText(error, search)} Почніть вхід ще раз — зазвичай це допомагає.`
       : 'Ця сторінка лише завершує вхід, а даних входу в адресі немає. Почніть вхід ще раз.';
     return (
-      <section role="alert" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 px-4">
+      <section role="alert" className="mx-auto flex min-h-dvh w-full max-w-sm flex-col items-center justify-center gap-4 px-4 text-center">
+        <BrandMark size={40} />
         <h1 className="text-title font-semibold text-primary">Вхід не завершився</h1>
-        <p className="text-body text-secondary">{text}</p>
-        <div>
-          <Button variant="primary" onClick={() => void signIn()}>
-            Увійти ще раз
-          </Button>
-        </div>
+        <p className="text-ui text-balance text-secondary">{text}</p>
+        <Button variant="primary" onClick={() => void signIn()}>
+          Увійти ще раз
+        </Button>
       </section>
     );
   }
 
   return (
-    <section role="status" aria-live="polite" className="flex min-h-dvh items-center justify-center gap-3 text-ui text-secondary">
-      <Spinner />
-      Завершуємо вхід…
-    </section>
+    <AuthTransition
+      fullScreen
+      text="Завершуємо вхід…"
+      slow={
+        slow ? (
+          <>
+            <p className="text-caption text-muted">Вхід завершується довше, ніж зазвичай.</p>
+            <Button variant="secondary" size="sm" onClick={() => void signIn()}>
+              Почати вхід знову
+            </Button>
+          </>
+        ) : null
+      }
+    />
   );
 }
