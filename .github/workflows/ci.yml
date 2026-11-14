@@ -119,6 +119,11 @@ jobs:
 
       - name: Shell scripts
         run: |
-          for f in infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh; do bash -n "$f"; done
+          for f in infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh infra/deploy/tests/*.sh; do bash -n "$f"; done
           command -v shellcheck >/dev/null || sudo apt-get install -y -qq shellcheck
           shellcheck -x -P infra/deploy/scripts infra/deploy/scripts/*.sh infra/deploy/postgres/*.sh
+          shellcheck -x -P infra/deploy/tests infra/deploy/tests/*.sh
+
+      # deploy-key checks of ci-entry.sh, Caddy routing in a throwaway container, rendered compose files
+      - name: Deployment script and configuration tests
+        run: bash infra/deploy/tests/run.sh

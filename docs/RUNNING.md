@@ -19,6 +19,13 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 | gateway | **8080** | 256 / 512 MB | the only entry point for clients: `http://localhost:8080/api/...` |
 | web | 8088 | — | nginx with the SPA, `/api` → gateway, `/auth` → auth; every sign-in goes through it (also from `npm run dev` on 5180) |
 
+Every port is published on `127.0.0.1` only. The stand runs the real bot token from `.env` with public
+development credentials (`rozklad`/`rozklad`, `postgres`/`postgres`, Redis without a password), so on a
+shared network (college or café Wi-Fi) nobody else may reach it. To show the site to a phone or another PC
+on purpose, start with `WEB_BIND_ADDRESS=0.0.0.0 scripts/dev-stack.sh up --no-telegram`: only the web
+container (8088) is opened, and sign-in works only on this PC (the issuer is `http://localhost:8088/auth`).
+For a demo away from home prefer the deployed site, or at least `--no-telegram`.
+
 Heaps are set with `JAVA_TOOL_OPTIONS=-Xmx…` (wins over `-XX:MaxRAMPercentage=75` of the images) and
 can be changed with `CORE_HEAP`, `CORE_MEM_LIMIT`, … in the shell or `.env`. The whole stack takes about
 3.5–4 GB.

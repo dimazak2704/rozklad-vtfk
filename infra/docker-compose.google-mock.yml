@@ -14,7 +14,7 @@ services:
       SERVER_PORT: "8090"
       JSON_CONFIG_PATH: /config/mock-oidc.json
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     volumes:
       - ./dev/mock-oidc.json:/config/mock-oidc.json:ro
     mem_limit: 256m
