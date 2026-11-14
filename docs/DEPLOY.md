@@ -425,8 +425,8 @@ Deploy key for GitHub. The `docker` group is root-equivalent, so the key must no
 gets a forced command and may run `ci-entry.sh` only. On your PC:
 
 ```bash
-ssh-keygen -t ed25519 -C github-deploy -f rozklad_github -N ''
-cat rozklad_github.pub                         # one line: ssh-ed25519 AAAA... github-deploy
+ssh-keygen -t ed25519 -C github-deploy -f ~/.ssh/rozklad_github -N ''   # outside the repository
+cat ~/.ssh/rozklad_github.pub                  # one line: ssh-ed25519 AAAA... github-deploy
 ```
 
 On the server, append that line to `~/.ssh/authorized_keys` **with this prefix** (adjust the path if
@@ -438,9 +438,21 @@ restrict,command="bash /home/ubuntu/rozklad/infra/deploy/scripts/ci-entry.sh" ss
 
 `restrict` turns off port forwarding, agent forwarding and the terminal; `command` makes sshd run
 `ci-entry.sh` whatever the client asks. The script reads the commit sha, image prefix, user name,
-token and `DOMAIN` from stdin, accepts only a 40-character sha and `ghcr.io/<owner>/rozklad`, and runs
-`deploy.sh --pull-images`. Paste the private key (`rozklad_github`) into the `VPS_SSH_KEY` secret,
-then delete both files.
+token and `DOMAIN` from stdin, and the server decides what it accepts, because whoever holds the key
+chooses those lines:
+
+- the image prefix must be this server's own: `DEPLOY_IMAGE_PREFIX` in `.env` if set, otherwise
+  `ghcr.io/<GitHub owner of the clone's origin, lower-case>/rozklad`. Images of another GHCR owner are
+  refused before the server logs in anywhere. A clone whose origin is not on GitHub needs
+  `DEPLOY_IMAGE_PREFIX`;
+- the commit must be the tip of `main` on origin right now (`git fetch` on the server). An older
+  commit is refused, so the key cannot roll production back. If two pushes come quickly, the run of
+  the older one stops at this check and the run of the newer one deploys;
+- `DOMAIN` must equal the server's.
+
+Then it runs `deploy.sh --pull-images`. A leaked key can therefore only redeploy the current `main`;
+still treat it like a password. Paste the private key into the `VPS_SSH_KEY` secret, then delete both
+files.
 
 Host key: on the server run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`; on your PC run
 `ssh-keyscan -t ed25519 <VPS_HOST>` (the same name or IP as the secret; `-p <port>` if not 22), check with `ssh-keygen -lf -` on that
