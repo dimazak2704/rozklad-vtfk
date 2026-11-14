@@ -15,6 +15,9 @@ so the scenario also exercises the substitution workflow. Run it on the demo sta
     date is published. Publication sends Telegram messages, so it also needs every bound chat to be allowed with
     --allow-chat (the masked chat id as GET /api/notify/bindings shows it); any other bound chat aborts it.
 
+Before the data the script turns on «Показувати повні імена викладачів» (setting showTeacherFullNames), so public
+cards show «Прізвище Ім'я» where the first name is known; grids keep the surname. Turn it off in /admin/settings.
+
 The script is idempotent: an absence of the teacher on the date, or a live (not cancelled) change of the same kind
 for the same group, pair and subgroup is reused, never duplicated. It prints a summary of both days at the end.
 
@@ -122,6 +125,13 @@ DECISIONS = [
              reason="FINISHED"),
 ]
 
+def full_names_update(settings: dict) -> dict | None:
+    """PUT body of /api/admin/settings that turns on full teacher names, or None when they are already on."""
+    if settings.get("showTeacherFullNames"):
+        return None
+    return {**settings, "showTeacherFullNames": True}
+
+
 LIVE = ("DRAFT", "PENDING_CONFIRMATION", "CONFIRMED", "DECLINED", "APPLIED")
 
 
@@ -161,6 +171,15 @@ class Scenario:
             if lesson["pair"] == pair and lesson["subgroup"] == subgroup and lesson["kind"] == "REGULAR":
                 return lesson
         raise LookupError(f"{group} {date}: no regular lesson at pair {pair}, subgroup {subgroup}")
+
+    # ---------------------------------------------------------------- settings
+    def ensure_full_names(self) -> None:
+        body = full_names_update(self.admin.get("/api/admin/settings"))
+        if body is None:
+            print("  full teacher names: already on", flush=True)
+            return
+        self.admin.put("/api/admin/settings", body)
+        print("  full teacher names: turned on", flush=True)
 
     # ---------------------------------------------------------------- absences
     def ensure_absences(self) -> None:
@@ -352,6 +371,8 @@ def main(argv: list[str]) -> None:
     if args.summary:
         scenario.load_absences()
     else:
+        print("== settings")
+        scenario.ensure_full_names()
         print("== absences")
         scenario.ensure_absences()
         print("== decisions")
