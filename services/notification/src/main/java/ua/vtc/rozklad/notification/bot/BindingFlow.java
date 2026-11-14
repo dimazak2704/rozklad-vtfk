@@ -2,6 +2,7 @@ package ua.vtc.rozklad.notification.bot;
 
 import static ua.vtc.rozklad.notification.text.Html.b;
 
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,11 +12,13 @@ import ua.vtc.rozklad.notification.binding.BindingCodes.Redemption;
 import ua.vtc.rozklad.notification.binding.BindingTarget;
 import ua.vtc.rozklad.notification.binding.BindingType;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
+import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatMessage;
 import ua.vtc.rozklad.notification.config.BotProperties;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup;
+import ua.vtc.rozklad.notification.telegram.TelegramApiFailure;
 
 /**
  * {@code /start <code>} (deep link in a private chat or {@code ?startgroup=}) and
@@ -23,24 +26,35 @@ import ua.vtc.rozklad.notification.telegram.ReplyMarkup;
  * that really exists — the bot never writes to chats that were not bound through the system.
  * Wrong codes are counted per chat and user ({@link BindingAttempts}): after five within 15 minutes codes are
  * not looked up at all, so nobody can find a code by sending one guess after another.
+ * In a group chat any member may bind a new chat to its group, but only a chat admin may make the chat a service
+ * chat (ADMIN_CHAT code) or apply a code to a chat that is already bound (move it to another group): a code
+ * that leaked into a student chat must not redirect it. A teacher whose chat is taken over by a newer code is
+ * told so in the old chat.
  */
 @Component
 public class BindingFlow {
+
+    static final String ADMINS_ONLY = "Застосувати цей код у груповому чаті може лише адміністратор чату.";
+    static final String ADMIN_CHECK_FAILED = "Не вдалося перевірити, чи ви адміністратор чату. Спробуйте за хвилину.";
 
     private static final Logger log = LoggerFactory.getLogger(BindingFlow.class);
 
     private final BindingCodes codes;
     private final BindingAttempts attempts;
     private final ChatAccess access;
+    private final ChatBindings bindings;
+    private final ChatAdmins admins;
     private final BotReplies replies;
     private final TelegramProperties telegram;
     private final BotProperties bot;
 
-    public BindingFlow(BindingCodes codes, BindingAttempts attempts, ChatAccess access, BotReplies replies,
-                       TelegramProperties telegram, BotProperties bot) {
+    public BindingFlow(BindingCodes codes, BindingAttempts attempts, ChatAccess access, ChatBindings bindings,
+                       ChatAdmins admins, BotReplies replies, TelegramProperties telegram, BotProperties bot) {
         this.codes = codes;
         this.attempts = attempts;
         this.access = access;
+        this.bindings = bindings;
+        this.admins = admins;
         this.replies = replies;
         this.telegram = telegram;
         this.bot = bot;
@@ -62,10 +76,20 @@ public class BindingFlow {
             }
             return;
         }
+        if (message.chat().isGroup() && !mayRedeemInGroup(message, code)) {
+            return;
+        }
         Redemption redemption = codes.redeem(code, message.chat());
         switch (redemption) {
-            case Redemption.Bound bound -> replies.send(chatId, boundText(bound.target(), bound.binding()),
-                    keyboard(bound.target()));
+            case Redemption.Bound bound -> {
+                replies.send(chatId, boundText(bound.target(), bound.binding()), keyboard(bound.target()));
+                if (bound.displacedChatId() != null) {
+                    long displaced = bound.displacedChatId();
+                    log.info("Teacher chat {} replaced by chat {}", ChatIds.mask(displaced), ChatIds.mask(chatId));
+                    replies.send(displaced, displacedText(bound.target()),
+                            bindings.isKnownChat(displaced) ? BotTexts.mainMenu(false) : null);
+                }
+            }
             case Redemption.Rejected rejected -> {
                 attempts.recordFailure(chatId, userId);
                 if (!knownBefore && rejected.reason() == BindingCodes.RejectReason.UNKNOWN) {
@@ -75,6 +99,38 @@ public class BindingFlow {
                 replies.send(chatId, rejectedText(rejected), null);
             }
         }
+    }
+
+    /**
+     * A non-admin may apply only a group code to a group chat that is not bound yet. An unknown, used or expired
+     * code is left to {@link BindingCodes#redeem}, which rejects it and counts the failure.
+     */
+    private boolean mayRedeemInGroup(ChatMessage message, String code) {
+        Optional<BindingType> type = codes.redeemableType(code);
+        long chatId = message.chat().id();
+        boolean needsAdmin = type.isPresent() && (type.get() == BindingType.ADMIN_CHAT
+                || type.get() == BindingType.GROUP_CHAT && bindings.isKnownChat(chatId));
+        if (!needsAdmin) {
+            return true;
+        }
+        try {
+            if (admins.isAdmin(message)) {
+                return true;
+            }
+            log.info("{} code in chat {} refused: the author is not a chat admin", type.get(), ChatIds.mask(chatId));
+            replies.send(chatId, ADMINS_ONLY, null);
+        } catch (TelegramApiFailure e) {
+            log.warn("Admin check in chat {} failed: {}", ChatIds.mask(chatId), e.getMessage());
+            replies.send(chatId, ADMIN_CHECK_FAILED, null);
+        }
+        return false;
+    }
+
+    /** To the teacher's previous chat after a newer code moved his requests elsewhere. */
+    static String displacedText(BindingTarget target) {
+        return "⚠️ Telegram викладача " + b(target.label()) + " щойно підключили в іншому чаті, тож прохання "
+                + "про заміни сюди більше не надходитимуть.\n"
+                + "Якщо це зробили не ви, підключіть Telegram знову в кабінеті на сайті й повідомте диспетчера.";
     }
 
     static String boundText(BindingTarget target, ChatBinding binding) {
@@ -108,7 +164,7 @@ public class BindingFlow {
         return switch (rejected.reason()) {
             case UNKNOWN -> "Код не знайдено. Перевірте його або попросіть новий у веб-панелі.";
             case USED -> "Цей код уже використано. Попросіть новий у веб-панелі (Telegram → Прив’язки).";
-            case EXPIRED -> "Термін дії коду минув — він діє 24 години. Попросіть новий у веб-панелі.";
+            case EXPIRED -> "Термін дії коду минув. Попросіть новий у веб-панелі.";
             case WRONG_CHAT -> rejected.codeType() == BindingType.GROUP_CHAT
                     ? "Цей код — для чату групи. Додайте бота до групового чату й надішліть там: /bind КОД"
                     : "Цей код — для особистого чату з ботом: відкрийте @" + telegram.botUsername()

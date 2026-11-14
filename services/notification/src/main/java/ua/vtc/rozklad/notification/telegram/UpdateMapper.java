@@ -81,6 +81,6 @@ public final class UpdateMapper {
             default -> ChatKind.CHANNEL;
         };
         String title = chat.getTitle() != null ? chat.getTitle() : chat.getFirstName();
-        return new ChatRef(chat.getId(), kind, title);
+        return new ChatRef(chat.getId(), kind, title, kind == ChatKind.PRIVATE ? chat.getUserName() : null);
     }
 }

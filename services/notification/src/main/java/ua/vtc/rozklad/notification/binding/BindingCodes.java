@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
@@ -20,8 +21,11 @@ import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 
 /**
- * One-time binding codes (TTL 24 h): issued in the web panel, redeemed in Telegram with
- * {@code /start <code>} (deep link) or {@code /bind <code>} (group chat).
+ * One-time binding codes: issued in the web panel, redeemed in Telegram with {@code /start <code>} (deep link)
+ * or {@code /bind <code>} (group chat). Whoever redeems a code first gets the binding, so codes for a teacher's
+ * chat and for a service chat live only {@code app.bot.personal-code-ttl} (15 min: a QR shown on a projector or
+ * in a shared screen is useless soon after); codes of group chats and subscribers live {@code app.bot.code-ttl}
+ * (24 h).
  */
 @Service
 public class BindingCodes {
@@ -52,7 +56,7 @@ public class BindingCodes {
     public IssuedCode issue(BindingTarget target, String createdBy) {
         Instant now = clock.instant();
         String code = newCode();
-        BindingCode stored = codes.save(new BindingCode(hash(code), target, createdBy, now, now.plus(bot.codeTtl())));
+        BindingCode stored = codes.save(new BindingCode(hash(code), target, createdBy, now, now.plus(ttl(target.type()))));
         log.info("Binding code {} issued by {} for {}", target.type(), createdBy, target.label());
         boolean groupCapable = target.type() == BindingType.GROUP_CHAT || target.type() == BindingType.ADMIN_CHAT;
         return new IssuedCode(display(code),
@@ -60,6 +64,26 @@ public class BindingCodes {
                 groupCapable ? telegram.botLink() + "?startgroup=" + code : null,
                 groupCapable ? "/bind " + display(code) : null,
                 stored.getExpiresAt(), target);
+    }
+
+    Duration ttl(BindingType type) {
+        return switch (type) {
+            case TEACHER, ADMIN_CHAT -> bot.personalCodeTtl();
+            case GROUP_CHAT, SUBSCRIBER -> bot.codeTtl();
+        };
+    }
+
+    /**
+     * Type of a code that could be redeemed now (known, unused, unexpired), without spending it: a group chat
+     * asks for an admin before an ADMIN_CHAT code or a re-binding is applied.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BindingType> redeemableType(String rawCode) {
+        Instant now = clock.instant();
+        return normalize(rawCode)
+                .flatMap(code -> codes.findByCodeHash(hash(code)))
+                .filter(code -> !code.isUsed() && !code.isExpired(now))
+                .map(BindingCode::getType);
     }
 
     /**
@@ -94,9 +118,15 @@ public class BindingCodes {
             return new Redemption.Rejected(RejectReason.WRONG_CHAT, code.getType());
         }
         code.markUsed(chat.id(), now);
+        // викладач має один чат: нова прив'язка забирає старий, і той чат дізнається про це (Redemption.Bound)
+        Long displacedChat = code.getType() != BindingType.TEACHER ? null
+                : bindings.teacherChat(code.target().teacherId())
+                .map(ChatBinding::getChatId)
+                .filter(previous -> previous != chat.id())
+                .orElse(null);
         ChatBinding binding = bindings.bind(code.target(), chat);
         log.info("Binding code {} redeemed in chat {}", code.getType(), ChatIds.mask(chat.id()));
-        return new Redemption.Bound(binding, code.target());
+        return new Redemption.Bound(binding, code.target(), displacedChat);
     }
 
     /** Is there any code with this text (used/expired included)? Decides whether to answer an unknown chat. */
@@ -165,7 +195,8 @@ public class BindingCodes {
 
     public sealed interface Redemption {
 
-        record Bound(ChatBinding binding, BindingTarget target) implements Redemption {
+        /** {@code displacedChatId}: the teacher's previous chat, unbound by this code ({@code null} if none). */
+        record Bound(ChatBinding binding, BindingTarget target, Long displacedChatId) implements Redemption {
         }
 
         /** {@code codeType} is null for an unknown code. */

@@ -8,7 +8,8 @@ import ua.vtc.rozklad.notification.core.CoreDtos.CurrentUser;
 import ua.vtc.rozklad.notification.web.BusinessRuleException;
 
 /**
- * {@code GET /api/notify/bindings/me}: whether the signed-in teacher's own Telegram chat is bound.
+ * {@code GET} and {@code DELETE /api/notify/bindings/me}: whether the signed-in teacher's own Telegram chat is
+ * bound, and unlinking it.
  * The teacher is resolved from the caller's token ({@code GET /api/me} on core), like the binding
  * codes a teacher creates for himself; other people's bindings stay ADMIN-only.
  */
@@ -25,12 +26,27 @@ public class MyTelegramBinding {
 
     /** @throws BusinessRuleException {@code teacher-not-linked} (422) for an account without a teacher */
     public Status of(String bearerToken) {
+        CurrentUser me = teacherOf(bearerToken);
+        return new Status(me.teacher().id(), me.teacher().label(), bindings.teacherChat(me.teacher().id()));
+    }
+
+    /**
+     * {@code DELETE /api/notify/bindings/me}: the teacher unlinks his own Telegram chat himself, without waiting
+     * for the dispatcher (a chat he does not recognise, a lost phone). Idempotent.
+     *
+     * @throws BusinessRuleException {@code teacher-not-linked} (422) for an account without a teacher
+     */
+    public void unlink(String bearerToken) {
+        bindings.unlinkTeacher(teacherOf(bearerToken).teacher().id());
+    }
+
+    private CurrentUser teacherOf(String bearerToken) {
         CurrentUser me = core.currentUser(bearerToken);
         if (me == null || me.teacher() == null || me.teacher().id() == null) {
             throw new BusinessRuleException("teacher-not-linked",
                     "Ваш обліковий запис не пов’язаний з викладачем. Зверніться до диспетчера.");
         }
-        return new Status(me.teacher().id(), me.teacher().label(), bindings.teacherChat(me.teacher().id()));
+        return me;
     }
 
     public record Status(UUID teacherId, String teacherName, Optional<ChatBinding> binding) {

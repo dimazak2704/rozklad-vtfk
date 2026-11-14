@@ -20,10 +20,15 @@ public sealed interface BotUpdate permits BotUpdate.ChatMessage, BotUpdate.Callb
         CHANNEL
     }
 
-    record ChatRef(long id, ChatKind kind, String title) {
+    /** {@code title}: a group's title or a private chat's first name; {@code username} only for private chats. */
+    record ChatRef(long id, ChatKind kind, String title, String username) {
 
         public ChatRef {
             Objects.requireNonNull(kind, "kind");
+        }
+
+        public ChatRef(long id, ChatKind kind, String title) {
+            this(id, kind, title, null);
         }
 
         public boolean isPrivate() {

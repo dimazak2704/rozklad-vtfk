@@ -217,6 +217,8 @@ class GroupChatFlowsIT extends IntegrationTest {
     void rebindingAChatKeepsItsMorningScheduleChoice() {
         groupChatOf(GROUP_CHAT, CoreFixtures.GROUP_4KI1, "4КІ1");
         bindings.setGroupChatDigest(GROUP_CHAT, true);
+        // прив'язаний чат переносить на іншу групу лише адміністратор чату (BindingTakeoverIT)
+        telegram.setMemberStatus(GROUP_CHAT, 42, MemberStatus.ADMINISTRATOR);
         sayInGroup(GROUP_CHAT, "/bind " + issue(BindingTarget.group(BindingType.GROUP_CHAT, CoreFixtures.GROUP_4KI2,
                 "4КІ2")));
         assertThat(telegram.lastSentTo(GROUP_CHAT).text())

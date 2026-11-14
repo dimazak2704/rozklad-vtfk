@@ -10,6 +10,7 @@ import ua.vtc.rozklad.notification.binding.BindingType;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatMessage;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
 import ua.vtc.rozklad.notification.support.IntegrationTest;
+import ua.vtc.rozklad.notification.telegram.TelegramApi.MemberStatus;
 
 /** Guessing binding codes: five wrong codes per chat and user within 15 minutes, then nothing is looked up. */
 class BindingAttemptsIT extends IntegrationTest {
@@ -39,8 +40,10 @@ class BindingAttemptsIT extends IntegrationTest {
         Long ttl = redis.getExpire("rozklad:notification:bind-fail:chat:" + GROUP_CHAT);
         assertThat(ttl).isBetween(1L, 900L);
         // вікно минуло: справжній код знову перевіряється і не був витрачений під час блокування
+        // (прив'язаний чат переносить на іншу групу лише адміністратор чату)
         redis.delete("rozklad:notification:bind-fail:chat:" + GROUP_CHAT);
         redis.delete("rozklad:notification:bind-fail:user:42");
+        telegram.setMemberStatus(GROUP_CHAT, 42, MemberStatus.ADMINISTRATOR);
         sayInGroup(GROUP_CHAT, "/bind " + real);
         assertThat(bindings.groupChat(GROUP_CHAT)).get().extracting(b -> b.getGroupCode()).isEqualTo("4КІ2");
     }

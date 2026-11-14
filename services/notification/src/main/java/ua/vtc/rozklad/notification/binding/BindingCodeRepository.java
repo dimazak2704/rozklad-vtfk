@@ -18,6 +18,8 @@ public interface BindingCodeRepository extends JpaRepository<BindingCode, UUID> 
 
     boolean existsByCodeHash(String codeHash);
 
+    Optional<BindingCode> findByCodeHash(String codeHash);
+
     @Modifying
     @Query("delete from BindingCode c where c.expiresAt < :before")
     int deleteExpiredBefore(Instant before);

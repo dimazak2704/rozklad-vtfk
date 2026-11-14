@@ -189,10 +189,14 @@ public class ChatBindings {
                         ChatBinding.subscriberTitle(target.groupCode()), now);
                 return found;
             }).orElseGet(() -> ChatBinding.subscriber(chat.id(), target.groupId(), target.groupCode(), now));
-            case TEACHER -> existing.map(found -> {
-                found.reassignTeacher(target.teacherId(), target.label(), now);
-                return found;
-            }).orElseGet(() -> ChatBinding.teacher(chat.id(), target.teacherId(), target.label(), now));
+            case TEACHER -> {
+                ChatBinding teacher = existing.map(found -> {
+                    found.reassignTeacher(target.teacherId(), target.label(), now);
+                    return found;
+                }).orElseGet(() -> ChatBinding.teacher(chat.id(), target.teacherId(), target.label(), now));
+                teacher.linkedBy(telegramAccount(chat), now);
+                yield teacher;
+            }
             case ADMIN_CHAT -> existing.map(found -> {
                 found.rename(adminChatTitle(chat), now);
                 return found;
@@ -201,6 +205,31 @@ public class ChatBindings {
         ChatBinding saved = repository.save(binding);
         log.info("Chat {} bound as {} ({})", ChatIds.mask(chat.id()), target.type(), target.label());
         return saved;
+    }
+
+    /**
+     * {@code DELETE /api/notify/bindings/me}: the teacher unlinks his own Telegram (for example a chat he does
+     * not recognise in the cabinet).
+     *
+     * @return the chat that was unlinked, empty when the teacher had none
+     */
+    @Transactional
+    public Optional<ChatBinding> unlinkTeacher(UUID teacherId) {
+        Optional<ChatBinding> binding = repository.findByTypeAndTeacherId(BindingType.TEACHER, teacherId);
+        binding.ifPresent(found -> {
+            repository.delete(found);
+            log.info("Teacher {} unlinked his Telegram chat {}", teacherId, ChatIds.mask(found.getChatId()));
+        });
+        return binding;
+    }
+
+    /**
+     * Is the binding a queued message was addressed to still there, for that chat? A message for a deleted
+     * binding is not sent even when the chat keeps another binding (a subscription, say).
+     */
+    @Transactional(readOnly = true)
+    public boolean isStillBound(UUID bindingId, long chatId) {
+        return repository.findById(bindingId).filter(binding -> binding.getChatId() == chatId).isPresent();
     }
 
     /** The bot was removed from the chat or blocked: nothing can be delivered there any more. */
@@ -226,6 +255,27 @@ public class ChatBindings {
     private String groupChatTitle(ChatRef chat, BindingTarget target) {
         String chatTitle = chat.title() == null || chat.title().isBlank() ? "Чат групи" : chat.title();
         return chatTitle + " → " + target.groupCode();
+    }
+
+    /**
+     * «Ім’я (@nick)» of the private chat that redeemed a teacher code, at most 100 characters; {@code null}
+     * when Telegram sent neither. Only teacher chats keep it: the cabinet shows the teacher which account
+     * is linked, so a chat he does not know stands out.
+     */
+    static String telegramAccount(ChatRef chat) {
+        String name = clean(chat.title());
+        String username = clean(chat.username());
+        String account = name == null ? (username == null ? null : "@" + username)
+                : username == null ? name : name + " (@" + username + ")";
+        return account == null || account.length() <= 100 ? account : account.substring(0, 100);
+    }
+
+    private static String clean(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = value.replaceAll("\\p{Cntrl}", " ").strip();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     private String adminChatTitle(ChatRef chat) {

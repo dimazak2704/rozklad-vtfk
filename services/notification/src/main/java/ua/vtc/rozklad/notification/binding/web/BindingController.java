@@ -62,6 +62,13 @@ public class BindingController {
                 status.binding().map(BindingDto::of).orElse(null), telegram.botUsername(), telegram.botLink());
     }
 
+    @DeleteMapping("/me")
+    @Operation(summary = "Відв’язати мій Telegram (викладач; 204 і тоді, коли нічого не прив’язано)")
+    public ResponseEntity<Void> unlinkMine(@AuthenticationPrincipal Jwt jwt) {
+        myBinding.unlink(jwt.getTokenValue());
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Відв’язати чат")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
@@ -76,7 +83,8 @@ public class BindingController {
     }
 
     @PostMapping("/codes")
-    @Operation(summary = "Одноразовий код прив’язки (24 год) і deep link; викладач — лише для себе")
+    @Operation(summary = "Одноразовий код прив’язки і deep link (чат викладача і службовий — 15 хв, інші — 24 год); "
+            + "викладач — лише для себе")
     public BindingCodeDto createCode(@Valid @RequestBody BindingCodeRequest request, @AuthenticationPrincipal Jwt jwt) {
         Caller caller = new Caller(jwt.getClaimAsString("preferred_username") != null
                 ? jwt.getClaimAsString("preferred_username") : jwt.getSubject(),
@@ -93,15 +101,17 @@ public class BindingController {
     }
 
     /**
-     * {@code chatId} is masked. Additive to the contract: {@code groupCode}, {@code digestEnabled}.
+     * {@code chatId} is masked. Additive to the contract: {@code groupCode}, {@code digestEnabled} and, for a
+     * teacher chat, {@code telegramAccount} («Ім’я (@nick)» of the account that linked it; {@code null} for other
+     * chats and for teacher chats linked before it was recorded).
      */
     public record BindingDto(UUID id, BindingType type, String chatId, String title, UUID groupId, String groupCode,
-                             UUID teacherId, boolean digestEnabled, Instant createdAt) {
+                             UUID teacherId, boolean digestEnabled, Instant createdAt, String telegramAccount) {
 
         static BindingDto of(ChatBinding binding) {
             return new BindingDto(binding.getId(), binding.getType(), ChatIds.mask(binding.getChatId()),
                     binding.getTitle(), binding.getGroupId(), binding.getGroupCode(), binding.getTeacherId(),
-                    binding.isDigestEnabled(), binding.getCreatedAt());
+                    binding.isDigestEnabled(), binding.getCreatedAt(), binding.getTelegramAccount());
         }
     }
 

@@ -41,6 +41,10 @@ public class ChatBinding extends IdentifiableEntity {
     @Column(name = "digest_enabled", nullable = false)
     private boolean digestEnabled;
 
+    /** TEACHER: the Telegram account that redeemed the code («Ім’я (@nick)»), so a stranger's chat is noticed. */
+    @Column(name = "telegram_account", length = 100)
+    private String telegramAccount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -113,6 +117,15 @@ public class ChatBinding extends IdentifiableEntity {
         this.updatedAt = now;
     }
 
+    /** TEACHER: who linked this chat; {@code null} when Telegram gave neither a name nor a username. */
+    public void linkedBy(String telegramAccount, Instant now) {
+        if (type != BindingType.TEACHER) {
+            throw new IllegalStateException(type + " does not record the Telegram account");
+        }
+        this.telegramAccount = telegramAccount;
+        this.updatedAt = now;
+    }
+
     public void rename(String title, Instant now) {
         this.title = requireTitle(title);
         this.updatedAt = now;
@@ -159,6 +172,10 @@ public class ChatBinding extends IdentifiableEntity {
 
     public boolean isDigestEnabled() {
         return digestEnabled;
+    }
+
+    public String getTelegramAccount() {
+        return telegramAccount;
     }
 
     public Instant getCreatedAt() {

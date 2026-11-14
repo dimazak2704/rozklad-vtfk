@@ -12,7 +12,9 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param dialogTtl            how long a half-finished dialog (search, absence wizard) is kept in Redis
  * @param digestEnabled        morning digest for subscribers on study days
- * @param codeTtl              lifetime of one-time binding codes
+ * @param codeTtl              lifetime of one-time binding codes of group chats and subscribers
+ * @param personalCodeTtl      lifetime of codes for a teacher's own chat and for a service chat: whoever scans
+ *                             such a code first gets the teacher's requests or the dispatchers' notices
  * @param noTelegramNoticeDelay how long a request of a teacher without Telegram may stay unanswered before
  *                             admins are told: changes confirmed or published within this time (a seeded or
  *                             quickly confirmed order) cause no warning at all
@@ -26,6 +28,7 @@ public record BotProperties(
         @DefaultValue("30m") @NotNull Duration dialogTtl,
         @DefaultValue("true") boolean digestEnabled,
         @DefaultValue("24h") @NotNull Duration codeTtl,
+        @DefaultValue("15m") @NotNull Duration personalCodeTtl,
         @DefaultValue("2m") @NotNull Duration noTelegramNoticeDelay,
         @DefaultValue("1m") @NotNull Duration adminCheckTtl,
         @DefaultValue("5") @Positive int bindAttempts,

@@ -31,11 +31,12 @@ from `V1`).
 | Method & path | Access | Notes |
 |---|---|---|
 | `GET /api/notify/bot` | ADMIN | `{username, link, mode, connected}` **+ `problem`** (Ukrainian reason when not connected). `getMe` is cached for 1 min. |
-| `GET /api/notify/bindings` | ADMIN | `[{id, type, chatId (masked «-•••7890»), title, groupId, teacherId, createdAt}]` **+ `groupCode`, `digestEnabled`** |
+| `GET /api/notify/bindings` | ADMIN | `[{id, type, chatId (masked «-•••7890»), title, groupId, teacherId, createdAt}]` **+ `groupCode`, `digestEnabled`, `telegramAccount`** (TEACHER: «Ім’я (@nick)» of the account that redeemed the code; `null` for other types and for chats linked before 14.11.2026) |
 | `DELETE /api/notify/bindings/{id}` | ADMIN | 204 / 404 |
 | `PATCH /api/notify/bindings/{id}` `{digestEnabled}` | ADMIN | **round 7.** 200 `BindingDto`; morning schedule of a GROUP_CHAT or SUBSCRIBER; 422 `digest-not-supported` (TEACHER, ADMIN_CHAT), 404, 400 `errors[digestEnabled]`. The web Telegram page shows it as the switch «Ранковий розклад о 7:30». |
 | `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` | ADMIN; TEACHER only `TEACHER` for himself | 200 `{code, deepLink, expiresAt}` **+ `type`, `label`, `groupLink`, `command`**. Code `K7QX-M2PA` (8 chars, no 0/O/1/I), deep link `https://t.me/scheduler_vtfk_bot?start=K7QXM2PA`; for GROUP_CHAT/ADMIN_CHAT also `?startgroup=` and `/bind K7QX-M2PA`. Errors: 400 `errors[groupId|teacherId|type]`, 404 unknown group/teacher, 403 teacher for someone else, 422 `teacher-not-linked`, 503 core down. A teacher is resolved from his own token (`GET /api/me` on core), never from the body. |
-| `GET /api/notify/bindings/me` | TEACHER, ADMIN with a linked teacher | `{teacherId, teacherName, bound, binding?, botUsername, botLink}`: the caller's own TEACHER binding; teacher from `GET /api/me` on core; 422 `teacher-not-linked` |
+| `GET /api/notify/bindings/me` | TEACHER, ADMIN with a linked teacher | `{teacherId, teacherName, bound, binding?, botUsername, botLink}`: the caller's own TEACHER binding (with `telegramAccount`); teacher from `GET /api/me` on core; 422 `teacher-not-linked` |
+| `DELETE /api/notify/bindings/me` | TEACHER, ADMIN with a linked teacher | 204 (also when nothing is bound): the caller unlinks his own TEACHER chat, for example an account he does not recognise; 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status&page&size` | ADMIN | page `{items,page,size,total}` of `{id, orderId, chatId (masked), chatTitle, bindingType, purpose, kind, status QUEUED/RETRYING/SENT/FAILED, attempts, error, createdAt, sentAt, nextAttemptAt}`; newest first; size ≤ 200 |
 | `POST /api/notify/test` | ADMIN | sends «Тест: бот Розклад ВТФК підключено ✅» to `TELEGRAM_OWNER_CHAT_ID` right away and returns the delivery (200); 503 bot disabled, 422 no owner chat, 502 Telegram refused |
 | `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` | public | only orders received in `order.published` (PUBLISHED); 404 otherwise; `ETag`, `Cache-Control: public, max-age=300`; DOCX as attachment, PDF/PNG inline; ASCII file names `rozporiadzhennia-35-2026-10-19.pdf`, `dopovnennia-36-…` |
@@ -216,7 +217,10 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
 (`TELEGRAM_OWNER_CHAT_ID`, auto-registered as ADMIN_CHAT on start) and to chats bound through the system.
 An unknown chat gets an answer only when it presents a code that exists (used/expired codes are explained,
 invented ones are ignored); inline queries of unknown users get an empty answer. Pushes go only to bindings,
-and the worker re-checks the binding right before sending (deleted binding ⇒ FAILED «Чат більше не прив’язаний»).
+and the worker re-checks the binding right before sending: the row's own binding (`binding_id`) must still exist for
+that chat, so a message queued for a removed teacher or service binding is FAILED «Чат більше не прив’язаний» even
+when the chat keeps a subscription. A queued substitution message whose chat is no longer this teacher's (bound to
+another teacher or to none) is FAILED «Неактуальне: заміну передано іншому викладачу.».
 `TELEGRAM_ACCESS=OPEN` opens «Моя група», search etc. to everyone (public launch).
 
 ## 4. Delivery
@@ -311,6 +315,7 @@ is rendered once per order no matter how many chats receive it.
 | `app.bot.no-telegram-notice-delay` (property) | `2m` | how long a request of a teacher without Telegram may stay pending before admins are told |
 | `app.bot.admin-check-ttl` (property) | `1m` | how long a `getChatMember` answer is reused |
 | `app.bot.bind-attempts`, `app.bot.bind-attempts-window` (properties) | `5`, `15m` | wrong binding codes per chat and per user, then codes are not looked up until the window ends |
+| `app.bot.code-ttl`, `app.bot.personal-code-ttl` (properties) | `24h`, `15m` | life of binding codes: group chats and subscribers; a teacher's chat and service chats |
 | `EVENTS_LISTENER_ENABLED` | `true` | `false` = do not consume the shared queue (manual runs) |
 | `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them) |
 
@@ -322,7 +327,9 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
 
 * **Код одноразовий, 8 символів** з 32 (без 0/O/1/I), тобто 2⁴⁰ варіантів (`BindingCodes`). Використаний код
   позначається; два чати з тим самим кодом одночасно не прив’яжуться обидва (рядок блокується).
-* **Діє 24 години** (`app.bot.code-ttl`); прострочений код відхиляється, через 7 днів рядок видаляється.
+* **Код чату викладача і службового чату діє 15 хвилин** (`app.bot.personal-code-ttl`), код чату групи й підписника
+  24 години (`app.bot.code-ttl`). Код спрацьовує в того, хто першим його застосує, тож QR викладача на проєкторі чи
+  в спільному екрані швидко стає марним. Прострочений код відхиляється, через 7 днів рядок видаляється.
 * **У базі лише SHA-256 коду.** Сам код бачить тільки той, хто створив його у веб-панелі (`BindingCodesTest`).
 * **Коди для чатів груп і службових чатів створює лише ADMIN.** Викладач може створити тільки код свого
   особистого чату; викладача визначає токен, а не тіло запиту (`NotifyApiIT.teacherCreatesOnlyHisOwnCode`).
@@ -337,7 +344,18 @@ Only ONE instance may long-poll a token (Telegram answers 409 to a second one); 
   Це ті самі дані, що й так відкриті на сайті. Код спрацьовує один раз: справжній чат групи побачить «Цей код уже
   використано» і попросить новий, а диспетчер видалить зайву прив’язку. Код викладача, надісланий у груповий чат,
   анулюється одразу. Код викладача в чужих руках дав би прохання про заміни цього викладача, тому такий код
-  створює лише сам викладач або диспетчер, а нова прив’язка переносить викладача в новий чат.
+  створює лише сам викладач або диспетчер, а нова прив’язка переносить викладача в новий чат. Старий чат одразу
+  отримує «Telegram викладача … щойно підключили в іншому чаті… Якщо це зробили не ви, підключіть Telegram знову
+  в кабінеті на сайті й повідомте диспетчера», тож тихо перехопити вже підключеного викладача не вийде.
+* **Видно, чий Telegram підключено.** Прив’язка викладача зберігає ім’я з профілю Telegram і @username того, хто
+  застосував код (`chat_binding.telegram_account`, V8); їх бачать сам викладач (`GET /api/notify/bindings/me`)
+  і диспетчер у списку прив’язок. Імена людей з особистих службових чатів, як і раніше, не зберігаються.
+  Викладач сам відв’язує свій Telegram (`DELETE /api/notify/bindings/me`), не чекаючи диспетчера
+  (`BindingTakeoverIT`).
+* **У груповому чаті код службового чату і повторну прив’язку застосовує лише адміністратор чату**
+  (`getChatMember`, як для `/rozklad_on`; без відповіді Telegram не прив’язуємо). Будь-хто з учасників може лише
+  прив’язати новий, ще не прив’язаний чат до групи. Тип коду перевіряється без його витрати, тож після відмови
+  адміністратор застосовує той самий код.
 * **Диспетчер бачить і видаляє прив’язки** (`GET`/`DELETE /api/notify/bindings`, лише ADMIN; id чатів
   замасковано). Якщо бота вилучили з чату, прив’язки цього чату видаляються самі.
 * **Бот ігнорує неприв’язані чати** (`TELEGRAM_ACCESS=BOUND_ONLY`, типово): відповідає лише чату власника і
