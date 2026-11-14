@@ -49,9 +49,8 @@ class Dashboard {
         Optional<OrderDocument> draft = orders.findAllByDateAndStatusOrderByCreatedAt(date, OrderStatus.DRAFT).stream()
                 .reduce((first, second) -> second);
         DashboardDto.Generation generation = semester
-                .flatMap(found -> generationJobs.findAllBySemesterIdOrderByCreatedAtDesc(found.id()).stream()
-                        .findFirst())
-                .map(job -> new DashboardDto.Generation(job.getStatus()))
+                .flatMap(found -> generationJobs.findLatestStatus(found.id()))
+                .map(DashboardDto.Generation::new)
                 .orElse(null);
         return new DashboardDto(date, parity, summary.absences(), summary.uncoveredLessons(), summary.pending(),
                 summary.confirmed(), summary.declined(),

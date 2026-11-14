@@ -23,6 +23,7 @@ import ua.vtc.rozklad.contracts.AbsenceReasonCategory;
 import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
+import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.AcademicYear;
@@ -192,6 +193,26 @@ class PersistenceMappingIT {
                 .isEqualTo("CONFIRM");
         assertThat(orders.findById(order.getId()).orElseThrow().getNotes())
                 .containsExactly("Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.");
+    }
+
+    @Test
+    void latestGenerationStatusIsTheNewestJobOfTheSemester() {
+        assertThat(generationJobs.findLatestStatus(semester.getId())).isEmpty();
+        GenerationJob older = generationJobs.save(new GenerationJob(semester.getId(), jsonMapper.readTree("{}"), null));
+        em.flush();
+        finishJob(older, "FAILED", "2026-10-02T08:00:00Z");
+        GenerationJob newer = generationJobs.save(new GenerationJob(semester.getId(), jsonMapper.readTree("{}"), null));
+        em.flush();
+        finishJob(newer, "SOLVED", "2026-10-03T08:00:00Z");
+        em.clear();
+
+        assertThat(generationJobs.findLatestStatus(semester.getId())).contains(GenerationStatus.SOLVED);
+    }
+
+    private void finishJob(GenerationJob job, String status, String createdAt) {
+        em.createNativeQuery("UPDATE generation_job SET status = ?1, created_at = CAST(?2 AS timestamptz) WHERE id = ?3")
+                .setParameter(1, status).setParameter(2, createdAt).setParameter(3, job.getId())
+                .executeUpdate();
     }
 
     @Test

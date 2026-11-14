@@ -16,6 +16,13 @@ public interface GenerationJobRepository extends JpaRepository<GenerationJob, UU
 
     List<GenerationJob> findTop50ByOrderByCreatedAtDesc();
 
+    /**
+     * Status of the semester's newest job, without loading jobs: their plan and analysis JSON is
+     * hundreds of kilobytes each, and the dashboard needs only this one value.
+     */
+    @Query("select j.status from GenerationJob j where j.semesterId = :semesterId order by j.createdAt desc limit 1")
+    Optional<GenerationStatus> findLatestStatus(UUID semesterId);
+
     boolean existsBySemesterIdAndStatusIn(UUID semesterId, Collection<GenerationStatus> statuses);
 
     List<GenerationJob> findAllByStatusIn(Collection<GenerationStatus> statuses);
