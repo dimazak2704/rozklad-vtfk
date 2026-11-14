@@ -211,7 +211,7 @@ services:
       # «машина часу» стенду (StandClock): scripts/dev-stack.sh up --time 2026-11-20T10:00; порожньо — реальний час
       ROZKLAD_STAND_TIME: ${ROZKLAD_STAND_TIME:-}
       ROZKLAD_STAND_TIME_ANCHOR: ${ROZKLAD_STAND_TIME_ANCHOR:-}
-      # LibreOffice працює в тому ж контейнері поруч із JVM, тому купа менша за ліміт
+      # купа менша за ліміт: рендеринг сторінок PDF для ШІ теж бере пам'ять поза купою
       JAVA_TOOL_OPTIONS: -Xmx${IMPORTER_HEAP:-384m}
     mem_limit: ${IMPORTER_MEM_LIMIT:-900m}
     ports:

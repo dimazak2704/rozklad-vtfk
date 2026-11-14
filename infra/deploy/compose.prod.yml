@@ -244,7 +244,7 @@ services:
       AI_MODEL_TEXT: ${AI_MODEL_TEXT:-claude-haiku-5-5}
       AI_MODEL_VISION: ${AI_MODEL_VISION:-claude-sonnet-5-5}
       AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-2.00}
-      # small heap on purpose: LibreOffice runs in the same container next to the JVM
+      # heap below the limit: rendering PDF pages for the AI also uses native memory
       JAVA_TOOL_OPTIONS: -Xmx${IMPORTER_HEAP:-320m}
     stop_grace_period: 30s
     mem_limit: ${IMPORTER_MEM_LIMIT:-896m}

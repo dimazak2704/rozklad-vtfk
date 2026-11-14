@@ -8,13 +8,13 @@ COPY target/app.jar application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 FROM eclipse-temurin:25-jre-noble
-# LibreOffice без GUI для DOC → DOCX (старі робочі програми); шрифти з кирилицею
+# Шрифти з кирилицею для рендерингу сторінок PDF у зображення (AiDocumentPreparer). Офісного пакета тут
+# немає: DOC читає Apache POI (HWPF), а soffice імпортер не запускає, тож менше коду розбирає чужі файли
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libreoffice-writer-nogui fonts-liberation fonts-dejavu \
+    && apt-get install -y --no-install-recommends fonts-liberation fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --user-group --create-home --home-dir /home/app app
-ENV SOFFICE_PATH=/usr/bin/soffice \
-    HOME=/home/app
+ENV HOME=/home/app
 WORKDIR /application
 COPY --from=extractor /builder/extracted/dependencies/ ./
 COPY --from=extractor /builder/extracted/spring-boot-loader/ ./

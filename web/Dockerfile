@@ -23,7 +23,9 @@ ENV VITE_API_BASE=$VITE_API_BASE \
 
 RUN npm run build
 
-FROM nginx:1.29-alpine AS runtime
+# стабільна гілка nginx (парна мінорна версія) отримує виправлення безпеки; mainline-тег на кшталт 1.29
+# замерзає, щойно починається наступна mainline
+FROM nginx:1.30-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

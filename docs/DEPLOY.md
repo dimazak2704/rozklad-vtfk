@@ -217,7 +217,7 @@ What it does:
    In pull mode it then removes the images of older deploys, keeping the current and the previous
    one.
 
-The first run downloads a lot (Maven dependencies, LibreOffice packages for two images, npm
+The first run downloads a lot (Maven dependencies, LibreOffice packages for the notification image, npm
 packages) and takes roughly 15–30 minutes. Later runs take a few minutes. If a step fails, the script stops with the command to look at; it is
 safe to run again.
 
@@ -490,7 +490,7 @@ private; pulling other tags by hand needs `docker login ghcr.io` with a token th
 `read:packages`, or public packages. The server still runs `git pull` for the compose files and
 scripts (deploy key for a private repo, section 5).
 
-The first image build takes long (ARM64 is emulated with QEMU, LibreOffice and npm run inside it);
+The first image build takes long (ARM64 is emulated with QEMU, the LibreOffice packages of notification and npm run inside it);
 later builds reuse the GitHub Actions cache.
 
 ## 14. Troubleshooting

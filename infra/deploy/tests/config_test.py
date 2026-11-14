@@ -162,5 +162,32 @@ class ProductionHardening(unittest.TestCase):
                     self.assertLess(weight(heavy), weight(vital))
 
 
+class Images(unittest.TestCase):
+    """Base images that keep getting security fixes, and no tools an image does not use."""
+
+    def dockerfile(self, path):
+        return (ROOT / path).read_text(encoding="utf-8")
+
+    def test_web_runs_on_a_stable_nginx_branch(self):
+        # A mainline tag such as 1.29 is frozen once the next mainline starts; the stable branch
+        # (even minor version) gets fixes for a year, and Dependabot proposes the next one.
+        match = re.search(r"^FROM nginx:1\.(\d+)-alpine\b", self.dockerfile("web/Dockerfile"), re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(0, int(match.group(1)) % 2, "nginx 1.%s is a mainline branch" % match.group(1))
+
+    def test_importer_ships_no_libreoffice(self):
+        # importer reads DOC with Apache POI and never starts soffice; notification still needs it
+        importer = self.dockerfile("services/importer/Dockerfile")
+        self.assertNotIn("libreoffice", importer)
+        self.assertNotIn("SOFFICE_PATH", importer)
+        self.assertIn("libreoffice", self.dockerfile("services/notification/Dockerfile"))
+
+    def test_java_services_run_as_a_non_root_user(self):
+        for service in ("auth", "core", "scheduler", "importer", "notification", "gateway"):
+            with self.subTest(service=service):
+                users = re.findall(r"^USER (\S+)", self.dockerfile(f"services/{service}/Dockerfile"), re.MULTILINE)
+                self.assertEqual("app", users[-1] if users else None)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

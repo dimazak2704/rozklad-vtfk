@@ -14,7 +14,7 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 | auth | 8085 (management 8086 in the container) | 256 / 512 MB | sign-in service (OIDC issuer `http://localhost:8088/auth`), database `auth` |
 | core | 8081 | heap 512 MB, limit 900 MB | domain, SSE `/api/events/stream`, Swagger `/swagger-ui.html` |
 | scheduler | 8082 | 512 / 900 MB | Timefold |
-| importer | 8083 | 384 / 900 MB | LibreOffice in the image, AI with `ANTHROPIC_API_KEY` |
+| importer | 8083 | 384 / 900 MB | parsers (Apache POI, PDFBox), AI with `ANTHROPIC_API_KEY` |
 | notification | 8084 | 384 / 900 MB | Telegram bot, documents (LibreOffice) |
 | gateway | **8080** | 256 / 512 MB | the only entry point for clients: `http://localhost:8080/api/...` |
 | web | 8088 | — | nginx with the SPA, `/api` → gateway, `/auth` → auth; every sign-in goes through it (also from `npm run dev` on 5180) |
