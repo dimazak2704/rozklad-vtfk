@@ -295,7 +295,8 @@ signature «Заступник директора з НР ⇥ Микола ПО�
 «ДОПОВНЕННЯ №36» + «до розпорядження №35» (when the main order is known here); drafts «№ ____».
 
 PDF: `soffice --headless --convert-to pdf` with a private profile in the cache dir, one conversion at a time,
-timeout 90 s. PNG (the picture for Telegram and `….png`): PDFBox at 2× (144 DPI), **cropped to the printed
+timeout 90 s; on timeout the whole process tree is killed (`soffice` is a launcher, the converting `soffice.bin`
+is its grandchild and would otherwise keep the profile). PNG (the picture for Telegram and `….png`): PDFBox at 2× (144 DPI), **cropped to the printed
 content** — one column range for all pages (the table stays aligned), each page cut to its own ink rows, 12 pt
 white margin, blank pages dropped — pages stacked (max 5 pages), then scaled down only if Telegram would refuse
 the photo (width + height ≤ 10000 px, ratio ≤ 20). A one-table order is a compact picture instead of an A4 sheet
