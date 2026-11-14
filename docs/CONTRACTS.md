@@ -179,10 +179,11 @@ Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SE
 ## 6. Notification (role ADMIN unless stated)
 
 | `GET /api/notify/bot` | `{username, link, mode: POLLING|WEBHOOK, connected}` |
-| `GET /api/notify/bindings` · `DELETE /api/notify/bindings/{id}` | `[{id, type: GROUP_CHAT|TEACHER|ADMIN_CHAT|SUBSCRIBER, chatId(masked), title, groupId?, teacherId?, createdAt}]` (+ `groupCode`, `digestEnabled`) |
+| `GET /api/notify/bindings` · `DELETE /api/notify/bindings/{id}` | `[{id, type: GROUP_CHAT|TEACHER|ADMIN_CHAT|SUBSCRIBER, chatId(masked), title, groupId?, teacherId?, createdAt}]` (+ `groupCode`, `digestEnabled`, `telegramAccount`) |
 | `PATCH /api/notify/bindings/{id}` `{digestEnabled}` (round 7) | 200 `BindingDto`; morning schedule at 07:30 for GROUP_CHAT/SUBSCRIBER only, else 422 `digest-not-supported`; 404 unknown; 400 `errors[digestEnabled]` |
-| `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` (ADMIN; TEACHER may create own TEACHER code) | `{code, deepLink, expiresAt}` |
+| `POST /api/notify/bindings/codes` `{type, groupId?, teacherId?}` (ADMIN; TEACHER may create own TEACHER code) | `{code, deepLink, expiresAt}`; TEACHER and ADMIN_CHAT codes expire in 15 min, others in 24 h |
 | `GET /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | `{teacherId, teacherName, bound, binding?: BindingDto, botUsername, botLink}`; 422 `teacher-not-linked` |
+| `DELETE /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | 204: the caller's own TEACHER chat is unlinked (also when none); 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status` | delivery log |
 | `POST /api/notify/test` | sends a test message to `TELEGRAM_OWNER_CHAT_ID` |
 | `GET /api/notify/events/dead-letters` (ADMIN) | `{queue, count}`: events in `notification.q.events.dlq` (failed every retry); 503 when RabbitMQ cannot be asked |
