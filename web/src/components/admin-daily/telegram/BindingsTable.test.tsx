@@ -19,6 +19,7 @@ const GROUP_CHAT: ChatBindingDto = {
   teacherId: null,
   digestEnabled: false,
   createdAt: '2026-11-08T08:00:00Z',
+  telegramAccount: null,
 };
 
 const TEACHER: ChatBindingDto = {
@@ -31,6 +32,7 @@ const TEACHER: ChatBindingDto = {
   teacherId: 't-1',
   digestEnabled: false,
   createdAt: '2026-11-08T08:00:00Z',
+  telegramAccount: 'Михайло (@nepyivoda)',
 };
 
 beforeEach(() => resetMockStores());

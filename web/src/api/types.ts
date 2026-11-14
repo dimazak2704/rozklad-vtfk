@@ -1446,6 +1446,11 @@ export interface ChatBindingDto {
    */
   digestEnabled: boolean;
   createdAt: IsoInstant;
+  /**
+   * Telegram-акаунт, що привʼязав чат викладача: «Імʼя (@nick)». `null` для інших чатів і для чатів викладачів,
+   * привʼязаних раніше, ніж notification почав його записувати.
+   */
+  telegramAccount: Nullable<string>;
 }
 
 /** PATCH /api/notify/bindings/{id} (адитивно, раунд 7). 422 `digest-not-supported` для викладача й диспетчерської. */

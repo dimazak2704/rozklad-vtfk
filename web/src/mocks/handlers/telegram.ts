@@ -62,6 +62,7 @@ function groupBinding(code: string, createdAt: string, digestEnabled = false): C
     teacherId: null,
     digestEnabled,
     createdAt: at(createdAt),
+    telegramAccount: null,
   };
 }
 
@@ -77,6 +78,7 @@ function teacherBinding(shortName: string, createdAt: string): ChatBindingDto {
     teacherId: teacher.id,
     digestEnabled: false,
     createdAt: at(createdAt),
+    telegramAccount: null,
   };
 }
 
@@ -111,6 +113,7 @@ const seedBindings = (): ChatBindingDto[] => [
     teacherId: null,
     digestEnabled: false,
     createdAt: at('2026-08-28T09:12:00Z'),
+    telegramAccount: null,
   },
   groupBinding('4КІ1', '2026-09-01T07:40:00Z', true),
   groupBinding('4КІ2', '2026-09-01T07:52:00Z'),

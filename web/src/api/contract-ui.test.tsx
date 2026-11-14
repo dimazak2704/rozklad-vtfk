@@ -125,6 +125,7 @@ describe('Telegram у кабінеті: стан власної привʼязк
           teacherId: teacherNamed('Кренцін').id,
           digestEnabled: false,
           createdAt: '2026-09-02T07:15:00Z',
+          telegramAccount: 'Микола (@krentsin)',
         }
       : null,
     botUsername: 'scheduler_vtfk_bot',
