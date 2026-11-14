@@ -46,7 +46,7 @@ scripts/dev-stack.sh up                 # infra + build jars and images + 6 serv
 scripts/dev-stack.sh up --no-telegram   # the same, the bot stays off (empty token for notification)
 scripts/dev-stack.sh up --no-build      # start from the images already built
 scripts/dev-stack.sh up --no-web        # without the nginx SPA on :8088 (then nobody can sign in)
-scripts/dev-stack.sh up --google-mock   # «Увійти через Google» against a local mock-oauth2-server (:8090)
+scripts/dev-stack.sh up --google-mock   # automated tests only: a fake Google (mock-oauth2-server, :8090)
 scripts/dev-stack.sh up --no-build --time 2026-11-20T10:00   # the stand lives at that Kyiv time (below)
 scripts/dev-stack.sh up --no-build --lan                     # phones on the LAN: https://<this PC's IP> (below)
 scripts/dev-stack.sh status             # containers, health, memory, URLs
@@ -142,12 +142,11 @@ is published on 127.0.0.1 only, and `X-Forwarded-For` sent there is ignored). Te
 username for a while (`Забагато спроб…`); a successful sign-in resets the count. A browser that already signed in as
 that username keeps its own count (device cookie `RZ_DEVICE`), so others' failures do not lock it.
 
-**Google without Google.** `scripts/dev-stack.sh up --google-mock` adds `infra/docker-compose.google-mock.yml`:
-`mock-oauth2-server` on `http://localhost:8090/google` and the Google button on the sign-in page. On the mock's
-page type any name (it becomes the Google id) and claims such as `{"email":"krentsin@rozklad.local"}`. Only
-addresses that have access in «Доступи» (`/admin/access`) get in; others see «Цієї адреси немає у списку
-доступу…». `GOOGLE_MOCK_HOSTED_DOMAIN=vtc.vn.ua` turns the college-domain rule on (then type `"hd":"vtc.vn.ua"`
-too). `up` without the flag stops the mock again. The real Google client: `docs/GOOGLE_SIGNIN.md`.
+**Google.** «Увійти через Google» uses the real Google client from `.env` (`AUTH_GOOGLE_CLIENT_ID`,
+`AUTH_GOOGLE_CLIENT_SECRET`; setup in `docs/GOOGLE_SIGNIN.md`). Only addresses that have access in «Доступи»
+(`/admin/access`) get in; others see «Цієї адреси немає у списку доступу…». Without the client the button is not
+shown and the passwords remain. `--google-mock` replaces Google with `mock-oauth2-server` for the automated tests
+(`web/e2e-real/google.spec.ts`), which cannot sign in to the real Google; it is not a way to use the stand.
 
 **«Доступи».** The admin page `/admin/access` grants access by e-mail (Google, or a password link the admin
 copies from the row menu), changes roles, revokes and restores access. A password link opens `/password/:token`.

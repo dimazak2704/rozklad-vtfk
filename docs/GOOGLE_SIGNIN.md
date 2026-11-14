@@ -79,11 +79,12 @@ with the same address, Google gives it a new id and the sign-in is refused; an a
 Google» in «Доступи», and the next sign-in binds the new account. When staff leave, revoke their access in
 «Доступи»: that also covers an address that is later given to someone else.
 
-## Local development without Google
+## Automated tests without Google
 
-`scripts/dev-stack.sh up --google-mock` starts `mock-oauth2-server` (`infra/docker-compose.google-mock.yml`)
-and turns the Google button on. «Увійти через Google» opens the mock's page on
-`http://localhost:8090/google`: type any user name (it becomes the Google id) and the claims, for example
+Browser tests cannot sign in to the real Google (bot detection, two-factor prompts), so `web/e2e-real/google.spec.ts`
+runs against a fake one: `scripts/dev-stack.sh up --google-mock` starts `mock-oauth2-server`
+(`infra/docker-compose.google-mock.yml`) in place of Google. For using the stand, configure the real client above.
+With the mock, «Увійти через Google» opens its page on `http://localhost:8090/google`: type any user name (it becomes the Google id) and the claims, for example
 
 ```json
 {"email": "krentsin@rozklad.local"}
