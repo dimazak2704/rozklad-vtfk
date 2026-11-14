@@ -41,7 +41,8 @@ import ua.vtc.rozklad.core.substitution.internal.support.SubstitutionCalendar;
  * The teacher's own reports (cabinet, bot) start today at the earliest and at most {@value #MAX_DAYS_AHEAD} days
  * ahead (the bot's calendar offers the same), and one teacher reports at most {@value #MAX_SELF_REPORTS_PER_DAY}
  * absences in 24 hours, cancelled ones included: every report is a Telegram message to every admin chat, so a
- * hijacked teacher account cannot flood them or fill the list. The dispatcher is not limited.
+ * hijacked teacher account cannot flood them or fill the list. A teacher marked inactive (left the college) reports
+ * nothing himself until he is active again, whatever is left of his account or bot link. The dispatcher is not limited.
  */
 @Service
 @Transactional
@@ -94,6 +95,12 @@ public class AbsenceService {
 
     public AbsenceDto report(UUID teacherId, AbsenceData data, AbsenceSource source, String actor) {
         Teacher teacher = catalog.teacher(teacherId, "teacherId");
+        // неактивний викладач (звільнився) сам більше не повідомляє: кабінет і бот можуть ще жити до відкликання
+        // доступу й нічного відв'язування чату, а кожне повідомлення йде в усі чати адміністраторів
+        if (source != AbsenceSource.ADMIN && !teacher.isActive()) {
+            throw new BusinessRuleException("TEACHER_INACTIVE", "Ваш профіль викладача неактивний, тож повідомити "
+                    + "про відсутність самому не можна. Зверніться до диспетчера.");
+        }
         LocalDate today = LocalDate.now(clock);
         // викладач (кабінет, бот) повідомляє лише про сьогодні й майбутнє: минуле — справа диспетчера,
         // інакше відсутність лягла б на вже опубліковані розпорядження і її не можна було б скасувати

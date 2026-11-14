@@ -2,6 +2,10 @@ package ua.vtc.rozklad.core.substitution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -23,10 +27,13 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.hibernate.StaleStateException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.WebApplicationContext;
 import ua.vtc.rozklad.contracts.AbsenceReasonCategory;
 import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.ChangeKind;
@@ -36,6 +43,7 @@ import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.SubstitutionConfirmationRequested;
 import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.core.calendar.Semester;
+import ua.vtc.rozklad.core.catalog.ApiTestSupport;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
@@ -120,6 +128,9 @@ class ChangeLifecycleIT {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private WebApplicationContext context;
 
     private ScheduleFixture fixture;
     private Semester semester;
@@ -626,6 +637,31 @@ class ChangeLifecycleIT {
                 .as("the dispatcher is not limited").isEqualTo(tomorrow.plusDays(20));
         assertThat(absences.report(krentsin.getId(), eleventh, AbsenceSource.WEB, "krentsin").dateFrom())
                 .as("the limit is per teacher").isEqualTo(tomorrow.plusDays(20));
+    }
+
+    @Test
+    void inactiveTeacherNoLongerReportsHimselfTheDispatcherStillDoes() throws Exception {
+        MockMvc mvc = ApiTestSupport.mockMvc(context);
+        LocalDate tomorrow = LocalDate.now(clock).plusDays(1);
+        String period = "\"dateFrom\":\"%s\",\"dateTo\":\"%s\",\"reasonCategory\":\"OTHER\""
+                .formatted(tomorrow, tomorrow);
+        // викладач звільнився: адміністратор зняв позначку «активний», а обліковий запис і чат ще живі
+        jdbc.update("UPDATE teacher SET active = false WHERE id = ?", krentsin.getId());
+
+        mvc.perform(post("/api/me/absences").with(TestJwts.teacher()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{" + period + "}"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("TEACHER_INACTIVE"));
+        mvc.perform(post("/api/internal/absences").with(TestJwts.service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teacherId\":\"%s\",%s}".formatted(krentsin.getId(), period)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("TEACHER_INACTIVE"))
+                .andExpect(jsonPath("$.detail").value(containsString("диспетчера")));
+        assertThat(absences.ofTeacher(krentsin.getId())).isEmpty();
+
+        assertThat(absences.report(krentsin.getId(), new AbsenceRequests.AbsenceData(tomorrow, tomorrow, null,
+                AbsenceReasonCategory.OTHER, null), AbsenceSource.ADMIN, "admin").dateFrom())
+                .as("the dispatcher still records the absence of an inactive teacher").isEqualTo(tomorrow);
     }
 
     @Test
