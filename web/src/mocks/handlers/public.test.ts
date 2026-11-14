@@ -8,12 +8,17 @@ import type {
   LessonView,
   PublicChangesDto,
   PublicGroupDto,
+  PublicMetaDto,
   ScheduleDto,
+  SettingsDto,
 } from '@/api/types';
 import { groupNamed, roomNamed, teacherNamed } from '../fixtures';
 import { orderNumberFor } from './public';
 
 const get = <T>(path: string, query?: Record<string, string | number>) => api.get<T>(path, query, { auth: false });
+/** Запит персоналу: мок вважає «увійшов» будь-який Bearer (core перевіряє ще й підпис і роль). */
+const getAsStaff = <T>(path: string, query?: Record<string, string | number>) =>
+  api.get<T>(path, query, { auth: false, headers: { Authorization: 'Bearer staff-token' } });
 const failure = (promise: Promise<unknown>) => promise.then(() => null, (e: unknown) => e as ApiError);
 
 function at(instant: string): void {
@@ -73,7 +78,8 @@ describe('GET /api/public/bells', () => {
 describe('розпорядження №35 (19.10.2026)', () => {
   it('у розкладі 4КІ1 СТП Кренціна замінено на НДЕКСМ Непийводи в 6 аудиторії («Зв.зам.»)', async () => {
     at('2026-11-09T08:00:00Z');
-    const schedule = await get<ScheduleDto>(`/public/schedule/group/${groupNamed('4КІ1').id}`, { from: '2026-10-19', to: '2026-10-23' });
+    // 19.10 — давніше за тиждень: архів бачить персонал
+    const schedule = await getAsStaff<ScheduleDto>(`/public/schedule/group/${groupNamed('4КІ1').id}`, { from: '2026-10-19', to: '2026-10-23' });
     const monday = schedule.days[0];
     expect(monday).toMatchObject({ date: '2026-10-19', parity: 'DENOMINATOR', weekdayLabel: 'ПОНЕДІЛОК' });
     const second = monday?.lessons.find((l) => l.pair === 2);
@@ -86,13 +92,13 @@ describe('розпорядження №35 (19.10.2026)', () => {
       reasonText: 'Зв.зам.',
     });
     // заміщений викладач бачить цю пару у своєму розкладі як заміну
-    const krentsin = await get<ScheduleDto>(`/public/schedule/teacher/${teacherNamed('Кренцін').id}`, { from: '2026-10-19', to: '2026-10-19' });
+    const krentsin = await getAsStaff<ScheduleDto>(`/public/schedule/teacher/${teacherNamed('Кренцін').id}`, { from: '2026-10-19', to: '2026-10-19' });
     expect(krentsin.days[0]?.lessons.find((l) => l.group.code === '4КІ1' && l.pair === 2)?.kind).toBe('SUBSTITUTED');
   });
 
   it('заміни на дату — рядки розпорядження за курсом і кодом групи', async () => {
     at('2026-11-09T08:00:00Z');
-    const changes = await get<PublicChangesDto>('/public/changes', { date: '2026-10-19' });
+    const changes = await getAsStaff<PublicChangesDto>('/public/changes', { date: '2026-10-19' });
     expect(changes.order).toMatchObject({ number: 35 });
     expect(changes.weekdayLabel).toBe('ПОНЕДІЛОК');
     expect(changes.groups.map((g) => g.group.code)).toEqual(['1КІ2', '1ТК1', '4КІ1']);
@@ -158,7 +164,53 @@ describe('демо-зміни навколо «сьогодні»', () => {
 
   it('у день без змін — порожньо і без розпорядження', async () => {
     at('2026-11-09T08:00:00Z');
-    expect(await get<PublicChangesDto>('/public/changes', { date: '2026-10-05' })).toMatchObject({ order: null, groups: [] });
+    expect(await get<PublicChangesDto>('/public/changes', { date: '2026-11-04' })).toMatchObject({ order: null, groups: [] });
+  });
+});
+
+describe('архів лише для персоналу (publicHistoryFrom)', () => {
+  // четвер, 12.11.2026: типово 7 днів — гостю відкрито з 05.11, розклад — з понеділка 02.11
+  it('гість: заміни з межі й майбутні — так, день перед межею — 404 з межею в тілі; персонал — без межі', async () => {
+    at('2026-11-12T08:00:00Z');
+    expect((await get<PublicMetaDto>('/public/meta')).publicHistoryFrom).toBe('2026-11-05');
+    expect(await get<PublicChangesDto>('/public/changes', { date: '2026-11-05' })).toMatchObject({ date: '2026-11-05' });
+    expect(await get<PublicChangesDto>('/public/changes', { date: '2026-11-20' })).toMatchObject({ date: '2026-11-20' });
+    const before = await failure(get('/public/changes', { date: '2026-11-04' }));
+    expect(before).toMatchObject({ status: 404, type: 'urn:rozklad:problem:history-not-public', code: 'HISTORY_NOT_PUBLIC', publicHistoryFrom: '2026-11-05' });
+    expect(before?.isHistoryNotPublic).toBe(true);
+    expect(await getAsStaff<PublicChangesDto>('/public/changes', { date: '2026-10-19' })).toMatchObject({ order: { number: 35 } });
+  });
+
+  it('гість: розклад цілими тижнями з понеділка тижня межі; давніший — 404, персоналу — так', async () => {
+    at('2026-11-12T08:00:00Z');
+    const id = groupNamed('4КІ1').id;
+    expect((await get<ScheduleDto>(`/public/schedule/group/${id}`, { from: '2026-11-02', to: '2026-11-06' })).from).toBe('2026-11-02');
+    expect((await failure(get(`/public/schedule/group/${id}`, { from: '2026-11-01', to: '2026-11-06' })))?.isHistoryNotPublic).toBe(true);
+    expect((await failure(get(`/public/schedule/group/${id}`, { from: '2026-10-26', to: '2026-10-30' })))?.isHistoryNotPublic).toBe(true);
+    expect((await getAsStaff<ScheduleDto>(`/public/schedule/group/${id}`, { from: '2026-10-26', to: '2026-10-30' })).days).toHaveLength(5);
+  });
+
+  it('межа йде за налаштуванням: 0 днів — лише від сьогодні', async () => {
+    at('2026-11-12T08:00:00Z');
+    const settings = await api.get<SettingsDto>('/admin/settings');
+    expect(settings.changesHistoryDays).toBe(7);
+    await api.put('/admin/settings', { ...settings, changesHistoryDays: 0 });
+    expect((await get<PublicMetaDto>('/public/meta')).publicHistoryFrom).toBe('2026-11-12');
+    expect((await failure(get('/public/changes', { date: '2026-11-11' })))?.publicHistoryFrom).toBe('2026-11-12');
+    expect(await get<PublicChangesDto>('/public/changes', { date: '2026-11-12' })).toMatchObject({ date: '2026-11-12' });
+  });
+
+  it('налаштування: 0..365 днів, поза межами — помилка поля; без поля (старий клієнт) — лишається збережене', async () => {
+    const settings = await api.get<SettingsDto>('/admin/settings');
+    for (const days of [-1, 366, 1.5]) {
+      const error = await failure(api.put('/admin/settings', { ...settings, changesHistoryDays: days }));
+      expect(error?.fieldErrors()).toEqual({ changesHistoryDays: 'Від 0 до 365 днів' });
+    }
+    const saved = await api.put<SettingsDto>('/admin/settings', { ...settings, changesHistoryDays: 365 });
+    expect(saved.changesHistoryDays).toBe(365);
+    const { changesHistoryDays, ...oldClient } = saved;
+    expect(changesHistoryDays).toBe(365);
+    expect((await api.put<SettingsDto>('/admin/settings', oldClient)).changesHistoryDays).toBe(365);
   });
 });
 
@@ -180,9 +232,18 @@ describe('GET /api/public/ics', () => {
     expect(text.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
     expect(text).toContain('X-WR-CALNAME:Розклад 4КІ1');
     expect(text).toContain('TZID:Europe/Kyiv');
-    expect(text).toMatch(/DTSTART;TZID=Europe\/Kyiv:20261019T094000/);
+    // гостю — з понеділка тижня межі (09.11 мінус 7 днів → тиждень 02.11), без давніших подій
+    expect(text).toMatch(/DTSTART;TZID=Europe\/Kyiv:2026110\dT/);
+    expect(text).not.toMatch(/DTSTART;TZID=Europe\/Kyiv:202610/);
     const encoder = new TextEncoder();
     for (const line of text.split('\r\n')) expect(encoder.encode(line).length).toBeLessThanOrEqual(75);
+    // персоналу — увесь семестр
+    const staff = await api.get<string>(`/public/ics/group/${groupNamed('4КІ1').id}.ics`, undefined, {
+      auth: false,
+      responseType: 'text',
+      headers: { Authorization: 'Bearer staff-token' },
+    });
+    expect(staff).toMatch(/DTSTART;TZID=Europe\/Kyiv:20261019T094000/);
     expect((await failure(api.get(`/public/ics/room/${roomNamed('6').id}.ics`, undefined, { auth: false, responseType: 'text' })))?.status).toBe(404);
   });
 });

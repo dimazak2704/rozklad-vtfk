@@ -9,6 +9,9 @@
  * Зміни стають публічними, коли «опубліковано» розпорядження: о 14:20 попереднього навчального дня
  * (DOMAIN §7: заняття змінюються саме під час публікації). Запити до Кренціна (демо-обліковий запис) чекають
  * на його відповідь у кабінеті — їх віддає handlers/me.ts.
+ *
+ * Гість (запит без `Authorization`) бачить заміни з `publicHistoryFrom` і розклад з понеділка того тижня,
+ * старіше — 404 `history-not-public`, як у core; ICS гостя починається з того ж понеділка.
  */
 import { http, HttpResponse } from 'msw';
 import type {
@@ -32,7 +35,7 @@ import type {
   Uuid,
   Weekday,
 } from '@/api/types';
-import { addDays, compareIsoDates, isIsoDate, isoWeekday, kyivClock, timeToMinutes, todayInKyiv } from '@/lib/date';
+import { addDays, compareIsoDates, isIsoDate, isoWeekday, kyivClock, startOfWeek, timeToMinutes, todayInKyiv } from '@/lib/date';
 import {
   ACTIVE_BELL_PROFILE,
   ACTIVE_SEMESTER,
@@ -65,7 +68,9 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, notFound, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { periods } from './calendar';
+import { ORDER_35_ID } from './admin-daily/orders';
 import { printedReason } from './admin-daily/printed';
+import { historyNotPublic, isStaffRequest, mockPublicHistoryFrom } from './meta';
 import { currentSettings } from './settings';
 
 const UK = new Intl.Collator('uk');
@@ -122,7 +127,8 @@ export function isPublished(date: IsoDate, now: Date): boolean {
   return now.getTime() >= new Date(publishedAtFor(date)).getTime();
 }
 
-export const orderIdFor = (date: IsoDate): Uuid => mockId('order', date);
+/** id розпорядження дати; №35 — те саме, що в архіві диспетчера (його файли віддає мок документів). */
+export const orderIdFor = (date: IsoDate): Uuid => (date === ORDER_35_DATE ? ORDER_35_ID : mockId('order', date));
 
 // ───────────────────────── Демо-зміни ─────────────────────────
 
@@ -743,9 +749,13 @@ const VTIMEZONE_KYIV = [
   'END:VTIMEZONE',
 ];
 
-/** Календар власника на семестр: опубліковані заняття, скасовані пропускаємо. */
-export function icsCalendar(owner: ScheduleOwner, now: Date): string {
-  const schedule = buildSchedule(owner.type, owner.id, ACTIVE_SEMESTER.startsOn, ACTIVE_SEMESTER.endsOn, {
+/**
+ * Календар власника на семестр: опубліковані заняття, скасовані пропускаємо. `from` — перший день
+ * (гостю core віддає календар лише з понеділка тижня `publicHistoryFrom`).
+ */
+export function icsCalendar(owner: ScheduleOwner, now: Date, from: IsoDate = ACTIVE_SEMESTER.startsOn): string {
+  const start = compareIsoDates(from, ACTIVE_SEMESTER.startsOn) > 0 ? from : ACTIVE_SEMESTER.startsOn;
+  const schedule = buildSchedule(owner.type, owner.id, start, ACTIVE_SEMESTER.endsOn, {
     overlay: publicOverlay(now),
   });
   const title = owner.type === 'GROUP' ? `Розклад ${owner.label}` : `Розклад: ${owner.label}`;
@@ -897,6 +907,9 @@ export const handlers = [
         { field: 'to', message: 'Не більше 31 дня від from' },
       ]);
     }
+    // гостю — лише цілі тижні від тижня `publicHistoryFrom`; персоналу — без обмежень
+    const historyFrom = mockPublicHistoryFrom();
+    if (!isStaffRequest(request) && compareIsoDates(from, startOfWeek(historyFrom)) < 0) return historyNotPublic(historyFrom);
     const now = new Date();
     const schedule = buildSchedule(type, String(params.id), from, to, { overlay: publicOverlay(now), periods: periods.all() });
     if (!schedule) return notFound(`${OWNER_NOUN[type]} з id ${String(params.id)} не знайдено.`);
@@ -908,10 +921,12 @@ export const handlers = [
     if (!isIsoDate(date)) {
       return badRequest('Вкажіть дату у форматі РРРР-ММ-ДД.', [{ field: 'date', message: 'Формат РРРР-ММ-ДД' }]);
     }
+    const historyFrom = mockPublicHistoryFrom();
+    if (!isStaffRequest(request) && compareIsoDates(date, historyFrom) < 0) return historyNotPublic(historyFrom);
     return HttpResponse.json(publicChanges(date, new Date()));
   }),
 
-  http.get(apiPath('/public/ics/:type/:file'), ({ params }) => {
+  http.get(apiPath('/public/ics/:type/:file'), ({ params, request }) => {
     const type = SEGMENT_TO_TYPE[String(params.type)];
     const file = String(params.file);
     if ((type !== 'GROUP' && type !== 'TEACHER') || !file.endsWith('.ics')) {
@@ -919,7 +934,8 @@ export const handlers = [
     }
     const owner = scheduleOwner(type, file.slice(0, -'.ics'.length));
     if (!owner) return notFound(`${OWNER_NOUN[type]} для календаря не знайдено.`);
-    return new HttpResponse(icsCalendar(owner, new Date()), {
+    const from = isStaffRequest(request) ? ACTIVE_SEMESTER.startsOn : startOfWeek(mockPublicHistoryFrom());
+    return new HttpResponse(icsCalendar(owner, new Date(), from), {
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
         'Content-Disposition': `attachment; filename="rozklad.ics"`,

@@ -34,8 +34,10 @@ export interface ProblemInit {
   detail?: string;
   errors?: FieldErrorDto[];
   conflicts?: Conflict[];
-  /** Код бізнес-правила (лише 422). */
+  /** Код бізнес-правила (422 і окремі відмови, як `HISTORY_NOT_PUBLIC`). */
   code?: string;
+  /** Додаткові поля ProblemDetail (RFC 9457 extension members), наприклад `publicHistoryFrom`. */
+  extensions?: Record<string, unknown>;
 }
 
 /**
@@ -55,6 +57,7 @@ export function problem(init: ProblemInit): Response {
     ...(init.errors ? { errors: [...init.errors].sort((a, b) => a.field.localeCompare(b.field)) } : {}),
     ...(init.conflicts ? { conflicts: init.conflicts } : {}),
     ...(init.code ? { code: init.code } : {}),
+    ...init.extensions,
   };
   return HttpResponse.json(body, {
     status: init.status,

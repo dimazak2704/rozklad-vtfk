@@ -1,10 +1,12 @@
 /**
  * Мета й пошук для оболонки (CONTRACTS §1): GET /api/public/meta і GET /api/public/search.
+ * Тут же — правило «архів лише для персоналу» (`publicHistoryFrom`), спільне для замін, розкладу й документів.
  */
 import { http, HttpResponse } from 'msw';
 import type {
   EntityType,
   GroupDto,
+  IsoDate,
   PairTimeDto,
   PublicMetaDto,
   SearchResultDto,
@@ -30,11 +32,9 @@ import {
   specialtyOf,
   TEACHERS,
 } from '../fixtures';
-import { apiPath, badRequest } from '../kit';
+import { apiPath, badRequest, problem } from '../kit';
 import { createMockStore } from '../store';
-
-/** Назва з затвердження таблиці розкладу (R2: «Директор Вінницького технічного фахового коледжу»). */
-export const COLLEGE_NAME = 'Вінницький технічний фаховий коледж';
+import { COLLEGE_NAME, publicHistoryFrom } from './settings';
 
 /** Як у core: дивимось уперед до 120 днів, щоб перекрити канікули між семестрами. */
 const NEXT_STUDY_DAY_HORIZON_DAYS = 120;
@@ -85,6 +85,33 @@ export function publicMetaNow(): PublicMetaDto {
   return { ...publicMeta(now), now: now.toISOString(), ...(offset === null ? {} : { standTime: true as const }) };
 }
 
+// ───────────────────────── Архів лише для персоналу ─────────────────────────
+
+/** З якої дати гість бачить заміни, розпорядження й розклад — на «сьогодні» мок-сервера (як `publicHistoryFrom` у meta). */
+export function mockPublicHistoryFrom(): IsoDate {
+  return publicHistoryFrom(kyivClock(new Date(Date.now() + (mockStandOffset() ?? 0))).date);
+}
+
+/**
+ * Запит від персоналу: є `Authorization: Bearer …`. Мок підпису й ролей не перевіряє — у мок-режимі клієнт
+ * шле фіктивний токен лише за ролей ADMIN/TEACHER (src/api/client.ts), справжній core перевіряє і те, і те.
+ */
+export function isStaffRequest(request: Request): boolean {
+  return /^Bearer\s+\S/i.test(request.headers.get('Authorization') ?? '');
+}
+
+/** 404 для гостя, який просить давніше за відкриту історію (як у core): тіло несе саму межу. */
+export function historyNotPublic(from: IsoDate): Response {
+  return problem({
+    status: 404,
+    slug: 'history-not-public',
+    title: 'Архів недоступний',
+    detail: 'Старіші заміни й розклад бачать лише працівники коледжу після входу.',
+    code: 'HISTORY_NOT_PUBLIC',
+    extensions: { publicHistoryFrom: from },
+  });
+}
+
 /** Стан «зараз» за київським часом: семестр, тиждень, парність, поточна й наступна пара. */
 export function publicMeta(now: Date = new Date()): PublicMetaDto {
   const clock = kyivClock(now);
@@ -122,6 +149,7 @@ export function publicMeta(now: Date = new Date()): PublicMetaDto {
     nextPair,
     bellProfile: { id: ACTIVE_BELL_PROFILE.id, name: ACTIVE_BELL_PROFILE.name },
     nextStudyDay: nextStudyDay(clock.date),
+    publicHistoryFrom: publicHistoryFrom(clock.date),
   };
 }
 

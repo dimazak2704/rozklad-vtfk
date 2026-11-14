@@ -18,6 +18,7 @@ import type {
 import { compareIsoDates, formatInstantTime, isIsoDate, todayInKyiv } from '@/lib/date';
 import { TEACHERS, teacherRef } from '../fixtures';
 import { apiPath, badRequest, businessRule, conflict, notFound, requiredParam, readJson } from '../kit';
+import { historyNotPublic, isStaffRequest, mockPublicHistoryFrom } from './meta';
 import {
   cancelAbsence,
   cancelChange,
@@ -277,12 +278,15 @@ export const handlers = [
   ),
 
   // ── Файли розпорядження (notification) ──
-  http.get(apiPath('/documents/orders/:file'), async ({ params }) => {
+  http.get(apiPath('/documents/orders/:file'), async ({ params, request }) => {
     const match = /^(.+)\.(docx|pdf|png)$/.exec(String(params.file));
     if (!match) return notFound('Формат має бути docx, pdf або png.');
     const [, id = '', format = 'pdf'] = match;
     const order = world().orders.get(id);
     if (!order || order.status !== 'PUBLISHED') return notFound('Документ буде доступний після публікації розпорядження.');
+    // давні розпорядження без входу не віддаються (як у notification): лише персоналу з токеном
+    const historyFrom = mockPublicHistoryFrom();
+    if (!isStaffRequest(request) && compareIsoDates(order.date, historyFrom) < 0) return historyNotPublic(historyFrom);
     const dto = toOrderDto(order);
     const parent = parentNumber(order.parentId);
     const bytes =

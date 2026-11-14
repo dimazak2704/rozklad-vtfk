@@ -4,6 +4,7 @@
  * - додає `Authorization: Bearer …`, якщо користувач увійшов;
  * - розбирає ProblemDetail у типізований ApiError (errors[], conflicts[]).
  */
+import { DEV_ROLES } from '@/auth/devUser';
 import { noteUnsavedChange } from '@/auth/unsavedChange';
 import { getAccessToken } from '@/auth/userManager';
 import { ApiError, errorFromResponse } from './errors';
@@ -13,6 +14,12 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/,
 
 /** Чи відповідає мок-API (src/mocks) замість бекенду: лише dev з VITE_USE_MOCKS=1, у production — завжди false. */
 export const MOCK_API = import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === '1';
+
+/**
+ * Мок-API з фіктивним персоналом (dev, ролі ADMIN/TEACHER без сервісу входу): справжнього токена немає, а мок
+ * має бачити «увійшов» (архів замін і розкладу без обмежень). У production-збірці MOCK_API — false.
+ */
+const MOCK_STAFF_TOKEN = MOCK_API && DEV_ROLES.some((role) => role === 'ADMIN' || role === 'TEACHER') ? 'mock-dev-staff' : null;
 
 export type QueryValue = string | number | boolean | null | undefined | ReadonlyArray<string | number>;
 export type QueryParams = Record<string, QueryValue>;
@@ -117,7 +124,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (auth) {
-    const token = await getAccessToken();
+    const token = (await getAccessToken()) ?? MOCK_STAFF_TOKEN;
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 

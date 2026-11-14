@@ -11,8 +11,8 @@
   детерміновані UUID.
 - Базовий набір даних (`src/mocks/fixtures/`): 56 груп, 107 викладачів, 128 дисциплін, 45 аудиторій,
   1077 занять шаблону з `seed/schedule-2025-26.xlsx`, календар I семестру 2026/2027, генератор ScheduleDto.
-- Ендпоінти: `GET /api/public/meta`, `GET /api/public/search`, `GET /api/events/stream`. Решту додають
-  агенти сторінок у своїх `handlers/<область>.ts`.
+- Ендпоінти: `GET /api/public/meta` (з `publicHistoryFrom`), `GET /api/public/search`, `GET /api/events/stream`.
+  Решту додають агенти сторінок у своїх `handlers/<область>.ts`.
 
 ## Рішення
 
@@ -25,8 +25,17 @@
   у git (виняток у `web/.gitignore`, корінь ховає всі `.env.*`).
 - **Фіктивний користувач — той самий механізм `VITE_DEV_AUTH_ROLES`.** У мок-режимі ролі можна змінити у
   вкладці через `sessionStorage['rozklad.mockRoles']` (`''` — гість); з реальним бекендом сховище не читається
-  (`src/auth/roles.ts → devRoles`). Макети адмінки й кабінету в мок-режимі відкривають SSE і для фіктивного
-  користувача (`MOCK_API` у `src/api/client.ts`): потік подій дає мок.
+  (`src/auth/roles.ts → devRoles`, одне значення на вкладку — `src/auth/devUser.ts`). Макети адмінки й кабінету в
+  мок-режимі відкривають SSE і для фіктивного користувача (`MOCK_API` у `src/api/client.ts`): потік подій дає мок.
+  Фіктивний персонал (ADMIN/TEACHER) ще й шле `Authorization: Bearer mock-dev-staff`, бо справжнього токена немає,
+  а мок має відрізнити його від гостя.
+- **Архів лише для персоналу.** `GET /api/public/meta` віддає `publicHistoryFrom` — «сьогодні» мок-сервера (з
+  переведеним часом стенда) мінус `changesHistoryDays` з `handlers/settings.ts` (типово 7, 0..365). Запит без
+  `Authorization: Bearer …` (гість) до давніших замін, розкладу з `from` раніше за понеділок тижня межі чи файлів
+  давнього розпорядження отримує 404 `urn:rozklad:problem:history-not-public` з `publicHistoryFrom` у тілі, як core і
+  notification (`historyNotPublic`, `isStaffRequest`, `mockPublicHistoryFrom` у `handlers/meta.ts`); ICS гостя
+  починається з того ж понеділка. Підпис і роль токена мок не перевіряє — лише наявність. У тестах обробника
+  персонал — `headers: { Authorization: 'Bearer …' }`, у e2e — `loginWithMockRoles(page, 'TEACHER')`.
 - **E2E завжди з моками і гостем.** `playwright.config.ts` стартує власний `vite` з `VITE_USE_MOCKS=1`,
   `VITE_DEV_AUTH_ROLES=''` (змінні процесу важливіші за локальні `.env*`) на `PW_PORT`; `reuseExistingServer: false`,
   бо чужий dev-сервер на тому ж порту (без моків або з ролями) дав би хибні результати. Ролі в тесті —

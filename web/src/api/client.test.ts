@@ -117,6 +117,30 @@ describe('apiRequest', () => {
     expect(error.isRetryable).toBe(false);
   });
 
+  it('404 «архів недоступний» гостю — окремий випадок з межею, а не «не знайдено»', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(404, {
+        type: 'urn:rozklad:problem:history-not-public',
+        title: 'Архів недоступний',
+        status: 404,
+        detail: 'Старіші заміни бачать лише працівники коледжу.',
+        code: 'HISTORY_NOT_PUBLIC',
+        publicHistoryFrom: '2026-11-02',
+      }),
+    );
+    const error = (await api.get('/public/changes', { date: '2026-10-19' }, { auth: false }).catch((e: unknown) => e)) as ApiError;
+    expect(error.isHistoryNotPublic).toBe(true);
+    expect(error.publicHistoryFrom).toBe('2026-11-02');
+    expect(error.isRetryable).toBe(false);
+
+    // звичайний 404 (невідомий id) — не архів
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { type: 'urn:rozklad:problem:not-found', status: 404 }));
+    const missing = (await api.get('/public/schedule/group/x', undefined, { auth: false }).catch((e: unknown) => e)) as ApiError;
+    expect(missing.isNotFound).toBe(true);
+    expect(missing.isHistoryNotPublic).toBe(false);
+    expect(missing.publicHistoryFrom).toBeUndefined();
+  });
+
   it('дає українське повідомлення, коли сервер не надіслав detail', async () => {
     fetchMock.mockResolvedValueOnce(new Response('<html>502</html>', { status: 502 }));
     const error = (await api.get('/public/meta').catch((e: unknown) => e)) as ApiError;

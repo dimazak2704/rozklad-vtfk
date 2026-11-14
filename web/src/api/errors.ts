@@ -53,6 +53,8 @@ export interface ApiErrorInit {
   /** Код бізнес-правила з 422 (`code`). */
   code?: string;
   requestId?: string;
+  /** З 404 `history-not-public`: з якої дати гість бачить заміни й розклад. */
+  publicHistoryFrom?: string;
   cause?: unknown;
 }
 
@@ -67,6 +69,7 @@ export class ApiError extends Error {
   readonly conflicts: Conflict[];
   readonly code: string | undefined;
   readonly requestId: string | undefined;
+  readonly publicHistoryFrom: string | undefined;
 
   constructor(init: ApiErrorInit) {
     const kind = init.kind ?? 'http';
@@ -83,6 +86,7 @@ export class ApiError extends Error {
     this.conflicts = init.conflicts ?? [];
     this.code = init.code;
     this.requestId = init.requestId;
+    this.publicHistoryFrom = init.publicHistoryFrom;
   }
 
   get isValidation(): boolean {
@@ -108,6 +112,14 @@ export class ApiError extends Error {
   /** 409 оптимістичного блокування: запис змінили між читанням і збереженням (`urn:rozklad:problem:stale-data`). */
   get isStaleData(): boolean {
     return this.status === 409 && (this.type?.endsWith(':stale-data') ?? false);
+  }
+
+  /**
+   * 404 для гостя: дата старіша за відкриту історію замін і розкладу (`urn:rozklad:problem:history-not-public`).
+   * Це не збій — сторінка пояснює, що архів бачить лише персонал, і веде до найранішої відкритої дати.
+   */
+  get isHistoryNotPublic(): boolean {
+    return this.status === 404 && (this.type?.endsWith(':history-not-public') ?? false);
   }
 
   /** Повторювати має сенс лише мережеві збої та 5xx/429. */
@@ -155,6 +167,7 @@ export async function errorFromResponse(response: Response): Promise<ApiError> {
     conflicts: Array.isArray(problem.conflicts) ? problem.conflicts : [],
     code: typeof problem.code === 'string' ? problem.code : undefined,
     requestId: headerRequestId ?? (typeof problem.requestId === 'string' ? problem.requestId : undefined),
+    publicHistoryFrom: typeof problem.publicHistoryFrom === 'string' ? problem.publicHistoryFrom : undefined,
   });
 }
 

@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
-import { useAuth } from 'react-oidc-context';
+import { useContext, useMemo } from 'react';
+import { AuthContext } from 'react-oidc-context';
 import type { Role } from '@/api/types';
-import { devRoles, rolesFromAccessToken } from './roles';
+import { DEV_ROLES } from './devUser';
+import { rolesFromAccessToken } from './roles';
 import type { SigninState } from './postLogin';
 
 export interface CurrentUser {
@@ -31,20 +32,6 @@ export interface CurrentUserState {
   isDevBypass: boolean;
 }
 
-function sessionStorageOrNull(): Storage | null {
-  try {
-    return window.sessionStorage;
-  } catch {
-    // сховище вимкнене налаштуваннями браузера
-    return null;
-  }
-}
-
-// import.meta.env.DEV у production-збірці замінюється на false, і гілка зникає з бандла
-const DEV_ROLES: Role[] = import.meta.env.DEV
-  ? devRoles(import.meta.env.VITE_DEV_AUTH_ROLES, import.meta.env.VITE_USE_MOCKS === '1', sessionStorageOrNull())
-  : [];
-
 function displayName(profile: Record<string, unknown>, fallback: string): string {
   const name = typeof profile.name === 'string' ? profile.name.trim() : '';
   if (name) return name;
@@ -52,25 +39,30 @@ function displayName(profile: Record<string, unknown>, fallback: string): string
   return parts.length > 0 ? parts.join(' ') : fallback;
 }
 
-/** Поточний користувач і ролі з поля `roles` access-токена. */
+/**
+ * Поточний користувач і ролі з поля `roles` access-токена. Поза AuthProvider (окремі компоненти в тестах) —
+ * гість: публічні сторінки питають, чи увійшла людина, і мають працювати й без сервісу входу.
+ */
 export function useCurrentUser(): CurrentUserState {
-  const auth = useAuth();
+  const auth = useContext(AuthContext);
 
   return useMemo<CurrentUserState>(() => {
     const signIn = async (returnTo?: string) => {
       const state: SigninState = { returnTo };
+      if (!auth) throw new Error('Вхід недоступний: немає AuthProvider');
       await auth.signinRedirect({ state });
     };
     const signOut = async () => {
-      await auth.signoutRedirect();
+      await auth?.signoutRedirect();
     };
 
     if (DEV_ROLES.length > 0) {
-      const user: CurrentUser = { id: 'dev-user', username: 'dev', name: 'Розробник (dev)', email: null, roles: DEV_ROLES };
+      const devRoles = [...DEV_ROLES];
+      const user: CurrentUser = { id: 'dev-user', username: 'dev', name: 'Розробник (dev)', email: null, roles: devRoles };
       return {
         status: 'authenticated',
         user,
-        roles: DEV_ROLES,
+        roles: devRoles,
         isAdmin: DEV_ROLES.includes('ADMIN'),
         isTeacher: DEV_ROLES.includes('TEACHER'),
         hasRole: (...roles) => roles.some((r) => DEV_ROLES.includes(r)),
@@ -84,9 +76,9 @@ export function useCurrentUser(): CurrentUserState {
       };
     }
 
-    const oidcUser = auth.user;
-    const authenticated = auth.isAuthenticated && oidcUser != null;
-    const status: AuthStatus = auth.isLoading ? 'loading' : authenticated ? 'authenticated' : 'anonymous';
+    const oidcUser = auth?.user;
+    const authenticated = Boolean(auth?.isAuthenticated) && oidcUser != null;
+    const status: AuthStatus = auth?.isLoading ? 'loading' : authenticated ? 'authenticated' : 'anonymous';
     const roles = authenticated ? rolesFromAccessToken(oidcUser.access_token) : [];
     const profile = (oidcUser?.profile ?? {}) as Record<string, unknown>;
     const username = typeof profile.preferred_username === 'string' ? profile.preferred_username : '';
@@ -109,7 +101,7 @@ export function useCurrentUser(): CurrentUserState {
       hasRole: (...wanted) => wanted.some((r) => roles.includes(r)),
       signIn,
       signOut,
-      error: auth.error ?? null,
+      error: auth?.error ?? null,
       isDevBypass: false,
     };
   }, [auth]);

@@ -140,11 +140,13 @@ describe('календарні періоди', () => {
     const created = await api.post<CalendarPeriod>('/admin/calendar-periods', { ...body, kind: 'PRACTICE' });
     expect(created.supervisors).toEqual([KRENTSIN]);
 
-    const groupDay = await api.get<ScheduleDto>(`/public/schedule/group/${group.id}`, { from: '2026-11-16', to: '2026-11-16' });
+    // від імені персоналу: гостю давніші за тиждень дні не віддаються, а тест не має залежати від дати запуску
+    const staff = { headers: { Authorization: 'Bearer staff' } };
+    const groupDay = await api.get<ScheduleDto>(`/public/schedule/group/${group.id}`, { from: '2026-11-16', to: '2026-11-16' }, staff);
     expect(groupDay.days[0]?.practices).toMatchObject([{ title: 'Технологічна практика', supervisors: [KRENTSIN], groups: [{ code: '3КІ1' }] }]);
-    const teacherDay = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-16', to: '2026-11-16' });
+    const teacherDay = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-16', to: '2026-11-16' }, staff);
     expect(teacherDay.days[0]?.practices).toMatchObject([{ title: 'Технологічна практика' }]);
-    const before = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-13', to: '2026-11-13' });
+    const before = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-13', to: '2026-11-13' }, staff);
     expect(before.days[0]?.practices).toEqual([]);
   });
 });

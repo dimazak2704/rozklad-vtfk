@@ -430,15 +430,29 @@ describe('розпорядження', () => {
   });
 
   it('файли доступні лише для опублікованого: DOCX — справжній ZIP', async () => {
+    // №35 (19.10) давніше за тиждень: його файли віддаються лише персоналу з токеном
+    const staff = { headers: { Authorization: 'Bearer admin-token' } };
     const archive = await api.get<Page<OrderSummaryDto>>('/admin/orders', { q: '35' });
-    const docx = await api.blob(`/documents/orders/${archive.items[0]?.id ?? ''}.docx`);
+    const docx = await api.blob(`/documents/orders/${archive.items[0]?.id ?? ''}.docx`, undefined, staff);
     const bytes = new Uint8Array(await docx.arrayBuffer());
     expect(String.fromCharCode(bytes[0] ?? 0, bytes[1] ?? 0)).toBe('PK');
-    const pdf = await api.blob(`/documents/orders/${archive.items[0]?.id ?? ''}.pdf`);
+    const pdf = await api.blob(`/documents/orders/${archive.items[0]?.id ?? ''}.pdf`, undefined, staff);
     expect(new TextDecoder().decode((await pdf.arrayBuffer()).slice(0, 8))).toBe('%PDF-1.4');
     const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
-    const error = await failure(api.blob(`/documents/orders/${draft.id}.png`));
+    const error = await failure(api.blob(`/documents/orders/${draft.id}.png`, undefined, staff));
     expect(error.status).toBe(404);
+    expect(error.isHistoryNotPublic).toBe(false);
+  });
+
+  it('гостю давні розпорядження не віддаються (404 history-not-public), свіжі — так', async () => {
+    const archive = await api.get<Page<OrderSummaryDto>>('/admin/orders', { q: '35' });
+    const old = await failure(api.blob(`/documents/orders/${archive.items[0]?.id ?? ''}.pdf`, undefined, { auth: false }));
+    expect(old.isHistoryNotPublic).toBe(true);
+    expect(old.publicHistoryFrom).toBe('2026-11-02');
+    const draft = await api.get<OrderDto>('/admin/orders/draft', { date: DAY });
+    const published = await api.post<OrderDto>(`/admin/orders/${draft.id}/publish`);
+    const fresh = await api.blob(`/documents/orders/${published.id}.pdf`, undefined, { auth: false });
+    expect(new TextDecoder().decode((await fresh.arrayBuffer()).slice(0, 8))).toBe('%PDF-1.4');
   });
 
   it('після публікації бот розсилає розпорядження в привʼязані чати груп і диспетчерам', async () => {

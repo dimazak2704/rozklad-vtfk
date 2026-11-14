@@ -226,7 +226,8 @@ describe('контракт мок-API ↔ core', () => {
     await expectShape(first(schedule.days, 'дні'), view, 'Day');
 
     const changesPath = `${CORE}order/internal/publicview/PublicChangesDto.java`;
-    const changes = await api.get<PublicChangesDto>('/public/changes', { date: '2026-10-19' });
+    // №35 (19.10) давніше за тиждень від «зараз» тесту: архів бачить лише персонал (будь-який Bearer для мока)
+    const changes = await api.get<PublicChangesDto>('/public/changes', { date: '2026-10-19' }, { headers: { Authorization: 'Bearer staff' } });
     await expectShape(changes, changesPath, 'PublicChangesDto');
     await expectShape(changes.order, changesPath, 'PublishedOrder');
     const group = first(changes.groups, 'групи змін');

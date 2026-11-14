@@ -16,6 +16,10 @@ SPA працює без бекенду й сервісу входу: Mock Servic
 - Ролі у вкладці змінюються без перезапуску: `sessionStorage.setItem('rozklad.mockRoles', 'TEACHER')` і
   перезавантаження; `''` — гість; `sessionStorage.removeItem('rozklad.mockRoles')` — знову ролі з `.env.mock`.
   Працює лише з моками (`src/auth/roles.ts → devRoles`); з реальним бекендом ролі дає токен.
+- Фіктивний ADMIN чи TEACHER шле `Authorization: Bearer mock-dev-staff` (`src/api/client.ts`): за цим заголовком мок
+  відрізняє персонал від гостя. Гостю давніші за `publicHistoryFrom` заміни, розклад і файли розпоряджень дають
+  404 `history-not-public` (`handlers/meta.ts → historyNotPublic`); у тесті обробника персонал —
+  `headers: { Authorization: 'Bearer …' }`.
 - Запит, для якого ще немає обробника, у браузері йде далі як є (`onUnhandledRequest: 'bypass'`) — на проксі,
   тобто до справжнього gateway, якщо той запущений, або отримає помилку проксі.
 - Консоль браузера: `window.__rozkladMocks.emit('change.updated', dto)` шле подію SSE усім відкритим вкладкам
@@ -107,7 +111,8 @@ export const handlers = [
 2. **Типи — з `@/api/types`.** Мок повертає те саме, що обіцяє контракт; розбіжність із контрактом — у
    `docs/CHANGELOG-CONTRACTS.md`, а не «підганяння» мока.
 3. **Помилки — як у бекенді** (`problem`, `badRequest`, `notFound`, `conflict`, `businessRule`): `type`
-   `urn:rozklad:problem:<slug>`, українські `title`/`detail`, `requestId`, `errors[]`, `conflicts[]`.
+   `urn:rozklad:problem:<slug>`, українські `title`/`detail`, `requestId`, `errors[]`, `conflicts[]`; власні поля
+   ProblemDetail — `problem({ …, extensions: { publicHistoryFrom } })`.
    Їх можна `return` або `throw` з будь-якого місця обробника (MSW візьме кинуту `Response` як відповідь).
    Валідуйте так само, як сервер: 400 на погані параметри, 404 на невідомий id, 409 з `conflicts[]`.
 4. **Стан — у сховищах своєї області** (`createMockCollection`, `createMockStore`), а не в змінних модуля:
@@ -159,7 +164,7 @@ export const handlers = [
 
 | Ендпоінт | Файл |
 |---|---|
-| `GET /api/public/meta` | `handlers/meta.ts` (київський час, поточна й наступна пара) |
+| `GET /api/public/meta` | `handlers/meta.ts` (київський час, поточна й наступна пара, `publicHistoryFrom`) |
 | `GET /api/public/search?q=&limit=` | `handlers/meta.ts` (нечіткий пошук з `lib/search`, `limit` 1–50) |
 | `GET /api/events/stream` | `handlers/events.ts` (відкритий потік, `ping` кожні 25 с) |
 
