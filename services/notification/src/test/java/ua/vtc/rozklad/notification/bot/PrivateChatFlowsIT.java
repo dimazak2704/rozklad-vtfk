@@ -117,8 +117,8 @@ class PrivateChatFlowsIT extends IntegrationTest {
         say(OWNER_CHAT, "📅 Сьогодні");
         Sent today = telegram.lastSentTo(OWNER_CHAT);
         assertThat(today.text()).startsWith("👥 <b>4КІ1</b> · понеділок, 19 жовтня\n<i>Знаменник</i>")
-                .contains("<b>2</b> · 09:40–10:40 · 🔁 заміна\nНДКС · Непийвода М.В. · ауд. 6")
-                .contains("замість <s>СТП · Кренцін М.Д.</s>");
+                .contains("<b>2</b> · 09:40–10:40 · 🔁 заміна\nНДКС · Непийвода М. В. · ауд. 6")
+                .contains("замість <s>СТП · Кренцін М. Д.</s>");
         assertThat(today.buttons()).containsExactly("◀️ Пт 16.10", "Вт 20.10 ▶️");
 
         press(OWNER_CHAT, today.messageId(), today.callbackOf("Вт 20.10 ▶️").orElseThrow());
@@ -152,7 +152,7 @@ class PrivateChatFlowsIT extends IntegrationTest {
 
         // вільний текст без діалогу — теж пошук
         say(OWNER_CHAT, "кренц");
-        assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("🧑‍🏫 <b>Кренцін М.Д.</b> · понеділок, 19 жовтня");
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("🧑‍🏫 <b>Кренцін М. Д.</b> · понеділок, 19 жовтня");
 
         say(OWNER_CHAT, "абракадабра");
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("Нічого не знайшов за «абракадабра»");
@@ -232,7 +232,7 @@ class PrivateChatFlowsIT extends IntegrationTest {
         teacherChat(TEACHER, CoreFixtures.TEACHER_NEPYIVODA, "Непийвода М.В.");
         say(TEACHER, "🧑‍🏫 Мої пари завтра");
         assertThat(telegram.lastSentTo(TEACHER).text())
-                .startsWith("🧑‍🏫 <b>Непийвода М.В.</b> · вівторок, 20 жовтня")
+                .startsWith("🧑‍🏫 <b>Непийвода М. В.</b> · вівторок, 20 жовтня")
                 .contains("4КІ1 · НДКС · ауд. 6");
 
         owner();
@@ -263,6 +263,16 @@ class PrivateChatFlowsIT extends IntegrationTest {
         dispatcher.dispatch(new InlineRequest(3, "q-3", OWNER_CHAT, "4КІ1"));
         assertThat(telegram.inlineAnswers().getLast().articles()).isEmpty();
         assertThat(telegram.inlineAnswers().getLast().cacheSeconds()).isZero();
+    }
+
+    @Test
+    void inlineTeacherCardsNameTheTeacherBySurnameAndInitials() {
+        owner();
+        dispatcher.dispatch(new InlineRequest(4, "q-4", OWNER_CHAT, "Кренцін"));
+        var articles = telegram.inlineAnswers().getLast().articles();
+        assertThat(articles).isNotEmpty();
+        assertThat(articles.getFirst().title()).startsWith("Кренцін М. Д. — ");
+        assertThat(articles.getFirst().html()).startsWith("🧑‍🏫 <b>Кренцін М. Д.</b>");
     }
 
     @Test

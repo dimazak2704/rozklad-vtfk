@@ -12,9 +12,11 @@ import ua.vtc.rozklad.notification.bot.BotUpdate.InlineRequest;
 import ua.vtc.rozklad.notification.core.CoreDtos.SearchHit;
 import ua.vtc.rozklad.notification.core.CoreQueries;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
+import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 import ua.vtc.rozklad.notification.telegram.TelegramApi.InlineArticle;
+import ua.vtc.rozklad.notification.text.TeacherNames;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /**
@@ -86,6 +88,6 @@ public class InlineQueries {
             when = "завтра, " + when;
         }
         String label = day.ownerLabel() == null || day.ownerLabel().isBlank() ? hit.label() : day.ownerLabel();
-        return label + " — " + when;
+        return (day.ownerType() == OwnerType.TEACHER ? TeacherNames.initials(label) : label) + " — " + when;
     }
 }

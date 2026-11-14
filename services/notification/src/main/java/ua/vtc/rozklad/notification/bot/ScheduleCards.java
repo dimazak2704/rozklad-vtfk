@@ -18,11 +18,13 @@ import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
 import ua.vtc.rozklad.notification.core.OwnerType;
 import ua.vtc.rozklad.notification.text.Plurals;
 import ua.vtc.rozklad.notification.text.Reasons;
+import ua.vtc.rozklad.notification.text.TeacherNames;
 import ua.vtc.rozklad.notification.text.UaDates;
 
 /**
  * A day of a group, teacher or room as a compact Telegram card: pair number and time, what and
- * who, and for changed lessons what it replaced (struck through) and why.
+ * who, and for changed lessons what it replaced (struck through) and why. Teachers read as
+ * «Прізвище І. Б.» ({@link TeacherNames#initials}).
  */
 public final class ScheduleCards {
 
@@ -119,7 +121,7 @@ public final class ScheduleCards {
             parts.add(perspective == OwnerType.GROUP ? discipline + subgroup(lesson) : discipline);
         }
         if (perspective != OwnerType.TEACHER && lesson.teacher() != null && lesson.teacher().label() != null) {
-            parts.add(lesson.teacher().label());
+            parts.add(TeacherNames.initials(lesson.teacher().label()));
         }
         if (perspective != OwnerType.ROOM && lesson.room() != null && lesson.room().name() != null) {
             parts.add("ауд. " + lesson.room().name());
@@ -137,7 +139,10 @@ public final class ScheduleCards {
                 List<String> parts = new ArrayList<>(2);
                 addLabel(parts, original.get("discipline"));
                 if (perspective != OwnerType.TEACHER) {
-                    addLabel(parts, original.get("teacher"));
+                    String teacher = label(original.get("teacher"));
+                    if (teacher != null) {
+                        parts.add(TeacherNames.initials(teacher));
+                    }
                 }
                 yield parts.isEmpty() ? null : "замість " + s(String.join(" · ", parts));
             }
@@ -207,7 +212,9 @@ public final class ScheduleCards {
 
     private static String label(DaySchedule schedule) {
         if (schedule.ownerLabel() != null && !schedule.ownerLabel().isBlank()) {
-            return schedule.ownerLabel();
+            return schedule.ownerType() == OwnerType.TEACHER
+                    ? TeacherNames.initials(schedule.ownerLabel())
+                    : schedule.ownerLabel();
         }
         return switch (schedule.ownerType()) {
             case GROUP -> "Група";
