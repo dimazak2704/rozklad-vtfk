@@ -195,6 +195,9 @@ services:
       - ./deploy/secrets/auth-signing-key.pem:/run/secrets/auth-signing-key.pem:ro
     stop_grace_period: 30s
     mem_limit: ${AUTH_MEM_LIMIT:-512m}
+    # A flood of sign-ins (BCrypt checks, new sessions) takes at most one CPU; the edge limit of /auth/* is in
+    # the web nginx (web/nginx.conf, location /auth/). 1 fits any VPS: Docker refuses more CPUs than the host has.
+    cpus: ${AUTH_CPUS:-1}
     logging: *logging
 
   # --- Application services ---------------------------------------------------------------------------

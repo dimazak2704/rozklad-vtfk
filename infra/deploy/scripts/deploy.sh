@@ -203,7 +203,7 @@ smoke_checks() {
   if [[ $discovery == *"\"issuer\":\"https://$domain/auth\""* ]]; then
     ok "Sign-in      issuer https://$domain/auth"
   else
-    warn "discovery at https://$domain/auth does not show the issuer https://$domain/auth; see: compose.sh logs auth caddy"
+    warn "discovery at https://$domain/auth does not show the issuer https://$domain/auth; see: compose.sh logs auth web caddy"
   fi
   location=$(probe "$domain" "/auth/oauth2/authorize?response_type=code&client_id=rozklad-web&scope=openid&state=smoke&redirect_uri=https%3A%2F%2F$domain%2Flogin%2Fcallback&code_challenge=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU&code_challenge_method=S256" \
     -k -H 'Accept: text/html' -o /dev/null -w '%{redirect_url}' 2>/dev/null || true)
@@ -211,7 +211,7 @@ smoke_checks() {
     ok "Sign-in      an authorize request without a session goes to https://$domain/auth/login"
   else
     warn "an authorize request without a session redirects to '${location:-nothing}', expected
-     https://$domain/auth/login (forwarded headers between Caddy and auth); see: compose.sh logs auth"
+     https://$domain/auth/login (forwarded headers of Caddy and the web nginx); see: compose.sh logs auth web"
   fi
   status=$(probe "$domain" /auth/internal/accounts -k -o /dev/null -w '%{http_code}' 2>/dev/null || true)
   if [[ $status == 404 ]]; then

@@ -1,13 +1,15 @@
 # Edge proxy of «Розклад ВТФК» in production (infra/deploy/compose.prod.yml, docs/DEPLOY.md).
 #
-#   https://{$DOMAIN}        SPA (web:80), /api/* -> gateway:8080, /auth/* -> auth:8085 (sign-in, OIDC)
+#   https://{$DOMAIN}        SPA (web:80), /api/* -> gateway:8080, /auth/* -> web:80 -> auth:8085
+#                            (sign-in, OIDC; the web nginx limits requests per client address).
 #                            One origin for everything, so no CORS is needed. Internal APIs
 #                            (/api/internal/*, /auth/internal/*) answer 404.
 #
 # Caddy gets and renews the Let's Encrypt certificate by itself; the name must resolve to this server
-# and ports 80/443 must be open. There is no access log (no `log` directive), so the codes and tokens
-# in the query strings of /auth/* are not written anywhere. {$VAR} values come from the container
-# environment (set in compose.prod.yml) and are substituted when the file is loaded.
+# and ports 80/443 must be open. There is no access log (no `log` directive), and the web nginx logs
+# /auth/* without query strings, so the codes and tokens in them are not written anywhere. {$VAR}
+# values come from the container environment (set in compose.prod.yml) and are substituted when the
+# file is loaded.
 # compose.prod.yml mounts this directory, not the file: after `git pull` the container sees the new
 # file, and deploy.sh runs `caddy reload` (a bind-mounted single file would keep the old inode).
 {
@@ -68,9 +70,13 @@
 	}
 }
 
-# The sign-in service with its own context path /auth (paths pass unchanged). Caddy sets
-# X-Forwarded-Proto/-Host/-For itself, so auth builds its redirects for https://{$DOMAIN}. The internal
-# accounts API is for core inside the network only; the actuator listens on another port (8086).
+# The sign-in service with its own context path /auth (paths pass unchanged). Caddy has no rate
+# limiting, so /auth/* goes through the web nginx, which allows 5 requests a second per client address
+# (limit_req in web/nginx.conf, location /auth/): every anonymous GET of /auth/login or /auth/oauth2/authorize
+# creates a session row in auth's database. Caddy sets X-Forwarded-Proto/-For itself; nginx trusts them
+# from the containers of the compose network only and passes them on, so auth builds its redirects for
+# https://{$DOMAIN} and its sign-in lockout sees the client. The internal accounts API is for core inside
+# the network only; the actuator listens on another port (8086).
 (auth_routes) {
 	@auth_private path /auth/internal /auth/internal/*
 	handle @auth_private {
@@ -78,7 +84,7 @@
 	}
 	handle /auth/* {
 		import compress
-		reverse_proxy auth:8085
+		reverse_proxy {$WEB_UPSTREAM:web:80}
 	}
 }
 

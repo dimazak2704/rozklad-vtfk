@@ -118,7 +118,7 @@ services:
       IMPORTER_CLIENT_SECRET: ${IMPORTER_CLIENT_SECRET:-dev-importer-secret}
       CORE_AUTH_CLIENT_SECRET: ${CORE_AUTH_CLIENT_SECRET:-dev-core-auth-secret}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
-      # X-Forwarded-* приймаються лише від контейнерів (nginx web, у prod — Caddy): діапазон ip_range мережі
+      # X-Forwarded-* приймаються лише від контейнерів (nginx web; у prod за ним Caddy): діапазон ip_range мережі
       # default нижче. Шлюз мережі (172.29.0.1), через який приходять з'єднання на опубліковані порти, у нього
       # не входить, тож клієнт з хоста не підставить собі IP для блокування входу
       AUTH_TRUSTED_PROXIES: 172.29.1.0/24

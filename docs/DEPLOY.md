@@ -16,7 +16,8 @@ The same command updates the server later. GitHub Actions can run it for you on 
 Internet ──► :80 / :443  Caddy (TLS, HTTP/2 + HTTP/3, security headers, compression)
               ├─ https://DOMAIN/            → web:80        nginx + Vite build, SPA fallback
               ├─ https://DOMAIN/api/*       → gateway:8080  → core, scheduler, importer, notification
-              └─ https://DOMAIN/auth/*      → auth:8085     sign-in page, OIDC, keys (/auth/internal/* → 404)
+              └─ https://DOMAIN/auth/*      → web:80 → auth:8085  sign-in page, OIDC, keys (/auth/internal/* → 404;
+                                            nginx limits /auth/* to 5 requests a second per client address)
               (/api/internal/* and /api/import/ai/parse-absence → 404: service-to-service only)
 
 Internal network only (no published ports): postgres, rabbitmq, redis, the services, auth's actuator.
@@ -27,7 +28,7 @@ domain (the SPA signs in at `<its origin>/auth`).
 
 | File | What it does |
 |---|---|
-| `infra/deploy/compose.prod.yml` | Overlay on `infra/docker-compose.yml`: Caddy, no published ports for anything else, `auth` in production mode, secrets from env, memory limits, log rotation, runtime hardening (no new privileges, no capabilities for the Java services, process limits, read-only Caddy and nginx, lower CPU weight for background work) |
+| `infra/deploy/compose.prod.yml` | Overlay on `infra/docker-compose.yml`: Caddy, no published ports for anything else, `auth` in production mode, secrets from env, memory limits, log rotation, runtime hardening (no new privileges, no capabilities for the Java services, process limits, read-only Caddy and nginx, lower CPU weight for background work, at most one CPU for `auth`) |
 | `infra/deploy/caddy/Caddyfile` | The site, TLS, routing of `/api` and `/auth`, the internal API of `auth` closed, forged forwarding headers removed |
 | `infra/deploy/.env.example` → `infra/deploy/.env` | Every setting with comments. `.env` is gitignored |
 | `infra/deploy/secrets/auth-signing-key.pem` | Token signing key of `auth` (RSA, created by `gen-secrets.sh`; gitignored) |
@@ -642,6 +643,16 @@ the gateway in `compose.prod.yml`). Caddy writes that header itself and removes 
 `Forwarded: for=...` would give every request a fresh bucket. Raise the values in `.env` if needed
 and run `compose.sh up -d`.
 
+**429 «Забагато запитів до входу» at sign-in.** Caddy sends `/auth/*` through the web nginx, which
+allows 5 requests a second per client address, 20 more at once and 20 more after a short delay
+(`limit_req` in `web/nginx.conf`): every anonymous visit of the sign-in page creates a session row in
+auth's database, so one client must not be able to fill it. A sign-in takes about ten requests. Staff
+behind the college's one public address share the limit; if they hit it at the start of the day, raise
+`rate` in `limit_req_zone` and `burst` in `location /auth/` of `web/nginx.conf` and deploy the web image.
+nginx trusts `X-Forwarded-For` only from the containers of the compose network (`set_real_ip_from`, the
+`ip_range` of `infra/docker-compose.yml`): keep the two equal. `auth` itself may use at most one CPU
+(`AUTH_CPUS`).
+
 **PostgreSQL: "password authentication failed for user core".** The init scripts run only when the
 volume is created. If the first start failed half-way, on a fresh server remove the volumes and start
 again: `infra/deploy/scripts/compose.sh down -v && infra/deploy/scripts/deploy.sh` (**deletes all
@@ -709,6 +720,11 @@ only to the services with a client for them, publishes Caddy on IPv4 only, and h
 container. Caddy (read-only, only `NET_BIND_SERVICE`) and the web nginx (read-only, four
 capabilities) started hardened and served requests; PostgreSQL, Redis, RabbitMQ and LibreOffice
 started under `no-new-privileges`. The development compose publishes every port on `127.0.0.1`.
+Sign-in through Caddy (production Caddyfile, https) and the web nginx 1.30 to a stub `auth`
+(`auth-edge-limit.docker.test.sh`): `auth` gets the client address Caddy saw, `https` and port 443, never
+the client's own forwarding headers; one client sending 120 requests at once gets 429 for most of them
+whatever `X-Forwarded-For`/`Forwarded` it forges; the query strings of those requests reach no log;
+nginx without Caddy (development) is not limited.
 
 Not verified yet: the full stack on a real VPS (the file permissions of the key on Linux included), the
 memory use of the whole stack (so 4 GB is only best effort), the GitHub workflows on GitHub (the weekly

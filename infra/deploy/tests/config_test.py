@@ -77,6 +77,30 @@ class ProductionEdge(unittest.TestCase):
         self.assertEqual({("0.0.0.0", "80", 80), ("0.0.0.0", "443", 443)}, {p for p in ports["caddy"]})
         self.assertEqual(3, len(ports["caddy"]))  # 443/tcp and 443/udp
 
+    def test_sign_in_goes_through_the_limited_nginx_location(self):
+        # Every anonymous GET of /auth/login or /auth/oauth2/authorize creates a session row in auth's
+        # database. Caddy has no rate limiting, so /auth/* goes through the web nginx, whose location /auth/
+        # limits requests per client address (auth-edge-limit.docker.test.sh checks the behaviour).
+        caddyfile = (ROOT / "infra/deploy/caddy/Caddyfile").read_text(encoding="utf-8")
+        code = "\n".join(line for line in caddyfile.splitlines() if not line.lstrip().startswith("#"))
+        auth_routes = code[code.index("(auth_routes) {"):code.index("{$DOMAIN} {")]
+        self.assertRegex(auth_routes, r"handle /auth/\* \{\s*import compress\s*reverse_proxy \{\$WEB_UPSTREAM:web:80\}")
+        self.assertNotIn("auth:8085", code)
+        nginx = (ROOT / "web/nginx.conf").read_text(encoding="utf-8")
+        location = nginx[nginx.index("location /auth/ {"):]
+        location = location[:location.index("\n  }")]
+        self.assertRegex(location, r"limit_req zone=rozklad_auth ")
+        self.assertRegex(nginx, r"limit_req_zone \$rozklad_auth_limit_key zone=rozklad_auth:\S+ rate=\d+r/s;")
+
+    def test_nginx_trusts_forwarding_headers_from_the_containers_only(self):
+        # Caddy is a container of the compose network; the network gateway, through which published
+        # ports are reached in development, must not be trusted (a browser would pick its own address)
+        ipam = render(DEV)["networks"]["default"]["ipam"]["config"][0]
+        nginx = (ROOT / "web/nginx.conf").read_text(encoding="utf-8")
+        self.assertEqual([ipam["ip_range"]], re.findall(r"^set_real_ip_from (\S+);$", nginx, re.MULTILINE))
+        geo = nginx[nginx.index("geo $realip_remote_addr $rozklad_via_edge {"):]
+        self.assertEqual({ipam["ip_range"]}, set(re.findall(r"^\s+([0-9./]+) 1;$", geo[:geo.index("}")], re.MULTILINE)))
+
 
 class ProductionSecrets(unittest.TestCase):
     """Each container gets only the credentials it uses (rendered with .env.example, where every
@@ -167,6 +191,11 @@ class ProductionHardening(unittest.TestCase):
             for vital in ("postgres", "gateway", "auth", "caddy"):
                 with self.subTest(heavy=heavy, vital=vital):
                     self.assertLess(weight(heavy), weight(vital))
+
+    def test_a_flood_of_sign_ins_takes_at_most_one_cpu(self):
+        # BCrypt checks and new sessions of anonymous clients; Docker refuses more CPUs than the host has,
+        # so the default must fit a one-CPU VPS too
+        self.assertTrue(0 < float(self.services["auth"].get("cpus", 0)) <= 1, self.services["auth"].get("cpus"))
 
 
 class Images(unittest.TestCase):
