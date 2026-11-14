@@ -43,7 +43,7 @@ from `V1`).
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` | ADMIN | draft preview, `no-store`; 400 `errors[format]` |
 | `GET /api/notify/events/dead-letters` | ADMIN | `{queue, count}`: events in `notification.q.events.dlq`; 503 RabbitMQ unreachable (§5) |
 | `POST /api/notify/events/dead-letters/replay` | ADMIN | `{replayed}`: moves the messages now in the DLQ back to the consumer, each once (§5) |
-| `POST /api/notify/telegram/webhook` | open | WEBHOOK mode only (404 otherwise); `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET` (403) |
+| `POST /api/notify/telegram/webhook` | open | WEBHOOK mode only (404 otherwise); `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET` (403). Both are checked before the body is read; at most 256 KB is read (400 `errors[body]` «Оновлення Telegram завелике.»), so an anonymous client cannot make the service buffer large bodies |
 
 PDF/PNG without LibreOffice: 503 ProblemDetail, title «Конвертер PDF недоступний» (DOCX still works).
 

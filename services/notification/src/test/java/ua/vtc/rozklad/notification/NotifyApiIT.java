@@ -216,6 +216,23 @@ class NotifyApiIT extends IntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** A Telegram update is a few kilobytes; a bigger body, valid or not, is refused before it is parsed. */
+    @Test
+    void webhookRefusesAnOversizedUpdate() throws Exception {
+        owner();
+        String update = """
+                {"update_id":502,"message":{"message_id":6,"date":1760000000,
+                 "from":{"id":1000,"is_bot":false,"first_name":"Власник"},
+                 "chat":{"id":1000,"type":"private","first_name":"Власник"},"text":"%s"}}"""
+                .formatted("a".repeat(300 * 1024));
+        mockMvc.perform(post("/api/notify/telegram/webhook").header("X-Telegram-Bot-Api-Secret-Token", WEBHOOK_SECRET)
+                        .contentType(MediaType.APPLICATION_JSON).content(update))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("body"))
+                .andExpect(jsonPath("$.errors[0].message").value("Оновлення Telegram завелике."));
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
     private ResultActions createCode(RequestPostProcessor caller, String body) throws Exception {
         return mockMvc.perform(post("/api/notify/bindings/codes").with(caller)
                 .contentType(MediaType.APPLICATION_JSON).content(body));
