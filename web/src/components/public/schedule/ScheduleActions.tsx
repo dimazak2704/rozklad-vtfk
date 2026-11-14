@@ -2,6 +2,7 @@ import { CalendarArrowDown, CalendarPlus, ChevronDown, Copy, Smartphone } from '
 import { DropdownMenu } from 'radix-ui';
 import { downloadIcs, icsUrls, type IcsOwner } from '@/api/public';
 import type { Uuid } from '@/api/types';
+import { usePublicViewer } from '@/auth/usePublicViewer';
 import { Button, notify } from '@/components/ui';
 
 const MENU =
@@ -20,9 +21,11 @@ export interface IcsTarget {
 /** Пункти календаря: файл, підписка на телефоні, Google Календар, копія адреси. */
 function CalendarItems({ ics }: { ics: IcsTarget }) {
   const urls = icsUrls(ics.owner, ics.id);
+  // файл персонал завантажує з токеном (увесь семестр); підписка — без токена, як її читають календарі
+  const viewer = usePublicViewer();
   const download = async () => {
     try {
-      await downloadIcs(ics.owner, ics.id, ics.fileName);
+      await downloadIcs(ics.owner, ics.id, ics.fileName, viewer);
       notify.success(`Файл ${ics.fileName} завантажено`, { description: 'Відкрийте його — календар запропонує додати пари.' });
     } catch (error) {
       notify.error(error, 'Не вдалося завантажити календар');

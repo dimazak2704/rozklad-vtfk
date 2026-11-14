@@ -102,7 +102,8 @@ export default function MyDayPage() {
   const ics = icsUrls('TEACHER', teacher.id);
   const downloadCalendar = async () => {
     try {
-      await downloadIcs('TEACHER', teacher.id, ICS_FILE);
+      // кабінет — лише для персоналу: файл з токеном, увесь семестр
+      await downloadIcs('TEACHER', teacher.id, ICS_FILE, 'staff');
       notify.success(`Файл ${ICS_FILE} завантажено`, { description: 'Відкрийте його — календар запропонує додати пари.' });
     } catch (error) {
       notify.error(error, 'Не вдалося завантажити календар');

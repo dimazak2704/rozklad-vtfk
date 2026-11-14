@@ -1,6 +1,7 @@
 import { CalendarArrowDown, CalendarPlus, ChevronRight, Smartphone, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { downloadIcs, icsUrls } from '@/api/public';
+import { usePublicViewer } from '@/auth/usePublicViewer';
 import { Dialog, DialogContent, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { IcsTarget } from './ScheduleActions';
@@ -40,11 +41,13 @@ export function CalendarDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const urls = icsUrls(ics.owner, ics.id);
+  // файл персонал завантажує з токеном (увесь семестр); підписка — без токена, як її читають календарі
+  const viewer = usePublicViewer();
   const close = () => onOpenChange(false);
   const download = async () => {
     close();
     try {
-      await downloadIcs(ics.owner, ics.id, ics.fileName);
+      await downloadIcs(ics.owner, ics.id, ics.fileName, viewer);
       notify.success(`Файл ${ics.fileName} завантажено — відкрийте його, і календар запропонує додати пари`);
     } catch (error) {
       notify.error(error, 'Не вдалося завантажити календар');

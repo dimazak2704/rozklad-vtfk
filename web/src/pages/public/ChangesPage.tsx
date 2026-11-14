@@ -81,7 +81,7 @@ function ChangesSkeleton() {
   );
 }
 
-/** «Розпорядження №35 від 19.10.2026.pdf» — назва файлу, якщо вкладку не дали відкрити і він зберігається. */
+/** «Розпорядження №35 від 19.10.2026.pdf» — заголовок вкладки, поки файл вантажиться, і назва, якщо сервер своєї не дав. */
 function documentFileName(kind: 'Розпорядження' | 'Доповнення', number: number | null, date: IsoDate, format: DocumentFormat): string {
   return `${kind} №${number ?? 'без номера'} від ${formatNumericDate(date)}.${format}`;
 }

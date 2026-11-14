@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, buildUrl, onUnauthorized } from './client';
+import { api, buildUrl, fileNameFromDisposition, onUnauthorized } from './client';
 import { ApiError, errorMessage } from './errors';
 import { takeUnsavedChange } from '@/auth/unsavedChange';
+import { getAccessToken } from '@/auth/userManager';
 
 vi.mock('@/auth/userManager', () => ({
   getAccessToken: vi.fn(() => Promise.resolve('token-123')),
@@ -172,6 +173,73 @@ describe('apiRequest', () => {
     await api.put('/admin/settings', { signatoryPosition: 'x' }).catch(() => undefined);
     expect(takeUnsavedChange()).toBe(true);
     off();
+  });
+
+  it("auth: 'required' — з дійсним токеном запит іде з ним", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { groups: [] }));
+    await api.get('/public/changes', { date: '2026-10-19' }, { auth: 'required' });
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer token-123');
+  });
+
+  // персонал питає архів, а токен прострочений і не оновився: гостьовий запит ліг би відповіддю гостю під ключ персоналу
+  it("auth: 'required' без дійсного токена — запит не йде гостьовим, а завершується 401 з реакцією сторінки", async () => {
+    vi.mocked(getAccessToken).mockResolvedValueOnce(null);
+    const handler = vi.fn();
+    const off = onUnauthorized(handler);
+
+    const error = (await api.get('/public/changes', { date: '2026-10-19' }, { auth: 'required' }).catch((e: unknown) => e)) as ApiError;
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.isUnauthorized).toBe(true);
+    expect(handler).toHaveBeenCalledWith(error);
+    off();
+  });
+
+  it('звичайний запит без токена йде без нього (публічні сторінки гостя)', async () => {
+    vi.mocked(getAccessToken).mockResolvedValueOnce(null);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, []));
+    await api.get('/public/groups');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).has('Authorization')).toBe(false);
+  });
+
+  it('файл отримує назву з Content-Disposition відповіді', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('%PDF', {
+        headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="rozporiadzhennia-35-2026-10-19.pdf"' },
+      }),
+    );
+    const file = await api.file('/documents/orders/o1.pdf');
+    expect(file).toBeInstanceOf(File);
+    expect(file.name).toBe('rozporiadzhennia-35-2026-10-19.pdf');
+    expect(file.type).toBe('application/pdf');
+
+    // без заголовка назви немає — викликач бере свою
+    fetchMock.mockResolvedValueOnce(new Response('BEGIN:VCALENDAR', { headers: { 'Content-Type': 'text/calendar' } }));
+    expect((await api.file('/public/ics/group/g1.ics')).name).toBe('');
+  });
+});
+
+describe('fileNameFromDisposition', () => {
+  it('бере filename у лапках або без них', () => {
+    expect(fileNameFromDisposition('attachment; filename="rozklad.ics"')).toBe('rozklad.ics');
+    expect(fileNameFromDisposition('inline; filename=order-35.pdf; size=10')).toBe('order-35.pdf');
+    expect(fileNameFromDisposition('attachment; filename="say \\"hi\\".txt"')).toBe('say "hi".txt');
+  });
+
+  it("filename*=UTF-8'' (кирилиця) має перевагу над запасною назвою", () => {
+    expect(
+      fileNameFromDisposition(
+        "attachment; filename=\"order.pdf\"; filename*=UTF-8''%D0%A0%D0%BE%D0%B7%D0%BF%D0%BE%D1%80%D1%8F%D0%B4%D0%B6%D0%B5%D0%BD%D0%BD%D1%8F.pdf",
+      ),
+    ).toBe('Розпорядження.pdf');
+    expect(fileNameFromDisposition("attachment; filename*=UTF-8''%E0%A4%A; filename=\"fallback.pdf\"")).toBe('fallback.pdf');
+  });
+
+  it('без назви — null', () => {
+    expect(fileNameFromDisposition(null)).toBeNull();
+    expect(fileNameFromDisposition('inline')).toBeNull();
+    expect(fileNameFromDisposition('attachment; filename=""')).toBeNull();
   });
 });
 

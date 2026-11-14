@@ -7,7 +7,7 @@ TanStack Query, типи — лише з `types.ts`, ключі — лише з 
 
 | Файл | Що робить |
 |---|---|
-| `client.ts` | `api.get/post/put/patch/delete/upload/blob`: база `/api`, Bearer-токен (якщо увійшли), тайм-аут 30 с, ProblemDetail → `ApiError` |
+| `client.ts` | `api.get/post/put/patch/delete/upload/blob/file`: база `/api`, Bearer-токен (якщо увійшли), тайм-аут 30 с, ProblemDetail → `ApiError` |
 | `errors.ts` | `ApiError` (`status`, `kind`, `title`, `detail`, `errors[]`, `conflicts[]`, `requestId`, `fieldErrors()`), `errorMessage()` |
 | `types.ts` | TypeScript-типи для **всіх** DTO з `docs/CONTRACTS.md`. Виведені з DOMAIN поля позначені `@inferred` |
 | `queryKeys.ts` | Ієрархічні ключі `qk.public…`, `qk.me…`, `qk.admin…`, `qk.importer…`, `qk.notify…` |
@@ -57,8 +57,11 @@ export function useCreateChange() {
    перетирають свіжі дані.
 3. **Публічні ендпоінти** (`/public/**`) — з `{ auth: false }`: токен там не потрібен. Виняток — розклад і заміни:
    гостю сервер віддає лише останні дні (`publicHistoryFrom` у meta), персоналу — увесь архів. Там
-   `auth: viewer === 'staff'` і `viewer` у ключі запиту (`usePublicViewer`, `qk.public.schedule|changes`), а 404
-   `history-not-public` (`error.isHistoryNotPublic`) сторінка показує як межу архіву, не як збій.
+   `viewer` у ключі запиту (`usePublicViewer`, `qk.public.schedule|changes`), а персонал питає з
+   `auth: 'required'`: без дійсного токена запит не йде гостьовим (відповідь гостю лягла б під ключ персоналу),
+   а завершується 401 — токен забувається, і сторінка перепитує як гість. 404 `history-not-public`
+   (`error.isHistoryNotPublic`) сторінка показує як межу архіву, не як збій. Запити з токеном Service Worker
+   не кешує (`public-api-cache.ts`): токен лишився б у Cache Storage після виходу.
 4. **Помилки не ховайте.** У компоненті — `<ErrorState error={query.error} onRetry={query.refetch} />` або стан
    таблиці; у мутаціях — `notify.error(error, 'Що не вдалося')`. Помилки полів форми: `error.fieldErrors()` →
    `form.setError(field, { message })`. Конфлікти розкладу: `error.conflicts` (масив `Conflict`).
@@ -72,9 +75,10 @@ export function useCreateChange() {
 ## Файли й завантаження
 
 - Завантаження: `api.upload<ImportJobDto>('/import/jobs', form)` (multipart, тайм-аут 120 с).
-- Файли розпоряджень: `api.blob('/documents/orders/' + id + '.pdf')` → `URL.createObjectURL(blob)`. На публічній
-  сторінці персоналу — `openOrderDocument(id, format, fileName)` (вкладка відкривається в тому ж натисканні), гостю —
-  звичайне посилання `orderDocumentUrl(id, format)`.
+- Файли розпоряджень: `api.blob('/documents/orders/' + id + '.pdf')` → `URL.createObjectURL(blob)`; `api.file(…)` —
+  те саме з назвою з `Content-Disposition`. На публічній сторінці персоналу — `openOrderDocument(id, format, title)`
+  (вкладка відкривається в тому ж натисканні; заблокована — файл під назвою від сервера; закрита людиною —
+  скасування), гостю — звичайне посилання `orderDocumentUrl(id, format)`.
 
 ## Чого не робити
 

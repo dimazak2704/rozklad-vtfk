@@ -6,7 +6,8 @@
  * (PWA) віддає збережену відповідь — так останній переглянутий розклад відкривається офлайн.
  *
  * Розклад і заміни персонал (ADMIN, TEACHER) просить з токеном — сервер віддає йому весь архів; гість — без
- * токена, лише з `publicHistoryFrom` (meta). Хто питає, записано і в ключ запиту (`usePublicViewer`).
+ * токена, лише з `publicHistoryFrom` (meta). Хто питає, записано і в ключ запиту (`usePublicViewer`), тож під
+ * ключем персоналу лежить лише відповідь персоналу: без дійсного токена запит не йде гостьовим (`viewerAuth`).
  */
 import { useMutation, useQuery, type QueryKey } from '@tanstack/react-query';
 import { usePublicViewer, type PublicViewer } from '@/auth/usePublicViewer';
@@ -70,6 +71,15 @@ export function publicSchedulePath(owner: EntityType, id: Uuid): string {
   return `/public/schedule/${OWNER_SEGMENT[owner]}/${encodeURIComponent(id)}`;
 }
 
+/**
+ * Токен для запиту, відповідь якого залежить від входу. Персоналу він обовʼязковий: якщо строк минув і оновити не
+ * вдалося, запит не йде гостьовим (відповідь гостю лягла б під ключ персоналу), а завершується 401 — токен
+ * забувається, і сторінка перепитує як гість. Гість питає без токена.
+ */
+function viewerAuth(viewer: PublicViewer | null): 'required' | false {
+  return viewer === 'staff' ? 'required' : false;
+}
+
 /** Ключ розкладу: [..., owner, id, {from, to}, viewer] — id на позиції 3, хто питає — на 5. */
 function sameOwnerKey(key: QueryKey | undefined, owner: EntityType, id: Uuid | undefined, viewer: PublicViewer | null): boolean {
   return Array.isArray(key) && key[2] === owner && key[3] === id && key[5] === viewer;
@@ -92,7 +102,7 @@ export function usePublicSchedule(
   return useQuery({
     queryKey: qk.public.schedule(owner, id ?? '', from, to, viewer ?? 'guest'),
     queryFn: ({ signal }) =>
-      api.get<ScheduleDto>(publicSchedulePath(owner, id ?? ''), { from, to }, { signal, auth: viewer === 'staff' }),
+      api.get<ScheduleDto>(publicSchedulePath(owner, id ?? ''), { from, to }, { signal, auth: viewerAuth(viewer) }),
     enabled: enabled && viewer !== null && Boolean(id && from && to),
     // дані іншого глядача (персонал → гість після виходу) заглушкою не показуємо
     placeholderData: (previous, previousQuery) => (sameOwnerKey(previousQuery?.queryKey, owner, id, viewer) ? previous : undefined),
@@ -108,7 +118,7 @@ export function usePublicChanges(date: IsoDate, { refetchInterval }: { refetchIn
   const viewer = usePublicViewer();
   return useQuery({
     queryKey: qk.public.changes(date, viewer ?? 'guest'),
-    queryFn: ({ signal }) => api.get<PublicChangesDto>('/public/changes', { date }, { signal, auth: viewer === 'staff' }),
+    queryFn: ({ signal }) => api.get<PublicChangesDto>('/public/changes', { date }, { signal, auth: viewerAuth(viewer) }),
     enabled: viewer !== null,
     refetchInterval,
     networkMode: 'offlineFirst',
@@ -141,9 +151,13 @@ export function icsUrls(owner: IcsOwner, id: Uuid, origin: string = window.locat
   return { https, webcal: https.replace(/^https?:/, 'webcal:') };
 }
 
-/** Завантажує .ics через клієнт API (з тайм-аутом і розбором помилок) і віддає браузеру як файл. */
-export async function downloadIcs(owner: IcsOwner, id: Uuid, fileName: string): Promise<void> {
-  const blob = await api.blob(icsPath(owner, id), undefined, { auth: false });
+/**
+ * Завантажує .ics через клієнт API (з тайм-аутом і розбором помилок) і віддає браузеру як файл. Персонал
+ * завантажує з токеном — увесь семестр; гість — з тижня `publicHistoryFrom`. Підписка (`icsUrls`) токена не несе:
+ * календарі телефонів і Google його не надсилають.
+ */
+export async function downloadIcs(owner: IcsOwner, id: Uuid, fileName: string, viewer: PublicViewer | null): Promise<void> {
+  const blob = await api.blob(icsPath(owner, id), undefined, { auth: viewer === 'staff' });
   saveBlob(blob, fileName);
 }
 
@@ -175,27 +189,30 @@ const DOCUMENT_URL_TTL_MS = 10 * 60_000;
 /**
  * Файл розпорядження для персоналу — запитом з токеном (давні розпорядження сервер віддає лише так).
  * PDF і PNG відкриваються в новій вкладці, DOCX — завантажується. Вкладку відкриваємо одразу, у тому ж
- * натисканні (інакше браузер заблокує спливне вікно), а файл ставимо в неї, щойно він завантажився; якщо
- * вкладку не дали відкрити, файл просто зберігається. Помилку (і закриту порожню вкладку) отримує викликач.
+ * натисканні (інакше браузер заблокує спливне вікно), а файл ставимо в неї, щойно він завантажився. Якщо
+ * вкладку не дали відкрити, файл зберігається під назвою від сервера (як за звичайним посиланням гостя;
+ * `title` — лише коли сервер назви не дав). Людина закрила вкладку «Завантажуємо…» — це скасування: файл не
+ * зберігаємо. Помилку (і закриту порожню вкладку) отримує викликач.
  */
-export async function openOrderDocument(orderId: Uuid, format: DocumentFormat, fileName: string): Promise<void> {
+export async function openOrderDocument(orderId: Uuid, format: DocumentFormat, title: string): Promise<void> {
   const tab = format === 'docx' ? null : window.open('', '_blank');
   if (tab) {
-    tab.document.title = fileName;
+    tab.document.title = title;
     tab.document.body.textContent = 'Завантажуємо розпорядження…';
   }
-  let blob: Blob;
+  let file: File;
   try {
-    blob = await api.blob(`/documents/orders/${encodeURIComponent(orderId)}.${format}`, undefined, { timeoutMs: 60_000 });
+    file = await api.file(`/documents/orders/${encodeURIComponent(orderId)}.${format}`, undefined, { timeoutMs: 60_000 });
   } catch (error) {
     tab?.close();
     throw error;
   }
-  if (!tab || tab.closed) {
-    saveBlob(blob, fileName);
+  if (!tab) {
+    saveBlob(file, file.name || title);
     return;
   }
-  const url = URL.createObjectURL(blob);
+  if (tab.closed) return;
+  const url = URL.createObjectURL(file);
   // вкладка — лише для перегляду: без доступу до сторінки, що її відкрила
   tab.opener = null;
   tab.location.href = url;

@@ -31,10 +31,14 @@ export interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
-  /** Чи додавати токен (за замовчуванням так, якщо він є). */
-  auth?: boolean;
-  /** Як читати відповідь. За замовчуванням JSON (204 → undefined). */
-  responseType?: 'json' | 'blob' | 'text';
+  /**
+   * Чи додавати токен (за замовчуванням так, якщо він є). `'required'` — відповідь залежить від входу і
+   * кешується як відповідь персоналу: без дійсного токена (строк минув, оновити не вдалося) запит не йде як
+   * гостьовий, а завершується 401, як від сервера, — обробник 401 забуває токен, і сторінка перепитує як гість.
+   */
+  auth?: boolean | 'required';
+  /** Як читати відповідь. За замовчуванням JSON (204 → undefined); `file` — File з назвою від сервера. */
+  responseType?: 'json' | 'blob' | 'text' | 'file';
   /** Обмеження часу в мс (за замовчуванням 30 с). */
   timeoutMs?: number;
   /**
@@ -106,6 +110,33 @@ function combineSignals(timeoutMs: number, external?: AbortSignal): { signal: Ab
   return { signal: controller.signal, timedOut: () => didTimeout };
 }
 
+/**
+ * Назва файлу з `Content-Disposition`: `filename*=UTF-8''…` (RFC 6266) має перевагу над `filename="…"`.
+ * `null` — сервер назви не дав або заголовок не видно (інше походження без Access-Control-Expose-Headers).
+ */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const extended = /filename\*\s*=\s*[^']*'[^']*'([^;]+)/i.exec(header)?.[1]?.trim();
+  if (extended) {
+    try {
+      return decodeURIComponent(extended);
+    } catch {
+      // зіпсоване кодування — беремо звичайну назву
+    }
+  }
+  const plain = /filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]+))/i.exec(header);
+  const name = plain?.[1]?.replace(/\\(.)/g, '$1') ?? plain?.[2]?.trim();
+  return name || null;
+}
+
+/** 401: токен не прийнято або його немає — сторінка реагує (`onUnauthorized`), помилку отримує викликач. */
+function unauthorized(error: ApiError, method: string): ApiError {
+  // збереження, яке відхилили через вхід, не мовчить: після повторного входу буде пояснення
+  if (method !== 'GET') noteUnsavedChange();
+  unauthorizedHandler?.(error);
+  return error;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', query, body, signal, auth = true, responseType = 'json', timeoutMs = 30_000, keepalive } = options;
   const headers = new Headers(options.headers);
@@ -126,6 +157,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (auth) {
     const token = (await getAccessToken()) ?? MOCK_STAFF_TOKEN;
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    else if (auth === 'required') throw unauthorized(new ApiError({ status: 401, title: 'Сесія входу завершилася' }), method);
   }
 
   const { signal: combined, timedOut } = combineSignals(timeoutMs, signal);
@@ -140,18 +172,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     const error = await errorFromResponse(response);
-    if (error.isUnauthorized) {
-      // збереження, яке відхилили через вхід, не мовчить: після повторного входу буде пояснення
-      if (method !== 'GET') noteUnsavedChange();
-      unauthorizedHandler?.(error);
-    }
-    throw error;
+    throw error.isUnauthorized ? unauthorized(error, method) : error;
   }
   // відповідь могла прийти з кешу Service Worker, а не з сервера: сторінка має це сказати
   if (method === 'GET') noteResponseSource(buildUrl(path, query), response.headers);
 
   if (response.status === 204 || response.status === 205) return undefined as T;
   if (responseType === 'blob') return (await response.blob()) as T;
+  if (responseType === 'file') {
+    const blob = await response.blob();
+    return new File([blob], fileNameFromDisposition(response.headers.get('Content-Disposition')) ?? '', { type: blob.type }) as T;
+  }
   if (responseType === 'text') return (await response.text()) as T;
 
   const text = await response.text();
@@ -181,4 +212,7 @@ export const api = {
   /** Файл як Blob (DOCX/PDF/PNG розпорядження, ICS). */
   blob: (path: string, query?: QueryParams, options?: Omit<RequestOptions, 'method' | 'query' | 'responseType'>) =>
     apiRequest<Blob>(path, { ...options, method: 'GET', query, responseType: 'blob' }),
+  /** Файл як File: назва — з `Content-Disposition` відповіді, порожня, якщо сервер її не дав. */
+  file: (path: string, query?: QueryParams, options?: Omit<RequestOptions, 'method' | 'query' | 'responseType'>) =>
+    apiRequest<File>(path, { ...options, method: 'GET', query, responseType: 'file' }),
 };
