@@ -9,6 +9,7 @@ export const LIMITS = SETTINGS_LIMITS;
 
 const minutes = LIMITS.confirmTimeoutMinutes;
 const hours = LIMITS.hoursPerPair;
+const history = LIMITS.changesHistoryDays;
 
 export const settingsSchema = z.object({
   approvalMode: z.enum(['NOTIFY', 'CONFIRM', 'AUTO'], { error: 'Оберіть режим погодження замін' }),
@@ -38,6 +39,11 @@ export const settingsSchema = z.object({
     .min(hours.min, { error: `Від ${hours.min} до ${hours.max}` })
     .max(hours.max, { error: `Від ${hours.min} до ${hours.max}` }),
   showTeacherFullNames: z.boolean(),
+  changesHistoryDays: z
+    .number({ error: 'Вкажіть кількість днів' })
+    .int({ error: 'Лише ціле число днів' })
+    .min(history.min, { error: `Від ${history.min} до ${history.max} днів` })
+    .max(history.max, { error: `Від ${history.min} до ${history.max} днів` }),
   activeBellProfileId: z.string().nullable(),
 });
 

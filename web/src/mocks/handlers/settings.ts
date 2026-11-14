@@ -3,16 +3,19 @@
  * область публічних сторінок (handlers/public.ts), витрати ШІ — область імпорту (handlers/import.ts).
  */
 import { http, HttpResponse } from 'msw';
-import { DEFAULT_CONFIRM_TIMEOUT_MINUTES, SETTINGS_LIMITS } from '@/api/settings-limits';
-import type { ApprovalMode, FieldErrorDto, SettingsDto } from '@/api/types';
+import { DEFAULT_CHANGES_HISTORY_DAYS, DEFAULT_CONFIRM_TIMEOUT_MINUTES, SETTINGS_LIMITS } from '@/api/settings-limits';
+import type { ApprovalMode, FieldErrorDto, IsoDate, SettingsDto } from '@/api/types';
+import { addDays } from '@/lib/date';
 import { ACTIVE_BELL_PROFILE, BELL_PROFILES } from '../fixtures';
 import { apiPath, badRequest, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
-import { COLLEGE_NAME } from './meta';
+
+/** Назва з затвердження таблиці розкладу (R2: «Директор Вінницького технічного фахового коледжу»). */
+export const COLLEGE_NAME = 'Вінницький технічний фаховий коледж';
 
 /**
  * Початкові значення — типові значення core (V1_802): «Заступник директора з НР» / «Микола ПОЛІЩУК», 2 год на пару,
- * 120 хв. Режим погодження в моку — CONFIRM (у core типовий NOTIFY): демо-світ показує прохання, строки й
+ * 120 хв, історія замін для гостей — 7 днів. Режим погодження в моку — CONFIRM (у core типовий NOTIFY): демо-світ показує прохання, строки й
  * змодельовані відповіді в Telegram; NOTIFY вмикається на сторінці налаштувань.
  */
 const seed = (): SettingsDto => ({
@@ -23,6 +26,7 @@ const seed = (): SettingsDto => ({
   collegeName: COLLEGE_NAME,
   hoursPerPair: 2,
   showTeacherFullNames: false,
+  changesHistoryDays: DEFAULT_CHANGES_HISTORY_DAYS,
   activeBellProfileId: ACTIVE_BELL_PROFILE.id,
   version: 0,
 });
@@ -32,6 +36,11 @@ const settings = createMockStore<SettingsDto>(seed);
 /** Поточні налаштування — для інших областей мок-API (режим погодження замін, підписант розпорядження). */
 export function currentSettings(): SettingsDto {
   return settings.get();
+}
+
+/** Як у core: гість бачить заміни й розклад з дати «сьогодні мінус changesHistoryDays» (і все майбутнє). */
+export function publicHistoryFrom(today: IsoDate): IsoDate {
+  return addDays(today, -settings.get().changesHistoryDays);
 }
 
 const APPROVAL_MODES: readonly ApprovalMode[] = ['NOTIFY', 'CONFIRM', 'AUTO'];
@@ -77,6 +86,11 @@ export function validateSettings(body: Partial<Record<keyof SettingsDto, unknown
   if (typeof body.showTeacherFullNames !== 'boolean') {
     errors.push({ field: 'showTeacherFullNames', message: 'Має бути так або ні' });
   }
+  // старий клієнт поля не надсилає — тоді лишається збережене значення
+  const history = SETTINGS_LIMITS.changesHistoryDays;
+  if (body.changesHistoryDays !== undefined && body.changesHistoryDays !== null && !isInteger(body.changesHistoryDays, history.min, history.max)) {
+    errors.push({ field: 'changesHistoryDays', message: `Від ${history.min} до ${history.max} днів` });
+  }
   if (body.activeBellProfileId !== null && !BELL_PROFILES.some((p) => p.id === body.activeBellProfileId)) {
     errors.push({ field: 'activeBellProfileId', message: 'Такого профілю дзвінків немає' });
   }
@@ -108,6 +122,7 @@ export const handlers = [
       collegeName: (body.collegeName as string).trim(),
       hoursPerPair: body.hoursPerPair as number,
       showTeacherFullNames: body.showTeacherFullNames as boolean,
+      changesHistoryDays: (body.changesHistoryDays as number | null | undefined) ?? settings.get().changesHistoryDays,
       activeBellProfileId: (body.activeBellProfileId as string | null) ?? null,
       version: settings.get().version + 1,
     };

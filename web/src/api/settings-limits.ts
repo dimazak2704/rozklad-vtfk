@@ -8,7 +8,10 @@ export const SETTINGS_LIMITS = {
   signatoryPosition: 200,
   signatoryName: 100,
   collegeName: { min: 1, max: 200 },
+  changesHistoryDays: { min: 0, max: 365 },
 } as const;
 
 /** Типове очікування підтвердження заміни в core (хвилини), якщо його не змінювали (V1_802). */
 export const DEFAULT_CONFIRM_TIMEOUT_MINUTES = 120;
+/** Скільки днів назад гості бачать заміни й розклад, якщо налаштування не змінювали (як у core). */
+export const DEFAULT_CHANGES_HISTORY_DAYS = 7;

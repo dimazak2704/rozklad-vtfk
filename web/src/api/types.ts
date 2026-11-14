@@ -154,6 +154,8 @@ export interface ProblemDetail {
   code?: string;
   /** Ідентифікатор запиту для пошуку в журналах (є в усіх сервісів). */
   requestId?: string;
+  /** Лише в 404 `history-not-public`: з якої дати гість бачить заміни й розклад (як у meta). */
+  publicHistoryFrom?: IsoDate;
 }
 
 export interface PageQuery {
@@ -201,6 +203,12 @@ export interface PublicMetaDto {
   now?: string;
   /** Лише на тестовому стенді з переведеним часом (ROZKLAD_STAND_TIME); інакше поля немає. */
   standTime?: true;
+  /**
+   * З якої дати гість (без входу) бачить заміни й розпорядження: сьогодні core мінус `changesHistoryDays`;
+   * розклад — з понеділка тижня цієї дати; майбутнє — завжди. Однакове для всіх, персонал (ADMIN, TEACHER з
+   * токеном) обмежень не має. Старіший core поля не віддає — тоді сайт нічого не обмежує.
+   */
+  publicHistoryFrom?: IsoDate;
 }
 
 /** Навчальний день з тижнем: `weekday` ISO 1..5. */
@@ -1193,6 +1201,11 @@ export interface SettingsDto {
   collegeName: string;
   hoursPerPair: number;
   showTeacherFullNames: boolean;
+  /**
+   * Скільки днів назад гості бачать заміни, розпорядження й розклад (0..365, типово 7; 0 — лише від сьогодні).
+   * PUT без поля (старий клієнт) лишає збережене значення.
+   */
+  changesHistoryDays: number;
   activeBellProfileId: Nullable<Uuid>;
   /** Версія налаштувань з GET; PUT зі старішою — 409 `stale-data` (хтось зберіг раніше). */
   version: number;

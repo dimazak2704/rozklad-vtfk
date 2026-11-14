@@ -327,9 +327,52 @@ describe('налаштування', () => {
     collegeName: 'Вінницький технічний фаховий коледж',
     hoursPerPair: 2,
     showTeacherFullNames: false,
+    changesHistoryDays: 7,
     activeBellProfileId: null,
     version: 0,
   };
+
+  it('історія замін для відвідувачів: степпер від 0 до 365 днів, одиниця — у підписі, значення йде на сервер', async () => {
+    let sent: unknown;
+    server.use(
+      http.put(apiPath('/admin/settings'), async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ ...settings, ...(sent as object), version: 1 });
+      }),
+    );
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(
+      <SettingsForm settings={{ ...settings, changesHistoryDays: 0 }} guardNavigation={false} numbering={null} ai={null} />,
+    );
+    const days = screen.getByRole('spinbutton', { name: /^Історія замін для відвідувачів, днів/ });
+    expect(days).toHaveValue('0');
+    expect(days).toHaveAttribute('aria-valuemin', '0');
+    expect(days).toHaveAttribute('aria-valuemax', '365');
+    // у центрі степпера лише число: «днів» стоїть у підписі поля
+    expect(days.parentElement).not.toHaveTextContent(/дн/);
+    const stepper = within(days.parentElement as HTMLElement);
+    expect(stepper.getByRole('button', { name: 'Зменшити' })).toBeDisabled();
+    await user.click(stepper.getByRole('button', { name: 'Збільшити' }));
+    expect(days).toHaveValue('1');
+
+    // більше за межу не ввести: при виході з поля значення стає 365, і «+» вимикається
+    await user.clear(days);
+    await user.type(days, '400');
+    await user.tab();
+    expect(days).toHaveValue('365');
+    expect(stepper.getByRole('button', { name: 'Збільшити' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+    await waitFor(() => expect(sent).toMatchObject({ changesHistoryDays: 365 }));
+    unmount();
+
+    renderWithProviders(<SettingsForm settings={{ ...settings, changesHistoryDays: 365 }} guardNavigation={false} numbering={null} ai={null} />);
+    const top = screen.getByRole('spinbutton', { name: /^Історія замін для відвідувачів, днів/ });
+    expect(within(top.parentElement as HTMLElement).getByRole('button', { name: 'Збільшити' })).toBeDisabled();
+    await user.clear(top);
+    await user.type(top, '-3');
+    await user.tab();
+    expect(top).toHaveValue('0');
+  });
 
   it('перевіряє поля до відправки й показує живий підпис', async () => {
     const user = userEvent.setup();

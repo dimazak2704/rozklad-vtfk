@@ -272,6 +272,27 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
             />
           )}
         />
+        <Field
+          label="Історія замін для відвідувачів, днів"
+          hint="Скільки днів назад без входу видно заміни, розпорядження й розклад; 0 — лише від сьогодні. Майбутні дні видно завжди, працівники після входу бачать увесь архів."
+          error={formState.errors.changesHistoryDays?.message}
+          required
+        >
+          <Controller
+            control={control}
+            name="changesHistoryDays"
+            render={({ field }) => (
+              <NumberInput
+                value={Number.isNaN(field.value) ? null : field.value}
+                onValueChange={(value) => field.onChange(value ?? Number.NaN)}
+                onBlur={field.onBlur}
+                min={LIMITS.changesHistoryDays.min}
+                max={LIMITS.changesHistoryDays.max}
+                className="w-36"
+              />
+            )}
+          />
+        </Field>
       </SettingsSection>
 
       <SettingsSection id="ai" title="ШІ" description="Розбір відсутностей з повідомлень у боті й розпізнавання документів під час імпорту.">
