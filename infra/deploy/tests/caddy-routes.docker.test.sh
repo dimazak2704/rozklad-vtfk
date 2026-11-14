@@ -13,13 +13,13 @@ caddy_dir="$(cd "${CADDY_DIR:-$here/../caddy}" && pwd)"
 mount=$caddy_dir
 if command -v cygpath >/dev/null 2>&1; then mount=$(cygpath -w "$caddy_dir"); fi
 image=$(sed -n 's/^ *image: \(caddy:.*\)$/\1/p' "$here/../compose.prod.yml" | head -n 1)
-name="rozklad-caddy-test-$$"
+container="rozklad-caddy-test-$$"
 
-MSYS_NO_PATHCONV=1 docker run -d --rm --name "$name" \
+MSYS_NO_PATHCONV=1 docker run -d --rm --name "$container" \
   -e DOMAIN=http://caddy.test -e ACME_EMAIL=ci@example.org \
   -p 127.0.0.1::80 -v "$mount:/etc/caddy:ro" "$image" >/dev/null || { echo "cannot start $image"; exit 1; }
-trap 'docker rm -f "$name" >/dev/null 2>&1' EXIT
-port=$(docker port "$name" 80/tcp | head -n 1 | sed 's/.*://')
+trap 'docker rm -f "$container" >/dev/null 2>&1' EXIT
+port=$(docker port "$container" 80/tcp | head -n 1 | sed 's/.*://')
 
 code() { curl -s -o /dev/null --path-as-is --max-time 10 -w '%{http_code}' -H 'Host: caddy.test' "http://127.0.0.1:$port$1"; }
 for _ in $(seq 1 50); do
