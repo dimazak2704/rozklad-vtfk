@@ -220,6 +220,28 @@ class DeliveryWorkerIT extends IntegrationTest {
         });
     }
 
+    /**
+     * A chat with two bindings loses the sensitive one (a teacher chat the dispatcher removed): what was queued
+     * for that binding is not sent, though the chat keeps its subscription; the subscription's own messages go.
+     */
+    @Test
+    void messageForADeletedBindingIsNotSentThroughAnotherBindingOfTheChat() {
+        ChatBinding teacher = teacherChat(5501, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        ChatBinding subscription = subscriber(5501, CoreFixtures.GROUP_4KI1, "4КІ1");
+        UUID forTeacher = queue(teacher, "прохання викладачу");
+        UUID forSubscriber = queue(subscription, "розклад групи");
+        bindings.delete(teacher.getId());
+
+        worker.drain();
+
+        assertThat(messages.findById(forTeacher).orElseThrow()).satisfies(message -> {
+            assertThat(message.getStatus()).isEqualTo(OutboundStatus.FAILED);
+            assertThat(message.getLastError()).isEqualTo("Чат більше не прив’язаний до бота.");
+        });
+        assertThat(messages.findById(forSubscriber).orElseThrow().getStatus()).isEqualTo(OutboundStatus.SENT);
+        assertThat(telegram.sentTo(5501)).extracting(Sent::text).containsExactly("розклад групи");
+    }
+
     private UUID queue(ChatBinding binding, String text) {
         List<OutboundMessage> queued = outbox.enqueue(OutboundDraft.text(Recipient.of(binding),
                 DeliveryPurpose.ORDER_GROUP, text));

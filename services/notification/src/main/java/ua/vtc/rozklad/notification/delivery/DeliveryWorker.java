@@ -96,7 +96,7 @@ public class DeliveryWorker implements SmartLifecycle {
             count("stale");
             return;
         }
-        if (!bindings.isKnownChat(message.getChatId())) {
+        if (!stillBound(message)) {
             recorder.markFailed(id, "Чат більше не прив’язаний до бота.", false, now);
             count("unbound");
             return;
@@ -128,6 +128,17 @@ public class DeliveryWorker implements SmartLifecycle {
             apply(message, retryPolicy.onTransientFailure(message.getAttempts() + 1, clock.instant()),
                     "Помилка підготовки повідомлення: " + e.getMessage());
         }
+    }
+
+    /**
+     * The binding the message was queued for must still exist for this chat: a chat that also has another
+     * binding (a subscription next to a removed teacher or service binding) must not get what was meant for the
+     * removed one. Rows without a binding id (none are written today) fall back to «the chat is known».
+     */
+    private boolean stillBound(OutboundMessage message) {
+        return message.getBindingId() != null
+                ? bindings.isStillBound(message.getBindingId(), message.getChatId())
+                : bindings.isKnownChat(message.getChatId());
     }
 
     private Optional<String> obsoleteReason(OutboundMessage message) {

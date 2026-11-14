@@ -382,9 +382,10 @@ public class SubstitutionRequests implements OutboundRelevance {
         return request.isConfirmedRequest() ? Optional.empty() : Optional.of(NOT_IN_FORCE);
     }
 
+    /** The chat is no longer this teacher's: bound to another teacher, or not a teacher chat at all any more. */
     private boolean reassigned(SubstitutionRequest request, long chatId) {
         Optional<UUID> chatTeacher = bindings.teacherBinding(chatId).map(ChatBinding::getTeacherId);
-        return chatTeacher.isPresent() && !chatTeacher.get().equals(request.getTeacherId());
+        return chatTeacher.isEmpty() || !chatTeacher.get().equals(request.getTeacherId());
     }
 
     /**
