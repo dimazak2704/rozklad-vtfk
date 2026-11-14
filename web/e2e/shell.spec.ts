@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { loginWithMockRoles } from './support/mock-auth';
 
 // Dev-сервер компілює модулі на льоту: перший запуск сторінки буває повільним
 test.describe.configure({ timeout: 60_000 });
@@ -60,6 +61,34 @@ test.describe('оболонка публічного сайту', () => {
     await expect(page).toHaveURL(/\/login\?returnTo=%2Fadmin%2Forders|\/auth\/oauth2\/authorize\?|\/auth\/login$/, {
       timeout: 30_000,
     });
+  });
+});
+
+test.describe('позначка часу стенда в шапці', () => {
+  /** Мок віддає standTime, як стенд із переведеним годинником (src/mocks/handlers/meta.ts). */
+  async function standTime(page: Page): Promise<void> {
+    await page.addInitScript(() => window.localStorage.setItem('rozklad.mock.stand-time', '2026-11-20T10:12+02:00'));
+  }
+
+  async function expectNoHorizontalScroll(page: Page): Promise<void> {
+    await expect(page.locator('[data-stand-time]').first()).toBeVisible({ timeout: 30_000 });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  }
+
+  test('гість: позначка й «Увійти» вміщаються в шапку без горизонтальної прокрутки', async ({ page }) => {
+    await standTime(page);
+    await openApp(page, '/');
+    await expectNoHorizontalScroll(page);
+    await expect(page.getByRole('link', { name: 'Увійти' })).toBeInViewport({ ratio: 1 });
+  });
+
+  test('викладач: позначка й аватар вміщаються в шапку кабінету', async ({ page }) => {
+    await standTime(page);
+    await loginWithMockRoles(page, 'TEACHER');
+    await openApp(page, '/me');
+    await expectNoHorizontalScroll(page);
+    await expect(page.locator('header').getByRole('button').last()).toBeInViewport({ ratio: 1 });
   });
 });
 

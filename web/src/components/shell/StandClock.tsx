@@ -28,7 +28,8 @@ export function ClockEpoch({ children }: { children: ReactNode }) {
 
 /**
  * Тиха позначка в шапці, лише на тестовому стенді з переведеним часом: щоб ніхто не плутав «пʼятницю 10:00»
- * на екрані зі справжнім часом. У звичайному режимі її немає.
+ * на екрані зі справжнім часом. У звичайному режимі її немає. Вужче за 640 px — лише час («10:12»), повний
+ * текст — для екранного читача.
  */
 export function StandTimeBadge({ className }: { className?: string }) {
   const { standTime } = useClockState();
@@ -41,12 +42,16 @@ export function StandTimeBadge({ className }: { className?: string }) {
     <Badge
       tone="neutral"
       data-stand-time=""
-      icon={<Clock3 aria-hidden="true" className="size-3.5 shrink-0" />}
+      icon={<Clock3 aria-hidden="true" className="hidden size-3.5 shrink-0 sm:block" />}
       title="Тестовий стенд: годинник переведено, сайт і сервер живуть у цьому дні й часі"
       className={cn('shrink-0', className)}
     >
       <span className="sr-only">{full}</span>
-      <span aria-hidden="true" className="figures xl:hidden">
+      {/* телефон: лише час, без значка — поруч «Увійти» чи аватар, і шапка не має виходити за екран */}
+      <span aria-hidden="true" className="figures sm:hidden">
+        {time}
+      </span>
+      <span aria-hidden="true" className="figures hidden sm:inline xl:hidden">
         {weekday} {time} · тест
       </span>
       <span aria-hidden="true" className="figures hidden xl:inline">
