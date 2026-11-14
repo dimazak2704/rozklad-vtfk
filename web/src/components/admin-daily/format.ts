@@ -1,6 +1,6 @@
 /** Підписи для екранів щоденної роботи: пари, періоди відсутності, джерела, суми. */
-import type { AbsenceDto, AbsenceSource, ChangeDto, ReasonCode } from '@/api/types';
-import { formatDateRange } from '@/lib/date';
+import type { AbsenceDto, AbsenceSource, ChangeDto, IsoDate, ReasonCode } from '@/api/types';
+import { formatDateRange, formatInstantTime, parseIsoDate, todayInKyiv } from '@/lib/date';
 import { countLabel, PAIR_FORMS_GEN, REASON_CODE_HINT } from '@/lib/labels';
 
 const PAIRS_FORMS = ['пара', 'пари', 'пар'] as const;
@@ -89,4 +89,17 @@ const USD = new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'USD',
 /** Сума в доларах для витрат ШІ одним форматом на весь застосунок: «0,03 $», «2,00 $» — до центів. */
 export function usd(value: number): string {
   return USD.format(value);
+}
+
+/**
+ * Коли сталася подія (відповідь викладача тощо): сьогодні — «о 01:15», іншого дня — «14.11 о 01:15»,
+ * іншого року — «14.11.2025 о 01:15». «Сьогодні» — за годинником застосунку (час стенда в dev).
+ */
+export function momentText(instant: string, today: IsoDate = todayInKyiv()): string {
+  const time = `о ${formatInstantTime(instant)}`;
+  const day = todayInKyiv(new Date(instant));
+  if (day === today) return time;
+  const { year, month, day: dayOfMonth } = parseIsoDate(day);
+  const dayMonth = `${String(dayOfMonth).padStart(2, '0')}.${String(month).padStart(2, '0')}`;
+  return `${year === parseIsoDate(today).year ? dayMonth : `${dayMonth}.${year}`} ${time}`;
 }

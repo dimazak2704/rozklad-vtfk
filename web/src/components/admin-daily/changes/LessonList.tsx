@@ -4,19 +4,20 @@ import type { AbsenceDto, ChangeDto, Uuid } from '@/api/types';
 import { HoverCard, HoverCardContent, HoverCardTrigger, MoreMenu } from '@/components/ui';
 import { LessonDetails } from '@/components/schedule';
 import { cn } from '@/lib/cn';
-import { formatInstantTime, formatWeekdayDate } from '@/lib/date';
+import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { ABSENCE_REASON_LABEL } from '@/lib/labels';
-import { ABSENCE_SOURCE_TEXT, absencePeriod, decisionSummary } from '../format';
+import { formatTeacherName } from '@/lib/teacher-name';
+import { ABSENCE_SOURCE_TEXT, absencePeriod, decisionSummary, momentText } from '../format';
 import { lessonButtonId, noticeAnswer, type LessonEntry, type TeacherGroup } from '../model';
 import { PendingCountdown, StateText } from '../StateBadge';
 
-/** Хто відмовився і коли — тихий рядок аудиту під станом пари. */
+/** Хто відмовився і коли — тихий рядок аудиту під станом пари; відмова не сьогодні — з датою. */
 function declinedLine(change: ChangeDto | null): string | null {
   if (!change) return null;
   const last = [...change.history].reverse().find((step) => step.to === 'DECLINED');
   if (!last) return null;
-  return `${change.new.teacher?.shortName ?? 'Викладач'} відмовився о ${formatInstantTime(last.at)}`;
+  return `${change.new.teacher ? formatTeacherName(change.new.teacher, 'grid') : 'Викладач'} відмовився ${momentText(last.at)}`;
 }
 
 /** Стан пари одним рядком: слово стану, далі — що саме вирішено. */
