@@ -49,7 +49,8 @@ class ClientRegistrationsTest {
 
         assertThat(core.getClientSecret()).isEqualTo("{enc}dev-core-auth-secret");
         assertThat(core.getAuthorizationGrantTypes()).containsExactly(AuthorizationGrantType.CLIENT_CREDENTIALS);
-        assertThat(core.getClientAuthenticationMethods()).contains(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+        // лише Basic: секрет у тілі запиту відхиляється ще до BCrypt
+        assertThat(core.getClientAuthenticationMethods()).containsExactly(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
         assertThat(core.getScopes()).containsExactly("accounts.manage");
         assertThat(core.getTokenSettings().getAccessTokenTimeToLive()).isEqualTo(Duration.ofMinutes(5));
         // імпортер без секрету не реєструється

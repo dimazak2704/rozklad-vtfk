@@ -7,7 +7,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.stereotype.Component;
@@ -16,8 +15,9 @@ import ua.vtc.rozklad.auth.config.AuthServerProperties;
 
 /**
  * At startup makes {@code oauth2_registered_client} equal to the configuration: upserts the clients of
- * {@link ClientRegistrations} (secrets re-encoded, so rotating a secret is "change env, restart") and removes
- * the others together with their authorizations, e.g. {@code rozklad-cli} once {@code AUTH_CLI_ENABLED} is off.
+ * {@link ClientRegistrations} (secrets re-encoded with {@link ClientSecrets}, so rotating a secret is "change env,
+ * restart" and an older cost-12 hash becomes cost 4) and removes the others together with their authorizations,
+ * e.g. {@code rozklad-cli} once {@code AUTH_CLI_ENABLED} is off.
  * Readiness turns UP only after runners, so no request meets a half-synchronised table.
  */
 @Component
@@ -27,14 +27,12 @@ public class RegisteredClientSynchronizer implements ApplicationRunner, Ordered 
 
     private final RegisteredClientRepository repository;
     private final JdbcClient jdbc;
-    private final PasswordEncoder passwordEncoder;
     private final AuthServerProperties properties;
 
     public RegisteredClientSynchronizer(RegisteredClientRepository repository, JdbcClient jdbc,
-            PasswordEncoder passwordEncoder, AuthServerProperties properties) {
+            AuthServerProperties properties) {
         this.repository = repository;
         this.jdbc = jdbc;
-        this.passwordEncoder = passwordEncoder;
         this.properties = properties;
     }
 
@@ -51,7 +49,7 @@ public class RegisteredClientSynchronizer implements ApplicationRunner, Ordered 
 
     @Transactional
     public void synchronise() {
-        List<RegisteredClient> clients = ClientRegistrations.build(properties, passwordEncoder::encode);
+        List<RegisteredClient> clients = ClientRegistrations.build(properties, ClientSecrets.encoder()::encode);
         clients.forEach(repository::save);
         String[] ids = clients.stream().map(RegisteredClient::getId).toArray(String[]::new);
         int authorizations = jdbc.sql("DELETE FROM oauth2_authorization WHERE NOT (registered_client_id = ANY(?))")

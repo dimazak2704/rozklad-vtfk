@@ -8,6 +8,7 @@ import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 import ua.vtc.rozklad.auth.support.AuthIntegrationTest;
 import ua.vtc.rozklad.auth.support.Browser;
@@ -27,6 +28,9 @@ class ClientCredentialsIT {
 
     @Autowired
     private TestAccounts accounts;
+
+    @Autowired
+    private JdbcClient jdbc;
 
     @Test
     void notificationGetsAServiceTokenWithTheSubjectAndActorItExpects() {
@@ -57,6 +61,30 @@ class ClientCredentialsIT {
 
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(response.body()).contains("invalid_client");
+    }
+
+    /** Only {@code client_secret_basic}: a secret in the body is refused before the hash is checked. */
+    @Test
+    void aSecretInTheBodyIsRefusedEvenWhenItIsRight() {
+        HttpResponse<String> response = browsers.open().postForm("/auth/oauth2/token", Map.of(
+                "grant_type", "client_credentials", "client_id", "rozklad-importer",
+                "client_secret", AuthIntegrationTest.IMPORTER_SECRET));
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.body()).contains("invalid_client");
+    }
+
+    /**
+     * The public token, introspection and revocation endpoints check a presented secret first, so its hash must
+     * be cheap: BCrypt cost 4, and a successful check does not re-encode it with the account passwords' cost 12.
+     */
+    @Test
+    void serviceSecretsKeepACheapHashAfterUse() {
+        token("rozklad-core", AuthIntegrationTest.CORE_SECRET, "accounts.manage");
+
+        assertThat(jdbc.sql("SELECT client_secret FROM oauth2_registered_client WHERE client_id = 'rozklad-core'")
+                .query(String.class).single()).startsWith("{bcrypt}$2a$04$");
+        assertThat(tokenResponse("rozklad-core", "wrong-secret", null).statusCode()).isEqualTo(401);
     }
 
     @Test

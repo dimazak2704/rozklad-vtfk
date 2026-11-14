@@ -32,6 +32,13 @@ Clients are written to the database at every start from `app.auth.*` (`Registere
 service client with an empty secret is not registered, and a client that left the configuration is removed.
 There is no password grant and no refresh token for the SPA.
 
+Service clients authenticate only with `client_secret_basic`: a secret in the body is refused before any hash
+is checked. Their secrets are stored with BCrypt cost 4 (`ClientSecrets`), not the cost 12 of passwords: the
+token, introspection and revocation endpoints are public and check a presented secret first, so a wrong
+secret must cost about a millisecond of CPU, not a quarter of a second. That is safe because the secrets are
+random and at least 32 characters long in production (`gen-secrets.sh`, `ProdGuard`); the provider never
+re-encodes a stored hash, and the synchroniser rewrites older cost-12 rows at the next start.
+
 ## Tokens
 
 - **Access token** (JWT, RS256, `kid` of the signing key): `iss`, `sub` = account id (UUID; for services the
@@ -118,12 +125,13 @@ published during a rotation. Server runbook: `docs/DEPLOY.md`.
 With an https issuer `auth` refuses to start when: there is no signing key file; the session cookie is not
 `Secure`; `PUBLIC_WEB_URL`, a web origin or a CORS origin is http or localhost; the development demo seed or
 the Google mock is on; Google endpoints are overridden; Google is on without a hosted domain; a client secret
-is a known development value.
+is a known development value; a service client secret is shorter than 32 characters.
 
 ## Tests
 
 Unit: `PasswordPolicyTest`, `LockoutPolicyTest`, `TokenClaimsCustomizerTest`, `SigningKeyLoaderTest`,
-`CspHeaderTest`, `ProdGuardTest`, `ClientRegistrationsTest`, `SilentAuthorizeRequestTest`, `GoogleUnitsTest`.
+`CspHeaderTest`, `ProdGuardTest`, `ClientRegistrationsTest`, `ClientSecretsTest`, `SilentAuthorizeRequestTest`,
+`GoogleUnitsTest`, `LoginUnitsTest`, `LoginThrottleFilterTest`.
 ITs (Testcontainers PostgreSQL, real HTTP): `DiscoveryIT`, `AuthorizationCodeFlowIT`, `PasswordLoginIT`,
 `LockoutIT`, `ClientCredentialsIT`, `JdbcAuthorizationRoundTripIT`, `LogoutIT`, `SessionIT`, `LoginPageIT`,
 `GoogleLoginIT` (in-process mock provider), `InternalAccountsApiIT`, `LastAdminIT`, `AccountSchemaIT`,

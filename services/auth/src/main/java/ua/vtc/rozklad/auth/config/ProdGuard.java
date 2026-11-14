@@ -18,6 +18,12 @@ import org.springframework.util.StringUtils;
 @Component
 public class ProdGuard implements InitializingBean {
 
+    /**
+     * The shortest service client secret in production: they are hashed with a low BCrypt cost (the public token
+     * endpoint checks them first), which is safe only for long random values; gen-secrets.sh makes 32 characters.
+     */
+    static final int MIN_SERVICE_SECRET_LENGTH = 32;
+
     /** Development values from {@code .env.example} and the dev compose file. */
     static final Set<String> DEV_SECRETS = Set.of(
             "dev-notification-secret", "dev-importer-secret", "dev-core-auth-secret", "dev-core-admin-secret",
@@ -90,9 +96,15 @@ public class ProdGuard implements InitializingBean {
             violations.add("the Google client secret is a known development value");
         }
         for (Map.Entry<String, AuthServerProperties.ServiceClient> client : properties.serviceClients().entrySet()) {
-            String secret = client.getValue().secret();
-            if (secret != null && DEV_SECRETS.contains(secret.strip())) {
+            if (!client.getValue().configured()) {
+                continue;
+            }
+            String secret = client.getValue().secret().strip();
+            if (DEV_SECRETS.contains(secret)) {
                 violations.add("the secret of " + client.getKey() + " is a known development value");
+            } else if (secret.length() < MIN_SERVICE_SECRET_LENGTH) {
+                violations.add("the secret of " + client.getKey() + " is shorter than " + MIN_SERVICE_SECRET_LENGTH
+                        + " characters (gen-secrets.sh makes random ones of that length)");
             }
         }
         return violations;

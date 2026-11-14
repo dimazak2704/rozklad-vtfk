@@ -32,8 +32,8 @@ public final class PropertiesFixture {
                 .corsOrigins(List.of())
                 .signingKey(new AuthServerProperties.SigningKey("/run/secrets/auth-signing-key.pem", "2026-11-a", null,
                         null))
-                .serviceClients(Map.of("rozklad-notification", new ServiceClient("s3cr3t-random-1", Set.of("SERVICE"),
-                        Set.of())));
+                .serviceClients(Map.of("rozklad-notification",
+                        new ServiceClient("test-only-notification-secret-32", Set.of("SERVICE"), Set.of())));
     }
 
     public static final class Builder {

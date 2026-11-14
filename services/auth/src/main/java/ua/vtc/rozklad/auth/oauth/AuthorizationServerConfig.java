@@ -46,6 +46,8 @@ public class AuthorizationServerConfig {
                 .oauth2AuthorizationServer(as -> {
                     http.securityMatcher(as.getEndpointsMatcher());
                     as.registeredClientRepository(clients)
+                            // секрети сервісів — дешевий хеш (ClientSecrets), а не BCrypt 12 паролів людей
+                            .clientAuthentication(client -> client.authenticationProviders(ClientSecrets::useIn))
                             .authorizationService(authorizations)
                             .authorizationConsentService(consents)
                             .oidc(oidc -> oidc.logoutEndpoint(logout ->

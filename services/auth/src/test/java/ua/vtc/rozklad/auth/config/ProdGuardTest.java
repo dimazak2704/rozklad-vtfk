@@ -69,6 +69,17 @@ class ProdGuardTest {
                 .allSatisfy(v -> assertThat(v).contains("known development value"));
     }
 
+    /** Service secrets are hashed cheaply (the public token endpoint checks them first), so they must be long. */
+    @Test
+    void shortServiceSecretsAreRefused() {
+        var properties = PropertiesFixture.prod().serviceClients(Map.of(
+                "rozklad-core", new ServiceClient("only-twenty-one-chars", Set.of(), Set.of("accounts.manage")),
+                "rozklad-importer", new ServiceClient("", Set.of("SERVICE"), Set.of()))).build();
+
+        assertThat(ProdGuard.violations(properties, true)).singleElement().asString()
+                .contains("rozklad-core").contains("32");
+    }
+
     @Test
     void startupFailsWithEveryViolationListed() {
         var guard = new ProdGuard(PropertiesFixture.prod().demoSeed(true)

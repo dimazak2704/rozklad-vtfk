@@ -107,8 +107,8 @@ public final class ClientRegistrations {
                 .clientId(clientId)
                 .clientName(clientId)
                 .clientSecret(encodeSecret.apply(config.secret()))
+                // лише Basic: секрет у тілі (client_secret_post) Spring AS відхиляє ще до перевірки хешу
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).build())
                 .tokenSettings(TokenSettings.builder()
