@@ -407,3 +407,11 @@ Vision extraction target: rows {discipline, semester, hoursPerWeek, hoursPerSeme
 - Calendar periods from order notes (practice 2КІ3 19.10–30.10.2026; 3rd course online 01.09–31.10.2026;
   4КІ online 01.09–31.10.2026), autumn holidays 2026-10-26…2026-10-30 are NOT assumed (unknown) — leave none.
 - Demo accounts linked to teachers «Кренцін» and «Непийвода». A few demo absences/changes reproducing order №35.
+
+## 13. Open questions
+
+Asked in `../Питання до навчальної частини.md` (outside the repo); until answered the system keeps the current
+behaviour. Each could become a setting once the college confirms a rule:
+- How far ahead a teacher may report an absence. Now: from today up to a year (`ValidDateRange.MAX_DAYS`).
+- Until when a teacher may answer «Не можу». Now: until the order is published (§7, NOTIFY).
+- How far forecast may differ from plan before a warning. Now: ±2 hours (`HoursLedger.TOLERANCE_HOURS`, §9).
