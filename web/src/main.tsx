@@ -5,6 +5,7 @@ import '@fontsource-variable/geologica/wght.css';
 import './styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { dropAuthorizedCopies } from './api/public-api-cache';
 import { App } from './app/App';
 
 /**
@@ -23,6 +24,9 @@ window.addEventListener('load', () => {
   // сторінка завантажилась нормально — наступне оновлення сайту знову може перезавантажити її раз
   window.setTimeout(() => sessionStorage.removeItem(RELOADED_KEY), 10_000);
 });
+
+// попередні збірки PWA зберігали в кеші запити персоналу разом із токеном — прибираємо їх (копії гостя лишаються)
+void dropAuthorizedCopies();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Не знайдено елемент #root');

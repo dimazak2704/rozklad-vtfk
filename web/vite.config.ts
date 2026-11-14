@@ -8,6 +8,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { offlineShellPlugin } from './src/api/offline-shell-plugin.ts';
 import { isCachedPageNavigation } from './src/api/page-cache-route.ts';
+import { isCachedPublicApiRequest, PUBLIC_API_CACHE } from './src/api/public-api-cache.ts';
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -86,11 +87,12 @@ function pwa(): Plugin[] {
           options: { cacheName: 'rozklad-assets', expiration: { maxEntries: 250, maxAgeSeconds: 60 * DAY_SECONDS } },
         },
         {
-          urlPattern: ({ url, sameOrigin }) =>
-            sameOrigin && /^\/api\/public\/(meta|groups|teachers|rooms|bells|schedule|changes)(\/|$)/.test(url.pathname),
+          // запит з токеном (персонал: архів розкладу й замін) маршрут не бере — він іде в мережу й не зберігається,
+          // інакше токен лежав би в Cache Storage після виходу
+          urlPattern: isCachedPublicApiRequest,
           handler: 'NetworkFirst',
           options: {
-            cacheName: 'rozklad-public-api',
+            cacheName: PUBLIC_API_CACHE,
             networkTimeoutSeconds: 5,
             expiration: { maxEntries: 120, maxAgeSeconds: 21 * DAY_SECONDS },
             cacheableResponse: { statuses: [200] },

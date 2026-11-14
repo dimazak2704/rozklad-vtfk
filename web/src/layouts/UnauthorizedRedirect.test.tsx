@@ -7,6 +7,7 @@ import { UnauthorizedRedirect } from './RootLayout';
 const mocks = vi.hoisted(() => ({
   handler: null as ((error: unknown) => void) | null,
   removeUser: vi.fn(() => Promise.resolve()),
+  dropAuthorizedCopies: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/api/client', () => ({
@@ -16,6 +17,7 @@ vi.mock('@/api/client', () => ({
   },
 }));
 vi.mock('@/auth/userManager', () => ({ userManager: { removeUser: mocks.removeUser } }));
+vi.mock('@/api/public-api-cache', () => ({ dropAuthorizedCopies: mocks.dropAuthorizedCopies }));
 
 function Location() {
   const location = useLocation();
@@ -36,6 +38,7 @@ function renderAt(path: string) {
 describe('UnauthorizedRedirect', () => {
   beforeEach(() => {
     mocks.removeUser.mockClear();
+    mocks.dropAuthorizedCopies.mockClear();
     window.sessionStorage.clear();
   });
 
@@ -51,6 +54,8 @@ describe('UnauthorizedRedirect', () => {
       expect(screen.getByTestId('location')).toHaveTextContent('/login?returnTo=%2Fadmin%2Fchanges%3Fdate%3D2026-10-19'),
     );
     expect(mocks.removeUser).toHaveBeenCalledTimes(1);
+    // відповіді з токеном, які зберегли попередні збірки PWA, теж забуваються
+    expect(mocks.dropAuthorizedCopies).toHaveBeenCalledTimes(1);
   });
 
   it('запізнілі 401 сторінки після переходу на вхід не рахуються другою відмовою', async () => {
@@ -79,6 +84,7 @@ describe('UnauthorizedRedirect', () => {
     renderAt('/changes?date=2026-10-19');
     act(() => mocks.handler?.(new ApiError({ status: 401, title: 'Потрібна автентифікація' })));
     await waitFor(() => expect(mocks.removeUser).toHaveBeenCalledTimes(1));
+    expect(mocks.dropAuthorizedCopies).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('location')).toHaveTextContent('/changes?date=2026-10-19');
     // це не повторна відмова при вході: автоматичний вхід на захищених сторінках не зупиняється
     expect(window.sessionStorage.getItem('rozklad.auth.rejectedAt')).toBeNull();

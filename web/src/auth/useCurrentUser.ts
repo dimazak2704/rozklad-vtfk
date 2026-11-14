@@ -1,5 +1,6 @@
 import { useContext, useMemo } from 'react';
 import { AuthContext } from 'react-oidc-context';
+import { dropAuthorizedCopies } from '@/api/public-api-cache';
 import type { Role } from '@/api/types';
 import { DEV_ROLES } from './devUser';
 import { rolesFromAccessToken } from './roles';
@@ -53,6 +54,8 @@ export function useCurrentUser(): CurrentUserState {
       await auth.signinRedirect({ state });
     };
     const signOut = async () => {
+      // до переходу на сервіс входу: відповіді з токеном, які зберегли попередні збірки PWA, не лишаються на пристрої
+      await dropAuthorizedCopies();
       await auth?.signoutRedirect();
     };
 

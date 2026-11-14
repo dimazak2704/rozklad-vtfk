@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, ScrollRestoration, useLocation, useMatches, useNavigate } from 'react-router';
 import { onUnauthorized } from '@/api/client';
+import { dropAuthorizedCopies } from '@/api/public-api-cache';
 import { paths } from '@/app/routes';
 import { loginAfterRejection, noteRejectedToken } from '@/auth/rejectedToken';
 import { takeUnsavedChange } from '@/auth/unsavedChange';
@@ -35,8 +36,9 @@ function DocumentTitle() {
  * «увійшов» і поверне сюди ж — нескінченне коло), ведемо на вхід і повертаємо сюди ж. Кілька запитів
  * сторінки отримують 401 одночасно, а ті, що ще в дорозі, відповідають уже після переходу на вхід, —
  * реагуємо один раз на сторінку (вхід через сервіс входу однаково перезавантажує застосунок).
- * На публічній сторінці 401 буває лише в персоналу (розклад і заміни він просить з токеном, щоб бачити архів):
- * токен забуваємо без переходу на вхід — сторінка перепитує як гість, а «Увійти» лишається в шапці.
+ * На публічній сторінці 401 буває лише в персоналу (розклад і заміни він просить з токеном, щоб бачити архів;
+ * токен прострочений і не оновився — клієнт API теж відповідає 401, не питаючи сервер): токен забуваємо без
+ * переходу на вхід — сторінка перепитує як гість, а «Увійти» лишається в шапці.
  */
 export function UnauthorizedRedirect() {
   const navigate = useNavigate();
@@ -53,17 +55,14 @@ export function UnauthorizedRedirect() {
         const path = location.pathname;
         if (handling.current) return;
         if (!isProtected(path)) {
-          void userManager.removeUser().catch(() => undefined);
+          void forgetRejectedToken();
           return;
         }
         handling.current = true;
         const repeated = noteRejectedToken();
-        void userManager
-          .removeUser()
-          .catch(() => undefined)
-          .finally(() => {
-            void navigate(loginAfterRejection(paths.login(path + location.search), repeated), { replace: true });
-          });
+        void forgetRejectedToken().finally(() => {
+          void navigate(loginAfterRejection(paths.login(path + location.search), repeated), { replace: true });
+        });
       }),
     [navigate, location.pathname, location.search],
   );
@@ -86,6 +85,14 @@ export function UnsavedChangeNotice() {
     }
   }, [location.pathname]);
   return null;
+}
+
+/**
+ * Забуває токен, який сервер не прийняв, і прибирає з кешу PWA відповіді на запити з токеном, які зберегли
+ * попередні збірки: інакше токен лишився б на пристрої. Не падає — далі однаково гість або вхід.
+ */
+function forgetRejectedToken(): Promise<void> {
+  return Promise.all([userManager.removeUser().catch(() => undefined), dropAuthorizedCopies()]).then(() => undefined);
 }
 
 function isProtected(path: string): boolean {
