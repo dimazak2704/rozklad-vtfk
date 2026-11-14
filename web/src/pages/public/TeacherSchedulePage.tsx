@@ -47,6 +47,18 @@ export default function TeacherSchedulePage() {
         <ScheduleLoadError heading="Розклад викладача" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );
     }
+    // давній тиждень гостю (імені розклад не несе), а довідник не завантажився: імені взяти нізвідки — кажемо про збій
+    // довідника, а не крутимо силует без кінця; щойно він завантажиться, сторінка пояснить архів
+    if (historyClosed && teachers.isError) {
+      return (
+        <ScheduleLoadError
+          heading="Розклад викладача"
+          error={teachers.error}
+          onRetry={() => void teachers.refetch()}
+          retrying={teachers.isFetching}
+        />
+      );
+    }
     return (
       <div className="flex flex-col gap-6">
         <ScheduleHeaderSkeleton />

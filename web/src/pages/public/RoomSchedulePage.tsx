@@ -54,6 +54,13 @@ export default function RoomSchedulePage() {
         <ScheduleLoadError heading="Розклад аудиторії" error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       );
     }
+    // давній тиждень гостю (назви розклад не несе), а довідник не завантажився: назви взяти нізвідки — кажемо про збій
+    // довідника, а не крутимо силует без кінця; щойно він завантажиться, сторінка пояснить архів
+    if (historyClosed && rooms.isError) {
+      return (
+        <ScheduleLoadError heading="Розклад аудиторії" error={rooms.error} onRetry={() => void rooms.refetch()} retrying={rooms.isFetching} />
+      );
+    }
     return (
       <div className="flex flex-col gap-6">
         <ScheduleHeaderSkeleton />
