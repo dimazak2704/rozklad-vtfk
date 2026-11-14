@@ -122,8 +122,45 @@ sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapf
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-Optional: `sudo timedatectl set-timezone Europe/Kyiv` (cron times of the backup), and keep
-`unattended-upgrades` on (it is preinstalled on Ubuntu cloud images).
+Optional: `sudo timedatectl set-timezone Europe/Kyiv` (cron times of the backup).
+
+**Harden the server** before the first deploy. The site is public, and the `docker` group of your
+user is root-equivalent, so the SSH login is the key to everything.
+
+SSH with keys only and no root login (most cloud images already do this; the file makes it explicit).
+Keep the current session open and check that a second `ssh` login works before you close it:
+
+```bash
+sudo tee /etc/ssh/sshd_config.d/90-rozklad.conf >/dev/null <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+EOF
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+Limit password guessing on port 22: with ufw use `sudo ufw limit OpenSSH` instead of `allow`; on
+Oracle's iptables images `sudo apt-get install -y fail2ban` (its `sshd` jail is on by default). If your
+own IP is stable, allow port 22 only from it in the cloud firewall. Do not add other users to the
+`docker` group.
+
+Security updates, Docker Engine included: `get.docker.com` installs Docker from Docker's own apt
+repository, which `unattended-upgrades` skips by default, so container-escape fixes in `containerd` and
+`runc` would never arrive by themselves:
+
+```bash
+sudo apt-get install -y unattended-upgrades
+sudo tee /etc/apt/apt.conf.d/52unattended-rozklad >/dev/null <<'EOF'
+Unattended-Upgrade::Origins-Pattern { "origin=Docker"; };
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+EOF
+sudo unattended-upgrade --dry-run --debug 2>&1 | grep -i 'origin=Docker'   # Docker's packages are allowed now
+```
+
+An update of Docker Engine restarts the daemon and with it the containers (they come back by
+themselves, `restart: unless-stopped`), and a kernel update reboots the server at 04:30: a minute of
+downtime at night.
 
 ## 4. Domain names
 
@@ -199,8 +236,8 @@ What it does:
 
 1. `git pull --ff-only` and continues with the scripts it just pulled (`--no-pull` skips this).
 2. Preflight: Docker and Compose versions, no `change-me` left, sane `DOMAIN`/`ACME_EMAIL`, the
-   signing key exists, the compose configuration renders, warning about RAM without swap, a note while
-   `AUTH_BOOTSTRAP_ADMIN_PASSWORD` is still set.
+   signing key exists, the compose configuration renders, warnings about RAM without swap and while
+   `AUTH_BOOTSTRAP_ADMIN_PASSWORD` is still set (empty it after your first sign-in).
 3. Builds the jars with Maven in a `maven:3.9.11-eclipse-temurin-25` container (no JDK on the host,
    dependencies cached in `~/.m2`), then the images `localhost/rozklad/<service>:prod` for this CPU
    (`compose build --pull`). With GitHub-built images it pulls them instead (section 13). Either way

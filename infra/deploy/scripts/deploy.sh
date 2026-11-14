@@ -78,7 +78,9 @@ preflight() {
     warn "AUTH_BOOTSTRAP_FORCE=true resets the password of $(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin) at every start:
      set it back to false after you have signed in"
   elif [[ -n $(env_get AUTH_BOOTSTRAP_ADMIN_PASSWORD) ]]; then
-    log "AUTH_BOOTSTRAP_ADMIN_PASSWORD is set: once you have signed in as $(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin), empty it in .env"
+    # auth ignores it while an admin can sign in, but it stays readable in .env and in the container
+    warn "AUTH_BOOTSTRAP_ADMIN_PASSWORD is still set: once you have signed in as $(env_get AUTH_BOOTSTRAP_ADMIN_USERNAME admin),
+     empty it in .env (AUTH_BOOTSTRAP_ADMIN_PASSWORD=) and run deploy.sh again"
   fi
 
   compose config --quiet || die "the compose configuration is invalid (see above)"
