@@ -696,7 +696,24 @@ drops client `Forwarded`, `X-Forwarded-Port`, `X-Forwarded-Prefix` and `X-Real-I
 `docker compose config --images` lists the images `restore-db.sh` checks; the default `localhost/rozklad`
 prefix cannot be resolved on Docker Hub; `backup-db.sh` and the database part of `restore-db.sh` worked.
 
+Security pass (14.11.2026), on the development PC with `infra/deploy/tests/run.sh` (also in CI):
+`ci-entry.sh` deploys only the tip of `main` with the server's own image prefix and refuses another
+GHCR owner, an older commit, a branch commit and an unknown sha (stubbed `deploy.sh` and `docker`, a
+local git origin); Caddy 2.11 answers 404 for `/api/internal/**`, `/api/import/ai/parse-absence` and
+`/auth/internal/**` in upper case, percent-encoded and with double slashes, and still proxies the
+rest; the broker user of the overlay has no tag and the management API refuses it; after a restore
+`20-prod-passwords.sh` resets the superuser's password too; `backup-db.sh` writes only
+`.sql.gz.age` with a recipient, refuses an off-site copy without one, fails without pinging when the
+copy fails (stubbed `age`, `rclone`, `curl`); the rendered overlay gives broker and Redis passwords
+only to the services with a client for them, publishes Caddy on IPv4 only, and hardens every
+container. Caddy (read-only, only `NET_BIND_SERVICE`) and the web nginx (read-only, four
+capabilities) started hardened and served requests; PostgreSQL, Redis, RabbitMQ and LibreOffice
+started under `no-new-privileges`. The development compose publishes every port on `127.0.0.1`.
+
 Not verified yet: the full stack on a real VPS (the file permissions of the key on Linux included), the
-memory use of the whole stack (so 4 GB is only best effort), the GitHub workflows on GitHub, the
-forced-command SSH key, certificates from Let's Encrypt, the smoke checks of `deploy.sh` against a
-running Caddy, Google sign-in with a real Google client, the timings above (estimates).
+memory use of the whole stack (so 4 GB is only best effort), the GitHub workflows on GitHub (the weekly
+schedule, Dependabot, environment secrets), the forced-command SSH key, certificates from Let's Encrypt,
+the smoke checks of `deploy.sh` against a running Caddy, Google sign-in with a real Google client, the
+images built from the changed Dockerfiles (nginx 1.30, importer without LibreOffice), the Java services
+with all capabilities dropped under real load, real `age` and `rclone` runs, a restore drill on a
+server, the timings above (estimates).
