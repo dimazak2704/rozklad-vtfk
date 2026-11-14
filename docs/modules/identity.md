@@ -17,7 +17,7 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
 | `POST /api/admin/invites {teacherId}` | 201 `{id, token, url, expiresAt, teacher}` — the token is shown once |
 | `GET /api/admin/invites?teacherId=` | `[{id, teacher, status: ACTIVE\|USED\|EXPIRED\|REVOKED, expiresAt, usedAt, revokedAt, createdAt, createdBy}]` |
 | `GET /api/public/invites/{token}` | `{valid, status, teacherName, expiresAt}`; 404 for an unknown token |
-| `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation (password 12–64 characters; `auth` may refuse it with a reason, shown in Ukrainian); 404; 409 username taken; 410 used/expired/revoked invite, or a revoked account («Доступ відкликано…», `inviteStatus: REVOKED`); 503 sign-in service unavailable |
+| `POST /api/public/invites/{token}/accept {username, password}` | 201 `{username}`; 400 validation (password 12–64 characters; `auth` may refuse it with a reason, shown in Ukrainian); 404; 409 username taken; 410 used/expired/revoked invite, or a revoked account («Доступ відкликано…», `inviteStatus: REVOKED`); 422 `INVITE_NOT_FOR_ADMIN` (a teacher invite never changes an account with the role ADMIN); 503 sign-in service unavailable |
 | `GET /api/internal/teachers/{id}` (SERVICE) | teacher with `accountId`, `linked`, cycle commission |
 | `GET /api/admin/teachers/{id}/account` | `{teacherId, teacherName, linked, userId, username, enabled}` (`username` is the username or, for an access grant by e-mail, the e-mail; null when `auth` lost the account) |
 | `PUT /api/admin/teachers/{id}/account {username}` | links an **existing** account by username or e-mail (`TeacherAccountService`): grants TEACHER, revokes open invites; 404 teacher, 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 account of another teacher or the teacher already has a live account, 503 sign-in service down. `scripts/seed_demo.py` links `krentsin`/`nepyivoda` this way |
@@ -43,6 +43,9 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
    - Teacher already linked → the same username restores access (new password + enable + TEACHER);
      another username → 409 naming the existing one. A link to an account deleted in `auth` creates a
      new account.
+   - Linked account with the role **ADMIN** → 422 `INVITE_NOT_FOR_ADMIN`, checked first, so neither the
+     password nor the username changes and the answer does not name the account. An invite lives a week and
+     is easy to forward; an admin's password is set only by a password link (below).
    - Linked account **revoked** (DESIGN D11) → 410 «Доступ відкликано. Зверніться до навчальної частини.»
      with `inviteStatus: REVOKED`; the invite is revoked and that is committed. `auth` refuses to enable a
      revoked account without an explicit restore, so a revocation racing the accept still wins.
@@ -55,6 +58,19 @@ username, roles, teacher?}`), `currentTeacher()`, `requireTeacherId()` (403 «В
    down. Problems of `auth` map to the port: 409 `username-taken`/`email-taken`/`last-admin`/
    `account-revoked`, 400 `password-rejected` with `reason`, 404; anything else, timeouts and token
    failures are `IdentityProviderException` (503). A timed-out create is retried once with the same id.
+
+## Password links
+
+«Посилання для пароля» in «Доступи» (`AccessService.passwordLink` → `InviteService.createPasswordLink`) uses
+the same table and token rules, bound to an account instead of a teacher, and opens `/password/{token}`. It
+sets the password of any account, an admin's too, so it lives `app.identity.password-link-ttl`
+(`PASSWORD_LINK_TTL`, default 24 hours), shorter than an invite. A newer link revokes the older ones; a revoked
+account gets none.
+
+## Logs
+
+The tokens are bearer credentials. `ApiExceptionHandler` writes `/api/public/invites/***/…` instead of the
+token when it logs a request path; nginx masks the SPA pages `/invite/` and `/password/` in its access log.
 
 ## Demo seed (profile `demo`)
 

@@ -43,12 +43,14 @@ import ua.vtc.rozklad.core.shared.security.Roles;
 class InviteServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-07T10:00:00Z");
+    private static final IdentityProperties PROPERTIES =
+            new IdentityProperties(Duration.ofDays(7), Duration.ofHours(24));
 
     private final InviteRepository invites = mock(InviteRepository.class);
     private final TeacherRepository teachers = mock(TeacherRepository.class);
     private final FakeIdentityProvider auth = new FakeIdentityProvider();
     private final InviteService service = new InviteService(invites, teachers, mock(CatalogQueries.class), auth,
-            new IdentityProperties(Duration.ofDays(7)), new AppProperties(URI.create("http://localhost:5180")),
+            PROPERTIES, new AppProperties(URI.create("http://localhost:5180")),
             Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
 
     private Teacher teacher;
@@ -179,6 +181,51 @@ class InviteServiceTest {
     }
 
     @Test
+    void anInviteNeverResetsThePasswordOfAnAdminAndDoesNotNameTheAccount() {
+        UUID account = auth.usableAdmin("zavuch");
+        auth.grantRole(account, Roles.TEACHER);
+        teacher.setAccountId(account);
+        String token = activeInvite();
+
+        for (String username : List.of("zavuch", "someone")) {
+            assertThatThrownBy(() -> service.accept(token, username, "attacker-password"))
+                    .isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                        assertThat(error.getCode()).isEqualTo("INVITE_NOT_FOR_ADMIN");
+                        assertThat(error.getMessage()).contains("посилання для пароля").doesNotContain("zavuch");
+                    });
+        }
+        assertThat(auth.user(account)).hasValueSatisfying(user -> {
+            assertThat(user.password()).isEqualTo("Admin-Password-2026");
+            assertThat(user.username()).isEqualTo("zavuch");
+        });
+        assertThat(stored(token).status(NOW)).isEqualTo(InviteStatus.ACTIVE);
+    }
+
+    @Test
+    void anInviteDoesNotGiveAnAdminGrantedByEmailAUsernameOrAPassword() {
+        UUID account = auth.grantedByEmail("zavuch@college.example", Set.of(Roles.ADMIN));
+        teacher.setAccountId(account);
+        String token = activeInvite();
+
+        assertThatThrownBy(() -> service.accept(token, "intruder", "attacker-password"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("INVITE_NOT_FOR_ADMIN"));
+        assertThat(auth.user(account)).hasValueSatisfying(user -> {
+            assertThat(user.username()).isNull();
+            assertThat(user.password()).isNull();
+        });
+        assertThat(auth.byUsername("intruder")).isEmpty();
+    }
+
+    @Test
+    void aPasswordLinkLivesADayAndAnInviteAWeek() {
+        UUID account = auth.usableAdmin("zavuch");
+
+        assertThat(service.createPasswordLink(account, "admin").expiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+        assertThat(service.create(teacher.getId(), "admin").expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));
+    }
+
+    @Test
     void accountDeletedInAuthIsCreatedAgain() {
         UUID deleted = UUID.randomUUID();
         teacher.setAccountId(deleted);
@@ -273,7 +320,7 @@ class InviteServiceTest {
             }
         };
         InviteService withRace = new InviteService(invites, teachers, mock(CatalogQueries.class), racing,
-                new IdentityProperties(Duration.ofDays(7)), new AppProperties(URI.create("http://localhost:5180")),
+                PROPERTIES, new AppProperties(URI.create("http://localhost:5180")),
                 Clock.fixed(NOW, ZoneId.of("Europe/Kyiv")));
 
         assertThatThrownBy(() -> withRace.accept(token, "krentsin", "secret-password"))

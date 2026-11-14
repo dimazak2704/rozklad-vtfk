@@ -84,7 +84,7 @@ class AccessServiceIT {
     void setUp() throws Exception {
         MockMvc mvc = ApiTestSupport.mockMvc(context);
         invites = new InviteService(inviteRepository, teacherRepository, catalog, auth,
-                new IdentityProperties(Duration.ofDays(7)), appProperties, clock);
+                new IdentityProperties(Duration.ofDays(7), Duration.ofHours(24)), appProperties, clock);
         access = new AccessService(auth, teacherRepository, invites, new AccountLinkLocks(jdbc), clock);
         admin = new CurrentUser(auth.usableAdmin("admin"), "admin", Set.of("ADMIN"));
         teacher = id(mvc.perform(post("/api/admin/teachers").with(TestJwts.admin())

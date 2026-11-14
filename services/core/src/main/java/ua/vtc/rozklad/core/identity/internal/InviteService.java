@@ -52,7 +52,8 @@ import ua.vtc.rozklad.core.shared.time.StandClock;
  * revokes the teacher's older ones, and using one revokes the rest, so only the latest link ever
  * works. A teacher who already has an account gets access back (enabled, new password) under the same
  * username; an account granted by e-mail without a username gets the chosen one. A revoked account
- * (DESIGN D11) is never re-enabled by an invite: the invite is revoked and the answer is 410.
+ * (DESIGN D11) is never re-enabled by an invite: the invite is revoked and the answer is 410. An account with
+ * the role ADMIN is never changed by an invite (422 {@code INVITE_NOT_FOR_ADMIN}): only a password link does that.
  */
 @Service
 public class InviteService {
@@ -135,7 +136,9 @@ public class InviteService {
 
     /**
      * A password link for an account (DESIGN §4.6, «Посилання для пароля» in «Доступи»): older open links of the
-     * account are revoked, so only the latest one works. A revoked account gets none.
+     * account are revoked, so only the latest one works. A revoked account gets none. It lives
+     * {@code app.identity.password-link-ttl} (a day), shorter than an invite: it sets the password of any account,
+     * an admin's too.
      *
      * @throws NotFoundException no such account in {@code auth}
      * @throws org.springframework.web.ErrorResponseException 409 {@code ACCOUNT_REVOKED}, 503 sign-in service down
@@ -156,7 +159,7 @@ public class InviteService {
         revokePasswordLinks(accountId, now);
         String token = InviteTokens.newToken();
         Invite link = invites.save(Invite.forAccount(accountId, InviteTokens.hash(token),
-                now.plus(properties.inviteTtl()), actor));
+                now.plus(properties.passwordLinkTtl()), actor));
         log.info("Password link {} created for account {} by {}", link.getId(), accountId, actor);
         return new PasswordLinkDto(link(PASSWORD_PATH, token), link.getExpiresAt());
     }
@@ -176,6 +179,7 @@ public class InviteService {
      * @throws org.springframework.web.ErrorResponseException 410 used / expired / revoked invite or revoked
      *                                account, 503 sign-in service down
      * @throws ConflictException      username taken, or another username than the teacher's account (409)
+     * @throws BusinessRuleException  {@code INVITE_NOT_FOR_ADMIN} (422): the teacher's account has the role ADMIN
      */
     @Transactional(noRollbackFor = IdentityProblems.AccessRevokedException.class)
     public AcceptedInviteDto accept(String token, String rawUsername, String password) {
@@ -315,6 +319,12 @@ public class InviteService {
     }
 
     private UUID restore(Account account, String username, String password) {
+        if (account.roles().contains(Roles.ADMIN)) {
+            // запрошення — посилання для викладача, яке довго живе й легко пересилається; пароль адміністратора
+            // змінює лише окреме посилання для пароля з «Доступів». Ім'я облікового запису не називаємо
+            throw new BusinessRuleException("INVITE_NOT_FOR_ADMIN", "Це запрошення не може змінити пароль "
+                    + "вашого облікового запису. Попросіть адміністратора надіслати посилання для пароля.");
+        }
         if (account.username() == null) {
             // доступ надали за e-mail у «Доступах»: викладач вибирає ім'я користувача тут
             identityProvider.setUsername(account.id(), username);

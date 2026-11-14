@@ -103,6 +103,12 @@ class ProbeController {
         throw new IllegalStateException("secret internal detail");
     }
 
+    /** An unexpected error under a path that carries a one-time token (an invite or a password link). */
+    @GetMapping("/api/public/invites/{token}/probe-boom")
+    void inviteBoom() {
+        throw new IllegalStateException("secret internal detail");
+    }
+
     /** What Tomcat throws when a query value is not valid UTF-8 ({@code ?q=%E0%A4}). */
     @GetMapping("/api/public/probe/undecodable")
     void undecodable() {

@@ -57,6 +57,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /** Tomcat names the parameter it could not decode: «… Parameter [q] with value […] …». */
     private static final Pattern PARAMETER_NAME = Pattern.compile("Parameter \\[([^\\]]{1,100})]");
 
+    /**
+     * The one-time token of an invite or a password link ({@code /api/public/invites/{token}/…}): a bearer
+     * credential that must not reach the log (nginx masks the SPA pages {@code /invite/} and {@code /password/}).
+     */
+    private static final Pattern INVITE_TOKEN = Pattern.compile("(/api/public/invites/)[^/]+");
+
     private static final String STALE_DETAIL =
             "Запис щойно змінив інший користувач. Оновіть сторінку та повторіть дію.";
 
@@ -175,7 +181,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             LockAcquisitionException.class})
     ResponseEntity<Object> handleLockFailure(Exception ex, HttpServletRequest request) {
         log.warn("Lock failure between concurrent requests on {} {}: {}", request.getMethod(),
-                request.getRequestURI(), ex.getClass().getSimpleName());
+                loggablePath(request), ex.getClass().getSimpleName());
         return problem(HttpStatus.CONFLICT, ProblemTypes.STALE_DATA, "Дані змінилися",
                 "Ці дані саме змінює інший запит. Оновіть сторінку та повторіть дію.", request);
     }
@@ -186,7 +192,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(InvalidParameterException.class)
     ResponseEntity<Object> handleUndecodableParameter(InvalidParameterException ex, HttpServletRequest request) {
-        log.info("Undecodable request parameter on {} {}", request.getMethod(), request.getRequestURI());
+        log.info("Undecodable request parameter on {} {}", request.getMethod(), loggablePath(request));
         Matcher name = PARAMETER_NAME.matcher(String.valueOf(ex.getMessage()));
         if (name.find()) {
             String field = name.group(1);
@@ -244,7 +250,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             log.debug("Client disconnected: {}", ex.getMessage());
             return null;
         }
-        log.error("Unhandled error on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        log.error("Unhandled error on {} {}", request.getMethod(), loggablePath(request), ex);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, ProblemTypes.INTERNAL, "Внутрішня помилка сервера",
                 "Сталася непередбачена помилка. Спробуйте пізніше або повідомте адміністратора код запиту.",
                 request);
@@ -321,6 +327,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         body.setInstance(URI.create(request.getRequestURI()));
         addRequestId(body);
         return body;
+    }
+
+    /** The request path for the log, with the token of an invite or a password link masked. */
+    static String loggablePath(HttpServletRequest request) {
+        return INVITE_TOKEN.matcher(request.getRequestURI()).replaceFirst("$1***");
     }
 
     private static void addRequestId(ProblemDetail problem) {

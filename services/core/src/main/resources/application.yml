@@ -154,6 +154,9 @@ logging:
 app.identity:
   # термін дії посилання-запрошення (DOMAIN: 7 днів)
   invite-ttl: ${INVITE_TTL:7d}
+  # посилання для пароля з «Доступів» змінює пароль будь-якого облікового запису, зокрема адміністратора,
+  # тому живе коротше за запрошення
+  password-link-ttl: ${PASSWORD_LINK_TTL:24h}
   # облікові записи живуть у сервісі входу auth (внутрішній API, не проксується назовні)
   accounts-api:
     url: ${AUTH_INTERNAL_URL:http://localhost:8085/auth/internal}

@@ -514,3 +514,10 @@ server. Nothing was ever deployed with Keycloak, so there is no account import a
 | Calendar periods | Request adds optional `supervisorIds` (only for PRACTICE, active teachers, no repeats); DTO adds `supervisorIds` and `supervisors: TeacherRef[]`, sorted by short name. Stored in `calendar_period_supervisor(period_id, teacher_id)` (V1_202). | The dispatcher assigns керівники практики in the calendar (owner decision 14.11.2026). Additive: an old client sends nothing and keeps none. |
 | `DayDto.practices` | Additive `practices: [{periodId, title, startsOn, endsOn, supervisors, groups, courses}]`: the group's practice on its days, the supervised practices on a teacher's days, `[]` for rooms. A holiday / day without classes that applies hides the practice. `studyDay` and `note` are unchanged. | The group page and the bot show «Практика: назва» with supervisors instead of empty pairs; the supervisor sees «Керівництво практикою: назва, група». |
 | notification `ScheduleDay` | Reads `practices` (absent from an older core = `[]`). | Backward-compatible both ways. |
+
+## Security hardening of core (14.11.2026)
+
+| Area | Decision | Why |
+|---|---|---|
+| `POST /api/public/invites/{token}/accept` | Additive 422 `INVITE_NOT_FOR_ADMIN` when the teacher's linked account has the role ADMIN, checked before anything changes (no password, no username, the account is not named). The SPA shows the message of an unknown 422 above the form. | An invite lives a week and is easy to forward; it must not reset an admin's password. A password link from «Доступи» still does. |
+| Password links | Expire after `app.identity.password-link-ttl` (`PASSWORD_LINK_TTL`, default 24 h) instead of the invite TTL (7 days). `expiresAt` in the answer tells the admin. | A leaked link sets the password of any account, an admin's too. |

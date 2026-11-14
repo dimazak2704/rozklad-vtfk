@@ -75,7 +75,7 @@ class InviteFlowIT {
     void setUp() throws Exception {
         mvc = ApiTestSupport.mockMvc(context);
         withFakeIdentity = new InviteService(inviteRepository, teacherRepository, catalog, identity,
-                new IdentityProperties(Duration.ofDays(7)), appProperties, clock);
+                new IdentityProperties(Duration.ofDays(7), Duration.ofHours(24)), appProperties, clock);
         teacher = id(mvc.perform(post("/api/admin/teachers").with(TestJwts.admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lastName\":\"Кренцін\",\"firstName\":\"Микола\",\"middleName\":\"Дмитрович\"}"))

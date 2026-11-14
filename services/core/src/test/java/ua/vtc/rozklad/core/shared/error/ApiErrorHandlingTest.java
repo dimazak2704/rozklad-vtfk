@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.shared.error;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,7 +16,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +36,7 @@ import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
 @WebMvcTest(ProbeController.class)
 @Import(WebSliceTestConfiguration.class)
 @ActiveProfiles(ProbeController.PROFILE)
+@ExtendWith(OutputCaptureExtension.class)
 class ApiErrorHandlingTest {
 
     @Autowired
@@ -213,6 +218,17 @@ class ApiErrorHandlingTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.title").value("Внутрішня помилка сервера"))
                 .andExpect(jsonPath("$.detail", startsWith("Сталася непередбачена помилка")));
+    }
+
+    @Test
+    void theLogNeverCarriesTheTokenOfAnInviteOrPasswordLink(CapturedOutput output) throws Exception {
+        String token = "Abcd" + "x".repeat(39);
+
+        mockMvc.perform(get("/api/public/invites/{token}/probe-boom", token))
+                .andExpect(status().isInternalServerError());
+
+        assertThat(output.getAll()).contains("Unhandled error on GET /api/public/invites/***/probe-boom")
+                .doesNotContain(token);
     }
 
     @Test
