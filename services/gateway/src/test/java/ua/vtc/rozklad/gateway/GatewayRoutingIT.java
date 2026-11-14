@@ -186,6 +186,25 @@ class GatewayRoutingIT {
         assertThat(events).containsExactly("{\"n\":1}", "{\"n\":2}");
     }
 
+    /** Bot and importer reach core and the importer directly; through the edge these paths do not exist. */
+    @Test
+    void serviceOnlyPathsAreNotRoutedFromTheEdge() {
+        for (String path : List.of("/api/internal/catalog/snapshot", "/api/internal/changes/x/reply",
+                "/api/admin/import/catalog", "/api/import/ai/parse-absence", "/api/%69nternal/absences")) {
+            client.post().uri(URI.create("http://localhost:" + port + path))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer service-token")
+                    .contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                    .exchange()
+                    .expectStatus().isNotFound()
+                    .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                    .expectBody()
+                    .jsonPath("$.type").isEqualTo("urn:rozklad:problem:not-found")
+                    .jsonPath("$.service").doesNotExist();
+        }
+        assertRoutedTo("/api/import/ai/usage", "importer");
+        assertRoutedTo("/api/admin/imports", "core");
+    }
+
     @Test
     void unavailableServiceGivesUkrainianProblemDetail() {
         client.get().uri("/api/scheduler/status")
