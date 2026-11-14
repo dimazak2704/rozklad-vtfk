@@ -187,10 +187,20 @@ export const PAIR_FORMS_ACC = ['пару', 'пари', 'пар'] as const;
 export const PAIR_FORMS_GEN = ['пари', 'пар', 'пар'] as const;
 export const MINUTE_FORMS = ['хвилина', 'хвилини', 'хвилин'] as const;
 
-/** «23 хв», «1 год 5 хв» — для зворотного відліку. */
+const MINUTES_PER_DAY = 24 * 60;
+
+/**
+ * «23 хв», «1 год 5 хв» — для зворотного відліку. Від доби — дні й години без хвилин: «6 дн 6 год»
+ * читається одним поглядом, а «150 год 53 хв» — ні.
+ */
 export function durationLabel(totalMinutes: number): string {
   const minutes = Math.max(0, Math.round(totalMinutes));
   if (minutes < 60) return `${minutes}\u00a0хв`;
+  if (minutes >= MINUTES_PER_DAY) {
+    const days = Math.floor(minutes / MINUTES_PER_DAY);
+    const hours = Math.floor((minutes % MINUTES_PER_DAY) / 60);
+    return hours === 0 ? `${days}\u00a0дн` : `${days}\u00a0дн ${hours}\u00a0год`;
+  }
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return rest === 0 ? `${hours}\u00a0год` : `${hours}\u00a0год ${rest}\u00a0хв`;

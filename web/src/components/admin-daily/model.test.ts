@@ -102,6 +102,8 @@ describe('стан пари', () => {
     const deadline = '2026-11-09T06:00:00.000Z';
     expect(pendingInfo(deadline, Date.parse('2026-11-09T05:49:00Z'))).toMatchObject({ overdue: false, minutes: 11, label: 'ще 11 хв' });
     expect(pendingInfo(deadline, Date.parse('2026-11-09T06:07:00Z'))).toMatchObject({ overdue: true, minutes: 7 });
+    // запит, створений тиждень тому: строк у днях, а не «150 год 53 хв»
+    expect(pendingInfo(deadline, Date.parse('2026-11-15T12:53:00Z'))?.label).toBe('прострочено 6\u00a0дн 6\u00a0год');
     expect(pendingInfo(null, 0)).toBeNull();
   });
 

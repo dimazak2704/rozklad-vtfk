@@ -56,12 +56,15 @@ function StatusLine({ entry }: { entry: LessonEntry }) {
         <>
           <StateText state="pending">
             <span className="whitespace-nowrap">Чекає відповіді</span>
-            {/* на телефоні строк — під словом стану, а не розірваним хвостом рядка */}
+            {/* на телефоні строк — під словом стану; у вузькій колонці він переноситься цілим, а не обрізається */}
             {change?.confirmDeadline ? (
-              <span className="font-normal whitespace-nowrap text-secondary max-sm:block">
-                <span className="max-sm:hidden"> · </span>
-                <PendingCountdown deadline={change.confirmDeadline} />
-              </span>
+              <>
+                <span className="max-sm:hidden"> </span>
+                <span className="font-normal whitespace-nowrap text-secondary max-sm:block">
+                  <span className="max-sm:hidden">·&nbsp;</span>
+                  <PendingCountdown deadline={change.confirmDeadline} />
+                </span>
+              </>
             ) : null}
           </StateText>
           {summary ? <span className="ps-4 text-caption text-secondary">{summary}</span> : null}
