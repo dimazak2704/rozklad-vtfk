@@ -107,6 +107,13 @@ class ProductionSecrets(unittest.TestCase):
         self.assertEqual({"core", "importer", "notification", "gateway"},
                          self.holders("SPRING_DATA_REDIS_PASSWORD"))
 
+    def test_the_development_cli_client_is_off_and_needs_two_switches(self):
+        # auth's ProdGuard refuses rozklad-cli on an https issuer unless AUTH_CLI_ALLOW_PROD is set too;
+        # both must reach the container for the documented one-off run, and both default to off
+        env = self.env("auth")
+        self.assertEqual("false", env.get("AUTH_CLI_ENABLED"))
+        self.assertEqual("false", env.get("AUTH_CLI_ALLOW_PROD"))
+
     def test_edge_containers_hold_no_secrets(self):
         for name in ("caddy", "web"):
             self.assertNotIn("change-me", (self.env(name) or {}).values(), name)

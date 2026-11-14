@@ -159,8 +159,10 @@ services:
       AUTH_WEB_ORIGINS: https://${DOMAIN:?}
       # the SPA is on the same origin: no CORS
       AUTH_CORS_ORIGINS: ""
-      # rozklad-cli (scripts) only for a one-off run on the server (docs/DEPLOY.md)
+      # rozklad-cli (scripts) only for a one-off run on the server: auth refuses an https issuer with it
+      # unless AUTH_CLI_ALLOW_PROD is set too, and warns at every start; switch both off afterwards
       AUTH_CLI_ENABLED: ${AUTH_CLI_ENABLED:-false}
+      AUTH_CLI_ALLOW_PROD: ${AUTH_CLI_ALLOW_PROD:-false}
       AUTH_DEMO_SEED: "false"
       AUTH_ACCESS_TOKEN_TTL: ${AUTH_ACCESS_TOKEN_TTL:-5m}
       AUTH_SESSION_IDLE: ${AUTH_SESSION_IDLE:-1h}
