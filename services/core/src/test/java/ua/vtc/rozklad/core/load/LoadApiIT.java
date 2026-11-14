@@ -13,7 +13,9 @@ import static ua.vtc.rozklad.core.catalog.ApiTestSupport.id;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -193,7 +195,11 @@ class LoadApiIT {
                 .with(TestJwts.admin())).andReturn(), "$[1].id"));
         TimetableVersion version = versions.save(new TimetableVersion(semester, "Імпорт Excel", VersionSource.IMPORT));
         lesson(version, 3, 3, Parity.BOTH, 2, english, mozharovska);
-        Lesson dated = new Lesson(semester, LocalDate.now(clock).plusDays(1), 2, group, 1, english, LessonOrigin.TEMPLATE);
+        // the next study day after today: dated lessons exist only Monday to Friday (ck_lesson_study_day)
+        LocalDate tomorrow = LocalDate.now(clock).plusDays(1);
+        LocalDate studyDay = tomorrow.getDayOfWeek().getValue() > 5
+                ? tomorrow.with(TemporalAdjusters.next(DayOfWeek.MONDAY)) : tomorrow;
+        Lesson dated = new Lesson(semester, studyDay, 2, group, 1, english, LessonOrigin.TEMPLATE);
         datedLessons.save(dated);
 
         mvc.perform(delete(subgroups + "/{sub}", group, subgroup2).with(TestJwts.admin()))
