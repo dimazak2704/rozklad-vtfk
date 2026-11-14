@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countLabel, durationLabel, PAIR_FORMS, PAIR_FORMS_ACC, PAIR_FORMS_GEN } from './labels';
+import { countLabel, durationLabel, lessonKindShown, PAIR_FORMS, PAIR_FORMS_ACC, PAIR_FORMS_GEN } from './labels';
 
 const nbsp = (text: string) => text.replace(/ /g, ' ');
 
@@ -25,5 +25,17 @@ describe('durationLabel', () => {
     expect([0, 23, 60, 65, 23 * 60 + 59].map(durationLabel)).toEqual(['0 хв', '23 хв', '1 год', '1 год 5 хв', '23 год 59 хв'].map(n));
     // «прострочено 150 год 53 хв» на стенді: тепер «6 дн 6 год»
     expect([24 * 60, 24 * 60 + 59, 150 * 60 + 53, 49 * 60].map(durationLabel)).toEqual(['1 дн', '1 дн', '6 дн 6 год', '2 дн 1 год'].map(n));
+  });
+});
+
+describe('вид заняття в картці пари', () => {
+  it('лекцію, практичне, лабораторну й семінар називає', () => {
+    expect((['LECTURE', 'PRACTICE', 'LAB', 'SEMINAR'] as const).map(lessonKindShown)).toEqual(['лекція', 'практичне', 'лабораторна', 'семінар']);
+  });
+
+  it('змішаний чи невідомий вид не показує', () => {
+    expect(lessonKindShown('MIXED')).toBeNull();
+    expect(lessonKindShown(null)).toBeNull();
+    expect(lessonKindShown(undefined)).toBeNull();
   });
 });

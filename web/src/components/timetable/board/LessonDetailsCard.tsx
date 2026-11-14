@@ -4,7 +4,7 @@ import type { TemplateLessonDto } from '@/api/types';
 import { ParityMark } from '@/components/ui';
 import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { lineAttr } from '@/lib/discipline-color';
-import { capitalize, LESSON_KIND_LABEL, weekdayName } from '@/lib/labels';
+import { capitalize, lessonKindShown, weekdayName } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 import { PARITY_SHORT } from '../model/labels';
 
@@ -16,6 +16,7 @@ interface LessonDetailsCardProps {
 /** Повні відомості про пару шаблону: назва, хто, де, коли, парність простими словами, конфлікти. */
 export function LessonDetailsCard({ lesson, conflicts }: LessonDetailsCardProps) {
   const teacherName = useTeacherFullName('admin');
+  const kind = lessonKindShown(lesson.lessonKind);
   const hard = conflicts.filter((c) => c.severity === 'HARD');
   const soft = conflicts.filter((c) => c.severity === 'SOFT');
   return (
@@ -49,8 +50,12 @@ export function LessonDetailsCard({ lesson, conflicts }: LessonDetailsCardProps)
           {lesson.parity !== 'BOTH' ? <ParityMark parity={lesson.parity} className="text-accent" /> : null}
           {lesson.parity === 'BOTH' ? 'щотижня' : `лише ${PARITY_SHORT[lesson.parity]}`}
         </dd>
-        <dt className="text-muted">Вид</dt>
-        <dd className="text-primary">{LESSON_KIND_LABEL[lesson.lessonKind]}</dd>
+        {kind ? (
+          <>
+            <dt className="text-muted">Вид</dt>
+            <dd className="text-primary">{kind}</dd>
+          </>
+        ) : null}
       </dl>
 
       {lesson.pinned || lesson.online || lesson.streamId ? (

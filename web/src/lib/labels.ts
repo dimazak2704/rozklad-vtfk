@@ -98,6 +98,15 @@ export const LESSON_KIND_LABEL: Record<LessonKind, string> = {
   MIXED: 'змішане',
 };
 
+/**
+ * Вид заняття для картки пари або null, коли його краще не показувати: MIXED — це «вид не відомий або
+ * кілька разом» (так приходить навантаження, виведене з розкладу), і «Вид: змішане» студенту нічого не каже.
+ */
+export function lessonKindShown(kind: LessonKind | null | undefined): string | null {
+  if (!kind || kind === 'MIXED') return null;
+  return LESSON_KIND_LABEL[kind] ?? null;
+}
+
 export const LESSON_VIEW_KIND_LABEL: Record<LessonViewKind, string> = {
   REGULAR: 'За розкладом',
   SUBSTITUTED: 'Заміна',
