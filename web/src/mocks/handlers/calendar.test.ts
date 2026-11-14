@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarBellProfile, CalendarPeriod, CalendarSemester, CalendarWeek } from '@/api/calendar';
 import { api } from '@/api/client';
 import { ApiError } from '@/api/errors';
+import type { ScheduleDto } from '@/api/types';
 import { GROUPS } from '../fixtures';
+import { KRENTSIN } from './public';
 
 async function failure(request: Promise<unknown>): Promise<ApiError> {
   try {
@@ -114,6 +116,36 @@ describe('календарні періоди', () => {
       orderNote: '3КІ1 – Технологічна практика з 16.11.26р. по 27.11.26 р.',
     });
     expect(created).toMatchObject({ scope: 'GROUPS', courses: null, groups: [{ code: '3КІ1' }], studyMode: null, version: 0 });
+  });
+
+  it('керівники практики: лише для PRACTICE, видні в розкладі групи й керівника', async () => {
+    const semester = await active();
+    const group = GROUPS.find((g) => g.code === '3КІ1') as { id: string };
+    const body = {
+      semesterId: semester.id,
+      kind: 'NO_CLASSES',
+      title: 'Технологічна практика',
+      startsOn: '2026-11-16',
+      endsOn: '2026-11-27',
+      scope: 'GROUPS',
+      groupIds: [group.id],
+      supervisorIds: [KRENTSIN.id],
+    };
+    expect((await failure(api.post('/admin/calendar-periods', body))).fieldErrors()).toEqual({
+      supervisorIds: 'Керівників призначають лише для періоду практики.',
+    });
+    expect((await failure(api.post('/admin/calendar-periods', { ...body, kind: 'PRACTICE', supervisorIds: ['nobody'] }))).fieldErrors()).toEqual({
+      'supervisorIds[0]': 'Викладача не знайдено.',
+    });
+    const created = await api.post<CalendarPeriod>('/admin/calendar-periods', { ...body, kind: 'PRACTICE' });
+    expect(created.supervisors).toEqual([KRENTSIN]);
+
+    const groupDay = await api.get<ScheduleDto>(`/public/schedule/group/${group.id}`, { from: '2026-11-16', to: '2026-11-16' });
+    expect(groupDay.days[0]?.practices).toMatchObject([{ title: 'Технологічна практика', supervisors: [KRENTSIN], groups: [{ code: '3КІ1' }] }]);
+    const teacherDay = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-16', to: '2026-11-16' });
+    expect(teacherDay.days[0]?.practices).toMatchObject([{ title: 'Технологічна практика' }]);
+    const before = await api.get<ScheduleDto>(`/public/schedule/teacher/${KRENTSIN.id}`, { from: '2026-11-13', to: '2026-11-13' });
+    expect(before.days[0]?.practices).toEqual([]);
   });
 });
 

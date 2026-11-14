@@ -6,6 +6,8 @@ import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
 import { lessonsByPair, pairRange, rowTimes, vacatedPairs, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
+import { dayPractices, noteWithoutPractices } from './practice';
+import { PracticeBlock } from './PracticeBlock';
 import { VacatedSlot } from './VacatedSlot';
 
 export interface WeekGridProps {
@@ -155,6 +157,8 @@ function PairGutter({
  */
 export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, className }: WeekGridProps) {
   const days = schedule.days;
+  // керівник практики бачить її окремим рядком над парами; група на практиці — у клітинці замість пар
+  const supervisedRow = perspective === 'teacher' && days.some((day) => dayPractices(day, perspective).length > 0);
   const range = useMemo(() => pairRange(days, { withVacated: true }), [days]);
   const times = useMemo(() => rowTimes(days), [days]);
   const byDay = useMemo(() => days.map((day) => lessonsByPair(day.lessons)), [days]);
@@ -260,6 +264,18 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
           </tr>
         </thead>
         <tbody>
+          {supervisedRow ? (
+            <tr>
+              <th scope="row" className="sticky left-0 z-[5] border-b border-separator bg-surface px-4 py-3 text-start align-top font-normal">
+                <span className="text-caption text-secondary">Практика</span>
+              </th>
+              {days.map((day) => (
+                <td key={day.date} className="border-b border-separator bg-surface px-3.5 py-3 align-top">
+                  <PracticeBlock practices={dayPractices(day, perspective)} perspective={perspective} />
+                </td>
+              ))}
+            </tr>
+          ) : null}
           {pairs.map((pair, rowIndex) => {
             const time = times.get(pair);
             const lastRow = rowIndex === pairs.length - 1;
@@ -292,11 +308,18 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                   const isLiveDay = day.date === liveDate;
                   const isToday = isLiveDay || day.date === today;
                   if (!day.studyDay) {
+                    const practices = perspective === 'group' ? dayPractices(day, perspective) : [];
+                    const note = noteWithoutPractices(day, practices);
                     return pair === range.first ? (
                       <td key={day.date} rowSpan={pairs.length} className="hatch bg-block-subtle px-3.5 py-4 text-center align-middle">
-                        <span className="inline-block rounded-tag bg-surface px-2 py-1 text-caption text-secondary">
-                          {day.note ?? 'Не навчальний день'}
-                        </span>
+                        {practices.length > 0 ? (
+                          <PracticeBlock practices={practices} perspective={perspective} className="rounded-tag bg-surface px-3 py-2.5" />
+                        ) : null}
+                        {note || practices.length === 0 ? (
+                          <span className={cn('inline-block rounded-tag bg-surface px-2 py-1 text-caption text-secondary', practices.length > 0 && 'mt-2')}>
+                            {note ?? 'Не навчальний день'}
+                          </span>
+                        ) : null}
                       </td>
                     ) : null;
                   }

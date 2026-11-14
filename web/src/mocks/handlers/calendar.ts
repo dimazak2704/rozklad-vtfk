@@ -20,7 +20,7 @@ import { ACADEMIC_YEAR, BELL_PROFILES, CALENDAR_PERIODS, SEMESTERS, SHIFT_WINDOW
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, problem, readJson } from '../kit';
 import { createMockCollection, createMockStore } from '../store';
-import { groupRefOf, groups } from './catalog';
+import { groupRefOf, groups, teachers } from './catalog';
 
 const KINDS: readonly CalendarPeriodKind[] = ['HOLIDAY', 'NO_CLASSES', 'PRACTICE', 'STUDY_MODE', 'EXAM_SESSION'];
 const MODES: readonly StudyMode[] = ['OFFLINE', 'ONLINE', 'MIXED'];
@@ -55,6 +55,8 @@ export const periods = createMockCollection<CalendarPeriod>('Період', () =
   CALENDAR_PERIODS.map((p) => ({
     ...p,
     groups: (p.groupIds ?? []).map((id) => groups.find(id)).filter((g) => g !== undefined).map(groupRefOf),
+    supervisorIds: p.supervisorIds ?? [],
+    supervisors: p.supervisors ?? [],
     version: 0,
   })),
 );
@@ -292,7 +294,26 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
   }
   const orderNote = body.orderNote?.trim() || null;
   if (orderNote && orderNote.length > 500) errors.add('orderNote', 'Не довше за 500 символів.');
+  // керівники практики, як у core: лише для PRACTICE, кожен — активний викладач, без повторів
+  const supervisorIds = body.supervisorIds ?? [];
+  if (supervisorIds.length > 0 && body.kind !== 'PRACTICE') {
+    errors.add('supervisorIds', 'Керівників призначають лише для періоду практики.');
+  } else {
+    supervisorIds.forEach((teacherId, i) => {
+      const teacher = teachers.find(teacherId);
+      if (supervisorIds.indexOf(teacherId) !== i) errors.add(`supervisorIds[${i}]`, 'Цього викладача вже призначено керівником.');
+      else if (!teacher) errors.add(`supervisorIds[${i}]`, 'Викладача не знайдено.');
+      else if (!teacher.active) errors.add(`supervisorIds[${i}]`, `Викладач ${teacher.shortName} неактивний: його не можна призначити керівником.`);
+    });
+  }
   errors.throwIfAny();
+  const supervisors = body.kind === 'PRACTICE'
+    ? supervisorIds
+        .map((tid) => teachers.find(tid))
+        .filter((t) => t !== undefined)
+        .map((t) => ({ id: t.id, shortName: t.shortName, displayName: t.displayName }))
+        .sort((a, b) => a.shortName.localeCompare(b.shortName, 'uk'))
+    : [];
   const fields = {
     semesterId: body.semesterId,
     kind: body.kind,
@@ -308,6 +329,8 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
       scope === 'GROUPS'
         ? [...new Set(groupIds)].map((gid) => groups.find(gid)).filter((g) => g !== undefined).map(groupRefOf)
         : [],
+    supervisorIds: supervisors.map((t) => t.id),
+    supervisors,
   };
   if (id) {
     return periods.update(id, (current) => {

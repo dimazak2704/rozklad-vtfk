@@ -8,6 +8,8 @@ import { daySlots, type DaySlot, type Perspective } from '@/lib/schedule';
 import { EmptyState } from '../ui/EmptyState';
 import { Skeleton } from '../ui/Skeleton';
 import { LessonCell } from './LessonCell';
+import { dayPractices, noteWithoutPractices } from './practice';
+import { PracticeBlock } from './PracticeBlock';
 import { VacatedSlot } from './VacatedSlot';
 
 export interface DayListProps {
@@ -76,6 +78,8 @@ export function DayList({
   const minutes = isToday ? (at ?? live.clock.minutes + live.clock.seconds / 60) : null;
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const relative = relativeDayLabel(day.date, today);
+  const practices = dayPractices(day, perspective);
+  const note = noteWithoutPractices(day, practices);
   // перерва: лінія «зараз» стоїть перед першою парою, що ще не почалась (але не перед першою парою дня)
   const breakBefore =
     minutes === null
@@ -91,20 +95,25 @@ export function DayList({
         </header>
       ) : null}
 
-      {day.note ? (
+      {note ? (
         <p className="flex items-start gap-2 text-caption text-secondary">
           <Info aria-hidden="true" className="mt-px size-4 shrink-0 text-muted" />
-          {day.note}
+          {note}
         </p>
       ) : null}
 
+      {/* практика групи стоїть замість «Не навчальний день»; керівник бачить її над своїми парами */}
+      {practices.length > 0 ? <PracticeBlock practices={practices} perspective={perspective} /> : null}
+
       {!day.studyDay || slots.length === 0 ? (
-        <EmptyState
-          size="sm"
-          align="start"
-          title={day.studyDay ? 'Цього дня пар немає.' : 'Не навчальний день.'}
-          description={day.studyDay ? undefined : 'Занять у цей день не проводять.'}
-        />
+        practices.length > 0 ? null : (
+          <EmptyState
+            size="sm"
+            align="start"
+            title={day.studyDay ? 'Цього дня пар немає.' : 'Не навчальний день.'}
+            description={day.studyDay ? undefined : 'Занять у цей день не проводять.'}
+          />
+        )
       ) : (
         <ol className="flex flex-col">
           {slots.map((slot, index) => {

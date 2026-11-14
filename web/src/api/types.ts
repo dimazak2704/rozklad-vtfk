@@ -332,6 +332,22 @@ export interface DayDto {
   studyDay: boolean;
   note: Nullable<string>;
   lessons: LessonView[];
+  /**
+   * Практика дня: для групи — та, на якій вона, для викладача — ті, якими він керує; для аудиторії порожньо.
+   * Старіший core поля не має.
+   */
+  practices?: PracticeDto[];
+}
+
+/** Період практики в розкладі дня: назва, керівники (може ще не бути), групи або курси. */
+export interface PracticeDto {
+  periodId: Uuid;
+  title: string;
+  startsOn: IsoDate;
+  endsOn: IsoDate;
+  supervisors: TeacherRef[];
+  groups: GroupRef[];
+  courses: number[];
 }
 
 /** GET /api/public/schedule/{group|teacher|room}/{id}?from=&to= (не більше 31 дня) */
@@ -547,6 +563,9 @@ export interface CalendarPeriodDto {
   scope: PeriodScope;
   courses: Nullable<number[]>;
   groupIds: Nullable<Uuid[]>;
+  /** Керівники практики (лише PRACTICE); старіший core полів не має. */
+  supervisorIds?: Uuid[];
+  supervisors?: TeacherRef[];
 }
 
 /** GET/PUT /api/admin/shift-windows */

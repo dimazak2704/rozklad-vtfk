@@ -64,6 +64,7 @@ import {
 import { mockId } from '../ids';
 import { apiPath, badRequest, notFound, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
+import { periods } from './calendar';
 import { printedReason } from './admin-daily/printed';
 import { currentSettings } from './settings';
 
@@ -897,7 +898,7 @@ export const handlers = [
       ]);
     }
     const now = new Date();
-    const schedule = buildSchedule(type, String(params.id), from, to, { overlay: publicOverlay(now) });
+    const schedule = buildSchedule(type, String(params.id), from, to, { overlay: publicOverlay(now), periods: periods.all() });
     if (!schedule) return notFound(`${OWNER_NOUN[type]} з id ${String(params.id)} не знайдено.`);
     return HttpResponse.json(schedule);
   }),

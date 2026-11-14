@@ -1,4 +1,5 @@
 import type { CalendarPeriod, CalendarPeriodRequest } from '@/api/calendar';
+import type { TeacherRef } from '@/api/types';
 import { SCOPE_LABEL } from './labels';
 
 /** Кого стосується період: «Усі групи», «3 курс», «2КІ3» або «4КІ1, 4КІ2, 4КІ3 та ще 2». */
@@ -27,6 +28,13 @@ export function periodRequest(period: CalendarPeriod): CalendarPeriodRequest {
     scope: period.scope,
     courses: period.courses,
     groupIds: period.groupIds ?? period.groups.map((g) => g.id),
+    supervisorIds: period.kind === 'PRACTICE' ? (period.supervisorIds ?? []) : [],
     version: period.version,
   };
+}
+
+/** «Керівник: Кренцін М.Д.» або «Керівники: Кренцін М.Д., Непийвода М.В.», як у паперах коледжу. */
+export function supervisorsLabel(supervisors: ReadonlyArray<Pick<TeacherRef, 'shortName'>>): string {
+  const names = supervisors.map((t) => t.shortName).join(', ');
+  return `${supervisors.length === 1 ? 'Керівник' : 'Керівники'}: ${names}`;
 }

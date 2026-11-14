@@ -6,6 +6,8 @@ import { formatDayMonth, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, weekdayName } from '@/lib/labels';
 import { daySlots, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
+import { dayPractices, noteWithoutPractices } from './practice';
+import { PracticeBlock } from './PracticeBlock';
 import { VacatedSlot } from './VacatedSlot';
 
 export interface DayColumnProps {
@@ -28,6 +30,8 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
   const live = useNow(null, { date: day.date });
   const isToday = day.date === today;
   const minutes = at ?? (isToday && live.isToday ? live.clock.minutes + live.clock.seconds / 60 : null);
+  const practices = dayPractices(day, perspective);
+  const note = noteWithoutPractices(day, practices);
 
   return (
     <section
@@ -50,10 +54,19 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
         </p>
       </header>
 
-      {day.note ? <p className="border-b border-separator px-3 py-2 text-caption text-secondary">{day.note}</p> : null}
+      {note ? <p className="border-b border-separator px-3 py-2 text-caption text-secondary">{note}</p> : null}
+
+      {/* група на практиці: блок замість «Не навчальний день»; керівник: блок над своїми парами */}
+      {practices.length > 0 && day.studyDay && slots.length > 0 ? (
+        <PracticeBlock practices={practices} perspective={perspective} className="border-b border-separator px-3 py-2" />
+      ) : null}
 
       {!day.studyDay || slots.length === 0 ? (
-        <p className="px-3 py-5 text-caption text-muted">{day.studyDay ? 'Пар немає' : 'Не навчальний день'}</p>
+        practices.length > 0 ? (
+          <PracticeBlock practices={practices} perspective={perspective} className="px-3 py-4" />
+        ) : (
+          <p className="px-3 py-5 text-caption text-muted">{day.studyDay ? 'Пар немає' : 'Не навчальний день'}</p>
+        )
       ) : (
         <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
           {slots.map((slot) => {

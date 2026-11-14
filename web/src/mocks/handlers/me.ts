@@ -24,6 +24,7 @@ import { bellSlots, buildSchedule, isStudyDay, scheduleRangeError, SEMESTERS } f
 import { mockId } from '../ids';
 import { apiPath, badRequest, businessRule, notFound, problem, readJson, requiredParam } from '../kit';
 import { createMockStore } from '../store';
+import { periods } from './calendar';
 import { changesForTeacher, KRENTSIN, publicOverlay, replyToChange } from './public';
 
 /** sub демо-користувача krentsin у realm (фіксовані id, ARCHITECTURE §6 / foundation). */
@@ -232,7 +233,7 @@ export const handlers = [
         { field: 'to', message: 'Не більше 31 дня від from' },
       ]);
     }
-    return HttpResponse.json(buildSchedule('TEACHER', KRENTSIN.id, from, to, { overlay: publicOverlay(new Date()) }));
+    return HttpResponse.json(buildSchedule('TEACHER', KRENTSIN.id, from, to, { overlay: publicOverlay(new Date()), periods: periods.all() }));
   }),
 
   http.get(apiPath('/me/changes'), ({ request }) => {

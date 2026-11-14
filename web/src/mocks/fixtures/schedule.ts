@@ -4,10 +4,12 @@
  * Детермінований: ті самі вхідні дані дають ті самі id і порядок.
  */
 import type {
+  CalendarPeriodDto,
   DayDto,
   EntityType,
   IsoDate,
   LessonView,
+  PracticeDto,
   ScheduleDto,
   ScheduleOwner,
   TemplateLessonDto,
@@ -17,7 +19,7 @@ import type {
 import { addDays, compareIsoDates, diffDays, isIsoDate, isoWeekday } from '@/lib/date';
 import { weekdayName } from '@/lib/labels';
 import { mockId } from '../ids';
-import { bellSlots, isStudyDay, parityOn, periodsOn } from './calendar';
+import { bellSlots, CALENDAR_PERIODS, isStudyDay, parityOn, periodsOn } from './calendar';
 import { findGroup, findRoom, findTeacher } from './catalog';
 import { TEMPLATE_LESSONS } from './timetable';
 
@@ -32,6 +34,8 @@ export interface ScheduleOptions {
   overlay?: (date: IsoDate, lessons: LessonView[]) => LessonView[];
   /** Інший шаблон (наприклад, чернетка версії) замість опублікованого. */
   template?: readonly TemplateLessonDto[];
+  /** Календарні періоди з керівниками практики (сховище мок-API); без них — демо-періоди. */
+  periods?: readonly CalendarPeriodDto[];
 }
 
 const UK = new Intl.Collator('uk');
@@ -121,6 +125,26 @@ function groupDayNote(date: IsoDate, groupId: Uuid): string | null {
   return titles.length > 0 ? titles.join('; ') : null;
 }
 
+/** Практика дня: група бачить свою, викладач — ту, якою керує (CONTRACTS §1, DayDto.practices). */
+function dayPractices(date: IsoDate, owner: ScheduleOwner, periods: readonly CalendarPeriodDto[]): PracticeDto[] {
+  if (owner.type === 'ROOM' || !isStudyDay(date)) return [];
+  const group = owner.type === 'GROUP' ? findGroup(owner.id) : undefined;
+  if (owner.type === 'GROUP' && !group) return [];
+  // керівник бачить практику будь-якої групи, тож для викладача беремо всі періоди дати
+  const covering = owner.type === 'GROUP' ? periodsOn(date, group, periods) : periods.filter((p) => p.startsOn <= date && date <= p.endsOn);
+  return covering
+    .filter((p) => p.kind === 'PRACTICE' && (owner.type === 'GROUP' || (p.supervisorIds ?? []).includes(owner.id)))
+    .map((p) => ({
+      periodId: p.id,
+      title: p.title,
+      startsOn: p.startsOn,
+      endsOn: p.endsOn,
+      supervisors: p.supervisors ?? [],
+      groups: p.scope === 'GROUPS' ? (p.groupIds ?? []).map(findGroup).filter((g) => g !== undefined).map((g) => ({ id: g.id, code: g.code, course: g.course })) : [],
+      courses: p.scope === 'COURSES' ? (p.courses ?? []) : [],
+    }));
+}
+
 /** Помилка параметрів from/to для 400 (українською) або null, якщо все гаразд. */
 export function scheduleRangeError(from: string | null, to: string | null): string | null {
   if (!from || !to) return 'Вкажіть дати from і to у форматі РРРР-ММ-ДД.';
@@ -156,6 +180,7 @@ export function buildSchedule(
       studyDay,
       note: owner.type === 'GROUP' ? groupDayNote(date, owner.id) : null,
       lessons: studyDay ? lessonsOn(date, options).filter((lesson) => belongsTo(lesson, owner)) : [],
+      practices: dayPractices(date, owner, options.periods ?? CALENDAR_PERIODS),
     });
   }
   return { owner, from, to, days };

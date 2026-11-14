@@ -87,6 +87,8 @@ export interface CalendarPeriodRequest {
   scope?: PeriodScope;
   courses?: number[] | null;
   groupIds?: Uuid[] | null;
+  /** Керівники практики: лише для PRACTICE, активні викладачі. */
+  supervisorIds?: Uuid[] | null;
   version?: number;
 }
 

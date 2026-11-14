@@ -27,6 +27,7 @@ const periodSchema = z
     scope: z.enum(['ALL', 'COURSES', 'GROUPS']),
     courses: z.array(z.number()),
     groupIds: z.array(z.string()),
+    supervisorIds: z.array(z.string()),
     orderNote: z.string().trim().max(500, 'Не довше за 500 символів'),
   })
   .superRefine((value, ctx) => {
@@ -45,7 +46,7 @@ const periodSchema = z
   });
 
 type PeriodValues = z.infer<typeof periodSchema>;
-const FIELDS = ['kind', 'title', 'startsOn', 'endsOn', 'studyMode', 'scope', 'courses', 'groupIds', 'orderNote'] as const;
+const FIELDS = ['kind', 'title', 'startsOn', 'endsOn', 'studyMode', 'scope', 'courses', 'groupIds', 'supervisorIds', 'orderNote'] as const;
 const COURSES = [1, 2, 3, 4] as const;
 
 interface PeriodFormDialogProps {
@@ -64,6 +65,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
   const save = useSaveCalendarPeriod();
   const remove = useDeleteCalendarPeriod();
   const groups = useCatalogOptions('groups', { active: true });
+  const teachers = useCatalogOptions('teachers', { active: true });
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<PeriodValues>({
     resolver: zodResolver(periodSchema),
@@ -76,6 +78,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       scope: period?.scope ?? 'GROUPS',
       courses: period?.courses ?? [],
       groupIds: period?.groupIds ?? [],
+      supervisorIds: period?.supervisorIds ?? [],
       orderNote: period?.orderNote ?? '',
     },
   });
@@ -83,6 +86,12 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
   const values = useWatch({ control: form.control }) as PeriodValues;
   const groupById = new Map((groups.items ?? []).map((g) => [g.id, g]));
   const chosenGroups = values.groupIds.map((id) => groupById.get(id)).filter((g) => g !== undefined);
+  // підпис керівника: з довідника активних, а для вже призначеного — і з самого періоду
+  const supervisorNames = new Map<string, string>([
+    ...(period?.supervisors ?? []).map((t): [string, string] => [t.id, t.shortName]),
+    ...(teachers.items ?? []).map((t): [string, string] => [t.id, t.shortName]),
+  ]);
+  const chosenSupervisors = values.supervisorIds.map((id) => ({ id, name: supervisorNames.get(id) ?? '…' }));
   const draftNote = composeOrderNote({
     kind: values.kind,
     title: values.title ?? '',
@@ -122,6 +131,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
         scope: data.scope,
         courses: data.scope === 'COURSES' ? data.courses : null,
         groupIds: data.scope === 'GROUPS' ? data.groupIds : null,
+        supervisorIds: data.kind === 'PRACTICE' ? data.supervisorIds : [],
         orderNote: blankToNull(data.orderNote),
         version: period?.version,
       };
@@ -130,13 +140,17 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       journalPeriod(period, body, saved);
       onOpenChange(false);
     } catch (error) {
-      setFormError(applyServerErrors(error, form.setError, FIELDS, { 'groupIds[0]': 'groupIds' }));
+      setFormError(applyServerErrors(error, form.setError, FIELDS, { 'groupIds[0]': 'groupIds', 'supervisorIds[0]': 'supervisorIds' }));
     }
   });
 
   const groupOptions = (groups.items ?? [])
     .filter((g) => !values.groupIds.includes(g.id))
     .map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс` }));
+
+  const supervisorOptions = (teachers.items ?? [])
+    .filter((t) => !values.supervisorIds.includes(t.id))
+    .map((t) => ({ value: t.id, label: t.shortName, keywords: [t.displayName] }));
 
   return (
     <FormDialog
@@ -164,6 +178,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
                     onValueChange={(next) => {
                       field.onChange(next);
                       if (next !== 'STUDY_MODE') form.setValue('studyMode', null);
+                      if (next !== 'PRACTICE') form.setValue('supervisorIds', []);
                     }}
                     options={PERIOD_KIND_OPTIONS}
                   />
@@ -287,6 +302,50 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
                         ))}
                       </ul>
                     ) : null}
+                  </div>
+                </Field>
+              )}
+            />
+          ) : null}
+          {values.kind === 'PRACTICE' ? (
+            <Controller
+              control={form.control}
+              name="supervisorIds"
+              render={({ field }) => (
+                <Field
+                  label="Керівники практики"
+                  error={errors.supervisorIds?.message}
+                  hint="Група на дні практики побачить «Практика» з керівниками, керівник — «Керівництво практикою»."
+                >
+                  <div className="flex flex-col gap-2">
+                    <Combobox
+                      value={null}
+                      onValueChange={(id) => {
+                        if (id) field.onChange([...field.value, id]);
+                      }}
+                      options={supervisorOptions}
+                      placeholder="Додати керівника…"
+                      searchPlaceholder="Прізвище викладача"
+                      loading={teachers.isPending}
+                    />
+                    {chosenSupervisors.length > 0 ? (
+                      <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані керівники">
+                        {chosenSupervisors.map((teacher) => (
+                          <li key={teacher.id} className="inline-flex items-center gap-0.5">
+                            <Plate size="md">{teacher.name}</Plate>
+                            <IconButton
+                              label={`Прибрати керівника ${teacher.name}`}
+                              icon={<X aria-hidden="true" className="size-3.5" />}
+                              size="sm"
+                              className="size-7"
+                              onClick={() => field.onChange(field.value.filter((id) => id !== teacher.id))}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-caption text-muted">Керівника не призначено.</p>
+                    )}
                   </div>
                 </Field>
               )}

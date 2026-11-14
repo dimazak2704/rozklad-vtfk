@@ -9,7 +9,7 @@ import { formatNumericDate } from '@/lib/date';
 import type { CalendarPeriodKind } from '@/api/types';
 import { PERIOD_KIND_LABEL, STUDY_MODE_LABEL } from './labels';
 import { PeriodFormDialog } from './PeriodForm';
-import { periodAudience } from './periods';
+import { periodAudience, supervisorsLabel } from './periods';
 
 const KIND_DOT: Record<CalendarPeriodKind, string> = {
   HOLIDAY: 'bg-[var(--fill-cancel)]',
@@ -50,7 +50,26 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
           </span>
         ),
       },
-      { id: 'title', header: 'Назва', rowHeader: true, sortValue: (p) => p.title, cell: (p) => p.title },
+      {
+        id: 'title',
+        header: 'Назва',
+        rowHeader: true,
+        sortValue: (p) => p.title,
+        // у практики під назвою керівники; без них диспетчер бачить, що їх ще треба призначити
+        cell: (p) =>
+          p.kind === 'PRACTICE' ? (
+            <span className="flex flex-col gap-0.5">
+              <span>{p.title}</span>
+              {p.supervisors && p.supervisors.length > 0 ? (
+                <span className="text-caption text-secondary">{supervisorsLabel(p.supervisors)}</span>
+              ) : (
+                <EmptyValue label="керівника не призначено" />
+              )}
+            </span>
+          ) : (
+            p.title
+          ),
+      },
       {
         id: 'dates',
         header: 'Дати',
