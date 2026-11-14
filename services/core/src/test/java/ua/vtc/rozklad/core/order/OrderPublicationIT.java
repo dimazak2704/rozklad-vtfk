@@ -58,6 +58,7 @@ import ua.vtc.rozklad.core.substitution.internal.change.ChangeDto;
 import ua.vtc.rozklad.core.substitution.internal.change.ChangeViews;
 import ua.vtc.rozklad.core.substitution.internal.change.CreateChangeRequest;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
+import ua.vtc.rozklad.core.support.TestClock;
 import ua.vtc.rozklad.core.timetable.Lesson;
 import ua.vtc.rozklad.core.timetable.LessonConflictChecker;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
@@ -120,6 +121,9 @@ class OrderPublicationIT {
 
     @Autowired
     private RestTestClient client;
+
+    @Autowired
+    private TestClock clock;
 
     @Autowired
     private TeacherActivityProvider teacherActivity;
@@ -223,6 +227,7 @@ class OrderPublicationIT {
 
     @AfterEach
     void cleanUp() {
+        clock.reset();
         fixture.cleanUp();
     }
 
@@ -281,6 +286,7 @@ class OrderPublicationIT {
                 && event.dates().equals(List.of(MONDAY)), 1, WAIT)).singleElement()
                 .satisfies(event -> assertThat(event.groupIds()).hasSize(7));
 
+        visitorsLookOn(MONDAY);
         client.get().uri("/api/public/changes?date=2026-10-19").exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -303,6 +309,7 @@ class OrderPublicationIT {
         fixture.period(semester, CalendarPeriodKind.HOLIDAY, "День захисників", LocalDate.of(2026, 10, 14),
                 LocalDate.of(2026, 10, 14), null, null);
 
+        visitorsLookOn(MONDAY);
         client.get().uri("/api/public/changes?date=2026-10-14").exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -334,6 +341,7 @@ class OrderPublicationIT {
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM change_replaced_lesson WHERE change_id = ?", Integer.class,
                 block)).isEqualTo(5);
+        visitorsLookOn(MONDAY);
         client.get().uri("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-19", tk1.getId()).exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -524,6 +532,7 @@ class OrderPublicationIT {
         assertThat(after.supersededBy())
                 .isEqualTo(new ChangeDto.Successor(cancellation.id(), ChangeKind.CANCEL, amendment.id()));
         assertThat(changeViews.toDto(changes.findById(cancellation.id()).orElseThrow()).supersededBy()).isNull();
+        visitorsLookOn(MONDAY);
         client.get().uri("/api/public/schedule/group/{id}?from={day}&to={day}", ki12.getId(), MONDAY, MONDAY)
                 .exchange()
                 .expectStatus().isOk()
@@ -710,5 +719,13 @@ class OrderPublicationIT {
 
     private static String text(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * Public reads go without a token here, and visitors see a week of history: the clock stops on {@code day}
+     * at 10:00 in Kyiv after the order is built, so the October dates of order №35 are open (reset after each test).
+     */
+    private void visitorsLookOn(LocalDate day) {
+        clock.stopAt(day.atTime(10, 0).atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant());
     }
 }

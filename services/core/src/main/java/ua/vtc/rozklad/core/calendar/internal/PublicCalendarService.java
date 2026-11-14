@@ -22,6 +22,7 @@ import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.PublicMetaDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SemesterRefDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SlotDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.StudyDayDto;
+import ua.vtc.rozklad.core.settings.PublicHistory;
 import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 import ua.vtc.rozklad.core.shared.time.StandClock;
@@ -41,19 +42,23 @@ public class PublicCalendarService {
     private final CalendarQueries calendar;
     private final BellProfileRepository bellProfiles;
     private final SettingsService settings;
+    private final PublicHistory history;
     private final Clock clock;
 
     public PublicCalendarService(CalendarQueries calendar, BellProfileRepository bellProfiles,
-                                 SettingsService settings, Clock clock) {
+                                 SettingsService settings, PublicHistory history, Clock clock) {
         this.calendar = calendar;
         this.bellProfiles = bellProfiles;
         this.settings = settings;
+        this.history = history;
         this.clock = clock;
     }
 
     /**
      * The semester of today, otherwise the active one (between semesters the header still names
      * the semester; week and parity are then {@code null} because today is outside it).
+     * {@code publicHistoryFrom} is the first date visitors may open, the same for every caller (staff see
+     * further back, but the meta does not depend on who asks).
      */
     public PublicMetaDto meta() {
         Instant now = clock.instant();
@@ -79,6 +84,7 @@ public class PublicCalendarService {
                 next,
                 calendar.bellProfileOn(today).map(PublicCalendarService::profileRef).orElse(null),
                 nextStudyDay(today),
+                history.from(),
                 now,
                 StandClock.isShifted(clock) ? Boolean.TRUE : null);
     }

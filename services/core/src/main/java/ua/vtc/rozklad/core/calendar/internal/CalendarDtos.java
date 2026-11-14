@@ -170,6 +170,7 @@ public final class CalendarDtos {
             PairDto nextPair,
             ProfileRefDto bellProfile,
             StudyDayDto nextStudyDay,
+            LocalDate publicHistoryFrom,
             @JsonInclude(JsonInclude.Include.NON_NULL) Instant now,
             @JsonInclude(JsonInclude.Include.NON_NULL) Boolean standTime) {
     }

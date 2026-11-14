@@ -90,13 +90,18 @@ class HistoricOrderImportIT {
                 .andExpect(jsonPath("$.itemCount").value(2))
                 .andExpect(jsonPath("$.created").value(true));
 
-        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19").with(TestJwts.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.order.number").value(35))
                 .andExpect(jsonPath("$.order.imported").value(true))
                 .andExpect(jsonPath("$.groups[0].group.code").value("1КІ2"))
                 .andExpect(jsonPath("$.groups[0].group.id").doesNotExist())
                 .andExpect(jsonPath("$.groups[0].items[0].to.teacher").value("Прокопчук"));
+        // відвідувач бачить лише тиждень історії, а 19.10.2026 давно минуло
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HISTORY_NOT_PUBLIC"))
+                .andExpect(jsonPath("$.publicHistoryFrom").value(LocalDate.now(clock).minusDays(7).toString()));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM change", Integer.class)).as("nothing is applied").isZero();
         assertThat(jdbc.queryForObject("SELECT title FROM order_document WHERE number = 35", String.class))
                 .isEqualTo("РОЗПОРЯДЖЕННЯ №35");
@@ -120,7 +125,7 @@ class HistoricOrderImportIT {
                 .andExpect(jsonPath("$.replaced").value(true))
                 .andExpect(jsonPath("$.itemCount").value(2));
 
-        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19").with(TestJwts.admin()))
                 .andExpect(jsonPath("$.groups[0].items[0].to.teacher").value("Прокопчук О."));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_document", Integer.class)).isOne();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_item", Integer.class)).isEqualTo(2);
@@ -208,7 +213,7 @@ class HistoricOrderImportIT {
                 .andExpect(status().isNoContent());
 
         assertThat(numbering.nextNumber(semester.getId())).isEqualTo(nextBefore);
-        mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+        mvc.perform(get("/api/public/changes").param("date", "2026-10-19").with(TestJwts.admin()))
                 .andExpect(jsonPath("$.order").doesNotExist());
         importOrder(ORDER_35).andExpect(status().isOk())
                 .andExpect(jsonPath("$.created").value(true))
@@ -247,7 +252,7 @@ class HistoricOrderImportIT {
                 .andExpect(jsonPath("$.code").value("ORDER_IMPORT_LABEL_MISMATCH"))
                 .andExpect(jsonPath("$.detail").value("У розпорядженні надруковано «П'ЯТНИЦЯ», а 19.10.2026 — "
                         + "понеділок. Перевірте дату або день тижня."));
-        String computed = JsonPath.read(mvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
+        String computed = JsonPath.read(mvc.perform(get("/api/public/changes").param("date", "2026-10-19").with(TestJwts.admin()))
                 .andReturn().getResponse().getContentAsString(), "$.parity");
         String wrong = "NUMERATOR".equals(computed) ? "ЗНАМЕННИК" : "ЧИСЕЛЬНИК";
         importOrder(ORDER_35.replace("\"parityLabel\":\"ЗНАМЕННИК\"", "\"parityLabel\":\"" + wrong + "\""))

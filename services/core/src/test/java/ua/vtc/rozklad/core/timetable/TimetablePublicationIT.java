@@ -43,6 +43,7 @@ import ua.vtc.rozklad.core.calendar.WeekParityOverride;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos;
 import ua.vtc.rozklad.core.calendar.internal.CalendarPeriodService;
 import ua.vtc.rozklad.core.calendar.internal.SemesterService;
+import ua.vtc.rozklad.core.settings.PublicHistory;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
@@ -240,9 +241,14 @@ class TimetablePublicationIT {
                 .jsonPath("$.days[0].lessons").isEmpty();
     }
 
+    /**
+     * A visitor's subscription (calendar apps send no token) has every scheduled lesson from the Monday of the
+     * week where the public history window starts (a week back by default); older weeks of the semester are left out.
+     */
     @Test
-    void groupCalendarSubscriptionHasEveryScheduledLesson() {
+    void groupCalendarSubscriptionHasEveryScheduledLessonOfThePublicWeeks() {
         publication.publish(imports.importTimetable(importCommand()).versionId(), data.semester.getStartsOn(), "admin");
+        LocalDate firstPublicMonday = PublicHistory.weekStart(LocalDate.now(clock).minusDays(7));
 
         byte[] ics = client.get().uri("/api/public/ics/group/{id}.ics", data.group4ki1.getId())
                 .exchange()
@@ -253,7 +259,10 @@ class TimetablePublicationIT {
         String calendar = new String(ics, StandardCharsets.UTF_8);
         assertThat(calendar).startsWith("BEGIN:VCALENDAR\r\n").contains("X-WR-CALNAME:Розклад 4КІ1 — ВТФК");
         assertThat(calendar.split("BEGIN:VEVENT", -1).length - 1).isEqualTo(count(
-                "SELECT count(*) FROM lesson WHERE group_id = ? AND status = 'SCHEDULED'", data.group4ki1.getId()));
+                "SELECT count(*) FROM lesson WHERE group_id = ? AND status = 'SCHEDULED' AND date >= ?",
+                data.group4ki1.getId(), firstPublicMonday));
+        assertThat(count("SELECT count(*) FROM lesson WHERE group_id = ? AND status = 'SCHEDULED' AND date < ?",
+                data.group4ki1.getId(), firstPublicMonday)).as("the semester's first week is older").isPositive();
     }
 
     @Test

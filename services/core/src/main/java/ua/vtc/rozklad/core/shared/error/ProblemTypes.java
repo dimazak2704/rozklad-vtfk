@@ -8,6 +8,8 @@ public final class ProblemTypes {
     public static final URI VALIDATION = of("validation");
     public static final URI BAD_REQUEST = of("bad-request");
     public static final URI NOT_FOUND = of("not-found");
+    /** 404: an anonymous visitor asked for substitutions older than the public window ({@link HistoryNotPublicException}). */
+    public static final URI HISTORY_NOT_PUBLIC = of("history-not-public");
     public static final URI CONFLICT = of("conflict");
     public static final URI SCHEDULE_CONFLICT = of("schedule-conflict");
     public static final URI STALE_DATA = of("stale-data");

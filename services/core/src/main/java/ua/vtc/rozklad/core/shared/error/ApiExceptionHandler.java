@@ -142,6 +142,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, ProblemTypes.NOT_FOUND, "Не знайдено", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(HistoryNotPublicException.class)
+    ResponseEntity<Object> handleHistoryNotPublic(HistoryNotPublicException ex, HttpServletRequest request) {
+        ProblemDetail body = body(HttpStatus.NOT_FOUND, ProblemTypes.HISTORY_NOT_PUBLIC, "Архів недоступний",
+                ex.getMessage(), request);
+        body.setProperty("code", HistoryNotPublicException.CODE);
+        body.setProperty("publicHistoryFrom", ex.getPublicHistoryFrom().toString());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler(ConflictException.class)
     ResponseEntity<Object> handleConflict(ConflictException ex, HttpServletRequest request) {
         if (ex.getConflicts().isEmpty()) {

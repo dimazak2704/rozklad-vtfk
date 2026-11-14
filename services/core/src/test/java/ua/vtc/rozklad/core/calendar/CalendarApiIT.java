@@ -288,7 +288,8 @@ class CalendarApiIT {
                 .andExpect(jsonPath("$.supervisorIds", hasSize(2)))
                 .andReturn());
 
-        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-25", group))
+        // жовтень 2026 уже поза тижнем історії для відвідувачів: розклад читає викладач
+        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-25", group).with(TestJwts.teacher()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.days", hasSize(5)))
                 .andExpect(jsonPath("$.days[0].studyDay").value(false))
@@ -296,7 +297,8 @@ class CalendarApiIT {
                 .andExpect(jsonPath("$.days[0].practices[0].supervisors[0].shortName").value("Кренцін М.Д."))
                 .andExpect(jsonPath("$.days[0].practices[0].groups[0].code").value("2КІ3"))
                 .andExpect(jsonPath("$.days[4].practices", hasSize(1)));
-        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-30&to=2026-11-02", krentsin))
+        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-30&to=2026-11-02", krentsin)
+                        .with(TestJwts.teacher()))
                 .andExpect(jsonPath("$.days", hasSize(2)))
                 .andExpect(jsonPath("$.days[0].practices[0].title").value("Електрорадіомонтажна практика"))
                 .andExpect(jsonPath("$.days[0].practices[0].groups[0].code").value("2КІ3"))
@@ -309,9 +311,10 @@ class CalendarApiIT {
                                 .replace("}", ",\"version\":0}")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.supervisors", hasSize(0)));
-        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-19&to=2026-10-19", krentsin))
+        mvc.perform(get("/api/public/schedule/teacher/{id}?from=2026-10-19&to=2026-10-19", krentsin)
+                        .with(TestJwts.teacher()))
                 .andExpect(jsonPath("$.days[0].practices", hasSize(0)));
-        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-19", group))
+        mvc.perform(get("/api/public/schedule/group/{id}?from=2026-10-19&to=2026-10-19", group).with(TestJwts.teacher()))
                 .andExpect(jsonPath("$.days[0].practices[0].supervisors", hasSize(0)));
     }
 
@@ -328,7 +331,12 @@ class CalendarApiIT {
                 .andExpect(jsonPath("$.semester.startsOn").value(today.minusDays(40).toString()))
                 .andExpect(jsonPath("$.weekNumber").isNumber())
                 .andExpect(jsonPath("$.parity").isString())
-                .andExpect(jsonPath("$.bellProfile.name").value("2 зміни, 60 хв"));
+                .andExpect(jsonPath("$.bellProfile.name").value("2 зміни, 60 хв"))
+                .andExpect(jsonPath("$.publicHistoryFrom").value(today.minusDays(7).toString()));
+        // межа однакова для всіх: персонал бачить і старіше, але meta від цього не залежить
+        mvc.perform(get("/api/public/meta").with(TestJwts.teacher()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicHistoryFrom").value(today.minusDays(7).toString()));
 
         LocalDate monday = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
         mvc.perform(get("/api/public/bells").param("date", monday.toString()))

@@ -23,7 +23,8 @@ import ua.vtc.rozklad.core.timetable.ScheduleOwnerType;
 
 /**
  * Calendar subscription (ICS) of a group or teacher for the current semester: every scheduled
- * dated lesson, changes included («Додати в Google Календар», UI.md §4).
+ * dated lesson, changes included («Додати в Google Календар», UI.md §4). A visitor's calendar starts at
+ * the public history window ({@code PublicHistory}), staff get the whole semester.
  */
 @Service
 @Transactional(readOnly = true)
@@ -47,8 +48,12 @@ public class IcsExportService {
         this.clock = clock;
     }
 
-    /** @throws IllegalArgumentException for room calendars (CONTRACTS.md offers group and teacher only) */
-    public IcsFile export(ScheduleOwnerType type, UUID ownerId) {
+    /**
+     * @param notBefore first date of the calendar ({@code null}: from the semester's start); a date after the
+     *                  semester gives a valid calendar without events
+     * @throws IllegalArgumentException for room calendars (CONTRACTS.md offers group and teacher only)
+     */
+    public IcsFile export(ScheduleOwnerType type, UUID ownerId, LocalDate notBefore) {
         if (type == ScheduleOwnerType.ROOM) {
             throw new IllegalArgumentException("ICS is available for groups and teachers only");
         }
@@ -58,7 +63,11 @@ public class IcsExportService {
         BellTimes bells = calendar.bellTimes(semesterCalendar).getOrDefault(semester.getId(), BellTimes.none());
         List<IcsCalendarWriter.Event> events = new ArrayList<>();
         int withoutTimes = 0;
-        for (LessonRow row : reads.forOwner(type, ownerId, semester.getStartsOn(), semester.getEndsOn())) {
+        LocalDate from = notBefore != null && notBefore.isAfter(semester.getStartsOn())
+                ? notBefore : semester.getStartsOn();
+        List<LessonRow> rows = from.isAfter(semester.getEndsOn())
+                ? List.of() : reads.forOwner(type, ownerId, from, semester.getEndsOn());
+        for (LessonRow row : rows) {
             if (!row.scheduled()) {
                 continue;
             }
