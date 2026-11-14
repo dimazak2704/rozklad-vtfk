@@ -18,11 +18,12 @@ public final class PublicCatalogDtos {
     }
 
     /**
-     * {@code fullName} is filled only when the setting {@code showTeacherFullNames} allows it and
-     * the first name is known; otherwise public pages show short names only.
+     * {@code fullName} and {@code firstName} are filled only when the setting {@code showTeacherFullNames}
+     * allows it and the first name is known; otherwise public pages show short names only. {@code firstName}
+     * lets pages write «Прізвище Ім'я» without the patronymic.
      */
     public record PublicTeacherDto(UUID id, String shortName, String displayName, String cycleCommission,
-                                   String fullName) {
+                                   String fullName, String firstName) {
     }
 
     /** {@code maxParallel}: how many groups the room hosts at once (the sports hall «с.з.» takes several). */

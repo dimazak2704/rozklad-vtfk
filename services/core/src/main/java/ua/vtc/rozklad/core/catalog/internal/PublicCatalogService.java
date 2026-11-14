@@ -16,6 +16,7 @@ import org.springframework.web.util.UriUtils;
 import ua.vtc.rozklad.core.catalog.Building;
 import ua.vtc.rozklad.core.catalog.BuildingRepository;
 import ua.vtc.rozklad.core.catalog.CatalogLabels;
+import ua.vtc.rozklad.core.catalog.CatalogText;
 import ua.vtc.rozklad.core.catalog.CycleCommission;
 import ua.vtc.rozklad.core.catalog.CycleCommissionRepository;
 import ua.vtc.rozklad.core.catalog.Department;
@@ -101,8 +102,10 @@ public class PublicCatalogService {
                 .sorted(Comparator.comparing(Teacher::getShortName, UkrainianOrder.NATURAL))
                 .map(teacher -> {
                     CycleCommission commission = commissionsById.get(teacher.getCycleCommissionId());
+                    String fullName = fullNameOrNull(teacher, fullNames);
                     return new PublicTeacherDto(teacher.getId(), teacher.getShortName(), teacher.getDisplayName(),
-                            commission == null ? null : commission.getName(), fullNameOrNull(teacher, fullNames));
+                            commission == null ? null : commission.getName(), fullName,
+                            fullName == null ? null : CatalogText.clean(teacher.getFirstName()));
                 })
                 .toList();
     }

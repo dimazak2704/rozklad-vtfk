@@ -130,4 +130,26 @@ class PublicCatalogSearchTest {
         assertThat(service.search("Микола", 10)).singleElement()
                 .satisfies(result -> assertThat(result.sublabel()).isEqualTo("Кренцін Микола Дмитрович"));
     }
+
+    @Test
+    void publicTeachersCarryTheFirstNameOnlyWhenTheSettingAllowsIt() {
+        krentsin.setFirstName("Микола");
+        krentsin.setMiddleName("Дмитрович");
+
+        assertThat(service.teachers()).filteredOn(t -> t.shortName().equals("Кренцін М.Д.")).singleElement()
+                .satisfies(t -> {
+                    assertThat(t.fullName()).isNull();
+                    assertThat(t.firstName()).isNull();
+                });
+
+        given(settings.showTeacherFullNames()).willReturn(true);
+        assertThat(service.teachers()).filteredOn(t -> t.shortName().equals("Кренцін М.Д.")).singleElement()
+                .satisfies(t -> {
+                    assertThat(t.fullName()).isEqualTo("Кренцін Микола Дмитрович");
+                    assertThat(t.firstName()).isEqualTo("Микола");
+                });
+        // no known first name: nothing, even when the setting allows it
+        assertThat(service.teachers()).filteredOn(t -> t.shortName().equals("Коваль")).singleElement()
+                .satisfies(t -> assertThat(t.firstName()).isNull());
+    }
 }

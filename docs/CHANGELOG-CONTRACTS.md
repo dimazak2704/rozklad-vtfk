@@ -500,3 +500,9 @@ server. Nothing was ever deployed with Keycloak, so there is no account import a
 |---|---|---|
 | `GET /api/public/meta` | Additive `now` (ISO instant of core's clock, e.g. `"2026-11-20T08:00:03.120Z"`) and `standTime: true`, present only when that clock is shifted by `ROZKLAD_STAND_TIME` (ARCHITECTURE §7.1); both may be absent (an older core, and `standTime` on real time), so clients fall back to their own clock. | The owner checks live states (current pair, today's substitutions) at a chosen moment; the browser has to know the stand's "now" instead of its own. |
 | Timestamps under the stand time | Domain timestamps (`createdAt`/`updatedAt`, change history, order `publishedAt`, deadlines) carry the stand time; outbox publications, Telegram deliveries, processed-event marks, invites, password links and binding codes keep real time. Events' `occurredAt` follows the sending service's clock. | Security and delivery must not depend on a development shift of the clock. |
+
+## Teacher first name on public pages (14.11.2026)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/public/teachers` | Additive `firstName`, filled by the same rule as the existing `fullName`: only when `showTeacherFullNames` is on and the first name is known, otherwise `null`. Older clients ignore it. | Cards and the teacher page write «Прізвище Імʼя» without the patronymic; parsing it out of `fullName` would guess where the surname ends. |

@@ -43,7 +43,7 @@ deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELO
 | `GET /api/public/meta` | `{collegeName, semester:{id,name,startsOn,endsOn}, today, weekNumber, parity, studyDay:bool, currentPair:{number,startsAt,endsAt,minutesLeft}?, nextPair?, bellProfile:{id,name}, nextStudyDay:{date,weekday,weekNumber,parity}?, now?, standTime?:true}` |
 | `GET /api/public/search?q=&limit=10` | `[{type: GROUP|TEACHER|ROOM, id, label, sublabel, url}]` (fuzzy, Latin/Cyrillic tolerant) |
 | `GET /api/public/groups` | `[{id, code, course, specialty:{letters,name}, department, shift}]` |
-| `GET /api/public/teachers` | `[{id, shortName, displayName, cycleCommission}]` |
+| `GET /api/public/teachers` | `[{id, shortName, displayName, cycleCommission, fullName, firstName}]`; `fullName` («Кренцін Михайло Дмитрович») and `firstName` are `null` unless the setting `showTeacherFullNames` is on and the first name is known |
 | `GET /api/public/rooms` | `[{id, name, type, capacity, building, maxParallel}]` |
 | `GET /api/public/bells?date=` | `{profile:{id,name}, weekday, slots:[{pair, startsAt, endsAt}]}` (+ `profiles` list when no date) |
 | `GET /api/public/schedule/{group\|teacher\|room}/{id}?from=&to=` | `ScheduleDto` below (max 31 days) |
