@@ -58,18 +58,22 @@ caps, not reservations). 2 vCPU / 4 GB with 2 GB of swap is best effort and has 
 on such a server let GitHub Actions build the images (section 13) instead of building on the VPS,
 and watch `docker stats --no-stream` while the solver runs.
 
-**Oracle Cloud Always Free (recommended, 4 OCPU / 24 GB ARM64, free).**
+**Oracle Cloud Always Free (recommended, 2 OCPU / 12 GB ARM64, free).** In June 2026 Oracle halved the
+Always Free Ampere allowance to 1 500 OCPU-hours and 9 000 GB-hours a month, that is **2 OCPU / 12 GB for the
+whole account** (older guides still say 4 / 24), and since 18.08.2026 instances above it are removed. The
+stack uses about 3.4 GB, so 12 GB is plenty.
 
 1. Sign up at cloud.oracle.com. A card is checked but Always Free resources are not charged. The
    **home region cannot be changed later** and the free A1 capacity exists only there: pick one close
    to Ukraine (Frankfurt, Amsterdam, Stockholm…).
 2. Compute → Instances → Create instance.
-   - Image: Canonical Ubuntu 24.04. Shape: Ampere → `VM.Standard.A1.Flex`, 4 OCPU, 24 GB.
+   - Image: Canonical Ubuntu 24.04. Shape: Ampere → `VM.Standard.A1.Flex`, **2 OCPU, 12 GB** (no more:
+     everything above the allowance is not free). Create only resources marked "Always Free-eligible".
    - Networking: create a VCN with a public subnet, "Assign a public IPv4 address".
    - SSH keys: upload your public key (`~/.ssh/id_ed25519.pub`) or download the generated one.
    - Boot volume: 100 GB is plenty (200 GB of block storage are free in total).
-3. "Out of capacity" is common for A1: try another availability domain, try again later, or take
-   2 OCPU / 12 GB for now.
+3. "Out of host capacity" is common for A1: try another availability domain or try again later (a smaller
+   shape such as 1 OCPU / 6 GB also works for a start; 1 OCPU means slow service starts).
 4. To keep the address when the VM is recreated, make the public IP **reserved** (Networking → IP
    management → Reserved public IPs, then attach it on the instance's VNIC).
 5. Oracle may reclaim Always Free VMs that stay idle for 7 days (CPU, network and, for A1, memory
@@ -218,7 +222,7 @@ Set by hand in `infra/deploy/.env`:
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_BOT_USERNAME` | from @BotFather / your chat (section 10) |
 | `ANTHROPIC_API_KEY` | from console.anthropic.com; empty disables AI import |
 | `AUTH_GOOGLE_*` | optional: Google sign-in (`docs/GOOGLE_SIGNIN.md`); empty = password sign-in only |
-| memory block at the end | uncomment it on Oracle A1 (24 GB); keep the defaults on 4–8 GB |
+| memory block at the end | uncomment it on Oracle A1 (12 GB); keep the defaults on 4–8 GB |
 
 Everything else has a working default or was generated. The secrets never leave this file: compose
 passes each service only what it needs. Keep a copy of `.env` in a password manager — backups depend
