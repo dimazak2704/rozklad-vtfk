@@ -144,7 +144,9 @@ database `auth`; core manages accounts through its internal API. Not behind the 
 reaches it on the site's own origin under `/auth`.
 
 ### gateway
-Routes (see topology), CORS for the SPA origins, Redis rate limiting on `/api/public/**`,
+Routes (see topology), CORS for the SPA origins, Redis rate limiting per client IP (`/api/public/**`,
+the anonymous order documents, and a generous limit on every other route except SSE), 404 for the
+service-to-service paths (`/api/internal/**`, `/api/admin/import/**`, `/api/import/ai/parse-absence`),
 `X-Request-Id` generation/propagation, passes `Authorization` through. Services validate JWTs themselves.
 
 ## 5. Messaging

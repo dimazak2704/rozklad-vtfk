@@ -323,7 +323,15 @@ reconnects) · `messaging.*` (topology, outbox config, ProcessedEvents) · `AppP
 Routes (ARCHITECTURE §1): `/api/import/**` → importer, `/api/notify/**` and `/api/documents/**` →
 notification, `/api/scheduler/**` → scheduler, `/api/events/stream` → core without response timeout
 (SSE), `/api/public/**` → core with Redis `RequestRateLimiter` (per client IP, 20 req/s, burst 40;
-`PUBLIC_RATE_LIMIT_*`), `/api/**` → core. Default filters: `PreserveHostHeader` (services build
+`PUBLIC_RATE_LIMIT_*`), `/api/**` → core. Every route except SSE has a per-IP limiter with its own bucket
+(the key includes the route id): `/api/documents/**` (anonymous order PDF/PNG/DOCX) 10 req/s, burst 30
+(`DOCUMENTS_RATE_LIMIT_*`); importer, notification, scheduler and core `/api/**` 50 req/s, burst 150
+(`API_RATE_LIMIT_*`), far above what a person in the cabinet does, but a loop over documents or with
+forged tokens stops at the edge (`ApiRateLimitIT`). `PrivatePathFilter` answers 404 for the
+service-to-service paths before routing: core's `/api/internal/**` and `/api/admin/import/**`, the
+importer's `/api/import/ai/parse-absence` (matched decoded and case-insensitively, as the services match).
+Notification and the importer call them directly over the container network, so a leaked service
+client secret alone does not open them from the internet. Default filters: `PreserveHostHeader` (services build
 absolute URLs with the client's host), `DedupeResponseHeader` for CORS headers. CORS for
 `CORS_ALLOWED_ORIGINS` (5180, 8088) incl. preflight on unmatched paths, exposed headers `Location`,
 `Content-Disposition`, `X-Request-Id`, `X-RateLimit-*`. `X-Request-Id`: kept if safe

@@ -30,19 +30,48 @@ spring:
                 exposed-headers: Location,Content-Disposition,X-Request-Id,X-RateLimit-Remaining,X-RateLimit-Replenish-Rate,X-RateLimit-Burst-Capacity
                 allow-credentials: false
                 max-age: 3600
+          # Ліміти за IP (Redis token bucket, ключ — адреса клієнта, у кожного маршруту свій кошик):
+          # /api/public/** — PUBLIC_*, анонімні документи розпоряджень — DOCUMENTS_*, решта API — щедрий
+          # API_* (людина в кабінеті так не клікає, але цикл з чужим або підробленим токеном зупиниться).
+          # Лише SSE /api/events/stream без ліміту: одне довге з'єднання на вкладку.
+          # Службові шляхи (/api/internal/** тощо) сюди не доходять: PrivatePathFilter відповідає 404.
           routes:
             - id: importer
               uri: ${IMPORTER_URL:http://localhost:8083}
               predicates:
                 - Path=/api/import/**
+              filters:
+                - name: RequestRateLimiter
+                  args: &api-rate-limit
+                    key-resolver: "#{@clientAddressKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${API_RATE_LIMIT_PER_SECOND:50}
+                    redis-rate-limiter.burstCapacity: ${API_RATE_LIMIT_BURST:150}
+                    redis-rate-limiter.requestedTokens: 1
+            - id: documents
+              uri: ${NOTIFICATION_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/documents/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@clientAddressKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${DOCUMENTS_RATE_LIMIT_PER_SECOND:10}
+                    redis-rate-limiter.burstCapacity: ${DOCUMENTS_RATE_LIMIT_BURST:30}
+                    redis-rate-limiter.requestedTokens: 1
             - id: notification
               uri: ${NOTIFICATION_URL:http://localhost:8084}
               predicates:
-                - Path=/api/notify/**,/api/documents/**
+                - Path=/api/notify/**
+              filters:
+                - name: RequestRateLimiter
+                  args: *api-rate-limit
             - id: scheduler
               uri: ${SCHEDULER_URL:http://localhost:8082}
               predicates:
                 - Path=/api/scheduler/**
+              filters:
+                - name: RequestRateLimiter
+                  args: *api-rate-limit
             # SSE: без response-timeout, інакше потік обривався б кожні 120 с
             - id: core-events
               uri: ${CORE_URL:http://localhost:8081}
@@ -66,6 +95,9 @@ spring:
               order: 100
               predicates:
                 - Path=/api/**
+              filters:
+                - name: RequestRateLimiter
+                  args: *api-rate-limit
 
 server:
   port: ${SERVER_PORT:8080}

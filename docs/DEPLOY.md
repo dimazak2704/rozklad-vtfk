@@ -506,7 +506,10 @@ every 25 s, so idle proxies do not cut the stream, and the SPA reconnects. Test 
 **429 Too Many Requests on public pages.** The gateway limits `/api/public/**` per client IP
 (`PUBLIC_RATE_LIMIT_PER_SECOND`, `PUBLIC_RATE_LIMIT_BURST`). Behind Caddy the gateway reads the real
 client IP from `X-Forwarded-For` (`SERVER_FORWARD_HEADERS_STRATEGY=native`), so one user cannot
-exhaust the limit of everyone. Caddy writes that header itself and removes the client's `Forwarded`,
+exhaust the limit of everyone. Other routes have their own per-IP buckets with gateway defaults: order
+documents `DOCUMENTS_RATE_LIMIT_PER_SECOND=10` / `DOCUMENTS_RATE_LIMIT_BURST=30`, the rest of the API
+`API_RATE_LIMIT_PER_SECOND=50` / `API_RATE_LIMIT_BURST=150` (to change them, pass these variables to
+the gateway in `compose.prod.yml`). Caddy writes that header itself and removes the client's `Forwarded`,
 `X-Forwarded-Port` and `X-Forwarded-Prefix` (snippet `strip_client_forwarding`); otherwise a forged
 `Forwarded: for=...` would give every request a fresh bucket. Raise the values in `.env` if needed
 and run `compose.sh up -d`.

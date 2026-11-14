@@ -16,7 +16,10 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/** The public API is limited per client IP with a Redis token bucket; other routes are not. */
+/**
+ * The public API is limited per client IP with a Redis token bucket; other routes have their own buckets
+ * ({@code ApiRateLimitIT}) and do not spend this one.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"PUBLIC_RATE_LIMIT_PER_SECOND=1", "PUBLIC_RATE_LIMIT_BURST=3"})
 @AutoConfigureWebTestClient
@@ -61,7 +64,7 @@ class PublicRateLimitIT {
     }
 
     @Test
-    void authenticatedApiIsNotRateLimitedByTheGateway() {
+    void authenticatedApiIsNotLimitedByThePublicBucket() {
         for (int i = 0; i < 8; i++) {
             client.get().uri("/api/admin/teachers").exchange().expectStatus().isOk();
         }
