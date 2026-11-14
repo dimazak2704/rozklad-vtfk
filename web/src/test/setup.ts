@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { resetClock } from '@/lib/clock';
 import { server } from '@/mocks/server';
 import { resetMockStores } from '@/mocks/store';
 
@@ -12,6 +13,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
   server.resetHandlers();
   resetMockStores();
+  // годинник застосунку (переведений час стенда) — справжній у кожному тесті
+  resetClock();
 });
 afterAll(() => server.close());
 

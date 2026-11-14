@@ -5,6 +5,7 @@ import { ApiError } from '@/api/errors';
 import type { PublicMetaDto, SearchResultDto } from '@/api/types';
 import { groupNamed, teacherNamed } from '../fixtures';
 import { apiPath, problem } from '../kit';
+import { setMockStandTime } from './meta';
 import { server } from '../server';
 
 /** Запит через справжній клієнт SPA — так перевіряємо і обробник, і формат відповіді. */
@@ -21,6 +22,23 @@ afterEach(() => {
 });
 
 describe('GET /api/public/meta', () => {
+  it('віддає серверний now; standTime — лише коли час стенда переведено', async () => {
+    at('2026-11-14T12:00:00Z');
+    const real = await getMeta();
+    expect(real.now).toBe('2026-11-14T12:00:00.000Z');
+    expect(real).not.toHaveProperty('standTime');
+
+    setMockStandTime('2026-11-20T08:00:00Z'); // пʼятниця, 10:00 у Києві
+    const stand = await getMeta();
+    expect(stand).toMatchObject({
+      now: '2026-11-20T08:00:00.000Z',
+      standTime: true,
+      today: '2026-11-20',
+      studyDay: true,
+      currentPair: { number: 2 },
+    });
+  });
+
   it('рахує тиждень, парність і поточну пару за київським часом', async () => {
     at('2026-10-19T07:00:00Z'); // понеділок, 10:00 у Києві — друга пара (09:40–10:40)
     const meta = await getMeta();

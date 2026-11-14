@@ -2,6 +2,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import type { LessonView, ScheduleDto } from '@/api/types';
+import { now as clockNow } from '@/lib/clock';
 import { formatDateRange, formatInstant, parseIsoDate } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName } from '@/lib/labels';
 import { lessonCounterpart, lessonsByPair, pairRange, roomLabel, rowTimes, type Perspective } from '@/lib/schedule';
@@ -26,7 +27,7 @@ interface SchedulePrintProps {
 function usePrintedAt(): Date | null {
   const [printedAt, setPrintedAt] = useState<Date | null>(null);
   useEffect(() => {
-    const onBeforePrint = () => flushSync(() => setPrintedAt(new Date()));
+    const onBeforePrint = () => flushSync(() => setPrintedAt(clockNow()));
     window.addEventListener('beforeprint', onBeforePrint);
     return () => window.removeEventListener('beforeprint', onBeforePrint);
   }, []);

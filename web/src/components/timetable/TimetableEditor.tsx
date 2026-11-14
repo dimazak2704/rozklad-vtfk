@@ -13,6 +13,7 @@ import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, 
 import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, type MoreMenuItem } from '@/components/ui';
 import { isModalOpen, useHotkeys, useShortcutHints } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
+import { isoWeekday, todayInKyiv } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
 import { BoardSkeleton } from './board/BoardSkeleton';
 import { TimetableBoard, type BoardFocus } from './board/TimetableBoard';
@@ -64,8 +65,8 @@ export function TimetableEditor({
   // на телефоні пʼять днів у 350 px — це «Вст.с…»; там сітка показує один день з перемикачем
   const phone = useMediaQuery('(max-width: 767px)');
   const [day, setDay] = useState<Weekday>(() => {
-    const today = new Date().getDay();
-    return (today >= 1 && today <= 5 ? today : 1) as Weekday;
+    const today = isoWeekday(todayInKyiv());
+    return (today <= 5 ? today : 1) as Weekday;
   });
   const catalog = usePlanningCatalog();
   const windowsQuery = useShiftWindows();

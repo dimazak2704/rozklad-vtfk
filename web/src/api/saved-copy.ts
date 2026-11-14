@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { now as clockNow, toClockMs } from '@/lib/clock';
 import { formatDayMonth, formatInstantTime, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { SAVED_COPY_HEADER } from './saved-copy-plugin';
 
@@ -26,6 +27,11 @@ export function noteResponseSource(url: string, headers: Pick<Headers, 'get'>): 
   if (copies.get(url) === savedAt) return;
   copies.set(url, savedAt);
   notify();
+}
+
+/** Чи остання відповідь за цією адресою — збережена копія (поза React-компонентами). */
+export function isSavedCopy(url: string): boolean {
+  return copies.has(url);
 }
 
 /** Для тестів: забути всі позначки. */
@@ -76,10 +82,14 @@ function oldestCopy(urls: readonly (string | undefined)[]): number | null | unde
   return oldest;
 }
 
-/** «сьогодні о 08:15», «вчора о 19:40», «10 листопада о 08:15». */
-export function savedCopyTimeLabel(savedAt: number, now: Date = new Date()): string {
-  const instant = new Date(savedAt).toISOString();
-  const day = todayInKyiv(new Date(savedAt));
+/**
+ * «сьогодні о 08:15», «вчора о 19:40», «10 листопада о 08:15». `savedAt` — справжній час браузера; підпис —
+ * на годиннику застосунку, щоб на стенді з переведеним часом він не суперечив «сьогодні» на сторінці.
+ */
+export function savedCopyTimeLabel(savedAt: number, now: Date = clockNow()): string {
+  const at = new Date(toClockMs(savedAt));
+  const instant = at.toISOString();
+  const day = todayInKyiv(at);
   const relative = relativeDayLabel(day, todayInKyiv(now));
   const dayLabel = relative === 'Сьогодні' || relative === 'Вчора' ? relative.toLowerCase() : formatDayMonth(day);
   return `${dayLabel} о ${formatInstantTime(instant)}`;

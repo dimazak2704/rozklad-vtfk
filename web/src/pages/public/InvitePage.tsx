@@ -32,7 +32,8 @@ function LoginLink({ primary = false }: { primary?: boolean }) {
 export default function InvitePage() {
   const { token = '' } = useParams();
   const invite = useInvite(token);
-  const { now } = useNow();
+  // строк запрошення — справжній час (сервер не переводить його разом із часом стенда)
+  const { realNow: now } = useNow();
   const [created, setCreated] = useState<string | null>(null);
   const [gone, setGone] = useState<string | null>(null);
 

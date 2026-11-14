@@ -20,7 +20,8 @@ function isNotLinked(error: unknown): boolean {
  */
 export function TelegramConnect({ teacherId }: { teacherId: Uuid }) {
   const link = useCreateBindingCode();
-  const { now } = useNow();
+  // строк коду — справжній час (сервер не переводить його разом із часом стенда)
+  const { realNow: now } = useNow();
   const data = link.data;
   const msLeft = data ? new Date(data.expiresAt).getTime() - now.getTime() : 0;
   const expired = data !== undefined && msLeft <= 0;

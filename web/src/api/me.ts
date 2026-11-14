@@ -5,6 +5,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notify } from '@/components/ui';
+import { now as clockNow } from '@/lib/clock';
 import { formatDateRange } from '@/lib/date';
 import { api } from './client';
 import { qk } from './queryKeys';
@@ -87,7 +88,7 @@ export function useReplyToChange() {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<ChangeDto[]>(key);
       queryClient.setQueryData<ChangeDto[]>(key, (list) =>
-        list?.map((change) => (change.id === id ? answered(change, decision, new Date().toISOString()) : change)),
+        list?.map((change) => (change.id === id ? answered(change, decision, clockNow().toISOString()) : change)),
       );
       return { previous };
     },

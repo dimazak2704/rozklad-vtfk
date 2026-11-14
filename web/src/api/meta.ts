@@ -3,15 +3,28 @@
  * у власних файлах src/api/<область>.ts (див. src/api/README.md).
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { api } from './client';
+import { syncClock } from '@/lib/clock';
+import { api, buildUrl } from './client';
 import { qk } from './queryKeys';
+import { isSavedCopy } from './saved-copy';
 import type { BellsDto, IsoDate, PublicMetaDto, SearchResultDto } from './types';
+
+/**
+ * Запит meta, що заодно звіряє годинник застосунку з сервером (lib/clock: переведений час стенда).
+ * Збережена копія Service Worker годинник не чіпає: її `now` — з минулого.
+ */
+export async function fetchPublicMeta(signal?: AbortSignal): Promise<PublicMetaDto> {
+  const sentAt = Date.now();
+  const meta = await api.get<PublicMetaDto>('/public/meta', undefined, { signal, auth: false });
+  if (!isSavedCopy(buildUrl('/public/meta'))) syncClock(meta, sentAt, Date.now());
+  return meta;
+}
 
 /** GET /api/public/meta — семестр, тиждень, чисельник/знаменник, поточна пара. */
 export function usePublicMeta() {
   return useQuery({
     queryKey: qk.public.meta(),
-    queryFn: ({ signal }) => api.get<PublicMetaDto>('/public/meta', undefined, { signal, auth: false }),
+    queryFn: ({ signal }) => fetchPublicMeta(signal),
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     // у шапці: одна повторна спроба, щоб недоступний сервер не тримав силует довго

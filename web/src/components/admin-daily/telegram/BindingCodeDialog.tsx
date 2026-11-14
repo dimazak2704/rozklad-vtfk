@@ -62,8 +62,9 @@ function Instructions({ type, command }: { type: CodeType; command: string | nul
 }
 
 function Result({ type, result }: { type: CodeType; result: BindingCodeDto }) {
-  const { now } = useNow();
-  const left = Math.max(0, Math.round((Date.parse(result.expiresAt) - now.getTime()) / 60_000));
+  // коди привʼязки сервер рахує за справжнім часом, навіть коли час стенда переведено
+  const { realNow } = useNow();
+  const left = Math.max(0, Math.round((Date.parse(result.expiresAt) - realNow.getTime()) / 60_000));
   // чат групи привʼязують посиланням ?startgroup= (бот сам додається в групу); інші — особистим ?start=
   const link = type === 'GROUP_CHAT' ? (result.groupLink ?? result.deepLink) : result.deepLink;
   return (

@@ -7,6 +7,7 @@ import { useJournal } from '@/lib/undo/journal';
 import { useCommandStore } from '@/stores/commands';
 import { IconButton } from '../ui/IconButton';
 import { LiveStatus } from './LiveStatus';
+import { StandTimeBadge } from './StandClock';
 import { UserMenu } from './UserMenu';
 import { Wordmark } from './Wordmark';
 import { WorkingDateSwitcher } from './WorkingDateSwitcher';
@@ -36,6 +37,7 @@ export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
       {dated ? <WorkingDateSwitcher /> : null}
       <div className="ms-auto flex shrink-0 items-center sm:gap-2">
         {/* стан звʼязку — у власному слоті; на телефоні це крапка-кнопка 44 px, і дата поруч лишається цілою */}
+        <StandTimeBadge className={dated ? 'hidden sm:inline-flex' : undefined} />
         <LiveStatus state={live} className="shrink-0" />
         <IconButton
           label="Журнал дій"

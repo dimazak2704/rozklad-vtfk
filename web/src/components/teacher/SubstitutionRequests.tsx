@@ -3,6 +3,7 @@ import { useServerEvent } from '@/api/live';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
+import { now as clockNow } from '@/lib/clock';
 import { formatDayMonth, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { awaitingAnswer, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
@@ -145,7 +146,7 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   });
 
   const waiting = awaitingAnswer(changes.data ?? [], todayInKyiv()).filter((change) => !held.has(change.id));
-  const urgent = mostUrgent(waiting, new Date());
+  const urgent = mostUrgent(waiting, clockNow());
 
   // помилку й завантаження показує сторінка (одна на всіх); тут — лише те, що треба вирішити
   return (

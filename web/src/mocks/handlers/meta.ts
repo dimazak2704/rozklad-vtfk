@@ -31,6 +31,7 @@ import {
   TEACHERS,
 } from '../fixtures';
 import { apiPath, badRequest } from '../kit';
+import { createMockStore } from '../store';
 
 /** Назва з затвердження таблиці розкладу (R2: «Директор Вінницького технічного фахового коледжу»). */
 export const COLLEGE_NAME = 'Вінницький технічний фаховий коледж';
@@ -47,6 +48,41 @@ export function nextStudyDay(today: string): StudyDayDto | null {
     }
   }
   return null;
+}
+
+/**
+ * Переведений час мок-«стенда» (як ROZKLAD_STAND_TIME у core): зсув від справжнього часу, мс; null — звичайний час.
+ * У тестах — `setMockStandTime('2026-11-20T08:00:00Z')`; у браузері з моком —
+ * `localStorage.setItem('rozklad.mock.stand-time', '2026-11-20T10:00+02:00')` і перезавантаження.
+ */
+const standOffset = createMockStore<number | null>(() => null);
+const STAND_STORAGE_KEY = 'rozklad.mock.stand-time';
+let storedStand: { value: string; offsetMs: number } | null = null;
+
+export function setMockStandTime(instant: string | null): void {
+  standOffset.set(instant === null ? null : Date.parse(instant) - Date.now());
+}
+
+function mockStandOffset(): number | null {
+  const set = standOffset.get();
+  if (set !== null) return set;
+  let value: string | null;
+  try {
+    value = typeof localStorage === 'undefined' ? null : localStorage.getItem(STAND_STORAGE_KEY);
+  } catch {
+    value = null;
+  }
+  if (!value || !Number.isFinite(Date.parse(value))) return null;
+  // зсув рахуємо один раз: далі «стенд» іде вперед разом зі справжнім часом
+  if (storedStand?.value !== value) storedStand = { value, offsetMs: Date.parse(value) - Date.now() };
+  return storedStand.offsetMs;
+}
+
+/** GET /api/public/meta на момент мок-сервера: зі зсувом стенда, якщо його задано. */
+export function publicMetaNow(): PublicMetaDto {
+  const offset = mockStandOffset();
+  const now = new Date(Date.now() + (offset ?? 0));
+  return { ...publicMeta(now), now: now.toISOString(), ...(offset === null ? {} : { standTime: true as const }) };
 }
 
 /** Стан «зараз» за київським часом: семестр, тиждень, парність, поточна й наступна пара. */
@@ -159,7 +195,7 @@ export function searchCatalog(query: string, limit: number): SearchResultDto[] {
 }
 
 export const handlers = [
-  http.get(apiPath('/public/meta'), () => HttpResponse.json(publicMeta())),
+  http.get(apiPath('/public/meta'), () => HttpResponse.json(publicMetaNow())),
 
   http.get(apiPath('/public/search'), ({ request }) => {
     const url = new URL(request.url);

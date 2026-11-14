@@ -7,6 +7,7 @@ import { useCommandStore } from '@/stores/commands';
 import { IconButton } from '../ui/IconButton';
 import { activeNavId } from './activeSection';
 import { SearchTrigger } from './SearchTrigger';
+import { StandTimeBadge } from './StandClock';
 import { UserMenu } from './UserMenu';
 import { Wordmark } from './Wordmark';
 
@@ -76,6 +77,7 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
         </nav>
 
         <div className="ms-auto flex min-w-0 items-center gap-2">
+          <StandTimeBadge />
           {onHome ? null : <SearchTrigger className="hidden w-64 lg:flex xl:w-72" />}
           <IconButton
             label="Пошук розкладу"

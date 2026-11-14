@@ -197,6 +197,10 @@ export interface PublicMetaDto {
   bellProfile: Nullable<{ id: Uuid; name: string }>;
   /** Перший навчальний день після сьогодні (вихідні й канікули пропущено); null, якщо такого не видно. */
   nextStudyDay: Nullable<StudyDayDto>;
+  /** Серверний момент відповіді (ISO instant). Нові сервери віддають завжди; старі — ні. */
+  now?: string;
+  /** Лише на тестовому стенді з переведеним часом (ROZKLAD_STAND_TIME); інакше поля немає. */
+  standTime?: true;
 }
 
 /** Навчальний день з тижнем: `weekday` ISO 1..5. */

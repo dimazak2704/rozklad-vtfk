@@ -8,6 +8,7 @@ import { userManager } from '@/auth/userManager';
 import { CommandPaletteHost } from '@/components/shell/CommandPaletteHost';
 import { NavigationProgress } from '@/components/shell/NavigationProgress';
 import { ShortcutsDialog } from '@/components/shell/ShortcutsDialog';
+import { ClockEpoch, StandClockSync } from '@/components/shell/StandClock';
 import { ThemeController } from '@/components/shell/ThemeController';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialog';
 import { Toaster } from '@/components/ui/Toaster';
@@ -94,7 +95,10 @@ export function RootLayout() {
       <UnauthorizedRedirect />
       <UnsavedChangeNotice />
       <NavigationProgress />
-      <Outlet />
+      <StandClockSync />
+      <ClockEpoch>
+        <Outlet />
+      </ClockEpoch>
       <CommandPaletteHost />
       <ShortcutsDialog />
       <ConfirmDialogHost />

@@ -3,6 +3,7 @@
  * і рахуємо їх у UTC, щоб перехід на літній час не зсував дні.
  */
 import type { IsoDate, IsoTime } from '@/api/types';
+import { now as clockNow } from './clock';
 import { capitalize, MONTHS_GENITIVE, MONTHS_SHORT, WEEKDAY_ACCUSATIVE, WEEKDAY_GENITIVE, weekdayName, weekdayShort } from './labels';
 
 export const COLLEGE_TIME_ZONE = 'Europe/Kyiv';
@@ -29,8 +30,8 @@ export interface KyivClock {
   seconds: number;
 }
 
-/** Що зараз показує годинник у Києві. */
-export function kyivClock(now: Date = new Date()): KyivClock {
+/** Що зараз показує годинник у Києві (за замовчуванням — годинник застосунку, див. lib/clock). */
+export function kyivClock(now: Date = clockNow()): KyivClock {
   const parts = partsFormatter.formatToParts(now);
   const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? '0');
   const year = get('year');
@@ -44,7 +45,7 @@ export function kyivClock(now: Date = new Date()): KyivClock {
   };
 }
 
-export function todayInKyiv(now: Date = new Date()): IsoDate {
+export function todayInKyiv(now: Date = clockNow()): IsoDate {
   return kyivClock(now).date;
 }
 

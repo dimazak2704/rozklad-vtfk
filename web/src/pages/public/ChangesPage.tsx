@@ -40,6 +40,7 @@ import {
   todayInKyiv,
 } from '@/lib/date';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { toClockMs } from '@/lib/clock';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore } from '@/stores/favorites';
 
@@ -234,7 +235,7 @@ export default function ChangesPage() {
   }
 
   const totalRows = groups.reduce((sum, g) => sum + g.items.length, 0);
-  const updated = changes.dataUpdatedAt > 0 ? formatInstantTime(new Date(changes.dataUpdatedAt).toISOString()) : null;
+  const updated = changes.dataUpdatedAt > 0 ? formatInstantTime(new Date(toClockMs(changes.dataUpdatedAt)).toISOString()) : null;
   // один рядок підсумку над списком: скільки замін (і «наживо», коли це сьогодні); час оновлення — у «Джерелі»
   const summary =
     groups.length > 0 ? (
