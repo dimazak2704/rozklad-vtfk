@@ -1,7 +1,9 @@
+import { useRef } from 'react';
 import { Link } from 'react-router';
 import type { ChangeView, IsoDate, OrderRowType } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { roomLabel } from '@/lib/schedule';
+import { useEntrance } from '../entrance';
 import { GroupHint } from '../GroupHint';
 import { reasonHint } from '../schedule/schedule-utils';
 import { changeRowText, ROOM_CHANGE_TITLE, sortByPair } from './change-rows';
@@ -97,8 +99,11 @@ interface ChangesListProps {
  */
 export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonReason = null }: ChangesListProps) {
   const sorted = [...groups].sort((a, b) => Number(isMyGroup(myGroupIds, b.group.id)) - Number(isMyGroup(myGroupIds, a.group.id)));
+  const ref = useRef<HTMLUListElement>(null);
+  // перша поява: групи проявляються згори вниз (DESIGN §6)
+  useEntrance(ref, sorted.length > 0);
   return (
-    <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
+    <ul ref={ref} className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
       {sorted.map(({ group, items }) => {
         const own = isMyGroup(myGroupIds, group.id);
         return (

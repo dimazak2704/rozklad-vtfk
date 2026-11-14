@@ -13,6 +13,7 @@ import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import type { Perspective } from '@/lib/schedule';
+import { useEntrance } from '../entrance';
 import { SavedCopyNote } from '../SavedCopyNote';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
@@ -128,9 +129,10 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   // зміни, що прийшли, поки людина дивиться на цей тиждень (без підгрупового фільтра й placeholder)
   const arrived = useArrivedChanges(placeholder ? undefined : query.data);
   // день чи тиждень входить спокійно: ковзає на 8 px у бік навігації; після скелета — проявляється
-  const enterRef = useNavTransition<HTMLDivElement>(
-    view === 'day' ? (day ? { view, at: day.date } : null) : schedule ? { view, at: schedule.from } : null,
-  );
+  const navKey = view === 'day' ? (day ? { view, at: day.date } : null) : schedule ? { view, at: schedule.from } : null;
+  const enterRef = useNavTransition<HTMLDivElement>(navKey);
+  // перший показ (і кожна інша група, бо сторінка групи монтується наново): стовпці тижня чи рядки дня проявляються по черзі
+  useEntrance(enterRef, navKey !== null && !placeholder);
 
   const openDay = (next: string) => {
     setDate(next);
