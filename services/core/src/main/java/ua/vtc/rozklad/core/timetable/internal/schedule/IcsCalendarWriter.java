@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Minimal iCalendar (RFC 5545) writer: UTC times, escaped TEXT values, CRLF line ends and lines
@@ -16,6 +17,9 @@ final class IcsCalendarWriter {
 
     static final String CRLF = "\r\n";
     private static final int MAX_LINE_OCTETS = 75;
+    private static final Pattern LINE_BREAK = Pattern.compile("\r\n|[\r\n\u0085  ]");
+    /** C0, DEL and C1 controls except HTAB. */
+    private static final Pattern CONTROL = Pattern.compile("[\\p{Cc}&&[^\t]]");
     private static final DateTimeFormatter UTC = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
             .withZone(ZoneOffset.UTC);
 
@@ -56,13 +60,17 @@ final class IcsCalendarWriter {
         return calendar.toString();
     }
 
-    /** TEXT escaping of RFC 5545 §3.3.11: backslash, semicolon, comma and line breaks. */
+    /**
+     * TEXT escaping of RFC 5545 §3.3.11: backslash, semicolon, comma and line breaks. Every line break
+     * a parser might split on (a bare CR, NEL, U+2028/U+2029 too) becomes {@code \n}, and other control
+     * characters (TEXT allows none but HTAB) are dropped, so free text (a change's reason) can never
+     * start a property or an event of its own in a subscribed calendar.
+     */
     static String escape(String text) {
-        return text.replace("\\", "\\\\")
+        String escaped = text.replace("\\", "\\\\")
                 .replace(";", "\\;")
-                .replace(",", "\\,")
-                .replace("\r\n", "\\n")
-                .replace("\n", "\\n");
+                .replace(",", "\\,");
+        return CONTROL.matcher(LINE_BREAK.matcher(escaped).replaceAll("\\\\n")).replaceAll("");
     }
 
     /** Folds a content line so that no physical line exceeds 75 octets; never splits a character. */

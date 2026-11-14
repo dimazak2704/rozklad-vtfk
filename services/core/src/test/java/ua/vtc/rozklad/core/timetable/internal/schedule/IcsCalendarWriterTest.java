@@ -37,6 +37,33 @@ class IcsCalendarWriterTest {
     }
 
     @Test
+    void everyLineBreakAParserMightSplitOnBecomesAnEscapedNewline() {
+        // голий CR, NEL і розділювачі рядків Unicode: деякі парсери (splitlines) розривають на них рядок
+        assertThat(IcsCalendarWriter.escape("a\rURL:https://evil.example\r\nb\nc\u0085d e f"))
+                .isEqualTo("a\\nURL:https://evil.example\\nb\\nc\\nd\\ne\\nf");
+    }
+
+    @Test
+    void otherControlCharactersAreDroppedButTabStays() {
+        assertThat(IcsCalendarWriter.escape("a\u000Bb\u000Cc\u001Cd\u0000e\u007Ff\u009Bg\th"))
+                .isEqualTo("abcdefg\th");
+    }
+
+    @Test
+    void injectedTextCannotStartAPropertyOrAnEvent() {
+        IcsCalendarWriter.Event hostile = new IcsCalendarWriter.Event(EVENT.uid(), EVENT.start(), EVENT.end(),
+                EVENT.stamp(), "СТП\rBEGIN:VEVENT", "ауд. 6\rURL:https://evil.example",
+                "Заміна (x\rURL:https://evil.example\rBEGIN:VALARM)");
+
+        String calendar = IcsCalendarWriter.write("Розклад\r4КІ1", List.of(hostile));
+
+        assertThat(calendar.replace("\r\n", "")).doesNotContain("\r", "\n");
+        assertThat(calendar.replace("\r\n ", "").split("\r\n"))
+                .noneMatch(line -> line.startsWith("URL:") || line.startsWith("BEGIN:VALARM"))
+                .filteredOn(line -> line.equals("BEGIN:VEVENT")).hasSize(1);
+    }
+
+    @Test
     void foldsLongLinesAt75OctetsWithoutSplittingLetters() {
         String line = "DESCRIPTION:" + "Надійність, діагностика та експлуатація комп'ютерних систем і мереж ".repeat(3);
 
