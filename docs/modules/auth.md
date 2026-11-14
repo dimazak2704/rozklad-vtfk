@@ -24,7 +24,7 @@ The proxies pass `/auth/**` unchanged and close `/auth/internal/**` (404). `auth
 | Client | Type | Use |
 |---|---|---|
 | `rozklad-web` | public, code + PKCE S256 | the SPA; redirect URIs `<origin>/login/callback` and `<origin>/login/silent.html`, post-logout `<origin>/` for every origin of `AUTH_WEB_ORIGINS` |
-| `rozklad-cli` | public, code + PKCE, loopback redirect `http://127.0.0.1:<port>/cli-callback` | `scripts/rozklad_auth.py` and `web/e2e-real`; exists only with `AUTH_CLI_ENABLED=true` (development) |
+| `rozklad-cli` | public, code + PKCE, loopback redirect `http://127.0.0.1:<port>/cli-callback` | `scripts/rozklad_auth.py` and `web/e2e-real`; exists only with `AUTH_CLI_ENABLED=true` (development; with an https issuer also `AUTH_CLI_ALLOW_PROD=true`, see the guards) |
 | `rozklad-notification`, `rozklad-importer` | `client_credentials` | service tokens with the roles `SERVICE` + `SERVICE_NOTIFICATION` / `SERVICE_IMPORTER` (core checks the own one) |
 | `rozklad-core` | `client_credentials`, scope `accounts.manage` | the internal accounts API |
 
@@ -125,7 +125,9 @@ published during a rotation. Server runbook: `docs/DEPLOY.md`.
 With an https issuer `auth` refuses to start when: there is no signing key file; the session cookie is not
 `Secure`; `PUBLIC_WEB_URL`, a web origin or a CORS origin is http or localhost; the development demo seed or
 the Google mock is on; Google endpoints are overridden; Google is on without a hosted domain; a client secret
-is a known development value; a service client secret is shorter than 32 characters.
+is a known development value; a service client secret is shorter than 32 characters; `rozklad-cli` is on
+(`AUTH_CLI_ENABLED=true`) without the explicit `AUTH_CLI_ALLOW_PROD=true`. With both set, `auth` starts and
+logs a warning at every start: it is for a one-off run only, and both go back to `false` afterwards.
 
 ## Tests
 

@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.auth.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
@@ -78,6 +79,21 @@ class ProdGuardTest {
 
         assertThat(ProdGuard.violations(properties, true)).singleElement().asString()
                 .contains("rozklad-core").contains("32");
+    }
+
+    /** {@code rozklad-cli} (loopback redirect, any port) only with an explicit override, and then with a warning. */
+    @Test
+    void theDevelopmentClientIsRefusedUnlessExplicitlyAllowed() {
+        var properties = PropertiesFixture.prod().cliEnabled(true).build();
+        var secure = new MockEnvironment().withProperty("server.servlet.session.cookie.secure", "true");
+
+        assertThat(ProdGuard.violations(properties, true)).singleElement().asString().contains("AUTH_CLI_ENABLED");
+        assertThatThrownBy(new ProdGuard(properties, GoogleProperties.disabled(), secure)::afterPropertiesSet)
+                .hasMessageContaining("AUTH_CLI_ALLOW_PROD");
+        assertThatCode(new ProdGuard(properties, GoogleProperties.disabled(),
+                secure.withProperty("app.auth.cli-allow-prod", "true"))::afterPropertiesSet).doesNotThrowAnyException();
+        // розробка (http-видавець) — як і раніше
+        assertThat(ProdGuard.violations(PropertiesFixture.builder().cliEnabled(true).build(), false)).isEmpty();
     }
 
     @Test

@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -18,11 +20,16 @@ import org.springframework.util.StringUtils;
 @Component
 public class ProdGuard implements InitializingBean {
 
+    private static final Logger log = LoggerFactory.getLogger(ProdGuard.class);
+
     /**
      * The shortest service client secret in production: they are hashed with a low BCrypt cost (the public token
      * endpoint checks them first), which is safe only for long random values; gen-secrets.sh makes 32 characters.
      */
     static final int MIN_SERVICE_SECRET_LENGTH = 32;
+
+    /** {@code AUTH_CLI_ALLOW_PROD}: the explicit consent to {@code rozklad-cli} with an https issuer. */
+    static final String CLI_ALLOW_PROD = "app.auth.cli-allow-prod";
 
     /** Development values from {@code .env.example} and the dev compose file. */
     static final Set<String> DEV_SECRETS = Set.of(
@@ -42,11 +49,17 @@ public class ProdGuard implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
+        boolean cliAllowed = environment.getProperty(CLI_ALLOW_PROD, Boolean.class, false);
         List<String> violations = violations(properties,
-                environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, false), google);
+                environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, false), google,
+                cliAllowed);
         if (!violations.isEmpty()) {
             throw new IllegalStateException("auth refuses to start with an https issuer:\n - "
                     + String.join("\n - ", violations));
+        }
+        if (properties.secure() && properties.cliEnabled()) {
+            log.warn("the development client rozklad-cli is registered on a production issuer (AUTH_CLI_ENABLED and "
+                    + "AUTH_CLI_ALLOW_PROD are on): switch both off after the one-off run");
         }
     }
 
@@ -55,8 +68,14 @@ public class ProdGuard implements InitializingBean {
         return violations(properties, secureCookie, GoogleProperties.disabled());
     }
 
-    /** The violated rules; empty for an http issuer (development) or a correct production configuration. */
+    /** The violated rules without the consent to {@code rozklad-cli}. */
     static List<String> violations(AuthServerProperties properties, boolean secureCookie, GoogleProperties google) {
+        return violations(properties, secureCookie, google, false);
+    }
+
+    /** The violated rules; empty for an http issuer (development) or a correct production configuration. */
+    static List<String> violations(AuthServerProperties properties, boolean secureCookie, GoogleProperties google,
+            boolean cliAllowed) {
         List<String> violations = new ArrayList<>();
         if (!properties.secure()) {
             return violations;
@@ -82,6 +101,10 @@ public class ProdGuard implements InitializingBean {
         }
         if (properties.demoSeed().enabled()) {
             violations.add("AUTH_DEMO_SEED is on (development accounts with short passwords)");
+        }
+        if (properties.cliEnabled() && !cliAllowed) {
+            violations.add("AUTH_CLI_ENABLED is on: the development client rozklad-cli (a loopback redirect on any "
+                    + "port, no consent) needs AUTH_CLI_ALLOW_PROD=true as well, for a one-off run only");
         }
         if (google.mock()) {
             violations.add("AUTH_GOOGLE_MOCK is on (the development stand-in for Google)");

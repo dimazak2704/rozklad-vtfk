@@ -71,6 +71,8 @@ app:
     cors-origins: ${AUTH_CORS_ORIGINS:http://localhost:5180,http://localhost:5181}
     # rozklad-cli: публічний клієнт для скриптів і e2e-real (код + PKCE на 127.0.0.1); у prod вимкнено
     cli-enabled: ${AUTH_CLI_ENABLED:false}
+    # з https-видавцем rozklad-cli потребує ще й явної згоди (ProdGuard), лише для разового запуску
+    cli-allow-prod: ${AUTH_CLI_ALLOW_PROD:false}
     tokens:
       web-access: ${AUTH_ACCESS_TOKEN_TTL:15m}
       cli-access: 15m
