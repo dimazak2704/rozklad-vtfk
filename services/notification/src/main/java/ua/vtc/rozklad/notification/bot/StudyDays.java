@@ -25,6 +25,10 @@ final class StudyDays {
         return onOrAfter(date.plusDays(1));
     }
 
+    static LocalDate weekStart(LocalDate date) {
+        return date.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    }
+
     static LocalDate previous(LocalDate date) {
         LocalDate day = date.minusDays(1);
         while (!isWeekday(day)) {

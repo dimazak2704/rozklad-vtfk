@@ -92,6 +92,10 @@ public class PublishedOrder implements Persistable<UUID> {
         this.persisted = true;
     }
 
+    public LocalDate getOrderDate() {
+        return orderDate;
+    }
+
     public Integer getNumber() {
         return number;
     }

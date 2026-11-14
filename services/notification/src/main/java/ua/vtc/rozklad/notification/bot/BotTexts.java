@@ -9,6 +9,9 @@ import ua.vtc.rozklad.notification.telegram.ReplyMarkup.ReplyKeyboard;
 /** Fixed bot texts (Ukrainian, short, buttons first) and the main keyboard. */
 public final class BotTexts {
 
+    /** A day before core's public history window in a chat that is not staff's (owner decision 14.11.2026). */
+    public static final String ARCHIVED_DAY = "🗄 Цей день уже в архіві. Старіші заміни бачить лише персонал коледжу.";
+
     public static final String CORE_DOWN = "😕 Не вдалося отримати дані розкладу — сервер тимчасово недоступний. "
             + "Спробуйте за хвилину.";
     public static final String STALE_BUTTON = "Ця кнопка вже не діє — почніть, будь ласка, спочатку.";

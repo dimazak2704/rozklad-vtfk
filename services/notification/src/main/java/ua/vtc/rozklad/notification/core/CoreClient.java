@@ -32,7 +32,14 @@ public interface CoreClient {
 
     BellSchedule bells(LocalDate date);
 
+    /** A visitor's schedule: core refuses a range before the public history window (404 {@code HISTORY_NOT_PUBLIC}). */
     Schedule schedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to);
+
+    /**
+     * The same schedule with the service token: core shows the bot the whole archive. Only for the bot's staff
+     * chats (a teacher's chat, an admin chat); needs the sign-in service for the token.
+     */
+    Schedule archiveSchedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to);
 
     /** {@code GET /api/me} on behalf of the user who called notification (token relay). */
     CurrentUser currentUser(String bearerToken);

@@ -63,6 +63,16 @@ public class ChatBindings {
         return telegram.isOwnerChat(chatId) || repository.existsByChatId(chatId);
     }
 
+    /**
+     * A chat of college staff: the owner chat, a teacher's own chat or an admin chat. Such chats see the whole
+     * substitution history in the bot, like signed-in staff on the site; other chats see core's public window.
+     */
+    @Transactional(readOnly = true)
+    public boolean isStaffChat(long chatId) {
+        return telegram.isOwnerChat(chatId)
+                || repository.existsByChatIdAndTypeIn(chatId, List.of(BindingType.TEACHER, BindingType.ADMIN_CHAT));
+    }
+
     @Transactional(readOnly = true)
     public Optional<ChatBinding> find(long chatId, BindingType type) {
         return repository.findByChatIdAndType(chatId, type);

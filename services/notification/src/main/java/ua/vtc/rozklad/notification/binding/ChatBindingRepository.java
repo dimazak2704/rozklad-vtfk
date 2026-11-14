@@ -14,6 +14,8 @@ public interface ChatBindingRepository extends JpaRepository<ChatBinding, UUID> 
 
     boolean existsByChatId(long chatId);
 
+    boolean existsByChatIdAndTypeIn(long chatId, Collection<BindingType> types);
+
     List<ChatBinding> findByType(BindingType type);
 
     List<ChatBinding> findByTypeAndGroupIdIn(BindingType type, Collection<UUID> groupIds);

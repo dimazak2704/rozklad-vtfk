@@ -136,10 +136,21 @@ public class CoreQueries {
      * semester) the result is an empty, non-study day.
      */
     public DaySchedule day(OwnerType type, UUID ownerId, LocalDate date) {
+        return day(type, ownerId, date, false);
+    }
+
+    /**
+     * {@link #day(OwnerType, UUID, LocalDate)}; {@code archive} asks core with the service token (staff chats, dates
+     * before the public window). core answers both the same, so they share the cache entry: the caller checks the
+     * window before it asks for another chat.
+     */
+    public DaySchedule day(OwnerType type, UUID ownerId, LocalDate date, boolean archive) {
         long generation = cache.counter(SCHEDULE_GENERATION);
         String key = "schedule:" + generation + ":" + type.code() + ":" + ownerId + ":" + date;
         Schedule schedule = cache.get(key, new TypeReference<>() {
-        }, SCHEDULE_TTL, () -> core.schedule(type, ownerId, date, date));
+        }, SCHEDULE_TTL, () -> archive
+                ? core.archiveSchedule(type, ownerId, date, date)
+                : core.schedule(type, ownerId, date, date));
         ScheduleDay day = schedule.days().stream()
                 .filter(candidate -> date.equals(candidate.date()))
                 .findFirst()
@@ -157,12 +168,19 @@ public class CoreQueries {
      * read for the whole range.
      */
     public Optional<LocalDate> nextStudyDay(OwnerType type, UUID ownerId, LocalDate date) {
+        return nextStudyDay(type, ownerId, date, false);
+    }
+
+    /** {@link #nextStudyDay(OwnerType, UUID, LocalDate)}; {@code archive} as in {@link #day(OwnerType, UUID, LocalDate, boolean)}. */
+    public Optional<LocalDate> nextStudyDay(OwnerType type, UUID ownerId, LocalDate date, boolean archive) {
         LocalDate from = date.plusDays(1);
         LocalDate to = date.plusDays(NEXT_STUDY_DAY_LOOKAHEAD_DAYS);
         long generation = cache.counter(SCHEDULE_GENERATION);
         String key = "schedule:" + generation + ":" + type.code() + ":" + ownerId + ":" + from + ".." + to;
         Schedule schedule = cache.get(key, new TypeReference<>() {
-        }, SCHEDULE_TTL, () -> core.schedule(type, ownerId, from, to));
+        }, SCHEDULE_TTL, () -> archive
+                ? core.archiveSchedule(type, ownerId, from, to)
+                : core.schedule(type, ownerId, from, to));
         return schedule.days().stream()
                 .filter(day -> day.studyDay() && day.date() != null && day.date().isAfter(date))
                 .map(ScheduleDay::date)

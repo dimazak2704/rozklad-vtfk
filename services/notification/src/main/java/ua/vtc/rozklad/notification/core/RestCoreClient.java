@@ -80,6 +80,13 @@ public class RestCoreClient implements CoreClient {
     }
 
     @Override
+    public Schedule archiveSchedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
+        return UpstreamCalls.call(CORE, "archive schedule", () -> serviceClient.get()
+                .uri("/api/public/schedule/{type}/{id}?from={from}&to={to}", type.path(), ownerId, from, to)
+                .retrieve().body(Schedule.class));
+    }
+
+    @Override
     public CurrentUser currentUser(String bearerToken) {
         return UpstreamCalls.call(CORE, "me", () -> publicClient.get().uri("/api/me")
                 .headers(headers -> headers.setBearerAuth(bearerToken))

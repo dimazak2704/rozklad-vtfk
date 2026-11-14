@@ -21,12 +21,13 @@ public final class CoreDtos {
 
     /**
      * {@code GET /api/public/meta}. Nullable: semester, weekNumber, parity (outside a semester), pairs,
-     * nextStudyDay (none known ahead, or an older core).
+     * nextStudyDay (none known ahead, or an older core), publicHistoryFrom (an older core: no window). Visitors see
+     * substitutions from {@code publicHistoryFrom} on and schedules from the Monday of its week.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record PublicMeta(String collegeName, SemesterInfo semester, LocalDate today, Integer weekNumber,
                              Parity parity, boolean studyDay, PairNow currentPair, PairNow nextPair,
-                             NamedRef bellProfile, StudyDay nextStudyDay) {
+                             NamedRef bellProfile, StudyDay nextStudyDay, LocalDate publicHistoryFrom) {
     }
 
     /** The first study day after today with its week (core skips weekends and holidays). */

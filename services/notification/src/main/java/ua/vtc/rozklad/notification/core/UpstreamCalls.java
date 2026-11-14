@@ -19,7 +19,10 @@ final class UpstreamCalls {
         } catch (RestClientResponseException e) {
             int status = e.getStatusCode().value();
             if (e.getStatusCode().is4xxClientError()) {
-                throw new UpstreamRejectedException(status, detail(e));
+                ProblemDetail problem = problem(e);
+                throw new UpstreamRejectedException(status, problem == null ? null : problem.getDetail(),
+                        problem == null || problem.getProperties() == null
+                                || !(problem.getProperties().get("code") instanceof String code) ? null : code);
             }
             throw new UpstreamUnavailableException(service, operation + ": HTTP " + status, e);
         } catch (ResourceAccessException e) {
@@ -40,10 +43,9 @@ final class UpstreamCalls {
         });
     }
 
-    private static String detail(RestClientResponseException e) {
+    private static ProblemDetail problem(RestClientResponseException e) {
         try {
-            ProblemDetail problem = e.getResponseBodyAs(ProblemDetail.class);
-            return problem == null ? null : problem.getDetail();
+            return e.getResponseBodyAs(ProblemDetail.class);
         } catch (RuntimeException notAProblem) {
             return null;
         }

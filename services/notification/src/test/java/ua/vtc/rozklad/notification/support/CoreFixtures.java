@@ -54,12 +54,13 @@ public final class CoreFixtures {
                 new PublicTeacher(TEACHER_NEPYIVODA, "Непийвода М.В.", "Непийвода"));
     }
 
-    public static PublicMeta meta(LocalDate today) {
+    /** @param publicHistoryFrom first date visitors may open ({@code null}: an older core without the window) */
+    public static PublicMeta meta(LocalDate today, LocalDate publicHistoryFrom) {
         return new PublicMeta("ВТФК", new SemesterInfo(SEMESTER, "I семестр 2026/2027", LocalDate.of(2026, 9, 1),
                 LocalDate.of(2026, 12, 30)), today, 8, Parity.DENOMINATOR, today.getDayOfWeek().getValue() <= 5,
                 new PairNow(2, LocalTime.of(9, 40), LocalTime.of(10, 40), 23),
                 new PairNow(3, LocalTime.of(11, 0), LocalTime.of(12, 0), null),
-                new NamedRef(UUID.randomUUID(), "2 зміни, 60 хв"), nextStudyDay(today));
+                new NamedRef(UUID.randomUUID(), "2 зміни, 60 хв"), nextStudyDay(today), publicHistoryFrom);
     }
 
     /** The next Monday–Friday; «today» is always in week 8 (знаменник), so the next week is 9 (чисельник). */

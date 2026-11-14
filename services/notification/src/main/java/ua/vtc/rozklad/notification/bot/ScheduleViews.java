@@ -30,7 +30,12 @@ import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
 import ua.vtc.rozklad.notification.text.Plurals;
 import ua.vtc.rozklad.notification.text.UaDates;
 
-/** «Сьогодні», «Завтра», day navigation, teacher's tomorrow, bells and parity. */
+/**
+ * «Сьогодні», «Завтра», day navigation, teacher's tomorrow, bells and parity. Days before core's public history
+ * window (whole weeks from the Monday of {@code publicHistoryFrom}) are open only to staff chats
+ * ({@link ChatBindings#isStaffChat}), which the bot asks core for with its service token; other chats get
+ * {@link BotTexts#ARCHIVED_DAY} and no ◀️ past the window.
+ */
 @Component
 public class ScheduleViews {
 
@@ -104,16 +109,25 @@ public class ScheduleViews {
         String text;
         InlineKeyboard keyboard;
         try {
-            DaySchedule schedule = queries.day(type, ownerId, date);
-            LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date);
-            text = ScheduleCards.day(schedule, nextStudyDay, queries.teacherLabels());
-            keyboard = navigation(chatId, type, ownerId, date, nextStudyDay, privateChat);
+            Window window = window(chatId, StudyDays.previous(date));
+            if (window.closes(date)) {
+                text = BotTexts.ARCHIVED_DAY;
+                keyboard = archived(type, ownerId, window.firstDay());
+            } else {
+                boolean archive = window.archive(date);
+                DaySchedule schedule = queries.day(type, ownerId, date, archive);
+                LocalDate nextStudyDay = schedule.day().studyDay() ? null : nextStudyDay(type, ownerId, date, archive);
+                text = ScheduleCards.day(schedule, nextStudyDay, queries.teacherLabels());
+                keyboard = navigation(chatId, type, ownerId, date, nextStudyDay, privateChat, window);
+            }
         } catch (UpstreamUnavailableException e) {
             text = BotTexts.CORE_DOWN;
             keyboard = InlineKeyboard.rows(List.of(InlineButton.callback("🔄 Спробувати ще раз",
                     CallbackData.day(type, ownerId, date))));
         } catch (UpstreamRejectedException e) {
-            text = "Розклад не знайдено 🤷 Можливо, групу чи викладача вже вилучили з каталогу.";
+            // межа вікна щойно зсунулася (meta в кеші до 30 с): core сам каже, що день уже в архіві
+            text = e.isHistoryNotPublic() ? BotTexts.ARCHIVED_DAY
+                    : "Розклад не знайдено 🤷 Можливо, групу чи викладача вже вилучили з каталогу.";
             keyboard = null;
         }
         if (editMessageId != null) {
@@ -124,23 +138,65 @@ public class ScheduleViews {
     }
 
     /** Hint for a day without lessons; a failed lookup only loses the hint, not the card. */
-    private LocalDate nextStudyDay(OwnerType type, UUID ownerId, LocalDate date) {
+    private LocalDate nextStudyDay(OwnerType type, UUID ownerId, LocalDate date, boolean archive) {
         try {
-            return queries.nextStudyDay(type, ownerId, date).orElse(null);
+            return queries.nextStudyDay(type, ownerId, date, archive).orElse(null);
         } catch (UpstreamUnavailableException | UpstreamRejectedException e) {
             return null;
         }
     }
 
-    /** ◀️ ▶️ to the previous/next weekday; on a day without lessons ▶️ jumps to the next study day. */
+    /**
+     * The public window for this chat when {@code earliest} may fall before it. The current week and later are open
+     * to every chat, so they need neither core's meta nor the chat's bindings.
+     */
+    private Window window(long chatId, LocalDate earliest) {
+        if (!earliest.isBefore(StudyDays.weekStart(today()))) {
+            return Window.OPEN;
+        }
+        LocalDate from = queries.meta().publicHistoryFrom();
+        if (from == null) {
+            return Window.OPEN; // старший core: вікна немає, усе публічне
+        }
+        return new Window(StudyDays.weekStart(from), bindings.isStaffChat(chatId));
+    }
+
+    /** «🗄 … в архіві» with a button to the first day the chat may open. */
+    private static InlineKeyboard archived(OwnerType type, UUID ownerId, LocalDate firstDay) {
+        return InlineKeyboard.rows(List.of(InlineButton.callback(dayLabel(firstDay) + " ▶️",
+                CallbackData.day(type, ownerId, firstDay))));
+    }
+
+    /**
+     * Core's public window as the bot applies it: whole weeks from {@code firstDay} ({@code null}: no limit).
+     * A staff chat goes further back with the service token ({@link #archive}); another chat stops at it.
+     */
+    private record Window(LocalDate firstDay, boolean staff) {
+
+        static final Window OPEN = new Window(null, false);
+
+        boolean closes(LocalDate date) {
+            return firstDay != null && !staff && date.isBefore(firstDay);
+        }
+
+        boolean archive(LocalDate date) {
+            return firstDay != null && staff && date.isBefore(firstDay);
+        }
+    }
+
+    /**
+     * ◀️ ▶️ to the previous/next weekday; on a day without lessons ▶️ jumps to the next study day. A chat without
+     * the archive gets no ◀️ on the first day of the public window.
+     */
     private InlineKeyboard navigation(long chatId, OwnerType type, UUID ownerId, LocalDate date,
-                                      LocalDate nextStudyDay, boolean privateChat) {
+                                      LocalDate nextStudyDay, boolean privateChat, Window window) {
         LocalDate previous = StudyDays.previous(date);
         LocalDate next = nextStudyDay != null ? nextStudyDay : StudyDays.next(date);
         List<List<InlineButton>> rows = new ArrayList<>();
-        rows.add(List.of(
+        InlineButton forward = InlineButton.callback(dayLabel(next) + " ▶️", CallbackData.day(type, ownerId, next));
+        rows.add(window.closes(previous) ? List.of(forward) : List.of(
                 InlineButton.callback("◀️ " + dayLabel(previous), CallbackData.day(type, ownerId, previous)),
-                InlineButton.callback(dayLabel(next) + " ▶️", CallbackData.day(type, ownerId, next))));
+                forward));
         if (privateChat && type == OwnerType.GROUP) {
             boolean following = bindings.subscription(chatId)
                     .map(subscription -> ownerId.equals(subscription.getGroupId()))

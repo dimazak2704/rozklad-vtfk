@@ -1,6 +1,8 @@
 package ua.vtc.rozklad.notification.documents;
 
+import java.time.LocalDate;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.events.OrderPayload;
@@ -54,8 +56,18 @@ public class OrderDocuments implements MediaResolver {
 
     /** A published order; 404 when the order is unknown here or not published. */
     public RenderedDocument published(UUID orderId, DocumentFormat format) {
+        return published(orderId, format, date -> {
+        });
+    }
+
+    /**
+     * {@link #published(UUID, DocumentFormat)} after {@code dateCheck} accepted the order's date (it throws to
+     * refuse), before anything is rendered.
+     */
+    public RenderedDocument published(UUID orderId, DocumentFormat format, Consumer<LocalDate> dateCheck) {
         PublishedOrder stored = publishedOrders.find(orderId)
                 .orElseThrow(() -> new NotFoundException("Розпорядження не знайдено або ще не опубліковано."));
+        dateCheck.accept(stored.getOrderDate());
         OrderPayload order = stored.getPayload();
         String version = stored.getPayloadHash().substring(0, 16);
         byte[] content = switch (format) {

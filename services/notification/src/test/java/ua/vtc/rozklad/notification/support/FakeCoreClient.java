@@ -21,9 +21,14 @@ import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleOwner;
 import ua.vtc.rozklad.notification.core.CoreDtos.SearchHit;
 import ua.vtc.rozklad.notification.core.OwnerType;
+import ua.vtc.rozklad.notification.core.UpstreamRejectedException;
 import ua.vtc.rozklad.notification.core.UpstreamUnavailableException;
 
-/** core stand-in with the fixtures of {@link CoreFixtures}; records commands and can be switched off. */
+/**
+ * core stand-in with the fixtures of {@link CoreFixtures}; records commands and can be switched off. Like core, it
+ * refuses a visitor's schedule that starts before the Monday of the public history window ({@code historyDays} back
+ * from {@code today}) and serves any date to the bot's service token ({@link #archiveSchedule}).
+ */
 public class FakeCoreClient implements CoreClient {
 
     public record Reply(UUID changeId, UUID teacherId, ConfirmationDecision decision) {
@@ -32,6 +37,7 @@ public class FakeCoreClient implements CoreClient {
     private final List<Reply> replies = new CopyOnWriteArrayList<>();
     private final List<AbsenceReport> absences = new CopyOnWriteArrayList<>();
     private final AtomicInteger scheduleCalls = new AtomicInteger();
+    private final AtomicInteger archiveCalls = new AtomicInteger();
     private final AtomicInteger teacherCalls = new AtomicInteger();
     private final AtomicInteger teacherCallsInTransaction = new AtomicInteger();
     private final java.util.Set<LocalDate> holidays = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -43,11 +49,14 @@ public class FakeCoreClient implements CoreClient {
     private volatile RuntimeException absenceFailure;
     private volatile ChangeStatus noticeStatus;
     private volatile LocalDate today = LocalDate.of(2026, 10, 19);
+    private volatile Integer historyDays = 7;
 
     public void reset() {
         replies.clear();
         absences.clear();
         scheduleCalls.set(0);
+        archiveCalls.set(0);
+        historyDays = 7;
         teacherCalls.set(0);
         teacherCallsInTransaction.set(0);
         holidays.clear();
@@ -100,6 +109,16 @@ public class FakeCoreClient implements CoreClient {
         this.today = value;
     }
 
+    /** The setting {@code public.changesHistoryDays}; {@code null} plays an older core without the window. */
+    public void setHistoryDays(Integer days) {
+        this.historyDays = days;
+    }
+
+    /** Schedules the bot asked for with its service token (the whole archive). */
+    public int archiveCalls() {
+        return archiveCalls.get();
+    }
+
     public List<Reply> replies() {
         return List.copyOf(replies);
     }
@@ -125,7 +144,7 @@ public class FakeCoreClient implements CoreClient {
     @Override
     public PublicMeta meta() {
         available();
-        return CoreFixtures.meta(today);
+        return CoreFixtures.meta(today, publicHistoryFrom());
     }
 
     @Override
@@ -184,6 +203,27 @@ public class FakeCoreClient implements CoreClient {
     @Override
     public Schedule schedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
         available();
+        LocalDate publicFrom = publicHistoryFrom();
+        if (publicFrom != null && from.isBefore(publicFrom.with(java.time.DayOfWeek.MONDAY))) {
+            throw new UpstreamRejectedException(404, "Розклад із замінами за тижні до … бачить лише персонал коледжу.",
+                    UpstreamRejectedException.HISTORY_NOT_PUBLIC);
+        }
+        return scheduleOf(type, ownerId, from, to);
+    }
+
+    @Override
+    public Schedule archiveSchedule(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
+        available();
+        archiveCalls.incrementAndGet();
+        return scheduleOf(type, ownerId, from, to);
+    }
+
+    private LocalDate publicHistoryFrom() {
+        Integer days = historyDays;
+        return days == null ? null : today.minusDays(days);
+    }
+
+    private Schedule scheduleOf(OwnerType type, UUID ownerId, LocalDate from, LocalDate to) {
         scheduleCalls.incrementAndGet();
         List<ScheduleDay> days = new java.util.ArrayList<>();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
