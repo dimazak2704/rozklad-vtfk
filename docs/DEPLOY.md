@@ -27,7 +27,7 @@ domain (the SPA signs in at `<its origin>/auth`).
 
 | File | What it does |
 |---|---|
-| `infra/deploy/compose.prod.yml` | Overlay on `infra/docker-compose.yml`: Caddy, no published ports for anything else, `auth` in production mode, secrets from env, memory limits, log rotation |
+| `infra/deploy/compose.prod.yml` | Overlay on `infra/docker-compose.yml`: Caddy, no published ports for anything else, `auth` in production mode, secrets from env, memory limits, log rotation, runtime hardening (no new privileges, no capabilities for the Java services, process limits, read-only Caddy and nginx, lower CPU weight for background work) |
 | `infra/deploy/caddy/Caddyfile` | The site, TLS, routing of `/api` and `/auth`, the internal API of `auth` closed, forged forwarding headers removed |
 | `infra/deploy/.env.example` → `infra/deploy/.env` | Every setting with comments. `.env` is gitignored |
 | `infra/deploy/secrets/auth-signing-key.pem` | Token signing key of `auth` (RSA, created by `gen-secrets.sh`; gitignored) |

@@ -25,6 +25,23 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
+# Runtime hardening of every container: setuid binaries give no new privileges, and the number of
+# processes and threads is bounded (a fork bomb stops at the limit). Checked by
+# infra/deploy/tests/config_test.py.
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 1024
+
+# The Java services run as the non-root user app on ports above 1024: they need no capability.
+x-java-hardening: &java-hardening
+  <<: *hardening
+  cap_drop: [ALL]
+
+# Background work (the solver, imports, document conversion) gets half the CPU weight of the database,
+# the gateway, auth and Caddy when the CPU is busy; idle CPU is still used in full.
+x-background-cpu: &background-cpu
+  cpu_shares: 512
+
 # Production values shared by the Java services (they override the dev values of x-java-env). The
 # broker and Redis credentials are separate: a service gets only those of a client it has (importer
 # has no AMQP client, scheduler no Redis client), so a compromised parser cannot publish bot events.
@@ -49,6 +66,12 @@ services:
   # --- Edge: TLS termination and routing (the only published ports) -------------------------------
   caddy:
     image: caddy:2.11-alpine
+    <<: *hardening
+    # root in the container, but with one capability: binding 80/443
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true # certificates and state live in the caddy_data/caddy_config volumes
+    tmpfs: [/tmp]
     profiles: [app]
     restart: unless-stopped
     # IPv4 only: the compose network has no IPv6, so docker-proxy would hand Caddy every IPv6 client as
@@ -79,6 +102,7 @@ services:
 
   # --- Data ------------------------------------------------------------------------------------------
   postgres:
+    <<: *hardening
     ports: !reset []
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -96,6 +120,7 @@ services:
     logging: *logging
 
   rabbitmq:
+    <<: *hardening
     ports: !reset []
     environment:
       # applied when the rabbitdata volume is created
@@ -108,6 +133,7 @@ services:
     logging: *logging
 
   redis:
+    <<: *hardening
     ports: !reset []
     # volatile-lru evicts only keys with a TTL (caches, rate limits), never state without one
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?}",
@@ -122,6 +148,7 @@ services:
   # --- Sign-in service (services/auth; Caddy serves it at https://<domain>/auth) ---------------------
   auth:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/auth:${IMAGE_TAG:-prod}
+    <<: *java-hardening
     env_file: !reset [] # also drops the development demo passwords of infra/dev/demo-users.env
     ports: !reset []
     environment:
@@ -171,6 +198,7 @@ services:
   # --- Application services ---------------------------------------------------------------------------
   core:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/core:${IMAGE_TAG:-prod}
+    <<: *java-hardening
     env_file: !reset []
     ports: !reset []
     environment:
@@ -189,6 +217,7 @@ services:
 
   scheduler:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/scheduler:${IMAGE_TAG:-prod}
+    <<: [*java-hardening, *background-cpu]
     env_file: !reset []
     ports: !reset []
     environment:
@@ -201,6 +230,7 @@ services:
 
   importer:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/importer:${IMAGE_TAG:-prod}
+    <<: [*java-hardening, *background-cpu]
     env_file: !reset []
     ports: !reset []
     environment:
@@ -222,6 +252,7 @@ services:
 
   notification:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/notification:${IMAGE_TAG:-prod}
+    <<: [*java-hardening, *background-cpu]
     env_file: !reset []
     ports: !reset []
     environment:
@@ -245,6 +276,7 @@ services:
 
   gateway:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/gateway:${IMAGE_TAG:-prod}
+    <<: *java-hardening
     env_file: !reset []
     ports: !reset []
     environment:
@@ -265,6 +297,12 @@ services:
   # --- SPA (nginx with the Vite build) -----------------------------------------------------------------
   web:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/web:${IMAGE_TAG:-prod}
+    <<: *hardening
+    # the nginx master runs as root to bind :80 and starts the workers as the user nginx
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    read_only: true
+    tmpfs: [/var/cache/nginx, /run, /tmp]
     build:
       # Vite reads VITE_* at build time. No VITE_OIDC_AUTHORITY: the SPA signs in at its own origin
       # (https://<domain>/auth), so one image fits every domain.

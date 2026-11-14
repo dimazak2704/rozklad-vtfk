@@ -119,5 +119,48 @@ class ProductionSecrets(unittest.TestCase):
         self.assertIn("default_user_tags.administrator = false", conf)
 
 
+class ProductionHardening(unittest.TestCase):
+    """After code execution in one container the attacker keeps as little as possible: no new
+    privileges through setuid binaries, no capabilities where none are needed, a bounded number of
+    processes, and the edge containers cannot write their own filesystem."""
+
+    JAVA = {"auth", "core", "scheduler", "importer", "notification", "gateway"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.services = render(PROD, PROD_ENV)["services"]
+
+    def test_no_new_privileges_and_a_process_limit_everywhere(self):
+        for name, service in self.services.items():
+            with self.subTest(service=name):
+                self.assertIn("no-new-privileges:true", service.get("security_opt", []))
+                self.assertTrue(0 < service.get("pids_limit", 0) <= 1024)
+
+    def test_no_capabilities_for_the_java_services(self):
+        # they run as the non-root user app on ports above 1024
+        for name in self.JAVA:
+            with self.subTest(service=name):
+                self.assertEqual(["ALL"], self.services[name].get("cap_drop"))
+                self.assertFalse(self.services[name].get("cap_add"))
+
+    def test_edge_containers_keep_only_what_they_need_and_are_read_only(self):
+        self.assertEqual(["ALL"], self.services["caddy"].get("cap_drop"))
+        self.assertEqual(["NET_BIND_SERVICE"], self.services["caddy"].get("cap_add"))
+        self.assertEqual(["ALL"], self.services["web"].get("cap_drop"))
+        # nginx: the root master binds :80 and starts its workers as the user nginx
+        self.assertEqual({"CHOWN", "SETGID", "SETUID", "NET_BIND_SERVICE"}, set(self.services["web"].get("cap_add")))
+        for name in ("caddy", "web"):
+            with self.subTest(service=name):
+                self.assertTrue(self.services[name].get("read_only"))
+
+    def test_background_work_cannot_starve_the_database_and_the_entry_points(self):
+        def weight(name):
+            return self.services[name].get("cpu_shares", 1024)
+        for heavy in ("scheduler", "importer", "notification"):
+            for vital in ("postgres", "gateway", "auth", "caddy"):
+                with self.subTest(heavy=heavy, vital=vital):
+                    self.assertLess(weight(heavy), weight(vital))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
