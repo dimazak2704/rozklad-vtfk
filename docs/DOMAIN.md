@@ -412,7 +412,7 @@ Vision extraction target: rows {discipline, semester, hoursPerWeek, hoursPerSeme
 
 ## 13. Open questions
 
-Asked in `../Питання до навчальної частини.md` (outside the repo); until answered the system keeps the current
+Asked in `../Docs/Нотатки/Питання до навчальної частини.md` (outside the repo); until answered the system keeps the current
 behaviour. Each could become a setting once the college confirms a rule:
 - How far ahead a teacher may report an absence. Now: from today up to a year (`ValidDateRange.MAX_DAYS`).
 - Until when a teacher may answer «Не можу». Now: until the order is published (§7, NOTIFY).
