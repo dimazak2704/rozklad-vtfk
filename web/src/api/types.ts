@@ -328,6 +328,11 @@ export interface LessonView {
   /** Надрукована причина розпорядження; null для ADDITIONAL, BLOCK і заміни аудиторії. */
   reasonText: Nullable<string>;
   changeId: Nullable<Uuid>;
+  /**
+   * Парність рядка шаблону, з якого пара: NUMERATOR чи DENOMINATOR — пара лише по чисельниках чи знаменниках,
+   * BOTH — щотижня. Старіший core поля не має: тоді картка просто не показує позначку.
+   */
+  parity?: Parity;
 }
 
 export interface DayDto {

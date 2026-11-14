@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiError } from '@/api/errors';
-import type { IsoDate, WeekParity } from '@/api/types';
+import type { IsoDate } from '@/api/types';
 import { OptionRow } from '@/components/admin-daily/changes/OptionRow';
 import { actionLabel } from '@/components/admin-daily/model';
 import { DayColumn, DayList, DayListSkeleton, LessonCell, NowIndicator, WeekGrid } from '@/components/schedule';
@@ -360,8 +360,6 @@ export default function KitchenSinkPage() {
     DEMO_BLOCK,
     DEMO_WEEK.days[3]?.lessons[2],
   ].filter((lesson) => lesson !== undefined);
-
-  const parity: WeekParity = 'NUMERATOR';
 
   return (
     <div className="flex flex-col gap-10">
@@ -897,7 +895,7 @@ export default function KitchenSinkPage() {
           <div className="grid overflow-hidden rounded-control border border-default sm:grid-cols-2 xl:grid-cols-4">
             {lessonStates.map((lesson) => (
               <div key={lesson.id} className="border-separator max-sm:not-last:border-b sm:border-e sm:border-b">
-                <LessonCell lesson={lesson} date={DEMO_TODAY} dayParity={parity} className="h-full" />
+                <LessonCell lesson={lesson} date={DEMO_TODAY} className="h-full" />
               </div>
             ))}
           </div>
@@ -939,7 +937,7 @@ export default function KitchenSinkPage() {
               </div>
               <div className="grid divide-y divide-[var(--border-color-separator)] overflow-hidden rounded-panel border border-default bg-surface">
                 {lessonStates.slice(0, 5).map((lesson) => (
-                  <LessonCell key={lesson.id} lesson={lesson} date={DEMO_TODAY} dayParity={parity} />
+                  <LessonCell key={lesson.id} lesson={lesson} date={DEMO_TODAY} />
                 ))}
               </div>
               <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={minutes} variant="inline" />

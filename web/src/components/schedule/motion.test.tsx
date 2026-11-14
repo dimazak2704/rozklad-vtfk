@@ -218,7 +218,7 @@ describe('Деталі при наведенні', () => {
   });
 
   it('картка заняття: повна назва, хто, де, коли, що було й чому — без повтору «ауд. · аудиторія»', () => {
-    renderWithProviders(<LessonDetails lesson={substituted} date={monday.date} dayParity="NUMERATOR" />);
+    renderWithProviders(<LessonDetails lesson={substituted} date={monday.date} />);
     expect(screen.getByText('Надійність, діагностика та експлуатація компʼютерних систем і мереж')).toBeInTheDocument();
     expect(screen.getByText('Веде')).toBeInTheDocument();
     expect(screen.getByText('Було')).toBeInTheDocument();

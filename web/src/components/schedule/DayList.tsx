@@ -181,7 +181,6 @@ export function DayList({
                           perspective={perspective}
                           variant="list"
                           date={day.date}
-                          dayParity={day.parity}
                           now={current}
                           past={past}
                           arrived={arrived?.has(lesson.id)}

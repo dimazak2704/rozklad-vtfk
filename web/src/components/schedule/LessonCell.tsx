@@ -1,6 +1,6 @@
 import { CornerDownRight, MonitorSmartphone } from 'lucide-react';
-import { memo, type ComponentProps, type ReactElement } from 'react';
-import type { IsoDate, LessonView, WeekParity } from '@/api/types';
+import { memo, useState, type ComponentProps, type ReactElement } from 'react';
+import type { IsoDate, LessonView } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
@@ -20,7 +20,6 @@ export interface LessonCellProps {
   /** `grid` — клітинка тижневої сітки, `list` — рядок денного списку. */
   variant?: 'grid' | 'list';
   date?: IsoDate;
-  dayParity?: WeekParity | null;
   /** Пара йде зараз (для читача екрана; лінію «зараз» малює сітка чи список). */
   now?: boolean;
   /** Застаріле: прогрес малює лінія «зараз» сітки. */
@@ -76,12 +75,14 @@ function DetailsTrigger({
   content: ComponentProps<typeof LessonDetails>;
   children: ReactElement;
 }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
   if (phone) {
+    // перехід з шторки (викладач, аудиторія, група) закриває її: нова сторінка не відкривається під шторкою
     return (
-      <Drawer>
+      <Drawer open={sheetOpen} onOpenChange={setSheetOpen}>
         <DrawerTrigger asChild>{children}</DrawerTrigger>
         <DrawerContent title={label} titleClassName="sr-only">
-          <LessonDetails {...content} />
+          <LessonDetails {...content} onNavigate={() => setSheetOpen(false)} />
         </DrawerContent>
       </Drawer>
     );
@@ -103,7 +104,6 @@ function LessonCellView({
   perspective = 'group',
   variant = 'grid',
   date,
-  dayParity,
   now = false,
   past = false,
   showTime = false,
@@ -150,7 +150,7 @@ function LessonCellView({
     <DetailsTrigger
       phone={phone}
       label={`Деталі: ${lesson.discipline.shortName}, ${lesson.pair} пара`}
-      content={{ lesson, date, dayParity }}
+      content={{ lesson, date, context: 'grid' }}
     >
       <button
         type="button"

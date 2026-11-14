@@ -10,6 +10,7 @@ import {
   dayShareText,
   filterBySubgroup,
   mainDisciplines,
+  ownRoomOf,
   roomDisciplinesLine,
   reasonHint,
   roomDetails,
@@ -277,6 +278,21 @@ describe('withoutOwnRoom', () => {
     expect(moved!.room).toEqual(own);
     // вхідні дані не змінюються
     expect(schedule.days[0]!.lessons[0]!.room).toEqual(own);
+  });
+});
+
+describe('ownRoomOf', () => {
+  it('бере аудиторію сторінки з типом із будь-якого її заняття; без занять у ній — null', () => {
+    const lab = { id: 'r9', name: '9', type: 'LAB' as const };
+    const schedule = {
+      days: [
+        { date: '2026-11-09', lessons: [lesson({})] },
+        { date: '2026-11-10', lessons: [lesson({ room: null }), lesson({ pair: 2, room: lab })] },
+      ],
+    } as unknown as ScheduleDto;
+    expect(ownRoomOf(schedule, 'r9')).toEqual(lab);
+    expect(ownRoomOf(schedule, 'r404')).toBeNull();
+    expect(ownRoomOf(undefined, 'r9')).toBeNull();
   });
 });
 

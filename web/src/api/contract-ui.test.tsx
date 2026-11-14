@@ -157,6 +157,13 @@ describe('Telegram у кабінеті: стан власної привʼязк
 });
 
 describe('рішення щодо пари: зміна причини з version', () => {
+  // ранок дня зміни: пара ще попереду, тож нагадати й спитати ще раз можна (після пари core дає 422 CHANGE_LESSON_OVER)
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-09T05:40:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
   const change: ChangeDto = {
     id: 'c-1',
     kind: 'REPLACE_TEACHER',

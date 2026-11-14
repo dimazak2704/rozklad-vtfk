@@ -97,7 +97,6 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
                         perspective={perspective}
                         variant="grid"
                         date={day.date}
-                        dayParity={day.parity}
                         now={current}
                         progress={progress}
                       />

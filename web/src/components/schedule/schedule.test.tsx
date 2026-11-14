@@ -1,7 +1,7 @@
-import { screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DayDto, PublicTeacherDto } from '@/api/types';
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
@@ -11,6 +11,8 @@ import { renderWithProviders } from '@/test/render';
 import { DayList } from './DayList';
 import { GridNamesProvider } from './GridNames';
 import { LessonCell } from './LessonCell';
+import { LessonDetails } from './LessonDetails';
+import { LessonLinksContext, type LessonLinks } from './lesson-links';
 import { NowIndicator } from './NowIndicator';
 import { WeekGrid } from './WeekGrid';
 
@@ -31,7 +33,7 @@ describe('LessonCell', () => {
 
   it('відкриває повні деталі з клавіатури', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<LessonCell lesson={substituted} date={monday.date} dayParity="NUMERATOR" />);
+    renderWithProviders(<LessonCell lesson={substituted} date={monday.date} />);
     await user.tab();
     await user.keyboard('{Enter}');
     const details = await screen.findByRole('dialog', { name: /Деталі: НДЕКСМ, 2 пара/ });
@@ -40,7 +42,11 @@ describe('LessonCell', () => {
     expect(within(details).getByText(/^Непийвода\sМ\.\sВ\.$/)).toBeInTheDocument();
     // код розпорядження в публічній картці розгорнуто словами
     expect(within(details).getByText('взаємна заміна')).toBeInTheDocument();
-    expect(within(details).getByText(/чисельник/)).toBeInTheDocument();
+    // у сітці «Коли» — лише пара й час: день видно в самій сітці, парність тижня — у шапці сторінки
+    expect(within(details).getByText(`2-га пара · ${substituted.startsAt}–${substituted.endsAt}`)).toBeInTheDocument();
+    expect(within(details).queryByText(/чисельник|знаменник|Понеділок/)).not.toBeInTheDocument();
+    // переходи — самі значення, окремого рядка посилань унизу немає
+    expect(within(details).queryByText('Розклад викладача')).not.toBeInTheDocument();
   });
 
   it('для викладача показує групу замість викладача', () => {
@@ -72,6 +78,122 @@ describe('LessonCell', () => {
     const lesson = monday.lessons[0]!;
     renderWithProviders(<LessonCell lesson={lesson} perspective="group" />);
     expect(screen.getByText(gridName(lesson.teacher!))).not.toHaveClass('font-display');
+  });
+});
+
+describe('картка заняття: значення-посилання', () => {
+  const lesson = monday.lessons[0]!;
+  const links = (self: LessonLinks['self'], search = '?view=week&date=2026-11-16'): LessonLinks => ({ self, search });
+
+  it('викладач, аудиторія й група ведуть на свої розклади з тим самим поданням і днем', () => {
+    renderWithProviders(
+      <LessonLinksContext value={links(null)}>
+        <LessonDetails lesson={lesson} context="grid" />
+      </LessonLinksContext>,
+    );
+    const teacher = screen.getByRole('link', { name: /розклад викладача/ });
+    expect(teacher).toHaveAttribute('href', `/t/${lesson.teacher!.id}?view=week&date=2026-11-16`);
+    expect(screen.getByRole('link', { name: /розклад аудиторії/ })).toHaveAttribute('href', `/r/${lesson.room!.id}?view=week&date=2026-11-16`);
+    const group = screen.getByRole('link', { name: '4КІ1, розклад групи' });
+    expect(group).toHaveAttribute('href', `/g/${encodeURIComponent('4КІ1')}?view=week&date=2026-11-16`);
+  });
+
+  it('сутність сторінки — простий текст: на сторінці групи її код не посилання', () => {
+    renderWithProviders(
+      <LessonLinksContext value={links({ kind: 'group', id: lesson.group.id, label: lesson.group.code })}>
+        <LessonDetails lesson={lesson} context="grid" />
+      </LessonLinksContext>,
+    );
+    expect(screen.getByText('4КІ1').closest('a')).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+  });
+
+  it('на сторінці викладача його імʼя не посилання, а група й аудиторія — так', () => {
+    renderWithProviders(
+      <LessonLinksContext value={links({ kind: 'teacher', id: lesson.teacher!.id, label: 'Непийвода' })}>
+        <LessonDetails lesson={lesson} context="grid" />
+      </LessonLinksContext>,
+    );
+    expect(screen.queryByRole('link', { name: /розклад викладача/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /розклад аудиторії/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /розклад групи/ })).toBeInTheDocument();
+  });
+
+  it('на сторінці аудиторії її номер у картці є (клітинки його не повторюють), але не посиланням', () => {
+    renderWithProviders(
+      <LessonLinksContext value={links({ kind: 'room', id: lesson.room!.id, label: 'ауд. 301' })}>
+        <LessonDetails lesson={{ ...lesson, room: null }} context="grid" />
+      </LessonLinksContext>,
+    );
+    expect(screen.getByText('ауд. 301')).toBeInTheDocument();
+    expect(screen.queryByText('не вказано')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /розклад аудиторії/ })).not.toBeInTheDocument();
+  });
+
+  it('на сторінці лабораторії картка називає й тип своєї аудиторії, простим текстом', () => {
+    const lab = { id: lesson.room!.id, name: '14', type: 'LAB' as const };
+    renderWithProviders(
+      <LessonLinksContext value={links({ kind: 'room', id: lab.id, label: 'ауд. 14', room: lab })}>
+        <LessonDetails lesson={{ ...lesson, room: null }} context="grid" />
+      </LessonLinksContext>,
+    );
+    expect(screen.getByText('ауд. 14')).toBeInTheDocument();
+    expect(screen.getByText(/лабораторія/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /розклад аудиторії/ })).not.toBeInTheDocument();
+  });
+
+  it('перехід за посиланням повідомляє картку (шторка закривається)', async () => {
+    const onNavigate = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<LessonDetails lesson={lesson} context="grid" onNavigate={onNavigate} />);
+    await user.click(screen.getByRole('link', { name: /розклад групи/ }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('посилання доступні з клавіатури: Tab по черзі проходить викладача, аудиторію й групу', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<LessonDetails lesson={lesson} context="grid" />);
+    await user.tab();
+    expect(screen.getByRole('link', { name: /розклад викладача/ })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('link', { name: /розклад аудиторії/ })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('link', { name: /розклад групи/ })).toHaveFocus();
+    expect(screen.getByRole('link', { name: /розклад групи/ })).toHaveClass('focus-visible:outline-2');
+  });
+});
+
+describe('картка заняття: «Коли»', () => {
+  const lesson = monday.lessons[0]!;
+  const time = `${lesson.startsAt}–${lesson.endsAt}`;
+
+  it('поза сіткою (списки змін, пошук) — з повною датою', () => {
+    renderWithProviders(<LessonDetails lesson={lesson} date={monday.date} />);
+    expect(screen.getByText(new RegExp(`^Понеділок, \\d+ \\S+, 1-ша пара · ${time}$`))).toBeInTheDocument();
+  });
+
+  it('у сітці — лише пара й час, навіть коли дата відома', () => {
+    renderWithProviders(<LessonDetails lesson={lesson} date={monday.date} context="grid" />);
+    expect(screen.getByText(`1-ша пара · ${time}`)).toBeInTheDocument();
+    expect(screen.queryByText(/Понеділок/)).not.toBeInTheDocument();
+  });
+
+  it('пара лише по знаменниках чи чисельниках має позначку, щотижнева — ні', () => {
+    renderWithProviders(<LessonDetails lesson={{ ...lesson, parity: 'DENOMINATOR' }} context="grid" />);
+    expect(screen.getByText('лише по знаменниках')).toBeInTheDocument();
+    cleanup();
+
+    renderWithProviders(<LessonDetails lesson={{ ...lesson, parity: 'NUMERATOR' }} context="grid" />);
+    expect(screen.getByText('лише по чисельниках')).toBeInTheDocument();
+    cleanup();
+
+    renderWithProviders(<LessonDetails lesson={{ ...lesson, parity: 'BOTH' }} context="grid" />);
+    expect(screen.queryByText(/^лише по/)).not.toBeInTheDocument();
+    cleanup();
+
+    // старіший core поля не має — позначки теж немає
+    renderWithProviders(<LessonDetails lesson={lesson} context="grid" />);
+    expect(screen.queryByText(/^лише по/)).not.toBeInTheDocument();
   });
 });
 

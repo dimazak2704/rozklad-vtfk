@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useBells, usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
-import { NowIndicator } from '@/components/schedule';
+import { LessonLinksContext, lessonLinkSearch, NowIndicator, type LessonLinks, type ScheduleEntityKind } from '@/components/schedule';
 import { PageErrorScope, PageHeader } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useTeacherNameDirectory } from '@/hooks/useTeacherNames';
@@ -22,7 +22,9 @@ import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
 import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
 import type { ScheduleParams } from './schedule-params';
-import { activePairs, changedLessons, dayOf, dayShareText, filterBySubgroup, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
+import { activePairs, changedLessons, dayOf, dayShareText, filterBySubgroup, ownRoomOf, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
+
+const TARGET_KIND = { GROUP: 'group', TEACHER: 'teacher', ROOM: 'room' } as const satisfies Record<ScheduleTarget['type'], ScheduleEntityKind>;
 
 interface SchedulePageProps {
   /** Ціль для обраного й нещодавніх: тип, id, підпис, маршрут у застосунку. */
@@ -91,6 +93,18 @@ export function SchedulePage({
   // на сторінці аудиторії клітинки не повторюють її номер: другий рядок — група й викладач
   const roomId = target.type === 'ROOM' ? target.id : null;
   const select = useMemo(() => (roomId ? (schedule: ScheduleDto) => withoutOwnRoom(schedule, roomId) : undefined), [roomId]);
+
+  // картка заняття: викладач, аудиторія й група ведуть на свої розклади з тим самим поданням і днем;
+  // сама сторінка (ця група, цей викладач, ця аудиторія) — простим текстом
+  // сирі дані ще несуть свою аудиторію (з типом): картка покаже «ауд. 14 · лабораторія», а не лише номер
+  const ownRoom = useMemo(() => (roomId ? ownRoomOf(query.data, roomId) : null), [query.data, roomId]);
+  const lessonLinks = useMemo<LessonLinks>(
+    () => ({
+      self: { kind: TARGET_KIND[target.type], id: target.id, label: target.label, room: ownRoom },
+      search: lessonLinkSearch({ view: params.view, date: params.date, homeDate: params.homeDate }),
+    }),
+    [target.type, target.id, target.label, ownRoom, params.view, params.date, params.homeDate],
+  );
 
   useDocumentTitle(documentTitle);
 
@@ -167,14 +181,16 @@ export function SchedulePage({
         controls={phone ? undefined : <ScheduleControls params={params} />}
         more={more}
       />
-      <ScheduleExplorer
-        query={query}
-        params={params}
-        perspective={perspective}
-        ownerLabel={target.label}
-        toolbar={false}
-        select={select}
-      />
+      <LessonLinksContext value={lessonLinks}>
+        <ScheduleExplorer
+          query={query}
+          params={params}
+          perspective={perspective}
+          ownerLabel={target.label}
+          toolbar={false}
+          select={select}
+        />
+      </LessonLinksContext>
       <SchedulePrint
         mode={mode}
         schedule={placeholder ? undefined : visible}

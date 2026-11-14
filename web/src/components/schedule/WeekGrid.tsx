@@ -368,7 +368,6 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                   lesson={lesson}
                                   perspective={perspective}
                                   date={day.date}
-                                  dayParity={day.parity}
                                   now={current}
                                   past={lessonPast}
                                   arrived={arrived?.has(lesson.id)}

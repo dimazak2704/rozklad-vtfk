@@ -58,7 +58,8 @@ export interface HoverDetailsProps {
 /**
  * Деталі, доступні всім: мишею — при наведенні (550 мс; поки інша картка відкрита чи щойно закрилась —
  * одразу, а та зникає), з клавіатури й на дотик — по Enter/тапу. Так влаштована картка заняття: повна назва,
- * викладач, аудиторія, що змінилося і чому. У картці є посилання, тож на неї можна перейти мишею.
+ * викладач, аудиторія, що змінилося і чому. У картці є посилання, тож на неї можна перейти мишею: дорогою
+ * курсор у безпечному трикутнику до картки, і сусідній тригер на цьому шляху картку не перехоплює.
  */
 export function HoverDetails({
   children,
@@ -70,7 +71,9 @@ export function HoverDetails({
   label,
   contentClassName,
 }: HoverDetailsProps) {
-  const intent = useHoverIntent({ openDelay, closeDelay });
+  const card = useRef<HTMLDivElement>(null);
+  // у картці є посилання: курсор має дійти до неї, навіть якщо дорогою перетне сусідній тригер
+  const intent = useHoverIntent({ openDelay, closeDelay, safeArea: () => card.current });
   // картку відкрило наведення мишею: при закритті фокус на тригер не повертаємо, інакше Radix
   // ставить його скриптом і :focus-visible малює кільце на клітинці, якої ніхто не натискав
   const openedByHover = useRef(false);
@@ -78,7 +81,15 @@ export function HoverDetails({
     if (intent.open) openedByHover.current = intent.byHover;
   }, [intent.open, intent.byHover]);
 
-  const hoverHandlers = {
+  const triggerHover = {
+    onPointerEnter: (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') intent.enter({ x: event.clientX, y: event.clientY });
+    },
+    onPointerLeave: (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') intent.leaveTrigger({ x: event.clientX, y: event.clientY });
+    },
+  };
+  const cardHover = {
     onPointerEnter: (event: PointerEvent) => {
       if (event.pointerType === 'mouse') intent.enter();
     },
@@ -98,7 +109,7 @@ export function HoverDetails({
     >
       <RadixPopover.Trigger
         asChild
-        {...hoverHandlers}
+        {...triggerHover}
         onClick={(event: MouseEvent<HTMLElement>) => {
           // картку вже відкрило наведення (з «розігрітої» сітки — одразу): клік по кнопці означає «відкрий»,
           // а не «закрий», тож лишаємо її відкритою, тепер як діалог (фокус потім повернеться на тригер).
@@ -113,19 +124,34 @@ export function HoverDetails({
       </RadixPopover.Trigger>
       <RadixPopover.Portal>
         <RadixPopover.Content
+          ref={card}
           side={side}
           align={align}
           sideOffset={6}
           collisionPadding={8}
           aria-label={label}
           data-hover-instant={intent.instant || undefined}
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            // відкрито з клавіатури чи тапом: фокус — на саму картку (читач екрана читає її, наступний Tab —
+            // перше посилання в ній; картка в порталі, тож інакше Tab пішов би до сусідньої клітинки).
+            // Від наведення фокус лишається, де був.
+            if (!intent.byHover) card.current?.focus({ preventScroll: true });
+          }}
           onCloseAutoFocus={(event) => {
             if (openedByHover.current) event.preventDefault();
             openedByHover.current = false;
           }}
           className={cn(!intent.instant && 'anim-pop', CARD, contentClassName)}
-          {...hoverHandlers}
+          {...cardHover}
+          onClick={(event: MouseEvent<HTMLElement>) => {
+            // перехід за посиланням у картці: картка зникає одразу (не висить над новою сторінкою, поки та
+            // вантажиться), і фокус не повертається на тригер, який от-от зникне
+            // (Ctrl/Cmd-клік відкриває нову вкладку — тут картка лишається)
+            if (event.ctrlKey || event.metaKey || event.shiftKey || !(event.target as Element).closest('a[href]')) return;
+            openedByHover.current = true;
+            intent.close(true);
+          }}
         >
           {content}
         </RadixPopover.Content>

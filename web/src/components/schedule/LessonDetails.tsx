@@ -7,9 +7,11 @@ import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { capitalize, LESSON_VIEW_KIND_LABEL, PARITY_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { capitalize, LESSON_VIEW_KIND_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, lessonTime, roomLabel } from '@/lib/schedule';
+import { ParityMark } from '../ui/ParityBadge';
+import { useLessonLinks } from './lesson-links';
 
 const STATE_WORD = {
   change: 'text-change',
@@ -32,7 +34,13 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 interface LessonDetailsProps {
   lesson: LessonView;
   date?: IsoDate;
-  dayParity?: WeekParity | null;
+  /**
+   * `grid` — картку відкрито з сітки тижня чи списку дня: день уже видно, тож «Коли» — лише пара й час.
+   * `standalone` (за замовчуванням) — деінде (списки змін, пошук): з повною датою.
+   */
+  context?: 'grid' | 'standalone';
+  /** Перехід за посиланням у картці: закрити шторку, у якій вона стоїть. */
+  onNavigate?: () => void;
 }
 
 /** Скорочення з розпорядження («Зв.зам.») — словами («взаємна заміна»): у публічній картці кодів не лишаємо. */
@@ -43,16 +51,53 @@ function reasonInWords(text: string): string {
   return code ? REASON_CODE_HINT[code].toLocaleLowerCase('uk') : text;
 }
 
-const LINK =
-  'inline-flex min-h-8 items-center rounded-control text-ui font-[650] text-accent pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+/**
+ * Значення-посилання: виглядає як значення (основне чорнило), тонка риска акцентного відтінку каже, що його
+ * можна натиснути; під мишею текст стає акцентним. На дотик область натискання вища за рядок.
+ */
+const VALUE_LINK =
+  'rounded-tag text-primary underline decoration-[var(--text-decoration-color-accent)] decoration-[1.5px] underline-offset-[0.2em] ' +
+  'transition-[color,text-decoration-color] duration-150 hover:text-accent hover:decoration-current pointer-coarse:py-1.5 ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+
+const PARITY_ONLY: Record<WeekParity, string> = {
+  NUMERATOR: 'лише по чисельниках',
+  DENOMINATOR: 'лише по знаменниках',
+};
+
+/** Значення, що веде на свій розклад (з тим самим поданням і днем), або простий текст, якщо це сутність сторінки. */
+function EntityValue({
+  to,
+  own,
+  hint,
+  onNavigate,
+  children,
+}: {
+  to: string;
+  own: boolean;
+  /** Для читача екрана: куди веде посилання («розклад викладача»). */
+  hint: string;
+  onNavigate?: () => void;
+  children: ReactNode;
+}) {
+  const { search } = useLessonLinks();
+  if (own) return <>{children}</>;
+  return (
+    <Link to={{ pathname: to, search }} className={VALUE_LINK} onClick={onNavigate}>
+      {children}
+      <span className="sr-only">{`, ${hint}`}</span>
+    </Link>
+  );
+}
 
 /**
  * Повні відомості про заняття для картки при наведенні чи шторки на телефоні: повна назва з крапкою
- * дисципліни, «Веде / Де / Коли / Група», для зміни — «Було» й причина словами, і два переходи:
- * розклад викладача й аудиторії.
+ * дисципліни, «Веде / Де / Коли / Група», для зміни — «Було» й причина словами. Викладач, аудиторія й група —
+ * посилання на їхні розклади (крім сутності самої сторінки), тож окремих переходів унизу картки немає.
  */
-export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
+export function LessonDetails({ lesson, date, context = 'standalone', onNavigate }: LessonDetailsProps) {
   const teacherName = useTeacherFullName();
+  const { self } = useLessonLinks();
   const tone = LESSON_TONE[lesson.kind];
   const original = lesson.original;
   const subgroup = subgroupLabel(lesson.subgroup);
@@ -60,12 +105,14 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
   const replacedTeacher = original?.teacher && original.teacher.id !== lesson.teacher?.id;
   const replacedRoom = original?.room && original.room.id !== lesson.room?.id;
   const movedFrom = original?.pair && original.pair !== lesson.pair ? original.pair : null;
-  const when = [
-    date ? formatWeekdayDate(date) : null,
-    `${pairOrdinalLabel(lesson.pair)}${lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}`,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const pairAndTime = `${pairOrdinalLabel(lesson.pair)}${lessonTime(lesson) ? ` · ${lessonTime(lesson)}` : ''}`;
+  // у сітці день уже видно: лише пара й час; деінде — з датою
+  const when = context === 'standalone' && date ? `${formatWeekdayDate(date)}, ${pairAndTime}` : capitalize(pairAndTime);
+  const parityOnly = lesson.parity === 'NUMERATOR' || lesson.parity === 'DENOMINATOR' ? lesson.parity : null;
+  // сторінка аудиторії прибирає свою аудиторію із занять (клітинки її не повторюють): у картці вона є, простим текстом
+  const ownRoom = self?.kind === 'room' ? self : null;
+  const room = lesson.room ?? ownRoom?.room ?? null;
+  const ownRoomLabel = !room && ownRoom ? ownRoom.label : null;
 
   return (
     <div className="flex w-full flex-col gap-3 sm:w-[min(21rem,calc(100vw-3rem))]">
@@ -81,17 +128,39 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
         </p>
       </div>
 
-      <dl className="flex flex-col gap-1.5">
-        <Row label="Веде">{lesson.teacher ? teacherName(lesson.teacher) : <span className="text-muted">не призначено</span>}</Row>
+      <dl className="flex flex-col gap-1.5 pointer-coarse:gap-2.5">
+        <Row label="Веде">
+          {lesson.teacher ? (
+            <EntityValue
+              to={paths.teacher(lesson.teacher.id)}
+              own={self?.kind === 'teacher' && self.id === lesson.teacher.id}
+              hint="розклад викладача"
+              onNavigate={onNavigate}
+            >
+              {teacherName(lesson.teacher)}
+            </EntityValue>
+          ) : (
+            <span className="text-muted">не призначено</span>
+          )}
+        </Row>
         <Row label="Де">
-          {lesson.room ? (
+          {room ? (
             <>
-              {roomLabel(lesson.room.name)}
+              <EntityValue
+                to={paths.room(room.id)}
+                own={self?.kind === 'room' && self.id === room.id}
+                hint="розклад аудиторії"
+                onNavigate={onNavigate}
+              >
+                {roomLabel(room.name)}
+              </EntityValue>
               {/* «ауд. 16 · аудиторія» — повтор; тип називаємо, лише коли він щось каже (клас, лабораторія, зал) */}
-              {lesson.room.type !== 'CLASSROOM' && lesson.room.type !== 'OTHER' ? (
-                <span className="text-secondary"> · {ROOM_TYPE_LABEL[lesson.room.type]}</span>
+              {room.type !== 'CLASSROOM' && room.type !== 'OTHER' ? (
+                <span className="text-secondary"> · {ROOM_TYPE_LABEL[room.type]}</span>
               ) : null}
             </>
+          ) : ownRoomLabel ? (
+            ownRoomLabel
           ) : (
             <span className="text-muted">не вказано</span>
           )}
@@ -103,11 +172,26 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
           ) : null}
         </Row>
         <Row label="Коли">
-          {capitalize(when)}
-          {dayParity ? <span className="text-secondary">, {PARITY_LABEL[dayParity]}</span> : null}
+          <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span>{when}</span>
+            {parityOnly ? (
+              // пара не щотижня: позначка лише в такої пари; загальна парність тижня — у шапці сторінки
+              <span className="inline-flex items-center gap-1 self-center rounded-tag bg-sunken px-1.5 py-px text-meta font-semibold whitespace-nowrap text-secondary">
+                <ParityMark parity={parityOnly} className="size-3" />
+                {PARITY_ONLY[parityOnly]}
+              </span>
+            ) : null}
+          </span>
         </Row>
         <Row label="Група">
-          {lesson.group.code}
+          <EntityValue
+            to={paths.group(lesson.group.code)}
+            own={self?.kind === 'group' && self.id === lesson.group.id}
+            hint="розклад групи"
+            onNavigate={onNavigate}
+          >
+            {lesson.group.code}
+          </EntityValue>
           {subgroup ? <span className="text-secondary"> · {subgroup}</span> : null}
         </Row>
       </dl>
@@ -135,21 +219,6 @@ export function LessonDetails({ lesson, date, dayParity }: LessonDetailsProps) {
             </Row>
           ) : null}
         </dl>
-      ) : null}
-
-      {lesson.teacher || lesson.room ? (
-        <div className="flex flex-wrap gap-x-4 border-t border-separator pt-2">
-          {lesson.teacher ? (
-            <Link to={paths.teacher(lesson.teacher.id)} className={LINK}>
-              <span className="u-line">Розклад викладача</span>
-            </Link>
-          ) : null}
-          {lesson.room ? (
-            <Link to={paths.room(lesson.room.id)} className={LINK}>
-              <span className="u-line">{/^\d/.test(lesson.room.name) ? `Аудиторія ${lesson.room.name}` : capitalize(lesson.room.name)}</span>
-            </Link>
-          ) : null}
-        </div>
       ) : null}
     </div>
   );

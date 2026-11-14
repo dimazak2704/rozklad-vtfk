@@ -1,7 +1,7 @@
 /**
  * Чиста логіка сторінок розкладу: підгрупи, перелік змін тижня, текст «Поділитися», зайнятість аудиторії.
  */
-import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, ScheduleDto, SemesterRef } from '@/api/types';
+import type { BellSlotDto, DayDto, IsoDate, LessonView, PublicRoomDto, RoomRef, ScheduleDto, SemesterRef } from '@/api/types';
 import { compareIsoDates, diffDays, formatWeekdayDate, startOfWeek } from '@/lib/date';
 import { capitalize, PARITY_LABEL, REASON_CODE_HINT, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { isChangedLesson, lessonCounterpart, roomLabel, vacatedPairs, type Perspective } from '@/lib/schedule';
@@ -52,6 +52,16 @@ export function withoutOwnRoom(schedule: ScheduleDto, roomId: string): ScheduleD
       ),
     })),
   };
+}
+
+/** Сама аудиторія сторінки (з типом) з будь-якого її заняття; null — цього тижня занять у ній немає. */
+export function ownRoomOf(schedule: ScheduleDto | undefined, roomId: string): RoomRef | null {
+  for (const day of schedule?.days ?? []) {
+    for (const lesson of day.lessons) {
+      if (lesson.room?.id === roomId) return lesson.room;
+    }
+  }
+  return null;
 }
 
 /**
