@@ -277,6 +277,29 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
             />
           </Field>
         ) : null}
+        {settings.fridayMaxPairs !== undefined ? (
+          <Field
+            label="Максимум пар у пʼятницю"
+            hint="Для генератора розкладу: пʼятниця — розвантажувальний день, більше пар у групи генератор не поставить. Пари, закріплені поза вибраними групами, лишаються як є."
+            error={formState.errors.fridayMaxPairs?.message}
+            required
+          >
+            <Controller
+              control={control}
+              name="fridayMaxPairs"
+              render={({ field }) => (
+                <NumberInput
+                  value={field.value === undefined || Number.isNaN(field.value) ? null : field.value}
+                  onValueChange={(value) => field.onChange(value ?? Number.NaN)}
+                  onBlur={field.onBlur}
+                  min={LIMITS.fridayMaxPairs.min}
+                  max={LIMITS.fridayMaxPairs.max}
+                  className="w-36"
+                />
+              )}
+            />
+          </Field>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Публічний сайт" description="Що бачать студенти й батьки без входу.">

@@ -11,6 +11,8 @@ export const SETTINGS_LIMITS = {
   changesHistoryDays: { min: 0, max: 365 },
   /** genfix §3.4: `generation.teacherMaxPairsPerDay`. */
   teacherMaxPairsPerDay: { min: 1, max: 8 },
+  /** Власник, 15.11.2026: `generation.fridayMaxPairs`. */
+  fridayMaxPairs: { min: 1, max: 8 },
 } as const;
 
 /** Типове очікування підтвердження заміни в core (хвилини), якщо його не змінювали (V1_802). */
@@ -19,3 +21,5 @@ export const DEFAULT_CONFIRM_TIMEOUT_MINUTES = 120;
 export const DEFAULT_CHANGES_HISTORY_DAYS = 7;
 /** Найбільше пар на день у викладача для генератора, якщо не змінювали (як у core, genfix §3.4). */
 export const DEFAULT_TEACHER_MAX_PAIRS_PER_DAY = 4;
+/** Найбільше пар у групи в пʼятницю, якщо не змінювали (як у core, власник 15.11.2026). */
+export const DEFAULT_FRIDAY_MAX_PAIRS = 3;
