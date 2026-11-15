@@ -21,6 +21,9 @@ import java.util.UUID;
  * @param teacherMaxPairsPerDay a teacher's daily pair limit for the generator's soft rule «Забагато пар на день
  *                              у викладача» and the metric of overloaded teacher days (not a college rule: in
  *                              the real timetable 35 of 781 teacher-days have 5–6 pairs, so 4 is the norm)
+ * @param fridayMaxPairs        most pairs a group has on Friday, a hard rule of the generator (owner's rule of
+ *                              15.11.2026: Friday is an unloading day; the published 2025/26 timetable has 4 Friday
+ *                              pairs only in 1КІ1, 1М, 4РТ1 and 4РТ2)
  */
 public record SystemSettings(
         ChangeApprovalMode approvalMode,
@@ -32,7 +35,8 @@ public record SystemSettings(
         boolean showTeacherFullNames,
         int changesHistoryDays,
         UUID activeBellProfileId,
-        int teacherMaxPairsPerDay) {
+        int teacherMaxPairsPerDay,
+        int fridayMaxPairs) {
 
     public static final int MIN_CONFIRM_TIMEOUT_MINUTES = 5;
     public static final int MAX_CONFIRM_TIMEOUT_MINUTES = 1440;
@@ -46,6 +50,9 @@ public record SystemSettings(
     public static final int MIN_TEACHER_MAX_PAIRS_PER_DAY = 1;
     public static final int MAX_TEACHER_MAX_PAIRS_PER_DAY = 8;
     public static final int DEFAULT_TEACHER_MAX_PAIRS_PER_DAY = 4;
+    public static final int MIN_FRIDAY_MAX_PAIRS = 1;
+    public static final int MAX_FRIDAY_MAX_PAIRS = 8;
+    public static final int DEFAULT_FRIDAY_MAX_PAIRS = 3;
 
     /**
      * Values from the college documents (orders №35, №96, №105) and DOMAIN §7–§9. The approval mode is
@@ -62,7 +69,8 @@ public record SystemSettings(
             false,
             7,
             null,
-            DEFAULT_TEACHER_MAX_PAIRS_PER_DAY);
+            DEFAULT_TEACHER_MAX_PAIRS_PER_DAY,
+            DEFAULT_FRIDAY_MAX_PAIRS);
 
     public SystemSettings {
         Objects.requireNonNull(approvalMode, "approvalMode");
@@ -71,12 +79,21 @@ public record SystemSettings(
         Objects.requireNonNull(collegeName, "collegeName");
     }
 
-    /** Settings with the default teacher daily limit (callers that do not deal with generation). */
+    /** Settings with the default generation limits (callers that do not deal with generation). */
     public SystemSettings(ChangeApprovalMode approvalMode, int confirmTimeoutMinutes, String signatoryPosition,
                           String signatoryName, String collegeName, int hoursPerPair, boolean showTeacherFullNames,
                           int changesHistoryDays, UUID activeBellProfileId) {
         this(approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair,
                 showTeacherFullNames, changesHistoryDays, activeBellProfileId, DEFAULT_TEACHER_MAX_PAIRS_PER_DAY);
+    }
+
+    /** Settings with the default Friday limit (callers written before it). */
+    public SystemSettings(ChangeApprovalMode approvalMode, int confirmTimeoutMinutes, String signatoryPosition,
+                          String signatoryName, String collegeName, int hoursPerPair, boolean showTeacherFullNames,
+                          int changesHistoryDays, UUID activeBellProfileId, int teacherMaxPairsPerDay) {
+        this(approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair,
+                showTeacherFullNames, changesHistoryDays, activeBellProfileId, teacherMaxPairsPerDay,
+                DEFAULT_FRIDAY_MAX_PAIRS);
     }
 
     public boolean requiresConfirmation() {

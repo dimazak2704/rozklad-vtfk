@@ -3,11 +3,13 @@ package ua.vtc.rozklad.core.settings.internal;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_COLLEGE_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_CONFIRM_TIMEOUT_MINUTES;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_FRIDAY_MAX_PAIRS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_HOURS_PER_PAIR;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_NAME_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_POSITION_LENGTH;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CONFIRM_TIMEOUT_MINUTES;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_FRIDAY_MAX_PAIRS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_HOURS_PER_PAIR;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_TEACHER_MAX_PAIRS_PER_DAY;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_TEACHER_MAX_PAIRS_PER_DAY;
@@ -40,6 +42,10 @@ final class SettingsRules {
                 || settings.teacherMaxPairsPerDay() > MAX_TEACHER_MAX_PAIRS_PER_DAY) {
             errors.add("teacherMaxPairsPerDay", "Найбільше пар на день у викладача має бути від %d до %d."
                     .formatted(MIN_TEACHER_MAX_PAIRS_PER_DAY, MAX_TEACHER_MAX_PAIRS_PER_DAY));
+        }
+        if (settings.fridayMaxPairs() < MIN_FRIDAY_MAX_PAIRS || settings.fridayMaxPairs() > MAX_FRIDAY_MAX_PAIRS) {
+            errors.add("fridayMaxPairs", "Найбільше пар у пʼятницю має бути від %d до %d."
+                    .formatted(MIN_FRIDAY_MAX_PAIRS, MAX_FRIDAY_MAX_PAIRS));
         }
         text(settings.signatoryPosition(), MAX_SIGNATORY_POSITION_LENGTH, "signatoryPosition", "Посаду підписанта",
                 errors);
