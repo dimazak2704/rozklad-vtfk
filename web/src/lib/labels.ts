@@ -155,6 +155,17 @@ export const REASON_CODE_HINT: Record<ReasonCode, string> = {
   OTHER: 'Інша причина',
 };
 
+/**
+ * Скорочення з розпорядження («Зв.зам.») — словами («взаємна заміна»): у публічній картці й у підписі для читача
+ * екрана кодів не лишаємо. Невідомий текст — як є.
+ */
+export function reasonInWords(text: string): string {
+  const code = (Object.keys(REASON_CODE_LABEL) as Array<keyof typeof REASON_CODE_LABEL>).find(
+    (key) => REASON_CODE_LABEL[key].toLocaleLowerCase('uk') === text.trim().toLocaleLowerCase('uk'),
+  );
+  return code ? REASON_CODE_HINT[code].toLocaleLowerCase('uk') : text;
+}
+
 export const ABSENCE_REASON_LABEL: Record<AbsenceReasonCategory, string> = {
   SICK_LEAVE: 'Лікарняний',
   VACATION: 'Відпустка',

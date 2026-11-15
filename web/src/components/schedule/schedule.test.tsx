@@ -27,7 +27,9 @@ describe('LessonCell', () => {
   it('показує заміну поверх розкладу: новий предмет, бейдж і закреслений оригінал', () => {
     renderWithProviders(<LessonCell lesson={substituted} />);
     const cell = screen.getByRole('button', { name: /2 пара/ });
-    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\sМ\.\sД\.\. Причина: Зв\.зам\./);
+    // причина — тим самим словом, що й на картці, а не скороченням розпорядження «Зв.зам.»
+    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\sМ\.\sД\.\. Причина: взаємна заміна\./);
+    expect(cell).not.toHaveAccessibleName(/Зв\.зам/);
     expect(within(cell).getByText('НДЕКСМ')).toBeInTheDocument();
     expect(within(cell).getByText('Заміна')).toBeInTheDocument();
     expect(within(cell).getByText('СТП · Кренцін М. Д.').tagName).toBe('S');
