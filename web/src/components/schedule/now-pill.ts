@@ -34,7 +34,7 @@ export function nowPillShift(centre: number, cell: Span, labels: readonly Span[]
     }
   }
   const free = [bottom, top].filter((y) => y >= cell.top + PILL_REACH && y <= cell.bottom - PILL_REACH);
-  if (free.length === 0) return 0;
-  const best = free.reduce((a, b) => (Math.abs(a - centre) <= Math.abs(b - centre) ? a : b));
-  return best - centre;
+  // the free edge nearest to the centre; centre itself when neither edge fits (no shift)
+  const best = free.reduce<number | null>((a, b) => (a !== null && Math.abs(a - centre) <= Math.abs(b - centre) ? a : b), null);
+  return best === null ? 0 : best - centre;
 }
