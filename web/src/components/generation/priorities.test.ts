@@ -35,6 +35,10 @@ describe('пріоритети замість ваг', () => {
     const ruleWeights = PRIORITY_RULES.flatMap((rule) => Object.keys(rule.ladder));
     for (const key of ['subgroupsTogether', 'specialRooms', 'studentOnePairDay']) expect(ruleWeights).not.toContain(key);
     expect(FIXED_RULES.map((rule) => rule.text).join(' ')).toMatch(/Підгрупи однієї дисципліни займаються одночасно/);
+    // «Діє завжди» не обіцяє більше, ніж робить генератор: «пара за парою» в одного викладача й день без однієї
+    // пари — мʼякі правила, тож у тексті є застереження
+    expect(FIXED_RULES.find((rule) => rule.id === 'subgroups')?.text).toMatch(/де це вдається/);
+    expect(FIXED_RULES.find((rule) => rule.id === 'onePairDays')?.text).toMatch(/якщо цього можна уникнути/);
     // одне речення на правило, без статистики й ваг
     for (const rule of PRIORITY_RULES) {
       expect(rule.hint.replace(/\.$/, ''), rule.label).not.toContain('. ');
