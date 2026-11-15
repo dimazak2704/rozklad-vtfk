@@ -206,8 +206,9 @@ public final class TimetableAnalyzer {
     }
 
     /**
-     * Pairs of sibling copies (at least one free) that are not together: of two teachers (hard) or of one teacher
-     * (soft); a free copy puts the match in scope.
+     * Pairs of sibling copies (at least one free) that are not together: copies that must be parallel (hard), or
+     * one teacher's copies and those of a key that cannot be parallel by the data (soft); a free copy puts the match
+     * in scope.
      */
     private static void siblingPairs(Tally parallel, Tally apart, List<LessonUnit> units) {
         Map<String, List<LessonUnit>> siblings = new HashMap<>();
