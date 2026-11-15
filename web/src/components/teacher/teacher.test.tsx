@@ -29,7 +29,7 @@ import {
 import { MyNow } from './MyNow';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
-import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
+import { cellKey, changedCells, nextKind, shorterDaysNote, templateCells, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
 import { useAssignedSchedule } from './useAssignedSchedule';
 import { answered } from '@/api/me';
@@ -127,7 +127,7 @@ describe('SubstitutionRequests', () => {
   });
 
   it('вихід зі сторінки закриває й сповіщення: «Скасувати» не лишається після надісланої відповіді', async () => {
-    trackReplies();
+    const sent = trackReplies();
     const undo = vi.spyOn(notify, 'undo');
     const dismiss = vi.spyOn(notify, 'dismiss');
     const user = userEvent.setup();
@@ -136,6 +136,8 @@ describe('SubstitutionRequests', () => {
     await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
     unmount();
     expect(dismiss).toHaveBeenCalledWith(undo.mock.results[0]?.value);
+    // дочекатися відповіді, щоб вона не долетіла до обробників наступного тесту
+    await waitFor(() => expect(sent).toHaveLength(1));
   });
 
   it('піти зі сторінки, не скасувавши, — відповідь іде одразу', async () => {
@@ -161,15 +163,11 @@ describe('SubstitutionRequests', () => {
   ])('%s — відкладена відповідь іде одразу, з keepalive, і лише один раз', async (_, leave) => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
-    const sent: string[] = [];
-    const keepalive: boolean[] = [];
-    server.use(
-      http.post(apiPath('/me/changes/:id/:decision'), ({ params, request }) => {
-        sent.push(`${String(params.decision)}:${String(params.id)}`);
-        keepalive.push(request.keepalive);
-        return problem({ status: 409, detail: 'На цей запит уже відповіли.' });
-      }),
-    );
+    const sent = trackReplies();
+    // msw 3 у Node перехоплює запит на рівні сокета, де keepalive уже не видно: дивимось, з чим викликали fetch
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const keepalive = () =>
+      fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => init?.keepalive);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
@@ -178,7 +176,7 @@ describe('SubstitutionRequests', () => {
     try {
       act(leave);
       await waitFor(() => expect(sent).toEqual([expect.stringMatching(/^confirm:/)]));
-      expect(keepalive).toEqual([true]);
+      expect(keepalive()).toEqual([true]);
       // ні таймер «Скасувати», ні вихід зі сторінки не шлють її вдруге
       await act(async () => {
         await vi.advanceTimersByTimeAsync(REPLY_UNDO_MS * 2);
@@ -189,6 +187,7 @@ describe('SubstitutionRequests', () => {
       });
       expect(sent).toHaveLength(1);
     } finally {
+      fetchSpy.mockRestore();
       Reflect.deleteProperty(document, 'visibilityState');
     }
   });
@@ -196,7 +195,7 @@ describe('SubstitutionRequests', () => {
   it('вкладка знову видима — нічого не шле: відповідь іде лише тоді, коли сторінка ховається', async () => {
     const sent = trackReplies();
     const user = userEvent.setup();
-    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+    const { unmount } = renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
     const [request] = await screen.findAllByRole('article', { name: /^Запит на заміну/ });
     await user.click(within(request as HTMLElement).getByRole('button', { name: 'Підтверджую' }));
     act(() => {
@@ -204,6 +203,9 @@ describe('SubstitutionRequests', () => {
     });
     expect(document.visibilityState).toBe('visible');
     expect(sent).toEqual([]);
+    // відкладена відповідь піде під час розмонтування — дочекатися її тут, а не в наступному тесті
+    unmount();
+    await waitFor(() => expect(sent).toHaveLength(1));
   });
 
   it('заміну, яку доповнення передало іншому, відповісти не просять: у «Моїх замінах» вона як передана', async () => {
@@ -350,6 +352,20 @@ describe('побажання', () => {
     expect(toList(new Map<CellKey, PreferenceKind>([[cellKey(1, 1), 'UNAVAILABLE']]), [{ weekday: 1, pair: 1, kind: 'UNWANTED', note: 'рано' }])).toEqual([
       { weekday: 1, pair: 1, kind: 'UNAVAILABLE', note: 'рано' },
     ]);
+  });
+
+  it('мої пари — з базового розкладу семестру: половинка з позначкою тижня, обидві половинки й щотижнева — без', () => {
+    const group = { id: 'g1', code: '4КІ1', course: 4 };
+    const discipline = { id: 'd1', name: 'Сучасні технології проєктування', shortName: 'СТП', color: null };
+    const cells = templateCells([
+      { weekday: 2, pair: 3, parity: 'BOTH', group, subgroup: 0, discipline },
+      { weekday: 3, pair: 1, parity: 'NUMERATOR', group, subgroup: 0, discipline },
+      { weekday: 4, pair: 2, parity: 'NUMERATOR', group, subgroup: 2, discipline },
+      { weekday: 4, pair: 2, parity: 'DENOMINATOR', group, subgroup: 2, discipline },
+    ]);
+    expect(cells.get(cellKey(2, 3))).toEqual(['4КІ1 · СТП']);
+    expect(cells.get(cellKey(3, 1))).toEqual(['4КІ1 · СТП (чисельник)']);
+    expect(cells.get(cellKey(4, 2))).toEqual(['4КІ1/2 · СТП']);
   });
 
   function Harness() {

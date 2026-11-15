@@ -52,7 +52,8 @@ class Dashboard {
                 .flatMap(found -> generationJobs.findLatestStatus(found.id()))
                 .map(DashboardDto.Generation::new)
                 .orElse(null);
-        return new DashboardDto(date, parity, summary.absences(), summary.uncoveredLessons(), summary.pending(),
+        return new DashboardDto(date, parity, summary.absences(), summary.uncoveredLessons(),
+                summary.undecidedLessons(), summary.pending(),
                 summary.confirmed(), summary.declined(),
                 draft.map(order -> new DashboardDto.OrderDraft(order.getId(), order.getItems().size())).orElse(null),
                 generation, null, alerts(date, semester.isPresent(), summary));

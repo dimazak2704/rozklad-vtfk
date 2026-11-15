@@ -23,7 +23,7 @@ import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/u
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
-import { addDays, formatDateRange, startOfWeek } from '@/lib/date';
+import { addDays, compareIsoDates, formatDateRange, formatDayMonth, shiftStudyDay, startOfWeek } from '@/lib/date';
 import type { Perspective } from '@/lib/schedule';
 import { useEntrance } from '../entrance';
 import { historyBound, isHistoryClosed, SCHEDULE_HISTORY_HINT } from '../history';
@@ -227,18 +227,25 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
     // керівниками), далі решта приміток дня без їхніх назв (канікули)
     const blocks = new Map<string, PracticeDto>();
     for (const d of schedule.days) for (const block of dayPractices(d, perspective)) blocks.set(block.periodId, block);
+    // до якого числа триває блок — студент має знати, коли пари повернуться
     const blockLines = [...blocks.values()].map((block) => {
       const supervisors = perspective === 'group' ? supervisorsLine(block) : null;
-      return supervisors ? `${blockTitle(block, perspective)}. ${supervisors}` : blockTitle(block, perspective);
+      const title = `${blockTitle(block, perspective)}, до ${formatDayMonth(block.endsOn)}`;
+      return supervisors ? `${title}. ${supervisors}` : title;
     });
+    const lastBlockDay = [...blocks.values()].map((block) => block.endsOn).sort(compareIsoDates).at(-1);
+    // наступний будній день після блоку — лише для групи (керівник має й інші пари): «Заняття з 30 листопада»
+    const backOn = perspective === 'group' && lastBlockDay ? shiftStudyDay(lastBlockDay, 1) : null;
     const dayNotes = schedule.days.map((d) => noteWithoutPractices(d, dayPractices(d, perspective))?.trim().replace(/\.$/, ''));
     const notes = [...new Set([...blockLines, ...dayNotes.filter((note): note is string => Boolean(note))])];
+    // у поданні «День» — про день, а не про тиждень
+    const when = view === 'day' ? (date === today ? 'Сьогодні' : 'Цього дня') : 'Цього тижня';
     content = (
       <EmptyState
-        title={noStudy ? 'Цього тижня занять немає' : `У ${ownerLabel} цього тижня пар немає`}
+        title={noStudy ? `${when} занять немає` : `У ${ownerLabel} ${when.toLocaleLowerCase('uk')} пар немає`}
         description={
           notes.length > 0
-            ? `${notes.join('; ')}. Розклад на інші тижні відкривається стрілками або календарем.`
+            ? `${notes.join('; ')}.${backOn ? ` Заняття з ${formatDayMonth(backOn)}.` : ''} Розклад на інші ${view === 'day' ? 'дні' : 'тижні'} відкривається стрілками або календарем.`
             : noStudy
               ? 'Це канікули або дні поза семестром. Розклад на інші тижні відкривається стрілками або календарем.'
               : 'Можливо, практика чи зміни в розкладі. Перевірте інший тиждень або сторінку замін.'

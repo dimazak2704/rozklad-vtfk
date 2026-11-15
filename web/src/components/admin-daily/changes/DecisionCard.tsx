@@ -231,8 +231,14 @@ export function DecisionCard({ change, state, lessonEndsAt = null, busy, onResen
         </p>
       ) : null}
 
+      {/* чому відмовився викладач — його слова окремим рядком; «Причина» нижче — це код розпорядження, а не його мотив */}
+      {state === 'declined' && change.responseComment ? (
+        <p className="text-ui text-secondary">
+          {substitute}: «{change.responseComment}»
+        </p>
+      ) : null}
       <p className="text-caption text-muted">
-        Причина: <span className="text-secondary">{reasonWords(change.reasonCode, change.reasonText)}</span>
+        Причина в розпорядженні: <span className="text-secondary">{reasonWords(change.reasonCode, change.reasonText)}</span>
       </p>
       {editingReason ? <ReasonEditor change={change} onDone={() => setEditingReason(false)} /> : null}
 

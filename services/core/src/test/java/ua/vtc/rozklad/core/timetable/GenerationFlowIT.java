@@ -209,7 +209,13 @@ class GenerationFlowIT {
         assertThat(solved.scope().groupIds()).containsExactly(data.group4ki1.getId());
         assertThat(solved.weights()).isEqualTo(GenerationWeights.DEFAULT);
         assertThat(solved.outcome()).as("no free base lesson of the scope to compare with")
+                .usingRecursiveComparison().ignoringFields("roomAssigned", "added", "kept")
                 .isEqualTo(new GenerationOutcome(0, 0, 0, List.of()));
+        long pinned = problem.units().stream().filter(unit -> unit.pinned() != null).count();
+        assertThat(solved.outcome().added()).as("every free unit is new: no free base lesson")
+                .isEqualTo((int) (problem.units().size() - pinned));
+        assertThat(solved.outcome().kept()).as("the lesson outside the scope stays where it is")
+                .isEqualTo((int) pinned).isPositive();
         TimetableVersion generated = versions.findById(solved.resultVersionId()).orElseThrow();
         assertThat(generated.getSource()).isEqualTo(VersionSource.GENERATED);
         assertThat(generated.getStatus()).isEqualTo(VersionStatus.DRAFT);
@@ -357,8 +363,9 @@ class GenerationFlowIT {
                 .isEqualTo(GenerationStatus.SOLVED));
 
         GenerationJobDto solved = generation.get(job.id());
-        assertThat(solved.outcome()).isEqualTo(new GenerationOutcome(1, 0, 1, List.of(
-                new GenerationOutcome.GroupOutcome(GroupRef.of(data.group4ki1), 1, 1))));
+        assertThat(solved.outcome()).usingRecursiveComparison().ignoringFields("added", "kept")
+                .isEqualTo(new GenerationOutcome(1, 0, 1, List.of(
+                        new GenerationOutcome.GroupOutcome(GroupRef.of(data.group4ki1), 1, 1)), 0, null, null));
         assertThat(templateLessons.findAllByVersionId(solved.resultVersionId()))
                 .filteredOn(lesson -> lesson.getDisciplineId().equals(data.stp.getId())
                         && lesson.getParity() == Parity.BOTH)

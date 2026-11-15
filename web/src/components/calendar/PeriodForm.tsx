@@ -271,7 +271,8 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="З" required error={errors.startsOn?.message}>
+            {/* «Від», а не «З»: кирилична «З» біля поля дати читається як цифра 3 */}
+            <Field label="Від" required error={errors.startsOn?.message}>
               <Controller
                 control={form.control}
                 name="startsOn"

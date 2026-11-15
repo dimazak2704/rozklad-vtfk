@@ -9,13 +9,15 @@ import ua.vtc.rozklad.contracts.Parity;
 
 /**
  * {@code GET /api/admin/dashboard?date}. {@code aiSpendToday} is always {@code null}: AI usage is
- * accounted by the importer service (see {@code GET /api/import/ai/usage}).
+ * accounted by the importer service (see {@code GET /api/import/ai/usage}). {@code undecidedLessons} is the
+ * part of {@code uncoveredLessons} without any decision, so it never overlaps {@code pending} or {@code declined}.
  */
 public record DashboardDto(
         LocalDate date,
         Parity parity,
         int absences,
         int uncoveredLessons,
+        int undecidedLessons,
         int pending,
         int confirmed,
         int declined,

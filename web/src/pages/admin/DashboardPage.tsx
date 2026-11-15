@@ -10,7 +10,7 @@ import { ActivityFeed } from '@/components/admin-daily/dashboard/ActivityFeed';
 import { NeedsList } from '@/components/admin-daily/dashboard/NeedsList';
 import { useFreshSources } from '@/components/admin-daily/dashboard/useFreshSources';
 import { useServiceAlerts } from '@/components/admin-daily/dashboard/useServiceAlerts';
-import { buildFeed, LESSON_STATE } from '@/components/admin-daily/model';
+import { buildFeed, tallyEntries } from '@/components/admin-daily/model';
 import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
 import { NowIndicator } from '@/components/schedule';
@@ -38,7 +38,7 @@ import {
   relativeDayLabel,
   shiftStudyDay,
 } from '@/lib/date';
-import { PAIR_FORMS, plural } from '@/lib/labels';
+import { countLabel, PAIR_FORMS, plural } from '@/lib/labels';
 
 /** Тихе посилання «Усі заміни →» праворуч від заголовка розділу. */
 function SectionLink({ to, children }: { to: string; children: string }) {
@@ -157,8 +157,8 @@ export default function DashboardPage() {
   const weekend = isWeekend(date);
   const nextStudyDay = shiftStudyDay(date, 1);
   const relative = relativeDayLabel(date, today);
-  const needsAction = workspace.entries.filter((e) => LESSON_STATE[e.state].needsAction).length;
-  const done = workspace.entries.length - needsAction;
+  const tally = tallyEntries(workspace.entries);
+  const needsAction = tally.open;
   const draftRows = summary?.orderDraft?.itemCount ?? 0;
 
   const changesLink = `/admin/changes?date=${date}`;
@@ -182,7 +182,9 @@ export default function DashboardPage() {
   const calm =
     workspace.absences.length === 0
       ? `${relative ? `${relative} н` : 'Н'}іхто не відсутній — замін не потрібно.`
-      : published && draftRows === 0
+      : tally.waiting > 0
+        ? `Рішення є для всіх пар, ${countLabel(tally.waiting, PAIR_FORMS)} ще ${tally.waiting === 1 ? 'чекає' : 'чекають'} відповіді викладача.`
+        : published && draftRows === 0
         ? `Усі пари вирішено, розпорядження №${published.number ?? '—'} опубліковане${published.publishedAt ? ` о ${formatInstantTime(published.publishedAt)}` : ''}.`
         : 'Усі пари вирішено. Лишилося опублікувати розпорядження.';
 
@@ -197,7 +199,7 @@ export default function DashboardPage() {
               <Skeleton className="h-3 w-48" />
             </span>
           ) : workspace.entries.length > 0 ? (
-            <ResolvedProgress done={done} total={workspace.entries.length} />
+            <ResolvedProgress done={tally.done} waiting={tally.waiting} total={tally.total} />
           ) : null
         }
       />

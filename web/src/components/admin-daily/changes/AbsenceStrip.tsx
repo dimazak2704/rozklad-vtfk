@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { LESSON_STATE, type LessonEntry } from '../model';
+import { isWaiting, LESSON_STATE, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
@@ -23,18 +23,21 @@ interface AbsenceStripProps {
 export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd }: AbsenceStripProps) {
   const name = useTeacherLabel();
   const open = (absenceId: Uuid) => entries.filter((e) => e.absence.id === absenceId && LESSON_STATE[e.state].needsAction).length;
+  const waiting = (absenceId: Uuid) => entries.filter((e) => e.absence.id === absenceId && isWaiting(e.state)).length;
   return (
     <div role="group" aria-label="Відсутні викладачі" className="flex flex-wrap items-center gap-1.5">
       {absences.map((absence) => {
         const selected = absence.id === selectedId;
         const left = open(absence.id);
+        const waits = waiting(absence.id);
         const unknown = lessonsStatus?.has(absence.id) ?? false;
+        const state = left > 0 ? `, без рішення: ${left}` : waits > 0 ? `, чекає відповіді: ${waits}` : ', усе вирішено';
         return (
           <button
             key={absence.id}
             type="button"
             aria-pressed={selected}
-            aria-label={`${name(absence.teacher)}${unknown ? '' : left > 0 ? `, без рішення: ${left}` : ', усе вирішено'}`}
+            aria-label={`${name(absence.teacher)}${unknown ? '' : state}`}
             onClick={() => onSelect(absence.id)}
             className={cn(
               'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',

@@ -31,6 +31,7 @@ import { publishedVersion } from '@/components/timetable/model/versions';
 import { Button, EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { cn } from '@/lib/cn';
 
 /**
  * Генератор розкладу: параметри (групи, базова версія, ліміт часу, ваги), запуск, хід розвʼязання
@@ -170,31 +171,40 @@ export default function GenerationPage() {
     );
   }
 
+  // задача скінчилася — на вузькому екрані її результат іде першим, над усією формою параметрів (і в порядку
+  // фокуса теж); на широкому колонки лишаються на своїх місцях
+  const resultFirst = Boolean(job.data && !isJobActive(job.data.status));
+  const formColumn = (
+    <div data-generation-form className={cn('min-w-0', resultFirst && 'lg:col-start-1 lg:row-start-1')}>
+      {!formReady ? (
+        <LoadingRegion label="Завантажуємо параметри…" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
+          {Array.from({ length: 7 }, (_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </LoadingRegion>
+      ) : (
+        <GenerationForm
+          form={form}
+          onChange={editForm}
+          groups={catalog.data?.groups ?? []}
+          versions={versions.data ?? []}
+          busy={busy}
+          submitted={submitted}
+          submit={launchButton}
+          title={showsJob ? 'Параметри запуску' : 'Параметри'}
+          loadProblems={loadProblems}
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {header}
       <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
-        {!formReady ? (
-          <LoadingRegion label="Завантажуємо параметри…" className="flex flex-col gap-3 rounded-panel border border-default bg-surface p-4">
-            {Array.from({ length: 7 }, (_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </LoadingRegion>
-        ) : (
-          <GenerationForm
-            form={form}
-            onChange={editForm}
-            groups={catalog.data?.groups ?? []}
-            versions={versions.data ?? []}
-            busy={busy}
-            submitted={submitted}
-            submit={launchButton}
-            title={showsJob ? 'Параметри запуску' : 'Параметри'}
-            loadProblems={loadProblems}
-          />
-        )}
+        {resultFirst ? null : formColumn}
 
-        <div className="flex min-w-0 flex-col gap-6">
+        <div data-generation-result className={cn('flex min-w-0 flex-col gap-6', resultFirst && 'lg:col-start-2 lg:row-start-1')}>
           {jobs.error ? (
             <PageErrorBanner error={jobs.error} title="Запуски не завантажено" retrying={jobs.isFetching} onRetry={() => void jobs.refetch()} />
           ) : jobs.isPending || (selectedJobId && job.isPending) ? (
@@ -234,6 +244,7 @@ export default function GenerationPage() {
           )}
           {jobs.data && jobs.data.length > 0 ? <JobHistory jobs={jobs.data} selectedId={selectedJobId} onSelect={selectJob} versionNames={versionNames} /> : null}
         </div>
+        {resultFirst ? formColumn : null}
       </div>
     </div>
   );

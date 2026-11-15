@@ -14,17 +14,30 @@ import ua.vtc.rozklad.core.catalog.GroupRef;
 /**
  * What a solved generation changed against its base version (genfix M2/B8), stored in
  * {@code generation_job.outcome}; the UI shows «Переставлено {moved} з {total} пар» (+ «, ще {roomChanged} — в
- * іншій аудиторії»).
+ * іншій аудиторії», «{roomAssigned} отримали аудиторію») and why the draft holds more lessons than {@code total}.
  *
- * @param moved       units whose weekday, pair or week differs from their base lesson (unplaced ones too)
- * @param roomChanged units kept in their base slot whose base lesson had a room and that got another one
- * @param total       units that had a base lesson ({@code PlanUnit.initial})
- * @param perGroup    the same per group of the scope, ordered by course and code
+ * @param moved        units whose weekday, pair or week differs from their base lesson (unplaced ones too)
+ * @param roomChanged  units kept in their base slot whose base lesson had a room and that got another one
+ * @param total        units that had a base lesson ({@code PlanUnit.initial})
+ * @param perGroup     the same per group of the scope, ordered by course and code
+ * @param roomAssigned (additive) units kept in their base slot whose base lesson had no room and that got one;
+ *                     {@code null} for jobs stored before it
+ * @param added        (additive) placed free units without a base lesson: the load has them, the base did not
+ *                     (a base lesson of another teacher, subgroup or week the load does not match is dropped);
+ *                     {@code null} for jobs stored before it
+ * @param kept         (additive) lessons kept at their base slot without the solver moving them: pinned by the
+ *                     dispatcher, stream lessons and lessons outside the scope; {@code null} for jobs stored before it
  */
-public record GenerationOutcome(int moved, int roomChanged, int total, List<GroupOutcome> perGroup) {
+public record GenerationOutcome(int moved, int roomChanged, int total, List<GroupOutcome> perGroup,
+                                Integer roomAssigned, Integer added, Integer kept) {
 
     public GenerationOutcome {
         perGroup = perGroup == null ? List.of() : List.copyOf(perGroup);
+    }
+
+    /** The shape of jobs stored before {@code roomAssigned}, {@code added} and {@code kept}. */
+    public GenerationOutcome(int moved, int roomChanged, int total, List<GroupOutcome> perGroup) {
+        this(moved, roomChanged, total, perGroup, null, null, null);
     }
 
     public record GroupOutcome(GroupRef group, int moved, int total) {
@@ -38,11 +51,19 @@ public record GenerationOutcome(int moved, int roomChanged, int total, List<Grou
                                 Function<GeneratedLessonsBuilder.Placement, UUID> roomOf, Map<UUID, GroupRef> groups) {
         int moved = 0;
         int roomChanged = 0;
+        int roomAssigned = 0;
+        int added = 0;
+        int kept = 0;
         int total = 0;
         Map<UUID, int[]> byGroup = new LinkedHashMap<>();
         for (GeneratedLessonsBuilder.Placement placement : result.placements()) {
             ProblemSnapshot.PinnedSlot initial = placement.unit().initial();
+            if (placement.unit().pinned() != null) {
+                kept++;
+                continue;
+            }
             if (initial == null) {
+                added++;
                 continue;
             }
             int[] counts = byGroup.computeIfAbsent(placement.unit().groupId(), id -> new int[2]);
@@ -55,6 +76,8 @@ public record GenerationOutcome(int moved, int roomChanged, int total, List<Grou
                 counts[0]++;
             } else if (initial.roomId() != null && !Objects.equals(initial.roomId(), roomOf.apply(placement))) {
                 roomChanged++;
+            } else if (initial.roomId() == null && roomOf.apply(placement) != null) {
+                roomAssigned++;
             }
         }
         for (PlanUnit unit : result.unplaced()) {
@@ -75,6 +98,6 @@ public record GenerationOutcome(int moved, int roomChanged, int total, List<Grou
         });
         perGroup.sort(Comparator.comparingInt((GroupOutcome row) -> row.group().course())
                 .thenComparing(row -> row.group().code()));
-        return new GenerationOutcome(moved, roomChanged, total, perGroup);
+        return new GenerationOutcome(moved, roomChanged, total, perGroup, roomAssigned, added, kept);
     }
 }

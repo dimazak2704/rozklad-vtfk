@@ -1,4 +1,4 @@
-import { ArrowRight, Crosshair, Minus, Plus, Search } from 'lucide-react';
+import { ArrowRight, Crosshair, DoorOpen, Minus, Plus, Search } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useVersionDiff } from '@/api/timetable';
 import type { TemplateLessonDto, TimetableVersionDto, Uuid } from '@/api/types';
@@ -18,12 +18,14 @@ import { cn } from '@/lib/cn';
 import { roomLabel } from '@/lib/schedule';
 import { matchScore } from '@/lib/search';
 import { ukCollator } from '@/lib/sort';
+import { movedKind, type DiffKind } from './model/diff';
 import { VERSION_STATUS_LABEL } from './model/labels';
 import { slotShort } from './model/text';
 import { formatTeacherName } from '@/lib/teacher-name';
 
-type DiffKind = 'moved' | 'added' | 'removed';
 type DiffFilter = 'all' | DiffKind;
+
+const KIND_ORDER: readonly DiffKind[] = ['moved', 'room', 'roomAssigned', 'added', 'removed'];
 
 interface DiffRow {
   kind: DiffKind;
@@ -48,6 +50,8 @@ const PAGE = 120;
 
 const KIND_META: Record<DiffKind, { label: string; tone: string; icon: ReactNode }> = {
   moved: { label: 'Переміщено', tone: 'text-change', icon: <ArrowRight aria-hidden="true" className="size-3.5" /> },
+  room: { label: 'Інша аудиторія', tone: 'text-change', icon: <DoorOpen aria-hidden="true" className="size-3.5" /> },
+  roomAssigned: { label: 'Аудиторію призначено', tone: 'text-secondary', icon: <DoorOpen aria-hidden="true" className="size-3.5" /> },
   added: { label: 'Додано', tone: 'text-add', icon: <Plus aria-hidden="true" className="size-3.5" /> },
   removed: { label: 'Прибрано', tone: 'text-cancel', icon: <Minus aria-hidden="true" className="size-3.5" /> },
 };
@@ -61,6 +65,7 @@ const who = (lesson: TemplateLessonDto) =>
     .filter(Boolean)
     .join(' · ');
 const where = (lesson: TemplateLessonDto) => [slotShort(lesson), roomLabel(lesson.room?.name)].filter(Boolean).join(', ');
+const roomOf = (lesson: TemplateLessonDto) => roomLabel(lesson.room?.name) ?? 'без аудиторії';
 
 /**
  * Порівняння версій: що в «цільовій» версії додано, прибрано й переміщено відносно базової (зазвичай
@@ -78,7 +83,7 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
     if (!diff.data) return [];
     const list: DiffRow[] = [
       ...diff.data.moved.map(({ from, to }) => ({
-        kind: 'moved' as const,
+        kind: movedKind(from, to),
         key: `m-${to.id}`,
         groupCode: to.group.code,
         course: to.group.course,
@@ -114,7 +119,11 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
     const lesson = (row.after ?? row.before) as TemplateLessonDto;
     return matchScore(query, row.groupCode, lesson.discipline.shortName, lesson.discipline.name, lesson.teacher?.shortName) >= 40;
   });
-  const counts = { moved: diff.data?.moved.length ?? 0, added: diff.data?.added.length ?? 0, removed: diff.data?.removed.length ?? 0 };
+  const counts = useMemo(() => {
+    const result: Record<DiffKind, number> = { moved: 0, room: 0, roomAssigned: 0, added: 0, removed: 0 };
+    for (const row of rows) result[row.kind] += 1;
+    return result;
+  }, [rows]);
   const groups = groupRows(visible.slice(0, limit));
 
   if (!base) {
@@ -158,9 +167,10 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
           // нульові види змін не показуємо: «Додано 0» — шум, а не вибір
           options={[
             { value: 'all' as const, label: `Усі ${rows.length}` },
-            ...(counts.moved > 0 || filter === 'moved' ? [{ value: 'moved' as const, label: `Переміщено ${counts.moved}` }] : []),
-            ...(counts.added > 0 || filter === 'added' ? [{ value: 'added' as const, label: `Додано ${counts.added}` }] : []),
-            ...(counts.removed > 0 || filter === 'removed' ? [{ value: 'removed' as const, label: `Прибрано ${counts.removed}` }] : []),
+            ...KIND_ORDER.filter((kind) => counts[kind] > 0 || filter === kind).map((kind) => ({
+              value: kind,
+              label: `${KIND_META[kind].label} ${counts[kind]}`,
+            })),
           ]}
         />
         <Input
@@ -241,17 +251,42 @@ function groupRows(rows: readonly DiffRow[]): Array<[string, DiffRow[]]> {
 function DiffRowItem({ row, onShowInGrid }: { row: DiffRow; onShowInGrid: (lesson: TemplateLessonDto) => void }) {
   const meta = KIND_META[row.kind];
   const lesson = (row.after ?? row.before) as TemplateLessonDto;
+  const whoText = who(lesson);
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
-      <span className={cn('inline-flex w-28 shrink-0 items-center gap-1.5 text-caption font-semibold', meta.tone)}>
-        {meta.icon}
-        {meta.label}
+    // телефон: два однакові рядки — «вид · дисципліна, викладач» (обрізано), під ним «було → стало» і кнопка праворуч;
+    // ширше — один рядок. Текст ніколи не рветься посеред «·»: рядки обрізаються, повний — у підказці
+    <li
+      data-diff-row
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2 sm:grid-cols-[11rem_minmax(0,1fr)_auto_auto] sm:gap-x-4"
+    >
+      <span data-diff-line="1" className="flex min-w-0 items-center gap-2 sm:contents">
+        <span className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-caption font-semibold', meta.tone)}>
+          {meta.icon}
+          {meta.label}
+        </span>
+        <span
+          title={whoText}
+          className={cn(
+            'min-w-0 truncate text-ui text-primary',
+            row.kind === 'removed' && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)]',
+          )}
+        >
+          {whoText}
+        </span>
       </span>
-      <span className={cn('min-w-0 flex-1 text-ui text-primary', row.kind === 'removed' && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)]')}>
-        {who(lesson)}
-      </span>
-      <span className="text-ui text-secondary figures">
-        {row.kind === 'moved' && row.before && row.after ? (
+      <span data-diff-line="2" className="col-start-1 row-start-2 min-w-0 truncate text-ui text-secondary figures sm:col-start-auto sm:row-start-auto sm:text-end">
+        {row.kind === 'room' && row.before && row.after ? (
+          <>
+            {slotShort(row.after)},{' '}
+            <s className="text-muted decoration-[var(--text-decoration-color-muted)]">{roomOf(row.before)}</s>
+            <ArrowRight aria-label="на" className="mx-1.5 inline size-3.5 text-change" />
+            <span className="font-semibold text-primary">{roomOf(row.after)}</span>
+          </>
+        ) : row.kind === 'roomAssigned' && row.after ? (
+          <>
+            {slotShort(row.after)}, <span className="font-semibold text-primary">{roomOf(row.after)}</span>
+          </>
+        ) : row.kind === 'moved' && row.before && row.after ? (
           <>
             <s className="text-muted decoration-[var(--text-decoration-color-muted)]">{where(row.before)}</s>
             <ArrowRight aria-label="на" className="mx-1.5 inline size-3.5 text-change" />
@@ -261,16 +296,18 @@ function DiffRowItem({ row, onShowInGrid }: { row: DiffRow; onShowInGrid: (lesso
           where(lesson)
         )}
       </span>
-      {row.target ? (
-        <IconButton
-          label="Показати в сітці"
-          size="sm"
-          icon={<Crosshair aria-hidden="true" className="size-4" />}
-          onClick={() => row.target && onShowInGrid(row.target)}
-        />
-      ) : (
-        <span className="size-8" aria-hidden="true" />
-      )}
+      <span className="col-start-2 row-span-2 row-start-1 flex sm:col-start-auto sm:row-span-1 sm:row-start-auto">
+        {row.target ? (
+          <IconButton
+            label="Показати в сітці"
+            size="sm"
+            icon={<Crosshair aria-hidden="true" className="size-4" />}
+            onClick={() => row.target && onShowInGrid(row.target)}
+          />
+        ) : (
+          <span className="size-8" aria-hidden="true" />
+        )}
+      </span>
     </li>
   );
 }

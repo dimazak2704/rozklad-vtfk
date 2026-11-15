@@ -634,6 +634,11 @@ function seedVersions(): VersionRecord[] {
 
 const versions = createMockStore<VersionRecord[]>(seedVersions);
 
+/** Заняття опублікованої версії семестру (для `/me/template`); порожньо, поки нічого не опубліковано. */
+export function publishedTemplateLessons(semesterId: Uuid): readonly TemplateLessonDto[] {
+  return versions.get().find((v) => v.semesterId === semesterId && v.status === 'PUBLISHED')?.lessons ?? [];
+}
+
 function versionOr404(id: string): VersionRecord {
   const version = versions.get().find((v) => v.id === id);
   if (!version) throw notFound(`Версію розкладу з id ${id} не знайдено.`);

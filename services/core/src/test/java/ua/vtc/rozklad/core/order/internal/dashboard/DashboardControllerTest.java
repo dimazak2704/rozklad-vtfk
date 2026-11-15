@@ -34,13 +34,14 @@ class DashboardControllerTest {
     @Test
     void dispatcherSeesTheFiguresOfTheDate() throws Exception {
         LocalDate date = LocalDate.of(2026, 10, 19);
-        given(dashboard.of(date)).willReturn(new DashboardDto(date, Parity.DENOMINATOR, 2, 3, 1, 4, 1, null, null,
+        given(dashboard.of(date)).willReturn(new DashboardDto(date, Parity.DENOMINATOR, 2, 3, 2, 1, 4, 1, null, null,
                 null, List.of(new DashboardDto.Alert("UNCOVERED_LESSONS", DashboardDto.Severity.WARN,
                 "3 пари без рішення через відсутність викладачів", "/admin/changes?date=2026-10-19"))));
 
         mockMvc.perform(get("/api/admin/dashboard").param("date", "2026-10-19").with(TestJwts.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.uncoveredLessons").value(3))
+                .andExpect(jsonPath("$.undecidedLessons").value(2))
                 .andExpect(jsonPath("$.alerts[0].severity").value("WARN"))
                 .andExpect(jsonPath("$.alerts[0].link").value("/admin/changes?date=2026-10-19"));
     }

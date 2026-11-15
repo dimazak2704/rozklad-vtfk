@@ -1,6 +1,8 @@
 import type { ChangeDto, ChangeHistoryEntry, ChangeStatus } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { formatInstantTime } from '@/lib/date';
+import { historyActor, SYSTEM_COMMENTS } from './history-actor';
+import { useTeacherLabel } from './useTeacherLabel';
 
 const STEP_LABEL: Record<ChangeStatus, string> = {
   DRAFT: 'Створено чернетку',
@@ -30,12 +32,14 @@ function stepLabel(entry: ChangeHistoryEntry): string {
  * Остання зупинка — поточний стан.
  */
 export function ChangeTimeline({ change, className }: { change: ChangeDto; className?: string }) {
+  const name = useTeacherLabel();
   const steps = change.history;
   if (steps.length === 0) return null;
   return (
     <ol aria-label="Історія рішення" className={cn('flex flex-col', className)}>
       {steps.map((entry, index) => {
         const last = index === steps.length - 1;
+        const actor = historyActor(entry, change, name);
         return (
           <li key={`${entry.at}-${index}`} className="grid grid-cols-[2.75rem_1rem_minmax(0,1fr)] gap-x-2">
             <time dateTime={entry.at} className="pt-px text-end text-meta font-semibold text-muted figures">
@@ -48,12 +52,12 @@ export function ChangeTimeline({ change, className }: { change: ChangeDto; class
             <div className={cn('flex min-w-0 flex-col pb-3', last && 'pb-0')}>
               <p className={cn('text-ui', last ? 'font-semibold text-primary' : 'text-secondary')}>{stepLabel(entry)}</p>
               <p className="text-caption text-muted">
-                {entry.actor}
+                {actor.label}
                 {entry.comment ? (
                   <span className="text-secondary">
                     {' · '}
                     {/* слова викладача — в лапках, службові примітки системи — як є */}
-                    {entry.actor === change.new.teacher?.shortName ? `«${entry.comment}»` : entry.comment}
+                    {actor.teacher && !SYSTEM_COMMENTS.has(entry.comment) ? `«${entry.comment}»` : entry.comment}
                   </span>
                 ) : null}
               </p>

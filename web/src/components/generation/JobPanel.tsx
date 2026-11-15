@@ -11,6 +11,7 @@ import { Disclosure } from './Disclosure';
 import {
   AUTO_STOP_SENTENCE,
   comparisonRows,
+  ignoredWeights,
   elapsedSeconds,
   formatSeconds,
   groupComparison,
@@ -19,6 +20,7 @@ import {
   jobScopeText,
   jobStatusTitle,
   liveElapsedSeconds,
+  outcomeDraftSentence,
   outcomeSentence,
   stopReasonSentence,
   type BaseVersionInfo,
@@ -81,6 +83,7 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
   const rows = comparisonRows(job, base);
   const groups = groupComparison(job, base);
   const outcome = job.status === 'SOLVED' ? outcomeSentence(job.outcome) : null;
+  const draftRest = job.status === 'SOLVED' ? outcomeDraftSentence(job.outcome) : null;
   const withConflicts = solvedWithConflicts(job);
   const scoped = Boolean(job.scope && (job.scope.groupIds.length > 0 || job.scope.courses.length > 0));
   const charts =
@@ -137,6 +140,7 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
             </p>
           ) : null}
           {outcome ? <p className="text-ui text-secondary">{outcome}</p> : null}
+          {draftRest ? <p className="text-caption text-muted">{draftRest}</p> : null}
           {active && limit ? (
             <div aria-hidden="true" className="h-1.5 max-w-md overflow-hidden rounded-full bg-[var(--fill-track-future)]">
               <div
@@ -187,7 +191,7 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
         {job.status === 'SOLVED' && (rows.length > 0 || job.analysis) ? (
           <div className="grid gap-6 border-t border-separator pt-5 xl:grid-cols-2">
             {rows.length > 0 ? <MetricsComparison rows={rows} /> : null}
-            {job.analysis ? <ConstraintAnalysis items={job.analysis} scoped={scoped} /> : null}
+            {job.analysis ? <ConstraintAnalysis items={job.analysis} scoped={scoped} ignored={ignoredWeights(job)} /> : null}
           </div>
         ) : null}
 

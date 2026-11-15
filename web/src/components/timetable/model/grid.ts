@@ -141,6 +141,25 @@ export interface BoardFilters {
 
 export const EMPTY_FILTERS: BoardFilters = { courses: [], department: null, query: '', conflictsOnly: false };
 
+/** Чи звужено сітку пошуком чи фільтром (а не показано все). */
+export function filtersActive(filters: BoardFilters): boolean {
+  return filters.courses.length > 0 || filters.department !== null || filters.query.trim() !== '' || filters.conflictsOnly;
+}
+
+/**
+ * Конфлікти лише тих рядків, що видно в сітці: під пошуком «4КІ2» попередження 4РТ1 — шум. Без фільтра — усі.
+ * Конфлікт без пар (не до чого прив'язати) у звуженому списку не показуємо.
+ */
+export function conflictsOfVisible<T extends { lessonIds: readonly Uuid[] }>(
+  conflicts: readonly T[] | undefined,
+  visible: readonly Pick<BoardEntity, 'lessons'>[],
+  active: boolean,
+): readonly T[] | undefined {
+  if (!conflicts || !active) return conflicts;
+  const ids = new Set(visible.flatMap((entity) => entity.lessons.map((lesson) => lesson.id)));
+  return conflicts.filter((conflict) => conflict.lessonIds.some((id) => ids.has(id)));
+}
+
 /**
  * Пошук у сітці. Точний збіг (код групи, прізвище) показує лише його: «4КІ3» не тягне за собою 1КІ3.
  * Коди груп короткі, тож для груп «схоже на одну літеру» — це вже інша група: лише префікс чи входження.

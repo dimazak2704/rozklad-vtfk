@@ -9,7 +9,7 @@ import { resetMockStores } from '@/mocks/store';
 const hasDom = typeof window !== 'undefined';
 
 // Мок-API (src/mocks): запит без обробника — помилка тесту, а не тихий похід у мережу
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => {
   server.resetHandlers();
   resetMockStores();

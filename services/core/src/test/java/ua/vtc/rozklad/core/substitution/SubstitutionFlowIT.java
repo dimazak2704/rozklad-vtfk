@@ -190,6 +190,7 @@ class SubstitutionFlowIT {
             assertThat(affected.decision()).isNull();
         });
         assertThat(overview.summarize(MONDAY).uncoveredLessons()).isEqualTo(1);
+        assertThat(overview.summarize(MONDAY).undecidedLessons()).isEqualTo(1);
 
         OptionDto.LessonOptions lessonOptions = this.lessonOptions.of(stpLesson.getId());
         List<OptionDto> options = lessonOptions.options();
@@ -236,6 +237,7 @@ class SubstitutionFlowIT {
         List<AffectedLessonDto> affected = affectedLessons.of(absence.id());
         assertThat(affected.getFirst().decision().status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
         assertThat(overview.summarize(MONDAY).uncoveredLessons()).isZero();
+        assertThat(overview.summarize(MONDAY).undecidedLessons()).isZero();
         assertThat(overview.summarize(MONDAY).pending()).isEqualTo(1);
 
         replies.replyFromBot(change.id(), nepyivoda.getId(), ConfirmationDecision.CONFIRM, null);

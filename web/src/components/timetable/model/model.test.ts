@@ -3,7 +3,9 @@ import type { Parity, PublicGroupDto, SemesterRef, ShiftWindowDto, TemplateLesso
 import {
   buildEntities,
   dropTargetId,
+  conflictsOfVisible,
   filterEntities,
+  filtersActive,
   layoutCell,
   moveRequestFor,
   pairRows,
@@ -279,5 +281,26 @@ describe('текст клітинки дошки', () => {
     expect(text.title).toBe('4КІ1/2');
     expect(text.lines).toEqual(['СТП']);
     expect(text.room).toBeNull();
+  });
+});
+
+describe('конфлікти лише показаних рядків', () => {
+  const lesson = (id: string) => ({ id }) as TemplateLessonDto;
+  const warning = (ids: string[]) => ({ lessonIds: ids, message: ids.join(',') });
+
+  it('під пошуком — лише ті, що зачіпають пари видимих рядків; без фільтра — усі', () => {
+    const all = [warning(['ki2-a']), warning(['rt1-a']), warning([])];
+    const visible = [{ lessons: [lesson('ki2-a'), lesson('ki2-b')] }];
+    expect(conflictsOfVisible(all, visible, true)?.map((c) => c.message)).toEqual(['ki2-a']);
+    expect(conflictsOfVisible(all, visible, false)).toBe(all);
+    expect(conflictsOfVisible(undefined, visible, true)).toBeUndefined();
+  });
+
+  it('звужено — пошук, курс, відділення чи «лише з конфліктами»', () => {
+    const none = { courses: [], department: null, query: '', conflictsOnly: false };
+    expect(filtersActive(none)).toBe(false);
+    expect(filtersActive({ ...none, query: '  ' })).toBe(false);
+    expect(filtersActive({ ...none, query: '4КІ2' })).toBe(true);
+    expect(filtersActive({ ...none, courses: [4] })).toBe(true);
   });
 });

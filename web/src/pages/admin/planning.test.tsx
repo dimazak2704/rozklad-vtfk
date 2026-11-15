@@ -216,6 +216,10 @@ describe('Генератор розкладу', () => {
     expect(within(table).getByRole('row', { name: /Жорсткі конфлікти\s*1$/ })).toBeInTheDocument();
     // бонус — не «що лишилось»
     expect(screen.getByRole('heading', { name: 'Що вдалося' })).toBeInTheDocument();
+    // готовий результат — перед формою параметрів (на телефоні він інакше під усією формою)
+    const result = document.querySelector('[data-generation-result]');
+    const form = document.querySelector('[data-generation-form]');
+    expect(result && form && result.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('запуск показує задачу в черзі, а потім хід розвʼязання і що вона зупиниться сама', async () => {

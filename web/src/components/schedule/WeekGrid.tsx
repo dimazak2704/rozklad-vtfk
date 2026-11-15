@@ -6,6 +6,7 @@ import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
 import { lessonsByPair, pairRange, rowTimes, vacatedPairs, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
+import { nowPillShift } from './now-pill';
 import { blocksLabel, dayPractices, noteWithoutPractices } from './practice';
 import { PeriodBlock } from './PeriodBlock';
 import { VacatedSlot } from './VacatedSlot';
@@ -44,15 +45,10 @@ function AtNow({ fraction, className, children }: { fraction: number; className?
   );
 }
 
-/** Половина висоти пігулки «зараз» (20 px). */
-const PILL_REACH = 10;
-/** Рядок підпису вищий за самі цифри: зверху й знизу по ~3 px порожнього міжрядкового простору. */
-const CAPTION_LEADING = 3;
-
 /**
- * Номер пари, початок і кінець у колонці часу. Пігулка «зараз» стоїть тут же, на точній хвилині. Підпис,
- * який вона накрила б, на цей час тихо зникає (як в Apple Calendar): пігулка й так називає час, а читач
- * екрана підпис чує. Так пігулка ніколи не лягає на текст, хоч би якою високою була клітинка.
+ * Номер пари, початок і кінець у колонці часу. Пігулка «зараз» стоїть тут же, на точній хвилині, а якщо там
+ * підпис — зсувається над чи під нього: час пари, що йде зараз, лишається видно (штрих біля пігулки й далі
+ * показує точну хвилину). Так пігулка ніколи не лягає на текст, хоч би якою високою була клітинка.
  */
 function PairGutter({
   pair,
@@ -66,31 +62,28 @@ function PairGutter({
   now: { fraction: number; label: string } | null;
 }) {
   const pillRef = useRef<HTMLSpanElement>(null);
-  const startRef = useRef<HTMLSpanElement>(null);
-  const endRef = useRef<HTMLSpanElement>(null);
-  const [covered, setCovered] = useState({ start: false, end: false });
+  const labelsRef = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
   const fraction = now?.fraction ?? null;
 
   useLayoutEffect(() => {
     const pill = pillRef.current;
     const cell = pill?.closest('th');
     if (fraction === null || !pill || !(cell instanceof HTMLElement)) {
-      setCovered((prev) => (prev.start || prev.end ? { start: false, end: false } : prev));
+      setShift(0);
       return;
     }
     const measure = () => {
       const box = cell.getBoundingClientRect();
-      // jsdom і схована вкладка не мають розмірів — нічого не ховаємо
+      // jsdom і схована вкладка не мають розмірів — нічого не зсуваємо
       if (box.height === 0) return;
       const centre = box.top + fraction * box.height;
       const pillLeft = box.right - pill.offsetWidth - 4;
-      const hits = (el: HTMLElement | null) => {
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        return r.right > pillLeft - 2 && r.bottom - CAPTION_LEADING > centre - PILL_REACH && r.top + CAPTION_LEADING < centre + PILL_REACH;
-      };
-      const next = { start: hits(startRef.current), end: hits(endRef.current) };
-      setCovered((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+      const labels = [...(labelsRef.current?.children ?? [])]
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.height > 0 && rect.right > pillLeft - 2);
+      const next = Math.round(nowPillShift(centre, box, labels));
+      setShift((prev) => (prev === next ? prev : next));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -101,26 +94,12 @@ function PairGutter({
 
   return (
     <>
-      <span className="flex flex-col">
+      <span ref={labelsRef} className="flex flex-col">
         <span className={cn('text-title leading-7 font-semibold figures', current ? 'text-accent' : 'text-primary')}>{pair}</span>
         {time ? (
           <>
-            <span
-              ref={startRef}
-              data-covered={covered.start || undefined}
-              className={cn(
-                'mt-1 text-caption figures transition-opacity duration-200',
-                current ? 'text-accent' : 'text-secondary',
-                covered.start && 'opacity-0',
-              )}
-            >
-              {time.startsAt}
-            </span>
-            <span
-              ref={endRef}
-              data-covered={covered.end || undefined}
-              className={cn('text-caption text-muted figures transition-opacity duration-200', covered.end && 'opacity-0')}
-            >
+            <span className={cn('mt-1 text-caption figures', current ? 'text-accent' : 'text-secondary')}>{time.startsAt}</span>
+            <span className="text-caption text-muted figures">
               <span className="sr-only">до </span>
               {time.endsAt}
             </span>
@@ -134,7 +113,9 @@ function PairGutter({
             <span className="absolute end-0 top-0 h-px w-1.5 -translate-y-1/2 bg-[var(--fill-now)] opacity-40" />
             <span
               ref={pillRef}
-              className="absolute end-1 top-0 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures"
+              data-shift={shift || undefined}
+              style={{ top: shift }}
+              className="absolute end-1 flex h-5 -translate-y-1/2 items-center rounded-full bg-accent px-1.5 text-meta font-semibold text-on-accent figures transition-[top] duration-200 motion-reduce:transition-none"
             >
               {now.label}
             </span>

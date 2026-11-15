@@ -188,9 +188,22 @@ describe('«Нова зміна» — зміна без відсутності',
       route: `/admin/changes?date=2026-11-29&group=${group.id}&discipline=${discipline.id}&suggest=ADDITIONAL&lessons=2`,
     });
     const dialog = await screen.findByRole('dialog', { name: 'Нова зміна' }, WAIT);
-    expect(within(dialog).getByLabelText(/Дата/)).toHaveValue('2026-11-30');
+    expect(within(dialog).getByLabelText(/Дата/)).toHaveValue('30.11.2026');
     expect(within(dialog).getByRole('note')).toHaveTextContent(/бракує 2\sпар\./);
     // понеділок 30.11 у 4КІ1 є пари: їхні номери позначені ще до збереження
     await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /у групи вже/ }).length).toBeGreaterThan(0), WAIT);
+  });
+
+  it('у пʼятницю — лише пари, що є за дзвінками (1–6), а дата — як у решті форм, дд.мм.рррр', async () => {
+    renderWithProviders(<ChangesPage />, {
+      route: `/admin/changes?date=2026-12-04&group=${group.id}&discipline=${discipline.id}&suggest=ADDITIONAL&lessons=1`,
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Нова зміна' }, WAIT);
+    expect(within(dialog).getByLabelText(/Дата/)).toHaveValue('04.12.2026');
+    const pairs = within(dialog).getByRole('group', { name: 'Номери пар' });
+    // поки дзвінки їдуть, номерів може бути 8; щойно приїхали — лише ті, що є цього дня
+    await waitFor(() => expect(within(pairs).queryByRole('button', { name: /^7 пара/ })).not.toBeInTheDocument(), WAIT);
+    expect(within(pairs).queryByRole('button', { name: /^8 пара/ })).not.toBeInTheDocument();
+    expect(within(pairs).getByRole('button', { name: /^6 пара, \d{2}:\d{2}/ })).toBeInTheDocument();
   });
 });
