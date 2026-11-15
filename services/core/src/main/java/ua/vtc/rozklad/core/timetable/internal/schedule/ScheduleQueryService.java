@@ -22,6 +22,7 @@ import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.StudyPeriod;
 import ua.vtc.rozklad.core.catalog.CatalogQueries;
 import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.UkrainianOrder;
 import ua.vtc.rozklad.core.shared.text.UkrainianText;
@@ -32,8 +33,9 @@ import ua.vtc.rozklad.core.timetable.ScheduleView;
 
 /**
  * Dated schedules for the public site, teachers and other modules. A constant number of queries
- * per request: the owner, the calendar (semesters, overrides, periods), bell profiles and one query
- * for all lessons of the range; a range with practice adds one lookup for its supervisors and one for its groups.
+ * per request: the owner, the calendar (semesters, overrides, periods with their kinds), bell profiles and one
+ * query for all lessons of the range; a range with blocks (practice, НС) adds one lookup for their supervisors,
+ * one for their groups and one for their rooms, each only when some block has them.
  */
 @Service
 @Transactional(readOnly = true)
@@ -106,7 +108,7 @@ public class ScheduleQueryService implements ScheduleQueries {
         }
     }
 
-    /** A group sees the practice it is at; a teacher sees the practices they supervise; a room sees none. */
+    /** A group sees the blocks it is at; a teacher sees the blocks they supervise; a room sees none. */
     private static Map<LocalDate, List<StudyPeriod>> practicesByDate(ScheduleOwnerType type, UUID ownerId,
                                                                      ScheduleOwners.Resolved owner,
                                                                      StudyCalendar calendar, LocalDate from,
@@ -125,7 +127,7 @@ public class ScheduleQueryService implements ScheduleQueries {
         return practices;
     }
 
-    /** Supervisors and groups of every practice in the range: one batch lookup each, none without practice. */
+    /** Supervisors, groups and rooms of every block in the range: one batch lookup each, none when unused. */
     private PracticeRefs practiceRefs(Collection<List<StudyPeriod>> practices) {
         Set<UUID> teacherIds = practices.stream().flatMap(List::stream)
                 .flatMap(period -> period.supervisorIds().stream())
@@ -134,15 +136,21 @@ public class ScheduleQueryService implements ScheduleQueries {
                 .filter(period -> period.scope() == PeriodScope.GROUPS)
                 .flatMap(period -> period.groupIds().stream())
                 .collect(Collectors.toSet());
+        Set<UUID> roomIds = practices.stream().flatMap(List::stream)
+                .map(StudyPeriod::roomId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         return new PracticeRefs(teacherIds.isEmpty() ? Map.of() : catalog.teacherRefs(teacherIds),
-                groupIds.isEmpty() ? Map.of() : catalog.groupRefs(groupIds));
+                groupIds.isEmpty() ? Map.of() : catalog.groupRefs(groupIds),
+                roomIds.isEmpty() ? Map.of() : catalog.roomRefs(roomIds));
     }
 
     private static BellTimes bellsOf(DayInfo info, Map<UUID, BellTimes> bells) {
         return info.semesterId() == null ? BellTimes.none() : bells.getOrDefault(info.semesterId(), BellTimes.none());
     }
 
-    private record PracticeRefs(Map<UUID, TeacherRef> teachers, Map<UUID, GroupRef> groups) {
+    private record PracticeRefs(Map<UUID, TeacherRef> teachers, Map<UUID, GroupRef> groups,
+                                Map<UUID, RoomRef> rooms) {
 
         ScheduleView.Practice practice(StudyPeriod period) {
             List<TeacherRef> supervisors = period.supervisorIds().stream()
@@ -157,8 +165,11 @@ public class ScheduleQueryService implements ScheduleQueries {
                     .toList();
             List<Integer> courses = period.scope() != PeriodScope.COURSES ? List.of()
                     : period.courses().stream().sorted().toList();
+            ScheduleView.Kind kind = new ScheduleView.Kind(period.kind().code(), period.kind().name(),
+                    period.kind().color(), period.kind().effect());
+            RoomRef room = period.roomId() == null ? null : rooms.get(period.roomId());
             return new ScheduleView.Practice(period.id(), period.title(), period.startsOn(), period.endsOn(),
-                    supervisors, periodGroups, courses);
+                    supervisors, periodGroups, courses, kind, room);
         }
     }
 }

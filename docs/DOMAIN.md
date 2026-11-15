@@ -31,11 +31,35 @@ discipline programs) and the college site (bells, curriculum).
 - Study days Mon–Fri. Week = Monday-based. Week 1 = week containing `semester.startsOn`.
 - `parity(week n)` = `firstWeekParity` (default NUMERATOR) for odd n, the other for even n;
   `week_parity_override` wins. **Verified**: semester start 01.09.2026 (Tue) ⇒ week of 19.10.2026 is week 8 ⇒ ЗНАМЕННИК (matches order №35).
-- A date has lessons if inside the semester and not inside a global `HOLIDAY`/`NO_CLASSES` period.
-  Group-scoped `PRACTICE` periods remove that group's lessons. A practice may have supervisors (керівники
-  практики, teachers assigned by the dispatcher); the group's schedule shows the practice with them on its
-  days, a supervisor's schedule shows «Керівництво практикою». How practice hours are counted is an open question. `STUDY_MODE` periods (ONLINE/MIXED) keep
-  lessons but mark them online and produce notes for orders (e.g. «Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»).
+- **Period kinds are data** (owner's decision 15.11.2026): a calendar period has a kind (`period_kind`: code as in the
+  college's academic calendar — К, НП, НС, ЗУ…, name, colour, aliases, note template) and every kind has exactly one
+  **effect** from a closed list in code. Behaviour comes from the effect only; on overlap DAY_OFF > SUSPEND > ONLINE > INFO:
+  | Effect | Lessons | Site and bot | College codes (builtin defaults) |
+  |---|---|---|---|
+  | `DAY_OFF` | removed for everybody in scope; with scope ALL the date is not a study day of the college | «навчання немає» + title | К (канікули), С (святкові дні), БЗ (без занять) |
+  | `SUSPEND` | the groups in scope are not at their pairs; teachers work | a block «{вид}: {назва}», supervisors, room | НП, ВП, ПП, Т (practices), ЗУ (збори), НС (національний спротив), І (сесія), Д (ДПА), А (атестація) |
+  | `ONLINE` | kept, online/mixed (`studyMode`), the room is free | «дистанційно» mark | ФН (форма навчання, internal) |
+  | `INFO` | not touched | note of the day | Р (резерв), ВКР |
+  Defaults by the owner's answers of 15.11.2026: І, Д, А suspend the regular pairs (the effect is a switch, no code);
+  НС is SUSPEND with room 401 in its title and note and no ОНС lessons yet (a later `BLOCK` effect will give a block its own
+  pairs, teacher and room). A new kind (a new law, a new practice) is added by the dispatcher in «Види періодів»; a new
+  effect needs code. Builtin kinds keep their code and are switched off instead of deleted; an inactive kind keeps its
+  periods working. Changing the effect of a kind with periods is a calendar edit of all of them (§6: lessons follow from
+  today on, the same 409 for live changes, tried first with a dry run).
+- A date has lessons if inside the semester and not inside a DAY_OFF period for everybody (scope ALL). DAY_OFF and
+  SUSPEND periods whose scope includes a group remove that group's lessons. A SUSPEND period may have supervisors
+  (керівники, teachers assigned by the dispatcher) and a room (display only, it does not occupy the room); the group's
+  schedule shows the block with them on its days, a supervisor's schedule shows «Керівництво практикою» (other kinds:
+  «Керівництво: {вид}»). How practice hours are counted is an open question. ONLINE periods keep lessons but mark them
+  online (ONLINE/MIXED; the most specific decides: group > course > all, then the later start) and produce notes for
+  orders (e.g. «Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»).
+- **Academic calendar (графік освітнього процесу).** The college's XLSX is imported whole (importer
+  `ACADEMIC_CALENDAR_XLSX` → core `POST /api/admin/import/calendar-periods`): runs of equal codes become periods (Monday
+  to the Friday of the last week), cut to the semesters of the system; days outside every semester (January–February of
+  4th-course groups) are listed, not stored — one timetable per semester, no separate January–February timetable, and
+  semester bounds are not per group. The import touches only its own rows (`source = IMPORT`, by `source_key`); a row the
+  dispatcher edited becomes MANUAL and is only reported. Theory weeks and exams per group and semester (columns E–H) go to
+  `group_semester`; step 1 stores them, load uses them in step 2.
 - Bell profiles (from Excel sheets «дзвінки (2 зм)», «дзвінки» and the college site). Active default = **«2 зміни, 60 хв»**:
   - Mon–Thu: 1 08:30–09:30, 2 09:40–10:40, 3 11:00–12:00, 4 12:10–13:10, 5 13:30–14:30, 6 14:40–15:40, 7 16:00–17:00, 8 17:10–18:10
   - Fri: 1 08:30–09:30, 2 09:40–10:40, 3 11:00–12:00, 4 12:20–13:20, 5 13:30–14:30, 6 14:50–15:50
@@ -70,7 +94,9 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 - `week_parity_override(semester_id, week_start, parity)`
 - `bell_profile(name, active)`; `bell_slot(profile_id, weekday 1..5, pair_number, starts_at time, ends_at time)`
 - `shift_window(shift, weekday, first_pair, last_pair)`
-- `calendar_period(semester_id, kind HOLIDAY|NO_CLASSES|PRACTICE|STUDY_MODE|EXAM_SESSION, title, starts_on, ends_on, study_mode OFFLINE|ONLINE|MIXED null, order_note text null, scope ALL|COURSES|GROUPS, courses smallint[] null)` + `calendar_period_group(period_id, group_id)` + `calendar_period_supervisor(period_id, teacher_id)` (PRACTICE only)
+- `period_kind(code unique case-insensitive, name, effect DAY_OFF|SUSPEND|ONLINE|INFO, color '#RRGGBB' null, aliases text[], note_template null, builtin, active, position)` — 15 builtin rows with fixed ids (`V1_203`)
+- `calendar_period(semester_id, kind_id → period_kind, title, starts_on, ends_on, study_mode OFFLINE|ONLINE|MIXED null (ONLINE effect only), order_note text null, scope ALL|COURSES|GROUPS, courses smallint[] null, room_id → room null (SUSPEND only, on delete set null), source MANUAL|IMPORT, source_key unique null)` + `calendar_period_group(period_id, group_id)` + `calendar_period_supervisor(period_id, teacher_id)` (SUSPEND only); the old column `kind` (HOLIDAY|NO_CLASSES|PRACTICE|STUDY_MODE|EXAM_SESSION) stays one release, nullable, written from the kind and never read (a trigger fills `kind_id` for SQL that writes only `kind`)
+- `group_semester(semester_id, group_id, theory_weeks 1..53 null, exams 0..20 null, source, updated_at)`, pk `(semester_id, group_id)`
 
 **load**
 - `load_item(semester_id, group_id, discipline_id, lesson_kind LECTURE|PRACTICE|LAB|SEMINAR|MIXED, hours_per_week numeric(4,1), planned_hours int, split_subgroups bool, required_room_type null, preferred_room_id null, control_form EXAM|CREDIT|NONE, stream_id null, source MANUAL|CURRICULUM|PROGRAM|TIMETABLE_DERIVED, note)`
@@ -148,7 +174,8 @@ Thursday — two halves in different slots; putting them into one slot removes b
 
 Publishing version V (effective from F): validate hard conflicts → archive the previously published
 version of the semester → for every study date d in [F, semester end]: parity(d), take template lessons
-with weekday(d) and parity ∈ {BOTH, parity(d)}, skip groups in PRACTICE on d, set `online` from STUDY_MODE,
+with weekday(d) and parity ∈ {BOTH, parity(d)}, skip groups a DAY_OFF or SUSPEND period closes on d (practice, НС,
+сесія…), set `online` from the deciding ONLINE period,
 insert `lesson` rows (origin TEMPLATE). Future TEMPLATE lessons of the old version (date ≥ F) not referenced
 by a live change are deleted first (a DECLINED or CANCELLED change pins nothing); lessons created/modified by
 applied changes are kept and reported if they now conflict; old-version lessons kept for an open decision are
@@ -419,8 +446,12 @@ Vision extraction target: rows {discipline, semester, hoursPerWeek, hoursPerSeme
   timetable (`TIMETABLE_DERIVED`: BOTH = 1 pair/week, NUM/DEN = ½) — feeds generation and accounting.
 - Departments: Комп'ютерне (КІ), Фінансово-економічне (Ф, ОБ, М, ЕП, ОД), Радіотехнічне (РТ, ТК),
   Електроенергетики та електромеханіки (ЕА, ВЕ), Транспортних технологій (ОП).
-- Calendar periods from order notes (practice 2КІ3 19.10–30.10.2026; 3rd course online 01.09–31.10.2026;
-  4КІ online 01.09–31.10.2026), autumn holidays 2026-10-26…2026-10-30 are NOT assumed (unknown) — leave none.
+- Calendar periods from order notes (3rd course online 01.09–31.10.2026 and 4КІ online 01.09–31.10.2026, kind ФН),
+  autumn holidays 2026-10-26…2026-10-30 are NOT assumed (unknown) — leave none. Step 1в of the period kinds imports
+  the real academic calendar 2026/27 on top and rebuilds the stand; the practice of 2КІ3 19.10–30.10.2026 (НП) comes
+  from that calendar only (`seed_demo.py` no longer creates it by hand, which gave two practice blocks).
+- Known gap of `V1_203`: the migration does not re-materialize lessons, so on a database that already had an EXAM_SESSION
+  period (now SUSPEND) its dated lessons stay until those dates are edited or the version is republished.
 - Demo accounts linked to teachers «Кренцін» and «Непийвода». A few demo absences/changes reproducing order №35.
 
 ## 13. Open questions

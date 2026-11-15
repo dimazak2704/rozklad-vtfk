@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.calendar;
 
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,21 @@ public final class CalendarFixtures {
     public static StudyCalendar calendar(List<StudyPeriod> periods, Map<LocalDate, Parity> overrides) {
         return new StudyCalendar(List.of(new StudySemester(SEMESTER_ID, STARTS, ENDS,
                 new SemesterCalendar(STARTS, ENDS, Parity.NUMERATOR, overrides), periods, null)));
+    }
+
+    /** The builtin kind a legacy kind maps to, loaded (integration tests, inside a transaction). */
+    public static PeriodKind builtin(EntityManager em, CalendarPeriodKind kind) {
+        return em.find(PeriodKind.class, kind.builtinKindId());
+    }
+
+    /** A kind with the code, name and effect of the builtin a legacy kind maps to (unit tests, not persisted). */
+    public static PeriodKind transientKind(CalendarPeriodKind kind) {
+        return new PeriodKind(kind.builtinCode(), kind.builtinName(), kind.builtinEffect());
+    }
+
+    /** A kind the dispatcher could add («ХХ»), not persisted. */
+    public static PeriodKindInfo customKind(String code, String name, PeriodEffect effect) {
+        return new PeriodKindInfo(UUID.randomUUID(), code, name, null, effect);
     }
 
     public static StudyPeriod holiday(String title, LocalDate from, LocalDate to) {

@@ -41,6 +41,8 @@ class CalendarChangeListener {
     @EventListener
     void on(CalendarEdited event) {
         DatedLessonRefresh.Result result = refresher.reconcile(event.dates(), event.groupIds(), event.before());
+        // dry run (зміна ефекту виду, імпорт графіка) показує ці числа, навіть коли правку буде відхилено
+        event.outcome().lessonsChanged(result.added(), result.removed(), result.updated());
         List<ConflictDto> conflicts = new ArrayList<>(result.clashes());
         conflicts.addAll(refresher.strandedByCalendar(event.dates(), event.groupIds(), event.before()));
         if (!conflicts.isEmpty()) {
