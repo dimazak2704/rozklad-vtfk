@@ -5,6 +5,7 @@ import {
   baselineSentence,
   completionNotice,
   comparisonRows,
+  ignoredWeights,
   formFromJob,
   groupComparison,
   hardAfter,
@@ -143,6 +144,26 @@ describe('аналіз обмежень (B7)', () => {
     expect(split.achieved.map((row) => row.constraint)).toEqual(['Половинки']);
     expect(split.clean).toEqual(['Вікна груп']);
     expect(split.outsideScope).toBe(7 + 4);
+  });
+
+  it('правило «Не враховувати» — не «Що лишилось», а довідка; без ваг (стара задача) — як раніше', () => {
+    const items = [
+      { constraint: '4-та пара зміни', constraintId: 'Late pair', matchCount: 59, score: '0hard/0soft', scopeMatchCount: 59 },
+      { constraint: 'Вікна груп', constraintId: 'Group windows', matchCount: 2, score: '0hard/-20soft', scopeMatchCount: 2 },
+    ];
+    const ignored = ignoredWeights(job({ weights: { ...DEFAULT_WEIGHTS, latePairs: 0 } }));
+    const split = splitAnalysis(items, ignored);
+    expect(split.remaining.map((row) => row.constraint)).toEqual(['Вікна груп']);
+    expect(split.ignored).toEqual([{ key: 'Late pair', constraint: '4-та пара зміни', count: 59, hard: false }]);
+    expect(splitAnalysis(items, ignoredWeights(job({}))).remaining).toHaveLength(2);
+  });
+
+  it('«Було і стало»: показник правила, яке не враховувалось, позначено', () => {
+    const rows = comparisonRows(
+      job({ weights: { ...DEFAULT_WEIGHTS, latePairs: 0 }, metricsBefore: metrics({ latePairs: 291, groupWindows: 3, maxPairsPerDay: 4 }), metricsAfter: metrics({ latePairs: 300, groupWindows: 1, maxPairsPerDay: 4 }) }),
+    );
+    expect(rows.find((row) => row.key === 'latePairs')).toMatchObject({ before: 291, after: 300, ignored: true });
+    expect(rows.find((row) => row.key === 'groupWindows')?.ignored).toBe(false);
   });
 
   it('стара задача без bonus: бонус упізнається за додатним балом', () => {

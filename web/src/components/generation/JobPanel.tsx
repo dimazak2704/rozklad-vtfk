@@ -8,6 +8,7 @@ import { countLabel } from '@/lib/labels';
 import { Disclosure } from './Disclosure';
 import {
   comparisonRows,
+  ignoredWeights,
   elapsedSeconds,
   formatSeconds,
   groupComparison,
@@ -154,7 +155,7 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
         {job.status === 'SOLVED' && (rows.length > 0 || job.analysis) ? (
           <div className="grid gap-6 border-t border-separator pt-5 xl:grid-cols-2">
             {rows.length > 0 ? <MetricsComparison rows={rows} /> : null}
-            {job.analysis ? <ConstraintAnalysis items={job.analysis} scoped={scoped} /> : null}
+            {job.analysis ? <ConstraintAnalysis items={job.analysis} scoped={scoped} ignored={ignoredWeights(job)} /> : null}
           </div>
         ) : null}
 

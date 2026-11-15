@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
-import type { ConstraintAnalysisDto } from '@/api/types';
+import type { ConstraintAnalysisDto, GenerationWeights } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { Disclosure } from './Disclosure';
@@ -8,16 +8,19 @@ import { GROUP_COLUMNS, splitAnalysis, type ComparisonRow, type GroupComparisonR
 const TIMES_FORMS = ['раз', 'рази', 'разів'] as const;
 const CONSTRAINT_FORMS = ['обмеження', 'обмеження', 'обмежень'] as const;
 
-/** Різниця «Стало − Було»: менше — краще (зелене), більше — гірше (червоне). */
-function Delta({ before, after }: { before: number | null; after: number | null }) {
+/**
+ * Різниця «Стало − Було»: менше — краще (зелене), більше — гірше (червоне). Правило, яке задача не враховувала,
+ * не «погіршилось» — його різниця нейтральна.
+ */
+function Delta({ before, after, neutral = false }: { before: number | null; after: number | null; neutral?: boolean }) {
   if (before === null || after === null) return <span className="text-muted">—</span>;
   const delta = after - before;
   return (
     <span
+      data-tone={neutral || delta === 0 ? 'neutral' : delta < 0 ? 'better' : 'worse'}
       className={cn(
         'inline-flex items-center justify-end gap-0.5 font-semibold',
-        delta < 0 && 'text-add',
-        delta > 0 && 'text-danger',
+        neutral ? 'text-secondary' : [delta < 0 && 'text-add', delta > 0 && 'text-danger'],
         delta === 0 && 'text-muted',
       )}
     >
@@ -62,14 +65,15 @@ export function MetricsComparison({ rows }: { rows: readonly ComparisonRow[] }) 
       <tbody>
         {rows.map((row) => (
           <tr key={row.key}>
-            <th scope="row" className="border-b border-separator py-2 pe-3 text-start font-normal text-primary">
+            <th scope="row" className={cn('border-b border-separator py-2 pe-3 text-start font-normal', row.ignored ? 'text-secondary' : 'text-primary')}>
               {row.label}
+              {row.ignored ? <span className="block text-caption text-muted">не враховувалось</span> : null}
             </th>
             {hasBefore ? <td className="border-b border-separator px-3 py-2 text-end text-secondary figures">{row.before ?? '—'}</td> : null}
             <td className="border-b border-separator px-3 py-2 text-end font-semibold text-primary figures">{row.after}</td>
             {hasBefore ? (
               <td className="border-b border-separator py-2 ps-3 text-end figures">
-                <Delta before={row.before} after={row.after} />
+                <Delta before={row.before} after={row.after} neutral={row.ignored} />
               </td>
             ) : null}
           </tr>
@@ -84,8 +88,17 @@ export function MetricsComparison({ rows }: { rows: readonly ComparisonRow[] }) 
  * міг рухати; бонус «половинки в парі» — у «Що вдалося»; порушення в закріплених парах поза вибором —
  * одним приглушеним рядком. Бали оцінки не показуємо — людині вони нічого не кажуть.
  */
-export function ConstraintAnalysis({ items, scoped }: { items: readonly ConstraintAnalysisDto[]; scoped: boolean }) {
-  const { remaining, achieved, clean, outsideScope } = splitAnalysis(items);
+export function ConstraintAnalysis({
+  items,
+  scoped,
+  ignored,
+}: {
+  items: readonly ConstraintAnalysisDto[];
+  scoped: boolean;
+  /** Правила задачі з «Не враховувати» (вага 0): їх не показуємо як порушення. */
+  ignored?: ReadonlySet<keyof GenerationWeights>;
+}) {
+  const { remaining, achieved, clean, outsideScope, ignored: notCounted } = splitAnalysis(items, ignored);
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="analysis-title" className="flex flex-col gap-2">
@@ -113,6 +126,19 @@ export function ConstraintAnalysis({ items, scoped }: { items: readonly Constrai
         )}
         {outsideScope > 0 ? (
           <p className="text-caption text-muted">Ще {outsideScope} — у закріплених парах поза вибором.</p>
+        ) : null}
+        {notCounted.length > 0 ? (
+          <ul aria-label="Не враховувалось" className="flex flex-col gap-1">
+            {notCounted.map((item) => (
+              <li key={item.key} className="flex items-baseline gap-3 text-caption text-muted">
+                <span aria-hidden="true" className="size-2 shrink-0 translate-y-[-1px] rounded-full border-[1.5px] border-[var(--fill-muted)]" />
+                <span className="min-w-0 flex-1">
+                  {item.constraint} · не враховувалось
+                </span>
+                <span className="figures">{countLabel(item.count, TIMES_FORMS)}</span>
+              </li>
+            ))}
+          </ul>
         ) : null}
         {clean.length > 0 ? (
           <Disclosure summary={`${scoped ? 'Без порушень у вибраних групах' : 'Без порушень'}: ${countLabel(clean.length, CONSTRAINT_FORMS)}`}>
