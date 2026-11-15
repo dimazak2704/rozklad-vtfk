@@ -370,6 +370,27 @@ class EmailFlowIT extends IntegrationTest {
     }
 
     @Test
+    void withTheBotOffTheDeadlineJobWritesLettersAndQueuesNothingForTelegram() {
+        Instant deadline = Instant.parse("2026-10-19T06:30:00Z");
+        handlers.handle(request(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, deadline));
+        worker.drain();
+        deliverMail();
+        int telegramBefore = telegram.sentTo(TEACHER_CHAT).size();
+
+        clock.set(Instant.parse("2026-10-19T06:31:00Z"));
+        assertThat(substitutions.remindOverdue(false)).isOne();
+        worker.drain();
+        deliverMail();
+
+        assertThat(telegram.sentTo(TEACHER_CHAT)).hasSize(telegramBefore);
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+        assertThat(mail.sentTo(NEPYIVODA)).extracting(OutgoingMail::subject)
+                .contains("Нагадування про заміну: пн, 19 жовтня, 2 пара, 4КІ1");
+        assertThat(mail.sentTo(DISPATCHER)).extracting(OutgoingMail::subject)
+                .containsExactly("Немає відповіді на запит заміни: Непийвода М.В., пн, 19 жовтня, 2 пара, 4КІ1");
+    }
+
+    @Test
     void absenceLettersAreForThoseWhoSwitchedThemOn() {
         AbsenceReported absence = new AbsenceReported(EventEnvelope.create(Clock.systemUTC()), UUID.randomUUID(),
                 CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.", Order35.DATE, Order35.DATE, List.of(1, 2),

@@ -73,15 +73,16 @@ public class ScheduledJobs {
      * scheduler runs on virtual threads, so two methods with the same delay would start together and lock
      * overlapping {@code substitution_request} rows side by side. A failure of the first job does not
      * skip the second one; both are tried again in a minute. They run when either channel is on: with the bot
-     * off the reminders still go by e-mail.
+     * off the reminders still go by e-mail, and nothing is queued for Telegram.
      */
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     public void substitutionDeadlines() {
-        if (!telegram.enabled() && (mail == null || !mail.enabled())) {
+        boolean bot = telegram.enabled();
+        if (!bot && (mail == null || !mail.enabled())) {
             return;
         }
-        runSafely("confirmation deadlines", substitutions::remindOverdue);
-        runSafely("teachers without Telegram", substitutions::reportTeachersWithoutTelegram);
+        runSafely("confirmation deadlines", () -> substitutions.remindOverdue(bot));
+        runSafely("teachers without Telegram", () -> substitutions.reportTeachersWithoutTelegram(bot));
     }
 
     private static void runSafely(String job, Runnable task) {

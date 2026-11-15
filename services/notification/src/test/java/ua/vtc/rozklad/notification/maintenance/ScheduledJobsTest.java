@@ -19,13 +19,13 @@ class ScheduledJobsTest {
     @Test
     void deadlinesThenTeachersWithoutTelegramInOneRun() {
         jobs(substitutions(false), "123:token").substitutionDeadlines();
-        assertThat(calls).containsExactly("remindOverdue", "reportTeachersWithoutTelegram");
+        assertThat(calls).containsExactly("remindOverdue telegram=true", "reportTeachersWithoutTelegram telegram=true");
     }
 
     @Test
     void failureOfTheFirstJobDoesNotSkipTheSecond() {
         jobs(substitutions(true), "123:token").substitutionDeadlines();
-        assertThat(calls).containsExactly("remindOverdue", "reportTeachersWithoutTelegram");
+        assertThat(calls).containsExactly("remindOverdue telegram=true", "reportTeachersWithoutTelegram telegram=true");
     }
 
     @Test
@@ -35,10 +35,11 @@ class ScheduledJobsTest {
     }
 
     @Test
-    void emailAloneRunsTheJobsToo() {
-        // the bot is off, letters still remind teachers and dispatchers
+    void emailAloneRunsTheJobsWithoutQueueingTelegram() {
+        // the bot is off: letters still remind teachers and dispatchers, nothing waits in the Telegram queue
         jobs(substitutions(false), "", mail("mailpit")).substitutionDeadlines();
-        assertThat(calls).containsExactly("remindOverdue", "reportTeachersWithoutTelegram");
+        assertThat(calls).containsExactly("remindOverdue telegram=false",
+                "reportTeachersWithoutTelegram telegram=false");
     }
 
     private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken) {
@@ -61,8 +62,8 @@ class ScheduledJobsTest {
     private SubstitutionRequests substitutions(boolean firstFails) {
         return new SubstitutionRequests(null, null, null, null, null, null, null, null, null, null, null) {
             @Override
-            public int remindOverdue() {
-                calls.add("remindOverdue");
+            public int remindOverdue(boolean telegram) {
+                calls.add("remindOverdue telegram=" + telegram);
                 if (firstFails) {
                     throw new IllegalStateException("deadlock detected");
                 }
@@ -70,8 +71,8 @@ class ScheduledJobsTest {
             }
 
             @Override
-            public int reportTeachersWithoutTelegram() {
-                calls.add("reportTeachersWithoutTelegram");
+            public int reportTeachersWithoutTelegram(boolean telegram) {
+                calls.add("reportTeachersWithoutTelegram telegram=" + telegram);
                 return 0;
             }
         };

@@ -561,15 +561,23 @@ public class SubstitutionRequests implements OutboundRelevance {
      * looked up before the rows are locked, so no call to core holds the locks.
      */
     public int remindOverdue() {
+        return remindOverdue(true);
+    }
+
+    /**
+     * @param telegram the bot is on: with it off only the e-mail intents are written — a Telegram row would wait
+     *                 in the queue for nobody and could go out a day late if the bot came back
+     */
+    public int remindOverdue(boolean telegram) {
         Instant now = clock.instant();
         Map<UUID, String> names = teacherNames(requests.findOverdueTeachers(now));
         if (names.isEmpty()) {
             return 0;
         }
-        return count(transactions.execute(tx -> remindOverdue(now, names)));
+        return count(transactions.execute(tx -> remindOverdue(now, names, telegram)));
     }
 
-    private int remindOverdue(Instant now, Map<UUID, String> names) {
+    private int remindOverdue(Instant now, Map<UUID, String> names, boolean telegram) {
         List<SubstitutionRequest> overdue = requests.findOverdue(now);
         for (SubstitutionRequest request : overdue) {
             request.markReminded(now);
@@ -581,7 +589,8 @@ public class SubstitutionRequests implements OutboundRelevance {
                 mails.toAdmins(EmailKind.REQUEST_OVERDUE, name(names, request.getTeacherId()), request.getChangeId(),
                         request, null, null, null, request.getDeadline(), null, "overdue:" + key + ":mail");
             }
-            if (request.isWithoutTelegram() || lessonOver(request.getLessonDate(), request.details().endsAt())) {
+            if (!telegram || request.isWithoutTelegram()
+                    || lessonOver(request.getLessonDate(), request.details().endsAt())) {
                 continue;
             }
             bindings.teacherChat(request.getTeacherId()).ifPresent(chat -> outbox.enqueue(
@@ -613,15 +622,20 @@ public class SubstitutionRequests implements OutboundRelevance {
      * @return number of (teacher, date) warnings queued
      */
     public int reportTeachersWithoutTelegram() {
+        return reportTeachersWithoutTelegram(true);
+    }
+
+    /** @param telegram the bot is on; with it off only the dispatchers' e-mail intents are written */
+    public int reportTeachersWithoutTelegram(boolean telegram) {
         Instant noticedBefore = clock.instant().minus(properties.noTelegramNoticeDelay());
         Map<UUID, String> names = teacherNames(requests.findUnreportedWithoutTelegramTeachers(noticedBefore));
         if (names.isEmpty()) {
             return 0;
         }
-        return count(transactions.execute(tx -> reportTeachersWithoutTelegram(noticedBefore, names)));
+        return count(transactions.execute(tx -> reportTeachersWithoutTelegram(noticedBefore, names, telegram)));
     }
 
-    private int reportTeachersWithoutTelegram(Instant noticedBefore, Map<UUID, String> names) {
+    private int reportTeachersWithoutTelegram(Instant noticedBefore, Map<UUID, String> names, boolean telegram) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
         // рядки заблоковано в порядку change id (як і в remindOverdue), групуємо ж за викладачем, датою, парою
@@ -638,7 +652,7 @@ public class SubstitutionRequests implements OutboundRelevance {
         if (byTeacherAndDate.isEmpty()) {
             return 0;
         }
-        List<ChatBinding> admins = bindings.adminChats();
+        List<ChatBinding> admins = telegram ? bindings.adminChats() : List.of();
         int warnings = 0;
         for (Map.Entry<TeacherDate, List<SubstitutionRequest>> entry : byTeacherAndDate.entrySet()) {
             TeacherDate key = entry.getKey();
