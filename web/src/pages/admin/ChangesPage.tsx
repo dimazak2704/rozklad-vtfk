@@ -609,6 +609,7 @@ export default function ChangesPage() {
       onAddChange={narrow ? openNewChange : undefined}
       loading={workspace.loading}
       drill={drill}
+      showDates={period === 'week'}
     />
   );
 

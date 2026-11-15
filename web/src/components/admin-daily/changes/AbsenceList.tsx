@@ -4,15 +4,20 @@ import { Button, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { pairsText } from '../format';
-import { formatDateRange } from '@/lib/date';
+import { formatDateRange, formatShortWeekdayDate } from '@/lib/date';
 import { isWaiting, LESSON_STATE, tallyEntries, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
-/** «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». */
-function absenceCaption(absence: AbsenceDto): string {
-  const when = absence.dateFrom === absence.dateTo ? pairsText(absence.pairs) : formatDateRange(absence.dateFrom, absence.dateTo);
-  return `${when} · ${ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}`;
+/**
+ * «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». У поданні «Тиждень» одноденна
+ * відсутність каже й день («Пт, 20.11 · увесь день · лікарняний»): той самий викладач буває у списку двічі.
+ */
+export function absenceCaption(absence: AbsenceDto, withDate = false): string {
+  const single = absence.dateFrom === absence.dateTo;
+  const when = single ? pairsText(absence.pairs) : formatDateRange(absence.dateFrom, absence.dateTo);
+  const day = single && withDate ? `${formatShortWeekdayDate(absence.dateFrom)} · ` : '';
+  return `${day}${when} · ${ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}`;
 }
 
 /**
@@ -85,10 +90,12 @@ interface AbsenceListProps {
   loading: boolean;
   /** Телефон: рядок веде на наступний рівень (стрілка), а не просто підсвічується. */
   drill?: boolean;
+  /** Подання «Тиждень»: у підписі одноденної відсутності — день і дата. */
+  showDates?: boolean;
 }
 
 /** Колонка «Відсутні»: хто, коли й чому, і скільки пар уже вирішено. Вибір показує пари цього викладача. */
-export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, onAddChange, loading, drill = false }: AbsenceListProps) {
+export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, onAddChange, loading, drill = false, showDates = false }: AbsenceListProps) {
   const name = useTeacherLabel();
   if (loading && absences.length === 0) {
     return (
@@ -123,7 +130,7 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-cell font-[650] text-primary">{name(absence.teacher)}</span>
-                  <span className="text-caption text-secondary">{absenceCaption(absence)}</span>
+                  <span className="text-caption text-secondary">{absenceCaption(absence, showDates)}</span>
                   <AbsenceProgress entries={own} status={lessonsStatus?.get(absence.id)} />
                 </span>
                 {drill ? <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted rtl:rotate-180" /> : null}

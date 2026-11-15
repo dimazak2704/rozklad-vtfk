@@ -5,7 +5,7 @@ import type { AbsenceDto } from '@/api/types';
 import { FIXTURE_LESSON, FIXTURE_TEACHERS } from '@/mocks/fixtures/lesson-options';
 import { renderWithProviders } from '@/test/render';
 import type { LessonEntry, LessonState } from '../model';
-import { AbsenceList, AbsenceProgress } from './AbsenceList';
+import { absenceCaption, AbsenceList, AbsenceProgress } from './AbsenceList';
 
 const absence: AbsenceDto = {
   id: 'a-1',
@@ -60,5 +60,13 @@ describe('скільки пар відсутності вирішено', () => 
   it('усе вирішено — лише коли нічого не чекаємо', () => {
     renderWithProviders(<AbsenceProgress entries={[entry('l1', 'confirmed'), entry('l2', 'applied')]} />);
     expect(screen.getByText('усе вирішено')).toBeInTheDocument();
+  });
+});
+
+describe('підпис відсутності', () => {
+  it('у поданні «Тиждень» одноденна — з днем і датою; кількаденна — діапазоном, як і було', () => {
+    expect(absenceCaption(absence)).toBe('увесь день · лікарняний');
+    expect(absenceCaption(absence, true)).toBe('Пт, 20.11 · увесь день · лікарняний');
+    expect(absenceCaption({ ...absence, dateTo: '2026-11-23' }, true)).toMatch(/^20.*23\sлистопада · лікарняний$/);
   });
 });
