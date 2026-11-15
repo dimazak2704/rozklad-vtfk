@@ -112,10 +112,11 @@ or via Spring application events (`@ApplicationModuleListener`). Internals live 
 (`catalog.internal…`). `ApplicationModules.of(CoreApplication.class).verify()` must pass.
 
 ### scheduler
-Stateless-ish Timefold service. Consumes `generation.requested` (full problem snapshot), solves with
-time limit, emits `generation.progress` every ~2 s and `generation.completed` (solution + score
-analysis + metrics). Supports cancel (`generation.cancel`). Keeps a small `generation_job` table
-(own DB) for status/idempotency. No access to core DB.
+Stateless-ish Timefold service. Consumes `generation.requested` (full problem snapshot), solves until the
+timetable stops getting better (auto mode, capped by the server; older requests carry a fixed time limit),
+emits `generation.progress` every ~2 s and `generation.completed` (solution + score analysis + metrics + why it
+stopped). Supports stop (`generation.cancel`, the best timetable so far is returned). Keeps a small
+`generation_job` table (own DB) for status/idempotency. No access to core DB.
 
 ### importer
 Accepts uploads, stores files (own DB, bytea or filesystem volume), parses:

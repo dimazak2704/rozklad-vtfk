@@ -28,8 +28,9 @@ CONTRACTS §1, §2 (timetable, generation, import apply), §7 (events). Deviatio
   aliases with the normalization of DOMAIN §10.
 - **Generation orchestration**: builds the `ProblemSnapshot`, sends `generation.requested` (outbox), consumes
   `generation.progress` / `generation.completed` from `core.q.scheduler-results` idempotently, stores progress points,
-  turns a SOLVED result into a DRAFT (source GENERATED) with metrics «було / стало», pushes SSE; cancel and a watchdog
-  for silent schedulers.
+  turns a SOLVED result (and the best timetable of a stopped job) into a DRAFT (source GENERATED) with metrics «було /
+  стало», pushes SSE; «Зупинити» and a watchdog for silent schedulers. Requests without a time limit run in the
+  scheduler's auto mode (stop when the timetable stops getting better; scheduler.md §4).
 - **Usual rooms of teachers** (round 7, DOMAIN §5): public `TeacherRoomQueries.published(semesterId, teacherIds)` →
   `TeacherRooms` (`forTeacher`, `forDiscipline`, `forGroup`), implemented by `internal.support.TeacherRoomReader`
   (one aggregate SQL over `template_lesson` per call; `ofVersion(versionId)` for the generator). Used by the
@@ -153,9 +154,18 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
     lessons (null) and counted in the version notes; load items are read `FOR SHARE`, so a delete that starts while the
     result is applied waits for it; a deleted group or discipline fails the job with «Під час генерації з каталогу
     видалили групу або дисципліну…» (the result is never dead-lettered for a broken foreign key);
-  - cancel marks the job CANCELLED at once and sends `generation.cancel`; the watchdog fails QUEUED jobs after
-    time limit + grace and RUNNING jobs after grace without progress (`app.timetable.generation.timeout-grace`,
-    default 10 min) and tells the scheduler to stop.
+  - `timeLimitSeconds` is optional (auto mode since 15.11.2026, owner's decision): absent in the request, it is absent
+    in `params` and in `generation.requested` too; a request with a value (10..600) keeps the old fixed limit;
+  - «Зупинити» (`POST …/cancel`) sends `generation.cancel`. A QUEUED job (no progress yet, so no timetable) is
+    CANCELLED at once and the scheduler's later answer is ignored. A RUNNING job only gets `stop_requested_at` and
+    stays active: the scheduler stops and returns CANCELLED with its best timetable, which becomes the draft
+    (SOLVED, `stop_reason` STOPPED); without assignments the job ends CANCELLED. Stopping again returns the job;
+  - `stop_reason` keeps the scheduler's `generation.completed.stopReason` (NO_IMPROVEMENT, TIME_LIMIT, SAFETY_CAP;
+    STOPPED for a stopped job's draft); older jobs have none;
+  - the watchdog fails a job and tells the scheduler to stop: a QUEUED job after its time limit + grace (auto mode:
+    `auto-time-cap` + grace), a RUNNING one after grace without progress (the scheduler stops an auto job after its
+    `stuck-limit` without a better score, which is shorter, so a long healthy run is never failed), a stopped one
+    `stop-grace` after the stop with «Планувальник не повернув найкращий варіант після зупинки…».
 - **SSE** is pushed after commit (`shared.sse.SseAfterCommit`), not through the outbox: `generation.progress`
   `{jobId, elapsedMs, hardScore, softScore}` and `generation.completed` (job DTO) to ADMIN, `schedule.changed`
   `{dates, groupIds, teacherIds, reason}` to everybody.
@@ -165,10 +175,13 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
 
 ## 4. Configuration
 
-`application.yml` → `app.timetable.generation.timeout-grace` (`GENERATION_TIMEOUT_GRACE`, default `10m`),
-`watchdog-interval` (`GENERATION_WATCHDOG_INTERVAL`, default `PT1M`). Migration `V1_401__generation_results.sql`
+`application.yml` → `app.timetable.generation.timeout-grace` (`GENERATION_TIMEOUT_GRACE`, default `10m`; longer than
+the scheduler's `auto.stuck-limit`), `auto-time-cap` (`GENERATION_AUTO_TIME_CAP`, default `30m`, the scheduler's
+`auto.time-cap`), `stop-grace` (`GENERATION_STOP_GRACE`, default `2m`), `watchdog-interval`
+(`GENERATION_WATCHDOG_INTERVAL`, default `PT1M`). Migration `V1_401__generation_results.sql`
 (job plan, analysis, metrics before/after, base version, last progress; one active job per semester),
-`V1_808__generation_job_outcome.sql` (`outcome jsonb`). Setting `generation.teacherMaxPairsPerDay` (settings.md).
+`V1_808__generation_job_outcome.sql` (`outcome jsonb`), `V1_809__generation_job_stop.sql` (`stop_requested_at`,
+`stop_reason`). Setting `generation.teacherMaxPairsPerDay` (settings.md).
 
 ## 5. How to test
 
@@ -182,7 +195,8 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
 - Unit: `ConflictEngineTest` (every rule, template and dated), `calendar.StudyCalendarTest`,
   `MaterializationPlannerTest` (parity, overrides, holidays, practice, online, kept changes), `TimetableMetricsCalculatorTest`
   (4КІ1-like week: two halves in one slot remove both broken days), `VersionDiffCalculatorTest`, `LoadUnitExpanderTest`,
-  `GeneratedLessonsBuilderTest`, `GenerationJobMapperTest`, `IcsCalendarWriterTest`, `LessonViewAssemblerTest`,
+  `GeneratedLessonsBuilderTest`, `GenerationJobMapperTest`, `GenerationWatchdogTest` (deadlines: fixed limit, auto
+  mode's cap, progress, stop grace), `IcsCalendarWriterTest`, `LessonViewAssemblerTest`,
   `NameKeysTest`, `CatalogNameIndexTest`; genfix: `BaseVersionMatchingTest` (B1, B3, no derived room type, sibling keys),
   `LoadFitCheckTest` (B9), `GenerationOutcomeTest`, `TimetableMetricsCalculatorTest` (late pairs, shift waits,
   week-wide cohorts, daily balance). Opt-in `RealSnapshotLoadFitTest`: `-Dgenfix.snapshots=<dir>` with the real
@@ -191,7 +205,9 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
 - Integration (Testcontainers): `TimetablePublicationIT` (import → publish → materialization, REST schedule and ICS,
   applied substitution kept on republication with a reported conflict, events on RabbitMQ, 409/422 rules),
   `GenerationFlowIT` (snapshot on RabbitMQ, teacher rooms in the units, progress/completed consumption, generated
-  draft, redelivery ignored, cancel, invalid and failed results; base teacher kept and the outcome, the 422 pre-check,
+  draft, redelivery ignored, cancel of a queued job, «Зупинити» of a running job keeps the best timetable as a draft and
+  without one ends CANCELLED, a request without a limit (auto mode) and its stop reason, invalid and failed results;
+  base teacher kept and the outcome, the 422 pre-check,
   draft pins only where the base pinned, no derived room type, teachers' daily limit, job DTO fields). `TeacherRoomsTest` (weights, ties by room number,
   fallbacks).
 
