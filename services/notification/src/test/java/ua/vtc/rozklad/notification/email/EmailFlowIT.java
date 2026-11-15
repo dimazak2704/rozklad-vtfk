@@ -19,6 +19,8 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.SubstitutionRequestMode;
 import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
@@ -92,7 +94,7 @@ class EmailFlowIT extends IntegrationTest {
         OutgoingMail letter = single(NEPYIVODA);
         assertThat(letter.subject()).isEqualTo("Вам поставили заміну: пн, 19 жовтня, 2 пара, 4КІ1");
         assertThat(letter.toName()).isEqualTo("Непийвода Марія Василівна");
-        assertThat(letter.text()).contains("Добрий день, Непийвода Марія Василівна!")
+        assertThat(letter.text()).contains("Добрий день!\n")
                 .contains("Пара: 2 пара · 09:40–10:40\nГрупа: 4КІ1\nДисципліна: " + DISCIPLINE + "\nАудиторія: 6\n"
                         + "Замість: Кренцін М.Д.\n")
                 .contains("Відкрити кабінет: http://localhost:5180/me?change=" + CHANGE);
@@ -110,7 +112,7 @@ class EmailFlowIT extends IntegrationTest {
         assertThat(telegram.sentTo(TEACHER_CHAT)).isEmpty();
 
         deliverMail();
-        assertThat(single(KRENTSIN).subject()).isEqualTo("Підтвердіть заміну до 10:00: пн, 19 жовтня, 2 пара, 4КІ1");
+        assertThat(single(KRENTSIN).subject()).isEqualTo("Підтвердіть заміну до 10:00 — пн, 19 жовтня, 2 пара, 4КІ1");
         assertThat(single(KRENTSIN).text()).contains("Відповісти до: пн, 19 жовтня, 10:00");
     }
 
@@ -276,11 +278,32 @@ class EmailFlowIT extends IntegrationTest {
 
         OutgoingMail letter = single(DISPATCHER);
         assertThat(mail.sent()).hasSize(1);
-        assertThat(letter.subject()).isEqualTo("Розклад згенеровано: 0 жорстких порушень, штраф 35");
-        assertThat(letter.text()).contains("• Вікна в групи — 3").doesNotContain("Бонус")
+        assertThat(letter.subject()).isEqualTo("Розклад згенеровано без конфліктів, штраф 35");
+        assertThat(letter.text()).contains("Найбільше порушень:\n• Вікна в групи: 3 випадки\n").doesNotContain("Бонус")
                 .contains("http://localhost:5180/admin/generation?job=" + job);
         assertThat(letter.threadId()).isNull();
         assertThat(letter.unsubscribeUrl()).isEqualTo("http://localhost:5180/admin/notifications");
+    }
+
+    @Test
+    void aStoppedGenerationTellsTheDispatcherItsBestTimetableWasKept() {
+        UUID kept = UUID.randomUUID();
+        handlers.handle(new GenerationCompleted(EventEnvelope.create(Clock.systemUTC()), kept,
+                GenerationStatus.CANCELLED, -2, -80, List.of(new GenerationCompleted.Assignment("u1", 1, 2,
+                Parity.BOTH, null)), List.of(new GenerationCompleted.ConstraintScore("Накладка викладача", 2,
+                "-2hard/0soft")), null, GenerationStopReason.STOPPED));
+        UUID nothing = UUID.randomUUID();
+        handlers.handle(new GenerationCompleted(EventEnvelope.create(Clock.systemUTC()), nothing,
+                GenerationStatus.CANCELLED, 0, 0, List.of(), List.of(), null, null));
+        mailWorker.drain();
+
+        assertThat(mail.sentTo(DISPATCHER)).extracting(OutgoingMail::subject).containsExactlyInAnyOrder(
+                "Генерацію зупинено: у збереженому розкладі 2 жорсткі порушення",
+                "Генерацію розкладу скасовано");
+        assertThat(mail.sentTo(DISPATCHER)).filteredOn(letter -> letter.text().contains("job=" + kept)).singleElement()
+                .satisfies(letter -> assertThat(letter.text())
+                        .contains("Генерацію зупинили вручну; найкращий знайдений розклад збережено.")
+                        .contains(MailTexts.REVIEW_CONFLICTS));
     }
 
     @Test
@@ -288,7 +311,7 @@ class EmailFlowIT extends IntegrationTest {
         handlers.handle(request(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Instant.parse("2026-10-19T07:00:00Z")));
         handlers.handle(statusChanged(CHANGE, ChangeStatus.DECLINED, CoreFixtures.TEACHER_NEPYIVODA));
         mailWorker.drain();
-        assertThat(single(DISPATCHER).subject()).isEqualTo("Відмова від заміни: Непийвода М.В., 2 пара 4КІ1, пн 19.10");
+        assertThat(single(DISPATCHER).subject()).isEqualTo("Відмова від заміни: Непийвода М.В., пн, 19 жовтня, 2 пара, 4КІ1");
 
         UUID other = UUID.randomUUID();
         Instant deadline = Instant.parse("2026-10-19T06:30:00Z");
@@ -301,11 +324,11 @@ class EmailFlowIT extends IntegrationTest {
         deliverMail();
 
         assertThat(mail.sentTo(KRENTSIN)).extracting(OutgoingMail::subject).containsExactly(
-                "Підтвердіть заміну до 09:30: пн, 19 жовтня, 2 пара, 4КІ1",
-                "Нагадування: підтвердіть заміну — пн, 19 жовтня, 2 пара, 4КІ1");
+                "Підтвердіть заміну до 09:30 — пн, 19 жовтня, 2 пара, 4КІ1",
+                "Нагадування про заміну: пн, 19 жовтня, 2 пара, 4КІ1");
         assertThat(mail.sentTo(DISPATCHER)).extracting(OutgoingMail::subject).containsExactly(
-                "Відмова від заміни: Непийвода М.В., 2 пара 4КІ1, пн 19.10",
-                "Немає відповіді на запит заміни: Кренцін М.Д., 2 пара 4КІ1, пн 19.10");
+                "Відмова від заміни: Непийвода М.В., пн, 19 жовтня, 2 пара, 4КІ1",
+                "Немає відповіді на запит заміни: Кренцін М.Д., пн, 19 жовтня, 2 пара, 4КІ1");
     }
 
     @Test

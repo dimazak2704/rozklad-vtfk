@@ -43,9 +43,14 @@ public final class MailModels {
         }
     }
 
-    /** {@code status}: SOLVED, FAILED or CANCELLED; scores as absolute values. */
+    /**
+     * {@code status}: SOLVED, FAILED or CANCELLED; scores as absolute values. {@code keptBest}: a CANCELLED job was
+     * stopped by the dispatcher and its best timetable so far was kept (the event carried assignments; core saves
+     * it like a solved one). {@code stopReason}: why a job with a timetable stopped
+     * ({@code GenerationStopReason} name), null when unknown.
+     */
     public record GenerationMail(UUID jobId, String status, long hardScore, long softScore, List<Penalty> penalties,
-                                 String error) implements MailModel {
+                                 String error, boolean keptBest, String stopReason) implements MailModel {
 
         public GenerationMail {
             penalties = penalties == null ? List.of() : List.copyOf(penalties);
@@ -88,6 +93,7 @@ public final class MailModels {
     public record RelinkedMail(String teacherName, String telegramAccount, Instant at) implements MailModel {
     }
 
-    public record TestMail(Instant requestedAt) implements MailModel {
+    /** {@code dispatcher}: asked from the dispatcher's settings page, so the footer links back there. */
+    public record TestMail(Instant requestedAt, boolean dispatcher) implements MailModel {
     }
 }

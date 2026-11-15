@@ -54,7 +54,7 @@ public class EmailPreferencesController {
     @PostMapping("/test")
     @Operation(summary = "Надіслати тестовий лист на мою підтверджену адресу (не частіше 3 разів на годину)")
     public ResponseEntity<TestLetterDto> test(@AuthenticationPrincipal Jwt jwt) {
-        settings.sendTest(accountId(jwt));
+        settings.sendTest(accountId(jwt), TokenRoles.of(jwt));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new TestLetterDto("QUEUED"));
     }
 

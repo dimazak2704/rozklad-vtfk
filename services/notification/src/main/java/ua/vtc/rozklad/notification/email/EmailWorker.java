@@ -150,7 +150,7 @@ public class EmailWorker implements SmartLifecycle {
                 ? EmailAudience.ADMIN : EmailAudience.TEACHER;
         return new OutgoingMail(message.getToAddress(), message.getAccountName(), message.getSubject(),
                 message.getBodyHtml(), message.getBodyText(), message.getId() + "@" + channel.messageIdDomain(),
-                thread, links.settings(audience));
+                thread, message.getKind().listed() ? links.settings(audience) : null);
     }
 
     /** Too late for the lesson, or the module behind the change says the letter is not needed any more. */

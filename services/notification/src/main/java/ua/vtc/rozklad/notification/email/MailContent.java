@@ -8,15 +8,17 @@ import java.util.List;
  * render all letters.
  *
  * @param preheader  the hidden first line mail clients show next to the subject
- * @param greeting   «Добрий день, …!» or null
- * @param struck     the details are no longer valid (a cancelled change): struck through, marked in text
+ * @param greeting   «Добрий день!» or null
+ * @param obsolete   the details are no longer valid (a cancelled change): muted, marked «більше не актуально»
+ * @param itemsTitle the line right above the list («Найбільше порушень:»), or null
  * @param items      a bulleted list (top penalties, order rows, pairs), may be empty
  * @param button     the main link, or null
  * @param links      further links shown as text
  * @param settingsUrl the settings page in the footer and in {@code List-Unsubscribe}
  */
 public record MailContent(String subject, String preheader, String title, String greeting, List<String> intro,
-                          List<Detail> details, boolean struck, List<String> items, List<String> outro, Link button,
+                          List<Detail> details, boolean obsolete, String itemsTitle, List<String> items,
+                          List<String> outro, Link button,
                           List<Link> links, String settingsUrl) {
 
     public MailContent {

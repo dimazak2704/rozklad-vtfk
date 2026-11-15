@@ -9,7 +9,9 @@
 <!-- A letter of «Розклад ВТФК». Every value is data and goes through th:text / th:href (escaped); no th:utext.
      Inline CSS, table layout up to 600 px, system fonts, no images and no remote resources. -->
 <body style="margin:0;padding:0;background-color:#f3f4f6;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f3f4f6;font-size:1px;line-height:1px;" th:text="${mail.preheader}">Preheader</div>
+<!-- The preheader is padded with zero-width non-joiners and spaces, so the inbox preview does not run on into the
+     letter's own text («Розклад ВТФК Вам поставили заміну Добрий день…»). -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f3f4f6;font-size:1px;line-height:1px;"><span th:text="${mail.preheader}">Preheader</span>&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
   <tr>
     <td align="center" style="padding:24px 12px;">
@@ -33,16 +35,20 @@
           <td style="padding:8px 24px 8px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
                    style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;">
+              <!-- a narrow label column leaves a 375 px screen room for «Понеділок, 16 листопада» on one line -->
               <tr th:each="detail : ${mail.details}">
-                <td valign="top" style="padding:6px 12px;width:120px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:20px;color:#6b7280;" th:text="${detail.label}">Поле</td>
-                <td th:if="${not mail.struck}" valign="top" style="padding:6px 12px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:20px;font-weight:600;color:#111827;" th:text="${detail.value}">Значення</td>
-                <td th:if="${mail.struck}" valign="top" style="padding:6px 12px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:20px;color:#6b7280;text-decoration:line-through;" th:text="${detail.value}">Значення</td>
+                <td valign="top" style="padding:6px 8px 6px 12px;width:88px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:20px;color:#6b7280;" th:text="${detail.label}">Поле</td>
+                <td th:if="${not mail.obsolete}" valign="top" style="padding:6px 12px 6px 4px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:20px;font-weight:600;color:#111827;" th:text="${detail.value}">Значення</td>
+                <td th:if="${mail.obsolete}" valign="top" style="padding:6px 12px 6px 4px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:20px;color:#4b5563;" th:text="${detail.value}">Значення</td>
               </tr>
             </table>
           </td>
         </tr>
-        <tr th:if="${mail.struck}">
+        <tr th:if="${mail.obsolete}">
           <td style="padding:0 24px 8px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:18px;color:#6b7280;">(більше не актуально)</td>
+        </tr>
+        <tr th:if="${mail.itemsTitle != null and not #lists.isEmpty(mail.items)}">
+          <td style="padding:4px 24px 4px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:15px;line-height:22px;color:#111827;" th:text="${mail.itemsTitle}">Список</td>
         </tr>
         <tr th:if="${not #lists.isEmpty(mail.items)}">
           <td style="padding:0 24px 8px;">
@@ -67,7 +73,7 @@
         </tr>
         <tr>
           <td style="padding:20px 24px 20px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;line-height:18px;color:#6b7280;border-top:1px solid #e5e7eb;">
-            Цей лист надіслала система «Розклад ВТФК» автоматично. Відповідати на нього не потрібно.<br>
+            Цей лист надіслала система «Розклад ВТФК» автоматично.<br>
             Налаштувати листи: <a th:href="${mail.settingsUrl}" th:text="${mail.settingsUrl}" style="color:#6b7280;">налаштування</a>
           </td>
         </tr>

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.AbsenceSource;
+import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
@@ -88,8 +89,11 @@ public class AdminNotices {
                     .filter(score -> !Boolean.TRUE.equals(score.bonus()))
                     .map(score -> new Penalty(score.constraint(), score.matchCount()))
                     .toList());
+            // зупинена задача з розкладом: core зберіг найкращий варіант, як і розв'язану
+            boolean keptBest = event.status() == GenerationStatus.CANCELLED && !event.assignments().isEmpty();
             mail.toAdmins(EmailKind.GENERATION_FINISHED, new GenerationMail(event.jobId(), event.status().name(),
-                            Math.abs(event.hardScore()), Math.abs(event.softScore()), penalties, event.error()),
+                            Math.abs(event.hardScore()), Math.abs(event.softScore()), penalties, event.error(),
+                            keptBest, event.stopReason() == null ? null : event.stopReason().name()),
                     event.jobId(), event.eventId(), EmailNotices.eventKey(event.eventId(), "generation"));
         }
     }

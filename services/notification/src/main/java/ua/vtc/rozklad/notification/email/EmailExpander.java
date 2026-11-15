@@ -195,7 +195,7 @@ public class EmailExpander {
                 count("not_needed");
                 continue;
             }
-            MailTemplates.Rendered letter = templates.render(texts.compose(kind.get(), model, target.name()));
+            MailTemplates.Rendered letter = templates.render(texts.compose(kind.get(), model));
             Instant notBefore = kind.get().followsChange() ? now.plus(properties.settleDelay()) : now;
             messages.save(new EmailMessage(notice, kind.get(), target, letter, notBefore, now));
             written++;

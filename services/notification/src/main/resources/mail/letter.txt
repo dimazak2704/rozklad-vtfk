@@ -5,9 +5,10 @@
 [# th:each="paragraph : ${mail.intro}"][(${paragraph})]
 [/]
 [# th:each="detail : ${mail.details}"][(${detail.label})]: [(${detail.value})]
-[/][# th:if="${mail.struck}"](більше не актуально)
+[/][# th:if="${mail.obsolete}"](більше не актуально)
 [/]
-[# th:each="item : ${mail.items}"]• [(${item})]
+[# th:if="${mail.itemsTitle != null and not #lists.isEmpty(mail.items)}"][(${mail.itemsTitle})]
+[/][# th:each="item : ${mail.items}"]• [(${item})]
 [/]
 [# th:each="paragraph : ${mail.outro}"][(${paragraph})]
 [/]
@@ -15,5 +16,5 @@
 [/][# th:each="link : ${mail.links}"][(${link.label})]: [(${link.url})]
 [/]
 --
-Цей лист надіслала система «Розклад ВТФК» автоматично. Відповідати на нього не потрібно.
+Цей лист надіслала система «Розклад ВТФК» автоматично.
 Налаштувати листи: [(${mail.settingsUrl})]

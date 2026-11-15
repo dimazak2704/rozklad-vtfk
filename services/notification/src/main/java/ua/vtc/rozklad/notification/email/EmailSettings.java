@@ -87,11 +87,12 @@ public class EmailSettings {
     /**
      * Queues a test letter to the caller's own verified address.
      *
+     * @param tokenRoles the caller's roles: a dispatcher's test letter links to the dispatcher's settings page
      * @throws ServiceUnavailableException {@code email-disabled} while the channel is off
      * @throws BusinessRuleException       {@code email-missing} / {@code email-not-verified}
      * @throws TooManyRequestsException    {@code email-test-limit} over the hourly limit
      */
-    public void sendTest(UUID accountId) {
+    public void sendTest(UUID accountId, Set<String> tokenRoles) {
         if (!channel.enabled()) {
             throw new ServiceUnavailableException("email-disabled", "Надсилання листів на сервері не налаштовано.");
         }
@@ -108,7 +109,7 @@ public class EmailSettings {
             throw new TooManyRequestsException("email-test-limit",
                     "Забагато тестових листів. Спробуйте за годину.");
         }
-        notices.toAccount(EmailKind.TEST, accountId, new TestMail(clock.instant()),
+        notices.toAccount(EmailKind.TEST, accountId, new TestMail(clock.instant(), tokenRoles.contains(ADMIN)),
                 "test:" + accountId + ":" + UUID.randomUUID());
     }
 
