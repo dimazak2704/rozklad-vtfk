@@ -5,10 +5,11 @@ Everything goes through the REST API the way a dispatcher (and the teacher «kre
 so the scenario also exercises the substitution workflow. Run it on the demo stack after `scripts/seed_demo.py`.
 
   Friday 20.11 (the stand clock may be moved to 2026-11-20T10:00, pair 2 in progress):
-    absences of Непийвода, Ординський, Стахова, Голєва, Крисак Л.В. and Марцинюк (pair 1 only) and a decision of every kind:
+    absences of Непийвода, Ординський, Стахова, Голєва, Крисак Л.В., Марцинюк (pair 1 only) and Паламарчук (pair 3
+    only) and a decision of every kind:
     REPLACE_DISCIPLINE (the group's own teacher of another discipline), REPLACE_TEACHER, SWAP, MERGE_SUBGROUPS,
-    CANCEL, ROOM_CHANGE, ADDITIONAL, BLOCK, DISCIPLINE_FINISHED; for Кренцін one NOTIFY assignment, one request
-    left PENDING_CONFIRMATION (he declined, the dispatcher asked again) and one he declined; four lessons stay
+    CANCEL, ROOM_CHANGE, ADDITIONAL, BLOCK, DISCIPLINE_FINISHED; for Кренцін two NOTIFY assignments, one request
+    left PENDING_CONFIRMATION on pair 3 (he declined, the dispatcher asked again) and one he declined; four lessons stay
     «Потрібне рішення». The order of Friday is NOT published.
   Thursday 19.11: absences of Колесник, Можаровська (pair 1), Феліксов and Непийвода, decisions of most kinds,
     Кренцін answers «Добре», and with --publish the order (or the amendment of an already published order) of the
@@ -85,6 +86,7 @@ ABSENCES = [
     Absence(FRIDAY, "Голєва Т.В.", "PERSONAL"),
     Absence(FRIDAY, "Крисак Л.В.", "SICK_LEAVE"),
     Absence(FRIDAY, "Марцинюк Т.Ю.", "OTHER", pairs=(1,), comment="Запізниться на першу пару"),
+    Absence(FRIDAY, "Паламарчук", "PERSONAL", pairs=(3,)),
     Absence(THURSDAY, "Колесник А.", "VACATION"),
     Absence(THURSDAY, "Можаровська О.Е.", "PERSONAL", pairs=(1,)),
     Absence(THURSDAY, "Феліксов Ю.Л.", "SICK_LEAVE"),
@@ -98,6 +100,9 @@ DECISIONS = [
     Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ3", 3, absent="Ординський", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", answer="decline", note="Кренцін declines: the lesson needs a decision again"),
     Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ2", 1, absent="Непийвода", discipline="СТП", teacher=SUBSTITUTE,
+             reason="MUTUAL", note="NOTIFY: the pair is over by 10:00, so no request can be sent for it"),
+    # a request can be sent only before the pair starts (CHANGE_LESSON_OVER): the pending one is on pair 3
+    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ2", 3, absent="Паламарчук", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", answer="pending", note="declined, asked again: PENDING_CONFIRMATION"),
     Decision(FRIDAY, "ROOM_CHANGE", "4ЕА2", 1, rooms=("309", "305", "210"), reason="OTHER",
              reason_text="Ремонт в аудиторії"),
