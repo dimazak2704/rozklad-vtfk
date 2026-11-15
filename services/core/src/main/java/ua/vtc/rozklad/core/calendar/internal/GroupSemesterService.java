@@ -20,8 +20,10 @@ import ua.vtc.rozklad.core.catalog.UkrainianOrder;
 
 /**
  * Theory weeks and exams of a group in a semester from the college's academic calendar (table
- * {@code group_semester}, written by the import, read by the admin API). Step 1 only stores them; load and
- * generation use them in step 2. Plain JDBC: the table has a natural key and no behaviour.
+ * {@code group_semester}, written by the import, read by the admin API). Plans do not use them: the graph's semester
+ * may be longer than the system's, so the plan counts the group's theory days in the system's calendar
+ * ({@code StudyCalendar.theory}) and accounting shows these numbers only as a cross-check. Plain JDBC: the table has a
+ * natural key and no behaviour.
  */
 @Service
 @Transactional(readOnly = true)
