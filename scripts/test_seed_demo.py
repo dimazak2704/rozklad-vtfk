@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import seed_demo
@@ -125,6 +126,98 @@ class RecentChangesTest(unittest.TestCase):
     def test_study_days_are_the_weekdays(self):
         days = seed_demo.study_days(seed_demo.date(2026, 11, 13), seed_demo.date(2026, 11, 17))
         self.assertEqual(["2026-11-13", "2026-11-16", "2026-11-17"], [d.isoformat() for d in days])
+
+
+class FakeAdmin:
+    """Answers the calls of `step_academic` from canned data and records what was sent."""
+
+    def __init__(self, periods: list[dict], parsed: dict, applied: dict | None = None):
+        self.periods = periods
+        self.jobs = [parsed, applied or parsed]
+        self.uploads: list[tuple] = []
+        self.posts: list[str] = []
+
+    def get(self, path: str):
+        if path == "/api/admin/semesters":
+            return [{"id": "s1", "name": seed_demo.SEMESTER_I}]
+        if path.startswith("/api/admin/calendar-periods?semesterId=s1"):
+            return self.periods
+        if path == "/api/import/jobs/j1":
+            return self.jobs[0] if not self.posts else self.jobs[1]
+        raise AssertionError(f"unexpected GET {path}")
+
+    def upload(self, path, fields, file_field, file_path, mime):
+        self.uploads.append((path, fields, file_field, file_path, mime))
+        return {"id": "j1", "status": "UPLOADED"}
+
+    def post(self, path, body=None):
+        self.posts.append(path)
+        return {"id": "j1", "status": "APPLYING"}
+
+
+DRAFT = {"groups": [{"code": "4КІ1"}], "codes": [{"code": "НС"}, {"code": "К"}], "periods": [{}, {}],
+         "check": {"created": 2, "updated": 0, "deleted": 0, "unchanged": 0, "skippedManual": 0,
+                   "outOfSemester": [{}]}}
+READY = {"id": "j1", "status": "READY", "draft": DRAFT,
+         "report": [{"severity": "WARN", "type": "PERIOD", "raw": "НС", "message": "поза семестрами"}]}
+APPLIED = {**READY, "status": "APPLIED", "result": {"calendar": {"created": 2, "updated": 0, "deleted": 0}}}
+
+
+class AcademicCalendarStepTest(unittest.TestCase):
+    """`seed academic`: the academic calendar through the importer, before the timetable is published."""
+
+    def setUp(self):
+        patcher = mock.patch.object(seed_demo, "log")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_runs_after_the_periods_and_before_publication_in_the_default_run(self):
+        steps = list(seed_demo.STEPS)
+        self.assertLess(steps.index("import"), steps.index("academic"), "groups and rooms come from the import")
+        self.assertLess(steps.index("academic"), steps.index("publish"), "publication materializes around periods")
+        self.assertLess(steps.index("academic"), steps.index("order35"))
+        self.assertNotIn("recent", steps, "`recent` stays by name and runs after the default steps")
+        self.assertTrue(seed_demo.ACADEMIC_CALENDAR.is_file(), seed_demo.ACADEMIC_CALENDAR)
+
+    def test_uploads_checks_and_applies_the_file(self):
+        admin = FakeAdmin([{"source": "MANUAL"}], READY, APPLIED)
+        seed_demo.step_academic(admin)
+        path, fields, file_field, file_path, mime = admin.uploads[0]
+        self.assertEqual(("/api/import/jobs", "ACADEMIC_CALENDAR_XLSX", "file", seed_demo.ACADEMIC_CALENDAR),
+                         (path, fields["kind"], file_field, file_path))
+        self.assertNotIn("semesterId", fields, "the academic calendar spans both semesters")
+        self.assertEqual('{"academicYear": "2026/2027"}', fields["options"])
+        self.assertEqual(["/api/import/jobs/j1/apply"], admin.posts)
+
+    def test_skips_when_core_already_has_imported_periods(self):
+        admin = FakeAdmin([{"source": "MANUAL"}, {"source": "IMPORT"}], READY)
+        seed_demo.step_academic(admin)
+        self.assertEqual([], admin.uploads)
+        self.assertEqual([], admin.posts)
+
+    def test_a_blocking_report_stops_the_seed_with_its_rows_and_applies_nothing(self):
+        review = {"id": "j1", "status": "NEEDS_REVIEW", "draft": {**DRAFT, "check": None}, "report": [
+            {"severity": "ERROR", "type": "PERIOD_KIND", "raw": "Х",
+             "message": "Невідомий код «Х» у груп 4КІ1: додайте вид у «Видах періодів» або пропустіть код."},
+            {"severity": "INFO", "type": "PERIOD", "raw": "", "message": "Буде створено 1"}]}
+        admin = FakeAdmin([], review)
+        with self.assertRaises(SystemExit) as stopped:
+            seed_demo.step_academic(admin)
+        self.assertIn("Невідомий код «Х»", str(stopped.exception))
+        self.assertNotIn("Буде створено", str(stopped.exception))
+        self.assertEqual([], admin.posts)
+
+    def test_a_conflict_on_apply_stops_the_seed(self):
+        back = {**READY, "status": "NEEDS_REVIEW", "report": [
+            {"severity": "ERROR", "type": "PERIOD", "raw": "4КІ1", "message": "Заміна в період (17.11.2026, пара 2)"}]}
+        admin = FakeAdmin([], READY, back)
+        with self.assertRaises(SystemExit) as stopped:
+            seed_demo.step_academic(admin)
+        self.assertIn("Заміна в період", str(stopped.exception))
+
+    def test_check_line_without_a_core_answer(self):
+        self.assertIn("not asked", seed_demo.calendar_check_line(None))
+        self.assertIn("outside the semesters 1", seed_demo.calendar_check_line(DRAFT["check"]))
 
 
 if __name__ == "__main__":

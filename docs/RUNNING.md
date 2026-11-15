@@ -164,22 +164,29 @@ Every step is a call to the running system (no SQL); a repeated run skips what e
    85 warnings: typos merged, two curators, clashes in the file) → review (READY) → apply: catalog (352
    entities) and the draft version «Розклад 2025/26 (імпорт з Excel)».
 4. **periods** — from the notes of order №35: 3rd course online 01.09–31.10, 4КІ online 01.09–31.10,
-   4ЕА/4ВЕ/4РТ/4ОП offline 01.09–31.10, practice of 2КІ3 19.10–30.10 (created before publication, which
-   uses them).
-5. **publish** — the Excel has 63 hard conflicts (61 rooms, mostly 3rd vs 4th course: the 3rd course studied
+   4ЕА/4ВЕ/4РТ/4ОП offline 01.09–31.10 (created before publication, which uses them). The practice of 2КІ3
+   19.10–30.10 from the same order comes from the academic calendar (step 5), not from here.
+5. **academic** — `seed/academic-calendar-2026-27.xlsx` uploaded as `ACADEMIC_CALENDAR_XLSX` → parsed (56 groups,
+   11 codes) and checked by core (dry run) → apply: the importer's periods of every group (national resistance
+   «Основи національного спротиву», room 401: 4ОП1 05.10–16.10, 4ОП2 19.10–30.10, 4ВЕ 02.11–13.11, 4КІ1
+   16.11–27.11, …; practice, sessions, ЗУ, holidays) and the theory weeks/exams per group. Also before
+   publication, so those groups have no pairs in their periods; parts outside the semesters are reported and
+   left out. Skipped when core already has imported periods; a blocking report row stops the seed.
+6. **publish** — the Excel has 63 hard conflicts (61 rooms, mostly 3rd vs 4th course: the 3rd course studied
    online; 2 teachers). The seed resolves them in the editor like a dispatcher: the PE lessons of Папулова
    for 2ЕА1/2М/2Ф become a stream; a double-booked room stays with one lesson and the others (3rd course
    first) are left without a room; Овчар's NUM-only Матем. in 2КІ1 is left without a teacher. Then the version
-   is published from 01.09.2026 (17 106 dated lessons) and 646 load items are derived from it.
-6. **accounts** — `krentsin` and `nepyivoda` linked to their teachers (`PUT /api/admin/teachers/{id}/account`).
-7. **order35** — order №35 of 19.10.2026 rebuilt from `seed/orders/order-035-2026-10-19.jpg`: numbering of the
+   is published from 01.09.2026 (17 106 dated lessons before the academic calendar existed; fewer with it) and
+   646 load items are derived from it.
+7. **accounts** — `krentsin` and `nepyivoda` linked to their teachers (`PUT /api/admin/teachers/{id}/account`).
+8. **order35** — order №35 of 19.10.2026 rebuilt from `seed/orders/order-035-2026-10-19.jpg`: numbering of the
    semester starts at 35 (`PUT /api/admin/orders/numbering`), teachers Ємельяненко and Яцуба and the
    discipline ЗУ «Захист України» added, absence of Крисак Л. (4 affected lessons), 16 changes (BLOCK 1ТК1 1-4,
    2 × ADDITIONAL, 2 × CANCEL of a subgroup, 2 × REPLACE_TEACHER, 9 × REPLACE_DISCIPLINE «Зв.зам.»; in the default
    approval mode NOTIFY they are confirmed at once — in mode CONFIRM Непийвода confirms hers in the cabinet and the
    dispatcher confirms the rest), the 5 notes of the original, publication →
    №35. Printed sheet: `GET /api/documents/orders/{id}.pdf|png|docx`.
-8. **names** — first names and patronymics of 89 of the 109 real teachers from `seed/teacher-names.csv`
+9. **names** — first names and patronymics of 89 of the 109 real teachers from `seed/teacher-names.csv`
    (`PUT /api/admin/teachers/{id}` with the version; short and display names stay). Sources are public: the
    cycle commission pages of vtc.vn.ua (Wayback snapshots 2025-2026; the site itself does not answer from
    here) and the «Кадрове забезпечення» PDFs of the OPPs on the college's Google Site. A row is used when the
@@ -190,9 +197,11 @@ A living stand (by name, not in the default run; the stand time `--time 2026-11-
 - **`seed recent`** — every study day from 20.10 to 18.11: 1–3 new absences (sick leave over 2–4 days, personal,
   business trip, other), the system's own plan for each absence accepted (`GET /api/admin/absences/{id}/plan`:
   another discipline of the group by its own teacher «Зв.зам.», merged subgroups, a cancelled pair), and the
-  order of the day published (№36…). Deterministic (seeded by the date) and resumable.
+  order of the day published (№36…). Deterministic (seeded by the date) and resumable. Groups in a period of the
+  academic calendar (4ОП2, 4ВЕ, 4КІ1 from 16.11) have no pairs then, so no absence reaches them.
 - **`python scripts/demo_day.py --publish --allow-chat='<masked id>'`** — then Thursday 19.11 (published) and
   Friday 20.11 with every kind of decision and four lessons left «Потрібне рішення» (the docstring lists them).
+  4КІ1 is on national resistance those days, so the scenario uses 4КІ2, 4КІ3 and other groups.
 
 The owner's chat (`TELEGRAM_OWNER_CHAT_ID`) is bound as the dispatchers' chat at start-up, so it gets a message
 for every absence and every order the seed creates. For a quiet seed run the three commands on a stand started
