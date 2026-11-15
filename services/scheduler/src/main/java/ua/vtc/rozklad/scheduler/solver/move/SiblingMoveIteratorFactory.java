@@ -23,8 +23,8 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
  * slot (parallel); when one teacher teaches two of them, they go to neighbouring pairs of one day
  * instead (parallel would be a teacher clash). Only slots and parities every sibling may take are
  * offered, and a group keeps only the start slots that give a valid move, so every offered move exists;
- * a group with none (one teacher whose pairs are never consecutive) offers nothing. A random move also
- * gives a unit whose room is taken at its target a free room of its range (the desired room first):
+ * a group with none (one teacher whose pairs are never consecutive) offers nothing. A move (random or in
+ * the original order) also gives a unit whose room is taken at its target a free room of its range (the desired room first):
  * the copies must stand together (a hard rule), so they cannot move one by one and change rooms later.
  */
 public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable, SiblingChangeMove> {
@@ -60,7 +60,7 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
                 }
             }
         }
-        return moves.iterator();
+        return withFreeRooms(moves.iterator(), builtFor.getUnits());
     }
 
     @Override
@@ -109,6 +109,32 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
             groups = siblingGroups(solution.getUnits());
             builtFor = solution;
         }
+    }
+
+    /**
+     * The moves of an iterator with free rooms ({@link #withFreeRooms(SiblingChangeMove, RoomUse)}), the room use of
+     * {@code all} counted at the first move: an iterator lives one step, and every move it gives is evaluated and undone
+     * before the next one, as in the random iterators.
+     */
+    static Iterator<SiblingChangeMove> withFreeRooms(Iterator<SiblingChangeMove> moves, List<LessonUnit> all) {
+        return new Iterator<>() {
+
+            private RoomUse roomUse;
+
+            @Override
+            public boolean hasNext() {
+                return moves.hasNext();
+            }
+
+            @Override
+            public SiblingChangeMove next() {
+                SiblingChangeMove move = moves.next();
+                if (roomUse == null) {
+                    roomUse = RoomUse.of(all);
+                }
+                return withFreeRooms(move, roomUse);
+            }
+        };
     }
 
     /** {@link #withFreeRooms(SiblingChangeMove, RoomUse)} with the room use of {@code all} counted now. */

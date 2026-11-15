@@ -141,6 +141,30 @@ class GroupSlotSwapMoveIteratorFactoryTest {
         assertThat(factory.swap(free, slot(2, 2))).as("a free Tuesday slot").isNotNull();
     }
 
+    /**
+     * The moves in the original order find rooms like the random ones: a lesson whose room another group takes at the
+     * target gets a free room of its range, and a lesson whose room is free there keeps it.
+     */
+    @Test
+    void movesInTheOriginalOrderTakeFreeRoomsAtTheTarget() {
+        LessonUnit moving = unit("moving", KI1, 0, KRENTSIN, slot(1, 1), Parity.BOTH, LAB);
+        LessonUnit busy = unit("busy", KI2, 0, NEPYIVODA, slot(1, 2), Parity.BOTH, LAB);
+        Timetable timetable = timetable(List.of(moving, busy));
+        @SuppressWarnings("unchecked")
+        ScoreDirector<Timetable> director = mock(ScoreDirector.class);
+        when(director.getWorkingSolution()).thenReturn(timetable);
+
+        List<SiblingChangeMove> moves = new ArrayList<>();
+        new GroupSlotSwapMoveIteratorFactory().createOriginalMoveIterator(director).forEachRemaining(moves::add);
+
+        assertThat(moves).filteredOn(move -> move.units().equals(List.of(moving)) && move.slots().equals(
+                List.of(slot(1, 2)))).singleElement().satisfies(move -> assertThat(move.getPlanningValues())
+                .containsExactly(slot(1, 2), Parity.BOTH, LAB2));
+        assertThat(moves).filteredOn(move -> move.units().equals(List.of(moving)) && move.slots().equals(
+                List.of(slot(1, 3)))).singleElement().satisfies(move -> assertThat(move.getPlanningValues())
+                .as("lab 6 is free at pair 3: kept").containsExactly(slot(1, 3), Parity.BOTH));
+    }
+
     /** Local search with group slot swaps only, in FULL_ASSERT: the move keeps the score consistent. */
     @Test
     void groupSlotSwapsKeepTheIncrementalScoreConsistent() {

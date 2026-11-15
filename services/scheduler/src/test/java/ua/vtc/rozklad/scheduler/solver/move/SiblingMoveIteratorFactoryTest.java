@@ -177,6 +177,35 @@ class SiblingMoveIteratorFactoryTest {
                 .isSameAs(move);
     }
 
+    /** The moves in the original order find rooms like the random ones (the same copies as above). */
+    @Test
+    void movesInTheOriginalOrderTakeFreeRoomsAtTheTarget() {
+        Room lab2 = new Room(UUID.randomUUID(), "7", RoomType.COMPUTER_LAB, 16, 1);
+        Room lab3 = new Room(UUID.randomUUID(), "8", RoomType.COMPUTER_LAB, 16, 1);
+        List<Timeslot> range = slots(1, 1, 1, 2);
+        LessonUnit first = LessonUnit.builder("a", KI2, DISCIPLINE).subgroup(1).teacher(KRENTSIN)
+                .weight(UnitWeight.WHOLE).siblingKey("k").desiredRoom(lab3).timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), LAB, Parity.BOTH).build();
+        LessonUnit second = LessonUnit.builder("b", KI2, DISCIPLINE).subgroup(2).teacher(NEPYIVODA)
+                .weight(UnitWeight.WHOLE).siblingKey("k").timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), lab2, Parity.BOTH).build();
+        LessonUnit other = unit("x", 0, null, null, List.of(range.get(1)), false);
+        Timetable timetable = new Timetable(range, List.of(LAB, lab2, lab3), List.of(KRENTSIN, NEPYIVODA),
+                List.of(KI2), List.of(first, second, other), null);
+        @SuppressWarnings("unchecked")
+        ScoreDirector<Timetable> director = mock(ScoreDirector.class);
+        when(director.getWorkingSolution()).thenReturn(timetable);
+
+        List<SiblingChangeMove> moves = new ArrayList<>();
+        new SiblingMoveIteratorFactory().createOriginalMoveIterator(director).forEachRemaining(moves::add);
+
+        assertThat(moves).filteredOn(move -> move.slots().getFirst().equals(range.get(1))).singleElement()
+                .satisfies(move -> assertThat(move.getPlanningValues())
+                        .containsExactly(range.get(1), range.get(1), Parity.BOTH, Parity.BOTH, lab3));
+    }
+
     /**
      * The random iterator counts the room use once per step and every move of the step reads it: a move's own room
      * choice must not leak into the next move (they are evaluated and undone one by one), and the result is the

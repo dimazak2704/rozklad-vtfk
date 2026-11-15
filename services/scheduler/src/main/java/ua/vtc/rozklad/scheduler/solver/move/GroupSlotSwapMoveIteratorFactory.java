@@ -63,7 +63,7 @@ public class GroupSlotSwapMoveIteratorFactory implements MoveIteratorFactory<Tim
                 }
             }
         }
-        return moves.iterator();
+        return SiblingMoveIteratorFactory.withFreeRooms(moves.iterator(), builtFor.getUnits());
     }
 
     @Override
