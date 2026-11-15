@@ -18,14 +18,18 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 import ua.vtc.rozklad.scheduler.support.Placements;
+import ua.vtc.rozklad.scheduler.support.ShapedCollege;
 import ua.vtc.rozklad.scheduler.support.SyntheticCollege;
 import ua.vtc.rozklad.scheduler.support.TestSolvers;
 
 /**
- * Benchmark at the size of the real college (56 groups × 16 units). Opt-in because it runs for
- * up to 90 s: {@code mvn -pl services/scheduler -am test -Dtest=RealSizeBenchmarkTest
+ * Benchmark at the size and shape of the real college ({@link ShapedCollege.Shape#realShaped()}: 56 groups with
+ * 14–19 pairs a week, halves, parallel and crossed subgroups, a gym with 5 places), solved from scratch. Opt-in
+ * because it runs for up to 90 s: {@code mvn -pl services/scheduler -am test -Dtest=RealSizeBenchmarkTest
  * -Dsurefire.failIfNoSpecifiedTests=false -Dbenchmark=true} (optional {@code -Dbenchmark.seconds},
- * {@code -Dbenchmark.config=<classpath resource or file:path>}, {@code -Dbenchmark.seed}).
+ * {@code -Dbenchmark.config=<classpath resource or file:path>}, {@code -Dbenchmark.seed},
+ * {@code -Dbenchmark.shape=<ShapedCollege shape>}). Until the genfix evaluation it used {@link SyntheticCollege}
+ * (at most 15 pairs a week in 2–3-pair days), which is easier than the real college.
  */
 @EnabledIfSystemProperty(named = "benchmark", matches = "true")
 class RealSizeBenchmarkTest {
@@ -35,10 +39,9 @@ class RealSizeBenchmarkTest {
 
     @Test
     void realSizeCollegeReachesZeroHardWithinTarget() {
-        SyntheticCollege.Options size = SyntheticCollege.Options.realSize();
-        long seed = Long.getLong("benchmark.seed", size.seed());
-        SyntheticCollege.Problem problem = SyntheticCollege.generate(
-                new SyntheticCollege.Options(size.groups(), size.shiftTwoGroups(), size.splitShare(), seed));
+        ShapedCollege.Shape shape = ShapedCollege.Shape.named(System.getProperty("benchmark.shape", "real-shaped"));
+        ShapedCollege.Problem problem = ShapedCollege.generate(shape.withSeed(Long.getLong("benchmark.seed",
+                shape.seed())));
         TimetableProblemFactory factory = new TimetableProblemFactory(5);
         Timetable timetable = factory.create(problem.snapshot(), GenerationWeights.DEFAULT);
 

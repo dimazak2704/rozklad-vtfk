@@ -148,6 +148,39 @@ class TimetableSolverTest {
         assertThat(solution.isFullyPlaced()).as("construction finished, local search ran").isTrue();
     }
 
+    /**
+     * The same check with every new soft rule active: base placements (half of them shifted by a pair,
+     * so stability and teacher baselines matter), sibling keys (the sibling move runs) and daily limits.
+     */
+    @Test
+    void incrementalScoreMatchesAFullRecalculationWithBasePlacementsAndSiblings() {
+        SyntheticCollege.Problem problem = SyntheticCollege.generate(SyntheticCollege.Options.tiny());
+        Map<String, Assignment> planted = problem.planted().stream()
+                .collect(Collectors.toMap(Assignment::unitId, Function.identity()));
+        List<ProblemSnapshot.Unit> started = new ArrayList<>();
+        for (ProblemSnapshot.Unit unit : problem.snapshot().units()) {
+            Assignment place = planted.get(unit.unitId());
+            int pair = started.size() % 2 == 0 ? place.pair() : Math.max(1, place.pair() - 1);
+            started.add(new ProblemSnapshot.Unit(unit.unitId(), unit.loadItemId(), unit.groupId(), unit.subgroup(),
+                    unit.disciplineId(), unit.teacherId(), unit.weight(), unit.requiredRoomType(),
+                    unit.preferredRoomId(), unit.homeRoomId(), null,
+                    new ProblemSnapshot.PinnedSlot(place.weekday(), pair, place.parity(),
+                            started.size() % 3 == 0 ? null : place.roomId()),
+                    unit.teacherRoomId(), unit.online(), unit.siblingKey()));
+        }
+        Timetable timetable = factory.create(withUnits(problem.snapshot(), started),
+                new GenerationWeights(3, 2, 1, 4, 1, 5, 2, 3, 4, 6, 2, 3, 1));
+        assertThat(timetable.getUnits()).anyMatch(unit -> unit.getSiblingKey() != null);
+        SolverConfig config = TestSolvers.config(TestSolvers.CONFIG,
+                new TerminationConfig().withSpentLimit(Duration.ofMinutes(3)), EnvironmentMode.FULL_ASSERT);
+        config.getPhaseConfigList().getLast().setTerminationConfig(new TerminationConfig().withStepCountLimit(150));
+
+        Timetable solution = TestSolvers.solveTimed(SolverFactory.create(config), timetable).solution();
+
+        assertThat(solution.isFullyPlaced()).isTrue();
+        assertThat(TimetableAnalyzer.totalScore(TimetableAnalyzer.analyze(solution))).isEqualTo(solution.getScore());
+    }
+
     private static ProblemSnapshot.Unit pin(ProblemSnapshot.Unit unit, ProblemSnapshot.PinnedSlot slot) {
         return new ProblemSnapshot.Unit(unit.unitId(), unit.loadItemId(), unit.groupId(), unit.subgroup(),
                 unit.disciplineId(), unit.teacherId(), unit.weight(), unit.requiredRoomType(), unit.preferredRoomId(),

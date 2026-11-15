@@ -5,9 +5,12 @@ import ai.timefold.solver.core.api.domain.entity.PlanningEntity;
 import ai.timefold.solver.core.api.domain.entity.PlanningPin;
 import ai.timefold.solver.core.api.domain.valuerange.ValueRangeProvider;
 import ai.timefold.solver.core.api.domain.variable.PlanningVariable;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import ua.vtc.rozklad.contracts.LatePairs;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.UnitWeight;
@@ -16,7 +19,10 @@ import ua.vtc.rozklad.contracts.UnitWeight;
  * One weekly lesson to place (planning entity): the solver chooses its timeslot, room and parity.
  * Value ranges are per unit: the group's shift window without the teacher's UNAVAILABLE slots,
  * compatible rooms, and {@code BOTH} for a WHOLE unit or {@code NUMERATOR}/{@code DENOMINATOR}
- * for a HALF unit. A pinned unit keeps the dispatcher's placement.
+ * for a HALF unit. A pinned unit keeps the dispatcher's placement. A unit may know its <em>base
+ * placement</em> (where it stands in the base version, for the stability rules) and its
+ * {@code siblingKey} (equal on the subgroup copies of one weekly occurrence of a split load item), and the
+ * special-purpose room types its load item kept to in the base version ({@link #getBaseRoomTypes()}).
  *
  * <p>Week arithmetic: a lesson with parity BOTH meets in both week types (numerator and
  * denominator weeks), NUMERATOR/DENOMINATOR in one. Penalties count such week occurrences.
@@ -45,6 +51,13 @@ public class LessonUnit {
     private RoomType requiredRoomType;
     private Room desiredRoom;
     private UUID keptRoomId;
+    private String siblingKey;
+    // місце в базовій версії (null — заняття в базі немає)
+    private Timeslot baseSlot;
+    private Parity baseParity;
+    private UUID baseRoomId;
+    // типи спецаудиторій (спортзал, майданчик), де стояли всі базові пари предмета; порожньо — правила немає
+    private Set<RoomType> baseRoomTypes;
     // доріжки «когорта × тип тижня» для кожної парності (індекс — Parity.ordinal())
     private int[][] cohortLanesByParity;
 
@@ -80,6 +93,11 @@ public class LessonUnit {
         this.requiredRoomType = builder.requiredRoomType;
         this.desiredRoom = builder.desiredRoom;
         this.keptRoomId = builder.keptRoomId;
+        this.siblingKey = builder.siblingKey;
+        this.baseSlot = builder.baseSlot;
+        this.baseParity = builder.baseParity;
+        this.baseRoomId = builder.baseRoomId;
+        this.baseRoomTypes = builder.baseRoomTypes.isEmpty() ? Set.of() : Set.copyOf(builder.baseRoomTypes);
         this.timeslotRange = List.copyOf(builder.timeslotRange);
         this.roomRange = List.copyOf(builder.roomRange);
         this.parityRange = List.copyOf(builder.parityRange);
@@ -201,6 +219,46 @@ public class LessonUnit {
         return keptRoomId;
     }
 
+    /** Key shared by the subgroup copies of one weekly occurrence of a split load item, or {@code null}. */
+    public String getSiblingKey() {
+        return siblingKey;
+    }
+
+    public boolean hasSiblingKey() {
+        return siblingKey != null;
+    }
+
+    /** Has a sibling key and a teacher (the input of «Підгрупи одного викладача не підряд»). */
+    public boolean hasSiblingWithTeacher() {
+        return siblingKey != null && teacher != null;
+    }
+
+    /** Slot of the unit in the base version, {@code null} when it has none. */
+    public Timeslot getBaseSlot() {
+        return baseSlot;
+    }
+
+    public Parity getBaseParity() {
+        return baseParity;
+    }
+
+    /** Room of the unit in the base version, {@code null} when it has none (or no base placement). */
+    public UUID getBaseRoomId() {
+        return baseRoomId;
+    }
+
+    public boolean hasBase() {
+        return baseSlot != null;
+    }
+
+    /**
+     * Special-purpose room types (sports hall, sports ground) that every base lesson of the unit's load item
+     * with a room stood in; empty when the item has no such base (no base, or a lesson in an ordinary room).
+     */
+    public Set<RoomType> getBaseRoomTypes() {
+        return baseRoomTypes;
+    }
+
     public List<Timeslot> getTimeslotRange() {
         return timeslotRange;
     }
@@ -297,6 +355,41 @@ public class LessonUnit {
         return group.getWindow().positionOf(timeslot);
     }
 
+    /** «4-та пара зміни» or later ({@link LatePairs}, the one definition shared with core and the web). */
+    public boolean isLate() {
+        return LatePairs.isLate(timeslot.pair(), group.getWindow().firstPairOn(timeslot.weekday()));
+    }
+
+    /** The 4th pair of the shift costs 1, the 5th 2, …, per week occurrence; 0 when not late. */
+    public int latePenalty() {
+        return isLate() ? (positionInShift() - LatePairs.FIRST_LATE_POSITION + 1) * weeklyOccurrences() : 0;
+    }
+
+    /** Shift of the group the lesson belongs to. */
+    public int getShift() {
+        return group.getShift();
+    }
+
+    /** The unit stands in another slot or week than in the base version. */
+    public boolean isMovedFromBase() {
+        return baseSlot != null && (!baseSlot.equals(timeslot) || baseParity != parity);
+    }
+
+    /** The unit kept its base slot and week but sits in another room than in the base version. */
+    public boolean isRoomChangedFromBase() {
+        return baseRoomId != null && !isMovedFromBase() && !room.isNone() && !baseRoomId.equals(room.getId());
+    }
+
+    /** The load item kept to special-purpose rooms in the base version, and this lesson sits in another kind of room. */
+    public boolean isOutsideBaseRoomTypes() {
+        return !baseRoomTypes.isEmpty() && !room.isNone() && !baseRoomTypes.contains(room.getType());
+    }
+
+    /** Same weekday, neighbouring pairs. */
+    public boolean isAdjacentTo(LessonUnit other) {
+        return timeslot.weekday() == other.timeslot.weekday() && Math.abs(timeslot.pair() - other.timeslot.pair()) == 1;
+    }
+
     @Override
     public String toString() {
         return id + "@" + timeslot + "/" + parity + "/" + room;
@@ -315,6 +408,11 @@ public class LessonUnit {
         private RoomType requiredRoomType;
         private Room desiredRoom;
         private UUID keptRoomId;
+        private String siblingKey;
+        private Timeslot baseSlot;
+        private Parity baseParity;
+        private UUID baseRoomId;
+        private Set<RoomType> baseRoomTypes = Set.of();
         private List<Timeslot> timeslotRange = List.of();
         private List<Room> roomRange = List.of();
         private List<Parity> parityRange = List.of();
@@ -362,6 +460,25 @@ public class LessonUnit {
         /** Room an online pinned lesson keeps for reference; it occupies {@link Room#NONE}. */
         public Builder keptRoomId(UUID keptRoomId) {
             this.keptRoomId = keptRoomId;
+            return this;
+        }
+
+        public Builder siblingKey(String siblingKey) {
+            this.siblingKey = siblingKey;
+            return this;
+        }
+
+        /** Where the unit stands in the base version ({@code roomId} may be {@code null}). */
+        public Builder base(Timeslot slot, Parity parity, UUID roomId) {
+            this.baseSlot = Objects.requireNonNull(slot, "slot");
+            this.baseParity = Objects.requireNonNull(parity, "parity");
+            this.baseRoomId = roomId;
+            return this;
+        }
+
+        /** Special-purpose room types the load item kept to in the base version (soft rule «specialRooms»). */
+        public Builder baseRoomTypes(Set<RoomType> types) {
+            this.baseRoomTypes = types == null || types.isEmpty() ? Set.of() : EnumSet.copyOf(types);
             return this;
         }
 

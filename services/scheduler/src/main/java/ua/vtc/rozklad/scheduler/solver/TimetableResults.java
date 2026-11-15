@@ -30,13 +30,15 @@ public final class TimetableResults {
     }
 
     /**
-     * Score per constraint with its Ukrainian title, hard constraints first; a constraint switched
-     * off by a zero weight is listed with its matches and a zero score.
+     * Score per constraint with its Ukrainian title, ASCII id, bonus flag and the matches that involve a
+     * free unit; hard constraints first. A constraint switched off by a zero weight is listed with its
+     * matches and a zero score.
      */
     public static List<ConstraintScore> analysis(Timetable timetable) {
         return TimetableAnalyzer.analyze(timetable).stream()
                 .map(result -> new ConstraintScore(result.constraint().title(), result.matchCount(),
-                        result.score().toString()))
+                        result.score().toString(), result.constraint().id(), result.constraint().isBonus(),
+                        result.scopeMatchCount()))
                 .toList();
     }
 }

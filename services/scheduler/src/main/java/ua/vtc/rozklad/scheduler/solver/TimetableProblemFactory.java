@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,20 +34,35 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  *
  * <p>Value ranges per unit: timeslots of the group's shift window where the teacher is not
  * UNAVAILABLE; rooms of the required type that fit the group (special-purpose rooms — sports
- * hall and ground — only for units that require them or name them as preferred, teacher's or home
- * room); parity
+ * hall and ground — only for units that require them, name them as preferred, teacher's or home
+ * room, or stood there in the base version); parity
  * BOTH for WHOLE units, NUMERATOR or DENOMINATOR for HALF units. When a filter leaves nothing, the
  * wider range is used and the matching hard constraint reports the violation. A desired room
  * that is not in the snapshot is ignored with a warning. An online pinned unit (DOMAIN §5) stands
  * in {@link Room#NONE} and keeps its room only for the result.
  *
- * <p>Rooms are warm-started: every unit starts in its desired room (preferred room of the load
- * item, else the teacher's usual room, else the group's home room of an older snapshot) or in the
- * least used compatible room. A unit with an
- * {@code initial} placement (where it stands in the base version) starts there when the slot,
- * parity and room are inside its value ranges; the construction heuristic places only the units
+ * <p>A unit with an {@code initial} placement (where it stands in the base version) starts there when
+ * the slot and parity are inside its value ranges; the construction heuristic places only the units
  * that have no start, so a feasible base is improved, never rebuilt worse. Local search may still
- * change anything that is not pinned.
+ * change anything that is not pinned. The base placement is also kept on the unit for the stability
+ * rules, even when it is outside the value ranges.
+ *
+ * <p>Rooms are warm-started. A started unit keeps its base room when it is compatible; a started unit
+ * without one (the base lesson had no room) takes a compatible room that is free at its start slot —
+ * the desired room first — so the run never starts with a room clash the base did not have (B2).
+ * Every other unit starts in its desired room (preferred room of the load item, else the teacher's
+ * usual room, else the group's home room of an older snapshot) or in the least used compatible room.
+ *
+ * <p>A load item whose base lessons with a room all sit in special-purpose rooms (PE in the sports hall or on the
+ * ground; data-driven, never by discipline name) gives its free units those room types as
+ * {@link LessonUnit#getBaseRoomTypes()}: the units start there, and the soft rule {@code specialRooms} penalizes
+ * any other room. Ordinary compatible rooms stay in the range, so a full or closed hall costs soft points instead
+ * of making the run infeasible, and weight 0 switches the preference off. Core sends no derived room type.
+ *
+ * <p>Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
+ * week: the weekdays of the teacher's base and pinned lessons in that week, but at least the days the
+ * teacher's load needs at the daily limit (4 pairs when there is none). Sibling keys are kept only on
+ * free units of one group with distinct subgroups; any other use is dropped with a warning.
  */
 public final class TimetableProblemFactory {
 
@@ -73,8 +89,11 @@ public final class TimetableProblemFactory {
         Map<UUID, Room> rooms = snapshot.rooms().stream()
                 .map(room -> new Room(room.id(), room.name(), room.type(), room.capacity(), room.maxParallel()))
                 .collect(Collectors.toMap(Room::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
+        Map<UUID, List<ProblemSnapshot.Unit>> unitsByTeacher = snapshot.units().stream()
+                .filter(unit -> unit.teacherId() != null)
+                .collect(Collectors.groupingBy(ProblemSnapshot.Unit::teacherId));
         Map<UUID, Teacher> teachers = snapshot.teachers().stream()
-                .map(TimetableProblemFactory::teacher)
+                .map(teacher -> teacher(teacher, unitsByTeacher.getOrDefault(teacher.id(), List.of())))
                 .collect(Collectors.toMap(Teacher::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
         Map<Integer, ShiftWindow> windows = shiftWindows(snapshot.shiftWindows());
         Map<UUID, StudentGroup> groups = snapshot.groups().stream()
@@ -82,16 +101,81 @@ public final class TimetableProblemFactory {
                         group.subgroups(), windows.get(group.shift())))
                 .collect(Collectors.toMap(StudentGroup::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
 
+        Set<String> siblingKeys = siblingKeys(snapshot.units());
+        Map<UUID, Set<RoomType>> sportItems = specialPurposeItems(snapshot.units(), rooms);
         List<UnitPlan> plans = snapshot.units().stream()
-                .map(unit -> plan(unit, timeslots, rooms, teachers, groups))
+                .map(unit -> plan(unit, timeslots, rooms, teachers, groups, siblingKeys, sportItems))
                 .toList();
         List<LessonUnit> units = new RoomWarmStart(plans).buildUnits();
         return new Timetable(timeslots, List.copyOf(rooms.values()), List.copyOf(teachers.values()),
                 List.copyOf(groups.values()), units, ConstraintWeights.of(weights, disciplineRepeatWeight));
     }
 
-    private static Teacher teacher(ProblemSnapshot.Teacher teacher) {
-        return new Teacher(teacher.id(), teacher.name(), slots(teacher.unavailable()), slots(teacher.unwanted()));
+    private static Teacher teacher(ProblemSnapshot.Teacher teacher, List<ProblemSnapshot.Unit> units) {
+        return new Teacher(teacher.id(), teacher.name(), slots(teacher.unavailable()), slots(teacher.unwanted()),
+                teacher.maxPairsPerDay(), baseDays(units, teacher.maxPairsPerDay()));
+    }
+
+    /**
+     * Teaching days per kind of week a teacher may use without the «extra day» penalty: the weekdays of
+     * the base and pinned lessons in that week, but at least the days the load needs at the daily limit.
+     */
+    static int[] baseDays(List<ProblemSnapshot.Unit> units, Integer maxPairsPerDay) {
+        List<Set<Integer>> days = List.of(new HashSet<>(), new HashSet<>());
+        int whole = 0;
+        int halves = 0;
+        for (ProblemSnapshot.Unit unit : units) {
+            if (unit.weight() == UnitWeight.HALF) {
+                halves++;
+            } else {
+                whole++;
+            }
+            ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
+            if (placed != null && placed.parity() != null && isValidSlot(placed.weekday(), placed.pair())) {
+                for (int week : weekLanes(placed.parity())) {
+                    days.get(week).add(placed.weekday());
+                }
+            }
+        }
+        int limit = maxPairsPerDay == null ? Teacher.DEFAULT_PAIRS_PER_DAY : maxPairsPerDay;
+        // половинки діляться між тижнями: у кожному тижні в середньому половина з них
+        int needed = Math.ceilDiv(whole + (halves + 1) / 2, limit);
+        return new int[] {Math.max(days.get(0).size(), needed), Math.max(days.get(1).size(), needed)};
+    }
+
+    private static int[] weekLanes(Parity parity) {
+        return switch (parity) {
+            case BOTH -> new int[] {LessonUnit.NUMERATOR_WEEK, LessonUnit.DENOMINATOR_WEEK};
+            case NUMERATOR -> new int[] {LessonUnit.NUMERATOR_WEEK};
+            case DENOMINATOR -> new int[] {LessonUnit.DENOMINATOR_WEEK};
+        };
+    }
+
+    private static boolean isValidSlot(int weekday, int pair) {
+        return weekday >= 1 && weekday <= Timeslot.MAX_WEEKDAY && pair >= 1 && pair <= Timeslot.MAX_PAIR;
+    }
+
+    /**
+     * Sibling keys that are safe to use: shared by at least two free units of one group with distinct
+     * subgroups. Any other use (another group, the whole group, a repeated subgroup) is a core data
+     * error that would only mislead the subgroup rules, so the key is dropped with a warning.
+     */
+    static Set<String> siblingKeys(List<ProblemSnapshot.Unit> units) {
+        Map<String, List<ProblemSnapshot.Unit>> byKey = units.stream()
+                .filter(unit -> unit.siblingKey() != null && unit.pinned() == null)
+                .collect(Collectors.groupingBy(ProblemSnapshot.Unit::siblingKey));
+        Set<String> valid = new HashSet<>();
+        byKey.forEach((key, siblings) -> {
+            boolean oneGroup = siblings.stream().map(ProblemSnapshot.Unit::groupId).distinct().count() == 1;
+            boolean distinctSubgroups = siblings.stream().allMatch(unit -> unit.subgroup() > 0)
+                    && siblings.stream().map(ProblemSnapshot.Unit::subgroup).distinct().count() == siblings.size();
+            if (siblings.size() >= 2 && oneGroup && distinctSubgroups) {
+                valid.add(key);
+            } else if (siblings.size() >= 2) {
+                log.warn("Sibling key {} joins units of different groups or the same subgroup, ignored", key);
+            }
+        });
+        return valid;
     }
 
     private static Set<Timeslot> slots(List<ProblemSnapshot.Timeslot> slots) {
@@ -110,7 +194,8 @@ public final class TimetableProblemFactory {
     }
 
     private static UnitPlan plan(ProblemSnapshot.Unit unit, List<Timeslot> timeslots, Map<UUID, Room> rooms,
-                                 Map<UUID, Teacher> teachers, Map<UUID, StudentGroup> groups) {
+                                 Map<UUID, Teacher> teachers, Map<UUID, StudentGroup> groups,
+                                 Set<String> siblingKeys, Map<UUID, Set<RoomType>> sportItems) {
         StudentGroup group = groups.get(unit.groupId());
         Teacher teacher = unit.teacherId() == null ? null : teachers.get(unit.teacherId());
         if (unit.pinned() != null) {
@@ -120,15 +205,22 @@ public final class TimetableProblemFactory {
             return UnitPlan.pinned(unit, group, teacher, new Timeslot(pin.weekday(), pin.pair()), room, pin.parity());
         }
         warnAboutUnknownDesiredRooms(unit, rooms);
-        List<Room> roomRange = roomRange(unit, group, rooms.values());
-        Room desired = desiredRoom(unit, rooms, roomRange);
+        Set<RoomType> baseRoomTypes = unit.requiredRoomType() != null || unit.loadItemId() == null ? Set.of()
+                : sportItems.getOrDefault(unit.loadItemId(), Set.of());
+        List<Room> roomRange = roomRange(unit, group, rooms.values(), baseRoomTypes);
+        // предмет зі спортзалу бажає лише спецаудиторію: «аудиторія викладача» не тягне його в клас
+        Room desired = desiredRoom(unit, rooms, baseRoomTypes.isEmpty() ? roomRange
+                : roomRange.stream().filter(room -> baseRoomTypes.contains(room.getType())).toList());
         List<Parity> parities = unit.weight() == UnitWeight.HALF ? HALF_PARITIES : WHOLE_PARITIES;
         List<Timeslot> slotRange = timeslotRange(unit, group, teacher, timeslots);
-        UnitPlan plan = UnitPlan.free(unit, group, teacher, slotRange, roomRange, parities, desired);
+        String siblingKey = siblingKeys.contains(unit.siblingKey()) ? unit.siblingKey() : null;
+        UnitPlan plan = UnitPlan.free(unit, group, teacher, slotRange, roomRange, parities, desired, siblingKey,
+                baseRoomTypes);
         ProblemSnapshot.PinnedSlot start = unit.initial();
-        if (start == null) {
+        if (start == null || start.parity() == null || !isValidSlot(start.weekday(), start.pair())) {
             return plan;
         }
+        plan = plan.withBase(new Timeslot(start.weekday(), start.pair()), start.parity(), start.roomId());
         // те саме значення, що в діапазоні (ходи розв'язувача працюють з екземплярами діапазону)
         Timeslot slot = slotRange.stream()
                 .filter(candidate -> candidate.equals(new Timeslot(start.weekday(), start.pair())))
@@ -180,9 +272,40 @@ public final class TimetableProblemFactory {
         return available;
     }
 
-    private static List<Room> roomRange(ProblemSnapshot.Unit unit, StudentGroup group, Collection<Room> rooms) {
+    /**
+     * Load items whose base lessons with a room (free units' {@code initial}, pinned units' pin; online lessons
+     * left out) all sit in special-purpose rooms, with those room types. On the real college these are the 60 PE
+     * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom.
+     */
+    static Map<UUID, Set<RoomType>> specialPurposeItems(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
+        Map<UUID, Set<RoomType>> types = new HashMap<>();
+        Set<UUID> elsewhere = new HashSet<>();
+        for (ProblemSnapshot.Unit unit : units) {
+            ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
+            Room room = placed == null || placed.roomId() == null ? null : rooms.get(placed.roomId());
+            if (unit.loadItemId() == null || unit.online() || room == null) {
+                continue;
+            }
+            if (SPECIAL_PURPOSE.contains(room.getType())) {
+                types.computeIfAbsent(unit.loadItemId(), id -> EnumSet.noneOf(RoomType.class)).add(room.getType());
+            } else {
+                elsewhere.add(unit.loadItemId());
+            }
+        }
+        elsewhere.forEach(types::remove);
+        return types;
+    }
+
+    /**
+     * Rooms of the required type that fit the group. A unit with base room types gets the special-purpose rooms of
+     * those types first and then the ordinary compatible rooms: the soft rule decides, not the range.
+     */
+    private static List<Room> roomRange(ProblemSnapshot.Unit unit, StudentGroup group, Collection<Room> rooms,
+                                        Set<RoomType> baseRoomTypes) {
         List<Room> compatible = rooms.stream()
-                .filter(room -> fitsType(unit, room) && fitsCapacity(unit, group, room))
+                .filter(room -> (fitsType(unit, room) || baseRoomTypes.contains(room.getType()))
+                        && fitsCapacity(unit, group, room))
+                .sorted(Comparator.comparing((Room room) -> !baseRoomTypes.contains(room.getType())))
                 .toList();
         if (compatible.isEmpty()) {
             log.warn("Unit {} of {}: no room of type {} fits, every room is allowed", unit.unitId(), group.getCode(),
@@ -192,12 +315,19 @@ public final class TimetableProblemFactory {
         return compatible;
     }
 
+    /**
+     * A special-purpose room (sports hall, sports ground) only for a unit that requires it, names it as a
+     * desired room or stood there in the base version: a PE lesson of a load item that uses both the hall and
+     * the ground (no single derived type) keeps its base room instead of starting in a classroom.
+     */
     private static boolean fitsType(ProblemSnapshot.Unit unit, Room room) {
         if (unit.requiredRoomType() != null) {
             return room.getType() == unit.requiredRoomType();
         }
+        UUID baseRoom = unit.initial() == null ? null : unit.initial().roomId();
         return !SPECIAL_PURPOSE.contains(room.getType()) || room.getId().equals(unit.preferredRoomId())
-                || room.getId().equals(unit.teacherRoomId()) || room.getId().equals(unit.homeRoomId());
+                || room.getId().equals(unit.teacherRoomId()) || room.getId().equals(unit.homeRoomId())
+                || room.getId().equals(baseRoom);
     }
 
     private static boolean fitsCapacity(ProblemSnapshot.Unit unit, StudentGroup group, Room room) {
@@ -208,26 +338,42 @@ public final class TimetableProblemFactory {
     /** Everything known about a unit before its initial room is chosen. */
     private record UnitPlan(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
                             List<Timeslot> timeslotRange, List<Room> roomRange, List<Parity> parityRange,
-                            Room desiredRoom, Timeslot pinnedSlot, Room pinnedRoom, Parity pinnedParity,
-                            Timeslot startSlot, Parity startParity, Room startRoom) {
+                            Room desiredRoom, String siblingKey, Set<RoomType> baseRoomTypes, Timeslot pinnedSlot,
+                            Room pinnedRoom, Parity pinnedParity, Timeslot baseSlot, Parity baseParity,
+                            UUID baseRoomId, Timeslot startSlot, Parity startParity, Room startRoom) {
 
         static UnitPlan pinned(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher, Timeslot slot,
                                Room room, Parity parity) {
-            return new UnitPlan(unit, group, teacher, List.of(), List.of(), List.of(), null, slot, room, parity,
-                    null, null, null);
+            return new UnitPlan(unit, group, teacher, List.of(), List.of(), List.of(), null, null, Set.of(), slot,
+                    room, parity, null, null, null, null, null, null);
         }
 
         static UnitPlan free(ProblemSnapshot.Unit unit, StudentGroup group, Teacher teacher,
                              List<Timeslot> timeslotRange, List<Room> roomRange, List<Parity> parityRange,
-                             Room desiredRoom) {
-            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom,
-                    null, null, null, null, null, null);
+                             Room desiredRoom, String siblingKey, Set<RoomType> baseRoomTypes) {
+            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom, siblingKey,
+                    baseRoomTypes, null, null, null, null, null, null, null, null, null);
         }
 
-        /** Starts at the base placement; {@code room} {@code null} keeps the usual initial room. */
+        /** Remembers the base placement (for the stability rules), whether or not the unit starts there. */
+        UnitPlan withBase(Timeslot slot, Parity parity, UUID roomId) {
+            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom, siblingKey,
+                    baseRoomTypes, null, null, null, slot, parity, roomId, startSlot, startParity, startRoom);
+        }
+
+        /** Starts at the base placement; {@code room} {@code null} lets the warm start pick a free room. */
         UnitPlan startingAt(Timeslot slot, Parity parity, Room room) {
-            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom, null, null,
-                    null, slot, parity, room);
+            return new UnitPlan(unit, group, teacher, timeslotRange, roomRange, parityRange, desiredRoom, siblingKey,
+                    baseRoomTypes, null, null, null, baseSlot, baseParity, baseRoomId, slot, parity, room);
+        }
+
+        /** Rooms the warm start tries first: those of the base room types when there are any, else the range. */
+        List<Room> preferredRooms() {
+            if (baseRoomTypes.isEmpty()) {
+                return roomRange;
+            }
+            List<Room> special = roomRange.stream().filter(room -> baseRoomTypes.contains(room.getType())).toList();
+            return special.isEmpty() ? roomRange : special;
         }
 
         boolean hasStart() {
@@ -262,7 +408,12 @@ public final class TimetableProblemFactory {
             builder.timeslotRange(timeslotRange)
                     .roomRange(roomRange)
                     .parityRange(parityRange)
+                    .siblingKey(siblingKey)
+                    .baseRoomTypes(baseRoomTypes)
                     .initialRoom(initialRoom);
+            if (baseSlot != null) {
+                builder.base(baseSlot, baseParity, baseRoomId);
+            }
             if (hasStart()) {
                 builder.placedAt(startSlot, initialRoom, startParity);
             }
@@ -271,13 +422,19 @@ public final class TimetableProblemFactory {
     }
 
     /**
-     * Initial rooms: pinned and desired rooms first, then every other unit takes the compatible
-     * room with the smallest planned load (ties by the order of rooms in the snapshot).
+     * Initial rooms. First the rooms that are given: pinned rooms and base rooms of started units take
+     * their slot, and the desired rooms of units without a start count as planned load. Then a started
+     * unit without a base room takes a compatible room that is free at its start slot (the desired
+     * room if it is free, else the least loaded free one, else the least loaded one). Every other unit
+     * takes the compatible room with the smallest planned load (ties by the order of rooms in the
+     * snapshot).
      */
     private static final class RoomWarmStart {
 
         private final List<UnitPlan> plans;
         private final Map<Room, Integer> load = new HashMap<>();
+        // зайнятість аудиторії у слоті: [чисельник, знаменник]
+        private final Map<RoomSlot, int[]> occupancy = new HashMap<>();
 
         RoomWarmStart(List<UnitPlan> plans) {
             this.plans = plans;
@@ -287,19 +444,29 @@ public final class TimetableProblemFactory {
             Room[] initialRooms = new Room[plans.size()];
             for (int i = 0; i < plans.size(); i++) {
                 UnitPlan plan = plans.get(i);
-                Room fixed = plan.isPinned() ? plan.pinnedRoom()
-                        : plan.startRoom() != null ? plan.startRoom() : plan.desiredRoom();
-                if (fixed != null) {
-                    load.merge(fixed, plan.occurrences(), Integer::sum);
-                    initialRooms[i] = fixed;
+                if (plan.isPinned()) {
+                    initialRooms[i] = plan.pinnedRoom();
+                    occupy(plan.pinnedRoom(), plan.pinnedSlot(), plan.pinnedParity(), plan.occurrences());
+                } else if (plan.hasStart() && plan.startRoom() != null) {
+                    initialRooms[i] = plan.startRoom();
+                    occupy(plan.startRoom(), plan.startSlot(), plan.startParity(), plan.occurrences());
+                } else if (!plan.hasStart() && plan.desiredRoom() != null) {
+                    initialRooms[i] = plan.desiredRoom();
+                    load.merge(plan.desiredRoom(), plan.occurrences(), Integer::sum);
+                }
+            }
+            for (int i = 0; i < plans.size(); i++) {
+                UnitPlan plan = plans.get(i);
+                if (initialRooms[i] == null && plan.hasStart()) {
+                    Room room = freeRoomAtStart(plan);
+                    initialRooms[i] = room;
+                    occupy(room, plan.startSlot(), plan.startParity(), plan.occurrences());
                 }
             }
             for (int i = 0; i < plans.size(); i++) {
                 if (initialRooms[i] == null) {
                     UnitPlan plan = plans.get(i);
-                    Room room = plan.roomRange().stream()
-                            .min(Comparator.comparingInt((Room candidate) -> load.getOrDefault(candidate, 0)))
-                            .orElseThrow();
+                    Room room = leastLoaded(plan.preferredRooms());
                     load.merge(room, plan.occurrences(), Integer::sum);
                     initialRooms[i] = room;
                 }
@@ -310,5 +477,54 @@ public final class TimetableProblemFactory {
             }
             return units;
         }
+
+        private Room freeRoomAtStart(UnitPlan plan) {
+            Room desired = plan.desiredRoom();
+            if (desired != null && isFree(desired, plan.startSlot(), plan.startParity())) {
+                return desired;
+            }
+            for (List<Room> candidates : List.of(plan.preferredRooms(), plan.roomRange())) {
+                List<Room> free = candidates.stream()
+                        .filter(room -> isFree(room, plan.startSlot(), plan.startParity()))
+                        .toList();
+                if (!free.isEmpty()) {
+                    return leastLoaded(free);
+                }
+            }
+            return leastLoaded(plan.preferredRooms());
+        }
+
+        private Room leastLoaded(List<Room> rooms) {
+            return rooms.stream()
+                    .min(Comparator.comparingInt((Room candidate) -> load.getOrDefault(candidate, 0)))
+                    .orElseThrow();
+        }
+
+        private boolean isFree(Room room, Timeslot slot, Parity parity) {
+            int[] used = occupancy.get(new RoomSlot(room, slot));
+            if (used == null) {
+                return true;
+            }
+            for (int week : weekLanes(parity)) {
+                if (used[week] >= room.getMaxParallel()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void occupy(Room room, Timeslot slot, Parity parity, int occurrences) {
+            load.merge(room, occurrences, Integer::sum);
+            if (room.isNone()) {
+                return;
+            }
+            int[] used = occupancy.computeIfAbsent(new RoomSlot(room, slot), key -> new int[LessonUnit.WEEK_TYPES]);
+            for (int week : weekLanes(parity)) {
+                used[week]++;
+            }
+        }
+    }
+
+    private record RoomSlot(Room room, Timeslot slot) {
     }
 }

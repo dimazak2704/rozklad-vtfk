@@ -11,13 +11,8 @@ public record WeekBalance(int numeratorPairs, int numeratorFirst, int denominato
         return numeratorPairs != denominatorPairs || numeratorFirst != denominatorFirst;
     }
 
-    /** How broken the day is: the difference in pair counts plus 1 when the first pairs differ. */
+    /** How broken the day is: the difference in pair counts plus 1 when the first pairs differ (0 = even). */
     public int brokenness() {
         return Math.abs(numeratorPairs - denominatorPairs) + (numeratorFirst != denominatorFirst ? 1 : 0);
-    }
-
-    /** Pairs above {@code limit} in each week type, summed. */
-    public int excessOver(int limit) {
-        return Math.max(0, numeratorPairs - limit) + Math.max(0, denominatorPairs - limit);
     }
 }

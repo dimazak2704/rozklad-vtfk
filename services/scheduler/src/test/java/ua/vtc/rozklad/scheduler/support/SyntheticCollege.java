@@ -19,8 +19,8 @@ import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 /**
  * Deterministic synthetic college shaped like ВТФК (seed Excel 2025/26): two shifts with the real
  * windows, 16 weekly units per group (one PE lesson in the sports hall with three parallel
- * places, a pair of halves, subgroup labs for split groups), teachers with ~18 lessons at most,
- * shared teacher cabinets and home rooms.
+ * places, a pair of halves, subgroup labs for split groups with one sibling key), teachers with
+ * ~18 lessons at most and a daily limit of 4 pairs, shared teacher cabinets and home rooms.
  *
  * <p>The generator first plants a complete timetable without hard violations and only then
  * forgets the placement, so every generated problem is known to be feasible (the planted
@@ -34,6 +34,8 @@ public final class SyntheticCollege {
     static final int TEACHERS_PER_CABINET = 2;
     static final int GYM_PLACES = 3;
     static final int INITIAL_LABS = 6;
+    /** Daily pair limit sent for every teacher, like core's default setting. */
+    static final int MAX_PAIRS_PER_DAY = 4;
 
     private static final String[] DISCIPLINES = {
             "Математика", "Українська мова", "Українська література", "Іноземна мова", "Історія України",
@@ -210,10 +212,11 @@ public final class SyntheticCollege {
                         plantUnit(groupId, home, 0, halfB, UnitWeight.HALF, Parity.DENOMINATOR, slot, null);
                     }
                     case SPLIT -> {
+                        String siblingKey = "split-" + groupId + ":w1";
                         plantUnit(groupId, home, 1, splitDiscipline, UnitWeight.WHOLE, Parity.BOTH, slot,
-                                RoomType.COMPUTER_LAB);
+                                RoomType.COMPUTER_LAB, siblingKey);
                         plantUnit(groupId, home, 2, splitDiscipline, UnitWeight.WHOLE, Parity.BOTH, slot,
-                                RoomType.COMPUTER_LAB);
+                                RoomType.COMPUTER_LAB, siblingKey);
                     }
                     case WHOLE -> plantUnit(groupId, home, 0, wholeDisciplines.get(slot), UnitWeight.WHOLE,
                             Parity.BOTH, slot, null);
@@ -283,6 +286,11 @@ public final class SyntheticCollege {
 
         private void plantUnit(UUID groupId, RoomState home, int subgroup, UUID discipline, UnitWeight weight,
                                Parity parity, Slot slot, RoomType requiredType) {
+            plantUnit(groupId, home, subgroup, discipline, weight, parity, slot, requiredType, null);
+        }
+
+        private void plantUnit(UUID groupId, RoomState home, int subgroup, UUID discipline, UnitWeight weight,
+                               Parity parity, Slot slot, RoomType requiredType, String siblingKey) {
             TeacherState teacher = teacherFor(discipline, slot);
             RoomState room;
             if (requiredType == RoomType.GYM) {
@@ -306,7 +314,8 @@ public final class SyntheticCollege {
             String unitId = "u" + units.size();
             UUID preferred = requiredType == null ? teacher.cabinet.id : null;
             units.add(new ProblemSnapshot.Unit(unitId, uuid("load-" + groupId + discipline + subgroup), groupId,
-                    subgroup, discipline, teacher.id, weight, requiredType, preferred, home.id, null));
+                    subgroup, discipline, teacher.id, weight, requiredType, preferred, home.id, null, null, null, false,
+                    siblingKey));
             planted.add(new Assignment(unitId, slot.weekday(), slot.pair(), parity, room.id));
         }
 
@@ -356,7 +365,8 @@ public final class SyntheticCollege {
                     unwanted.add(new ProblemSnapshot.Timeslot(1, 1));
                     unwanted.add(new ProblemSnapshot.Timeslot(5, 4));
                 }
-                result.add(new ProblemSnapshot.Teacher(teacher.id, teacher.name, unavailable, unwanted));
+                result.add(new ProblemSnapshot.Teacher(teacher.id, teacher.name, unavailable, unwanted,
+                        MAX_PAIRS_PER_DAY));
             }
             return result;
         }
