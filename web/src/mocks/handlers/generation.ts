@@ -44,7 +44,7 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, notFound, problem, readJson } from '../kit';
 import { createMockStore } from '../store';
 import { ADMIN_ACTOR } from './admin-daily/world';
-import { analyzeLessons, cohortsOverlap, groupOf, isLatePair, maxParallelOf, shiftWindowOf, timetableMock } from './timetable';
+import { analyzeLessons, cohortsOverlap, groupOf, isLatePair, maxParallelOf, presenceBy, shiftWindowOf, timetableMock, windowCells } from './timetable';
 
 const MAX_WEIGHT = WEIGHT_LIMIT;
 const QUEUE_MS = 600;
@@ -185,8 +185,11 @@ class Solver {
   private readonly hardBySlot = new Map<number, number>();
   private readonly rooms: RoomDto[];
   private readonly weights: GenerationWeights;
-  /** Групи, які задача може змінити: лише їхні вікна й пʼятниця — жорсткі правила (закріплене поза областю — ні). */
-  private readonly scopeGroups = new Set<number>();
+  /**
+   * Скільки занять, які задача може переставити, стоїть у дні групи (ключ — група × 10 + день): вікна й пʼятниця —
+   * жорсткі правила лише такого дня, як GroupDay.hasFreeUnit у scheduler (день із самих закріплених занять — ні).
+   */
+  private readonly movableByGroupDay = new Map<number, number>();
   private readonly fridayMaxPairs = currentSettings().fridayMaxPairs ?? 3;
   hard = 0;
   soft = 0;
@@ -217,7 +220,6 @@ class Solver {
       shift: groupOf(lesson)?.shift ?? 0,
     }));
     this.rooms = [...ROOMS];
-    for (const unit of this.units) if (unit.movable) this.scopeGroups.add(unit.group);
     for (const unit of this.units) this.place(unit);
     for (const slot of this.slotUnits.keys()) this.refreshSlot(slot);
     for (const [key, counts] of this.groupDays) this.soft -= this.groupDayCost(key, counts);
@@ -250,6 +252,10 @@ class Solver {
         if (unit.shift === 2) teacherDay[18 + offset + unit.pair] = (teacherDay[18 + offset + unit.pair] ?? 0) + delta;
       }
     }
+    if (unit.movable) {
+      const key = unit.group * 10 + unit.weekday;
+      this.movableByGroupDay.set(key, (this.movableByGroupDay.get(key) ?? 0) + delta);
+    }
     const slot = unit.weekday * 10 + unit.pair;
     let set = this.slotUnits.get(slot);
     if (!set) {
@@ -276,9 +282,9 @@ class Solver {
     return this.weights.brokenDays * (stats.broken ? 1 : 0) + this.weights.latePairs * stats.late;
   }
 
-  /** Жорсткі правила дня групи області: вікна й пари понад межу пʼятниці (закріплене поза областю — ні). */
+  /** Жорсткі правила дня групи з вільним заняттям: вікна й пари понад межу пʼятниці (день із закріплених — ні). */
   private groupDayRules(key: number, counts: Int16Array): number {
-    if (!this.scopeGroups.has(Math.floor(key / 10))) return 0;
+    if ((this.movableByGroupDay.get(key) ?? 0) === 0) return 0;
     return dayStats(counts, null).windows + (key % 10 === 5 ? fridayExcess(counts, this.fridayMaxPairs) : 0);
   }
 
@@ -581,7 +587,7 @@ export function solveTimetable(input: SolveInput): SolveResult {
  * Аналіз обмежень як від scheduler (genfix §1.3): `constraintId`, `bonus` і `scopeMatchCount` — скільки
  * порушень зачіпає групи області. Половинки в парі — бонус (додатний бал), не порушення.
  */
-function constraintAnalysis(
+export function constraintAnalysis(
   lessons: readonly TemplateLessonDto[],
   weights: GenerationWeights,
   scope: ReadonlySet<Uuid> | null,
@@ -607,12 +613,19 @@ function constraintAnalysis(
   }
   const paired = [...halves.values()].filter((slot) => slot.n && slot.d);
   const pairedInScope = paired.filter((slot) => inScope(slot.groupId)).length;
-  // жорсткі правила дня (власник, 15.11.2026) — лише в групах області, як у scheduler
-  const scopedWindows = sum((row) => row.windows);
+  // жорсткі правила дня (власник, 15.11.2026) — лише в днях групи із заняттям, яке задача може переставити,
+  // як GroupDay.hasFreeUnit у scheduler: день із самих закріплених занять або потоків не рахується
+  const runDays = new Set(
+    lessons.filter((lesson) => !lesson.pinned && !lesson.streamId && inScope(lesson.group.id)).map((lesson) => `${lesson.group.id}|${lesson.weekday}`),
+  );
+  let scopedWindows = 0;
+  for (const [groupId, days] of presenceBy(lessons, (lesson) => lesson.group.id)) {
+    for (const [weekday, day] of days) if (runDays.has(`${groupId}|${weekday}`)) scopedWindows += windowCells(day).length;
+  }
   const fridayLimit = currentSettings().fridayMaxPairs ?? 3;
   const fridayPairs = new Map<Uuid, [Set<number>, Set<number>]>();
   for (const lesson of lessons) {
-    if (lesson.weekday !== 5 || !inScope(lesson.group.id)) continue;
+    if (lesson.weekday !== 5 || !runDays.has(`${lesson.group.id}|5`)) continue;
     const weeks = fridayPairs.get(lesson.group.id) ?? [new Set<number>(), new Set<number>()];
     if (lesson.parity !== 'DENOMINATOR') weeks[0].add(lesson.pair);
     if (lesson.parity !== 'NUMERATOR') weeks[1].add(lesson.pair);

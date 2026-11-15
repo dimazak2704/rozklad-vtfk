@@ -4,7 +4,7 @@ import { ApiError } from '@/api/errors';
 import { appendProgressPoint, DEFAULT_WEIGHTS, parseScore } from '@/api/generation';
 import type { GenerationJobCreated, GenerationJobDto, TemplateLessonDto, TimetableVersionDto } from '@/api/types';
 import { ACTIVE_SEMESTER, GROUPS, PUBLISHED_VERSION_ID, TEMPLATE_LESSONS } from '../fixtures';
-import { loadProblems, solveTimetable } from './generation';
+import { constraintAnalysis, loadProblems, solveTimetable } from './generation';
 import { analyzeLessons } from './timetable';
 
 const jobsPath = '/admin/generation/jobs';
@@ -62,6 +62,30 @@ describe('розвʼязувач моку', () => {
     expect(fridayPairs(TEMPLATE_LESSONS)).toBe(4);
     expect(fridayPairs(result.lessons)).toBeLessThanOrEqual(3);
     expect(analyzeLessons(result.lessons).metrics.groupWindows).toBe(0);
+  });
+
+  it('день групи області з самих закріплених занять не рахується в правила дня, вільне заняття робить його задачею', () => {
+    // як GroupDay.hasFreeUnit у scheduler: 4РТ1 має 4 пари в пʼятницю, усі закріплені — задача не стає нездійсненною
+    const rt1 = GROUPS.find((g) => g.code === '4РТ1')?.id ?? '';
+    const scope = new Set([rt1]);
+    const isRt1Friday = (l: TemplateLessonDto) => l.group.id === rt1 && l.weekday === 5;
+    const fridayPairs = (lessons: readonly TemplateLessonDto[]) => new Set(lessons.filter(isRt1Friday).map((l) => l.pair)).size;
+    const fridayRow = (lessons: readonly TemplateLessonDto[]) =>
+      constraintAnalysis(lessons, { ...DEFAULT_WEIGHTS }, scope).find((row) => row.constraintId === 'Friday overload');
+    const pinned = TEMPLATE_LESSONS.map((l) => (isRt1Friday(l) ? { ...l, pinned: true } : l));
+    expect(fridayRow(pinned)).toMatchObject({ matchCount: 0, score: '0hard/0soft' });
+    const kept = solveTimetable({ lessons: pinned, scopeGroupIds: scope, weights: { ...DEFAULT_WEIGHTS } });
+    expect(fridayPairs(kept.lessons)).toBe(4);
+    expect(fridayRow(kept.lessons)).toMatchObject({ matchCount: 0, score: '0hard/0soft' });
+
+    // одне вільне заняття — і обидва тижні пʼятниці понад 3 пари стають жорсткими (−2), розвʼязувач їх прибирає
+    const firstFriday = pinned.find(isRt1Friday) as TemplateLessonDto;
+    const oneFree = pinned.map((l) => (l.id === firstFriday.id ? { ...l, pinned: false } : l));
+    expect(fridayRow(oneFree)).toMatchObject({ matchCount: 1, score: '-2hard/0soft' });
+    const moved = solveTimetable({ lessons: oneFree, scopeGroupIds: scope, weights: { ...DEFAULT_WEIGHTS } });
+    expect(moved.trajectory[0]?.hard).toBe((kept.trajectory[0]?.hard ?? 0) - 2);
+    expect(fridayPairs(moved.lessons)).toBe(3);
+    expect(fridayRow(moved.lessons)).toMatchObject({ matchCount: 0, score: '0hard/0soft' });
   });
 
   it('пари поза областю й закріплені не рухає', () => {
