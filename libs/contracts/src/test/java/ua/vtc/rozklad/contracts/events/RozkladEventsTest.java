@@ -64,6 +64,17 @@ class RozkladEventsTest {
     }
 
     @Test
+    void requestedEventRejectsANonPositiveLimitButAcceptsNone() {
+        GenerationRequested sample = (GenerationRequested) EventSamples.all().get(2);
+
+        assertThatThrownBy(() -> new GenerationRequested(EventSamples.envelope(), sample.jobId(), sample.semesterId(), 0,
+                sample.weights(), sample.problem()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(new GenerationRequested(EventSamples.envelope(), sample.jobId(), sample.semesterId(), null,
+                sample.weights(), sample.problem()).autoMode()).isTrue();
+    }
+
+    @Test
     void envelopeRejectsInvalidVersion() {
         assertThatThrownBy(() -> new EventEnvelope(UUID.randomUUID(), Instant.EPOCH, 0))
                 .isInstanceOf(IllegalArgumentException.class);
