@@ -88,7 +88,9 @@ class GenerationJobMapperTest {
         GenerationJobDto dto = mapper.toDto(job);
 
         assertThat(dto.legacyWeights()).isFalse();
-        assertThat(dto.weights()).isEqualTo(GenerationWeights.DEFAULT);
+        // the job's own weights (the genfix defaults of that time), only the absent specialRooms takes its default
+        assertThat(dto.weights()).isEqualTo(new GenerationWeights(30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10,
+                GenerationWeights.DEFAULT_SPECIAL_ROOMS));
     }
 
     /**
