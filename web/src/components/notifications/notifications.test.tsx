@@ -213,13 +213,27 @@ describe('сторінка «Сповіщення» диспетчера', () =>
 
     await user.click(screen.getByRole('tab', { name: 'Журнал листів' }));
     const table = await screen.findByRole('table', { name: 'Журнал листів' }, WAIT);
-    expect(within(table).getByText('Розклад згенеровано: 0 жорстких порушень, штраф 35')).toBeInTheDocument();
+    expect(within(table).getByText('Розклад згенеровано без конфліктів, штраф 35')).toBeInTheDocument();
     expect(within(table).getAllByText('k•••@vtc.vn.ua').length).toBeGreaterThan(0);
     expect(within(table).getByText('Замінено новішим')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Не надіслано' }));
     await waitFor(() => expect(within(table).queryByText('Замінено новішим')).not.toBeInTheDocument());
     expect(within(table).getByText(/535 5\.7\.8/)).toBeInTheDocument();
+  });
+
+  it('журнал фільтрується за видом листа', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationsPage />, { route: '/admin/notifications' });
+    await user.click(await screen.findByRole('tab', { name: 'Журнал листів' }, WAIT));
+    const table = await screen.findByRole('table', { name: 'Журнал листів' }, WAIT);
+    expect(await within(table).findByText('Розклад згенеровано без конфліктів, штраф 35', undefined, WAIT)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: 'Вид листа' }));
+    await user.click(await screen.findByRole('option', { name: 'Відмова від заміни' }));
+
+    await waitFor(() => expect(within(table).queryByText('Розклад згенеровано без конфліктів, штраф 35')).not.toBeInTheDocument());
+    expect(within(table).getByText('Відмова від заміни: Прокопчук, чт, 12 листопада, 2 пара, 2ОБ')).toBeInTheDocument();
   });
 
   it('пошту не налаштовано — так і сказано', async () => {
