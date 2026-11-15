@@ -16,11 +16,12 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 
 /**
- * Moves the subgroup copies of one occurrence (units with one sibling key) together: each unit gets its
- * own target slot and parity in one step, so subgroups that study in parallel stay in parallel (or a
- * teacher's two subgroups stay one after the other) while they move. A unit may also get a room that is
- * free at its target ({@code null} keeps its room): together standing is a hard rule, so the copies cannot
- * move one by one and fix their rooms afterwards.
+ * Moves several units in one step, each to its own target slot and parity: the subgroup copies of one occurrence
+ * (units with one sibling key), so subgroups that study in parallel stay in parallel (or a teacher's two subgroups stay
+ * one after the other) while they move, and the lessons of a group at two slots swapped as columns
+ * ({@link GroupSlotSwapMoveIteratorFactory}). A unit may also get a room that is free at its target ({@code null}
+ * keeps its room): together standing is a hard rule, so the copies cannot move one by one and fix their rooms
+ * afterwards.
  */
 public final class SiblingChangeMove implements Move<Timetable> {
 

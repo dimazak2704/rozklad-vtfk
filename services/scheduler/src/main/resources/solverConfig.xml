@@ -49,6 +49,11 @@
       <moveIteratorFactory>
         <moveIteratorFactoryClass>ua.vtc.rozklad.scheduler.solver.move.SiblingMoveIteratorFactory</moveIteratorFactoryClass>
       </moveIteratorFactory>
+      <!-- Вікна груп — жорстке правило: усе, що група має в одному слоті, міняється місцями з іншим слотом,
+           тож день без вікон лишається без вікон (docs/modules/scheduler.md §4) -->
+      <moveIteratorFactory>
+        <moveIteratorFactoryClass>ua.vtc.rozklad.scheduler.solver.move.GroupSlotSwapMoveIteratorFactory</moveIteratorFactoryClass>
+      </moveIteratorFactory>
     </unionMoveSelector>
     <!-- Бенчмарк 56 груп × 16 одиниць (docs/modules/scheduler.md §11): з 16 прийнятими ходами на
          крок 0 hard так само за кілька секунд, а штраф м'яких обмежень за 90 с у 2–4 рази менший,
