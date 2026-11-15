@@ -714,6 +714,13 @@ lessons fixed the siblings. The tight second shift (18–19 pairs in 19 slots) i
 pre-check gains the Friday limit (19 slots in the first shift; no real group is near it: 17 pairs at most) but not a
 «gap-free day», which needs no extra slot. Raw lines: `scratchpad/owner-rules2/results.jsonl` of the session.
 
+After the review the edge exemption was narrowed (a subgroup that waits between two of its own lessons has a window).
+The same batches end at 0 hard again with no group window: the whole college from the published version after 12.0 s,
+`ki4` and `course4` as before, from scratch, and every synthetic shape with both seeds (`tight-shift2` 25.3 / 15.8 s).
+On the same seed `real-shaped` ends at the same score under the old and the new definition, so the search never used
+such a day; `teacher-limits` reaches 0 hard after about the same number of steps. Raw lines:
+`scratchpad/owner-rules2/results-r3.jsonl` of the session (genfix evaluation §13).
+
 ## 12. Decisions (short)
 
 1. **One entity class with per-unit value ranges** instead of separate WHOLE/HALF classes: one set of
