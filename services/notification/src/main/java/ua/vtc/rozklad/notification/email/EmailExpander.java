@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -85,14 +86,11 @@ public class EmailExpander {
     /** Claims due intents (lease) and expands them one by one. @return number of claimed intents */
     public int expandDue() {
         Instant now = clock.instant();
-        List<EmailNotice> batch = transactions.execute(tx -> {
+        List<EmailNotice> batch = Objects.requireNonNullElse(transactions.execute(tx -> {
             List<EmailNotice> due = notices.lockDue(now, properties.batchSize());
             due.forEach(notice -> notice.lease(now.plus(properties.lease()), now));
             return due;
-        });
-        if (batch == null) {
-            return 0;
-        }
+        }), List.of());
         for (EmailNotice notice : batch) {
             expand(notice);
         }

@@ -54,7 +54,7 @@ public class MailTexts {
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     /** {@code java.lang.IllegalStateException: } at the start of an error text. */
     private static final Pattern JAVA_EXCEPTION = Pattern.compile(
-            "^(?:[a-z_$][\\w$]*\\.)+([A-Z][\\w$]*(?:Exception|Error))(?::\\s*)?");
+            "^(?:[a-z_$][\\w$]*+\\.)++([A-Z][\\w$]*+(?<=Exception|Error))(?::\\s*+)?");
 
     private final MailLinks links;
 

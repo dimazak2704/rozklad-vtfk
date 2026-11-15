@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  */
 public final class MailAddresses {
 
-    private static final Pattern ANY_ADDRESS = Pattern.compile("[\\p{L}\\p{N}._%+'-]+@[\\p{L}\\p{N}.-]+\\.[\\p{L}]{2,}");
+    private static final Pattern ANY_ADDRESS = Pattern.compile("[\\p{L}\\p{N}._%+'-]++@(?:[\\p{L}\\p{N}-]++\\.)++\\p{L}{2,}+");
     private static final int MAX_LENGTH = 254;
 
     private MailAddresses() {

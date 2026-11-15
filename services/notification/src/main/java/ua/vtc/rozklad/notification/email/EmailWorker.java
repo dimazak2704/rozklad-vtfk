@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -82,15 +83,13 @@ public class EmailWorker implements SmartLifecycle {
     public int processBatch() {
         int expanded = expander.expandDue();
         Instant now = clock.instant();
-        List<EmailMessage> batch = transactions.execute(tx -> {
+        List<EmailMessage> batch = Objects.requireNonNullElse(transactions.execute(tx -> {
             List<EmailMessage> due = messages.lockDue(now, properties.batchSize());
             due.forEach(message -> message.lease(now.plus(properties.lease()), now));
             return due;
-        });
-        if (batch != null) {
-            batch.forEach(this::process);
-        }
-        return expanded + (batch == null ? 0 : batch.size());
+        }), List.of());
+        batch.forEach(this::process);
+        return expanded + batch.size();
     }
 
     /** Processes everything that is due now (tests and manual runs). */
