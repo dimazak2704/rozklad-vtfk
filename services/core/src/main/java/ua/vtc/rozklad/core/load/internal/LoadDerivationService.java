@@ -18,6 +18,7 @@ import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.load.LoadSource;
+import ua.vtc.rozklad.core.load.PlanSource;
 import ua.vtc.rozklad.core.load.internal.LoadDerivation.Draft;
 import ua.vtc.rozklad.core.load.internal.LoadDerivation.Key;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.DerivedLoadResult;
@@ -39,15 +40,18 @@ public class LoadDerivationService {
     private final CatalogQueries catalog;
     private final SettingsService settings;
     private final LoadItemMapper mapper;
+    private final LoadPlanner planner;
 
     public LoadDerivationService(TemplateLessonReader lessons, LoadItemRepository items, CalendarQueries calendar,
-                                 CatalogQueries catalog, SettingsService settings, LoadItemMapper mapper) {
+                                 CatalogQueries catalog, SettingsService settings, LoadItemMapper mapper,
+                                 LoadPlanner planner) {
         this.lessons = lessons;
         this.items = items;
         this.calendar = calendar;
         this.catalog = catalog;
         this.settings = settings;
         this.mapper = mapper;
+        this.planner = planner;
     }
 
     @Transactional
@@ -73,6 +77,9 @@ public class LoadDerivationService {
         List<Draft> skippedDrafts = new ArrayList<>();
         Set<Key> produced = new HashSet<>();
         List<LoadItem> result = new ArrayList<>();
+        // план — за днями теорії групи й опублікованим розкладом (AUTO); публікація версії його перераховує
+        LoadPlanner.Context plans = planner.context(semester.id(),
+                drafts.stream().map(Draft::groupId).distinct().toList());
         for (Draft draft : drafts) {
             if (enteredByOthers.contains(List.of(draft.groupId(), draft.disciplineId()))) {
                 skippedDrafts.add(draft);
@@ -80,17 +87,21 @@ public class LoadDerivationService {
             }
             produced.add(draft.key());
             LoadItem item = derived.get(draft.key());
-            int plannedHours = LoadService.defaultPlannedHours(draft.hoursPerWeek(), semester.teachingWeeks());
             if (item == null) {
-                item = new LoadItem(semester.id(), draft.groupId(), draft.disciplineId(), draft.hoursPerWeek(), plannedHours);
+                item = new LoadItem(semester.id(), draft.groupId(), draft.disciplineId(), draft.hoursPerWeek(), 0);
                 item.setSource(LoadSource.TIMETABLE_DERIVED);
                 apply(draft, item);
+                item.autoPlan(plans.plannedHours(item, existing));
                 items.save(item);
                 counters.created++;
-            } else if (changes(draft, item, plannedHours)) {
-                item.setHours(draft.hoursPerWeek(), plannedHours);
-                apply(draft, item);
-                counters.updated++;
+            } else {
+                int plannedHours = plans.plannedHours(item, draft.hoursPerWeek(), existing);
+                if (changes(draft, item, plannedHours)) {
+                    item.setHours(draft.hoursPerWeek(), item.getPlannedHours());
+                    apply(draft, item);
+                    item.autoPlan(plannedHours);
+                    counters.updated++;
+                }
             }
             result.add(item);
         }
@@ -121,6 +132,7 @@ public class LoadDerivationService {
                 link -> link.getSubgroupNumber(), link -> link.getTeacherId()));
         return item.getHoursPerWeek().compareTo(draft.hoursPerWeek()) != 0
                 || item.getPlannedHours() != plannedHours
+                || item.getPlanSource() != PlanSource.AUTO
                 || item.getLessonKind() != draft.lessonKind()
                 || !Objects.equals(current, draft.teachers());
     }

@@ -98,12 +98,13 @@ export interface CalendarPeriodRequest {
 }
 
 /**
- * Календар впливає на все: на дати занять у публічному розкладі, дзвінки, облік годин і чернетки
- * розпоряджень (примітки періодів), тож після змін оновлюємо ці області.
+ * Календар впливає на все: на дати занять у публічному розкладі, дзвінки, облік годин, план навантаження
+ * (тижні поза теорією не плануються) і чернетки розпоряджень (примітки періодів), тож після змін оновлюємо ці області.
  */
 export function invalidateCalendar(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: qk.admin.calendar.all });
   void queryClient.invalidateQueries({ queryKey: qk.admin.accounting.all });
+  void queryClient.invalidateQueries({ queryKey: qk.admin.load() });
   void queryClient.invalidateQueries({ queryKey: qk.admin.orders.all });
   void queryClient.invalidateQueries({ queryKey: qk.public.all });
 }

@@ -59,7 +59,8 @@ discipline programs) and the college site (bells, curriculum).
   4th-course groups) are listed, not stored — one timetable per semester, no separate January–February timetable, and
   semester bounds are not per group. The import touches only its own rows (`source = IMPORT`, by `source_key`); a row the
   dispatcher edited becomes MANUAL and is only reported. Theory weeks and exams per group and semester (columns E–H) go to
-  `group_semester`; step 1 stores them, load uses them in step 2.
+  `group_semester`; the plan does not use them (the graph's semester can be longer than the system's: 4th course to
+  14.02), accounting shows them as a cross-check next to the theory weeks counted from the calendar (§9).
 - Bell profiles (from Excel sheets «дзвінки (2 зм)», «дзвінки» and the college site). Active default = **«2 зміни, 60 хв»**:
   - Mon–Thu: 1 08:30–09:30, 2 09:40–10:40, 3 11:00–12:00, 4 12:10–13:10, 5 13:30–14:30, 6 14:40–15:40, 7 16:00–17:00, 8 17:10–18:10
   - Fri: 1 08:30–09:30, 2 09:40–10:40, 3 11:00–12:00, 4 12:20–13:20, 5 13:30–14:30, 6 14:50–15:50
@@ -132,9 +133,9 @@ All tables: `id uuid pk`; mutable aggregates also `created_at`, `updated_at time
 
 `pairsPerWeek = hoursPerWeek / hoursPerPair`; `whole = floor(p)`, remainder ≥ 0.25 and < 0.75 → one HALF
 unit (NUM or DEN, chosen by the solver), ≥ 0.75 → one more whole. Examples: 3 h → 1 + ½; 4 h → 2; 2 h → 1; 1 h → ½.
-Split subgroups ⇒ units per subgroup with that subgroup's teacher. Planned hours default = hoursPerWeek × weeks.
-Generator does **not** chase exact semester totals — the college stops with «Вичит.» when hours are done;
-accounting forecasts that (§8).
+Split subgroups ⇒ units per subgroup with that subgroup's teacher. Planned hours: §9 «Plan» (hours per week over the
+days the group is on theory; a set number stays). Generator does **not** chase exact semester totals — the college
+stops with «Вичит.» when hours are done; accounting forecasts that (§8).
 Real example (curriculum КІ 2023 ред. 2025, semester 7, 22 weeks, 31 h/week): Комп. мережі 4 h,
 Економіка та управління ІТ-проєктами 3 h, НДЕКСМ 2 h (24 lect + 20 lab = 44 h; the discipline program says 40),
 Системне програмування 2, Охорона праці та ЦЗ 2, Соціологія 2, Іноземна мова 2, Укр. мова (проф.) 2, Фізвиховання 2.
@@ -396,6 +397,29 @@ group chats: a new GROUP_CHAT binding starts without it; chat administrators swi
 `/rozklad_off` (the dispatcher can do it on the Telegram page). A private SUBSCRIBER keeps it on by default.
 
 ## 9. Accounting
+
+**Plan (owner's decision 15.11.2026, a college rule).** Weeks when a group is not on theory — every period whose effect
+takes it off its pairs (DAY_OFF: holidays; SUSPEND: НС/ОНС, practice, session, ДПА, training camp…) — simply do not
+count, and their hours are not caught up later. The plan of a load item is therefore its hours per week over the days
+the group really studies in the system's semester (`StudyCalendar.theory`: Mon–Fri dates of the semester no such period
+of the group closes, kept per weekday and per week parity with overrides):
+- with the item's lessons in the PUBLISHED version, every weekly lesson counts the group's study days on its weekday in
+  the weeks of its parity (`T` pairs; a numerator-only pair misses only numerator weeks off theory), the template has
+  `C` pairs per two-week cycle, and `plan = 2 × hoursPerWeek × T / C` (rounded half up) — exactly the timetable's pairs
+  on theory days when it gives the load's hours, scaled when the load says more or less; a split item takes its busiest
+  subgroup. Lessons are the item's by `load_item_id`, else (imported versions) by group × discipline × split, and by
+  lesson kind when two items share that key. `T` comes from the version published now, over the whole semester: after a
+  mid-semester republication the weeks before its `effectiveFrom` ran on the earlier version, so «exactly the
+  timetable's pairs» holds for one version only and the plan follows the new one (usually close);
+- without lessons (nothing published, or the discipline is not in it): `plan = hoursPerWeek × studyDays / 5`.
+Example (the live stand, 15.11.2026): 4КІ2 ДК 3 h/week (Monday every week + Wednesday numerator), НС 30.11–11.12 and
+holidays 28.12–30.12: 15 Mondays + 8 numerator Wednesdays = 23 pairs = 46 h (the old `3 × 18 = 54` was never reachable,
+«Додати 4 пари»). The theory-week count of the college's academic calendar (`group_semester.theory_weeks`) is only a
+cross-check shown when it differs. A plan set as a number (the dispatcher in the form, a program in the import) is
+FIXED and never recounted; a curriculum row's total (its own weeks × hours) does not fix the plan, neither in the
+import nor in the migration that marked the plans stored before this rule. AUTO plans are recounted on every calendar
+edit (`CalendarEdited`), on version publication and at start-up. So «Не вистачить» means a real shortfall: cancelled
+pairs, pairs given to another discipline, a discipline finished early, a fixed plan above what the timetable gives.
 
 For semester S, group G, discipline D: `plan = Σ planned_hours(load items)`, `fact = (#SCHEDULED lessons that
 already ended) × hoursPerPair`, `remaining = #future SCHEDULED × hoursPerPair`, `forecast = fact + remaining`,

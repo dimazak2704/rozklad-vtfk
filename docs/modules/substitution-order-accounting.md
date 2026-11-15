@@ -47,7 +47,7 @@ accounting  ← substitution ← order
 | `GET/POST /api/admin/changes`, `POST /batch`, `GET/PUT/DELETE /{id}`, `POST /{id}/request-confirmation`, `POST /{id}/confirm` | ADMIN | changes and their workflow; `batch` = several changes in one transaction |
 | `GET /api/admin/orders`, `GET /draft?date=`, `GET /{id}`, `PUT /{id}/notes`, `POST /{id}/publish` | ADMIN | orders |
 | `GET /api/admin/dashboard?date` | ADMIN | daily figures and alerts |
-| `GET /api/admin/accounting?semesterId&groupId`, `GET /api/admin/accounting/teachers?month=2026-10` | ADMIN | accounting |
+| `GET /api/admin/accounting?semesterId&groupId`, `GET /api/admin/accounting/theory?semesterId&groupId`, `GET /api/admin/accounting/teachers?month=2026-10` | ADMIN | accounting |
 | `GET /api/public/changes?date` | anyone | published changes of a date; a visitor's date before `publicHistoryFrom` (today − `changesHistoryDays`) → 404 `history-not-public`, staff tokens see every date; `Vary: Authorization`; staff answers `Cache-Control: no-cache, private` (as schedules), a visitor's sets none of its own (Spring Security's `no-cache, no-store, max-age=0, must-revalidate`) |
 | `GET /api/me/changes?status`, `POST /api/me/changes/{id}/confirm\|decline` | TEACHER/ADMIN with a linked teacher | «мої заміни» |
 | `GET/POST /api/me/absences`, `DELETE /api/me/absences/{id}` | same | own absences (cancel only before they start); a report starts today to 90 days ahead (422 `ABSENCE_IN_PAST` / `ABSENCE_TOO_FAR`) and one teacher reports at most 10 absences in 24 hours, cancelled ones included (422 `ABSENCE_LIMIT`); a teacher marked inactive reports nothing himself (422 `TEACHER_INACTIVE`); the bot (`POST /api/internal/absences`) has the same limits, the dispatcher none |
@@ -201,7 +201,9 @@ teacher gets 403 on `/api/me/*`.
 
 ## 6. Accounting (DOMAIN §9)
 
-Per group × discipline with load items: plan = Σ planned hours; lessons = SCHEDULED dated lessons;
+Per group × discipline with load items: plan = Σ planned hours (counted by the load module over the group's theory
+days — weeks off theory are not planned and not caught up, owner's rule 15.11.2026, DOMAIN §9 — unless a number was set);
+rows add `hoursPerWeek` (Σ of the items) and `planSource` (AUTO, FIXED or MIXED); lessons = SCHEDULED dated lessons;
 ended = earlier date, or today after the bell of the semester's profile (without a profile today's
 pairs are not ended); fact/remaining × `accounting.hoursPerPair` (default 2); forecast = fact +
 remaining; FINISHED (fact ≥ plan), WILL_OVERRUN (> plan + 2), WILL_UNDERRUN (< plan − 2), ON_TRACK;
@@ -212,6 +214,15 @@ finish lesson (ids listed); WILL_UNDERRUN → ADDITIONAL with the number of pair
 (confirmed and applied changes of the month): substitutions = taking a colleague's pair (REPLACE_*,
 finished with replacement), hours = pairs × hours per pair; missed = own pairs taken over, moved away
 (SWAP) or cancelled. Only teachers with activity are listed.
+
+`GET /api/admin/accounting/theory` (`AccountingTheory`): for every group with load in the semester (or `groupId`), by
+course and code, `{group, semesterWeeks, theoryWeeks, numeratorWeeks, denominatorWeeks, studyDays, graphTheoryWeeks?,
+offPeriods:[{id, kind:{code, name, color, effect}, title, startsOn, endsOn}]}` — why the plans are what they are, with
+the academic calendar's number as a cross-check (the web warns when it differs). A constant number of queries for any
+number of groups (`AccountingTheoryIT.theoryOfManyGroupsCostsNoMoreStatementsThanOfOne`); `progressOfGroup(s)` is
+unchanged (plans are stored), so the options budgets did not move. Verified on the live stand (15.11.2026, read-only):
+the old rule flagged 608 of 645 rows WILL_UNDERRUN; the new plan leaves 11, every one a discipline that lost two pairs
+to a substitution with another discipline, and 5 WILL_OVERRUN that received them.
 
 Numbering: `GET/PUT /api/admin/orders/numbering` (`OrderNumberingService`, table `order_numbering`, V1_602).
 Without a row the semester starts at №1; `firstNumber` = 35 makes the first published order №35 (the

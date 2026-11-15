@@ -29,9 +29,10 @@ describe('GET /api/admin/load', () => {
   it('навантаження 4КІ1 виведене з розкладу: ЕУ 3 год → 1 + ½, план з програми — для НДЕКСМ', async () => {
     const items = await loadOf('4КІ1');
     const eu = items.find((i) => i.discipline.shortName === 'ЕУ');
-    expect(eu).toMatchObject({ hoursPerWeek: 3, pattern: { whole: 1, half: 1 }, plannedHours: 54, source: 'TIMETABLE_DERIVED', lessonKind: 'MIXED' });
+    // вт щотижня + чт чисельника без двох тижнів НС 16.11–27.11: 16 + 8 = 24 пари = 48 год, а не 3 × 18 = 54
+    expect(eu).toMatchObject({ hoursPerWeek: 3, pattern: { whole: 1, half: 1 }, plannedHours: 48, planSource: 'AUTO', source: 'TIMETABLE_DERIVED', lessonKind: 'MIXED' });
     expect(eu?.teachers.map((t) => t.teacher.shortName)).toEqual(['Алексєєнко']);
-    expect(items.find((i) => i.discipline.shortName === 'НДЕКСМ')).toMatchObject({ hoursPerWeek: 2, plannedHours: 40, source: 'PROGRAM' });
+    expect(items.find((i) => i.discipline.shortName === 'НДЕКСМ')).toMatchObject({ hoursPerWeek: 2, plannedHours: 40, planSource: 'FIXED', source: 'PROGRAM' });
     const english = items.filter((i) => i.discipline.shortName === 'Ін.мова');
     expect(english.find((i) => i.splitSubgroups)?.teachers.map((t) => [t.subgroup, t.teacher.shortName])).toEqual([
       [1, 'Прокопчук'],
@@ -63,7 +64,7 @@ describe('POST/PUT /api/admin/load', () => {
     expect((await failure(api.post('/admin/load', { ...body, hoursPerWeek: 41 }))).fieldErrors().hoursPerWeek).toBe('Не більше 40 годин на тиждень');
   });
 
-  it('новий запис — ручний, план за замовчуванням = години × тижні; правка виведеного робить його ручним', async () => {
+  it('новий запис — ручний, план без числа рахує система за днями теорії; правка виведеного робить його ручним', async () => {
     const { id: semesterId } = await semester();
     const teacher = TEACHERS.find((t) => t.shortName === 'Непийвода') as (typeof TEACHERS)[number];
     const created = await api.post<LoadItem>('/admin/load', {
@@ -75,7 +76,8 @@ describe('POST/PUT /api/admin/load', () => {
       teachers: [{ subgroup: 0, teacherId: teacher.id }],
       controlForm: 'CREDIT',
     });
-    expect(created).toMatchObject({ source: 'MANUAL', plannedHours: 27, pattern: { whole: 1, half: 0 }, controlForm: 'CREDIT' });
+    // КБ немає в розкладі: 1,5 год × 77 навчальних днів 4КІ1 (без НС) / 5 = 23
+    expect(created).toMatchObject({ source: 'MANUAL', plannedHours: 23, planSource: 'AUTO', pattern: { whole: 1, half: 0 }, controlForm: 'CREDIT' });
     const eu = (await loadOf('4КІ1')).find((i) => i.discipline.shortName === 'ЕУ') as LoadItem;
     const edited = await api.put<LoadItem>(`/admin/load/${eu.id}`, {
       semesterId,
@@ -84,7 +86,13 @@ describe('POST/PUT /api/admin/load', () => {
       hoursPerWeek: 4,
       version: eu.version,
     });
-    expect(edited).toMatchObject({ source: 'MANUAL', hoursPerWeek: 4, pattern: { whole: 2, half: 0 }, version: eu.version + 1 });
+    expect(edited).toMatchObject({ source: 'MANUAL', hoursPerWeek: 4, pattern: { whole: 2, half: 0 }, planSource: 'AUTO', version: eu.version + 1 });
+    // те саме число автоматичного плану назад — план лишається автоматичним; інше число — задане
+    const body = { semesterId, groupId: eu.group.id, disciplineId: eu.discipline.id, hoursPerWeek: 4 };
+    const echoed = await api.put<LoadItem>(`/admin/load/${eu.id}`, { ...body, plannedHours: edited.plannedHours, version: edited.version });
+    expect(echoed.planSource).toBe('AUTO');
+    const fixed = await api.put<LoadItem>(`/admin/load/${eu.id}`, { ...body, plannedHours: 60, version: echoed.version });
+    expect(fixed).toMatchObject({ plannedHours: 60, planSource: 'FIXED' });
   });
 });
 

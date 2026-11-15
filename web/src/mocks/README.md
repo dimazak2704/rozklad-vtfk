@@ -37,6 +37,7 @@ src/mocks/
 ├── store.ts       createMockStore, createMockCollection, resetMockStores
 ├── events.ts      потік SSE і emitServerEvent
 ├── ids.ts         mockId(kind, key) — детермінований UUID
+├── plan.ts        план годин за тижнями теорії групи (як core LoadPlan) і тижні теорії для обліку
 ├── handlers/      одна область — один файл: meta.ts (meta, search), events.ts (SSE)
 └── fixtures/      базові дані: catalog, calendar, timetable, schedule (генератор)
 ```

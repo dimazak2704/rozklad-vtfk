@@ -30,6 +30,16 @@ class AccountingController {
         return report.rows(semesterId, groupId);
     }
 
+    /**
+     * Theory weeks of the groups with load (or of {@code groupId}): what the AUTO plans are counted over, with the
+     * academic calendar's number as a cross-check; the active semester when {@code semesterId} is omitted.
+     */
+    @GetMapping("/theory")
+    List<GroupTheoryDto> theory(@RequestParam(required = false) UUID semesterId,
+                                @RequestParam(required = false) UUID groupId) {
+        return report.theory(semesterId, groupId);
+    }
+
     /** Monthly teacher statistics, {@code month=2026-10}; the current month by default. */
     @GetMapping("/teachers")
     List<TeacherStatsDto> teachers(@RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM")

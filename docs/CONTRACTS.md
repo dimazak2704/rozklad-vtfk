@@ -109,7 +109,9 @@ effect only; priority on overlap DAY_OFF > SUSPEND > ONLINE > INFO; BLOCK is not
 | `GET /api/admin/group-semesters?semesterId=` | `[{semesterId, group:GroupRef, theoryWeeks?, exams?, source, updatedAt}]` by group code; 400 without `semesterId` |
 
 Load: `/api/admin/load?semesterId&groupId` (CRUD) → `LoadItemDto {id, semesterId, group, discipline, lessonKind, hoursPerWeek,
-plannedHours, splitSubgroups, teachers:[{subgroup, teacher}], requiredRoomType, preferredRoom, controlForm, source, pattern:{whole, half}}`;
+plannedHours, planSource, splitSubgroups, teachers:[{subgroup, teacher}], requiredRoomType, preferredRoom, controlForm, source, pattern:{whole, half}}`
+(`planSource` AUTO: the system counts `plannedHours` over the group's theory days and recounts it; FIXED: a set number; a
+request without `plannedHours` makes the plan AUTO);
 `POST /api/admin/load/derive-from-version/{versionId}` → derived items (TIMETABLE_DERIVED).
 
 Timetable:
@@ -156,7 +158,10 @@ Orders:
 | `GET /api/admin/orders/numbering?semesterId` · `PUT {semesterId, firstNumber}` | `{semesterId, firstNumber, lastNumber?, nextNumber}`; next = max(last + 1, first); 422 `ORDER_NUMBER_USED` when `firstNumber ≤ last` |
 `OrderItemDto {id, groupCode, pairLabel, rowType, fromDiscipline, fromTeacher, reasonText, toDiscipline, toTeacher, roomText, changeId?}`
 
-Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipline, plan, fact, remaining, forecast, status, forecastFinishDate?, suggestion?}]`;
+Accounting: `GET /api/admin/accounting?semesterId&groupId` → `[{group, discipline, plan, fact, remaining, forecast, status, forecastFinishDate?, suggestion?, hoursPerWeek, planSource}]`
+(`planSource` AUTO | FIXED | MIXED);
+`GET /api/admin/accounting/theory?semesterId&groupId` → `[{group, semesterWeeks, theoryWeeks, numeratorWeeks, denominatorWeeks, studyDays, graphTheoryWeeks?, offPeriods:[{id, kind:{code, name, color, effect}, title, startsOn, endsOn}]}]`
+(groups with load, by course and code; weeks off theory are not planned, DOMAIN §9);
 `GET /api/admin/accounting/teachers?month=2026-10` → `[{teacher, substitutionsCount, substitutionsHours, missedCount}]`.
 
 Identity & settings: `POST /api/admin/invites {teacherId}` → `{token, url, expiresAt}`; `GET /api/admin/invites`;

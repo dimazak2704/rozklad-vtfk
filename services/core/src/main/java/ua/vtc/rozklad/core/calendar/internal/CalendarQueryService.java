@@ -62,13 +62,14 @@ class CalendarQueryService implements CalendarQueries {
     private final StudyCalendarLoader studyCalendars;
     private final BellTimesLoader bellTimes;
     private final ShiftWindowsLoader shiftWindowTable;
+    private final GroupSemesterService groupSemesters;
 
     CalendarQueryService(SemesterRepository semesters, AcademicYearRepository academicYears,
                          WeekParityOverrideRepository overrides, CalendarPeriodRepository periods,
                          BellProfileRepository bellProfiles, BellSlotRepository bellSlots,
                          ShiftWindowRepository shiftWindows, CatalogQueries catalog, SettingsService settings,
                          StudyCalendarLoader studyCalendars, BellTimesLoader bellTimes,
-                         ShiftWindowsLoader shiftWindowTable) {
+                         ShiftWindowsLoader shiftWindowTable, GroupSemesterService groupSemesters) {
         this.semesters = semesters;
         this.academicYears = academicYears;
         this.overrides = overrides;
@@ -81,6 +82,7 @@ class CalendarQueryService implements CalendarQueries {
         this.studyCalendars = studyCalendars;
         this.bellTimes = bellTimes;
         this.shiftWindowTable = shiftWindowTable;
+        this.groupSemesters = groupSemesters;
     }
 
     @Override
@@ -244,6 +246,15 @@ class CalendarQueryService implements CalendarQueries {
     @Override
     public Map<UUID, BellTimes> bellTimes(StudyCalendar calendar) {
         return bellTimes.forCalendar(calendar);
+    }
+
+    @Override
+    public Map<UUID, Integer> theoryWeeksFromGraph(UUID semesterId) {
+        Map<UUID, Integer> weeks = new java.util.HashMap<>();
+        groupSemesters.rows(List.of(semesterId)).stream()
+                .filter(row -> row.theoryWeeks() != null)
+                .forEach(row -> weeks.put(row.groupId(), row.theoryWeeks()));
+        return weeks;
     }
 
     SemesterInfo info(Semester semester) {

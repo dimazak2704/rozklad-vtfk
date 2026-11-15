@@ -22,7 +22,7 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 /**
  * Навантаження: group × discipline × semester with hours per week and planned hours, plus the
  * teacher of every subgroup (subgroup 0 when the group is not split). Weekly units are derived
- * from {@code hoursPerWeek} (DOMAIN §4).
+ * from {@code hoursPerWeek} (DOMAIN §4); the plan is counted by the system unless it is {@link PlanSource#FIXED}.
  */
 @Entity
 @Table(name = "load_item")
@@ -46,6 +46,10 @@ public class LoadItem extends BaseEntity {
 
     @Column(name = "planned_hours", nullable = false)
     private int plannedHours;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_source", nullable = false, length = 10)
+    private PlanSource planSource = PlanSource.FIXED;
 
     @Column(name = "split_subgroups", nullable = false)
     private boolean splitSubgroups;
@@ -78,6 +82,7 @@ public class LoadItem extends BaseEntity {
     protected LoadItem() {
     }
 
+    /** An item with a set plan (FIXED); {@link #autoPlan} hands the plan over to the system. */
     public LoadItem(UUID semesterId, UUID groupId, UUID disciplineId, BigDecimal hoursPerWeek, int plannedHours) {
         this.semesterId = Objects.requireNonNull(semesterId, "semesterId");
         this.groupId = Objects.requireNonNull(groupId, "groupId");
@@ -115,6 +120,22 @@ public class LoadItem extends BaseEntity {
 
     public int getPlannedHours() {
         return plannedHours;
+    }
+
+    public PlanSource getPlanSource() {
+        return planSource;
+    }
+
+    /** A number the dispatcher or an import set: the system will not recount it. */
+    public void fixPlan(int plannedHours) {
+        setHours(hoursPerWeek, plannedHours);
+        this.planSource = PlanSource.FIXED;
+    }
+
+    /** The plan the system counted (hours per week × the group's theory days); recounted on calendar edits. */
+    public void autoPlan(int plannedHours) {
+        setHours(hoursPerWeek, plannedHours);
+        this.planSource = PlanSource.AUTO;
     }
 
     public void setHours(BigDecimal hoursPerWeek, int plannedHours) {

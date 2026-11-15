@@ -20,6 +20,8 @@ import ua.vtc.rozklad.core.catalog.RoomInfo;
 import ua.vtc.rozklad.core.catalog.TeacherInfo;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
+import ua.vtc.rozklad.core.load.LoadSource;
+import ua.vtc.rozklad.core.load.PlanSource;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportItem;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportRequest;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportResult;
@@ -38,6 +40,10 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * that group × discipline × lesson kind and keeps its split (a new item is for the whole group). When the
  * semester has both a whole-group and a split item for it the row is refused ({@code items[i].splitSubgroups}).
  * <p>
+ * {@code plannedHours} in a row fixes the plan (FIXED, e.g. a program's 40 h), except in a CURRICULUM row (its total
+ * assumes the curriculum's weeks). Without it a FIXED plan of the stored item stays, otherwise the system counts the
+ * plan from the group's theory days and keeps it current (AUTO).
+ * <p>
  * An update keeps what the request does not carry: a field that is absent ({@code null}) leaves the
  * stored value as it is, so a program or a curriculum (hours only) does not erase the teachers, the
  * room requirements or the note of an item derived from the timetable. An explicit empty list of
@@ -49,11 +55,14 @@ public class LoadImportService {
     private final LoadItemRepository items;
     private final CatalogQueries catalog;
     private final CalendarQueries calendar;
+    private final LoadPlanner planner;
 
-    public LoadImportService(LoadItemRepository items, CatalogQueries catalog, CalendarQueries calendar) {
+    public LoadImportService(LoadItemRepository items, CatalogQueries catalog, CalendarQueries calendar,
+                             LoadPlanner planner) {
         this.items = items;
         this.catalog = catalog;
         this.calendar = calendar;
+        this.planner = planner;
     }
 
     @Transactional
@@ -81,9 +90,9 @@ public class LoadImportService {
         int updated = 0;
         int unchanged = 0;
         Map<String, UUID> ids = new LinkedHashMap<>();
+        LoadPlanner.Context plans = planner.context(semester.id(),
+                resolved.stream().map(item -> item.group().id()).distinct().toList());
         for (Resolved item : resolved) {
-            int plannedHours = item.source().plannedHours() != null ? item.source().plannedHours()
-                    : LoadService.defaultPlannedHours(item.source().hoursPerWeek(), semester.teachingWeeks());
             Optional<LoadItem> match = existing.stream()
                     .filter(candidate -> candidate.getGroupId().equals(item.group().id())
                             && candidate.getDisciplineId().equals(item.discipline().id())
@@ -93,16 +102,20 @@ public class LoadImportService {
             LoadItem target;
             if (match.isEmpty()) {
                 target = new LoadItem(semester.id(), item.group().id(), item.discipline().id(),
-                        item.source().hoursPerWeek(), plannedHours);
+                        item.source().hoursPerWeek(), 0);
                 apply(item, target);
+                Plan plan = plan(item, target, plans, existing);
+                setPlan(target, plan);
                 items.save(target);
                 existing.add(target);
                 created++;
             } else {
                 target = match.get();
-                if (differs(item, target, plannedHours)) {
-                    target.setHours(item.source().hoursPerWeek(), plannedHours);
+                Plan plan = plan(item, target, plans, existing);
+                if (differs(item, target, plan)) {
+                    target.setHours(item.source().hoursPerWeek(), target.getPlannedHours());
                     apply(item, target);
+                    setPlan(target, plan);
                     updated++;
                 } else {
                     unchanged++;
@@ -188,10 +201,36 @@ public class LoadImportService {
         return splits;
     }
 
-    private static boolean differs(Resolved item, LoadItem target, int plannedHours) {
+    /**
+     * The plan the row gives the item: its own number (FIXED); without one a FIXED plan of the stored item stays as the
+     * dispatcher set it, otherwise the system counts it from the group's theory days (AUTO). A CURRICULUM row's number
+     * is the curriculum's weeks × hours (22 for 4КІ): by the owner's rule of 15.11.2026 weeks off theory are not
+     * planned, so it does not fix the plan — the curriculum's hours per week are counted over the group's theory days.
+     */
+    private static Plan plan(Resolved item, LoadItem target, LoadPlanner.Context plans, List<LoadItem> existing) {
+        Integer given = item.source().source() == LoadSource.CURRICULUM ? null : item.source().plannedHours();
+        if (given != null) {
+            return new Plan(given, PlanSource.FIXED);
+        }
+        if (target.getPlanSource() == PlanSource.FIXED) {
+            return new Plan(target.getPlannedHours(), PlanSource.FIXED);
+        }
+        return new Plan(plans.plannedHours(target, item.source().hoursPerWeek(), existing), PlanSource.AUTO);
+    }
+
+    private static void setPlan(LoadItem target, Plan plan) {
+        if (plan.source() == PlanSource.FIXED) {
+            target.fixPlan(plan.hours());
+        } else {
+            target.autoPlan(plan.hours());
+        }
+    }
+
+    private static boolean differs(Resolved item, LoadItem target, Plan plan) {
         LoadImportItem source = item.source();
         return target.getHoursPerWeek().compareTo(source.hoursPerWeek()) != 0
-                || target.getPlannedHours() != plannedHours
+                || target.getPlannedHours() != plan.hours()
+                || target.getPlanSource() != plan.source()
                 || target.getSource() != source.source()
                 || (item.teachers() != null && !teachersOf(target).equals(item.teachers()))
                 || (source.controlForm() != null && target.getControlForm() != source.controlForm())
@@ -236,6 +275,9 @@ public class LoadImportService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private record Plan(int hours, PlanSource source) {
     }
 
     /**
