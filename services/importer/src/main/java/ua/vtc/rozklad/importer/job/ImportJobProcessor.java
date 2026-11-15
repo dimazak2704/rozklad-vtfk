@@ -3,6 +3,8 @@ package ua.vtc.rozklad.importer.job;
 import java.time.Clock;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -128,17 +130,16 @@ public class ImportJobProcessor {
     // ───────────────────────── розбір ─────────────────────────
 
     void parse(UUID id) {
-        ImportJob job = transaction.execute(status -> {
-            ImportJob found = jobs.findById(id).orElse(null);
-            if (found == null || found.status() != ImportJobStatus.UPLOADED) {
-                return null;
-            }
-            found.startParsing(clock.instant());
-            return found;
-        });
-        if (job == null) {
+        Optional<ImportJob> claimed = Objects.requireNonNull(transaction.execute(status -> jobs.findById(id)
+                .filter(found -> found.status() == ImportJobStatus.UPLOADED)
+                .map(found -> {
+                    found.startParsing(clock.instant());
+                    return found;
+                })));
+        if (claimed.isEmpty()) {
             return;
         }
+        ImportJob job = claimed.get();
         long started = System.nanoTime();
         try {
             ImportHandler handler = handlers.get(job.kind());

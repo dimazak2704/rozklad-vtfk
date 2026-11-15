@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -310,11 +311,12 @@ public final class AcademicCalendarParser {
         int startDay = day(sheet, layout.startRow(), layout.firstWeek());
         int endDay = day(sheet, layout.endRow(), layout.firstWeek());
         LocalDate september = LocalDate.of(year, 9, 1);
+        // only Mondays near 1 September: the previous-or-same Monday, then one week either way
+        LocalDate base = september.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate first = null;
-        for (int distance = 0; distance <= 40 && first == null; distance++) {
-            for (LocalDate candidate : List.of(september.minusDays(distance), september.plusDays(distance))) {
-                if (candidate.getDayOfWeek() == DayOfWeek.MONDAY && candidate.getDayOfMonth() == startDay
-                        && candidate.plusDays(6).getDayOfMonth() == endDay) {
+        for (int weeks = 0; weeks <= 6 && first == null; weeks++) {
+            for (LocalDate candidate : List.of(base.minusWeeks(weeks), base.plusWeeks(weeks))) {
+                if (candidate.getDayOfMonth() == startDay && candidate.plusDays(6).getDayOfMonth() == endDay) {
                     first = candidate;
                     break;
                 }
