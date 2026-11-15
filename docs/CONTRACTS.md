@@ -193,14 +193,15 @@ an inactive teacher reports nothing himself: 422 `TEACHER_INACTIVE`);
 
 ## 4. Core — internal (service roles, client credentials)
 
-Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SERVICE_NOTIFICATION (the bot);
+Per service account: `changes/{id}/reply`, `absences`, `teachers/{id}` and `mail-recipients` → SERVICE_NOTIFICATION (the bot);
 `catalog/snapshot` → SERVICE_IMPORTER; any other `/api/internal/**` → 403. The plain SERVICE role opens none of them.
 
 
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
 `GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...], periodKinds:[{id, code, name, effect, color, aliases, noteTemplate, active}]}` (`periodKinds`: every kind, inactive ones too);
-`GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens).
+`GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens);
+`GET /api/internal/mail-recipients?teacherId={uuid}` | `?accountId={uuid}` | `?role=ADMIN` (exactly one; other roles → 400) → `[{accountId, teacherId?, displayName, username?, email?, googleLinked, roles[], enabled, revoked, demo}]`: the people accounts of `auth` an e-mail would reach (`email` = the sign-in address, lower case, `null` for accounts created by invite; `googleLinked` = Google confirmed it). Facts only: disabled, revoked and demo accounts are listed, the mail channel decides. An unknown teacher or account, a teacher without an account and an account `auth` lost → `[]`; `auth` down → 503 `identity-unavailable`.
 
 ## 5. Importer (role ADMIN; `ai/parse-absence` also SERVICE)
 
