@@ -4,7 +4,7 @@ import { BELL_PROFILES } from '@/mocks/fixtures';
 import { breakAfter, gridFromSlots, hasErrors, mostCommon, nextSlot, normalizeTime, slotsFromGrid, validateDay } from './bells';
 import { isoToText, textToIso } from './dateText';
 import { composeOrderNote, orderDate, renderNoteTemplate, T_DAYOFF, T_INFO, T_SUSPEND, type NoteInput } from './notes';
-import { periodAudience, periodKindLabel, periodKindOf, periodRequest } from './periods';
+import { periodAudience, periodChipLabel, periodKindLabel, periodKindOf, periodRequest } from './periods';
 
 describe('примітка періоду для розпорядження', () => {
   const FN = '{хто} з {від}р. по {до} {режим}.';
@@ -74,6 +74,16 @@ describe('примітка періоду для розпорядження', ()
 
   it('кого стосується період', () => {
     expect(periodAudience({ scope: 'COURSES', courses: [3], groups: [] })).toBe('3 курс');
+    // смуга на шкалі: кого й код виду, а не обрізана однакова назва
+    expect(
+      periodChipLabel({
+        scope: 'GROUPS',
+        courses: null,
+        groups: [{ id: 'g', code: '4КІ1', course: 4 }],
+        kind: 'NO_CLASSES',
+        periodKind: { id: 'k', code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' },
+      } as Parameters<typeof periodChipLabel>[0]),
+    ).toBe('4КІ1 · НС');
     expect(periodAudience({ scope: 'COURSES', courses: [4, 3], groups: [] })).toBe('3, 4 курси');
     const groups = ['1КІ1', '1КІ2', '1КІ3', '1ТК1', '1ТК2'].map((code, i) => ({ id: String(i), code, course: 1 }));
     expect(periodAudience({ scope: 'GROUPS', courses: null, groups })).toBe('1КІ1, 1КІ2, 1КІ3 та ще 2');

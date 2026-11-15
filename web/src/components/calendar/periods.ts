@@ -36,6 +36,14 @@ export function periodAudience(period: Pick<CalendarPeriod, 'scope' | 'courses' 
 }
 
 /**
+ * Підпис смуги періоду на шкалі семестру: кого стосується й код виду — «4КІ1 · НС», «3 курс · НП». Смуги однакових
+ * видів різняться саме групою; повна назва — у підказці.
+ */
+export function periodChipLabel(period: Pick<CalendarPeriod, 'scope' | 'courses' | 'groups' | 'kind' | 'periodKind'>): string {
+  return `${periodAudience(period)} · ${periodKindOf(period).code}`;
+}
+
+/**
  * Період → тіло PUT (для повернення попередніх значень із журналу дій). Вид — `kindId`; лише від старішого
  * core без довідника видів — старий `kind`.
  */
