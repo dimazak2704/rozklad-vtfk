@@ -22,6 +22,14 @@ public interface LoadItemRepository extends JpaRepository<LoadItem, UUID> {
 
     List<LoadItem> findAllBySemesterIdAndGroupIdAndDisciplineId(UUID semesterId, UUID groupId, UUID disciplineId);
 
+    /** Semesters that have any load (start-up recount of AUTO plans). */
+    @Query("select distinct i.semesterId from LoadItem i")
+    List<UUID> findSemesterIds();
+
+    /** Groups with load in the semester (accounting covers exactly these). */
+    @Query("select distinct i.groupId from LoadItem i where i.semesterId = :semesterId")
+    List<UUID> findGroupIds(UUID semesterId);
+
     @EntityGraph(attributePaths = "teachers")
     Optional<LoadItem> findWithTeachersById(UUID id);
 

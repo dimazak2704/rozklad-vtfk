@@ -20,6 +20,7 @@ import type {
   ProgramDraft,
   TimetableDraft,
 } from '@/api/import';
+import type { LoadItem } from '@/api/load';
 import type {
   AiUsageDto,
   ImportFileType,
@@ -909,8 +910,16 @@ function upsertLoad(job: StoredJob, entries: readonly LoadFromImport[]): { creat
         });
       }
       const existing = candidates[0];
+      // як core: число програми фіксує план; підсумок навчального плану (його тижні × години) — ні, план рахує
+      // система за тижнями теорії групи; заданий диспетчером план лишається
+      const plan = (current?: LoadItem): Pick<LoadItem, 'plannedHours' | 'planSource'> =>
+        entry.source === 'PROGRAM'
+          ? { plannedHours: entry.plannedHours, planSource: 'FIXED' }
+          : current?.planSource === 'FIXED'
+            ? { plannedHours: current.plannedHours, planSource: 'FIXED' }
+            : { plannedHours: entry.plannedHours, planSource: 'AUTO' };
       if (existing) {
-        loadItems.update(existing.id, (current) => ({ ...current, ...fields, version: current.version + 1 }));
+        loadItems.update(existing.id, (current) => ({ ...current, ...fields, ...plan(current), version: current.version + 1 }));
         updated += 1;
       } else {
         loadItems.insert({
@@ -926,6 +935,7 @@ function upsertLoad(job: StoredJob, entries: readonly LoadFromImport[]): { creat
           streamId: null,
           version: 0,
           ...fields,
+          ...plan(),
         });
         created += 1;
       }

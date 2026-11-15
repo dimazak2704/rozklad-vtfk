@@ -22,6 +22,7 @@ import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.load.ControlForm;
 import ua.vtc.rozklad.core.load.LoadPattern;
 import ua.vtc.rozklad.core.load.LoadSource;
+import ua.vtc.rozklad.core.load.PlanSource;
 
 /** DTOs of the load admin API, its import and the derivation from a timetable version. */
 public final class LoadDtos {
@@ -32,7 +33,10 @@ public final class LoadDtos {
     private LoadDtos() {
     }
 
-    /** {@code LoadItemDto} of CONTRACTS §2 plus {@code streamId}, {@code note} and {@code version}. */
+    /**
+     * {@code LoadItemDto} of CONTRACTS §2 plus {@code streamId}, {@code note} and {@code version}; {@code planSource}
+     * says whether the system counts {@code plannedHours} (AUTO) or a number was set (FIXED).
+     */
     public record LoadItemDto(
             UUID id,
             UUID semesterId,
@@ -41,6 +45,7 @@ public final class LoadDtos {
             LessonKind lessonKind,
             BigDecimal hoursPerWeek,
             int plannedHours,
+            PlanSource planSource,
             boolean splitSubgroups,
             List<LoadTeacherDto> teachers,
             RoomType requiredRoomType,
@@ -57,7 +62,8 @@ public final class LoadDtos {
     }
 
     /**
-     * @param plannedHours {@code hoursPerWeek × teaching weeks} of the semester when empty
+     * @param plannedHours a fixed plan; empty: the system counts it from the group's theory days (AUTO). On an update
+     *                     the number of an AUTO plan sent back unchanged keeps it AUTO
      * @param teachers     subgroup 0 for a whole group; 1..n of the group's subgroups when split
      */
     public record LoadItemRequest(

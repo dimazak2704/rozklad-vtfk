@@ -339,6 +339,12 @@ describe('контракт мок-API ↔ core: каталог, календар
     if (suggested) await expectShape(suggested.suggestion, `${CORE}accounting/internal/web/AccountingRowDto.java`, 'SuggestionDto');
     const stats = await api.get<unknown[]>('/admin/accounting/teachers', { month: '2026-10' });
     if (stats.length > 0) await expectShape(stats[0], `${CORE}accounting/internal/web/TeacherStatsDto.java`, 'TeacherStatsDto');
+    const theoryPath = `${CORE}accounting/internal/web/GroupTheoryDto.java`;
+    const theory = await api.get<Array<{ offPeriods: Array<{ kind: unknown }> }>>('/admin/accounting/theory', { semesterId: ACTIVE_SEMESTER.id });
+    await expectShape(first(theory, 'тижні теорії'), theoryPath, 'GroupTheoryDto');
+    const off = theory.find((t) => t.offPeriods.length > 0)?.offPeriods[0];
+    await expectShape(off, theoryPath, 'OffPeriodDto');
+    await expectShape(off?.kind, theoryPath, 'KindDto');
   });
 });
 

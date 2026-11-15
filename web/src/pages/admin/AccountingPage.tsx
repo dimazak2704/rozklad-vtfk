@@ -1,9 +1,10 @@
 import { ArrowRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useAccountingRows, type AccountingRow } from '@/api/accounting';
+import { useAccountingRows, useGroupTheory, type AccountingRow } from '@/api/accounting';
 import { activeSemesterOf, useSemesters } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
+import { GroupTheoryList, GroupTheoryNote } from '@/components/accounting/GroupTheoryNote';
 import { HoursBar, HoursBarLegend } from '@/components/accounting/HoursBar';
 import {
   accountingSummary,
@@ -17,6 +18,7 @@ import {
   type StatusFilter,
 } from '@/components/accounting/model';
 import { TeacherStats } from '@/components/accounting/TeacherStats';
+import { PLAN_RULE, planHint } from '@/components/accounting/theory';
 import {
   Combobox,
   DataTable,
@@ -30,6 +32,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Tooltip,
   buttonClass,
   type DataTableColumn,
 } from '@/components/ui';
@@ -93,7 +96,9 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
   const rawFilter = params.get('status') as StatusFilter | null;
   const filter: StatusFilter = rawFilter && FILTER_VALUES.has(rawFilter) ? rawFilter : groupId ? 'all' : 'attention';
   const rows = useAccountingRows(semester?.id, groupId);
+  const theory = useGroupTheory(semester?.id, groupId);
   const groups = useCatalogOptions('groups');
+  const theoryByGroup = useMemo(() => new Map((theory.data ?? []).map((t) => [t.group.id, t])), [theory.data]);
 
   const counts = useMemo(() => {
     const out = new Map<StatusFilter, number>();
@@ -156,7 +161,17 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
         className: 'whitespace-nowrap',
         cell: (row) => (
           <span className="text-ui text-secondary">
-            <span className="figures font-semibold text-primary">{row.fact}</span> з <span className="figures">{row.plan}</span> год
+            <span className="figures font-semibold text-primary">{row.fact}</span> з{' '}
+            {/* чому план саме такий: години на тиждень лише за тижні теорії групи або задане число */}
+            <Tooltip content={planHint(row, theoryByGroup.get(row.group.id))}>
+              <span
+                tabIndex={0}
+                className="figures rounded-tag underline decoration-dotted decoration-1 underline-offset-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              >
+                {row.plan}
+              </span>
+            </Tooltip>{' '}
+            год
           </span>
         ),
       },
@@ -175,7 +190,7 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
         cell: (row) => <StatusCell row={row} />,
       },
     ],
-    [groupId],
+    [groupId, theoryByGroup],
   );
 
   if (semesters.isPending) return <Skeleton className="h-64 w-full" />;
@@ -210,9 +225,18 @@ function GroupsAccounting({ params, set }: { params: URLSearchParams; set: (patc
     label: rows.data ? `${f.label} · ${counts.get(f.value) ?? 0}` : f.label,
   }));
 
+  const groupTheory = groupId ? theoryByGroup.get(groupId) : undefined;
+
   return (
     <div className="flex flex-col gap-4">
-      {rows.data ? <p className="text-body text-secondary">{accountingSummary(rows.data, counts.get('attention') ?? 0)}</p> : null}
+      {rows.data ? (
+        <div className="flex max-w-3xl flex-col gap-1">
+          <p className="text-body text-secondary">{accountingSummary(rows.data, counts.get('attention') ?? 0)}</p>
+          <p className="text-caption text-muted">{PLAN_RULE}</p>
+        </div>
+      ) : null}
+      {groupTheory ? <GroupTheoryNote theory={groupTheory} /> : null}
+      {!groupId && theory.data && theory.data.length > 0 ? <GroupTheoryList items={theory.data} /> : null}
       <div className="flex flex-wrap items-end gap-3">
         {semesters.data.length > 1 ? (
           <label className="flex w-full flex-col gap-1 text-caption font-[650] text-primary sm:w-auto">

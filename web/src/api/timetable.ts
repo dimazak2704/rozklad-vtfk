@@ -378,6 +378,9 @@ export function usePublishVersion() {
       void queryClient.invalidateQueries({ queryKey: qk.admin.timetable.all });
       // опублікований шаблон матеріалізовано в заняття на дати — публічний розклад теж змінився
       void queryClient.invalidateQueries({ queryKey: qk.public.scheduleAll });
+      // план годин рахується за парами опублікованого розкладу в дні теорії групи
+      void queryClient.invalidateQueries({ queryKey: qk.admin.load() });
+      void queryClient.invalidateQueries({ queryKey: qk.admin.accounting.all });
     },
   });
 }

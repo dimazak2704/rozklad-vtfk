@@ -84,6 +84,7 @@ export const qk = {
       all: ['admin', 'accounting'] as const,
       rows: (params?: Params) => ['admin', 'accounting', 'rows', clean(params)] as const,
       teachers: (month: string) => ['admin', 'accounting', 'teachers', month] as const,
+      theory: (params?: Params) => ['admin', 'accounting', 'theory', clean(params)] as const,
     },
     catalog: {
       all: ['admin', 'catalog'] as const,

@@ -13,7 +13,9 @@ import ua.vtc.rozklad.core.accounting.TeacherActivity;
 import ua.vtc.rozklad.core.accounting.TeacherActivityProvider;
 import ua.vtc.rozklad.core.accounting.internal.AccountingRow;
 import ua.vtc.rozklad.core.accounting.internal.AccountingService;
+import ua.vtc.rozklad.core.accounting.internal.AccountingTheory;
 import ua.vtc.rozklad.core.accounting.internal.LedgerResult;
+import ua.vtc.rozklad.core.calendar.GroupTheory;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
@@ -31,14 +33,16 @@ import ua.vtc.rozklad.core.shared.text.UkrainianText;
 class AccountingReport {
 
     private final AccountingService accounting;
+    private final AccountingTheory theory;
     private final TeacherActivityProvider teacherActivity;
     private final StudentGroupRepository groups;
     private final DisciplineRepository disciplines;
     private final TeacherRepository teachers;
 
-    AccountingReport(AccountingService accounting, TeacherActivityProvider teacherActivity,
+    AccountingReport(AccountingService accounting, AccountingTheory theory, TeacherActivityProvider teacherActivity,
                      StudentGroupRepository groups, DisciplineRepository disciplines, TeacherRepository teachers) {
         this.accounting = accounting;
+        this.theory = theory;
         this.teacherActivity = teacherActivity;
         this.groups = groups;
         this.disciplines = disciplines;
@@ -58,6 +62,11 @@ class AccountingReport {
                         .thenComparing(dto -> dto.group().code(), alphabetical)
                         .thenComparing(dto -> dto.discipline().shortName(), alphabetical))
                 .toList();
+    }
+
+    /** Theory weeks of the groups with load (or of one group), by course and code. */
+    List<GroupTheoryDto> theory(UUID semesterId, UUID groupId) {
+        return theory.groups(semesterId, groupId).stream().map(AccountingReport::toDto).toList();
     }
 
     List<TeacherStatsDto> teachers(YearMonth month) {
@@ -88,7 +97,20 @@ class AccountingReport {
                 ledger.plan(), ledger.fact(), ledger.remaining(), ledger.forecast(), ledger.status(),
                 ledger.forecastFinishDate(),
                 suggestion == null ? null : new AccountingRowDto.SuggestionDto(suggestion.kind().name(),
-                        suggestion.text(), suggestion.fromDate(), suggestion.lessons(), suggestion.lessonIds()));
+                        suggestion.text(), suggestion.fromDate(), suggestion.lessons(), suggestion.lessonIds()),
+                row.hoursPerWeek(), row.planSource());
+    }
+
+    private static GroupTheoryDto toDto(AccountingTheory.GroupTheoryRow row) {
+        GroupTheory facts = row.theory();
+        return new GroupTheoryDto(row.group(), facts.semesterWeeks(), facts.theoryWeeks(), facts.numeratorWeeks(),
+                facts.denominatorWeeks(), facts.studyDays(), row.graphTheoryWeeks(),
+                facts.offPeriods().stream()
+                        .map(period -> new GroupTheoryDto.OffPeriodDto(period.id(),
+                                new GroupTheoryDto.KindDto(period.kind().code(), period.kind().name(),
+                                        period.kind().color(), period.effect()),
+                                period.title(), period.startsOn(), period.endsOn()))
+                        .toList());
     }
 
     private static <T> Map<UUID, T> byId(List<T> entities, Function<T, UUID> id) {

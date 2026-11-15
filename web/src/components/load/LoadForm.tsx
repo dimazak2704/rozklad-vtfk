@@ -3,10 +3,12 @@ import { useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import type { CalendarSemester } from '@/api/calendar';
+import { useGroupTheory } from '@/api/accounting';
 import { useCatalogOptions } from '@/api/catalog';
 import { useDeleteLoadItem, useSaveLoadItem, type LoadItem, type LoadItemRequest } from '@/api/load';
 import { qk } from '@/api/queryKeys';
 import type { ControlForm, LessonKind, RoomType } from '@/api/types';
+import { theoryWeeksLabel } from '@/components/accounting/theory';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { ROOM_TYPE_OPTIONS } from '@/components/catalog/labels';
@@ -84,7 +86,8 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
       disciplineId: item?.discipline.id ?? '',
       lessonKind: item?.lessonKind ?? 'MIXED',
       hoursPerWeek: item?.hoursPerWeek ?? 2,
-      plannedHours: item?.plannedHours ?? null,
+      // автоматичний план — порожнє поле: система рахує його сама й перераховує, коли змінюється календар
+      plannedHours: item && item.planSource !== 'AUTO' ? item.plannedHours : null,
       splitSubgroups: item?.splitSubgroups ?? false,
       teachers: Object.fromEntries((item?.teachers ?? []).map((t) => [String(t.subgroup), t.teacher.id])),
       requiredRoomType: item?.requiredRoomType ?? null,
@@ -94,13 +97,22 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
     },
   });
   const { errors, isDirty } = form.formState;
-  const [groupId, hoursPerWeek, split] = useWatch({ control: form.control, name: ['groupId', 'hoursPerWeek', 'splitSubgroups'] });
+  const [groupId, hoursPerWeek, split, plannedHours] = useWatch({
+    control: form.control,
+    name: ['groupId', 'hoursPerWeek', 'splitSubgroups', 'plannedHours'],
+  });
   const group = groups.items?.find((g) => g.id === groupId);
   const subgroupNumbers = (group?.subgroups ?? []).map((s) => s.number);
   const pattern = loadPattern(hoursPerWeek ?? 0);
   // помилка всього словника «підгрупа → викладач» (не окремої підгрупи)
   const teachersError = typeof errors.teachers?.message === 'string' ? errors.teachers.message : undefined;
-  const plannedDefault = hoursPerWeek ? Math.round(hoursPerWeek * semester.teachingWeeks) : null;
+  const theory = useGroupTheory(groupId ? semester.id : null, groupId || null).data?.find((t) => t.group.id === groupId);
+  const plannedHint = autoPlanHint({
+    empty: plannedHours == null,
+    hoursPerWeek,
+    theory,
+    current: item?.planSource === 'AUTO' && item.hoursPerWeek === hoursPerWeek ? item.plannedHours : null,
+  });
 
   /**
    * Навантаження — у журнал дій: додане скасовує видалення (повтор додає знову), змінене — попередні
@@ -179,7 +191,7 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
       open={open}
       onOpenChange={onOpenChange}
       title={item ? `${item.group.code} · ${item.discipline.shortName}` : 'Нове навантаження'}
-      description={`${semester.name}, ${semester.teachingWeeks} навчальних тижнів`}
+      description={semester.name}
       formId={formId}
       submitLabel={item ? 'Зберегти' : 'Додати навантаження'}
       pending={save.isPending}
@@ -238,7 +250,7 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
           <Field
             label="За семестр, год"
             error={errors.plannedHours?.message}
-            hint={plannedDefault !== null ? `Порожньо — ${formatHours(hoursPerWeek)} × ${semester.teachingWeeks} = ${plannedDefault} год` : undefined}
+            hint={plannedHint}
           >
             <Controller
               control={form.control}
@@ -340,4 +352,25 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
       </form>
     </FormDialog>
   );
+}
+
+/**
+ * Підказка до «За семестр»: порожнє поле — план рахує система (години на тиждень лише за тижні теорії групи) і
+ * перераховує його, коли змінюється календар; число — план задано, система його не чіпає.
+ */
+function autoPlanHint({
+  empty,
+  hoursPerWeek,
+  theory,
+  current,
+}: {
+  empty: boolean;
+  hoursPerWeek: number | undefined;
+  theory: Parameters<typeof theoryWeeksLabel>[0] | undefined;
+  current: number | null;
+}): string {
+  if (!empty) return 'Задане число система не змінює. Очистіть поле, щоб план рахувався за тижнями теорії групи.';
+  const weeks = theory ? ` за ${theoryWeeksLabel(theory)}` : ' за тижні теорії групи';
+  const now = current !== null ? `: зараз ${current} год` : '';
+  return `Порожньо — рахує система: ${formatHours(hoursPerWeek ?? 0)} год на тиждень${weeks}${now}.`;
 }
