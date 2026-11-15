@@ -114,5 +114,11 @@ export const qk = {
     bindings: () => ['notify', 'bindings'] as const,
     myBinding: () => ['notify', 'bindings', 'me'] as const,
     deliveries: (params?: Params) => ['notify', 'deliveries', clean(params)] as const,
+    email: {
+      all: ['notify', 'email'] as const,
+      me: () => ['notify', 'email', 'me'] as const,
+      status: () => ['notify', 'email', 'status'] as const,
+      deliveries: (params?: Params) => ['notify', 'email', 'deliveries', clean(params)] as const,
+    },
   },
 } as const;

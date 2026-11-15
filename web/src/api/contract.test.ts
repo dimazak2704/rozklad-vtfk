@@ -15,6 +15,8 @@ import type {
   ChatBindingDto,
   DashboardDto,
   DeliveryDto,
+  EmailDeliveryDto,
+  EmailPreferencesDto,
   GenerationJobCreated,
   ImportJobDto,
   MyBindingDto,
@@ -358,6 +360,20 @@ describe('контракт мок-API ↔ notification', () => {
     const code = await api.post<BindingCodeDto>('/notify/bindings/codes', { type: 'ADMIN_CHAT' });
     await expectShape(code, path, 'BindingCodeDto');
     await expectShape(await api.get('/notify/bot'), `${NOTIFY}telegram/BotStatus.java`, 'Status');
+  });
+
+  it('листи на пошту: мої налаштування, стан пошти й журнал листів', async () => {
+    const prefsPath = `${NOTIFY}email/web/EmailPreferencesController.java`;
+    const prefs = await api.get<EmailPreferencesDto>('/notify/email/me');
+    await expectShape(prefs, prefsPath, 'EmailSettingsDto');
+    await expectShape(prefs.channel, prefsPath, 'ChannelDto');
+    await expectShape(first(prefs.kinds, 'види листів'), prefsPath, 'KindDto');
+    await expectShape(await api.post('/notify/email/me/test'), prefsPath, 'TestLetterDto');
+    const adminPath = `${NOTIFY}email/web/EmailAdminController.java`;
+    await expectShape(await api.get('/notify/email/status'), adminPath, 'StatusDto');
+    const page = await api.get<Page<EmailDeliveryDto>>('/notify/email/deliveries');
+    await expectShape(page, `${NOTIFY}shared/PageResponse.java`, 'PageResponse');
+    await expectShape(first(page.items, 'листи'), adminPath, 'EmailDeliveryDto');
   });
 });
 
