@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderWithProviders } from '@/test/render';
-import { ConstraintAnalysis, MetricsComparison } from './ResultSummary';
+import { ConstraintAnalysis, GroupComparison, MetricsComparison } from './ResultSummary';
 
 describe('результат генерації: правило «Не враховувати»', () => {
   it('«Було і стало» не фарбує його зміну як погіршення й підписує «не враховувалось»', () => {
@@ -35,5 +35,32 @@ describe('результат генерації: правило «Не врах�
     expect(remaining).toHaveTextContent('Вікна у викладача');
     expect(remaining).not.toHaveTextContent('4-та пара зміни');
     expect(within(section).getByRole('list', { name: 'Не враховувалось' })).toHaveTextContent(/4-та пара зміни · не враховувалось\s*59\sразів/);
+  });
+});
+
+describe('По групах на телефоні', () => {
+  it('картка на групу: кожен показник, і «Переставлено», — своїм рядком, без таблиці, що ховає колонки', () => {
+    renderWithProviders(
+      <GroupComparison
+        rows={[
+          {
+            group: { id: 'g', code: '4КІ2', course: 4 },
+            cells: [
+              { key: 'latePairs', before: 4, after: 2 },
+              { key: 'windows', before: 0, after: 0 },
+              { key: 'brokenDays', before: 1, after: 1 },
+              { key: 'onePairDays', before: 1, after: 0 },
+            ],
+            moved: { moved: 2, total: 18 },
+          },
+        ]}
+      />,
+    );
+    const card = within(screen.getByRole('list', { name: 'По групах: картки' })).getByRole('listitem');
+    expect(within(card).getByText('Дні з однією парою')).toBeInTheDocument();
+    expect(within(card).getByText('Переставлено').nextElementSibling).toHaveTextContent('2 з 18');
+    expect(card.closest('ul')).toHaveClass('sm:hidden');
+    // таблиця — лише з ширини sm
+    expect(screen.getByRole('table', { hidden: true }).parentElement?.parentElement).toHaveClass('hidden', 'sm:block');
   });
 });

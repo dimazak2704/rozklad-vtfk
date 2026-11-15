@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { Fragment } from 'react';
 import type { ConstraintAnalysisDto, GenerationWeights } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
@@ -240,16 +241,49 @@ export function GroupComparison({ rows }: { rows: readonly GroupComparisonRow[] 
       </table>
     </div>
   );
+  // телефон: таблиця з пʼятьма колонками не вміщується, а прокрутку вбік ніхто не помічає — картка на групу,
+  // кожен показник своїм рядком «було → стало»
+  const cards = (
+    <ul aria-label="По групах: картки" className="flex flex-col divide-y divide-[var(--border-color-separator)] border-y border-separator sm:hidden">
+      {rows.map((row) => (
+        <li key={row.group.id} className="flex flex-col gap-1.5 py-2.5">
+          <p className="text-ui font-[650] text-primary">{row.group.code}</p>
+          <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-ui">
+            {row.cells.map((cell) => (
+              <Fragment key={cell.key}>
+                <dt className="text-secondary">{GROUP_COLUMNS.find((column) => column.key === cell.key)?.label}</dt>
+                <dd className="text-end figures">
+                  <BeforeAfter before={cell.before} after={cell.after} />
+                </dd>
+              </Fragment>
+            ))}
+            {hasMoved ? (
+              <>
+                <dt className="text-secondary">Переставлено</dt>
+                <dd className="text-end text-secondary figures">{row.moved ? `${row.moved.moved} з ${row.moved.total}` : '—'}</dd>
+              </>
+            ) : null}
+          </dl>
+        </li>
+      ))}
+    </ul>
+  );
+  const content = (
+    <>
+      {cards}
+      <div className="hidden sm:block">{table}</div>
+    </>
+  );
   return (
     <section aria-label="По групах" className="flex flex-col gap-2">
       {rows.length > OPEN_GROUP_ROWS ? (
-        <Disclosure summary={`По групах: ${rows.length}`}>{table}</Disclosure>
+        <Disclosure summary={`По групах: ${rows.length}`}>{content}</Disclosure>
       ) : (
         <>
           <h3 className="text-heading font-bold text-primary">
             По групах
           </h3>
-          {table}
+          {content}
         </>
       )}
     </section>
