@@ -25,6 +25,7 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, businessRule, notFound, problem, readJson, requiredParam } from '../kit';
 import { createMockStore } from '../store';
 import { periods } from './calendar';
+import { publishedTemplateLessons } from './timetable';
 import { changesForTeacher, KRENTSIN, publicOverlay, replyToChange } from './public';
 
 /** sub демо-користувача krentsin у realm (фіксовані id, ARCHITECTURE §6 / foundation). */
@@ -296,6 +297,12 @@ export const handlers = [
     absenceState.set(list.map((a) => (a.id === absence.id ? cancelled : a)));
     emitServerEvent('absence.updated', absenceEvent(cancelled));
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  // як core: мої пари опублікованої версії семестру (без разових змін і періодів)
+  http.get(apiPath('/me/template'), ({ request }) => {
+    const semesterId = semesterFrom(new URL(request.url));
+    return HttpResponse.json(publishedTemplateLessons(semesterId).filter((lesson) => lesson.teacher?.id === KRENTSIN.id));
   }),
 
   http.get(apiPath('/me/preferences'), ({ request }) => {

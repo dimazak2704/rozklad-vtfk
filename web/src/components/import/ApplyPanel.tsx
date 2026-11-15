@@ -6,7 +6,7 @@ import { Button, buttonClass, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
-import { blockingReason, type ReviewTab } from './decisions';
+import { blockingReason, nothingToApply, type ReviewTab } from './decisions';
 import { trackFinal } from '@/lib/undo/actions';
 
 interface ApplyPanelProps {
@@ -27,6 +27,8 @@ const APPLY_EFFECT: Record<ImportJob['kind'], string> = {
   ACADEMIC_CALENDAR_XLSX:
     'Періоди графіка запишуться в календар: імпортовані раніше оновляться, змінені вручну лишаться як є. Пари груп перебудуються від сьогодні, тижні теорії збережуться для груп.',
 };
+
+const NOTHING_TO_APPLY = 'Застосування нічого не запише: періоди, пари груп і тижні теорії вже такі, як у файлі.';
 
 /** Що записано в core: підсумок кроків застосування людськими словами (порожні кроки пропускаємо). */
 function resultLines(result: ImportApplyResult): string[] {
@@ -95,11 +97,13 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
   const applying = job.status === 'APPLYING';
   const elapsed = useElapsed(applying);
 
+  const unchanged = nothingToApply(job);
+
   const start = async () => {
     const ok = await confirm({
-      title: `Застосувати «${job.fileName}»?`,
-      description: APPLY_EFFECT[job.kind],
-      confirmLabel: 'Застосувати',
+      title: unchanged ? `Позначити «${job.fileName}» як перевірений?` : `Застосувати «${job.fileName}»?`,
+      description: unchanged ? `Змін немає — календар уже такий. ${NOTHING_TO_APPLY}` : APPLY_EFFECT[job.kind],
+      confirmLabel: unchanged ? 'Позначити як перевірене' : 'Застосувати',
       onConfirm: () => apply.mutateAsync(),
     });
     if (!ok) return;
@@ -204,14 +208,16 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
             {reason.errors.length > 1 ? ` (і ще ${countLabel(reason.errors.length - 1, ['рядок', 'рядки', 'рядків'])})` : ''}
           </p>
         ) : !failed && !rejected ? (
-          <p className="text-ui font-semibold text-primary">Готово до застосування</p>
+          <p className="text-ui font-semibold text-primary">{unchanged ? 'Змін немає — календар уже такий' : 'Готово до застосування'}</p>
         ) : null}
         <p className={cn('text-caption text-secondary', blocked && here && 'sr-only')}>
           {failed && !canApply
             ? 'Чернетки немає: файл не розібрано, тож застосовувати нічого.'
             : rejected && canApply
               ? 'Виправте чернетку за цим повідомленням або усуньте причину в системі й застосуйте ще раз.'
-              : APPLY_EFFECT[job.kind]}
+              : unchanged
+                ? NOTHING_TO_APPLY
+                : APPLY_EFFECT[job.kind]}
         </p>
       </div>
       {blocked && !here && (reason.decisions > 0 || reason.errors.length > 0) ? (
@@ -227,13 +233,13 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
         </Link>
       ) : (
         <Button
-          variant="primary"
+          variant={unchanged && !failed && !rejected ? 'secondary' : 'primary'}
           disabled={!canApply}
           loading={apply.isPending}
-          iconStart={<Play aria-hidden="true" className="size-4" />}
+          iconStart={unchanged && !failed && !rejected ? <CircleCheck aria-hidden="true" className="size-4" /> : <Play aria-hidden="true" className="size-4" />}
           onClick={() => void start()}
         >
-          {failed || rejected ? 'Спробувати ще раз' : 'Застосувати'}
+          {failed || rejected ? 'Спробувати ще раз' : unchanged ? 'Позначити як перевірене' : 'Застосувати'}
         </Button>
       )}
     </section>

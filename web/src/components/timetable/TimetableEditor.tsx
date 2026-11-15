@@ -20,7 +20,7 @@ import { TimetableBoard, type BoardFocus } from './board/TimetableBoard';
 import { LessonDialog } from './dialogs/LessonDialog';
 import { MoveDialog } from './dialogs/MoveDialog';
 import { EditorToolbar } from './EditorToolbar';
-import { buildEntities, EMPTY_FILTERS, entityIdOf, filterEntities, type BoardEntity, type BoardFilters, type BoardView } from './model/grid';
+import { buildEntities, conflictsOfVisible, EMPTY_FILTERS, entityIdOf, filterEntities, filtersActive, type BoardEntity, type BoardFilters, type BoardView } from './model/grid';
 import { toLessonRequest } from './model/history';
 import { EMPTY_LESSON_FORM, formValuesOf, type LessonFormValues } from './model/lessonForm';
 import { lessonTitle } from './model/text';
@@ -114,6 +114,10 @@ export function TimetableEditor({
     [catalog.data, lessons, view, teacherLabel],
   );
   const visible = useMemo(() => filterEntities(entities, filters, hardLessonIds), [entities, filters, hardLessonIds]);
+  // під пошуком чи фільтром панель конфліктів показує лише рядки, які видно в сітці
+  const narrowed = filtersActive(filters);
+  const visibleHard = useMemo(() => conflictsOfVisible(conflictsQuery.data?.hard, visible, narrowed), [conflictsQuery.data, visible, narrowed]);
+  const visibleSoft = useMemo(() => conflictsOfVisible(conflictsQuery.data?.soft, visible, narrowed), [conflictsQuery.data, visible, narrowed]);
   const departments = useMemo(
     () =>
       [...new Set((catalog.data?.groups ?? []).flatMap((g) => (g.department ? [g.department] : [])))].sort((a, b) => a.localeCompare(b, 'uk')),
@@ -254,8 +258,9 @@ export function TimetableEditor({
         onDelete={(lesson) => void removeLesson(lesson)}
       />
       <ConflictsPanel
-        hard={conflictsQuery.data?.hard}
-        soft={conflictsQuery.data?.soft}
+        hard={visibleHard}
+        soft={visibleSoft}
+        scoped={narrowed}
         loading={conflictsQuery.isPending}
         error={conflictsQuery.error}
         onRetry={() => void conflictsQuery.refetch()}

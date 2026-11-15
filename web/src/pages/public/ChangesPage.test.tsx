@@ -105,7 +105,7 @@ describe('«Заміни»: розпорядження з доповненням
     // рядок основного розпорядження без позначки, рядок доповнення — з нею
     expect(await screen.findByText(/з доповнення №49/)).toBeInTheDocument();
     // підзаголовок — лише дата й парність, підсумок — окремим рядком над списком
-    expect(screen.getByRole('heading', { level: 2, name: /^2\sзаміни у 1\sгрупі$/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /^2\sзміни у 1\sгрупі$/ })).toBeInTheDocument();
     expect(screen.queryByText(/№43/)).not.toBeInTheDocument();
     // номери документів — у картці «Джерело» під списком
     await user.click(screen.getByRole('button', { name: 'Джерело' }));

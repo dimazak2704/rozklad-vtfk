@@ -3,6 +3,7 @@
  * (п'ятниця має інші дзвінки — такі клітинки показують свій час окремо).
  */
 import type { BellSlotDto, DayDto, LessonView, LessonViewKind } from '@/api/types';
+import { reasonInWords } from './labels';
 import { formatTeacherName, type TeacherNameOptions } from './teacher-name';
 
 /** Чий це розклад — від цього залежить, що писати в клітинці. */
@@ -208,7 +209,11 @@ export function lessonSummary(lesson: LessonView, perspective: Perspective = 'gr
     case 'REGULAR':
       break;
   }
-  if (lesson.reasonText) parts.push(`Причина: ${lesson.reasonText}${/[.!?]$/.test(lesson.reasonText) ? '' : '.'}`);
+  // те саме слово, що й на картці: «взаємна заміна», а не скорочення розпорядження «Зв.зам.»
+  if (lesson.reasonText) {
+    const reason = reasonInWords(lesson.reasonText);
+    parts.push(`Причина: ${reason}${/[.!?]$/.test(reason) ? '' : '.'}`);
+  }
   if (lesson.online) parts.push('Дистанційно.');
   return parts.join(' ');
 }

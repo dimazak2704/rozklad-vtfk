@@ -537,12 +537,22 @@ function outcomeOf(base: readonly TemplateLessonDto[], result: readonly Template
   const perGroup = new Map(groups.map((group) => [group.id, { group, moved: 0, total: 0 }]));
   let moved = 0;
   let roomChanged = 0;
+  let roomAssigned = 0;
+  let added = 0;
+  let kept = 0;
   let total = 0;
   for (const lesson of result) {
     const initial = before.get(lesson.id);
     const row = perGroup.get(lesson.group.id);
-    // як core (§7): рахуються лише вільні пари з базовим місцем, закріплені — ні
-    if (!initial || !row || initial.pinned) continue;
+    // як core (§7): рахуються лише вільні пари з базовим місцем; закріплені й поза вибором — `kept`, нові — `added`
+    if (!row || initial?.pinned) {
+      kept += 1;
+      continue;
+    }
+    if (!initial) {
+      added += 1;
+      continue;
+    }
     total += 1;
     row.total += 1;
     const slotChanged = initial.weekday !== lesson.weekday || initial.pair !== lesson.pair || initial.parity !== lesson.parity;
@@ -551,9 +561,11 @@ function outcomeOf(base: readonly TemplateLessonDto[], result: readonly Template
       row.moved += 1;
     } else if (initial.room && initial.room.id !== lesson.room?.id) {
       roomChanged += 1;
+    } else if (!initial.room && lesson.room) {
+      roomAssigned += 1;
     }
   }
-  return { moved, roomChanged, total, perGroup: [...perGroup.values()] };
+  return { moved, roomChanged, total, perGroup: [...perGroup.values()], roomAssigned, added, kept };
 }
 
 /**

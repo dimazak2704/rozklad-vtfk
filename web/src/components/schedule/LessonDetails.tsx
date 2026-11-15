@@ -7,7 +7,7 @@ import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { capitalize, LESSON_VIEW_KIND_LABEL, REASON_CODE_HINT, REASON_CODE_LABEL, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { capitalize, LESSON_VIEW_KIND_LABEL, reasonInWords, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, lessonTime, roomLabel } from '@/lib/schedule';
 import { ParityMark } from '../ui/ParityBadge';
@@ -41,14 +41,6 @@ interface LessonDetailsProps {
   context?: 'grid' | 'standalone';
   /** Перехід за посиланням у картці: закрити шторку, у якій вона стоїть. */
   onNavigate?: () => void;
-}
-
-/** Скорочення з розпорядження («Зв.зам.») — словами («взаємна заміна»): у публічній картці кодів не лишаємо. */
-function reasonInWords(text: string): string {
-  const code = (Object.keys(REASON_CODE_LABEL) as Array<keyof typeof REASON_CODE_LABEL>).find(
-    (key) => REASON_CODE_LABEL[key].toLocaleLowerCase('uk') === text.trim().toLocaleLowerCase('uk'),
-  );
-  return code ? REASON_CODE_HINT[code].toLocaleLowerCase('uk') : text;
 }
 
 /**

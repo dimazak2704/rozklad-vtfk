@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import type { TimetableConflict, TimetableConflictKind } from '@/api/timetable';
 import { Button, ErrorState, SegmentedControl, Select, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { countLabel } from '@/lib/labels';
 import { CONFLICT_KIND_LABEL } from '../model/labels';
 
 export type ConflictSeverityTab = 'HARD' | 'SOFT';
@@ -19,16 +20,19 @@ interface ConflictsPanelProps {
   tab: ConflictSeverityTab;
   onTabChange: (tab: ConflictSeverityTab) => void;
   onFocusConflict: (conflict: TimetableConflict) => void;
+  /** Списки звужено до рядків, які видно в сітці (пошук чи фільтр). */
+  scoped?: boolean;
   className?: string;
 }
 
 const PAGE = 40;
+const WARNING_FORMS = ['попередження', 'попередження', 'попереджень'] as const;
 
 /**
  * Конфлікти версії: жорсткі (блокують публікацію) і попередження. Вибір виду, клік — до клітинки
  * в сітці. Довгий список показуємо порціями, щоб панель лишалась швидкою.
  */
-export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTabChange, onFocusConflict, className }: ConflictsPanelProps) {
+export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTabChange, onFocusConflict, scoped = false, className }: ConflictsPanelProps) {
   const [kind, setKind] = useState<TimetableConflictKind | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const list = useMemo(() => (tab === 'HARD' ? hard : soft) ?? [], [tab, hard, soft]);
@@ -63,6 +67,7 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
             { value: 'SOFT', label: `Попередження · ${soft?.length ?? '…'}` },
           ]}
         />
+        {scoped ? <p className="text-caption text-muted">Лише для рядків, показаних у сітці.</p> : null}
         {/* вид — один тихий вибір без лічильників: числа вже є у вкладках вище */}
         {kinds.length > 1 ? (
           <Select<KindFilter>
@@ -94,7 +99,10 @@ export function ConflictsPanel({ hard, soft, loading, error, onRetry, tab, onTab
             <p className="flex items-start gap-2 text-ui text-secondary">
               <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-add" />
               {tab === 'HARD'
-                ? 'Накладок і порушень правил немає.'
+                ? // попередження — теж порушення правил, тож «порушень немає» поруч із «Попередження · 95» — неправда
+                  soft && soft.length > 0
+                  ? `Накладок немає; ${countLabel(soft.length, WARNING_FORMS)}.`
+                  : 'Накладок і порушень правил немає.'
                 : 'Попереджень немає: без вікон, рваних днів і перевантажених днів.'}
             </p>
             {tab === 'HARD' && soft && soft.length > 0 ? (

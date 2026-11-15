@@ -50,8 +50,8 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         header: 'Назва',
         rowHeader: true,
         sortValue: (p) => p.title,
-        // у періоду «група не на парах» під назвою аудиторія й керівники; без керівників диспетчер бачить, що їх ще треба
-        // призначити
+        // у періоду «група не на парах» під назвою аудиторія й керівники; без керівників видимого другого рядка немає
+        // (рядок з одним «—» під кожною назвою лише шумів), а читач екрана чує «керівника не призначено»
         cell: (p) =>
           periodKindOf(p).effect === 'SUSPEND' ? (
             <span className="flex flex-col gap-0.5">
@@ -62,7 +62,7 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
               {p.supervisors && p.supervisors.length > 0 ? (
                 <span className="text-caption text-secondary">{supervisorsLabel(p.supervisors)}</span>
               ) : (
-                <EmptyValue label="керівника не призначено" />
+                <span className="sr-only">керівника не призначено</span>
               )}
             </span>
           ) : (

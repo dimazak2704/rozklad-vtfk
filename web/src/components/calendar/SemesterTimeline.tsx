@@ -10,7 +10,7 @@ import { MONTHS_NOMINATIVE, PARITY_LABEL } from '@/lib/labels';
 import { KindSwatch } from './KindSwatch';
 import { STUDY_MODE_LABEL } from './labels';
 import { parityActionLabel } from './parity-confirmation';
-import { periodAudience, periodKindOf } from './periods';
+import { periodAudience, periodChipLabel, periodKindOf } from './periods';
 
 interface SemesterTimelineProps {
   weeks: readonly CalendarWeek[];
@@ -148,7 +148,7 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                       onClick={() => onOpenPeriod(period)}
                       className="truncate rounded-tag text-start text-caption text-secondary hover-fine:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                     >
-                      {period.title} — до {formatNumericDate(period.endsOn).slice(0, 5)}
+                      {periodChipLabel(period)}: {period.title} — до {formatNumericDate(period.endsOn).slice(0, 5)}
                     </button>
                   ))}
                 </span>
@@ -253,8 +253,8 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
               )}
             >
               {kind.color ? <KindSwatch color={kind.color} effect={kind.effect} /> : null}
-              {/* назва — завжди всередині смуги (обрізана); повна назва, кому й коли — у підказці */}
-              <span className="truncate">{period.title}</span>
+              {/* у смузі — кого й який вид («4КІ1 · НС»): однакові назви інакше не розрізнити; повна назва — у підказці */}
+              <span className="truncate">{periodChipLabel(period)}</span>
             </button>
           </HoverDetails>
         ))}

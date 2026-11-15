@@ -8,9 +8,10 @@ import { useBells } from '@/api/meta';
 import { usePublicGroups, usePublicSchedule, usePublicTeachers } from '@/api/public';
 import { qk } from '@/api/queryKeys';
 import type { ChangeDto, IsoDate, LessonView, ReasonCode, SemesterRef, Uuid } from '@/api/types';
+import { DateInput } from '@/components/calendar/DateInput';
 import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl, Select, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatShortWeekdayDate, nearestStudyDay } from '@/lib/date';
+import { formatShortWeekdayDate, isIsoDate, nearestStudyDay } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 import { track } from '@/lib/undo/actions';
@@ -22,6 +23,7 @@ import {
   NEW_CHANGE_MODES,
   newChangeLabel,
   newChangeRequest,
+  pairsOfDay,
   defaultTeacherDiscipline,
   teacherChangeKind,
   teacherDisciplines,
@@ -33,7 +35,6 @@ import {
 } from './new-change';
 import { ReasonPicker } from './ReasonPicker';
 
-const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 const NO_LESSONS: LessonView[] = [];
 
 interface NewChangeDialogProps {
@@ -100,10 +101,14 @@ export function NewChangeDialog({ open, onOpenChange, date, semester, prefill, a
   const disciplines = useCatalogOptions('disciplines', {}, { enabled: open });
   const rooms = useCatalogOptions('rooms', {}, { enabled: open });
   const load = useLoadItems(open ? semester?.id : null, state.groupId);
-  const bells = useBells(open ? state.date : null);
+  // набрана частково дата — ще не дата: ні дзвінків, ні розкладу за нею не просимо
+  const validDate = isIsoDate(state.date);
+  const bells = useBells(open && validDate ? state.date : null);
+  // лише пари, що є цього дня за дзвінками (у пʼятницю 7–8 немає)
+  const dayPairs = pairsOfDay(bells.data?.slots);
   const needsLesson = state.mode !== 'additional';
   // пари групи цього дня: для зміни пари — з чого обирати, для додаткової — які номери вже зайняті
-  const schedule = usePublicSchedule('GROUP', state.groupId ?? undefined, state.date, state.date, { enabled: open && Boolean(state.groupId) });
+  const schedule = usePublicSchedule('GROUP', state.groupId ?? undefined, state.date, state.date, { enabled: open && validDate && Boolean(state.groupId) });
   const dayLessons = useMemo(
     () => (schedule.data?.days ?? []).flatMap((day) => day.lessons).sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup),
     [schedule.data],
@@ -141,7 +146,8 @@ export function NewChangeDialog({ open, onOpenChange, date, semester, prefill, a
           mode: 'additional',
           groupId: state.groupId,
           date: state.date,
-          pairs: state.pairs,
+          // пара, якої в новий день немає, із запиту випадає
+          pairs: state.pairs.filter((pair) => dayPairs.includes(pair)),
           subgroup: state.subgroup ?? loadSuggested?.subgroup ?? 0,
           disciplineId: state.disciplineId,
           teacherId: state.teacherId ?? suggested?.teacher.id ?? null,
@@ -368,13 +374,11 @@ export function NewChangeDialog({ open, onOpenChange, date, semester, prefill, a
               />
             </Field>
             <Field label="Дата" required error={errors.date}>
-              <Input
-                type="date"
+              <DateInput
                 value={state.date}
                 min={semester?.startsOn}
                 max={semester?.endsOn}
-                onChange={(event) => patch({ date: event.target.value, lessonId: null })}
-                className="figures"
+                onChange={(next) => patch({ date: next, lessonId: null })}
               />
             </Field>
           </div>
@@ -386,7 +390,7 @@ export function NewChangeDialog({ open, onOpenChange, date, semester, prefill, a
                   Пара <span className="font-normal text-muted">— одна чи кілька підряд</span>
                 </legend>
                 <div role="group" aria-label="Номери пар" className="flex flex-wrap gap-1.5">
-                  {PAIRS.map((pair) => {
+                  {dayPairs.map((pair) => {
                     const on = state.pairs.includes(pair);
                     const slot = bells.data?.slots.find((s) => s.pair === pair);
                     // у групи вже є пара — не забороняємо (буває для підгрупи), але видно до збереження

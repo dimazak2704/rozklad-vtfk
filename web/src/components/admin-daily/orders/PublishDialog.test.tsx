@@ -11,12 +11,13 @@ import { api } from '@/api/client';
 import type { ChangeDto, OrderDto } from '@/api/types';
 import { resetMockStores } from '@/mocks/store';
 import { renderWithProviders } from '@/test/render';
+import { NOTHING_LEFT_OUT, type LeftOut } from './left-out';
 import { PublishDialog, STALE_DRAFT_MESSAGE } from './PublishDialog';
 
 const DAY = '2026-11-09';
 
 /** Як на сторінці «Розпорядження»: діалог отримує поточну чернетку з запиту. */
-function Harness({ onPublished }: { onPublished: (order: OrderDto) => void }) {
+function Harness({ onPublished, leftOut = NOTHING_LEFT_OUT }: { onPublished: (order: OrderDto) => void; leftOut?: LeftOut }) {
   const draft = useOrderDraft(DAY);
   const publish = usePublishOrder();
   const [open, setOpen] = useState(true);
@@ -34,8 +35,7 @@ function Harness({ onPublished }: { onPublished: (order: OrderDto) => void }) {
         order={draft.data}
         parentNumber={null}
         nextNumber={36}
-        pending={0}
-        declined={0}
+        leftOut={leftOut}
         onPublish={async () => {
           const published = await publish.mutateAsync(draft.data.id);
           onPublished(published);
@@ -122,5 +122,25 @@ describe('PublishDialog: чернетка застаріла', () => {
     dialog = await screen.findByRole('dialog');
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Скасувати' })).toBeInTheDocument();
+  });
+});
+
+describe('PublishDialog: що не потрапить у документ', () => {
+  it('пари без рішення — червоне попередження разом з очікуваннями й відмовами', async () => {
+    renderWithProviders(<Harness onPublished={vi.fn()} leftOut={{ undecided: 3, pending: 1, declined: 1 }} />);
+    const dialog = await screen.findByRole('dialog');
+    const warning = within(dialog).getByText(/без рішення/).closest('p');
+    expect(warning).toHaveTextContent(
+      /^3\sпари без рішення, 1\sзаміна ще чекає підтвердження і 1 без нового кандидата після відмови — у цей документ не потраплять, лише в доповнення\.$/,
+    );
+    expect(warning).toHaveAttribute('data-tone', 'danger');
+  });
+
+  it('лише очікування — бурштинове, без пар без рішення', async () => {
+    renderWithProviders(<Harness onPublished={vi.fn()} leftOut={{ undecided: 0, pending: 2, declined: 0 }} />);
+    const dialog = await screen.findByRole('dialog');
+    const warning = within(dialog).getByText(/чекають підтвердження/).closest('p');
+    expect(warning).toHaveAttribute('data-tone', 'change');
+    expect(within(dialog).queryByText(/без рішення/)).not.toBeInTheDocument();
   });
 });

@@ -96,3 +96,19 @@ describe('DecisionCard: пара вже минула', () => {
     expect(screen.queryByRole('button', { name: 'Надіслати прохання ще раз' })).not.toBeInTheDocument();
   });
 });
+
+describe('DecisionCard: відмова', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('причина розпорядження підписана як така, а слова викладача — окремим рядком', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(DURING);
+    renderCard({
+      change: change({ status: 'DECLINED', reasonCode: 'MUTUAL', printedReason: 'Зв.зам.', responseComment: 'Не встигаю' }),
+      state: 'declined',
+    });
+    expect(screen.getByText(/^Причина в розпорядженні:/)).toHaveTextContent('Причина в розпорядженні: взаємна заміна');
+    expect(screen.queryByText(/^Причина:/)).not.toBeInTheDocument();
+    expect(screen.getByText(/«Не встигаю»/)).toHaveTextContent(/^Михальчук.*: «Не встигаю»$/);
+  });
+});

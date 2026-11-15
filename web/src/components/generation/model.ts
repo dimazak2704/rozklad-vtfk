@@ -98,9 +98,66 @@ export interface ComparisonRow {
   /** null — «Було» невідоме (сервер не порахував метрики бази): показуємо лише «Стало». */
   before: number | null;
   after: number;
+  /** Правило цього показника задача не враховувала («Не враховувати», вага 0): різниця — нейтральна. */
+  ignored?: boolean;
 }
 
 type CountKey = Exclude<keyof MetricsDto, 'perGroup' | 'hardConflicts'>;
+
+/** Яка вага керує показником «Було / Стало» (як `ConstraintWeights` у scheduler). */
+const METRIC_WEIGHT: Partial<Record<CountKey, keyof GenerationWeights>> = {
+  groupWindows: 'windows',
+  teacherWindows: 'teacherWindows',
+  teacherShiftWaits: 'teacherShiftWait',
+  brokenDays: 'brokenDays',
+  latePairs: 'latePairs',
+  studentOnePairDays: 'studentOnePairDay',
+  loneSubgroupSlots: 'subgroupsTogether',
+  teacherDays: 'teacherDays',
+  teacherOnePairDays: 'teacherDays',
+  teacherOverloadDays: 'teacherOverload',
+};
+
+/** Яка вага керує обмеженням розвʼязувача (`constraintId`, як `ConstraintWeights` у scheduler). */
+const CONSTRAINT_WEIGHT: Record<string, keyof GenerationWeights> = {
+  'Group windows': 'windows',
+  'Teacher windows': 'teacherWindows',
+  'Teacher shift wait': 'teacherShiftWait',
+  'Broken day': 'brokenDays',
+  'Halves paired': 'brokenDays',
+  'Late pair': 'latePairs',
+  'Group one pair day': 'studentOnePairDay',
+  'Subgroup alone': 'subgroupsTogether',
+  'Subgroups apart': 'subgroupsTogether',
+  'Teacher one pair day': 'teacherDays',
+  'Teacher extra day': 'teacherDays',
+  'Teacher overload': 'teacherOverload',
+  'Discipline twice': 'disciplineTwice',
+  'Unwanted slot': 'preferences',
+  'Room preference': 'homeRoom',
+  'Unit moved': 'stability',
+  'Room changed': 'stability',
+  'Special room lost': 'specialRooms',
+};
+
+/**
+ * Правила, які задача не враховувала: вага 0 («Не враховувати»). Порожньо, коли ваг немає (стара задача): тоді
+ * нічого не вигадуємо й показуємо все як раніше.
+ */
+export function ignoredWeights(job: Pick<GenerationJobDto, 'weights'>): ReadonlySet<keyof GenerationWeights> {
+  const ignored = new Set<keyof GenerationWeights>();
+  if (!job.weights) return ignored;
+  for (const [key, value] of Object.entries(job.weights)) {
+    if (value === 0) ignored.add(key as keyof GenerationWeights);
+  }
+  return ignored;
+}
+
+/** Обмеження розвʼязувача, яке задача не враховувала. */
+export function constraintIgnored(item: Pick<ConstraintAnalysisDto, 'constraintId'>, ignored: ReadonlySet<keyof GenerationWeights>): boolean {
+  const weight = item.constraintId ? CONSTRAINT_WEIGHT[item.constraintId] : undefined;
+  return weight !== undefined && ignored.has(weight);
+}
 
 /** Показники «Було / Стало» у порядку таблиці; нові (genfix §3.3) — лише коли сервер їх порахував. */
 const METRIC_ROWS: ReadonlyArray<{ key: CountKey; label: string }> = [
@@ -164,6 +221,7 @@ export function hardAfter(job: GenerationJobDto): number | null {
 export function comparisonRows(job: GenerationJobDto, base?: BaseVersionInfo | null): ComparisonRow[] {
   const after = job.metricsAfter;
   if (!after) return [];
+  const ignored = ignoredWeights(job);
   const before = metricsBefore(job, base);
   const rows: ComparisonRow[] = [];
   const hard = hardAfter(job);
@@ -171,7 +229,8 @@ export function comparisonRows(job: GenerationJobDto, base?: BaseVersionInfo | n
   for (const { key, label } of METRIC_ROWS) {
     const value = numberOrNull(after[key]);
     if (value === null) continue;
-    rows.push({ key, label, before: before ? numberOrNull(before[key]) : null, after: value });
+    const weight = METRIC_WEIGHT[key];
+    rows.push({ key, label, before: before ? numberOrNull(before[key]) : null, after: value, ignored: weight !== undefined && ignored.has(weight) });
   }
   return rows;
 }
@@ -194,6 +253,8 @@ export interface AnalysisSplit {
   clean: string[];
   /** Порушення лише в закріплених парах поза вибором. */
   outsideScope: number;
+  /** Правила, які задача не враховувала («Не враховувати»): не «лишилось», а довідка сірим. */
+  ignored: AnalysisRow[];
 }
 
 /** Рядок-бонус: за прапорцем, а в старих задачах — за додатним мʼяким балом (лише бонус його має). */
@@ -203,10 +264,17 @@ export function isBonus(item: ConstraintAnalysisDto): boolean {
   return score !== null && score.soft > 0;
 }
 
-export function splitAnalysis(items: readonly ConstraintAnalysisDto[]): AnalysisSplit {
-  const split: AnalysisSplit = { remaining: [], achieved: [], clean: [], outsideScope: 0 };
+export function splitAnalysis(
+  items: readonly ConstraintAnalysisDto[],
+  ignored: ReadonlySet<keyof GenerationWeights> = new Set(),
+): AnalysisSplit {
+  const split: AnalysisSplit = { remaining: [], achieved: [], clean: [], outsideScope: 0, ignored: [] };
   for (const item of items) {
     const key = item.constraintId ?? item.constraint;
+    if (constraintIgnored(item, ignored)) {
+      if (item.matchCount > 0) split.ignored.push({ key, constraint: item.constraint, count: item.matchCount, hard: false });
+      continue;
+    }
     if (isBonus(item)) {
       if (item.matchCount > 0) split.achieved.push({ key, constraint: item.constraint, count: item.matchCount, hard: false });
       continue;
@@ -223,12 +291,39 @@ export function splitAnalysis(items: readonly ConstraintAnalysisDto[]): Analysis
 // ───────────────────────── Що змінилось і по групах (genfix B8) ─────────────────────────
 
 const PAIR_FORMS_GEN = ['пари', 'пар', 'пар'] as const;
+const PAIR_FORMS = ['пара', 'пари', 'пар'] as const;
 
-/** «Переставлено 34 з 53 пар, ще 5 — в іншій аудиторії.» null — сервер не порахував або бази не було. */
+/**
+ * «Переставлено 34 з 53 пар, ще 5 — в іншій аудиторії, 44 отримали аудиторію.» — ті самі три види, що й у порівнянні
+ * версій («Переміщено», «Інша аудиторія», «Аудиторію призначено»). null — сервер не порахував або бази не було.
+ */
 export function outcomeSentence(outcome: GenerationOutcomeDto | null | undefined): string | null {
   if (!outcome || outcome.total === 0) return null;
-  const rooms = outcome.roomChanged > 0 ? `, ще ${outcome.roomChanged} — в іншій аудиторії` : '';
-  return `Переставлено ${outcome.moved} з ${outcome.total}\u00a0${plural(outcome.total, PAIR_FORMS_GEN)}${rooms}.`;
+  const assigned = outcome.roomAssigned ?? 0;
+  const rooms = [
+    outcome.roomChanged > 0 ? `ще ${outcome.roomChanged} — в іншій аудиторії` : null,
+    assigned > 0 ? `${outcome.roomChanged > 0 ? '' : 'ще '}${assigned} ${assigned % 10 === 1 && assigned % 100 !== 11 ? 'отримала' : 'отримали'} аудиторію, якої не було` : null,
+  ].filter(Boolean);
+  return `Переставлено ${outcome.moved} з ${outcome.total}\u00a0${plural(outcome.total, PAIR_FORMS_GEN)}${rooms.length > 0 ? `, ${rooms.join(', ')}` : ''}.`;
+}
+
+const NEW_PAIR_FORMS = ['нова пара', 'нові пари', 'нових пар'] as const;
+
+/**
+ * Чому в чернетці пар більше, ніж «з M»: решта не мала базового місця, яке можна порівняти, — закріплені чи поза
+ * вибором (стоять, як у базовій) і нові з навантаження. «Ще 3 пари чернетки: 2 — закріплені чи поза вибором, 1 нова
+ * пара — у базовій її не було.» null — нічого понад «з M» або стара задача.
+ */
+export function outcomeDraftSentence(outcome: GenerationOutcomeDto | null | undefined): string | null {
+  if (!outcome) return null;
+  const kept = outcome.kept ?? 0;
+  const added = outcome.added ?? 0;
+  if (kept + added === 0) return null;
+  const parts = [
+    kept > 0 ? `${kept} — закріплені чи поза вибором, стоять, як у базовій` : null,
+    added > 0 ? `${countLabel(added, NEW_PAIR_FORMS)} з навантаження — у базовій ${added === 1 ? 'її' : 'їх'} не було` : null,
+  ].filter(Boolean);
+  return `Ще ${countLabel(kept + added, PAIR_FORMS)} чернетки: ${parts.join('; ')}.`;
 }
 
 export type GroupColumnKey = 'latePairs' | 'windows' | 'brokenDays' | 'onePairDays';

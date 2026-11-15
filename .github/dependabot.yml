@@ -32,6 +32,13 @@ updates:
     groups:
       npm-minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 7: wait until typescript-eslint supports it (its peer range ends below 6.1)
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Node.js types follow the Node.js major of web/Dockerfile and CI (24), not the newest one
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Base images of the service images. nginx stays on a stable branch (an even minor version): close a
   # pull request to an odd, mainline one; CI refuses it (infra/deploy/tests/config_test.py).

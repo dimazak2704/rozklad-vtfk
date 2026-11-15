@@ -19,6 +19,7 @@ import type {
   PreferenceDto,
   ReplyDecision,
   ScheduleDto,
+  TemplateLessonDto,
   Uuid,
 } from './types';
 
@@ -161,6 +162,19 @@ export function useMyPreferences(semesterId: Uuid | undefined) {
     queryKey: qk.me.preferences(semesterId),
     queryFn: ({ signal }) => api.get<PreferenceDto[]>('/me/preferences', { semesterId }, { signal }),
     enabled: Boolean(semesterId),
+  });
+}
+
+/**
+ * GET /api/me/template?semesterId — мої пари в опублікованому базовому розкладі семестру: без разових замін і
+ * періодів (НС, практика). Порожньо, поки розклад не опубліковано.
+ */
+export function useMyTemplate(semesterId: Uuid | undefined) {
+  return useQuery({
+    queryKey: qk.me.template(semesterId),
+    queryFn: ({ signal }) => api.get<TemplateLessonDto[]>('/me/template', { semesterId }, { signal }),
+    enabled: Boolean(semesterId),
+    staleTime: 5 * 60_000,
   });
 }
 

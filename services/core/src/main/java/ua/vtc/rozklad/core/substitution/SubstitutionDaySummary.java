@@ -9,6 +9,8 @@ import java.util.UUID;
  *
  * @param absences         active absences covering the date
  * @param uncoveredLessons SCHEDULED lessons of absent teachers without a decision (or only a declined one)
+ * @param undecidedLessons the part of {@code uncoveredLessons} nobody has decided about at all (no declined
+ *                         change either), so it does not overlap {@code pending} and {@code declined}
  * @param declined         declined changes that nobody has replaced with a new decision yet
  * @param overduePending   pending confirmations past their deadline
  * @param declinedChanges  the unresolved declined changes, for alerts
@@ -19,6 +21,7 @@ public record SubstitutionDaySummary(
         LocalDate date,
         int absences,
         int uncoveredLessons,
+        int undecidedLessons,
         int pending,
         int confirmed,
         int declined,

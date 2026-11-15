@@ -2,16 +2,14 @@ import { Save, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useBlocker } from 'react-router';
 import { usePublicMeta } from '@/api/meta';
-import { useMe, useMyPreferences, useMySchedule, useSavePreferences } from '@/api/me';
+import { useMe, useMyPreferences, useMyTemplate, useSavePreferences } from '@/api/me';
 import { useBellProfiles } from '@/api/public';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
-import { studyWeek } from '@/components/public/schedule/schedule-params';
 import { PreferenceGrid, PreferenceLegend } from '@/components/teacher/PreferenceGrid';
-import { cellKey, changedCells, toList, toMap, type CellKey } from '@/components/teacher/preferences';
+import { changedCells, templateCells, toList, toMap, type CellKey } from '@/components/teacher/preferences';
 import { Button, EmptyState, LoadingRegion, PageErrorScope, PageHeader, Skeleton, notify, toastClearanceRef } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { addDays, nearestStudyDay, todayInKyiv } from '@/lib/date';
-import { countLabel, PARITY_LABEL } from '@/lib/labels';
+import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
 
 const CELL_FORMS = ['клітинка', 'клітинки', 'клітинок'] as const;
@@ -25,9 +23,8 @@ export default function MyPreferencesPage() {
   const preferences = useMyPreferences(teacher ? semester?.id : undefined);
   const save = useSavePreferences(semester?.id);
   const profiles = useBellProfiles();
-  // два тижні — чисельник і знаменник: щоб показати, де в мене пари зараз
-  const week = studyWeek(nearestStudyDay(todayInKyiv()));
-  const schedule = useMySchedule(week.from, addDays(week.to, 7), { enabled: teacher !== null });
+  // мої пари в базовому розкладі семестру — не разові заміни цього тижня і не порожні тижні груп на НС чи практиці
+  const template = useMyTemplate(teacher ? semester?.id : undefined);
   const [draft, setDraft] = useState<Map<CellKey, PreferenceKind> | null>(null);
 
   const saved = useMemo(() => toMap(preferences.data ?? []), [preferences.data]);
@@ -42,32 +39,7 @@ export default function MyPreferencesPage() {
     return map;
   }, [profiles.data]);
 
-  const lessons = useMemo(() => {
-    const byCell = new Map<CellKey, Map<string, Set<string>>>();
-    for (const day of schedule.data?.days ?? []) {
-      for (const lesson of day.lessons) {
-        if (lesson.teacher?.id !== teacher?.id || lesson.kind === 'CANCELLED') continue;
-        const key = cellKey(day.weekday, lesson.pair);
-        const labels = byCell.get(key) ?? new Map<string, Set<string>>();
-        const label = `${lesson.group.code} · ${lesson.discipline.shortName}`;
-        const parities = labels.get(label) ?? new Set<string>();
-        // день поза семестром (parity = null) не каже, чисельник це чи знаменник
-        if (day.parity) parities.add(day.parity);
-        labels.set(label, parities);
-        byCell.set(key, labels);
-      }
-    }
-    const out = new Map<CellKey, string[]>();
-    for (const [key, labels] of byCell) {
-      out.set(
-        key,
-        [...labels].map(([label, parities]) =>
-          parities.size === 1 ? `${label} (${PARITY_LABEL[[...parities][0] as 'NUMERATOR' | 'DENOMINATOR']})` : label,
-        ),
-      );
-    }
-    return out;
-  }, [schedule.data, teacher?.id]);
+  const lessons = useMemo(() => templateCells(template.data ?? []), [template.data]);
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) => changed > 0 && currentLocation.pathname !== nextLocation.pathname);
   useEffect(() => {

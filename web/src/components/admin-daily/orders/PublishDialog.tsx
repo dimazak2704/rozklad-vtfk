@@ -9,6 +9,7 @@ import { Button, Dialog, DialogContent, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatLongDate } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
+import { leftOutIsGap, leftOutText, type LeftOut } from './left-out';
 
 interface PublishDialogProps {
   open: boolean;
@@ -17,14 +18,13 @@ interface PublishDialogProps {
   parentNumber: number | null;
   /** Номер, який, найімовірніше, присвоїть сервер (останній у семестрі + 1); null — ще рахуємо. */
   nextNumber: number | null;
-  pending: number;
-  declined: number;
+  /** Що з дати не потрапить у документ (панель core на дату). */
+  leftOut: LeftOut;
   onPublish: () => Promise<OrderDto>;
 }
 
 const ROWS = ['рядок', 'рядки', 'рядків'] as const;
 const NOTES = ['примітка', 'примітки', 'приміток'] as const;
-const CHANGES = ['заміна', 'заміни', 'замін'] as const;
 
 export const STALE_DRAFT_MESSAGE = 'Чернетку оновлено — перевірте зміни й опублікуйте ще раз.';
 
@@ -32,7 +32,7 @@ export const STALE_DRAFT_MESSAGE = 'Чернетку оновлено — пер
  * Підтвердження публікації: який номер отримає розпорядження, що в ньому і що станеться далі.
  * Номер остаточно присвоює сервер; якщо його вже зайняв колега, у тості буде справжній.
  */
-export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNumber, pending, declined, onPublish }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNumber, leftOut, onPublish }: PublishDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // сервер відмовив: чернетка застаріла; її вже перечитують — поки нові рядки не прийшли, не публікуємо
@@ -41,6 +41,9 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
   const rows = order.items.length + order.roomChanges.length;
   const kind = order.kind === 'AMENDMENT' ? 'доповнення' : 'розпорядження';
   const numberText = nextNumber !== null ? `№${nextNumber}` : null;
+  const leftOutSentence = leftOutText(leftOut);
+  // пари без рішення чи відмови — групи можуть лишитися без викладача: червоне; лише очікування — бурштинове
+  const gap = leftOutIsGap(leftOut);
 
   /** Закриття будь-яким шляхом (кнопка, Esc, хрестик) забуває відмову: знову відкритий діалог — чистий. */
   const close = () => {
@@ -124,14 +127,20 @@ export function PublishDialog({ open, onOpenChange, order, parentNumber, nextNum
             <li>Номер — наскрізний у семестрі, тому скасувати публікацію не можна.</li>
           </ul>
 
-          {pending > 0 || declined > 0 ? (
-            <p className="flex items-start gap-2 rounded-control border border-change bg-change-subtle px-3 py-2 text-ui text-change">
-              <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>
-                {pending > 0 ? `${countLabel(pending, CHANGES)} ще ${pending === 1 ? 'чекає' : 'чекають'} підтвердження` : ''}
-                {pending > 0 && declined > 0 ? ' і ' : ''}
-                {declined > 0 ? `${declined} без нового кандидата після відмови` : ''} — у цей документ не потраплять, лише в доповнення.
-              </span>
+          {leftOutSentence ? (
+            <p
+              data-tone={gap ? 'danger' : 'change'}
+              className={cn(
+                'flex items-start gap-2 rounded-control border px-3 py-2 text-ui',
+                gap ? 'border-danger bg-danger-subtle text-danger' : 'border-change bg-change-subtle text-change',
+              )}
+            >
+              {gap ? (
+                <CircleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              ) : (
+                <TriangleExclamationPoint aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              )}
+              <span>{leftOutSentence} — у цей документ не потраплять, лише в доповнення.</span>
             </p>
           ) : null}
 

@@ -85,7 +85,8 @@ describe('«Заміни» на головній', () => {
     useFavoritesStore.setState({ favorites: [], recent: [{ type: 'GROUP', id: 'g-4ki1', label: '4КІ1', url: '/g/4КІ1' }], lastViewed: null });
     const { container } = renderWithProviders(<TodayChanges />);
     expect(await screen.findByRole('link', { name: '4КІ1' })).toHaveAttribute('href', expect.stringContaining('view=day'));
-    expect(container.textContent).toMatch(/2\sзаміни у 2\sгрупах, серед них у 4КІ1\./);
+    // «змін», а не «замін»: тут і скасування, і інші аудиторії
+    expect(container.textContent).toMatch(/2\sзміни у 2\sгрупах, серед них у 4КІ1\./);
     // жодних табличок з кодами всіх груп
     expect(screen.queryByRole('link', { name: /1КІ2/ })).not.toBeInTheDocument();
   });

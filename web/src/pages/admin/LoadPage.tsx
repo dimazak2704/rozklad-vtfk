@@ -10,6 +10,7 @@ import { DeriveDialog } from '@/components/load/DeriveDialog';
 import { CONTROL_FORM_LABEL, LOAD_SOURCE_HINT, LOAD_SOURCE_LABEL } from '@/components/load/labels';
 import { LoadFormDialog } from '@/components/load/LoadForm';
 import { formatHours, pairsPerWeek, patternDescription, patternShort } from '@/components/load/pattern';
+import { teacherLoadSummary } from '@/components/load/summary';
 import { Link } from 'react-router';
 import {
   Button,
@@ -263,6 +264,9 @@ export default function LoadPage() {
   }
 
   const summary = groupId && items.data ? groupSummary(items.data) : null;
+  const searching = table.q.trim() !== '';
+  // пошук привів до рядків одного викладача — його тиждень і семестр, як у групи
+  const teacherSummary = searching && items.data ? teacherLoadSummary(filtered) : null;
   const extraFilters = (source ? 1 : 0) + (semester.id !== activeSemesterOf(semesters.data)?.id ? 1 : 0);
   const capacity = group ? weeklyCapacity(shiftWindows.data ?? [], group.shift) : null;
 
@@ -342,10 +346,10 @@ export default function LoadPage() {
         </Popover>
       </div>
       {/* підказка — одразу під полем «Група», а не під 50 рядками й сторінками */}
-      {!groupId || semester.id !== activeSemesterOf(semesters.data)?.id ? (
+      {(!groupId && !searching) || semester.id !== activeSemesterOf(semesters.data)?.id ? (
         <p className="-mt-3 text-caption text-muted">
           {semester.id !== activeSemesterOf(semesters.data)?.id ? `Показано ${semester.name}. ` : null}
-          {!groupId ? 'Оберіть групу, щоб побачити, як заповнено її тиждень.' : null}
+          {!groupId && !searching ? 'Оберіть групу, щоб побачити, як заповнено її тиждень.' : null}
         </p>
       ) : null}
 
@@ -374,6 +378,14 @@ export default function LoadPage() {
             </span>
           ) : null}
         </section>
+      ) : null}
+
+      {teacherSummary ? (
+        <p aria-label={`Навантаження: ${name(teacherSummary.teacher)}`} className="max-w-3xl text-body text-secondary">
+          <span className="font-[650] text-primary">{name(teacherSummary.teacher)}</span>: {formatHours(teacherSummary.hours)} год на тиждень, за
+          семестр {formatHours(teacherSummary.planned)} год — {countLabel(teacherSummary.rows, ['рядок', 'рядки', 'рядків'])} у{' '}
+          {countLabel(teacherSummary.groups, ['групі', 'групах', 'групах'])}.
+        </p>
       ) : null}
 
       <Panel flush>
