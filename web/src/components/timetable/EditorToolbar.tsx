@@ -106,7 +106,7 @@ export function EditorToolbar({
   const toggleCourse = (course: number) =>
     onFiltersChange({
       ...filters,
-      courses: filters.courses.includes(course) ? filters.courses.filter((c) => c !== course) : [...filters.courses, course].sort(),
+      courses: filters.courses.includes(course) ? filters.courses.filter((c) => c !== course) : [...filters.courses, course].sort((a, b) => a - b),
     });
   const activeFilters = filters.courses.length + (filters.department !== null ? 1 : 0) + (filters.conflictsOnly ? 1 : 0);
   const filtered = activeFilters > 0 || filters.query !== '';
