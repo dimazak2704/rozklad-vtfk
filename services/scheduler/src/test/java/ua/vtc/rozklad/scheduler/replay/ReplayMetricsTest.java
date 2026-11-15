@@ -68,6 +68,28 @@ class ReplayMetricsTest {
         assertThat(metrics.get("unplaced")).isEqualTo(week.getUnits().size() - 2L);
     }
 
+    /** A subgroup that waits between two of its own lessons has a window of the hard rule, at the edge or not. */
+    @Test
+    void aSubgroupWaitingBetweenItsOwnLessonsIsAHardWindow() {
+        List<LessonUnit> units = List.of(
+                placed("a1", KI2, UUID.randomUUID(), T1, 2, 1, Parity.BOTH, R1).subgroup(1).build(),
+                placed("b2", KI2, UUID.randomUUID(), T2, 2, 2, Parity.BOTH, R2).subgroup(2).build(),
+                placed("a3", KI2, UUID.randomUUID(), T3, 2, 3, Parity.BOTH, R1).subgroup(1).build(),
+                placed("w1", KI2, UUID.randomUUID(), T1, 3, 1, Parity.BOTH, R1).build(),
+                placed("c2", KI2, UUID.randomUUID(), T2, 3, 2, Parity.BOTH, R1).subgroup(1).build(),
+                placed("d3", KI2, UUID.randomUUID(), T2, 3, 3, Parity.BOTH, R1).subgroup(2).build(),
+                placed("c4", KI2, UUID.randomUUID(), T3, 3, 4, Parity.BOTH, R1).subgroup(1).build());
+        Timetable timetable = new Timetable(List.of(), List.of(R1, R2), List.of(T1, T2, T3), List.of(KI2), units,
+                ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
+
+        ReplayMetrics metrics = ReplayMetrics.of(units, ReplayMetrics.placed(timetable), Set.of());
+
+        // Tue: subgroup 1 waits at p2 (no full pair); Wed: subgroup 1 waits at p3 after the full p1, subgroup 2's
+        // wait at p2 is the edge; one window per day and kind of week
+        assertThat(metrics.get("grpWin")).isEqualTo(4L);
+        assertThat(metrics.get("grpWinH")).isEqualTo(4L);
+    }
+
     private static Map<String, Long> expected() {
         Map<String, Long> values = new java.util.LinkedHashMap<>();
         values.put("grpWin", 8L);   // 4КІ1 Mon p2 ×2, 1КІ2 Thu worst cohort (2: p1,p4) 2 ×2, 2ЕА1 Fri p5 ×2

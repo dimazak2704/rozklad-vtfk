@@ -13,10 +13,12 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
  *
  * @param windows free pairs between lessons: per kind of week the worst cohort (B10, the same as the core
  *                metric), summed over both kinds of week, except a <em>lone subgroup pair at the edge of the
- *                day</em>: a pair where another subgroup studies and no pair before it, or none after it, has every
- *                cohort at a lesson (one teacher's two subgroups one after the other at the start or the end of the
- *                day, a subgroup lesson without a counterpart at the first or last pair). A lone pair between two
- *                pairs of the whole group stays a window for the subgroup that waits.
+ *                day</em>: a pair where another subgroup studies, between the pairs with every cohort at a lesson and
+ *                the cohort's own lessons on that side of them (one teacher's two subgroups one after the other at
+ *                the start or the end of the day, a subgroup lesson without a counterpart at the first or last
+ *                pair). A free pair between two pairs of the whole group, between two of the cohort's own lessons
+ *                on one side of them (sub 1, sub 2, sub 1), or on a day without such a pair stays a window for the
+ *                subgroup that waits.
  * @param brokenness «рваний день»: |Δ pair count| + 1 if the first pair differs (union of cohorts)
  * @param onePairWeeks kinds of week in which the group has exactly one occupied pair (union of cohorts)
  * @param loneSubgroupSlots pair × kind of week where a subgroup studies while another cohort has no lesson
@@ -104,10 +106,11 @@ public record GroupDay(int windows, int brokenness, int onePairWeeks, int loneSu
         }
 
         /**
-         * The worst cohort's free pairs between its lessons in a week with subgroup lessons; a free pair where another
-         * subgroup studies does not count when it lies before the first or after the last pair with every cohort at a
-         * lesson (the lone subgroup pairs at the edge of the day). Without subgroup lessons every cohort has the same
-         * pairs, so the caller takes the gaps of cohort 0.
+         * The worst cohort's free pairs between its lessons in a week with subgroup lessons. A free pair where another
+         * subgroup studies does not count when it lies between the block of pairs with every cohort at a lesson and
+         * the cohort's own nearest lesson on that side of the block (the lone subgroup pairs at the edge of the day);
+         * between two own lessons on one side of the block, inside the block, or on a day without a full pair it
+         * counts. Without subgroup lessons every cohort has the same pairs, so the caller takes the gaps of cohort 0.
          */
         private int worstCohortWindows(int week) {
             int fullFirst = 0;
@@ -126,10 +129,19 @@ public record GroupDay(int windows, int brokenness, int onePairWeeks, int loneSu
                 if (cohorts.distinctPairs(lane) < 2) {
                     continue;
                 }
+                // без повної пари крайових немає: межі 0 нічого не охоплюють
+                int edgeBefore = 0;
+                int edgeAfter = 0;
+                if (fullFirst > 0) {
+                    edgeBefore = ownLessonBelow(lane, fullFirst);
+                    edgeAfter = ownLessonAbove(lane, fullLast);
+                }
                 int last = cohorts.lastPair(lane);
                 int free = 0;
                 for (int pair = cohorts.firstPair(lane) + 1; pair < last; pair++) {
-                    if (cohorts.count(lane, pair) == 0 && !isLoneAtTheEdge(week, pair, fullFirst, fullLast)) {
+                    boolean edge = weeks.count(week, pair) > 0
+                            && (edgeBefore < pair && pair < fullFirst || fullLast < pair && pair < edgeAfter);
+                    if (cohorts.count(lane, pair) == 0 && !edge) {
                         free++;
                     }
                 }
@@ -138,9 +150,24 @@ public record GroupDay(int windows, int brokenness, int onePairWeeks, int loneSu
             return worst;
         }
 
-        /** Another cohort studies at the pair, and no pair with every cohort at a lesson lies on one side of it. */
-        private boolean isLoneAtTheEdge(int week, int pair, int fullFirst, int fullLast) {
-            return weeks.count(week, pair) > 0 && (fullFirst == 0 || pair < fullFirst || pair > fullLast);
+        /** The cohort's last lesson before {@code pair}, 0 without one. */
+        private int ownLessonBelow(int lane, int pair) {
+            for (int below = pair - 1; below > 0; below--) {
+                if (cohorts.count(lane, below) > 0) {
+                    return below;
+                }
+            }
+            return 0;
+        }
+
+        /** The cohort's first lesson after {@code pair}, past the last pair without one. */
+        private int ownLessonAbove(int lane, int pair) {
+            for (int above = pair + 1; above <= Timeslot.MAX_PAIR; above++) {
+                if (cohorts.count(lane, above) > 0) {
+                    return above;
+                }
+            }
+            return Timeslot.MAX_PAIR + 1;
         }
 
         private boolean everyCohortAt(int week, int pair) {

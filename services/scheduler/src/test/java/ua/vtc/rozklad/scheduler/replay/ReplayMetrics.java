@@ -41,7 +41,8 @@ public record ReplayMetrics(Map<String, Long> values) {
         Map<String, String> columns = new LinkedHashMap<>();
         columns.put("grpWin", "group windows: per group-day-week the worst cohort (core metric)");
         columns.put("grpWinH", "group windows of the hard rule: grpWin without a lone subgroup pair at the edge of the "
-                + "day (no pair with every cohort at a lesson before it, or none after it), in group-days with a free unit");
+                + "day (another cohort studies there, between the full pairs and the cohort's own nearest lesson on that "
+                + "side), in group-days with a free unit");
         columns.put("fri4", "group-weeks with more Friday pairs than the group's limit (cohorts united), all groups");
         columns.put("friOver", "Friday pairs above the group's limit per group-week (cohorts united), in group-days with "
                 + "a free unit (the hard rule)");
@@ -387,7 +388,8 @@ public record ReplayMetrics(Map<String, Long> values) {
 
     /**
      * Free pairs of a cohort between its lessons, without the lone subgroup pairs at the edge of the day: a pair where
-     * another cohort studies and no full pair lies before it, or none after it.
+     * another cohort studies, between the full pairs and the cohort's own nearest lesson on that side of them. On a day
+     * without a full pair every free pair counts.
      */
     private static long hardGaps(SortedSet<Integer> attended, SortedSet<Integer> occupied, SortedSet<Integer> full) {
         if (attended.size() < 2) {
@@ -398,8 +400,9 @@ public record ReplayMetrics(Map<String, Long> values) {
             if (attended.contains(pair)) {
                 continue;
             }
-            boolean loneAtTheEdge = occupied.contains(pair)
-                    && (full.isEmpty() || pair < full.first() || pair > full.last());
+            boolean loneAtTheEdge = occupied.contains(pair) && !full.isEmpty()
+                    && (pair < full.first() && attended.subSet(pair, full.first()).isEmpty()
+                    || pair > full.last() && attended.subSet(full.last() + 1, pair).isEmpty());
             if (!loneAtTheEdge) {
                 count++;
             }

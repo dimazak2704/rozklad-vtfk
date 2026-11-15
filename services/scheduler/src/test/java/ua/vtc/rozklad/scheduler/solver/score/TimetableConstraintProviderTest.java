@@ -377,6 +377,41 @@ class TimetableConstraintProviderTest {
                     .hasNoImpact();
         }
 
+        /**
+         * The edge exemption covers only the pairs between the full pairs and a subgroup's own lessons: a subgroup that
+         * waits between two of its own lessons while the other studies has a window (sub 1, sub 2, sub 1), with or
+         * without a whole-group pair on the day.
+         */
+        @Test
+        void aSubgroupWaitingBetweenItsOwnLessonsHasAWindow() {
+            // без пари всієї групи: підгрупа 1 на парах 1 і 3, підгрупа 2 на 2
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+            // після пари всієї групи: підгрупа 1 чекає на 3-й; підгрупа 2 на 2-й — край дня, не вікно
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(2, 1), BOTH).build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 4), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+            // те саме на початку дня: підгрупа 1 на 1 і 3, підгрупа 2 на 2, уся група на 4
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(3, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(3, 2), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(3, 3), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(3, 4), BOTH).build())
+                    .penalizesBy(2);
+            // в одному тижні: половинки чисельника — вікно лише в чисельник
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(4, 1), NUMERATOR).subgroup(1).build(),
+                            lesson(KI2, slot(4, 2), NUMERATOR).subgroup(2).build(),
+                            lesson(KI2, slot(4, 3), NUMERATOR).subgroup(1).build())
+                    .penalizesBy(1);
+        }
+
         /** Between two pairs of the whole group a lone subgroup pair stays a window for the subgroup that waits. */
         @Test
         void oneTeachersSubgroupsInTheMiddleOfTheDayLeaveWindows() {
