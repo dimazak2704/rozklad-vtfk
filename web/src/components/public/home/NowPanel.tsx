@@ -268,7 +268,7 @@ export function NowPanel({ className }: { className?: string }) {
   // після пар чи у вихідний — коли наступного разу: «Завтра перша о 09:40 — ЕУ, ауд. 22»
   let afterDay: string | undefined;
   if (nextDay) {
-    const when = relativeDayLabel(nextDay, data.today) ?? capitalize(formatWeekdayDateAfterNa(nextDay).split(',')[0]);
+    const when = relativeDayLabel(nextDay, data.today) ?? capitalize(formatWeekdayDateAfterNa(nextDay).split(',')[0] ?? '');
     const first = firstLesson(groupNextDay);
     if (group && first?.startsAt) {
       afterDay = `${when === 'Завтра' ? 'Завтра' : `У ${when.toLocaleLowerCase('uk')}`} у ${group.label} перша о ${first.startsAt} — ${lessonLine(first)}.`;
