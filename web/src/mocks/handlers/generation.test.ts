@@ -60,8 +60,10 @@ describe('розвʼязувач моку', () => {
 });
 
 describe('задачі генерації', () => {
+  // без ліміту часу: як вебзастосунок, задача зупиняється сама
   const start = (body: object = {}) =>
-    api.post<GenerationJobCreated>(jobsPath, { semesterId: ACTIVE_SEMESTER.id, scope: {}, baseVersionId: PUBLISHED_VERSION_ID, timeLimitSeconds: 10, ...body });
+    api.post<GenerationJobCreated>(jobsPath, { semesterId: ACTIVE_SEMESTER.id, scope: {}, baseVersionId: PUBLISHED_VERSION_ID, ...body });
+  const get = (jobId: string) => api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
 
   it('проходить шлях у черзі → розвʼязується → готово з «Було / Стало» і новою чернеткою', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -80,22 +82,55 @@ describe('задачі генерації', () => {
     vi.setSystemTime(t0 + 15_000);
     const done = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
     expect(done).toMatchObject({ status: 'SOLVED', bestScore: expect.stringMatching(/^0hard\/-\d+soft$/) });
+    // без ліміту: зупинилась сама після плато, точки прогресу — лише покращення
+    expect(done).toMatchObject({ timeLimitSeconds: null, stopReason: 'NO_IMPROVEMENT', stopRequested: false });
+    expect(done.progress.at(-1)?.t).toBeLessThan(12);
     expect(done.metricsAfter?.teacherWindows).toBeLessThan(180);
     expect(done.analysis?.find((a) => a.constraint === 'Аудиторія зайнята')).toMatchObject({ matchCount: 0 });
     const versions = await api.get<TimetableVersionDto[]>('/admin/timetable/versions', { semesterId: ACTIVE_SEMESTER.id });
     expect(versions.find((v) => v.id === done.resultVersionId)).toMatchObject({ status: 'DRAFT', source: 'GENERATED', hardConflicts: 0 });
   });
 
-  it('другий запуск, поки перший іде, — 409; скасування зупиняє задачу', async () => {
+  it('другий запуск, поки перший іде, — 409; задачу в черзі скасовано без чернетки', async () => {
     const { jobId } = await start();
     const second = await failure(start());
     expect(second.status).toBe(409);
     await api.post(`${jobsPath}/${jobId}/cancel`);
-    const cancelled = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
+    const cancelled = await get(jobId);
     expect(cancelled.status).toBe('CANCELLED');
     expect(cancelled.resultVersionId).toBeNull();
-    const again = await failure(api.post(`${jobsPath}/${jobId}/cancel`));
-    expect(again.status).toBe(409);
+    // як core: повторне скасування — та сама задача
+    expect((await api.post<GenerationJobDto>(`${jobsPath}/${jobId}/cancel`)).status).toBe('CANCELLED');
+  });
+
+  it('«Зупинити» задачу, що розвʼязується, — найкращий варіант стає чернеткою (STOPPED)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = new Date('2026-11-08T10:00:00Z').getTime();
+    vi.setSystemTime(t0);
+    const { jobId } = await start();
+    await solved();
+    vi.setSystemTime(t0 + 4_000);
+    const stopping = await api.post<GenerationJobDto>(`${jobsPath}/${jobId}/cancel`);
+    expect(stopping).toMatchObject({ status: 'RUNNING', stopRequested: true });
+
+    vi.setSystemTime(t0 + 6_000);
+    const stopped = await get(jobId);
+    expect(stopped).toMatchObject({ status: 'SOLVED', stopReason: 'STOPPED', stopRequested: true });
+    expect(stopped.resultVersionId).not.toBeNull();
+    expect(stopped.progress.at(-1)?.t).toBeLessThanOrEqual(4);
+    // зупинку не можна «повторити» в 409; семестр вільний для нового запуску
+    expect((await api.post<GenerationJobDto>(`${jobsPath}/${jobId}/cancel`)).status).toBe('SOLVED');
+    await expect(start()).resolves.toMatchObject({ jobId: expect.any(String) as unknown });
+  });
+
+  it('старий клієнт із лімітом часу: задача зупиняється на ліміті (TIME_LIMIT)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = new Date('2026-11-08T10:00:00Z').getTime();
+    vi.setSystemTime(t0);
+    const { jobId } = await start({ timeLimitSeconds: 10 });
+    await solved();
+    vi.setSystemTime(t0 + 15_000);
+    expect(await get(jobId)).toMatchObject({ status: 'SOLVED', timeLimitSeconds: 10, stopReason: 'TIME_LIMIT' });
   });
 
   it('задача несе власні параметри: область, групи, усі 14 ваг, бали й скільки пар переставлено (genfix B8)', async () => {

@@ -25,6 +25,7 @@ import type {
   GenerationJobRequest,
   GenerationJobStatus,
   GenerationProgressPoint,
+  GenerationStopReason,
   GenerationWeights,
   GenerationWeightsWire,
   MetricsDto,
@@ -48,6 +49,11 @@ const MAX_WEIGHT = WEIGHT_LIMIT;
 const QUEUE_MS = 600;
 const POINT_EVERY_MS = 2000;
 const MOCK_MAX_SOLVE_SECONDS = 12;
+/** Без ліміту (автоматичний режим): ~8 с покращень, потім плато, і задача зупиняється сама. */
+const AUTO_SOLVE_MS = 12_000;
+const AUTO_IMPROVING_SHARE = 0.7;
+/** Скільки «планувальник» повертає найкращий варіант після «Зупинити». */
+const STOP_MS = 800;
 
 // ───────────────────────── Розвʼязувач ─────────────────────────
 
@@ -600,11 +606,16 @@ interface JobRecord {
   weights: GenerationWeights;
   createdAt: number;
   durationMs: number;
+  /** Скільки з них розклад покращується: в автоматичному режимі решта — плато, після якого задача зупиняється сама. */
+  improvingMs: number;
   /** Розвʼязок рахується поза запитом запуску (≈0,2 с), поки задача «в черзі». */
   solution: (SolveResult & { metricsBefore: MetricsDto; baseLessons: readonly TemplateLessonDto[] }) | null;
   /** Коли задача почала «розвʼязуватись» (після черги й підготовки). */
   startedAtMs: number | null;
+  /** «Скасувати» в черзі: без чернетки. */
   cancelledAt: number | null;
+  /** «Зупинити», поки розвʼязується: за STOP_MS задача завершується з найкращим варіантом (як у core). */
+  stopRequestedAt: number | null;
   resultVersionId: Uuid | null;
   emittedPoints: number;
   completedEmitted: boolean;
@@ -634,14 +645,16 @@ function scoreAt(solution: SolveResult, durationMs: number, elapsedMs: number): 
   return trajectory[index] ?? (trajectory[0] as Score);
 }
 
-function progressUntil(solution: SolveResult, durationMs: number, elapsedMs: number): GenerationProgressPoint[] {
+/** Точки прогресу: як у планувальника, лише коли оцінка покращилась (на плато нових точок немає). */
+function progressUntil(solution: SolveResult, improvingMs: number, elapsedMs: number): GenerationProgressPoint[] {
   const points: GenerationProgressPoint[] = [];
-  for (let at = 0; at <= elapsedMs; at += POINT_EVERY_MS) points.push({ t: at / 1000, ...scoreAt(solution, durationMs, at) });
+  const end = Math.min(elapsedMs, improvingMs);
+  for (let at = 0; at <= end; at += POINT_EVERY_MS) points.push({ t: at / 1000, ...scoreAt(solution, improvingMs, at) });
   const last = points.at(-1);
-  if (elapsedMs >= durationMs && (!last || last.t * 1000 < durationMs)) {
-    points.push({ t: durationMs / 1000, ...scoreAt(solution, durationMs, durationMs) });
+  if (elapsedMs >= improvingMs && (!last || last.t * 1000 < improvingMs)) {
+    points.push({ t: improvingMs / 1000, ...scoreAt(solution, improvingMs, improvingMs) });
   }
-  return points;
+  return points.filter((point, i) => i === 0 || point.hard !== points[i - 1]?.hard || point.soft !== points[i - 1]?.soft);
 }
 
 const scoreText = (score: Score) => `${score.hard}hard/${score.soft}soft`;
@@ -661,14 +674,26 @@ function materializeResult(job: JobRecord, solution: SolveResult, finishedAt: nu
   return version.id;
 }
 
+/** Коли задача закінчиться: сама (плато або старий ліміт) або за STOP_MS після «Зупинити». */
+function finishedAtMs(job: JobRecord, startedAtMs: number): number {
+  const natural = startedAtMs + job.durationMs;
+  return job.stopRequestedAt === null ? natural : Math.min(natural, job.stopRequestedAt + STOP_MS);
+}
+
 function jobStatus(job: JobRecord, now: number): GenerationJobStatus {
   if (job.cancelledAt !== null) return 'CANCELLED';
   if (job.startedAtMs === null || now < job.startedAtMs) return 'QUEUED';
-  if (now < job.startedAtMs + job.durationMs) return 'RUNNING';
+  if (now < finishedAtMs(job, job.startedAtMs)) return 'RUNNING';
   return 'SOLVED';
 }
 
-/** GenerationJobDto core: адитивні semesterId, createdAt, baseVersionId, timeLimitSeconds, requestedBy. */
+/** Чому задача зупинилась (як `stopReason` core); мок не має межі сервера. */
+function stopReasonOf(job: JobRecord, startedAtMs: number): GenerationStopReason {
+  if (job.stopRequestedAt !== null && job.stopRequestedAt < startedAtMs + job.durationMs) return 'STOPPED';
+  return job.params.timeLimitSeconds ? 'TIME_LIMIT' : 'NO_IMPROVEMENT';
+}
+
+/** GenerationJobDto core: адитивні semesterId, createdAt, baseVersionId, timeLimitSeconds, requestedBy, stop*. */
 function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
   const status = jobStatus(job, now);
   const { solution, startedAtMs } = job;
@@ -683,7 +708,7 @@ function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
     progress: [],
     resultVersionId: null,
     baseVersionId: job.baseVersionId,
-    timeLimitSeconds: job.params.timeLimitSeconds,
+    timeLimitSeconds: job.params.timeLimitSeconds ?? null,
     analysis: null,
     metricsBefore: solution?.metricsBefore ?? null,
     metricsAfter: null,
@@ -697,21 +722,25 @@ function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
     outcome: null,
     // нові задачі мока завжди з повним набором ваг (стару задачу з пʼятьма вагами мок не створює)
     legacyWeights: false,
+    stopRequested: job.stopRequestedAt !== null,
+    stopReason: null,
   };
   if (status === 'CANCELLED' && job.cancelledAt !== null) view.finishedAt = iso(job.cancelledAt);
   if (!solution || startedAtMs === null || now < startedAtMs) return view;
 
-  const stoppedAt = job.cancelledAt ?? now;
+  const stoppedAt = job.cancelledAt ?? job.stopRequestedAt ?? now;
   const elapsed = Math.max(0, Math.min(stoppedAt - startedAtMs, job.durationMs));
   view.startedAt = iso(startedAtMs);
-  view.progress = progressUntil(solution, job.durationMs, elapsed);
+  view.progress = progressUntil(solution, job.improvingMs, elapsed);
   const best = view.progress.at(-1);
   view.bestScore = best ? scoreText(best) : null;
   view.hardScore = best?.hard ?? null;
   view.softScore = best?.soft ?? null;
   if (status === 'SOLVED') {
-    const finishedAt = startedAtMs + job.durationMs;
+    const finishedAt = finishedAtMs(job, startedAtMs);
     view.finishedAt = iso(finishedAt);
+    view.stopReason = stopReasonOf(job, startedAtMs);
+    // мок зберігає лише кінцевий розклад: зупинена задача теж отримує його як чернетку (спрощення демо)
     view.resultVersionId = materializeResult(job, solution, finishedAt);
     view.analysis = constraintAnalysis(solution.lessons, job.weights, job.scopeGroupIds);
     view.metricsAfter = analyzeLessons(solution.lessons).metrics;
@@ -758,8 +787,9 @@ function scopeGroups(scope: ReadonlySet<Uuid> | null): GroupRef[] {
 function validateJob(body: Partial<GenerationJobRequest>): { errors: FieldErrorDto[]; weights: GenerationWeights } {
   const errors: FieldErrorDto[] = [];
   if (!SEMESTERS.some((s) => s.id === body.semesterId)) errors.push({ field: 'semesterId', message: 'Оберіть семестр' });
+  // як core: ліміт необовʼязковий (без нього — автоматичний режим), а заданий — 10..600 с
   const limit = body.timeLimitSeconds;
-  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 10 || limit > 600) {
+  if (limit != null && (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 10 || limit > 600)) {
     errors.push({ field: 'timeLimitSeconds', message: 'Ліміт часу — від 10 до 600 секунд' });
   }
   const groupIds = body.scope?.groupIds ?? [];
@@ -815,7 +845,7 @@ export const handlers = [
     const active = [...jobs.get().values()].find(
       (job) => job.semesterId === request_.semesterId && ['QUEUED', 'RUNNING'].includes(jobStatus(job, now)),
     );
-    if (active) return conflict('Генерація для цього семестру вже триває. Дочекайтеся завершення або скасуйте її.');
+    if (active) return conflict('Для цього семестру вже виконується генерація: дочекайтеся її або зупиніть.');
 
     // без базової версії одиниці беруться з навантаження, а в демо воно виведене з опублікованого розкладу (DOMAIN §12)
     const baseVersion = request_.baseVersionId ? timetableMock.find(request_.baseVersionId) : timetableMock.published(request_.semesterId);
@@ -841,10 +871,12 @@ export const handlers = [
       params: { ...request_, weights },
       weights,
       createdAt: now,
-      durationMs: Math.min(request_.timeLimitSeconds, MOCK_MAX_SOLVE_SECONDS) * 1000,
+      durationMs: request_.timeLimitSeconds ? Math.min(request_.timeLimitSeconds, MOCK_MAX_SOLVE_SECONDS) * 1000 : AUTO_SOLVE_MS,
+      improvingMs: request_.timeLimitSeconds ? Math.min(request_.timeLimitSeconds, MOCK_MAX_SOLVE_SECONDS) * 1000 : AUTO_SOLVE_MS * AUTO_IMPROVING_SHARE,
       solution: null,
       startedAtMs: null,
       cancelledAt: null,
+      stopRequestedAt: null,
       resultVersionId: null,
       emittedPoints: 0,
       completedEmitted: false,
@@ -873,15 +905,19 @@ export const handlers = [
     return HttpResponse.json(jobView(job));
   }),
 
+  // як core: у черзі — CANCELLED одразу; що розвʼязується — stopRequested, і найкращий варіант стане чернеткою;
+  // повторна зупинка — та сама задача; завершена — 409
   http.post(apiPath(`${base}/:jobId/cancel`), ({ params }) => {
     const job = jobs.get().get(String(params.jobId));
     if (!job) return notFound(`Задачу генерації з id ${String(params.jobId)} не знайдено.`);
-    const status = jobStatus(job, Date.now());
+    const now = Date.now();
+    const status = jobStatus(job, now);
+    if (status === 'CANCELLED' || job.stopRequestedAt !== null) return HttpResponse.json(jobView(job, now), { status: 202 });
     if (status !== 'QUEUED' && status !== 'RUNNING') {
-      return conflict('Генерацію вже завершено — скасовувати нічого.');
+      return conflict('Генерацію вже завершено: зупинити її не можна.');
     }
-    job.cancelledAt = Date.now();
-    // як core: 202 із задачею
-    return HttpResponse.json(jobView(job), { status: 202 });
+    if (status === 'QUEUED') job.cancelledAt = now;
+    else job.stopRequestedAt = now;
+    return HttpResponse.json(jobView(job, now), { status: 202 });
   }),
 ];

@@ -4,7 +4,7 @@ import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, Panel } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
-import { elapsedSeconds, formatSeconds, jobScopeText } from './model';
+import { elapsedSeconds, formatSeconds, jobScopeText, stopReasonLabel } from './model';
 import { changedPriorities } from './priorities';
 
 const STATUS: Record<GenerationJobDto['status'], { label: string; dot: string }> = {
@@ -44,8 +44,8 @@ interface JobHistoryProps {
 }
 
 /**
- * Запуски цього семестру: стан словом, коли й скільки тривав. Число жорстких порушень — лише коли
- * воно не нуль; мʼякий штраф — у самому запуску, не в кожному рядку.
+ * Запуски цього семестру: стан словом, коли, скільки тривав і чому зупинився. Число жорстких порушень — лише
+ * коли воно не нуль; мʼякий штраф — у самому запуску, не в кожному рядку.
  */
 export function JobHistory({ jobs, selectedId, onSelect, versionNames = new Map() }: JobHistoryProps) {
   const [all, setAll] = useState(false);
@@ -58,6 +58,7 @@ export function JobHistory({ jobs, selectedId, onSelect, versionNames = new Map(
           const status = solvedWithConflicts(job) ? WITH_CONFLICTS : STATUS[job.status];
           const hard = Math.abs(jobHardScore(job) ?? 0);
           const params = paramsLine(job, versionNames);
+          const reason = stopReasonLabel(job);
           return (
             <li key={job.id}>
               <button
@@ -77,6 +78,7 @@ export function JobHistory({ jobs, selectedId, onSelect, versionNames = new Map(
                 <span className="text-ui text-secondary">{job.startedAt ? formatInstant(job.startedAt) : 'ще не почався'}</span>
                 <span className="ms-auto text-caption text-muted">
                   {formatSeconds(elapsedSeconds(job))}
+                  {reason ? ` · ${reason}` : null}
                   {hard > 0 ? <span className="text-cancel"> · {hard} жорстк.</span> : null}
                 </span>
                 {params ? <span className="basis-full text-caption text-secondary">{params}</span> : null}
