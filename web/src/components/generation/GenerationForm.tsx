@@ -89,7 +89,7 @@ export function GenerationForm({
                   onToggle={() =>
                     onChange({
                       ...form,
-                      courses: form.courses.includes(course) ? form.courses.filter((c) => c !== course) : [...form.courses, course].sort(),
+                      courses: form.courses.includes(course) ? form.courses.filter((c) => c !== course) : [...form.courses, course].sort((a, b) => a - b),
                     })
                   }
                 >

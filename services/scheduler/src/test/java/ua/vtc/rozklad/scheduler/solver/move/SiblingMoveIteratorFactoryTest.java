@@ -177,7 +177,7 @@ class SiblingMoveIteratorFactoryTest {
 
     private static List<Timeslot> slots(int... weekdayPair) {
         List<Timeslot> slots = new ArrayList<>();
-        for (int i = 0; i < weekdayPair.length; i += 2) {
+        for (int i = 0; i + 1 < weekdayPair.length; i += 2) {
             slots.add(new Timeslot(weekdayPair[i], weekdayPair[i + 1]));
         }
         return slots;
