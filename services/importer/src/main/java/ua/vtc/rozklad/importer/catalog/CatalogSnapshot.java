@@ -12,7 +12,7 @@ import java.util.UUID;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CatalogSnapshot(List<GroupItem> groups, List<TeacherItem> teachers, List<DisciplineItem> disciplines,
-                              List<RoomItem> rooms, List<SemesterItem> semesters) {
+                              List<RoomItem> rooms, List<SemesterItem> semesters, List<PeriodKindItem> periodKinds) {
 
     public CatalogSnapshot {
         groups = groups == null ? List.of() : List.copyOf(groups);
@@ -20,14 +20,47 @@ public record CatalogSnapshot(List<GroupItem> groups, List<TeacherItem> teachers
         disciplines = disciplines == null ? List.of() : List.copyOf(disciplines);
         rooms = rooms == null ? List.of() : List.copyOf(rooms);
         semesters = semesters == null ? List.of() : List.copyOf(semesters);
+        periodKinds = periodKinds == null ? List.of() : List.copyOf(periodKinds);
+    }
+
+    /** A catalog without period kinds (an older core, or a test that does not need them). */
+    public CatalogSnapshot(List<GroupItem> groups, List<TeacherItem> teachers, List<DisciplineItem> disciplines,
+                           List<RoomItem> rooms, List<SemesterItem> semesters) {
+        this(groups, teachers, disciplines, rooms, semesters, List.of());
     }
 
     public static CatalogSnapshot empty() {
-        return new CatalogSnapshot(List.of(), List.of(), List.of(), List.of(), List.of());
+        return new CatalogSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
+    /** {@code active} is additive in core's snapshot; {@code null} (an older core) counts as active. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GroupItem(UUID id, String code, Integer course, List<Integer> subgroups) {
+    public record GroupItem(UUID id, String code, Integer course, List<Integer> subgroups, Boolean active) {
+
+        public GroupItem(UUID id, String code, Integer course, List<Integer> subgroups) {
+            this(id, code, course, subgroups, null);
+        }
+
+        public boolean isActive() {
+            return active == null || active;
+        }
+    }
+
+    /**
+     * A period kind of core's catalog (CONTRACTS «period kinds»): {@code effect} DAY_OFF, SUSPEND, ONLINE or
+     * INFO; {@code aliases} — other codes of the kind («З» for «ЗУ»); inactive kinds are listed too.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PeriodKindItem(UUID id, String code, String name, String effect, String color, List<String> aliases,
+                                 String noteTemplate, Boolean active) {
+
+        public PeriodKindItem {
+            aliases = aliases == null ? List.of() : List.copyOf(aliases);
+        }
+
+        public boolean isActive() {
+            return active == null || active;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

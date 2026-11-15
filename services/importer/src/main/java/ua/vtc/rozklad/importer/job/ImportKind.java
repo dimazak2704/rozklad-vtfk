@@ -9,5 +9,7 @@ public enum ImportKind {
     /** The curriculum («навчальний план»): scanned PDF, photo or XLSX. */
     CURRICULUM,
     /** An order («розпорядження»): DOCX or a photo/scan. */
-    ORDER_DOCUMENT
+    ORDER_DOCUMENT,
+    /** The college's academic calendar («робочий графік освітнього процесу») as XLSX: calendar periods. */
+    ACADEMIC_CALENDAR_XLSX
 }

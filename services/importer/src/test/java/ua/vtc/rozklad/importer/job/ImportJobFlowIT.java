@@ -2,6 +2,7 @@ package ua.vtc.rozklad.importer.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -53,6 +54,7 @@ import ua.vtc.rozklad.importer.catalog.CatalogPort;
 import ua.vtc.rozklad.importer.catalog.CatalogUnavailableException;
 import ua.vtc.rozklad.importer.config.Ids;
 import ua.vtc.rozklad.importer.support.SeedFiles;
+import ua.vtc.rozklad.importer.support.TestCalendars;
 import ua.vtc.rozklad.importer.support.TestCatalogs;
 import ua.vtc.rozklad.importer.support.TestTokens;
 import ua.vtc.rozklad.importer.support.TestcontainersConfiguration;
@@ -621,6 +623,105 @@ class ImportJobFlowIT {
                         .content("{\"mappings\":[{\"type\":\"GROUP\",\"raw\":\"1ТК\",\"createNew\":{},\"addAlias\":false}]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("mappings[0].createNew"));
+    }
+
+    private static final String CALENDAR_CHECK = """
+            {"dryRun":true,"academicYear":"2026/2027","canApply":true,"created":140,"updated":0,"unchanged":0,
+             "deleted":0,"skippedManual":0,"periods":[],"manual":[],"manualOverlaps":[],"outOfSemester":[],
+             "groupSemesters":{"created":110,"updated":0,"unchanged":0,"skipped":[]},"conflicts":[],
+             "lessons":{"added":0,"removed":0,"updated":0}}""";
+
+    /**
+     * ACADEMIC_CALENDAR_XLSX on the real 2026/27 file: an unknown group blocks (core is not asked), skipping it
+     * runs core's dry-run, apply needs no semester and sends one idempotent step; a second apply sends nothing.
+     */
+    @Test
+    void academicCalendarIsCheckedByCoreAndAppliedOnce() throws Exception {
+        List<String> known = TestCalendars.GROUPS.stream().filter(code -> !code.equals("4РТ2")).toList();
+        when(catalog.snapshot()).thenReturn(TestCalendars.college(known, TestCalendars.kinds()));
+        when(core.importCalendarPeriods(any(), eq(true), org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(jsonMapper.readTree(CALENDAR_CHECK));
+        when(core.importCalendarPeriods(any(), eq(false), anyString()))
+                .thenReturn(jsonMapper.readTree("{\"dryRun\":false,\"created\":140}"));
+
+        UUID id = UUID.fromString(upload("academic-calendar-2026-27.xlsx", "ACADEMIC_CALENDAR_XLSX", null, null)
+                .get("id").asString());
+        JsonNode parsed = job(id);
+        assertThat(parsed.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(parsed.at("/draft/groups").size()).isEqualTo(56);
+        assertThat(parsed.at("/draft/codes").size()).isEqualTo(11);
+        assertThat(parsed.at("/draft/check").isMissingNode()).isTrue();
+        assertThat(errorMessages(parsed)).containsExactly("Немає в каталозі. Цей імпорт не створює нових груп. Зіставте "
+                + "її з групою каталогу або пропустіть (параметр імпорту skipGroups).");
+        verify(core, never()).importCalendarPeriods(any(), anyBoolean(), any());
+
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + parsed.get("version").asLong()
+                                + ",\"options\":{\"academicYear\":\"2027/2028\"}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("options.academicYear"));
+
+        JsonNode current = job(id);
+        String options = "{\"version\":" + current.get("version").asLong() + ",\"options\":{\"skipGroups\":[\"4РТ-2\"]}}";
+        mockMvc.perform(put("/api/import/jobs/{id}/options", id).with(TestTokens.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content(options))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.draft.check.created").value(140));
+        JsonNode ready = job(id);
+        assertThat(messages(ready)).contains("Буде створено 140, оновлено 0, видалено 0, без змін 0.");
+        assertThat(ready.at("/draft/periods").size()).isGreaterThan(50);
+
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted());
+        JsonNode applied = job(id);
+        assertThat(applied.get("status").asString()).isEqualTo("APPLIED");
+        assertThat(applied.at("/result/calendar/created").asInt()).isEqualTo(140);
+        ArgumentCaptor<CoreImportPayloads.CalendarPeriodsRequest> sent =
+                ArgumentCaptor.forClass(CoreImportPayloads.CalendarPeriodsRequest.class);
+        verify(core).importCalendarPeriods(sent.capture(), eq(false), eq("import-job:" + id + ":calendar"));
+        assertThat(sent.getValue().periods()).noneMatch(period -> period.groupCodes().contains("4РТ2"))
+                .anyMatch(period -> period.kindCode().equals("НС") && period.groupCodes().equals(List.of("4КІ1"))
+                        && period.startsOn().equals(LocalDate.of(2026, 11, 16))
+                        && period.endsOn().equals(LocalDate.of(2026, 11, 27)));
+
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("APPLIED"));
+        verify(core, times(1)).importCalendarPeriods(any(), eq(false), anyString());
+    }
+
+    /** Core's 409 on the real run (a live change appeared after the check): back to review with the conflicts. */
+    @Test
+    void academicCalendarConflictAtApplyReturnsToReviewWithItsRows() throws Exception {
+        when(catalog.snapshot()).thenReturn(TestCalendars.college());
+        when(core.importCalendarPeriods(any(), eq(true), org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(jsonMapper.readTree(CALENDAR_CHECK));
+        when(core.importCalendarPeriods(any(), eq(false), anyString())).thenThrow(new CoreImportException(409,
+                "Сервер розкладу не прийняв періоди графіка: Періоди зачіпають живі заміни.",
+                jsonMapper.readTree("""
+                        {"status":409,"conflicts":[{"kind":"GROUP","severity":"HARD","message":"Заміна 4КІ1 на 2 парі",
+                          "lessonIds":[],"date":"2026-11-19","pair":2}]}"""), null));
+
+        UUID id = UUID.fromString(upload("academic-calendar-2026-27.xlsx", "ACADEMIC_CALENDAR_XLSX", null, null)
+                .get("id").asString());
+        assertThat(job(id).get("status").asString()).isEqualTo("READY");
+        mockMvc.perform(post("/api/import/jobs/{id}/apply", id).with(TestTokens.admin()))
+                .andExpect(status().isAccepted());
+
+        JsonNode rejected = job(id);
+        assertThat(rejected.get("status").asString()).isEqualTo("NEEDS_REVIEW");
+        assertThat(rejected.get("error").asString()).contains("живі заміни");
+        assertThat(rejected.get("canApply").asBoolean()).isFalse();
+        assertThat(errorMessages(rejected)).containsExactly("Заміна 4КІ1 на 2 парі (19.11.2026, пара 2)");
+    }
+
+    @Test
+    void academicCalendarAcceptsOnlyXlsx() throws Exception {
+        mockMvc.perform(multipart("/api/import/jobs").file(file("orders/order-035-2026-10-19.jpg"))
+                        .param("kind", "ACADEMIC_CALENDAR_XLSX").with(TestTokens.admin()))
+                .andExpect(status().isUnsupportedMediaType());
     }
 
     private static List<String> messages(JsonNode job) {

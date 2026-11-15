@@ -16,8 +16,8 @@ Specs: CONTRACTS §5 (endpoints), DOMAIN §10 (normalization), DOMAIN §11 (sour
 | `GET /api/import/jobs?kind&status&page=0&size=20` | ADMIN | page `{items,page,size,total}`, newest first; items without `draft`/`report` |
 | `GET /api/import/jobs/{id}` | ADMIN | full `ImportJobDto` |
 | `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type,raw,targetId?,createNew?,addAlias}]}` | ADMIN | merges decisions, re-matches against a fresh catalog, returns the job; `createNew` for a value the kind cannot create (an order; a group of a program/plan; a program discipline named only by its file) → 400 `errors[mappings[i].createNew]` |
-| `PUT /api/import/jobs/{id}/options` `{version, options}` | ADMIN | replaces the application parameters (groups, weekly hours, version name; `sheet`/`semesterNumber` → 400, they decide how the file was read), rebuilds the report; stale `version` → 409 |
-| `POST /api/import/jobs/{id}/apply` optional body `{semesterId?}` | ADMIN | 202, job in `APPLYING` (or unchanged when already `APPLYING`/`APPLIED`) |
+| `PUT /api/import/jobs/{id}/options` `{version, options}` | ADMIN | replaces the application parameters (groups, weekly hours, version name, calendar codes/groups/titles/rooms; `sheet`/`semesterNumber`/`academicYear` → 400, they decide how the file was read), rebuilds the report; stale `version` → 409 |
+| `POST /api/import/jobs/{id}/apply` optional body `{semesterId?}` | ADMIN | 202, job in `APPLYING` (or unchanged when already `APPLYING`/`APPLIED`); the semester is not needed for `ORDER_DOCUMENT` and `ACADEMIC_CALENDAR_XLSX` |
 | `POST /api/import/ai/parse-absence` `{text, teacherId?, today}` | ADMIN, SERVICE | rules first, AI only when unsure |
 | `GET /api/import/ai/usage` | ADMIN | today's calls/tokens/cost, daily budget, models |
 
@@ -25,7 +25,8 @@ Specs: CONTRACTS §5 (endpoints), DOMAIN §10 (normalization), DOMAIN §11 (sour
 plus additive `fileType, fileSize, updatedAt, createdBy, semesterId, options, mappings, result, canApply`.
 `ReportRow` = `{severity, type, raw, matched?, suggestions, location}` plus an additive Ukrainian `message`.
 `type` is one of `TEACHER, DISCIPLINE, GROUP, ROOM` (catalog matching, mappable) or `LESSON, CELL, BELLS,
-HOURS, ORDER, CURRICULUM, CATALOG, FILE` (parse remarks).
+HOURS, ORDER, CURRICULUM, CATALOG, FILE, OPTIONS, PERIOD_KIND, PERIOD` (parse remarks, readiness; the last two
+belong to the academic calendar).
 
 Errors are ProblemDetail like the rest of the system: 400 `validation` (`errors[]`, e.g. `options.semesterNumber`),
 404, 409 `conflict` (job state, concurrent change `stale-data`), 413 `payload-too-large`, 415 `unsupported-file`,
@@ -81,6 +82,7 @@ UPLOADED ──parse──► PARSING ──► NEEDS_REVIEW ◄──mappings�
 | `DISCIPLINE_PROGRAM` | DOCX, DOC, PDF | `groupCodes` (for apply), `hoursPerWeek?` | `ProgramDraft`: name, cycle commission, hours, semester (informative), hours/week, credits, source | 1. catalog (new discipline) 2. `POST /api/admin/import/load` one item per group |
 | `CURRICULUM` | PDF scan, JPEG/PNG/WEBP, XLSX | `semesterNumber` (required), `groupCodes` (for apply) | `CurriculumDraft`: rows of that semester | 1. catalog (new disciplines) 2. load items per group × row |
 | `ORDER_DOCUMENT` | DOCX; JPEG/PNG/WEBP/GIF/PDF via AI | — | `OrderDraft`: number, kind, date, weekday/parity labels, rows of both sections, notes, signature | `POST /api/admin/import/changes` (text snapshots) |
+| `ACADEMIC_CALENDAR_XLSX` | XLSX | `sheet?`, `academicYear?`, `skipCodes?`, `skipGroups?`, `titles?`, `rooms?` | `AcademicCalendarDraft`: groups, legend, runs; codes, periods, groupSemesters and core's dry-run `check` (rebuilt with every report) | one step `calendar`: `POST /api/admin/import/calendar-periods` (re-sendable upsert by source key) |
 
 ### TIMETABLE_XLSX parser (DOMAIN §11, tested on the real file)
 
@@ -208,6 +210,50 @@ their own message: map them to the elective the group actually studies. Two rows
 naming both rows: core keeps one load item per group and discipline and rejects the pair at apply. Whether such
 rows should instead be merged by summing their hours is an owner question; until it is answered nothing is summed.
 
+### ACADEMIC_CALENDAR_XLSX («робочий графік освітнього процесу»)
+
+Option Б step 1б of `Docs/Нотатки/Періоди навчального процесу — проєкт.md`; the request and response of core's
+endpoint are in CONTRACTS («Calendar periods import»). Code: `calendar/AcademicCalendarParser` (file),
+`CalendarPlan` (request, pure), `NoteTemplate` (order notes), `AcademicCalendarImportHandler`.
+
+* **Parser** (POI, structure by content): the header cell «ГРУПА» gives the group column; of the next 8 rows the
+  pair whose columns hold day numbers 6 days apart (31/6, 7/13, …) for the longest run of columns gives the weeks.
+  Dates are rebuilt from the academic year (`options.academicYear`, else «на 2026 - 2027 навчальний рік» above the
+  header, else the sheet name; none → parse error): the first week is the Monday nearest to 1 September with those
+  day numbers, every next column is 7 days later and must match its cells (else «Тижні графіка йдуть не підряд»).
+  Header cells left of the weeks with «тижн» / «іспит» give theory weeks and exams of semesters I/II (that cell and
+  the next; empty → `null`, out of 1..53 / 0..20 → warning, `null`). Every row whose group cell is a group code
+  after removing dashes («4КІ-1» → «4КІ1») is a group (a duplicate → warning, the first is kept). Codes are folded
+  (upper case, Latin look-alikes → Cyrillic). A merged cell over several weeks gives its code to each. Equal
+  adjacent codes of a group form a **run** from Monday of its first week to **Friday** of its last («НС» 16.11–29.11
+  in the grid → 16.11–27.11). Legend = short upper-case codes with a description in one of the next three cells
+  below the groups; when the legend has several lines for a code (НП), the cell's fill colour picks the line's
+  title in sentence case (FFFF6600 → «Навчальна радіомонтажна практика»), an unknown colour the uncoloured line
+  («Навчальна практика»), and a different colour starts a new run. Sheet size is bounded like `SheetGrid`.
+  Real file: 56 groups, 11 codes (І А ВП Д ЗУ К НП НС ПП Р С), weeks 31.08.2026–29.08.2027, no warnings.
+* **Report rebuild** (`ImportHandler.review`, on parse, mappings, options and right before apply): groups (minus
+  `skipGroups`) and the rooms of `rooms` for codes in the file are GROUP/ROOM entities that this kind never
+  creates (ERROR until mapped or skipped). Codes are matched to the snapshot's `periodKinds` by code or alias
+  (`ЗУ`, alias `З`). Unknown code → ERROR `PERIOD_KIND` «Невідомий код «Х» у груп 4КІ1, 4КІ2: додайте вид у «Видах
+  періодів» або пропустіть код.»; inactive kind → ERROR; a kind with effect ONLINE → ERROR «Вид «ФН» з ефектом
+  «онлайн» не імпортується з графіка (у графіку немає режиму навчання): пропустіть код і додайте такий період у
+  календарі вручну.» (core would refuse it without a study mode); a skipped code → INFO; an older core without kinds →
+  one ERROR. Title: the legend's colour title, else `titles[code]`, else the kind's name; room: `rooms[code]`, only for
+  SUSPEND kinds (else an INFO). Defaults when `titles`/`rooms` are absent: «НС» → «Основи національного
+  спротиву», room «401» (owner, 15.11.2026); `{}` means none. Runs with the same kind, title, dates and room are one
+  period; scope ALL when its groups are all active catalog groups, COURSES when exactly the active groups of some
+  courses (at least 2 groups), else GROUPS. `orderNote` from the kind's `noteTemplate` (`NoteTemplate`; the shared
+  test vectors are in `NoteTemplateTest`); `sourceKey` = `2026/2027|НС|2026-11-16|2026-11-27|<8 hex of SHA-256 of
+  the title>`. `groupSemesters`: two per group (semesters 1 and 2). When nothing blocks, core is asked for a dry-run
+  (no Idempotency-Key); its answer is stored as `draft.check` and becomes rows: `conflicts` → ERROR `PERIOD`
+  («message (dd.MM.yyyy, пара N)»), `outOfSemester` → WARN «НС 4ЕА1 11.01–22.01 поза семестрами системи: не
+  імпортується» / «… обрізано до 01.09–04.09», `manual` with differences → WARN, `manualOverlaps` → INFO,
+  `groupSemesters.skipped` → WARN, counts → INFO «Буде створено N, оновлено M, видалено K, без змін L.», lesson
+  counts → INFO; core down, 404 (an older core) or 400 → a blocking ERROR with the reason.
+* **Apply**: the same request with `dryRun=false` and `Idempotency-Key: import-job:<id>:calendar`; a second apply
+  of an applied job sends nothing. Core's 409 `conflicts[]` (a live change that appeared after the check) sends
+  the job back to `NEEDS_REVIEW` with one ERROR row per conflict (`ImportHandler.rejectionRows`).
+
 ### parse-absence
 
 `AbsenceTextParser` (rules): «сьогодні», «завтра», «післязавтра», weekdays («у понеділок»), «4.11», «04.11.2026»,
@@ -275,7 +321,7 @@ The text is never logged (absence reasons are private).
 | `IMPORT_WORKERS`, `IMPORT_QUEUE_CAPACITY` | `2`, `50` | full queue → job FAILED «Черга обробки переповнена» |
 | `CORE_URL`, `IMPORTER_CLIENT_SECRET`, `AUTH_TOKEN_URI` | foundation | catalog snapshot and import calls use the `rozklad-importer` service account |
 
-## 6. Persistence (Flyway `V1__import_jobs_and_ai_usage.sql`)
+## 6. Persistence (Flyway `V1__import_jobs_and_ai_usage.sql`, `V2__academic_calendar_kind.sql`)
 
 `import_job` (kind/status/file metadata, sha256, storage, semester, JSONB `options`, `draft`, `issues` (parse
 remarks), `report`, `summary`, `mappings`, `ai`, `result`, `error`, timestamps, optimistic `version`),
@@ -318,7 +364,10 @@ POST /api/admin/import/load {semesterId, items:[{groupCode, disciplineShortName,
 POST /api/admin/import/changes {date, number?, kind, parentNumber?, weekdayLabel?, parityLabel?, items:[{section,
   groupCode, pairLabel, rowType, fromDiscipline?, fromTeacher?, reasonText?, toDiscipline?, toTeacher?, roomText?}],
   notes, signatoryPosition?, signatoryName?}
-Header on all: Idempotency-Key: import-job:<jobId>:<step>
+POST /api/admin/import/calendar-periods[?dryRun=true] {academicYear, periods:[{sourceKey, kindCode, title, startsOn,
+  endsOn, scope, groupCodes, courses, roomName, studyMode, orderNote}], groupSemesters:[{groupCode, semesterNumber,
+  theoryWeeks, exams}]}                                                        → result.calendar
+Header on all real runs: Idempotency-Key: import-job:<jobId>:<step> (none on the calendar dry-run)
 ```
 
 Upserts must keep existing values the request does not carry (e.g. a specialty name). Lessons reference only
@@ -335,6 +384,9 @@ mvn -q -pl services/importer -am verify -Dtest=None -Dsurefire.failIfNoSpecified
 ```
 
 * `TimetableWorkbookParserTest`, `ProgramStructureExtractorTest` — real `seed/` files;
+* `AcademicCalendarParserTest` (real `seed/academic-calendar-2026-27.xlsx` and small generated sheets),
+  `AcademicCalendarImportHandlerTest` (kinds, scopes, notes, dry-run rows, apply, 409), `NoteTemplateTest`,
+  `CalendarOptionsTest`;
 * `NormalizationEngineTest`, `TextRulesTest`, `AbsenceTextParserTest`, `ParseAbsenceServiceTest`, `UploadRulesTest`,
   `OrderDocxParserTest` (a DOCX built in the college layout), `CurriculumAndOrderMappingTest`;
 * `AiExtractionServiceTest` (fake adapter: models, effort, schema, usage on success/refusal/cut-off/invalid JSON,
@@ -364,3 +416,7 @@ run the jar with `SERVER_PORT=18083 DB_NAME=importer_<name>` and a key from `.en
 * A catalog entry created by an apply attempt that core then rejected stays in core when the admin later maps
   that value to an existing record instead (core has no undo for an import; it is marked `needsReview` there).
 * `FILESYSTEM` storage: a file written for a rolled-back upload stays in the directory (harmless orphan).
+* Academic calendar: core's `calendar-periods` endpoint and `periodKinds` in the snapshot were built in parallel;
+  the importer was verified against a stubbed core only. `outOfSemester[].kept` is read leniently (objects with
+  `startsOn`/`endsOn` give «обрізано до …», anything else «імпортується лише частина»). `summary.recognized` still
+  counts matched catalog entities (groups, rooms), not periods.
