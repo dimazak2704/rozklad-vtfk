@@ -1,16 +1,21 @@
-# CI: backend (Maven verify: unit tests + Testcontainers integration tests), web (lint, tests,
-# build) and the production deployment config (compose overlay, Caddyfile, scripts).
+# CI: backend (Maven verify: unit tests + Testcontainers integration tests, JaCoCo coverage), web
+# (lint, tests with coverage, build), the production deployment config (compose overlay, Caddyfile,
+# scripts) and the SonarCloud analysis with its quality gate (sonar-project.properties).
 #
-# Runs on pull requests and on pushes to branches other than main. For main the Deploy workflow
-# calls this one (workflow_call) and rolls out only when it passes, so main is tested exactly once.
+# Runs on pull requests (feature branches are tested through their PR, once per push) and on pushes to
+# develop. For main the Deploy workflow calls this one (workflow_call) and rolls out only when it passes,
+# so main is tested exactly once.
 name: CI
 
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    branches: [develop]
   workflow_dispatch:
   workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -33,9 +38,25 @@ jobs:
           java-version: "25"
           cache: maven
 
-      # Testcontainers uses the Docker engine of the runner (PostgreSQL, RabbitMQ, Redis)
+      # Testcontainers uses the Docker engine of the runner (PostgreSQL, RabbitMQ, Redis).
+      # JaCoCo records both test runs: target/site/jacoco/jacoco.xml in every module
       - name: Build, unit and integration tests
         run: mvn -B -ntp verify
+
+      # for the SonarCloud job: compiled classes and coverage, not the jars
+      - name: Keep classes and coverage for the analysis
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-analysis
+          path: |
+            libs/*/target/classes/
+            libs/*/target/test-classes/
+            libs/*/target/site/jacoco/jacoco.xml
+            services/*/target/classes/
+            services/*/target/test-classes/
+            services/*/target/site/jacoco/jacoco.xml
+          retention-days: 3
+          if-no-files-found: error
 
       - name: Keep the test reports of a failed run
         if: failure()
@@ -66,8 +87,17 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      # the same tests as npm test, with coverage/lcov.info for SonarCloud
+      - run: npm run test:coverage
       - run: npm run build
+
+      - name: Keep coverage for the analysis
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-coverage
+          path: web/coverage/lcov.info
+          retention-days: 3
+          if-no-files-found: error
 
   deploy-config:
     name: Deployment config
@@ -127,3 +157,72 @@ jobs:
       # deploy-key checks of ci-entry.sh, Caddy routing in a throwaway container, rendered compose files
       - name: Deployment script and configuration tests
         run: bash infra/deploy/tests/run.sh
+
+  # One SonarCloud project for Java and TypeScript (sonar-project.properties). Pull requests get a PR
+  # analysis, pushes a branch analysis (develop; main through the Deploy workflow). The job waits for
+  # the quality gate and fails when it is red; only main requires it. Without SONAR_TOKEN (pull requests
+  # from forks, Dependabot) it is skipped, not failed.
+  sonar:
+    name: SonarCloud
+    needs: [backend, web]
+    # pull requests from this repository, develop and main; a push to a feature branch is analysed in its PR
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository ||
+       github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Token
+        id: token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=SonarCloud skipped::The secret SONAR_TOKEN is not available to this run."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.present == 'true'
+        with:
+          # blame data decides what counts as new code
+          fetch-depth: 0
+
+      # the dependency jars for sonar.java.libraries: the Maven cache the backend job restored or saved
+      # (same key: the pom files)
+      - uses: actions/setup-java@v6
+        if: steps.token.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - uses: actions/download-artifact@v8
+        if: steps.token.outputs.present == 'true'
+        with:
+          name: backend-analysis
+          path: .
+
+      - uses: actions/download-artifact@v8
+        if: steps.token.outputs.present == 'true'
+        with:
+          name: web-coverage
+          path: web/coverage
+
+      # Vitest writes paths relative to web/; the analysis runs from the repository root
+      - name: Paths in lcov.info
+        if: steps.token.outputs.present == 'true'
+        run: sed -i 's#^SF:src/#SF:web/src/#' web/coverage/lcov.info
+
+      # pinned to a commit like the other third-party actions (Dependabot updates it)
+      - name: SonarCloud scan and quality gate
+        if: steps.token.outputs.present == 'true'
+        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4 # v8.5.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.java.libraries=/home/runner/.m2/repository/**/*.jar

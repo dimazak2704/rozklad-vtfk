@@ -278,3 +278,18 @@ starts the container again and waits until it is healthy (about a minute).
   `POST /api/notify/events/dead-letters/replay` sends each of them back once (handlers skip events they already
   handled). A message that fails again returns to the DLQ; an unreadable one stays there for a developer
   (RabbitMQ management, `http://127.0.0.1:15672`). The gauge `notification.events.dead_letters` has the count.
+
+## 8. Test coverage
+
+CI sends both reports to SonarCloud (`sonar-project.properties`); the same reports can be built locally.
+
+* **Backend:** `mvn verify` (or `mvn -pl services/core -am verify` for one service). JaCoCo records the unit
+  (surefire) and the integration (failsafe, Testcontainers) tests into one `target/jacoco.exec` per module and
+  writes the report at `verify`: open `<module>/target/site/jacoco/index.html`; `jacoco.xml` next to it is what
+  SonarCloud reads. A module whose tests did not run (`-DskipTests`) has no report.
+  On Windows the JaCoCo agent cannot write to a path with non-ASCII characters (a Cyrillic folder name): Maven
+  then prints «Skipping JaCoCo execution due to missing execution data file». Point the data file at an ASCII
+  path: `J='C:/Temp/jacoco/${project.artifactId}.exec'; mvn verify -Djacoco.destFile="$J" -Djacoco.dataFile="$J"`.
+* **Web:** `cd web && npm run test:coverage`: the same tests as `npm test` plus a summary in the console,
+  `web/coverage/lcov-report/index.html` and `web/coverage/lcov.info` (for SonarCloud). Tests, the mock API
+  (`src/mocks`), test helpers and the dev kitchen sink are not counted.
