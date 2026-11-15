@@ -28,7 +28,9 @@ class ReplayMetricsTest {
     private static final StudentGroup KI1 = new StudentGroup(UUID.randomUUID(), "4КІ1", 25, 1, List.of(), FIRST_SHIFT);
     private static final StudentGroup KI2 = new StudentGroup(UUID.randomUUID(), "1КІ2", 28, 1, List.of(1, 2),
             FIRST_SHIFT);
-    private static final StudentGroup EA1 = new StudentGroup(UUID.randomUUID(), "2ЕА1", 30, 2, List.of(), SECOND_SHIFT);
+    /** Friday limit of one pair, so its two Friday pairs are above it. */
+    private static final StudentGroup EA1 = new StudentGroup(UUID.randomUUID(), "2ЕА1", 30, 2, List.of(), SECOND_SHIFT,
+            1);
     private static final Teacher T1 = teacher("Т1", Set.of());
     private static final Teacher T2 = teacher("Т2", Set.of());
     private static final Teacher T3 = teacher("Т3", Set.of());
@@ -69,6 +71,11 @@ class ReplayMetricsTest {
     private static Map<String, Long> expected() {
         Map<String, Long> values = new java.util.LinkedHashMap<>();
         values.put("grpWin", 8L);   // 4КІ1 Mon p2 ×2, 1КІ2 Thu worst cohort (2: p1,p4) 2 ×2, 2ЕА1 Fri p5 ×2
+        // 1КІ2 Thu: subgroup 2 waits at p2 while subgroup 1 studies after the last full pair (p1): a lone pair at the
+        // edge of the day, not a window of the hard rule; the empty p3 is
+        values.put("grpWinH", 6L);
+        values.put("fri4", 2L);     // 2ЕА1 Fri p4, p6 in both weeks, limit 1
+        values.put("friOver", 2L);
         values.put("broken", 1L);   // 4КІ1 Fri: numerator {1,2}, denominator {2}
         values.put("late", 4L);     // 4КІ1 Wed p4, 1КІ2 Thu p4 (Friday p6 of the 2nd shift is not late)
         values.put("grp1p", 7L);    // 4КІ1 Tue ×2 and Fri denominator, 2ЕА1 Mon ×2 and Wed ×2

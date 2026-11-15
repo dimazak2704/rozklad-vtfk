@@ -308,7 +308,8 @@ public final class SnapshotReplay {
         Map<TimetableConstraint, TimetableAnalyzer.ConstraintResult> rows = new LinkedHashMap<>();
         TimetableAnalyzer.analyze(solution).forEach(row -> rows.put(row.constraint(), row));
         Map<String, String> checks = new LinkedHashMap<>();
-        check(checks, "grpWin", rows.get(TimetableConstraint.GROUP_WINDOWS).impact(), metrics.get("grpWin"));
+        check(checks, "grpWinH", rows.get(TimetableConstraint.GROUP_WINDOWS).impact(), metrics.get("grpWinH"));
+        check(checks, "friOver", rows.get(TimetableConstraint.FRIDAY_OVERLOAD).impact(), metrics.get("friOver"));
         check(checks, "tchWin", rows.get(TimetableConstraint.TEACHER_WINDOWS).impact(), metrics.get("tchWin"));
         check(checks, "shWait", rows.get(TimetableConstraint.TEACHER_SHIFT_WAIT).impact(), metrics.get("shWait"));
         check(checks, "broken", rows.get(TimetableConstraint.BROKEN_DAY).matchCount(), metrics.get("broken"));

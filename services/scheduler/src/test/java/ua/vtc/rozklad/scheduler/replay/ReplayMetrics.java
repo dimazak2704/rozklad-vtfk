@@ -40,6 +40,11 @@ public record ReplayMetrics(Map<String, Long> values) {
     private static Map<String, String> columns() {
         Map<String, String> columns = new LinkedHashMap<>();
         columns.put("grpWin", "group windows: per group-day-week the worst cohort (core metric)");
+        columns.put("grpWinH", "group windows of the hard rule: grpWin without a lone subgroup pair at the edge of the "
+                + "day (no pair with every cohort at a lesson before it, or none after it), in group-days with a free unit");
+        columns.put("fri4", "group-weeks with more Friday pairs than the group's limit (cohorts united), all groups");
+        columns.put("friOver", "Friday pairs above the group's limit per group-week (cohorts united), in group-days with "
+                + "a free unit (the hard rule)");
         columns.put("broken", "broken group-days: numerator and denominator differ in count or first pair (core)");
         columns.put("late", "group-day-weeks with a pair at the 4th position of the shift or later (LatePairs, core)");
         columns.put("grp1p", "group-day-weeks with one occupied pair, cohorts united (core studentOnePairDays)");
@@ -172,6 +177,7 @@ public record ReplayMetrics(Map<String, Long> values) {
                 int weekday = dayEntry.getKey();
                 List<Placement> day = dayEntry.getValue();
                 StudentGroup studentGroup = day.getFirst().unit().getGroup();
+                boolean dayInScope = day.stream().anyMatch(placement -> !placement.unit().isPinned());
                 List<SortedSet<Integer>> occupiedByWeek = new ArrayList<>();
                 for (int week = NUMERATOR; week <= DENOMINATOR; week++) {
                     int currentWeek = week;
@@ -179,7 +185,9 @@ public record ReplayMetrics(Map<String, Long> values) {
                     SortedSet<Integer> occupied = pairs(active);
                     occupiedByWeek.add(occupied);
                     long worstWindows = 0;
+                    long worstHardWindows = 0;
                     Map<UUID, Integer> busiestDiscipline = new HashMap<>();
+                    SortedSet<Integer> full = fullPairs(active, cohorts, occupied);
                     for (int cohort : cohorts) {
                         List<Placement> attended = active.stream()
                                 .filter(placement -> placement.unit().getSubgroup() == 0
@@ -187,6 +195,7 @@ public record ReplayMetrics(Map<String, Long> values) {
                                 .toList();
                         SortedSet<Integer> attendedPairs = pairs(attended);
                         worstWindows = Math.max(worstWindows, gaps(attendedPairs));
+                        worstHardWindows = Math.max(worstHardWindows, hardGaps(attendedPairs, occupied, full));
                         maxDay = Math.max(maxDay, attendedPairs.size());
                         if (attendedPairs.size() == 1) {
                             add(values, "coh1p", 1);
@@ -199,6 +208,12 @@ public record ReplayMetrics(Map<String, Long> values) {
                                 busiestDiscipline.merge(discipline, set.size(), Math::max));
                     }
                     add(values, "grpWin", worstWindows);
+                    add(values, "grpWinH", dayInScope ? worstHardWindows : 0);
+                    Integer fridayLimit = studentGroup.getFridayMaxPairs();
+                    if (weekday == StudentGroup.FRIDAY && fridayLimit != null && occupied.size() > fridayLimit) {
+                        add(values, "fri4", 1);
+                        add(values, "friOver", dayInScope ? occupied.size() - fridayLimit : 0);
+                    }
                     if (occupied.size() == 1) {
                         add(values, "grp1p", 1);
                     } else if (occupied.size() == 2) {
@@ -354,6 +369,42 @@ public record ReplayMetrics(Map<String, Long> values) {
 
     private static long gaps(SortedSet<Integer> pairs) {
         return pairs.size() < 2 ? 0 : pairs.last() - pairs.first() + 1 - pairs.size();
+    }
+
+    /** Occupied pairs at which every cohort has a lesson (whole group, or all subgroups in parallel). */
+    private static SortedSet<Integer> fullPairs(List<Placement> active, List<Integer> cohorts,
+                                                SortedSet<Integer> occupied) {
+        SortedSet<Integer> full = new TreeSet<>();
+        for (int pair : occupied) {
+            Set<Integer> present = active.stream().filter(placement -> placement.slot().pair() == pair)
+                    .map(placement -> placement.unit().getSubgroup()).collect(Collectors.toSet());
+            if (present.contains(0) || present.containsAll(cohorts)) {
+                full.add(pair);
+            }
+        }
+        return full;
+    }
+
+    /**
+     * Free pairs of a cohort between its lessons, without the lone subgroup pairs at the edge of the day: a pair where
+     * another cohort studies and no full pair lies before it, or none after it.
+     */
+    private static long hardGaps(SortedSet<Integer> attended, SortedSet<Integer> occupied, SortedSet<Integer> full) {
+        if (attended.size() < 2) {
+            return 0;
+        }
+        long count = 0;
+        for (int pair = attended.first() + 1; pair < attended.last(); pair++) {
+            if (attended.contains(pair)) {
+                continue;
+            }
+            boolean loneAtTheEdge = occupied.contains(pair)
+                    && (full.isEmpty() || pair < full.first() || pair > full.last());
+            if (!loneAtTheEdge) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static void add(Map<String, Long> values, String column, long amount) {
