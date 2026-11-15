@@ -76,6 +76,19 @@ describe('SubstitutionRequests', () => {
     expect(sent).toEqual([]);
   });
 
+  it('посилання з листа (/me?change=…) прокручує до картки цієї заміни й підсвічує її', async () => {
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const target = changesForTeacher(krentsin.id, new Date()).filter((change) => change.status === 'PENDING_CONFIRMATION').at(-1);
+    if (!target) throw new Error('у демо-даних немає запиту на заміну');
+    renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />, { route: `/me?change=${target.id}` });
+    await screen.findAllByRole('article', { name: /^Запит на заміну/ });
+    const item = document.getElementById(`change-${target.id}`);
+    expect(item).not.toBeNull();
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    expect(scroll.mock.contexts[0]).toBe(item);
+    expect(item?.querySelector('article')).toHaveClass('anim-arrive');
+  });
+
   it('якщо сервер відмовив — картка повертається', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));

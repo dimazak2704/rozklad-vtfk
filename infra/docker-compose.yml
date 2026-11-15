@@ -1,5 +1,5 @@
 # Розклад ВТФК — локальний стенд.
-#   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis
+#   docker compose -f infra/docker-compose.yml --profile infra up -d          # postgres, rabbitmq, redis, mailpit
 #   docker compose -f infra/docker-compose.yml --profile app up -d --build    # + усі сервіси, auth та web
 # Перед --profile app зберіть jar-и: mvn -q -DskipTests package (Dockerfile копіює target/app.jar).
 # Секрети (TELEGRAM_*, ANTHROPIC_API_KEY, *_CLIENT_SECRET) беруться з ../.env, якщо він є.
@@ -85,6 +85,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # Перехоплювач листів для стенду: notification надсилає сюди всі листи, справжнім адресатам нічого не йде.
+  # Вебінтерфейс http://127.0.0.1:8025. Без depends_on: недоступний SMTP лише затримує листи (вони чекають у таблиці)
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    profiles: [infra, app]
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "1000"
+      # логін з чийогось локального .env не ламає надсилання
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   # Сервіс входу: OIDC-провайдер (Spring Authorization Server), сторінка входу /auth/login.
   # Браузер бачить його лише через nginx контейнера web (http://localhost:8088/auth); 8085 опубліковано лише
@@ -243,6 +263,18 @@ services:
       IMPORTER_URL: http://importer:8083
       PUBLIC_WEB_URL: http://localhost:8088
       NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:-dev-notification-secret}
+      # листи — лише в Mailpit стенду: environment перекриває ../.env, тож справжній MAIL_* розробника сюди не дійде
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_USERNAME: ""
+      MAIL_PASSWORD: ""
+      MAIL_STARTTLS: "false"
+      MAIL_SSL: "false"
+      MAIL_FROM: "Розклад ВТФК <rozklad@rozklad.local>"
+      MAIL_REPLY_TO: ""
+      # демо-акаунти стенду мають адреси @rozklad.local (services/auth application.yml): на стенді вони підтверджені
+      MAIL_TRUSTED_DOMAINS: "vtc.vn.ua,rozklad.local"
+      MAIL_ALLOW_REAL_SMTP: "false"
       # «машина часу» стенду (StandClock): scripts/dev-stack.sh up --time 2026-11-20T10:00; порожньо — реальний час
       ROZKLAD_STAND_TIME: ${ROZKLAD_STAND_TIME:-}
       ROZKLAD_STAND_TIME_ANCHOR: ${ROZKLAD_STAND_TIME_ANCHOR:-}

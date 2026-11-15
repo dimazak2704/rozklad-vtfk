@@ -21,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
  *       only PUBLISHED orders;</li>
  *   <li>{@code POST /api/documents/orders/render} — ADMIN;</li>
  *   <li>{@code POST /api/notify/bindings/codes} — ADMIN or TEACHER (a teacher only for own code);</li>
+ *   <li>{@code /api/notify/email/me}, {@code …/me/test} — ADMIN or TEACHER (own settings only);</li>
  *   <li>{@code POST /api/notify/telegram/webhook} — open, the Telegram secret header is checked in
  *       the controller;</li>
  *   <li>other {@code /api/notify/**} — ADMIN; everything else is denied.</li>
@@ -56,6 +57,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/notify/bindings/codes").hasAnyRole(ADMIN, TEACHER)
                         .requestMatchers(HttpMethod.GET, "/api/notify/bindings/me").hasAnyRole(ADMIN, TEACHER)
                         .requestMatchers(HttpMethod.DELETE, "/api/notify/bindings/me").hasAnyRole(ADMIN, TEACHER)
+                        .requestMatchers("/api/notify/email/me", "/api/notify/email/me/test").hasAnyRole(ADMIN, TEACHER)
                         .requestMatchers("/api/notify/**").hasRole(ADMIN)
                         .requestMatchers("/actuator/**").hasRole(ADMIN)
                         .anyRequest().denyAll())

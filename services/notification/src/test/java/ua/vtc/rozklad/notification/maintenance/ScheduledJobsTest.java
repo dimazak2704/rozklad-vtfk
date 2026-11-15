@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
+import ua.vtc.rozklad.notification.email.MailChannel;
+import ua.vtc.rozklad.notification.support.MailTestProperties;
 import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
 
 /** The every-minute substitution jobs run one after another in one scheduled method. */
@@ -17,33 +19,51 @@ class ScheduledJobsTest {
     @Test
     void deadlinesThenTeachersWithoutTelegramInOneRun() {
         jobs(substitutions(false), "123:token").substitutionDeadlines();
-        assertThat(calls).containsExactly("remindOverdue", "reportTeachersWithoutTelegram");
+        assertThat(calls).containsExactly("remindOverdue telegram=true", "reportTeachersWithoutTelegram telegram=true");
     }
 
     @Test
     void failureOfTheFirstJobDoesNotSkipTheSecond() {
         jobs(substitutions(true), "123:token").substitutionDeadlines();
-        assertThat(calls).containsExactly("remindOverdue", "reportTeachersWithoutTelegram");
+        assertThat(calls).containsExactly("remindOverdue telegram=true", "reportTeachersWithoutTelegram telegram=true");
     }
 
     @Test
-    void nothingRunsWithoutTelegram() {
-        jobs(substitutions(false), "").substitutionDeadlines();
+    void nothingRunsWithoutTelegramAndEmail() {
+        jobs(substitutions(false), "", mail("")).substitutionDeadlines();
         assertThat(calls).isEmpty();
     }
 
+    @Test
+    void emailAloneRunsTheJobsWithoutQueueingTelegram() {
+        // the bot is off: letters still remind teachers and dispatchers, nothing waits in the Telegram queue
+        jobs(substitutions(false), "", mail("mailpit")).substitutionDeadlines();
+        assertThat(calls).containsExactly("remindOverdue telegram=false",
+                "reportTeachersWithoutTelegram telegram=false");
+    }
+
     private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken) {
+        return jobs(substitutions, botToken, mail(""));
+    }
+
+    private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken, MailChannel mail) {
         TelegramProperties telegram = new TelegramProperties(botToken, "scheduler_vtfk_bot", null,
                 TelegramProperties.Mode.POLLING, null, null, TelegramProperties.Access.BOUND_ONLY);
-        return new ScheduledJobs(substitutions, null, null, null, null, telegram, Clock.systemUTC(), null);
+        return new ScheduledJobs(substitutions, null, null, null, null, telegram, Clock.systemUTC(), null, mail,
+                null);
+    }
+
+    private static MailChannel mail(String host) {
+        return MailTestProperties.channel(MailTestProperties.of("host", host, "from", "rozklad@rozklad.local"),
+                "http://localhost:8088");
     }
 
     /** Records the calls; the jobs themselves are covered by {@code SubstitutionFlowIT}. */
     private SubstitutionRequests substitutions(boolean firstFails) {
-        return new SubstitutionRequests(null, null, null, null, null, null, null, null, null, null) {
+        return new SubstitutionRequests(null, null, null, null, null, null, null, null, null, null, null) {
             @Override
-            public int remindOverdue() {
-                calls.add("remindOverdue");
+            public int remindOverdue(boolean telegram) {
+                calls.add("remindOverdue telegram=" + telegram);
                 if (firstFails) {
                     throw new IllegalStateException("deadlock detected");
                 }
@@ -51,8 +71,8 @@ class ScheduledJobsTest {
             }
 
             @Override
-            public int reportTeachersWithoutTelegram() {
-                calls.add("reportTeachersWithoutTelegram");
+            public int reportTeachersWithoutTelegram(boolean telegram) {
+                calls.add("reportTeachersWithoutTelegram telegram=" + telegram);
                 return 0;
             }
         };

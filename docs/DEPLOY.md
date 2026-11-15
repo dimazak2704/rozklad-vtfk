@@ -222,6 +222,8 @@ Set by hand in `infra/deploy/.env`:
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_BOT_USERNAME` | from @BotFather / your chat (section 10) |
 | `ANTHROPIC_API_KEY` | from console.anthropic.com; empty disables AI import |
 | `AUTH_GOOGLE_*` | optional: Google sign-in (`docs/GOOGLE_SIGNIN.md`); empty = password sign-in only |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | optional: letters to the corporate mailboxes (section 10a); empty `MAIL_HOST` = no e-mail |
+| `MAIL_STARTTLS`, `MAIL_SSL`, `MAIL_REPLY_TO`, `MAIL_TRUSTED_DOMAINS` | defaults `true`, `false`, none, `vtc.vn.ua` (section 10a) |
 | memory block at the end | uncomment it on Oracle A1 (12 GB); keep the defaults on 4–8 GB |
 
 Everything else has a working default or was generated. The secrets never leave this file: compose
@@ -288,6 +290,10 @@ curl -N -H "Authorization: Bearer <token>" https://$D/api/events/stream    # "ev
 
 For the explanatory note, run Lighthouse (mobile) against `https://DOMAIN` here.
 
+E-mail (when `MAIL_HOST` is set): as the admin, «Сповіщення» shows the server card (`GET /api/notify/email/status`:
+mode `SMTP`, no `problem`); «Надіслати тестовий лист» must arrive in your own mailbox within a minute, and the
+«Журнал листів» shows it `SENT`.
+
 ## 8. Before the defense
 
 - Open the site from a phone on mobile data (not the server's network) and log in with both roles.
@@ -339,6 +345,41 @@ create a second bot in @BotFather for development and keep its token in your loc
 `TELEGRAM_WEBHOOK_URL` from `DOMAIN`; set it in `.env` only to override) and checks the
 `TELEGRAM_WEBHOOK_SECRET` header; Caddy already provides the HTTPS endpoint. Without a URL the bot only sends,
 and `GET /api/notify/bot` reports it in `problem`.
+
+## 10a. E-mail
+
+notification can send letters to the corporate mailboxes besides Telegram: a teacher gets his substitution
+(notice or request, changes, cancellation, the deadline reminder), the dispatcher a finished generation, a refusal,
+an objection after the order, an unanswered request. Each person switches kinds on the page «Сповіщення»
+(`/me/notifications`, `/admin/notifications`). Empty `MAIL_HOST` (the default) = no e-mail at all; Telegram works
+the same either way.
+
+**Who gets letters.** Only the address of the person's own account (the address he signs in with), and only when it
+is verified: the account has Google sign-in, or the address is on `MAIL_TRUSTED_DOMAINS` (default `vtc.vn.ua`,
+an empty value = Google sign-in only). Accounts created by an invite have no address and get no letters; the page
+tells them so. Demo, disabled and revoked accounts get nothing.
+
+**Google Workspace, two ways** (check Google's current rules when you set it up):
+
+1. A service mailbox, e.g. `rozklad@vtc.vn.ua`, with 2-Step Verification and an **app password** (the Workspace
+   admin must allow app passwords): `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_STARTTLS=true`,
+   `MAIL_USERNAME=rozklad@vtc.vn.ua`, `MAIL_PASSWORD=<the 16-letter app password>`,
+   `MAIL_FROM=Розклад ВТФК <rozklad@vtc.vn.ua>`. About 2 000 letters a day per mailbox; the college sends tens.
+2. The Workspace **SMTP relay** (Admin console → Gmail → Routing → SMTP relay service: only addresses of the
+   domain, require TLS, allow the server's IP or SMTP AUTH): `MAIL_HOST=smtp-relay.gmail.com`, `MAIL_PORT=587`.
+
+Port 25 is blocked by many VPS providers; 587 (STARTTLS) or 465 (`MAIL_SSL=true`, `MAIL_STARTTLS=false`) work.
+SPF and DKIM of `vtc.vn.ua` are Google's when the letters go through Google. `MAIL_REPLY_TO` may name the
+dispatcher office: a reply then lands there. The letters make no promise either way about replies; a substitution
+is answered in the cabinet or in Telegram, as each letter says. Bounces (an unknown address) come back to the
+`MAIL_FROM` mailbox; nobody parses them, the letter log shows the server's refusal when it came at once. A relay
+that refuses the sender (`MAIL FROM`, e.g. an address outside the domain or the server's IP not allowed) is
+treated like a wrong password: the letters wait and are retried, and «Сповіщення» shows the problem.
+
+Apply: edit `infra/deploy/.env`, then `infra/deploy/scripts/compose.sh up -d notification`. notification stops
+at start when `MAIL_HOST` is set without a valid `MAIL_FROM`. An SMTP outage never makes the service unready:
+letters wait in the database and are retried (up to 6 attempts over about 15 minutes, a letter older than 12 hours
+is dropped). Letters, like the Telegram log, are deleted after 30 days.
 
 ## 11. Day-to-day operations
 
@@ -594,6 +635,13 @@ The first image build takes long (ARM64 is emulated with QEMU, the LibreOffice p
 later builds reuse the GitHub Actions cache.
 
 ## 14. Troubleshooting
+
+**No letters arrive.** As the admin: «Сповіщення» → server card (`GET /api/notify/email/status`). `problem`
+«…535…» = the login or app password is wrong; «…530…» or «STARTTLS» = the server wants TLS (`MAIL_STARTTLS=true`
+on 587); a timeout = port 587 is blocked (try 465 with `MAIL_SSL=true`, `MAIL_STARTTLS=false`). «Журнал листів»
+(`GET /api/notify/email/deliveries`) has every letter with its last error. No row at all for a person: his address
+is missing or not verified, or he switched the kind off — `compose.sh logs notification | grep 'skipped for account'`
+names the account and the reason, never the address.
 
 **`exec format error`, a container restarts at once.** The image was built for another CPU. Build on
 the server (`deploy.sh --build`) or include its platform in `IMAGE_PLATFORMS`. Check with

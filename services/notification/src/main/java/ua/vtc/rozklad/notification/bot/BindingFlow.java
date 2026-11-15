@@ -2,7 +2,9 @@ package ua.vtc.rozklad.notification.bot;
 
 import static ua.vtc.rozklad.notification.text.Html.b;
 
+import java.time.Clock;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,9 @@ import ua.vtc.rozklad.notification.binding.ChatBindings;
 import ua.vtc.rozklad.notification.bot.BotUpdate.ChatMessage;
 import ua.vtc.rozklad.notification.config.BotProperties;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
+import ua.vtc.rozklad.notification.email.EmailKind;
+import ua.vtc.rozklad.notification.email.EmailNotices;
+import ua.vtc.rozklad.notification.email.MailModels.RelinkedMail;
 import ua.vtc.rozklad.notification.shared.ChatIds;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup;
 import ua.vtc.rozklad.notification.telegram.TelegramApiFailure;
@@ -29,7 +34,7 @@ import ua.vtc.rozklad.notification.telegram.TelegramApiFailure;
  * In a group chat any member may bind a new chat to its group, but only a chat admin may make the chat a service
  * chat (ADMIN_CHAT code) or apply a code to a chat that is already bound (move it to another group): a code
  * that leaked into a student chat must not redirect it. A teacher whose chat is taken over by a newer code is
- * told so in the old chat.
+ * told so in the old chat and by e-mail (the old chat may be the very thing he lost).
  */
 @Component
 public class BindingFlow {
@@ -47,9 +52,12 @@ public class BindingFlow {
     private final BotReplies replies;
     private final TelegramProperties telegram;
     private final BotProperties bot;
+    private final EmailNotices mail;
+    private final Clock clock;
 
     public BindingFlow(BindingCodes codes, BindingAttempts attempts, ChatAccess access, ChatBindings bindings,
-                       ChatAdmins admins, BotReplies replies, TelegramProperties telegram, BotProperties bot) {
+                       ChatAdmins admins, BotReplies replies, TelegramProperties telegram, BotProperties bot,
+                       EmailNotices mail, Clock clock) {
         this.codes = codes;
         this.attempts = attempts;
         this.access = access;
@@ -58,6 +66,8 @@ public class BindingFlow {
         this.replies = replies;
         this.telegram = telegram;
         this.bot = bot;
+        this.mail = mail;
+        this.clock = clock;
     }
 
     public void redeem(ChatMessage message, String code) {
@@ -88,6 +98,7 @@ public class BindingFlow {
                     log.info("Teacher chat {} replaced by chat {}", ChatIds.mask(displaced), ChatIds.mask(chatId));
                     replies.send(displaced, displacedText(bound.target()),
                             bindings.isKnownChat(displaced) ? BotTexts.mainMenu(false) : null);
+                    mailRelinked(bound.target(), bound.binding());
                 }
             }
             case Redemption.Rejected rejected -> {
@@ -124,6 +135,23 @@ public class BindingFlow {
             replies.send(chatId, ADMIN_CHECK_FAILED, null);
         }
         return false;
+    }
+
+    /**
+     * The security letter about a takeover; a failure to queue it never spoils the binding. One letter per
+     * takeover: a binding code is redeemed once, so nothing repeats it, while the chat's binding row is reused when
+     * the same chat later takes over another teacher (or the same one again) — its id alone would swallow that
+     * letter as a duplicate.
+     */
+    private void mailRelinked(BindingTarget target, ChatBinding binding) {
+        try {
+            mail.toTeacher(EmailKind.SECURITY_TELEGRAM_RELINKED, target.teacherId(),
+                    new RelinkedMail(target.label(), binding.getTelegramAccount(), clock.instant()), null, null, null,
+                    null, "relinked:" + target.teacherId() + ":" + UUID.randomUUID() + ":mail");
+        } catch (RuntimeException e) {
+            log.warn("Security e-mail about teacher chat {} not queued: {}", ChatIds.mask(binding.getChatId()),
+                    e.getMessage());
+        }
     }
 
     /** To the teacher's previous chat after a newer code moved his requests elsewhere. */

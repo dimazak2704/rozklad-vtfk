@@ -16,6 +16,8 @@ import ua.vtc.rozklad.notification.config.StandClock;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.delivery.OutboundMessageRepository;
 import ua.vtc.rozklad.notification.delivery.OutboundStatus;
+import ua.vtc.rozklad.notification.email.EmailHousekeeping;
+import ua.vtc.rozklad.notification.email.MailChannel;
 import ua.vtc.rozklad.notification.events.DeadLetters;
 import ua.vtc.rozklad.notification.events.ProcessedEvents;
 import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
@@ -41,10 +43,13 @@ public class ScheduledJobs {
     private final TelegramProperties telegram;
     private final Clock clock;
     private final DeadLetters deadLetters;
+    private final MailChannel mail;
+    private final EmailHousekeeping emails;
 
     public ScheduledJobs(SubstitutionRequests substitutions, OutboundMessageRepository outbound,
                          ProcessedEvents processedEvents, BindingCodes codes, DeliveryProperties delivery,
-                         TelegramProperties telegram, Clock clock, DeadLetters deadLetters) {
+                         TelegramProperties telegram, Clock clock, DeadLetters deadLetters, MailChannel mail,
+                         EmailHousekeeping emails) {
         this.substitutions = substitutions;
         this.outbound = outbound;
         this.processedEvents = processedEvents;
@@ -53,6 +58,8 @@ public class ScheduledJobs {
         this.telegram = telegram;
         this.clock = clock;
         this.deadLetters = deadLetters;
+        this.mail = mail;
+        this.emails = emails;
     }
 
     /** Events that failed every retry: gauge {@code notification.events.dead_letters} and a warning when it grows. */
@@ -65,15 +72,17 @@ public class ScheduledJobs {
      * Confirmation deadlines, then warnings about teachers without Telegram. One method on purpose: the
      * scheduler runs on virtual threads, so two methods with the same delay would start together and lock
      * overlapping {@code substitution_request} rows side by side. A failure of the first job does not
-     * skip the second one; both are tried again in a minute.
+     * skip the second one; both are tried again in a minute. They run when either channel is on: with the bot
+     * off the reminders still go by e-mail, and nothing is queued for Telegram.
      */
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     public void substitutionDeadlines() {
-        if (!telegram.enabled()) {
+        boolean bot = telegram.enabled();
+        if (!bot && (mail == null || !mail.enabled())) {
             return;
         }
-        runSafely("confirmation deadlines", substitutions::remindOverdue);
-        runSafely("teachers without Telegram", substitutions::reportTeachersWithoutTelegram);
+        runSafely("confirmation deadlines", () -> substitutions.remindOverdue(bot));
+        runSafely("teachers without Telegram", () -> substitutions.reportTeachersWithoutTelegram(bot));
     }
 
     private static void runSafely(String job, Runnable task) {
@@ -93,7 +102,8 @@ public class ScheduledJobs {
         int events = processedEvents.purgeBefore(now.minus(PROCESSED_EVENTS_RETENTION));
         int expiredCodes = codes.purgeExpired(now.minus(EXPIRED_CODES_RETENTION));
         int requests = substitutions.purgeLessonsBefore(LocalDate.now(clock).minusDays(SUBSTITUTIONS_RETENTION_DAYS));
+        int letters = emails.purge(now);
         log.info("Housekeeping: removed {} deliveries, {} processed events, {} expired codes, {} old substitution "
-                + "requests", deliveries, events, expiredCodes, requests);
+                + "requests, {} e-mail rows", deliveries, events, expiredCodes, requests, letters);
     }
 }

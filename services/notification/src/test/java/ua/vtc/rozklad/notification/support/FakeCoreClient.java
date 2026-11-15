@@ -13,6 +13,7 @@ import ua.vtc.rozklad.notification.core.CoreClient;
 import ua.vtc.rozklad.notification.core.CoreDtos.BellSchedule;
 import ua.vtc.rozklad.notification.core.CoreDtos.ChangeSummary;
 import ua.vtc.rozklad.notification.core.CoreDtos.CurrentUser;
+import ua.vtc.rozklad.notification.core.CoreDtos.MailRecipient;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicMeta;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
@@ -46,7 +47,11 @@ public class FakeCoreClient implements CoreClient {
     private final List<PublicGroup> addedGroups = new CopyOnWriteArrayList<>();
     private final List<PublicTeacher> addedTeachers = new CopyOnWriteArrayList<>();
     private final java.util.Map<UUID, TeacherStatus> teacherStatuses = new java.util.concurrent.ConcurrentHashMap<>();
+    private final List<MailRecipient> mailRecipients = new CopyOnWriteArrayList<>();
+    private final AtomicInteger mailRecipientCalls = new AtomicInteger();
+    private final AtomicInteger mailRecipientCallsInTransaction = new AtomicInteger();
     private volatile boolean unavailable;
+    private volatile boolean mailRecipientsUnavailable;
     private volatile RuntimeException replyFailure;
     private volatile RuntimeException absenceFailure;
     private volatile ChangeStatus noticeStatus;
@@ -67,6 +72,10 @@ public class FakeCoreClient implements CoreClient {
         addedGroups.clear();
         addedTeachers.clear();
         teacherStatuses.clear();
+        mailRecipients.clear();
+        mailRecipientCalls.set(0);
+        mailRecipientCallsInTransaction.set(0);
+        mailRecipientsUnavailable = false;
         unavailable = false;
         replyFailure = null;
         absenceFailure = null;
@@ -95,6 +104,43 @@ public class FakeCoreClient implements CoreClient {
     /** The dispatcher made the teacher inactive ({@code INACTIVE}) or removed him ({@code GONE}). */
     public void setTeacherStatus(UUID teacherId, TeacherStatus status) {
         teacherStatuses.put(teacherId, status);
+    }
+
+    /** An account core reports in {@code GET /api/internal/mail-recipients}. */
+    public void addMailRecipient(MailRecipient recipient) {
+        mailRecipients.add(recipient);
+    }
+
+    /** Only the mail-recipients endpoint fails (the rest of core answers). */
+    public void setMailRecipientsUnavailable(boolean value) {
+        this.mailRecipientsUnavailable = value;
+    }
+
+    public int mailRecipientCalls() {
+        return mailRecipientCalls.get();
+    }
+
+    /** Calls of {@link #mailRecipients} made while the calling thread had a database transaction open. */
+    public int mailRecipientCallsInTransaction() {
+        return mailRecipientCallsInTransaction.get();
+    }
+
+    @Override
+    public List<MailRecipient> mailRecipients(MailRecipientQuery query) {
+        mailRecipientCalls.incrementAndGet();
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            mailRecipientCallsInTransaction.incrementAndGet();
+        }
+        available();
+        if (mailRecipientsUnavailable) {
+            throw new UpstreamUnavailableException("core", "test: mail recipients unavailable", null);
+        }
+        return mailRecipients.stream().filter(recipient -> switch (query.parameter()) {
+            case "teacherId" -> query.value().equals(String.valueOf(recipient.teacherId()));
+            case "accountId" -> query.value().equals(String.valueOf(recipient.accountId()));
+            case "role" -> recipient.roles().contains(query.value());
+            default -> false;
+        }).toList();
     }
 
     public void setUnavailable(boolean value) {

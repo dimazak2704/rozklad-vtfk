@@ -118,12 +118,33 @@ app:
     cache-dir: ${DOCUMENTS_CACHE_DIR:${java.io.tmpdir}/rozklad-notification}
   bot:
     digest-enabled: ${BOT_DIGEST_ENABLED:true}
+  # листи на пошту (docs/modules/notification.md «E-mail»). Порожній MAIL_HOST — канал вимкнено (типово на хості
+  # й у тестах). У docker compose стенду — Mailpit (усе лишається на машині), справжній SMTP — лише env сервера.
+  # Стенд розробки (http PUBLIC_WEB_URL) не надсилає на справжній сервер без MAIL_ALLOW_REAL_SMTP=true
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    starttls: ${MAIL_STARTTLS:true}
+    ssl: ${MAIL_SSL:false}
+    from: ${MAIL_FROM:}
+    reply-to: ${MAIL_REPLY_TO:}
+    # адреса на цих доменах вважається підтвердженою й без входу через Google; порожньо — лише Google
+    trusted-domains: ${MAIL_TRUSTED_DOMAINS:vtc.vn.ua}
+    allow-real-smtp: ${MAIL_ALLOW_REAL_SMTP:false}
+    message-id-domain: ${MAIL_MESSAGE_ID_DOMAIN:}
+    worker-enabled: ${MAIL_WORKER_ENABLED:true}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+  health:
+    # збій SMTP не робить сервіс неготовим: листи чекають у таблиці (стан — GET /api/notify/email/status)
+    mail:
+      enabled: false
   endpoint:
     health:
       probes:

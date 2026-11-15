@@ -181,8 +181,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ServiceUnavailableException.class)
     ResponseEntity<Object> handleServiceUnavailable(ServiceUnavailableException ex, HttpServletRequest request) {
-        return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Сервіс тимчасово недоступний",
+        ProblemDetail body = body(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable",
+                "Сервіс тимчасово недоступний", ex.getMessage(), request);
+        if (ex.getCode() != null) {
+            body.setProperty("code", ex.getCode());
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<Object> handleTooManyRequests(TooManyRequestsException ex, HttpServletRequest request) {
+        ProblemDetail body = body(HttpStatus.TOO_MANY_REQUESTS, "too-many-requests", "Забагато запитів",
                 ex.getMessage(), request);
+        body.setProperty("code", ex.getCode());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
     }
 
     @ExceptionHandler(UpstreamUnavailableException.class)

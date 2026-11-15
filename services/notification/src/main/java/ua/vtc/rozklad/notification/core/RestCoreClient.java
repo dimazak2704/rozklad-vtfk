@@ -14,6 +14,7 @@ import ua.vtc.rozklad.notification.config.ServiceUrlsProperties;
 import ua.vtc.rozklad.notification.core.CoreDtos.BellSchedule;
 import ua.vtc.rozklad.notification.core.CoreDtos.ChangeSummary;
 import ua.vtc.rozklad.notification.core.CoreDtos.CurrentUser;
+import ua.vtc.rozklad.notification.core.CoreDtos.MailRecipient;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicMeta;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
@@ -120,6 +121,17 @@ public class RestCoreClient implements CoreClient {
             }
             throw e;
         }
+    }
+
+    /** An unknown teacher or account is an empty list; a 404 means core has no such endpoint (an older core). */
+    @Override
+    public List<MailRecipient> mailRecipients(MailRecipientQuery query) {
+        List<MailRecipient> recipients = UpstreamCalls.call(CORE, "mail recipients", () -> serviceClient.get()
+                .uri(uri -> uri.path("/api/internal/mail-recipients").queryParam(query.parameter(), query.value())
+                        .build())
+                .retrieve().body(new ParameterizedTypeReference<List<MailRecipient>>() {
+                }));
+        return recipients == null ? List.of() : recipients;
     }
 
     @Override

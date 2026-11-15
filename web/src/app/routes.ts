@@ -7,6 +7,7 @@
  */
 import {
   ArrowLeftRight,
+  Bell,
   BookOpen,
   Building,
   Calculator,
@@ -225,6 +226,17 @@ export const ROUTES: readonly AppRoute[] = [
     page: () => import('@/pages/teacher/MyPreferencesPage'),
     nav: { label: 'Побажання', icon: CalendarHeart, order: 3, tab: true, header: true },
   },
+  {
+    id: 'me-notifications',
+    parent: 'me',
+    path: '/me/notifications',
+    title: 'Сповіщення',
+    description: 'Які листи про мої заміни приходять на корпоративну пошту; адреса й тестовий лист.',
+    layout: 'teacher',
+    roles: TEACHER_ROLES,
+    page: () => import('@/pages/teacher/MyNotificationsPage'),
+    nav: { label: 'Сповіщення', icon: Bell, order: 4, tab: true, header: true, keywords: ['пошта', 'e-mail', 'листи'] },
+  },
 
   // ── Панель диспетчера ──
   {
@@ -425,6 +437,17 @@ export const ROUTES: readonly AppRoute[] = [
     roles: ADMIN_ROLES,
     page: () => import('@/pages/admin/TelegramPage'),
     nav: { label: 'Telegram', icon: Send, section: 'Планування', order: 16, keywords: ['бот', 'розсилка'] },
+  },
+  {
+    id: 'admin-notifications',
+    parent: 'admin',
+    path: '/admin/notifications',
+    title: 'Сповіщення',
+    description: 'Листи на пошту: стан поштового сервера, мої листи диспетчера, журнал листів.',
+    layout: 'admin',
+    roles: ADMIN_ROLES,
+    page: () => import('@/pages/admin/NotificationsPage'),
+    nav: { label: 'Сповіщення', icon: Bell, section: 'Планування', order: 16.5, keywords: ['пошта', 'e-mail', 'листи', 'mailpit'] },
   },
   {
     id: 'admin-settings',

@@ -34,6 +34,18 @@ public final class Html {
         return out.toString();
     }
 
+    /** Telegram HTML back to plain text: tags dropped, entities of {@link #escape} decoded. */
+    public static String toPlain(String html) {
+        if (html == null) {
+            return "";
+        }
+        return html.replaceAll("<[^>]*>", "")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&amp;", "&");
+    }
+
     public static String b(String text) {
         return "<b>" + escape(text) + "</b>";
     }
