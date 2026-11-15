@@ -262,16 +262,30 @@ function groupRows(rows: readonly DiffRow[]): Array<[string, DiffRow[]]> {
 function DiffRowItem({ row, onShowInGrid }: { row: DiffRow; onShowInGrid: (lesson: TemplateLessonDto) => void }) {
   const meta = KIND_META[row.kind];
   const lesson = (row.after ?? row.before) as TemplateLessonDto;
+  const whoText = who(lesson);
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
-      <span className={cn('inline-flex w-28 shrink-0 items-center gap-1.5 text-caption font-semibold', meta.tone)}>
-        {meta.icon}
-        {meta.label}
+    // телефон: два однакові рядки — «вид · дисципліна, викладач» (обрізано), під ним «було → стало» і кнопка праворуч;
+    // ширше — один рядок. Текст ніколи не рветься посеред «·»: рядки обрізаються, повний — у підказці
+    <li
+      data-diff-row
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2 sm:grid-cols-[11rem_minmax(0,1fr)_auto_auto] sm:gap-x-4"
+    >
+      <span data-diff-line="1" className="flex min-w-0 items-center gap-2 sm:contents">
+        <span className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-caption font-semibold', meta.tone)}>
+          {meta.icon}
+          {meta.label}
+        </span>
+        <span
+          title={whoText}
+          className={cn(
+            'min-w-0 truncate text-ui text-primary',
+            row.kind === 'removed' && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)]',
+          )}
+        >
+          {whoText}
+        </span>
       </span>
-      <span className={cn('min-w-0 flex-1 text-ui text-primary', row.kind === 'removed' && 'text-secondary line-through decoration-[var(--text-decoration-color-cancel)]')}>
-        {who(lesson)}
-      </span>
-      <span className="text-ui text-secondary figures">
+      <span data-diff-line="2" className="col-start-1 row-start-2 min-w-0 truncate text-ui text-secondary figures sm:col-start-auto sm:row-start-auto sm:text-end">
         {row.kind === 'room' && row.before && row.after ? (
           <>
             {slotShort(row.after)},{' '}
@@ -293,16 +307,18 @@ function DiffRowItem({ row, onShowInGrid }: { row: DiffRow; onShowInGrid: (lesso
           where(lesson)
         )}
       </span>
-      {row.target ? (
-        <IconButton
-          label="Показати в сітці"
-          size="sm"
-          icon={<Crosshair aria-hidden="true" className="size-4" />}
-          onClick={() => row.target && onShowInGrid(row.target)}
-        />
-      ) : (
-        <span className="size-8" aria-hidden="true" />
-      )}
+      <span className="col-start-2 row-span-2 row-start-1 flex sm:col-start-auto sm:row-span-1 sm:row-start-auto">
+        {row.target ? (
+          <IconButton
+            label="Показати в сітці"
+            size="sm"
+            icon={<Crosshair aria-hidden="true" className="size-4" />}
+            onClick={() => row.target && onShowInGrid(row.target)}
+          />
+        ) : (
+          <span className="size-8" aria-hidden="true" />
+        )}
+      </span>
     </li>
   );
 }
