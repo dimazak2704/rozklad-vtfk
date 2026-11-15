@@ -2,8 +2,6 @@ package ua.vtc.rozklad.core.load.internal;
 
 import static ua.vtc.rozklad.core.shared.persistence.EntityGuards.checkVersion;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +19,7 @@ import ua.vtc.rozklad.core.load.ControlForm;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
 import ua.vtc.rozklad.core.load.LoadSource;
+import ua.vtc.rozklad.core.load.PlanSource;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadItemDto;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadItemRequest;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadTeacherRequest;
@@ -32,7 +31,8 @@ import ua.vtc.rozklad.core.shared.error.NotFoundException;
  * Навантаження CRUD. One item per group × discipline × lesson kind × split; a split item has a
  * teacher per subgroup of the group (catalog), a whole-group item at most one teacher (subgroup 0).
  * Editing an item imported or derived from a timetable makes it MANUAL, so a later re-derivation
- * does not overwrite the admin's numbers.
+ * does not overwrite the admin's numbers. Planned hours given in the request are FIXED; without them the system counts
+ * the plan from the group's theory days and keeps it current (AUTO, {@link LoadPlanner}).
  */
 @Service
 @Transactional(readOnly = true)
@@ -42,13 +42,15 @@ public class LoadService {
     private final CatalogQueries catalog;
     private final CalendarQueries calendar;
     private final LoadItemMapper mapper;
+    private final LoadPlanner planner;
 
     public LoadService(LoadItemRepository items, CatalogQueries catalog, CalendarQueries calendar,
-                       LoadItemMapper mapper) {
+                       LoadItemMapper mapper, LoadPlanner planner) {
         this.items = items;
         this.catalog = catalog;
         this.calendar = calendar;
         this.mapper = mapper;
+        this.planner = planner;
     }
 
     public List<LoadItemDto> list(UUID semesterId, UUID groupId) {
@@ -69,8 +71,13 @@ public class LoadService {
         }
         Context context = validate(request, null);
         LoadItem item = new LoadItem(request.semesterId(), request.groupId(), request.disciplineId(),
-                request.hoursPerWeek(), plannedHours(request, context.semester()));
+                request.hoursPerWeek(), 0);
         copy(request, item);
+        if (request.plannedHours() != null) {
+            item.fixPlan(request.plannedHours());
+        } else {
+            item.autoPlan(autoPlan(item, context.siblings()));
+        }
         items.save(item);
         return mapper.toDto(item);
     }
@@ -89,9 +96,15 @@ public class LoadService {
         errors.throwIfAny();
         items.lockSemesterLoad(item.getSemesterId());
         Context context = validate(request, id);
+        boolean fixed = fixesPlan(request, item);
         item.setDisciplineId(request.disciplineId());
-        item.setHours(request.hoursPerWeek(), plannedHours(request, context.semester()));
+        item.setHours(request.hoursPerWeek(), item.getPlannedHours());
         copy(request, item);
+        if (fixed) {
+            item.fixPlan(request.plannedHours());
+        } else {
+            item.autoPlan(autoPlan(item, context.siblings()));
+        }
         item.setSource(LoadSource.MANUAL);
         items.flush();
         return mapper.toDto(item);
@@ -129,15 +142,17 @@ public class LoadService {
         errors.throwIfAny();
         LessonKind kind = request.lessonKind() == null ? LessonKind.MIXED : request.lessonKind();
         boolean split = Boolean.TRUE.equals(request.splitSubgroups());
-        items.findAllBySemesterIdAndGroupIdAndDisciplineId(request.semesterId(), request.groupId(),
-                        request.disciplineId()).stream()
+        List<LoadItem> siblings = items.findAllBySemesterIdAndGroupIdAndDisciplineId(request.semesterId(),
+                        request.groupId(), request.disciplineId()).stream()
                 .filter(other -> !other.getId().equals(ownId))
+                .toList();
+        siblings.stream()
                 .filter(other -> other.getLessonKind() == kind && other.isSplitSubgroups() == split)
                 .findFirst()
                 .ifPresent(other -> {
                     throw new ConflictException("У групи %s уже є таке навантаження з цієї дисципліни.".formatted(group.code()));
                 });
-        return new Context(semester);
+        return new Context(siblings);
     }
 
     /** Split: subgroups 1..n that exist in the group; whole group: only subgroup 0. Teachers must exist. */
@@ -189,18 +204,25 @@ public class LoadService {
         wanted.forEach(item::assignTeacher);
     }
 
-    /** Planned hours default to hours per week × teaching weeks of the semester (DOMAIN §4). */
-    static int plannedHours(LoadItemRequest request, SemesterInfo semester) {
-        if (request.plannedHours() != null) {
-            return request.plannedHours();
+    /**
+     * A number in the request fixes the plan. A client that sends back the number of an AUTO plan unchanged (an older
+     * form, the undo journal) decides nothing, so the plan stays AUTO; with other hours per week it is a new number.
+     */
+    private static boolean fixesPlan(LoadItemRequest request, LoadItem item) {
+        if (request.plannedHours() == null) {
+            return false;
         }
-        return defaultPlannedHours(request.hoursPerWeek(), semester.teachingWeeks());
+        boolean echo = item.getPlanSource() == PlanSource.AUTO && request.plannedHours() == item.getPlannedHours()
+                && item.getHoursPerWeek().compareTo(request.hoursPerWeek()) == 0;
+        return !echo;
     }
 
-    static int defaultPlannedHours(BigDecimal hoursPerWeek, int teachingWeeks) {
-        return hoursPerWeek.multiply(BigDecimal.valueOf(teachingWeeks)).setScale(0, RoundingMode.HALF_UP).intValueExact();
+    /** Planned hours without a number: hours per week over the group's theory days ({@link LoadPlan}, DOMAIN §4). */
+    private int autoPlan(LoadItem item, List<LoadItem> siblings) {
+        return planner.context(item.getSemesterId(), List.of(item.getGroupId())).plannedHours(item, siblings);
     }
 
-    private record Context(SemesterInfo semester) {
+    /** @param siblings the other stored items of the same group × discipline in the semester */
+    private record Context(List<LoadItem> siblings) {
     }
 }

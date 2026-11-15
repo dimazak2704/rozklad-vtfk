@@ -33,6 +33,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.UnitWeight;
@@ -122,7 +123,9 @@ class LoadApiIT {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.pattern.whole").value(1))
                 .andExpect(jsonPath("$.pattern.half").value(1))
-                .andExpect(jsonPath("$.plannedHours").value(54))
+                // без розкладу й періодів: 3 год × 87 навчальних днів / 5 = 52 (тиждень — за його днями)
+                .andExpect(jsonPath("$.plannedHours").value(52))
+                .andExpect(jsonPath("$.planSource").value("AUTO"))
                 .andExpect(jsonPath("$.source").value("MANUAL"))
                 .andExpect(jsonPath("$.group.code").value("4КІ1"))
                 .andExpect(jsonPath("$.teachers[0].teacher.shortName").value("Кренцін М.Д."))
@@ -136,6 +139,7 @@ class LoadApiIT {
                 .andExpect(jsonPath("$.pattern.whole").value(2))
                 .andExpect(jsonPath("$.pattern.half").value(0))
                 .andExpect(jsonPath("$.plannedHours").value(80))
+                .andExpect(jsonPath("$.planSource").value("FIXED"))
                 .andExpect(jsonPath("$.teachers", hasSize(0)));
 
         create("/api/admin/load", """
@@ -145,6 +149,81 @@ class LoadApiIT {
                 .andExpect(jsonPath("$", hasSize(1)));
         mvc.perform(get("/api/admin/load").with(TestJwts.admin())).andExpect(status().isBadRequest());
         mvc.perform(delete("/api/admin/load/{id}", item).with(TestJwts.admin())).andExpect(status().isNoContent());
+    }
+
+    /**
+     * Owner's rule 15.11.2026: the weeks of an НС block are not planned and not caught up. The AUTO plan follows the
+     * calendar both ways, a set plan stays, a form that sends the AUTO number back changes nothing and an empty
+     * number hands the plan back to the system; an import row without a number keeps a set plan.
+     */
+    @Test
+    void autoPlanFollowsTheCalendarAndASetPlanStays() throws Exception {
+        UUID auto = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":3}""".formatted(semester, group, stp))
+                .andExpect(jsonPath("$.plannedHours").value(52))
+                .andReturn());
+        UUID fixed = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":2,"plannedHours":40}"""
+                .formatted(semester, group, english))
+                .andExpect(jsonPath("$.planSource").value("FIXED"))
+                .andReturn());
+
+        UUID period = id(create("/api/admin/calendar-periods", """
+                {"semesterId":"%s","kindId":"a1000000-0000-4000-8000-000000000009",
+                 "title":"Основи національного спротиву","startsOn":"2026-11-30","endsOn":"2026-12-11",
+                 "scope":"GROUPS","groupIds":["%s"]}""".formatted(semester, group))
+                .andExpect(status().isCreated()).andReturn());
+
+        // 3 год × 77 днів / 5 = 46: два тижні НС не плануються
+        expectPlan(auto, 46, "AUTO");
+        expectPlan(fixed, 40, "FIXED");
+
+        update(auto, "\"plannedHours\":46").andExpect(status().isOk());
+        expectPlan(auto, 46, "AUTO");
+        update(auto, "\"plannedHours\":50").andExpect(status().isOk());
+        expectPlan(auto, 50, "FIXED");
+        update(auto, "\"plannedHours\":null").andExpect(status().isOk());
+        expectPlan(auto, 46, "AUTO");
+
+        mvc.perform(delete("/api/admin/calendar-periods/{id}", period).with(TestJwts.admin()))
+                .andExpect(status().isNoContent());
+        expectPlan(auto, 52, "AUTO");
+        expectPlan(fixed, 40, "FIXED");
+
+        mvc.perform(post("/api/admin/import/load").with(TestJwts.importerService()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","items":[{"groupCode":"4КІ1","disciplineShortName":"Ін.мова",
+                                 "hoursPerWeek":2,"source":"CURRICULUM"},
+                                 {"groupCode":"4КІ1","disciplineShortName":"СТП","hoursPerWeek":4,"source":"CURRICULUM"}]}"""
+                                .formatted(semester)))
+                .andExpect(status().isOk());
+        expectPlan(fixed, 40, "FIXED");
+        // 4 год × 87 / 5 = 69,6
+        expectPlan(auto, 70, "AUTO");
+    }
+
+    /** The timetable's lessons make the plan exact: 4КІ1 СТП on Monday every week and Wednesday numerator. */
+    @Test
+    void publishedTimetableGivesTheExactPlan() throws Exception {
+        UUID item = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":3}""".formatted(semester, group, stp))
+                .andReturn());
+        TimetableVersion version = versions.save(new TimetableVersion(semester, "Імпорт Excel", VersionSource.IMPORT));
+        lesson(version, 1, 1, Parity.BOTH, 0, stp, krentsin);
+        lesson(version, 3, 2, Parity.NUMERATOR, 0, stp, krentsin);
+
+        mvc.perform(post("/api/admin/timetable/versions/{id}/publish", version.getId()).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"effectiveFrom\":\"2026-09-01\"}"))
+                .andExpect(status().isOk());
+
+        // 17 понеділків (31.08 — до семестру) + 9 серед чисельника = 26 пар
+        expectPlan(item, 52, "AUTO");
+        create("/api/admin/calendar-periods", """
+                {"semesterId":"%s","kindId":"a1000000-0000-4000-8000-000000000001","title":"Канікули",
+                 "startsOn":"2026-12-28","endsOn":"2026-12-30","scope":"ALL"}""".formatted(semester))
+                .andExpect(status().isCreated());
+        // понеділок 28.12 випав, середа 30.12 — знаменник, її й так не було
+        expectPlan(item, 50, "AUTO");
     }
 
     @Test
@@ -428,6 +507,23 @@ class LoadApiIT {
         TemplateLesson lesson = new TemplateLesson(version.getId(), weekday, pair, parity, group, subgroup, discipline);
         lesson.setTeacherId(teacher);
         templateLessons.save(lesson);
+    }
+
+    private void expectPlan(UUID item, int hours, String source) throws Exception {
+        mvc.perform(get("/api/admin/load/{id}", item).with(TestJwts.admin()))
+                .andExpect(jsonPath("$.plannedHours").value(hours))
+                .andExpect(jsonPath("$.planSource").value(source));
+    }
+
+    /** PUT of the AUTO item with 3 h a week, the given plan field and the stored version. */
+    private ResultActions update(UUID item, String plannedHours) throws Exception {
+        Integer version = ApiTestSupport.read(mvc.perform(get("/api/admin/load/{id}", item).with(TestJwts.admin()))
+                .andReturn(), "$.version");
+        return mvc.perform(MockMvcRequestBuilders.put("/api/admin/load/{id}", item).with(TestJwts.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":3,%s,"version":%d}"""
+                        .formatted(semester, group, stp, plannedHours, version)));
     }
 
     private ResultActions create(String path, String json) throws Exception {
