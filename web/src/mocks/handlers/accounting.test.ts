@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccountingRow } from '@/api/accounting';
 import { api } from '@/api/client';
 import { ApiError } from '@/api/errors';
-import type { TeacherStatsDto } from '@/api/types';
+import type { GroupTheoryDto, TeacherStatsDto } from '@/api/types';
 import { GROUPS } from '../fixtures';
 import { resetMockStores } from '../store';
 
@@ -42,11 +42,23 @@ describe('GET /api/admin/accounting', () => {
     expect(ndeksm).toMatchObject({ plan: 40, forecast: 30, status: 'WILL_UNDERRUN', forecastFinishDate: null });
     expect(ndeksm.suggestion).toMatchObject({ kind: 'ADDITIONAL', text: 'Не вистачає 10 год: додати 5 пар', lessons: 5 });
   });
-  it('практика 2КІ3 (19–30.10) знімає пари групи — прогноз менший за план', async () => {
+  it('тижні практики 2КІ3 (19–30.10) не плануються: прогноз дорівнює плану', async () => {
     const group2ki3 = GROUPS.find((g) => g.code === '2КІ3') as (typeof GROUPS)[number];
     const rows = await rowsOf(group2ki3.id);
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.forecast < r.plan)).toBe(true);
+    expect(rows.every((r) => r.forecast === r.plan && r.planSource === 'AUTO')).toBe(true);
+  });
+
+  it('ДК 4КІ1 — 3 год на тиждень без двох тижнів НС: 15 понеділків + 8 серед чисельника = 46 год', async () => {
+    const dk = row(await rowsOf(group4ki1.id), 'ДК');
+    expect(dk).toMatchObject({ plan: 46, forecast: 46, status: 'ON_TRACK', hoursPerWeek: 3, planSource: 'AUTO' });
+  });
+
+  it('«Не вистачить» — справжня нестача: дві пари ТОЕ 2КІ1 скасовано без заміни', async () => {
+    const group2ki1 = GROUPS.find((g) => g.code === '2КІ1') as (typeof GROUPS)[number];
+    const toe = row(await rowsOf(group2ki1.id), 'ТОЕ');
+    expect(toe).toMatchObject({ plan: 70, forecast: 66, status: 'WILL_UNDERRUN' });
+    expect(toe.suggestion).toMatchObject({ kind: 'ADDITIONAL', lessons: 2 });
   });
 
   it('рядки відсортовано за курсом і групою; без групи — увесь семестр', async () => {
@@ -54,6 +66,21 @@ describe('GET /api/admin/accounting', () => {
     expect(rows[0]?.group.course).toBe(1);
     expect(rows.at(-1)?.group.course).toBe(4);
     expect(new Set(rows.map((r) => r.group.id)).size).toBe(GROUPS.length);
+  });
+});
+
+describe('GET /api/admin/accounting/theory', () => {
+  it('4КІ1: 16 тижнів теорії з 18 — НС 16.11–27.11; графік каже 20', async () => {
+    const [theory] = await api.get<GroupTheoryDto[]>('/admin/accounting/theory', { groupId: group4ki1.id });
+    expect(theory).toMatchObject({ semesterWeeks: 18, theoryWeeks: 16, numeratorWeeks: 8, denominatorWeeks: 8, graphTheoryWeeks: 20 });
+    expect(theory?.offPeriods.map((p) => [p.kind.code, p.startsOn, p.endsOn])).toEqual([['НС', '2026-11-16', '2026-11-27']]);
+  });
+
+  it('без групи — усі групи з навантаженням за курсом', async () => {
+    const all = await api.get<GroupTheoryDto[]>('/admin/accounting/theory');
+    expect(all).toHaveLength(GROUPS.length);
+    expect(all[0]?.group.course).toBe(1);
+    expect(all.at(-1)?.group.course).toBe(4);
   });
 });
 

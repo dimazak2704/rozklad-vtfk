@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
 import { qk } from './queryKeys';
-import type { AccountingRowDto, AccountingSuggestion, TeacherStatsDto, Uuid } from './types';
+import type { AccountingRowDto, AccountingSuggestion, GroupTheoryDto, TeacherStatsDto, Uuid } from './types';
 
 export interface AccountingSuggestionDetail extends AccountingSuggestion {
   /** Скільки пар зняти (DISCIPLINE_FINISHED) або додати (ADDITIONAL). */
@@ -25,6 +25,19 @@ export function useAccountingRows(semesterId: Uuid | null | undefined, groupId?:
     queryKey: qk.admin.accounting.rows({ semesterId: semesterId ?? undefined, groupId: groupId ?? undefined }),
     queryFn: ({ signal }) =>
       api.get<AccountingRow[]>('/admin/accounting', { semesterId: semesterId ?? undefined, groupId: groupId ?? undefined }, { signal }),
+    enabled: Boolean(semesterId),
+  });
+}
+
+/**
+ * Тижні теорії груп з навантаженням (або однієї групи): за ними система рахує план, з числом графіка освітнього
+ * процесу для звірки. Без `groupId` — усі групи семестру.
+ */
+export function useGroupTheory(semesterId: Uuid | null | undefined, groupId?: Uuid | null) {
+  return useQuery({
+    queryKey: qk.admin.accounting.theory({ semesterId: semesterId ?? undefined, groupId: groupId ?? undefined }),
+    queryFn: ({ signal }) =>
+      api.get<GroupTheoryDto[]>('/admin/accounting/theory', { semesterId: semesterId ?? undefined, groupId: groupId ?? undefined }, { signal }),
     enabled: Boolean(semesterId),
   });
 }
