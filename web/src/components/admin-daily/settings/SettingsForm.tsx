@@ -212,7 +212,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
         {numbering}
       </SettingsSection>
 
-      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, скільки академічних годин зараховується за одну пару в обліку і межа пар на день для генератора.">
+      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, скільки академічних годин зараховується за одну пару в обліку і межі пар для генератора: на день у викладача й у пʼятницю в групи.">
         <Field
           label="Профіль дзвінків"
           hint="Зміна профілю оновить час пар на сайті, у боті й у розпорядженнях."
