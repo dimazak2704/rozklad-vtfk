@@ -632,3 +632,11 @@ effect each from a closed list, so a new kind (НС this year) needs no code. Al
 | Importer `ACADEMIC_CALENDAR_XLSX` | New import kind (CONTRACTS §5): parses the XLSX by content, report rows `PERIOD_KIND` / `PERIOD`, core's dry run on every rebuild, one apply step `calendar` (re-sendable). A code of a kind with effect ONLINE is a blocking ERROR `PERIOD_KIND` «Вид «ФН» з ефектом «онлайн» не імпортується з графіка (у графіку немає режиму навчання): пропустіть код і додайте такий період у календарі вручну.» instead of core's generic 400. | The whole graph is read, not retyped. |
 | Order notes | Unchanged: `orderNote` is stored text. Kinds carry a `noteTemplate` (placeholders `{хто} {назва} {назва_мала} {вид} {від} {до} {ауд} {режим}`, `[...]` optional) rendered by the web form («Скласти») and by the importer, not by core. | The dispatcher still edits the sentence of record. |
 | Schema compatibility | `calendar_period.kind` stays one release, nullable, written from the kind (never read); `ck_calendar_period_kind` dropped (`V1_203`), and `ck_calendar_period_study_mode_required` too (`V1_204`): it was keyed on the old column, so after the builtin ФН (no periods yet) switched its effect away from ONLINE every new ФН period failed with a misleading 409; the study mode is checked by effect in the service. A trigger fills `kind_id` from `kind` for SQL that inserts only the old column (the demo seed `V9_001` on a new database). Known gap: the migration does not re-materialize lessons, so dated lessons inside an EXAM_SESSION period created before `V1_203` stay until those dates are edited or republished. | A rollback of core still finds the column; applied migrations are not edited. |
+
+## E2E findings (fix/e2e-findings)
+
+All changes are additive REST fields; no event or `libs/contracts` record changes.
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/admin/dashboard` | Additive `undecidedLessons`: the part of `uncoveredLessons` with no decision at all (a lesson whose decision was declined is counted in `declined` instead), so `undecidedLessons`, `pending` and `declined` never overlap. `SubstitutionDaySummary` gets the same component. | The order draft warned about 1 pending and 1 declined lesson only: three undecided pairs were left out of №59 without a word. |

@@ -1261,6 +1261,8 @@ export interface DashboardDto {
   parity: Nullable<WeekParity>;
   absences: number;
   uncoveredLessons: number;
+  /** Частина `uncoveredLessons`, про яку ще ніхто нічого не вирішив: не перетинається з `pending` і `declined`. */
+  undecidedLessons: number;
   pending: number;
   confirmed: number;
   declined: number;

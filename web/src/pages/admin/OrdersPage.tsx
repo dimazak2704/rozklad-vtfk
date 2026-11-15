@@ -25,6 +25,7 @@ import { OrderRows } from '@/components/admin-daily/orders/OrderRows';
 import { OrderSheet } from '@/components/admin-daily/orders/OrderSheet';
 import { OrdersArchive } from '@/components/admin-daily/orders/OrdersArchive';
 import { PublishDialog } from '@/components/admin-daily/orders/PublishDialog';
+import { leftOutOf, leftOutText } from '@/components/admin-daily/orders/left-out';
 import {
   Button,
   buttonClass,
@@ -47,7 +48,6 @@ import { useRegisterCommands } from '@/stores/commands';
 import { trackFinal } from '@/lib/undo/actions';
 
 const ROWS = ['рядок', 'рядки', 'рядків'] as const;
-const CHANGES = ['заміна', 'заміни', 'замін'] as const;
 
 function SheetSkeleton() {
   return (
@@ -103,10 +103,10 @@ export default function OrdersPage() {
   const parent = useOrder(order?.parentId ?? null);
   const changes = useChanges(order?.date ?? date);
   const changesById = useMemo(() => new Map<Uuid, ChangeDto>((changes.data ?? []).map((c) => [c.id, c])), [changes.data]);
-  // відмова рахується, лише поки на пару не обрано нового кандидата — це знає сервер (панель на дату)
+  // пари без рішення, очікування й відмови без нового кандидата — це знає сервер (панель на дату)
   const dayDashboard = useDashboard(order?.date ?? date);
-  const pending = dayDashboard.data?.pending ?? 0;
-  const declined = dayDashboard.data?.declined ?? 0;
+  const leftOut = leftOutOf(dayDashboard.isPlaceholderData ? undefined : dayDashboard.data);
+  const leftOutSentence = leftOutText(leftOut);
   const next = useNextOrderNumber(semester ?? undefined);
   const publish = usePublishOrder();
   const [publishOpen, setPublishOpen] = useState(false);
@@ -166,11 +166,9 @@ export default function OrdersPage() {
   };
 
   const waiting =
-    isDraft && (pending > 0 || declined > 0) ? (
+    isDraft && leftOutSentence ? (
       <p className="text-ui text-change">
-        {pending > 0 ? `${countLabel(pending, CHANGES)} ще ${pending === 1 ? 'чекає' : 'чекають'} підтвердження` : ''}
-        {pending > 0 && declined > 0 ? ', а ' : ''}
-        {declined > 0 ? `${declined} без нового кандидата після відмови` : ''} — у цей документ не потраплять.{' '}
+        {leftOutSentence} — у цей документ не потраплять.{' '}
         <Link to={`${changesLink}`} className="font-semibold underline underline-offset-4">
           До замін
         </Link>
@@ -306,8 +304,7 @@ export default function OrdersPage() {
           order={order}
           parentNumber={parent.data?.number ?? null}
           nextNumber={next.nextNumber}
-          pending={pending}
-          declined={declined}
+          leftOut={leftOut}
           onPublish={runPublish}
         />
       ) : null}

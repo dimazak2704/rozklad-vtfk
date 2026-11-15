@@ -537,6 +537,14 @@ describe('екран «Заміни»', () => {
     expect(screen.queryByRole('button', { name: /Опублікувати/ })).not.toBeInTheDocument();
   });
 
+  it('чернетка називає й пари без рішення, а не лише очікування й відмови', { timeout: 20_000 }, async () => {
+    // демо-ранок 9.11: 4 пари без заміни, з них 1 після відмови, і 2 заміни чекають відповіді
+    renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-11-09' });
+    expect(
+      await screen.findByText(/^3\sпари без рішення, 2\sзаміни ще чекають підтвердження і 1 без нового кандидата після відмови — у цей документ не потраплять\./, undefined, WAIT),
+    ).toBeInTheDocument();
+  });
+
   it('без мережі — пояснення замість вічних силуетів', { timeout: 20_000 }, async () => {
     onlineManager.setOnline(false);
     try {

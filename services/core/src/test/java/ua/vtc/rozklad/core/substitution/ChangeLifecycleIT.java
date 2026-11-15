@@ -508,6 +508,9 @@ class ChangeLifecycleIT {
         replies.replyFromBot(first.id(), nepyivoda.getId(), ConfirmationDecision.DECLINE, null);
         ChangeDto second = commands.create(replaceTeacher(stets), "admin");
         replies.replyFromBot(second.id(), stets.getId(), ConfirmationDecision.DECLINE, null);
+        SubstitutionDaySummary declined = overview.summarize(MONDAY);
+        assertThat(declined.uncoveredLessons()).isEqualTo(1);
+        assertThat(declined.undecidedLessons()).as("a declined lesson is counted in declined, not here").isZero();
 
         assertThat(commands.requestConfirmation(first.id(), "admin").status())
                 .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);

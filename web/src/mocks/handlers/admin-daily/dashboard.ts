@@ -74,6 +74,7 @@ export function dashboardFor(world: World, date: IsoDate, now: Date): DashboardD
     parity: isWithinSemester(date) ? parityOn(date) : null,
     absences: new Set(absences.map((a) => a.teacher.id)).size,
     uncoveredLessons: uncovered.length,
+    undecidedLessons: uncovered.filter((item) => !item.decision).length,
     pending: pending.length,
     confirmed: confirmed.length,
     declined: declined.length,
