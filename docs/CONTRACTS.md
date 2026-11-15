@@ -189,7 +189,7 @@ reconnects with a fresh token. 429 (`too-many-requests`) above 10 streams of one
 a report starts today to 90 days ahead and at most 10 reports per teacher in 24 hours: 422 `ABSENCE_TOO_FAR`, `ABSENCE_LIMIT`;
 an inactive teacher reports nothing himself: 422 `TEACHER_INACTIVE`);
 `GET /api/me/changes?status` → changes where I am the new teacher; `POST /api/me/changes/{id}/confirm|decline` `{comment?}`;
-`GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`.
+`GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`. `GET /api/me/template?semesterId` → `[TemplateLessonDto]`: the teacher's own lessons of the semester's published version (empty without one), for «мої пари» in the wishes grid.
 
 ## 4. Core — internal (service roles, client credentials)
 
