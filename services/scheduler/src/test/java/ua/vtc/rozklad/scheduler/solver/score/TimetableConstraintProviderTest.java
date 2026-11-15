@@ -42,6 +42,10 @@ class TimetableConstraintProviderTest {
             FIRST_SHIFT);
     private static final StudentGroup EA1 = new StudentGroup(UUID.randomUUID(), "2ЕА1", 30, 2, List.of(),
             SECOND_SHIFT);
+    /** The college's Friday limit (setting «Максимум пар у пʼятницю», default 3). */
+    private static final StudentGroup RT1 = new StudentGroup(UUID.randomUUID(), "4РТ1", 25, 1, List.of(), FIRST_SHIFT, 3);
+    private static final StudentGroup M1 = new StudentGroup(UUID.randomUUID(), "1М", 28, 1, List.of(1, 2), FIRST_SHIFT,
+            3);
 
     private static final Teacher KRENTSIN = new Teacher(UUID.randomUUID(), "Кренцін М.Д.",
             Set.of(slot(1, 1)), Set.of(slot(2, 1)));
@@ -265,6 +269,10 @@ class TimetableConstraintProviderTest {
         }
     }
 
+    /**
+     * Group windows are a hard rule since the owner's answers, round 2 (15.11.2026): «вікна групам не варто лишати,
+     * краще викладачам вікна». Teacher windows stay soft.
+     */
     @Nested
     class Windows {
 
@@ -272,6 +280,35 @@ class TimetableConstraintProviderTest {
         void freePairBetweenLessonsIsAWindowInBothWeeks() {
             verifier.verifyThat(TimetableConstraintProvider::groupWindows)
                     .given(lesson(KI1, slot(1, 1), BOTH).build(), lesson(KI1, slot(1, 3), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void aGroupWindowIsHardWhateverTheRequestWeights() {
+            LessonUnit first = lesson(KI1, slot(1, 1), BOTH).build();
+            LessonUnit third = lesson(KI1, slot(1, 3), BOTH).build();
+            Timetable timetable = new Timetable(List.of(), List.of(ROOM_6), List.of(), List.of(KI1),
+                    List.of(first, third), ConstraintWeights.of(new GenerationWeights(0, 0, 0, 0, 0), 0));
+
+            // вага windows 0 вікна групи не вимикає: −2 hard; вікон викладача немає (без викладача)
+            verifier.verifyThat().givenSolution(timetable).scores(HardSoftScore.ofHard(-2));
+        }
+
+        /** A day of lessons pinned outside the scope never makes the run infeasible. */
+        @Test
+        void aWindowBetweenPinnedLessonsOnlyIsExempt() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI1, slot(1, 1), BOTH).pinned().build(), lesson(KI1, slot(1, 3), BOTH).pinned().build(),
+                            lesson(KI2, slot(1, 1), BOTH).pinned().build(), lesson(KI2, slot(1, 4), BOTH).pinned().build())
+                    .hasNoImpact();
+        }
+
+        /** A free lesson on the day makes the day the run's: the window counts, the solver can fill it or leave. */
+        @Test
+        void aFreeLessonOnTheDayMakesThePinnedWindowCount() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI1, slot(1, 1), BOTH).pinned().build(), lesson(KI1, slot(1, 3), BOTH).build(),
+                            lesson(KI1, slot(2, 1), BOTH).pinned().build(), lesson(KI1, slot(2, 3), BOTH).pinned().build())
                     .penalizesBy(2);
         }
 
@@ -309,12 +346,92 @@ class TimetableConstraintProviderTest {
 
         @Test
         void worstSubgroupCountsWhenSubgroupsDiffer() {
-            // підгрупа 1: пари 1, 4 (2 вікна); підгрупа 2: пари 1, 3 (1 вікно) — рахується гірша
+            // підгрупа 1: пари 1, 4 (2 вікна); підгрупа 2: пари 1, 2, 4 (1 вікно) — рахується гірша
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).build(), lesson(KI2, slot(1, 4), BOTH).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).build())
+                    .penalizesBy(4);
+            // з порожньою парою 2 й самотньою парою 3 на краю дня: для підгрупи 1 вікно — лише порожня пара 2
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(2, 1), BOTH).build(),
+                            lesson(KI2, slot(2, 4), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).build())
+                    .penalizesBy(2);
+        }
+
+        /**
+         * One teacher's two subgroups one after the other (the soft «Subgroups apart») at the end or the start of the
+         * day: the subgroup that waits while the other studies has no window, a lone subgroup pair at the edge of
+         * the day is the college's way (DOMAIN §13 Q4).
+         */
+        @Test
+        void loneSubgroupPairsAtTheEdgeOfTheDayAreNoWindow() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).build(), lesson(KI2, slot(1, 2), BOTH).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 4), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 1), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).build(), lesson(KI2, slot(2, 4), BOTH).build(),
+                            lesson(KI2, slot(3, 1), BOTH).build(), lesson(KI2, slot(3, 2), BOTH).subgroup(1).build())
+                    .hasNoImpact();
+        }
+
+        /**
+         * The edge exemption covers only the pairs between the full pairs and a subgroup's own lessons: a subgroup that
+         * waits between two of its own lessons while the other studies has a window (sub 1, sub 2, sub 1), with or
+         * without a whole-group pair on the day.
+         */
+        @Test
+        void aSubgroupWaitingBetweenItsOwnLessonsHasAWindow() {
+            // без пари всієї групи: підгрупа 1 на парах 1 і 3, підгрупа 2 на 2
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+            // після пари всієї групи: підгрупа 1 чекає на 3-й; підгрупа 2 на 2-й — край дня, не вікно
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(2, 1), BOTH).build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 4), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+            // те саме на початку дня: підгрупа 1 на 1 і 3, підгрупа 2 на 2, уся група на 4
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(3, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(3, 2), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(3, 3), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(3, 4), BOTH).build())
+                    .penalizesBy(2);
+            // в одному тижні: половинки чисельника — вікно лише в чисельник
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(4, 1), NUMERATOR).subgroup(1).build(),
+                            lesson(KI2, slot(4, 2), NUMERATOR).subgroup(2).build(),
+                            lesson(KI2, slot(4, 3), NUMERATOR).subgroup(1).build())
+                    .penalizesBy(1);
+        }
+
+        /** Between two pairs of the whole group a lone subgroup pair stays a window for the subgroup that waits. */
+        @Test
+        void oneTeachersSubgroupsInTheMiddleOfTheDayLeaveWindows() {
             verifier.verifyThat(TimetableConstraintProvider::groupWindows)
                     .given(lesson(KI2, slot(1, 1), BOTH).build(),
-                            lesson(KI2, slot(1, 4), BOTH).subgroup(1).build(),
-                            lesson(KI2, slot(1, 3), BOTH).subgroup(2).build())
-                    .penalizesBy(4);
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 4), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        /** Parallel subgroups make a full pair: the day around them is judged like a whole-group day. */
+        @Test
+        void parallelSubgroupsAreAFullPair() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 1), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 3), BOTH).build())
+                    .penalizesBy(2);
         }
 
         @Test
@@ -325,6 +442,92 @@ class TimetableConstraintProviderTest {
                             lesson(EA1, slot(2, 5), BOTH).teacher(NEPYIVODA).build(),
                             lesson(KI1, slot(2, 6), BOTH).build())
                     .penalizesBy(4);
+        }
+    }
+
+    /**
+     * Owner's rule, round 2 (15.11.2026): Friday is an unloading day, at most the setting «Максимум пар у пʼятницю»
+     * (default 3) for every group; the pairs of the group's row count (any subgroup at a lesson).
+     */
+    @Nested
+    class FridayLimit {
+
+        @Test
+        void aFourthFridayPairIsHardInBothWeeks() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(), lesson(RT1, slot(5, 4), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void aHalfAboveTheLimitCountsInItsWeekOnly() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(), lesson(RT1, slot(5, 4), NUMERATOR).build())
+                    .penalizesBy(1);
+        }
+
+        @Test
+        void subgroupsOnDifferentPairsAreTwoPairsOfTheGroup() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(M1, slot(5, 1), BOTH).build(), lesson(M1, slot(5, 2), BOTH).build(),
+                            lesson(M1, slot(5, 3), BOTH).subgroup(1).build(),
+                            lesson(M1, slot(5, 3), BOTH).subgroup(2).build(),
+                            lesson(M1, slot(5, 4), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void otherDaysGroupsWithoutALimitAndThreeFridayPairsAreFine() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(4, 1), BOTH).build(), lesson(RT1, slot(4, 2), BOTH).build(),
+                            lesson(RT1, slot(4, 3), BOTH).build(), lesson(RT1, slot(4, 4), BOTH).build(),
+                            lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(),
+                            lesson(KI1, slot(5, 1), BOTH).build(), lesson(KI1, slot(5, 2), BOTH).build(),
+                            lesson(KI1, slot(5, 3), BOTH).build(), lesson(KI1, slot(5, 4), BOTH).build())
+                    .hasNoImpact();
+        }
+
+        /** The published 4РТ1 has 4 Friday pairs: pinned outside the scope it does not make the run infeasible. */
+        @Test
+        void aPinnedFridayAboveTheLimitIsExemptUntilAFreeLessonJoinsIt() {
+            List<LessonUnit> pinnedFriday = List.of(lesson(RT1, slot(5, 1), BOTH).pinned().build(),
+                    lesson(RT1, slot(5, 2), BOTH).pinned().build(), lesson(RT1, slot(5, 3), BOTH).pinned().build(),
+                    lesson(RT1, slot(5, 4), BOTH).pinned().build());
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(pinnedFriday.toArray())
+                    .hasNoImpact();
+            List<LessonUnit> withFree = new ArrayList<>(pinnedFriday.subList(0, 3));
+            withFree.add(lesson(RT1, slot(5, 4), BOTH).build());
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(withFree.toArray())
+                    .penalizesBy(2);
+        }
+
+        /** The limit is the college setting the snapshot carries: 4 lets a fourth pair stand, 2 forbids a third. */
+        @Test
+        void theLimitFollowsTheSetting() {
+            StudentGroup four = new StudentGroup(UUID.randomUUID(), "4РТ2", 25, 1, List.of(), FIRST_SHIFT, 4);
+            StudentGroup two = new StudentGroup(UUID.randomUUID(), "1КІ1", 25, 1, List.of(), FIRST_SHIFT, 2);
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(four, slot(5, 1), BOTH).build(), lesson(four, slot(5, 2), BOTH).build(),
+                            lesson(four, slot(5, 3), BOTH).build(), lesson(four, slot(5, 4), BOTH).build(),
+                            lesson(two, slot(5, 1), BOTH).build(), lesson(two, slot(5, 2), BOTH).build(),
+                            lesson(two, slot(5, 3), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void theLimitIsHardWhateverTheRequestWeights() {
+            List<LessonUnit> friday = List.of(lesson(RT1, slot(5, 1), BOTH).build(),
+                    lesson(RT1, slot(5, 2), BOTH).build(), lesson(RT1, slot(5, 3), BOTH).build(),
+                    lesson(RT1, slot(5, 4), BOTH).build());
+            Timetable timetable = new Timetable(List.of(), List.of(ROOM_6), List.of(), List.of(RT1), friday,
+                    ConstraintWeights.of(new GenerationWeights(0, 0, 0, 0, 0), 0));
+
+            verifier.verifyThat().givenSolution(timetable).scores(HardSoftScore.ofHard(-2));
         }
     }
 
@@ -464,34 +667,148 @@ class TimetableConstraintProviderTest {
                     .hasNoImpact();
         }
 
+    }
+
+    /**
+     * Owner's rule (15.11.2026): the subgroups of a split discipline study at the same time — hard for two teachers.
+     * One teacher of both cannot be parallel: neighbouring pairs, a soft rule with the strongest default.
+     */
+    @Nested
+    class SubgroupsTogether {
+
+        private static final StudentGroup THREE_SUBGROUPS = new StudentGroup(UUID.randomUUID(), "2ТК1", 30, 1,
+                List.of(1, 2, 3), FIRST_SHIFT);
+
         @Test
-        void subgroupsOfOneTeacherOnNeighbouringPairsAreFine() {
-            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
-                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("k").build(),
-                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("k").build())
+        void subgroupsOfTwoTeachersInOneSlotAndWeekAreTogether() {
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build(),
+                            lesson(KI2, slot(1, 1), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("a").build(),
+                            lesson(KI2, slot(2, 3), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("h").build(),
+                            lesson(KI2, slot(2, 3), NUMERATOR).subgroup(2).teacher(KRENTSIN).siblingKey("h").build())
                     .hasNoImpact();
         }
 
         @Test
-        void subgroupsOfOneTeacherApartOrOnAnotherDay() {
-            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
+        void subgroupsOfTwoTeachersInOtherSlotsOrWeeksBreakTheHardRule() {
+            // ціла пара в різних слотах — 2 тижні; половинки в одному слоті, але в різні тижні — 1
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
                     .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build(),
-                            lesson(KI2, slot(1, 3), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("a").build(),
-                            lesson(KI2, slot(2, 1), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("b").build(),
-                            lesson(KI2, slot(3, 2), NUMERATOR).subgroup(2).teacher(NEPYIVODA).siblingKey("b").build())
+                            lesson(KI2, slot(3, 2), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("a").build(),
+                            lesson(KI2, slot(2, 3), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("h").build(),
+                            lesson(KI2, slot(2, 3), DENOMINATOR).subgroup(2).teacher(KRENTSIN).siblingKey("h").build())
                     .penalizesBy(3);
         }
 
         @Test
-        void otherTeachersOtherKeysOrOtherWeeksAreNotSiblingsApart() {
+        void oneTeacherTeachesBothSubgroupsOnNeighbouringPairs() {
             verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
-                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build(),
-                            lesson(KI2, slot(1, 4), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("a").build(),
-                            lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("b").build(),
-                            lesson(KI2, slot(3, 4), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("c").build(),
-                            lesson(KI2, slot(4, 1), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("d").build(),
-                            lesson(KI2, slot(4, 4), DENOMINATOR).subgroup(2).teacher(NEPYIVODA).siblingKey("d").build())
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("k").build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("k").build(),
+                            lesson(KI2, slot(2, 4), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("h").build(),
+                            lesson(KI2, slot(2, 3), NUMERATOR).subgroup(2).teacher(NEPYIVODA).siblingKey("h").build())
                     .hasNoImpact();
+        }
+
+        @Test
+        void oneTeacherWithAGapOnAnotherDayOrInAnotherWeekIsPenalizedSoftly() {
+            // через пару — 2; в інший день — 1; той самий слот у чисельник і знаменник (по черзі) — 1
+            LessonUnit[] lessons = {
+                    lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build(),
+                    lesson(KI2, slot(1, 3), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("a").build(),
+                    lesson(KI2, slot(2, 1), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("b").build(),
+                    lesson(KI2, slot(3, 2), NUMERATOR).subgroup(2).teacher(NEPYIVODA).siblingKey("b").build(),
+                    lesson(KI2, slot(4, 1), NUMERATOR).subgroup(1).teacher(NEPYIVODA).siblingKey("d").build(),
+                    lesson(KI2, slot(4, 1), DENOMINATOR).subgroup(2).teacher(NEPYIVODA).siblingKey("d").build()};
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart).given((Object[]) lessons).penalizesBy(4);
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) lessons).hasNoImpact();
+        }
+
+        @Test
+        void aPinnedPairThatIsAlreadyApartIsExempt() {
+            // обидві копії закріплені (пари поза вибором) — не рахуємо; одна вільна — рахуємо
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("p").pinned().build(),
+                            lesson(KI2, slot(3, 2), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("p").pinned().build())
+                    .hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("p").pinned().build(),
+                            lesson(KI2, slot(3, 2), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("p").build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void lessonsWithoutAKeyOrWithAnotherKeyAreNotSiblings() {
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build(),
+                            lesson(KI2, slot(3, 4), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("b").build(),
+                            lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).build(),
+                            lesson(KI2, slot(4, 4), BOTH).subgroup(2).teacher(KRENTSIN).build())
+                    .hasNoImpact();
+        }
+
+        /**
+         * A key whose copies cannot all be parallel by the data (here A, A, B: B cannot be parallel to both of A's
+         * copies) would make every run infeasible under the hard rule. The factory marks it soft: the hard rule leaves
+         * it, and the soft one takes two teachers' copies as together in one slot or on neighbouring pairs.
+         */
+        @Test
+        void aKeyThatCannotBeParallelByTheDataIsLeftToTheSoftRule() {
+            // A на 1-й і 2-й парі, B паралельно з першою: краще не буває, а жорстке правило дає −2 за пару «A2—B»
+            LessonUnit[] hard = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t").build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t").build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t").build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) hard).penalizesBy(2);
+
+            LessonUnit[] together = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t")
+                            .softSiblingRule().build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) together).hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart).given((Object[]) together).hasNoImpact();
+
+            // B в інший день: дві пари «A—B» не разом, по 2 тижні — лише м'яко
+            LessonUnit[] apart = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(3, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t")
+                            .softSiblingRule().build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) apart).hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart).given((Object[]) apart).penalizesBy(4);
+        }
+
+        /** Two teachers without a common free slot: neighbouring pairs are together, other slots cost softly. */
+        @Test
+        void twoTeachersOfASoftKeyOnNeighbouringPairsAreTogether() {
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
+                    .given(lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("n")
+                                    .softSiblingRule().build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("n")
+                                    .softSiblingRule().build())
+                    .hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
+                    .given(lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("n")
+                                    .softSiblingRule().build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("n")
+                                    .softSiblingRule().build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void theRuleIsHardWhateverTheRequestWeights() {
+            LessonUnit first = lesson(KI2, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("a").build();
+            LessonUnit second = lesson(KI2, slot(2, 1), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("a").build();
+            Timetable zeroWeights = new Timetable(List.of(), List.of(ROOM_6, ROOM_304), List.of(NEPYIVODA, KRENTSIN),
+                    List.of(KI2), List.of(first, second), ConstraintWeights.of(
+                            new GenerationWeights(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0));
+            // 2 тижні жорстко; м'які правила вимкнені нулями, лише «Підгрупа сама» теж має вагу 0
+            verifier.verifyThat().givenSolution(zeroWeights).scores(HardSoftScore.ofHard(-2));
         }
     }
 
@@ -779,8 +1096,9 @@ class TimetableConstraintProviderTest {
         LessonUnit late = lesson(KI1, slot(1, 4), BOTH).desiredRoom(ROOM_6).room(ROOM_304).build();
         LessonUnit first = lesson(KI1, slot(1, 1), BOTH).build();
         Timetable weighted = timetable(List.of(late, first), new GenerationWeights(1, 0, 3, 0, 2));
-        // вікна: пари 2 і 3 в обох тижнях = 4×1; пізня пара 2×3; не своя аудиторія 2×2; замала аудиторія 2 hard
-        verifier.verifyThat().givenSolution(weighted).scores(HardSoftScore.of(-2, -4 - 6 - 4));
+        // вікна групи (жорсткі, без ваги): пари 2 і 3 в обох тижнях = 4 hard; замала аудиторія 2 hard;
+        // пізня пара 2×3; не своя аудиторія 2×2
+        verifier.verifyThat().givenSolution(weighted).scores(HardSoftScore.of(-4 - 2, -6 - 4));
     }
 
     @Test
@@ -823,10 +1141,12 @@ class TimetableConstraintProviderTest {
         private Room desiredRoom;
         private UUID discipline = UUID.randomUUID();
         private String siblingKey;
+        private boolean softSiblingRule;
         private Timeslot baseSlot;
         private Parity baseParity;
         private UUID baseRoom;
         private Set<RoomType> baseRoomTypes = Set.of();
+        private boolean pinned;
 
         UnitBuilder(StudentGroup group, Timeslot slot, Parity parity) {
             this.group = group;
@@ -869,6 +1189,11 @@ class TimetableConstraintProviderTest {
             return this;
         }
 
+        UnitBuilder softSiblingRule() {
+            this.softSiblingRule = true;
+            return this;
+        }
+
         UnitBuilder baseRoomTypes(Set<RoomType> types) {
             this.baseRoomTypes = types;
             return this;
@@ -881,6 +1206,11 @@ class TimetableConstraintProviderTest {
             return this;
         }
 
+        UnitBuilder pinned() {
+            this.pinned = true;
+            return this;
+        }
+
         LessonUnit build() {
             LessonUnit.Builder builder = LessonUnit.builder("u" + ++counter, group, discipline)
                     .subgroup(subgroup)
@@ -889,8 +1219,13 @@ class TimetableConstraintProviderTest {
                     .requiredRoomType(requiredRoomType)
                     .desiredRoom(desiredRoom)
                     .siblingKey(siblingKey)
-                    .baseRoomTypes(baseRoomTypes)
-                    .placedAt(slot, room, parity);
+                    .softSiblingRule(softSiblingRule)
+                    .baseRoomTypes(baseRoomTypes);
+            if (pinned) {
+                builder.pinnedAt(slot, room, parity);
+            } else {
+                builder.placedAt(slot, room, parity);
+            }
             if (baseSlot != null) {
                 builder.base(baseSlot, baseParity, baseRoom);
             }

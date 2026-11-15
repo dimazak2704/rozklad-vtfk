@@ -212,7 +212,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
         {numbering}
       </SettingsSection>
 
-      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, скільки академічних годин зараховується за одну пару в обліку і межа пар на день для генератора.">
+      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, скільки академічних годин зараховується за одну пару в обліку і межі пар для генератора: на день у викладача й у пʼятницю в групи.">
         <Field
           label="Профіль дзвінків"
           hint="Зміна профілю оновить час пар на сайті, у боті й у розпорядженнях."
@@ -271,6 +271,29 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
                   onBlur={field.onBlur}
                   min={LIMITS.teacherMaxPairsPerDay.min}
                   max={LIMITS.teacherMaxPairsPerDay.max}
+                  className="w-36"
+                />
+              )}
+            />
+          </Field>
+        ) : null}
+        {settings.fridayMaxPairs !== undefined ? (
+          <Field
+            label="Максимум пар у пʼятницю"
+            hint="Для генератора розкладу: пʼятниця — розвантажувальний день, більше пар у групи генератор не поставить. Пари, закріплені поза вибраними групами, лишаються як є."
+            error={formState.errors.fridayMaxPairs?.message}
+            required
+          >
+            <Controller
+              control={control}
+              name="fridayMaxPairs"
+              render={({ field }) => (
+                <NumberInput
+                  value={field.value === undefined || Number.isNaN(field.value) ? null : field.value}
+                  onValueChange={(value) => field.onChange(value ?? Number.NaN)}
+                  onBlur={field.onBlur}
+                  min={LIMITS.fridayMaxPairs.min}
+                  max={LIMITS.fridayMaxPairs.max}
                   className="w-36"
                 />
               )}

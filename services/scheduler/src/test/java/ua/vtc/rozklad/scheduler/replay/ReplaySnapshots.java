@@ -38,6 +38,8 @@ public final class ReplaySnapshots {
             "college-from-scratch");
     /** The college's daily pair limit for a teacher (core setting {@code generation.teacherMaxPairsPerDay}). */
     static final int TEACHER_LIMIT = 4;
+    /** The college's Friday limit of a group (core setting {@code generation.fridayMaxPairs}, owner's rule). */
+    static final int FRIDAY_LIMIT = 3;
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Set<RoomType> SPORT_ROOMS = EnumSet.of(RoomType.GYM, RoomType.SPORTS_GROUND);
@@ -70,7 +72,8 @@ public final class ReplaySnapshots {
 
     /**
      * Completes an old snapshot the way the core of this branch sends it: sibling key {@code loadItemId:suffix}
-     * on free subgroup units of an item with two or more of them, and the daily limit for every teacher. No room
+     * on free subgroup units of an item with two or more of them, the daily limit for every teacher and the Friday
+     * limit for every group. No room
      * type is derived (core stopped doing that: keeping PE in the hall is the scheduler's soft {@code specialRooms},
      * read from the base rooms). B3 (the base lesson's teacher) cannot be redone here: the snapshots carry the
      * load's teacher.
@@ -95,7 +98,11 @@ public final class ReplaySnapshots {
                 .map(teacher -> new ProblemSnapshot.Teacher(teacher.id(), teacher.name(), teacher.unavailable(),
                         teacher.unwanted(), teacher.maxPairsPerDay() == null ? TEACHER_LIMIT : teacher.maxPairsPerDay()))
                 .toList();
-        return new ProblemSnapshot(snapshot.timeslots(), snapshot.shiftWindows(), snapshot.groups(), snapshot.rooms(),
+        List<ProblemSnapshot.Group> groups = snapshot.groups().stream()
+                .map(group -> new ProblemSnapshot.Group(group.id(), group.code(), group.size(), group.shift(),
+                        group.subgroups(), group.fridayMaxPairs() == null ? FRIDAY_LIMIT : group.fridayMaxPairs()))
+                .toList();
+        return new ProblemSnapshot(snapshot.timeslots(), snapshot.shiftWindows(), groups, snapshot.rooms(),
                 teachers, units);
     }
 

@@ -180,20 +180,58 @@ group of one shift and every lesson after it of a group of the other shift (186 
 the real timetable; 154 of 781 teacher-days use both shifts). Warnings and metrics count them apart; whether they
 are acceptable is open (§13).
 
-**Generator preferences (genfix) are not college rules.** They are soft, each has a request weight (0 = off), and
-the defaults come from the real timetable (`seed/schedule-2025-26.xlsx`, 560 group-day-weeks, 781 teacher-days):
-- «4-та пара зміни» (`contracts.LatePairs`): the 4th pair of the group's shift window (shift 1 the 4th, shift 2 the
-  8th; Friday shift 2 has none). The college uses it on 321 of 560 group-day-weeks (57 %), so it is not «late»;
-  the weight only spreads pairs over the week;
-- stability against the base version (a moved pair, a changed room); subgroups of one discipline together
-  (72 of 75 real subgroup slots), and adjacent pairs when one teacher teaches both; a one-pair day of a group
-  (3 of 560); a teacher's one-pair day and extra teaching day; more than `teacherMaxPairsPerDay` pairs a day for a
-  teacher (setting, default 4: 35 of 781 real teacher-days have 5–6); a discipline twice a day (12 of 560;
-  3 or more times stays the warning above);
-- PE stays in the hall: a lesson of a load item whose base lessons with a room all stood in the sports hall or on
-  the sports ground goes to another room only at the cost of `specialRooms` (all 60 real PE items stand only there,
-  none in a classroom); data-driven, never by discipline name, and soft like the rest (§13 Q6). Generation derives
-  no hard room type from the base.
+**Generator rules (owner's answers, 15.11.2026; §13 Q1, Q4–Q7 and the Friday rule).**
+- **Groups have no windows** (hard; Q7: «Вікна групам не варто лишати, краще викладачам вікна»): per kind of week the
+  worst subgroup's free pairs between its lessons, the same count as the core metric «Вікна груп», with one exemption: a
+  free pair where another subgroup studies, between the pairs at which every subgroup is at a lesson and the subgroup's
+  own nearest lesson on that side of them, is not a window (a lone subgroup pair at the edge of the day, e.g. one
+  teacher's two subgroups one after the other at the end of the day). A subgroup that waits between two whole-group
+  pairs, or between two of its own lessons (sub 1, sub 2, sub 1, with or without a whole-group pair that day), has a
+  window. Only group-days with a lesson the run may move count, so lessons pinned outside the scope never make a run
+  infeasible. Teacher windows stay a soft trade-off (`teacherWindows`); the request weight `windows` weighs nothing now.
+  The core conflict check keeps group windows as warnings: a manual edit may leave one, and publication is not blocked.
+  The published timetable has none (560 group-day-weeks). Its replay snapshot shows 1, 2КІ1 Thursday pair 6 in the
+  numerator week: the published «Матем.» there names Овчар Ін.М., the load unit Овчар Ів.М. (different people, §10),
+  so core sends that unit without a base lesson and the snapshot's base has a free pair where the timetable has none.
+- **Friday is an unloading day: at most 3 pairs for every group** (hard): the setting «Максимум пар у пʼятницю»
+  (`generation.fridayMaxPairs`, 1..8, default 3) counts the pairs of the group's row (any subgroup at a lesson) in each kind
+  of week, on group-days the run may change. The published 2025/26 timetable has 4 Friday pairs in 1КІ1, 1М, 4РТ1 and
+  4РТ2 (both weeks), so a whole-college run moves those pairs to other days; a scope run without them leaves them as
+  pinned. The B9 pre-check counts a first-shift group with 19 slots instead of 20. The owner's «the usual day is 3–4
+  pairs» is kept by the day-balance rules below; no hard minimum is added.
+- **Subgroups of a split discipline study at the same time** (hard): the subgroup copies of one weekly occurrence of
+  a split load item (`siblingKey`) with different teachers stand in one slot and the same weeks. When one teacher
+  teaches both, parallel is impossible, so they should stand on neighbouring pairs of one day in the same weeks: a soft
+  rule with the strongest default (`subgroupsTogether` 30), because a hard one made a full second shift with such labs
+  infeasible (the published timetable has no such case). Pinned lessons carry no sibling key and a pair of two pinned
+  copies is never scored, so lessons pinned outside the scope cannot make a run infeasible. A subgroup lesson without a counterpart
+  in the load (the three lone subgroup slots of the published timetable, §13 Q4) is not covered: it stays the soft
+  «Subgroup alone» (`subgroupsTogether`). In the published timetable 70 of the 72 sibling keys have a base placement and
+  all 70 are parallel; the other 2 have none, so a run from it reaches 0 hard within seconds, not from the start. A key
+  whose copies cannot all be parallel by the data (one teacher for two of three or more copies, or teachers without a
+  common free slot in the shift) is soft as a whole, so data alone cannot make a run infeasible; the real data has none.
+- **A group's one-pair day is to be avoided** and **PE stands in the sports hall or on the sports ground**: confirmed,
+  soft (`studentOnePairDay` 10, `specialRooms` 30, the strongest default), not offered to the dispatcher as a choice
+  (replay: one-pair days 0–3 at 10, 30 did not help the rest of the week, scheduler.md §11). PE stays
+  soft because the hall has 5 places and the published timetable fills all 5 in 4 slot-weeks: a full or closed hall
+  must cost points, not make the run infeasible. The PE items are found from the data, never by discipline name: a load
+  item whose base lessons with a room all stood in the hall or on the ground, or, without a base (from scratch), whose
+  teacher's usual room is the hall and the discipline is nowhere in an ordinary room (all 100 PE units of the real
+  request from scratch, no other unit). Generation derives no hard room type.
+- **The 4th pair of the shift is normal** (shift 1 the 4th pair 12:10–13:10, shift 2 the 8th; `contracts.LatePairs`;
+  the college uses it on 321 of 560 group-day-weeks, 57 %): the preference «4-та пара зміни» defaults to weight 0 and
+  stays switchable. The days stay balanced through the one-pair day, a discipline twice a day, broken days and the
+  teacher's daily limit (replay, scheduler.md §11 «Owner's rules»: scope runs as even as the published timetable; the
+  whole college a little less even, not equal: spread 186 vs 178, two-pair days 86 vs 75 group day-weeks, the 4th pair
+  337 vs 289, while one-pair days 2 vs 5 and broken days 28 vs 36 are better). Whether a two-pair day next to
+  four-pair days is acceptable is open (§13 Q1).
+
+**Generator preferences (genfix) are trade-offs, not college rules.** They are soft, each has a request weight
+(0 = off), and the defaults come from the real timetable (`seed/schedule-2025-26.xlsx`, 560 group-day-weeks, 781
+teacher-days): teacher windows, broken days, a discipline twice a day (12 of 560; 3 or more times stays
+the warning above), stability against the base version (a moved pair, a changed room), a teacher's one-pair day and
+extra teaching day, more than `teacherMaxPairsPerDay` pairs a day for a teacher (setting, default 4: 35 of 781 real
+teacher-days have 5–6), unwanted slots and the teacher's room.
 
 ## 6. Publication & materialization
 
@@ -510,25 +548,37 @@ behaviour. Each could become a setting once the college confirms a rule:
 - Until when a teacher may answer «Не можу». Now: until the order is published (§7, NOTIFY).
 - How far forecast may differ from plan before a warning. Now: ±2 hours (`HoursLedger.TOLERANCE_HOURS`, §9).
 
-Generator (genfix, 15.11.2026). Until answered the generator keeps the soft defaults of `GenerationWeights.DEFAULT`
-(CONTRACTS; none of these is a hard rule, each can be switched off with its weight). Weights compare as costs per week
-occurrence: a group window costs 30, the strongest default.
-- Q1. Is the 4th pair of a shift (12:10–13:10 in shift 1, the 8th pair in shift 2) «late»? Now: soft «4-та пара
-  зміни», weight 9, only to spread pairs over the week (the college uses it in 57 % of group-days).
+Generator (genfix, 15.11.2026). The owner answered Q1, Q4, Q5 (for groups), Q6 and Q7 on 15.11.2026 and added the
+Friday rule; the rules are in §5. The open ones keep the soft defaults of `GenerationWeights.DEFAULT` (CONTRACTS; each
+can be switched off with its weight). Weights compare as costs per week occurrence: 30 is the strongest default (one
+teacher's subgroups apart, a lone subgroup, PE outside the hall).
+- Q1 (answered). Is the 4th pair of a shift «late»? No: for the 1st shift it is a normal pair. Now: «4-та пара зміни»
+  defaults to 0 and the dispatcher may switch it on. Follow-up (open): without that preference the generator makes
+  more two-pair days next to full four-pair days (whole college 86 vs 75 group day-weeks, spread 186 vs 178), while
+  one-pair and broken days are fewer than published; is that fine?
 - Q2. Are a teacher's waits between a 1st-shift and a 2nd-shift lesson acceptable, and what is a teacher's maximum
   number of pairs a day? Now: waits weight 3 (a third of an in-shift teacher window); setting
   `teacherMaxPairsPerDay` = 4, soft, weight 3 per pair above it.
 - Q3. May a discipline appear twice a day? Back-to-back lab pairs? Now: soft, weight 10 (12 of 560 real
   group-days); three times a day is a separate soft rule (service config, 5).
-- Q4. Must subgroups be parallel? Is a one-subgroup pair allowed only at the first or last pair? Now: soft, weight 10
-  (a lone subgroup; two subgroups of one teacher not one after the other).
-- Q5. Is a one-pair day allowed, for students and for teachers? Now: soft, weights 10 (groups) and 5 (teachers'
-  one-pair and extra days).
-- Q6. Must PE always be in the gym or on the sports ground? Now: soft `specialRooms`, weight 30: a lesson of a load
-  item whose base lessons all stood there goes to another room only at that cost (when the hall is full or closed);
-  without a base version there is no preference. Core derives no hard room type (all 60 real PE items stand only in
-  the hall or on the ground).
-- Q7. Are teacher windows as bad as student windows? Now: no: group windows 30, teacher windows inside a shift 10,
-  waits between shifts 3 (the college has 0 student windows and 117 in-shift teacher windows).
+- Q4 (answered). Must subgroups be parallel? Yes, always: a hard rule (§5); one teacher of both → neighbouring pairs
+  (soft, strongest default).
+  Still open: a pair for one subgroup without a counterpart in the load, only at the first or last pair? The three lone
+  slots of the published timetable are such lessons, at a shift edge: 2ТК English on Tuesday pair 8 (Крисак Л.) and
+  Wednesday pair 5 (Можаровська О.), each marked «(п)» for a subgroup in the Excel, imported both as subgroup 1 (the
+  group stores only subgroup 1, its load has one item for subgroup 1, 2 pairs, so no sibling key and nothing to pair);
+  1ОП1 English on Wednesday pair 1 (Харченко О., subgroup 1; the load has no subgroup-2 counterpart). Now: soft «Subgroup
+  alone», weight `subgroupsTogether` 30; the 1ОП1 slot cannot be paired by any timetable of this load.
+- Q5 (answered for groups). Is a one-pair day allowed? For groups it is to be avoided: confirmed, soft, weight
+  `studentOnePairDay`, not offered as a choice. Teachers: still a preference («Дні викладачів»: one-pair and extra
+  days 5, overload 3).
+- Q6 (answered). Must PE always be in the gym or on the sports ground? Yes. Now: soft `specialRooms`, weight 30, not
+  offered as a choice (the hall's 5 places are the reason it is not hard, §5); from scratch the teacher's usual room
+  marks the PE items.
+- Q7 (answered). Are teacher windows as bad as student windows? No: groups must not have windows, teachers may get them.
+  Now: group windows are a hard rule (§5); teacher windows inside a shift 10 and waits between shifts 3 stay soft (the
+  college has 0 student windows and 117 in-shift teacher windows).
+- Friday (answered with Q7): at most 3 pairs a group, an unloading day; a hard rule with the setting
+  `generation.fridayMaxPairs` (§5).
 - Q8. On re-generation mid-semester, how much may lessons move? Now: soft «stability», weight 1 per moved week
   occurrence and per room change in a kept slot.

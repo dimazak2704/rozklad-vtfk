@@ -65,7 +65,8 @@ import ua.vtc.rozklad.core.timetable.internal.support.TeacherRoomReader;
  * the scheduler's soft rule {@code specialRooms}, read from the base rooms in {@code initial}/{@code pinned}.
  * Each free unit names its teacher's usual room ({@code teacherRoomId}, {@link TeacherRooms#forDiscipline})
  * in the published version of the semester, or in the base version when nothing is published; free units
- * of a split item carry a {@code siblingKey} shared by the subgroup copies of one weekly occurrence.
+ * of a split item carry a {@code siblingKey} shared by the subgroup copies of one weekly occurrence. Every group
+ * carries the college's Friday limit and every teacher the daily limit (settings).
  */
 @Component
 class ProblemSnapshotBuilder {
@@ -163,7 +164,7 @@ class ProblemSnapshotBuilder {
         Map<UUID, Long> cohortsOfItem = cohortsOfItem(loadUnits);
         Set<PlanUnit.StreamSlot> streamLeaders = new HashSet<>();
         ProblemSnapshot snapshot = new ProblemSnapshot(timeslots(windows), shiftWindowsOf(windows),
-                snapshotGroups(groupsById.values(), storedSubgroups, units), snapshotRooms,
+                snapshotGroups(groupsById.values(), storedSubgroups, units, current.fridayMaxPairs()), snapshotRooms,
                 snapshotTeachers(units, preferences.forSemester(semesterId), current.teacherMaxPairsPerDay()),
                 units.stream().map(unit -> {
                     PlanUnit.StreamSlot stream = unit.streamSlot();
@@ -346,8 +347,10 @@ class ProblemSnapshotBuilder {
         return numbers;
     }
 
+    /** Every group gets the college's Friday limit (setting {@code generation.fridayMaxPairs}, a hard rule). */
     private static List<ProblemSnapshot.Group> snapshotGroups(Collection<StudentGroup> groups,
-                                                              Map<UUID, Set<Integer>> stored, List<PlanUnit> units) {
+                                                              Map<UUID, Set<Integer>> stored, List<PlanUnit> units,
+                                                              int fridayMaxPairs) {
         Map<UUID, Set<Integer>> used = new HashMap<>();
         units.stream().filter(unit -> unit.subgroup() > 0)
                 .forEach(unit -> used.computeIfAbsent(unit.groupId(), id -> new TreeSet<>()).add(unit.subgroup()));
@@ -358,7 +361,7 @@ class ProblemSnapshotBuilder {
                     numbers.addAll(used.getOrDefault(group.getId(), Set.of()));
                     return new ProblemSnapshot.Group(group.getId(), group.getCode(),
                             group.getSize() == null ? UNKNOWN_SIZE : group.getSize(), group.getShift(),
-                            List.copyOf(numbers));
+                            List.copyOf(numbers), fridayMaxPairs);
                 })
                 .toList();
     }

@@ -18,26 +18,36 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 
 /**
- * A hand-made week in which every soft rule added after the generator review (and the windows and
- * late pairs they interact with) has at least one match; optionally with every unit pinned.
+ * A hand-made week in which every rule added after the generator review (and the windows and late pairs
+ * they interact with) has at least one match; optionally with every unit pinned. «Subgroups not together»,
+ * group windows and the Friday limit are hard since the owner's answers (15.11.2026) and exempt pinned lessons: a
+ * pair of pinned copies, a day without a free lesson.
  */
 final class NewRulesWeek {
 
     static final Set<TimetableConstraint> RULES = EnumSet.of(TimetableConstraint.GROUP_WINDOWS,
-            TimetableConstraint.TEACHER_WINDOWS, TimetableConstraint.TEACHER_SHIFT_WAIT, TimetableConstraint.LATE_PAIR,
+            TimetableConstraint.FRIDAY_OVERLOAD, TimetableConstraint.TEACHER_WINDOWS, TimetableConstraint.TEACHER_SHIFT_WAIT, TimetableConstraint.LATE_PAIR,
             TimetableConstraint.GROUP_ONE_PAIR_DAY, TimetableConstraint.SUBGROUP_ALONE,
-            TimetableConstraint.SIBLINGS_APART, TimetableConstraint.TEACHER_ONE_PAIR_DAY,
+            TimetableConstraint.SUBGROUPS_APART, TimetableConstraint.SIBLINGS_APART,
+            TimetableConstraint.TEACHER_ONE_PAIR_DAY,
             TimetableConstraint.TEACHER_EXTRA_DAY, TimetableConstraint.TEACHER_OVERLOAD,
             TimetableConstraint.DISCIPLINE_TWICE, TimetableConstraint.UNIT_MOVED, TimetableConstraint.ROOM_CHANGED,
             TimetableConstraint.SPECIAL_ROOM_LOST);
-    /** Rules whose matches may consist of pinned units only. */
-    static final Set<TimetableConstraint> PINNABLE_RULES = RULES;
+    /** Hard rules that exempt pinned lessons (declared first: the next field reads it). */
+    static final Set<TimetableConstraint> PINNED_EXEMPT = EnumSet.of(TimetableConstraint.SUBGROUPS_APART,
+            TimetableConstraint.GROUP_WINDOWS, TimetableConstraint.FRIDAY_OVERLOAD);
+    /**
+     * Rules whose matches may consist of pinned units only (two pinned subgroup copies apart are never scored, a
+     * group-day without a free lesson breaks no hard day rule).
+     */
+    static final Set<TimetableConstraint> PINNABLE_RULES = withoutPinnedExemptions();
 
     private static final ShiftWindow FIRST_SHIFT = window(1, 4, 1, 4);
     private static final ShiftWindow SECOND_SHIFT = window(5, 8, 4, 6);
     private static final StudentGroup KI1 = new StudentGroup(UUID.randomUUID(), "4КІ1", 25, 1, List.of(), FIRST_SHIFT);
+    /** Split group with a Friday limit of one pair. */
     private static final StudentGroup KI2 = new StudentGroup(UUID.randomUUID(), "1КІ2", 28, 1, List.of(1, 2),
-            FIRST_SHIFT);
+            FIRST_SHIFT, 1);
     private static final StudentGroup EA1 = new StudentGroup(UUID.randomUUID(), "2ЕА1", 30, 2, List.of(),
             SECOND_SHIFT);
     /** Daily limit 2, baseline one day per kind of week. */
@@ -49,6 +59,13 @@ final class NewRulesWeek {
     private static final UUID STP = UUID.randomUUID();
 
     private NewRulesWeek() {
+    }
+
+    private static Set<TimetableConstraint> withoutPinnedExemptions() {
+        Set<TimetableConstraint> rules = EnumSet.copyOf(RULES);
+        rules.removeAll(PINNED_EXEMPT);
+        rules.remove(TimetableConstraint.SIBLINGS_APART);
+        return rules;
     }
 
     static Timetable timetable(boolean pinned) {
@@ -68,6 +85,28 @@ final class NewRulesWeek {
         // четвер: другий робочий день обмеженого викладача; його підгрупи не підряд і кожна сама
         units.add(unit("thu1", KI2, 4, 1, LIMITED, ROOM_304, pinned).subgroup(1).siblingKey("lab:w1").build());
         units.add(unit("thu3", KI2, 4, 3, LIMITED, ROOM_304, pinned).subgroup(2).siblingKey("lab:w1").build());
+        // п'ятниця: англійська двох викладачів, підгрупи не одночасно (жорстке правило); дві пари групи при
+        // обмеженні в одну
+        units.add(unit("fri2", KI2, 5, 2, FREE, ROOM_304, pinned).subgroup(1).siblingKey("eng:w1").build());
+        units.add(unit("fri3", KI2, 5, 3, null, ROOM_6, pinned).subgroup(2).siblingKey("eng:w1").build());
+        return new Timetable(List.of(), List.of(ROOM_304, ROOM_6), List.of(LIMITED, FREE), List.of(KI1, KI2, EA1),
+                units, ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
+    }
+
+    /**
+     * Two sibling keys of two teachers whose copies cannot be parallel by the data (soft sibling rule): one on
+     * neighbouring pairs (together), one on different days (apart, 2 week occurrences of «Subgroups apart»).
+     */
+    static Timetable softSiblingKeys() {
+        List<LessonUnit> units = List.of(
+                unit("mon1", KI2, 1, 1, FREE, ROOM_304, false).subgroup(1).siblingKey("n:w1").softSiblingRule(true)
+                        .build(),
+                unit("mon2", KI2, 1, 2, LIMITED, ROOM_6, false).subgroup(2).siblingKey("n:w1").softSiblingRule(true)
+                        .build(),
+                unit("tue1", KI2, 2, 1, FREE, ROOM_304, false).subgroup(1).siblingKey("n:w2").softSiblingRule(true)
+                        .build(),
+                unit("wed1", KI2, 3, 1, LIMITED, ROOM_6, false).subgroup(2).siblingKey("n:w2").softSiblingRule(true)
+                        .build());
         return new Timetable(List.of(), List.of(ROOM_304, ROOM_6), List.of(LIMITED, FREE), List.of(KI1, KI2, EA1),
                 units, ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
     }

@@ -27,13 +27,16 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
  * <p>Like {@link SyntheticCollege}, the generator plants a complete timetable without hard violations first and
  * then forgets it, so each problem is known to be feasible. Unlike it, a group gets the real number of pairs a
  * week (14–19, a pair of halves counts as one), its days start at the shift's first pair as a rule and Friday is
- * the lightest day; each load item has one teacher for all its occurrences; split items are parallel (one
+ * the lightest day (at most the college's Friday limit of 3 pairs, which the snapshot carries); its days have no
+ * windows; each load item has one teacher for all its occurrences; split items are parallel (one
  * teacher per subgroup) or crossed (one teacher teaches both subgroups on neighbouring pairs, like a lab); every
  * teacher has a cabinet (the desired room) and the college's daily limit of 4 pairs.
  */
 public final class ShapedCollege {
 
     static final int MAX_PAIRS_PER_DAY = 4;
+    /** The college's Friday limit of a group (core setting {@code generation.fridayMaxPairs}); the plant keeps to it. */
+    static final int FRIDAY_MAX_PAIRS = 3;
     static final int TEACHERS_PER_CABINET = 2;
     static final int PART_TIME_LOAD = 8;
 
@@ -342,7 +345,7 @@ public final class ShapedCollege {
             String code = "%d%s%d".formatted(course, LETTERS[index % LETTERS.length], 1 + index / LETTERS.length);
             UUID groupId = uuid("group-" + index);
             groups.add(new ProblemSnapshot.Group(groupId, code, 18 + random.nextInt(13), shift,
-                    split ? List.of(1, 2) : List.of()));
+                    split ? List.of(1, 2) : List.of(), FRIDAY_MAX_PAIRS));
             int min = shift == 1 ? shape.minPairs() : shape.minPairsShiftTwo();
             int max = shift == 1 ? shape.maxPairs() : shape.maxPairsShiftTwo();
             List<Slot> slots = chooseSlots(shift, min + random.nextInt(max - min + 1), stream);

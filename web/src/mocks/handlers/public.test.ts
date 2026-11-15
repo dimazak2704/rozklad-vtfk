@@ -219,6 +219,14 @@ describe('архів лише для персоналу (publicHistoryFrom)', ()
     const six = await api.put<SettingsDto>('/admin/settings', { ...kept, teacherMaxPairsPerDay: 6 });
     const { teacherMaxPairsPerDay: _omit, ...withoutLimit } = six;
     expect((await api.put<SettingsDto>('/admin/settings', withoutLimit)).teacherMaxPairsPerDay).toBe(6);
+    // власник, 15.11.2026: найбільше пар у пʼятницю — 1..8, типово 3; без поля в PUT лишається збережене
+    expect(six.fridayMaxPairs).toBe(3);
+    const fridayTooMany = await failure(api.put('/admin/settings', { ...six, fridayMaxPairs: 0 }));
+    expect(fridayTooMany?.fieldErrors()).toEqual({ fridayMaxPairs: 'Від 1 до 8 пар' });
+    const four = await api.put<SettingsDto>('/admin/settings', { ...six, version: (await api.get<SettingsDto>('/admin/settings')).version, fridayMaxPairs: 4 });
+    expect(four.fridayMaxPairs).toBe(4);
+    const { fridayMaxPairs: _friday, ...withoutFriday } = four;
+    expect((await api.put<SettingsDto>('/admin/settings', withoutFriday)).fridayMaxPairs).toBe(4);
   });
 });
 

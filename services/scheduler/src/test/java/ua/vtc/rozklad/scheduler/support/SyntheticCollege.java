@@ -36,6 +36,8 @@ public final class SyntheticCollege {
     static final int INITIAL_LABS = 6;
     /** Daily pair limit sent for every teacher, like core's default setting. */
     static final int MAX_PAIRS_PER_DAY = 4;
+    /** Friday limit sent for every group, like core's default setting (the plant's days have 2–3 pairs). */
+    static final int FRIDAY_MAX_PAIRS = 3;
 
     private static final String[] DISCIPLINES = {
             "Математика", "Українська мова", "Українська література", "Іноземна мова", "Історія України",
@@ -192,7 +194,8 @@ public final class SyntheticCollege {
             int size = 18 + random.nextInt(13);
             RoomState home = shift == 1 ? classrooms.get(index - options.shiftTwoGroups())
                     : classrooms.get(random.nextInt(classrooms.size()));
-            groups.add(new ProblemSnapshot.Group(groupId, code, size, shift, split ? List.of(1, 2) : List.of()));
+            groups.add(new ProblemSnapshot.Group(groupId, code, size, shift, split ? List.of(1, 2) : List.of(),
+                    FRIDAY_MAX_PAIRS));
 
             List<Slot> slots = chooseSlots(shift, split ? 14 : 15);
             Map<Slot, Role> roles = assignRoles(slots, split);

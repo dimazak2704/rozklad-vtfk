@@ -11,6 +11,7 @@ const minutes = LIMITS.confirmTimeoutMinutes;
 const hours = LIMITS.hoursPerPair;
 const history = LIMITS.changesHistoryDays;
 const teacherPairs = LIMITS.teacherMaxPairsPerDay;
+const fridayPairs = LIMITS.fridayMaxPairs;
 
 export const settingsSchema = z.object({
   approvalMode: z.enum(['NOTIFY', 'CONFIRM', 'AUTO'], { error: 'Оберіть режим погодження замін' }),
@@ -51,6 +52,12 @@ export const settingsSchema = z.object({
     .int({ error: 'Лише ціле число пар' })
     .min(teacherPairs.min, { error: `Від ${teacherPairs.min} до ${teacherPairs.max} пар` })
     .max(teacherPairs.max, { error: `Від ${teacherPairs.min} до ${teacherPairs.max} пар` })
+    .optional(),
+  fridayMaxPairs: z
+    .number({ error: 'Вкажіть кількість пар' })
+    .int({ error: 'Лише ціле число пар' })
+    .min(fridayPairs.min, { error: `Від ${fridayPairs.min} до ${fridayPairs.max} пар` })
+    .max(fridayPairs.max, { error: `Від ${fridayPairs.min} до ${fridayPairs.max} пар` })
     .optional(),
   activeBellProfileId: z.string().nullable(),
 });

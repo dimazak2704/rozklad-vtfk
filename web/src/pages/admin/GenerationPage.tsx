@@ -12,6 +12,7 @@ import {
 } from '@/api/generation';
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
+import { useSettings } from '@/api/settings';
 import { usePlanningCatalog, useTimetableVersions } from '@/api/timetable';
 import type { LoadProblemDto, Uuid } from '@/api/types';
 import { BaselinePanel } from '@/components/generation/BaselinePanel';
@@ -42,6 +43,8 @@ export default function GenerationPage() {
   const semesterId = meta.data?.semester?.id;
   const versions = useTimetableVersions(semesterId);
   const catalog = usePlanningCatalog();
+  // число для рядка «Пʼятниця розвантажена»; поки не завантажено — типове значення core
+  const settings = useSettings();
   const jobs = useGenerationJobs(semesterId);
   const [params, setParams] = useSearchParams();
   const selectedJobId = params.get('job') ?? jobs.data?.[0]?.id ?? null;
@@ -193,6 +196,7 @@ export default function GenerationPage() {
           submit={launchButton}
           title={showsJob ? 'Параметри запуску' : 'Параметри'}
           loadProblems={loadProblems}
+          fridayMaxPairs={settings.data?.fridayMaxPairs}
         />
       )}
     </div>

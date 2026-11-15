@@ -221,7 +221,11 @@ describe('параметри і наслідки задачі (B8)', () => {
       job({ scope: { groupIds: ['a'], courses: [] }, weights: { windows: 20, brokenDays: 10, latePairs: 3, preferences: 5, homeRoom: 1 } }),
     );
     expect(form).toEqual({ scope: 'groups', courses: [], groupIds: ['a'], baseVersionId: 'v1', weights: expect.any(Object) as unknown });
-    expect(form.weights).toEqual({ ...DEFAULT_WEIGHTS, windows: 20, latePairs: 3, teacherWindows: 20 });
+    // вікна викладачів беруть стару спільну вагу (як core), а вікна груп тепер правило коледжу — типова вага
+    expect(form.weights).toEqual({ ...DEFAULT_WEIGHTS, latePairs: 3, teacherWindows: 20 });
+    // правила «Діє завжди» не вибирають: «Взяти ці параметри» повертає їм типові ваги, а не приховану стару
+    const old = formFromJob(job({ scope: { groupIds: [], courses: [] }, weights: { ...DEFAULT_WEIGHTS, subgroupsTogether: 10, specialRooms: 0 } }));
+    expect(old.weights).toEqual(DEFAULT_WEIGHTS);
   });
 
   it('таблиця по групах: було → стало і переставлені пари', () => {

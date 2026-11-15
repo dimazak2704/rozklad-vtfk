@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
@@ -20,6 +21,7 @@ class LoadFitCheckTest {
 
     private static final UUID TK = UUID.randomUUID();
     private static final UUID KI = UUID.randomUUID();
+    private static final UUID TK_FIRST = UUID.randomUUID();
     private static final UUID TEACHER = UUID.randomUUID();
     private static final UUID DISCIPLINE = UUID.randomUUID();
     private static final UUID GYM = UUID.randomUUID();
@@ -102,6 +104,50 @@ class LoadFitCheckTest {
                 .extracting(LoadFitCheck.Problem::kind).containsExactly(LoadFitCheck.Kind.GROUP);
     }
 
+    /**
+     * Owner's rule of 15.11.2026: at most 3 pairs on Friday (hard in the scheduler), so a first-shift group has 19
+     * slots, not 20; the second shift's Friday window has 3 pairs anyway.
+     */
+    @Test
+    void theFridayLimitTakesTheFourthFridayPairOffTheFirstShift() {
+        List<ProblemSnapshot.Unit> units = new ArrayList<>(units(KI, 0, 20, 0, null, null));
+        units.addAll(units(TK, 0, 18, 1, null, null));
+
+        assertThat(LoadFitCheck.check(snapshot(units, List.of(), 1, null)).problems()).as("no limit").isEmpty();
+        assertThat(LoadFitCheck.check(snapshot(units, List.of(), 1, 3)).problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.label()).isEqualTo("4КІ1");
+            assertThat(problem.availablePairs()).isEqualTo(19);
+            assertThat(problem.message())
+                    .isEqualTo("Група 4КІ1: 20 пар на тиждень, а в її зміні 19 слотів (у пʼятницю не більше 3 пар).");
+        });
+        assertThat(LoadFitCheck.check(snapshot(units.subList(1, units.size()), List.of(), 1, 3)).problems())
+                .as("19 pairs fit").isEmpty();
+        assertThat(LoadFitCheck.check(snapshot(units, List.of(), 1, 1)).problems()).extracting(LoadFitCheck.Problem::message)
+                .contains("Група 4КІ1: 20 пар на тиждень, а в її зміні 17 слотів (у пʼятницю не більше 1 пари).");
+    }
+
+    /** A group outside the scope (all pinned) keeps its Friday: the scheduler exempts pinned lessons. */
+    @Test
+    void pinnedFridayPairsAboveTheLimitAreExempt() {
+        List<ProblemSnapshot.Unit> outside = new ArrayList<>();
+        List<ProblemSnapshot.Unit> inScope = new ArrayList<>();
+        for (int weekday = 1; weekday <= 5; weekday++) {
+            for (int pair = 1; pair <= 4; pair++) {
+                ProblemSnapshot.PinnedSlot slot = new ProblemSnapshot.PinnedSlot(weekday, pair, Parity.BOTH, null);
+                outside.add(pinned(KI, slot));
+                // у групі області закріплено всю пʼятницю (4 пари), решта 16 пар вільні: 4 + 16 = 20 слотів
+                inScope.add(weekday == 5 ? pinned(TK_FIRST, slot) : unit(TK_FIRST, 0, UnitWeight.WHOLE, null, null));
+            }
+        }
+        List<ProblemSnapshot.Unit> units = new ArrayList<>(outside);
+        units.addAll(inScope);
+
+        assertThat(LoadFitCheck.check(snapshot(units, List.of(), 1, 3)).problems()).isEmpty();
+        units.add(unit(TK_FIRST, 0, UnitWeight.WHOLE, null, null));
+        assertThat(LoadFitCheck.check(snapshot(units, List.of(), 1, 3)).problems())
+                .extracting(LoadFitCheck.Problem::label).containsExactly("1ТК");
+    }
+
     @Test
     void pairsAreWrittenInUkrainian() {
         assertThat(LoadFitCheck.pairs(2)).isEqualTo("1 пара");
@@ -134,8 +180,19 @@ class LoadFitCheckTest {
         return snapshot(units, unavailable, 1);
     }
 
+    private static ProblemSnapshot.Unit pinned(UUID group, ProblemSnapshot.PinnedSlot slot) {
+        return new ProblemSnapshot.Unit(UUID.randomUUID().toString(), null, group, 0, DISCIPLINE, null,
+                UnitWeight.WHOLE, null, null, null, slot);
+    }
+
     private static ProblemSnapshot snapshot(List<ProblemSnapshot.Unit> units,
                                             List<ProblemSnapshot.Timeslot> unavailable, int gymPlaces) {
+        return snapshot(units, unavailable, gymPlaces, null);
+    }
+
+    private static ProblemSnapshot snapshot(List<ProblemSnapshot.Unit> units,
+                                            List<ProblemSnapshot.Timeslot> unavailable, int gymPlaces,
+                                            Integer fridayMaxPairs) {
         List<ProblemSnapshot.ShiftWindow> windows = new ArrayList<>();
         for (int weekday = 1; weekday <= 5; weekday++) {
             windows.add(new ProblemSnapshot.ShiftWindow(1, weekday, 1, 4));
@@ -143,8 +200,9 @@ class LoadFitCheckTest {
                     : new ProblemSnapshot.ShiftWindow(2, weekday, 5, 8));
         }
         return new ProblemSnapshot(List.of(), windows,
-                List.of(new ProblemSnapshot.Group(TK, "2ТК", 0, 2, List.of()),
-                        new ProblemSnapshot.Group(KI, "4КІ1", 0, 1, List.of())),
+                List.of(new ProblemSnapshot.Group(TK, "2ТК", 0, 2, List.of(), fridayMaxPairs),
+                        new ProblemSnapshot.Group(KI, "4КІ1", 0, 1, List.of(), fridayMaxPairs),
+                        new ProblemSnapshot.Group(TK_FIRST, "1ТК", 0, 1, List.of(), fridayMaxPairs)),
                 List.of(new ProblemSnapshot.Room(GYM, "с.з.", RoomType.GYM, 0, gymPlaces)),
                 List.of(new ProblemSnapshot.Teacher(TEACHER, "Кренцін М.Д.", unavailable, List.of(), 4)),
                 units);

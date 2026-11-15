@@ -62,6 +62,20 @@ final class LaneCounts {
         throw new IllegalStateException("lane " + lane + " is inconsistent");
     }
 
+    /** Last occupied pair of the lane, 0 when the lane is empty. */
+    int lastPair(int lane) {
+        if (distinctPairs[lane] == 0) {
+            return 0;
+        }
+        int[] pairs = counts[lane];
+        for (int pair = pairs.length - 1; pair > 0; pair--) {
+            if (pairs[pair] > 0) {
+                return pair;
+            }
+        }
+        throw new IllegalStateException("lane " + lane + " is inconsistent");
+    }
+
     /** Free pairs between the first and the last lesson of one lane ("windows"). */
     int gaps(int lane) {
         int distinct = distinctPairs[lane];

@@ -156,6 +156,8 @@ class GenerationFlowIT {
         assertThat(problem.timeslots()).hasSize(38);
         assertThat(problem.shiftWindows()).hasSize(10);
         assertThat(problem.groups()).extracting(ProblemSnapshot.Group::code).containsExactly("4КІ1", "4КІ2");
+        assertThat(problem.groups()).as("the college setting «Максимум пар у пʼятницю», default 3")
+                .allSatisfy(group -> assertThat(group.fridayMaxPairs()).isEqualTo(3));
         assertThat(problem.teachers()).filteredOn(teacher -> teacher.id().equals(data.krentsin.getId()))
                 .singleElement()
                 .satisfies(teacher -> assertThat(teacher.unavailable()).containsExactly(new ProblemSnapshot.Timeslot(1, 1)));

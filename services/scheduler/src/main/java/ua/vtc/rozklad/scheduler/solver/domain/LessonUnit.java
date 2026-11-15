@@ -22,7 +22,7 @@ import ua.vtc.rozklad.contracts.UnitWeight;
  * for a HALF unit. A pinned unit keeps the dispatcher's placement. A unit may know its <em>base
  * placement</em> (where it stands in the base version, for the stability rules) and its
  * {@code siblingKey} (equal on the subgroup copies of one weekly occurrence of a split load item), and the
- * special-purpose room types its load item kept to in the base version ({@link #getBaseRoomTypes()}).
+ * special-purpose room types its load item keeps to ({@link #getBaseRoomTypes()}).
  *
  * <p>Week arithmetic: a lesson with parity BOTH meets in both week types (numerator and
  * denominator weeks), NUMERATOR/DENOMINATOR in one. Penalties count such week occurrences.
@@ -52,11 +52,15 @@ public class LessonUnit {
     private Room desiredRoom;
     private UUID keptRoomId;
     private String siblingKey;
+    // копії ключа не можуть стояти всі паралельно (один викладач на дві з трьох і більше, або в їхніх викладачів
+    // немає спільного вільного слоту): «разом» для всього ключа — м'яке правило
+    private boolean softSiblingRule;
     // місце в базовій версії (null — заняття в базі немає)
     private Timeslot baseSlot;
     private Parity baseParity;
     private UUID baseRoomId;
-    // типи спецаудиторій (спортзал, майданчик), де стояли всі базові пари предмета; порожньо — правила немає
+    // типи спецаудиторій (спортзал, майданчик), де стояли всі базові пари предмета (без бази — де аудиторія
+    // викладача); порожньо — правила немає
     private Set<RoomType> baseRoomTypes;
     // доріжки «когорта × тип тижня» для кожної парності (індекс — Parity.ordinal())
     private int[][] cohortLanesByParity;
@@ -94,6 +98,7 @@ public class LessonUnit {
         this.desiredRoom = builder.desiredRoom;
         this.keptRoomId = builder.keptRoomId;
         this.siblingKey = builder.siblingKey;
+        this.softSiblingRule = builder.softSiblingRule;
         this.baseSlot = builder.baseSlot;
         this.baseParity = builder.baseParity;
         this.baseRoomId = builder.baseRoomId;
@@ -228,9 +233,14 @@ public class LessonUnit {
         return siblingKey != null;
     }
 
-    /** Has a sibling key and a teacher (the input of «Підгрупи одного викладача не підряд»). */
-    public boolean hasSiblingWithTeacher() {
-        return siblingKey != null && teacher != null;
+    /**
+     * The copies of the unit's sibling key cannot all stand in parallel: one teacher teaches two of three or more
+     * copies, or the copies share no allowed slot or parity (their teachers' free slots never meet in the group's
+     * shift). Then standing together is soft for every pair of the key, and neighbouring pairs count as together
+     * for copies of two teachers too (see {@code TimetableProblemFactory}).
+     */
+    public boolean hasSoftSiblingRule() {
+        return softSiblingRule;
     }
 
     /** Slot of the unit in the base version, {@code null} when it has none. */
@@ -253,7 +263,8 @@ public class LessonUnit {
 
     /**
      * Special-purpose room types (sports hall, sports ground) that every base lesson of the unit's load item
-     * with a room stood in; empty when the item has no such base (no base, or a lesson in an ordinary room).
+     * with a room stood in, or, when the item has no base lesson in a room, both types if the teacher's usual or
+     * the preferred room is one; empty otherwise (a lesson of the item in an ordinary room, or no such room).
      */
     public Set<RoomType> getBaseRoomTypes() {
         return baseRoomTypes;
@@ -380,7 +391,7 @@ public class LessonUnit {
         return baseRoomId != null && !isMovedFromBase() && !room.isNone() && !baseRoomId.equals(room.getId());
     }
 
-    /** The load item kept to special-purpose rooms in the base version, and this lesson sits in another kind of room. */
+    /** The load item keeps to special-purpose rooms (PE), and this lesson sits in another kind of room. */
     public boolean isOutsideBaseRoomTypes() {
         return !baseRoomTypes.isEmpty() && !room.isNone() && !baseRoomTypes.contains(room.getType());
     }
@@ -388,6 +399,41 @@ public class LessonUnit {
     /** Same weekday, neighbouring pairs. */
     public boolean isAdjacentTo(LessonUnit other) {
         return timeslot.weekday() == other.timeslot.weekday() && Math.abs(timeslot.pair() - other.timeslot.pair()) == 1;
+    }
+
+    /**
+     * Two subgroup copies of one occurrence (equal sibling key) stand together, the college rule: in the same
+     * slot and weeks when their teachers differ; when one teacher teaches both, parallel is impossible, so on
+     * neighbouring pairs of one day in the same weeks. In a key whose copies cannot all be parallel
+     * ({@link #hasSoftSiblingRule()}) neighbouring pairs count as together for copies of two teachers as well.
+     */
+    public boolean isTogetherWith(LessonUnit sibling) {
+        if (parity != sibling.parity) {
+            return false;
+        }
+        if (sharesTeacherWith(sibling)) {
+            return isAdjacentTo(sibling);
+        }
+        return timeslot.equals(sibling.timeslot)
+                || (softSiblingRule || sibling.softSiblingRule) && isAdjacentTo(sibling);
+    }
+
+    /**
+     * The hard rule applies to the two copies: different teachers in a key whose copies can all be parallel.
+     * Otherwise (one teacher, or a key with {@link #hasSoftSiblingRule()}) together is the soft rule.
+     */
+    public boolean mustBeParallelTo(LessonUnit sibling) {
+        return !sharesTeacherWith(sibling) && !softSiblingRule && !sibling.softSiblingRule;
+    }
+
+    /** Both lessons have the same teacher (then subgroup copies cannot be parallel). */
+    public boolean sharesTeacherWith(LessonUnit other) {
+        return teacher != null && teacher.getId().equals(other.getTeacherId());
+    }
+
+    /** Week occurrences two siblings that are not together cost: the more of the two. */
+    public int apartPenalty(LessonUnit sibling) {
+        return Math.max(weeklyOccurrences(), sibling.weeklyOccurrences());
     }
 
     @Override
@@ -409,6 +455,7 @@ public class LessonUnit {
         private Room desiredRoom;
         private UUID keptRoomId;
         private String siblingKey;
+        private boolean softSiblingRule;
         private Timeslot baseSlot;
         private Parity baseParity;
         private UUID baseRoomId;
@@ -465,6 +512,12 @@ public class LessonUnit {
 
         public Builder siblingKey(String siblingKey) {
             this.siblingKey = siblingKey;
+            return this;
+        }
+
+        /** The copies of the key cannot all be parallel (see {@link LessonUnit#hasSoftSiblingRule()}). */
+        public Builder softSiblingRule(boolean softSiblingRule) {
+            this.softSiblingRule = softSiblingRule;
             return this;
         }
 

@@ -2,6 +2,7 @@ package ua.vtc.rozklad.scheduler.solver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 import ua.vtc.rozklad.scheduler.solver.domain.Room;
+import ua.vtc.rozklad.scheduler.solver.domain.StudentGroup;
 import ua.vtc.rozklad.scheduler.solver.domain.Teacher;
 import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
@@ -26,6 +28,7 @@ class TimetableProblemFactoryTest {
 
     private static final UUID GROUP = UUID.randomUUID();
     private static final UUID SPLIT_GROUP = UUID.randomUUID();
+    private static final UUID THREE_SUBGROUPS = UUID.randomUUID();
     private static final UUID TEACHER = UUID.randomUUID();
     private static final UUID BUSY_TEACHER = UUID.randomUUID();
     private static final UUID ROOM_304 = UUID.randomUUID();
@@ -78,7 +81,8 @@ class TimetableProblemFactoryTest {
         assertThat(roomIds(timetable.getUnits().get(0))).containsExactly(LAB);
         assertThat(roomIds(timetable.getUnits().get(1))).containsExactly(ROOM_304, LAB);
         assertThat(roomIds(timetable.getUnits().get(2))).containsExactly(ROOM_304, ROOM_SMALL, LAB);
-        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(ROOM_304, LAB, GYM);
+        // бажаний зал без базової версії: спецаудиторія першою, звичайні — для м'якого правила
+        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(GYM, ROOM_304, LAB);
     }
 
     @Test
@@ -109,14 +113,16 @@ class TimetableProblemFactoryTest {
                 unit("teacher").teacherRoom(LAB).homeRoom(ROOM_304).build(),
                 unit("preferred").preferredRoom(ROOM_304).teacherRoom(LAB).build(),
                 unit("tooSmallTeacherRoom").teacherRoom(ROOM_SMALL).homeRoom(ROOM_304).build(),
-                unit("peTeacher").teacherRoom(GYM).build())), GenerationWeights.DEFAULT);
+                unit("peTeacher").discipline(UUID.randomUUID()).teacherRoom(GYM).build())), GenerationWeights.DEFAULT);
 
         assertThat(timetable.getUnits()).extracting(unit -> unit.getDesiredRoom().getId())
                 .containsExactly(LAB, ROOM_304, ROOM_304, GYM);
         assertThat(timetable.getUnits().getFirst().getRoom().getId()).as("warm start in the teacher's room")
                 .isEqualTo(LAB);
-        // спортзал лише для тих, кому він потрібен або чия це аудиторія
-        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(ROOM_304, LAB, GYM);
+        // спортзал лише для тих, кому він потрібен або чия це аудиторія; предмет без базових пар, чий викладач
+        // веде його в залі (і якого ніде не ведуть у класі), тримається спецаудиторій (зал першим), звичайні
+        // лишаються для м'якого правила
+        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(GYM, ROOM_304, LAB);
         assertThat(roomIds(timetable.getUnits().get(0))).doesNotContain(GYM);
     }
 
@@ -141,6 +147,63 @@ class TimetableProblemFactoryTest {
         assertThat(timetable.getUnits().get(0).getRoom().getId()).isEqualTo(GYM);
         assertThat(timetable.getUnits().get(0).getBaseRoomTypes()).as("the item also has a classroom lesson").isEmpty();
         assertThat(roomIds(timetable.getUnits().get(1))).doesNotContain(GYM);
+    }
+
+    /**
+     * From scratch there is no base to read, so the teacher's usual room decides (owner's rule, 15.11.2026: PE in the
+     * hall or on the ground): an item without a base lesson in a room whose unit names the hall as the teacher's room
+     * or the preferred room keeps to both special-purpose types; an item with a classroom base or a classroom teacher
+     * room does not.
+     */
+    @Test
+    void withoutABaseTheTeachersHallKeepsTheItemInSpecialPurposeRooms() {
+        UUID pe = UUID.randomUUID();
+        UUID taughtInClass = UUID.randomUUID();
+        UUID physicalEducation = UUID.randomUUID();
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("peFromScratch").loadItem(pe).discipline(physicalEducation).teacherRoom(GYM).build(),
+                unit("pePreferred").preferredRoom(GYM).build(),
+                unit("ordinary").teacherRoom(ROOM_304).build(),
+                unit("classBase").loadItem(taughtInClass).teacherRoom(GYM)
+                        .initial(new ProblemSnapshot.PinnedSlot(2, 2, Parity.BOTH, ROOM_304)).build())),
+                GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits().get(0).getBaseRoomTypes())
+                .containsExactlyInAnyOrder(RoomType.GYM, RoomType.SPORTS_GROUND);
+        assertThat(timetable.getUnits().get(0).getRoom().getId()).as("starts in the hall").isEqualTo(GYM);
+        assertThat(roomIds(timetable.getUnits().get(0)).getFirst()).isEqualTo(GYM);
+        assertThat(timetable.getUnits().get(1).getBaseRoomTypes()).isNotEmpty();
+        assertThat(timetable.getUnits().get(2).getBaseRoomTypes()).isEmpty();
+        assertThat(timetable.getUnits().get(3).getBaseRoomTypes()).as("its base stood in a classroom").isEmpty();
+    }
+
+    /**
+     * The PE teacher's hall marks only disciplines without a trace of an ordinary room (review of the owner-rules
+     * branch): his theory discipline, taught by another teacher in a classroom or standing in a classroom elsewhere,
+     * stays out of the hall; a pinned PE lesson in the hall is no such trace, and a preferred hall always counts.
+     */
+    @Test
+    void thePeTeachersTheoryDisciplineIsNotPulledIntoTheHall() {
+        UUID physicalEducation = UUID.randomUUID();
+        UUID healthBasics = UUID.randomUUID();
+        UUID defence = UUID.randomUUID();
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("pe").discipline(physicalEducation).teacherRoom(GYM).build(),
+                unit("pePinned").discipline(physicalEducation).teacherRoom(GYM)
+                        .pinned(new ProblemSnapshot.PinnedSlot(1, 2, Parity.BOTH, GYM)).build(),
+                unit("healthByPeTeacher").discipline(healthBasics).teacherRoom(GYM).build(),
+                unit("healthElsewhere").discipline(healthBasics).teacherRoom(ROOM_304).build(),
+                unit("defenceByPeTeacher").discipline(defence).teacherRoom(GYM).build(),
+                unit("defencePinned").discipline(defence)
+                        .pinned(new ProblemSnapshot.PinnedSlot(1, 3, Parity.BOTH, ROOM_304)).build(),
+                unit("defencePreferringTheHall").discipline(defence).preferredRoom(GYM).build())),
+                GenerationWeights.DEFAULT);
+
+        List<LessonUnit> units = timetable.getUnits();
+        assertThat(units.get(0).getBaseRoomTypes()).containsExactlyInAnyOrder(RoomType.GYM, RoomType.SPORTS_GROUND);
+        assertThat(units.get(2).getBaseRoomTypes()).as("taught in a classroom by another teacher").isEmpty();
+        assertThat(units.get(4).getBaseRoomTypes()).as("pinned in a classroom elsewhere").isEmpty();
+        assertThat(units.get(6).getBaseRoomTypes()).as("its own preferred room").isNotEmpty();
     }
 
     /**
@@ -287,7 +350,6 @@ class TimetableProblemFactoryTest {
                 new GenerationWeights(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14));
 
         var overrides = timetable.getConstraintWeightOverrides();
-        assertThat(overrides.getConstraintWeight(TimetableConstraint.GROUP_WINDOWS.id())).isEqualTo(soft(1));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_WINDOWS.id())).isEqualTo(soft(6));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_SHIFT_WAIT.id())).isEqualTo(soft(7));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.BROKEN_DAY.id())).isEqualTo(soft(2));
@@ -307,6 +369,11 @@ class TimetableProblemFactoryTest {
         assertThat(overrides.getConstraintWeight(TimetableConstraint.SPECIAL_ROOM_LOST.id())).isEqualTo(soft(14));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.DISCIPLINE_REPEAT.id())).isEqualTo(soft(4));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_CONFLICT.id())).isNull();
+        // правила коледжу (жорсткі): підгрупи разом, без вікон у групи, межа пар у пʼятницю — жодна вага запиту
+        // їх не вимикає; {@code windows} лишився в запиті лише для сумісності
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.SUBGROUPS_APART.id())).isNull();
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.GROUP_WINDOWS.id())).isNull();
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.FRIDAY_OVERLOAD.id())).isNull();
     }
 
     /** A request of the first schema (five weights): teacher windows follow {@code windows}. */
@@ -381,6 +448,39 @@ class TimetableProblemFactoryTest {
     }
 
     /**
+     * A key whose copies cannot all be parallel by the data is soft on every copy (review of the owner-rules branch):
+     * one teacher for two of three copies, or two teachers whose free slots never meet in the shift. Two teachers
+     * with common slots and two copies of one teacher (the ordinary soft case) keep the flag off.
+     */
+    @Test
+    void keysThatCannotBeParallelByTheDataAreSoft() {
+        UUID morning = UUID.randomUUID();
+        UUID afternoon = UUID.randomUUID();
+        List<ProblemSnapshot.Teacher> teachers = List.of(
+                new ProblemSnapshot.Teacher(TEACHER, "Кренцін М.Д.", List.of(), List.of()),
+                new ProblemSnapshot.Teacher(BUSY_TEACHER, "Непийвода М.В.", List.of(), List.of()),
+                new ProblemSnapshot.Teacher(morning, "Колесник А.І.", pairs(3, 4), List.of()),
+                new ProblemSnapshot.Teacher(afternoon, "Алексєєнко О.А.", pairs(1, 2), List.of()));
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("a1").group(THREE_SUBGROUPS).subgroup(1).teacher(TEACHER).siblingKey("aab").build(),
+                unit("a2").group(THREE_SUBGROUPS).subgroup(2).teacher(TEACHER).siblingKey("aab").build(),
+                unit("b").group(THREE_SUBGROUPS).subgroup(3).teacher(BUSY_TEACHER).siblingKey("aab").build(),
+                unit("early").group(SPLIT_GROUP).subgroup(1).teacher(morning).siblingKey("noCommonSlot").build(),
+                unit("late").group(SPLIT_GROUP).subgroup(2).teacher(afternoon).siblingKey("noCommonSlot").build(),
+                unit("p1").group(SPLIT_GROUP).subgroup(1).teacher(TEACHER).siblingKey("parallel").build(),
+                unit("p2").group(SPLIT_GROUP).subgroup(2).teacher(BUSY_TEACHER).siblingKey("parallel").build(),
+                unit("o1").group(SPLIT_GROUP).subgroup(1).teacher(TEACHER).siblingKey("oneTeacher").build(),
+                unit("o2").group(SPLIT_GROUP).subgroup(2).teacher(TEACHER).siblingKey("oneTeacher").build()),
+                teachers), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits()).extracting(LessonUnit::hasSoftSiblingRule)
+                .containsExactly(true, true, true, true, true, false, false, false, false);
+        assertThat(timetable.getUnits()).extracting(LessonUnit::getSiblingKey)
+                .containsExactly("aab", "aab", "aab", "noCommonSlot", "noCommonSlot", "parallel", "parallel",
+                        "oneTeacher", "oneTeacher");
+    }
+
+    /**
      * The daily limit comes from the snapshot; the day baseline is the weekdays of base and pinned
      * lessons per kind of week, at least the days the load needs at the limit (4 without one).
      */
@@ -431,6 +531,18 @@ class TimetableProblemFactoryTest {
         assertThat(snapshot.units().getFirst().siblingKey()).isNull();
         assertThat(timetable.getTeachers().getFirst().getMaxPairsPerDay()).isNull();
         assertThat(timetable.getUnits().getFirst().getSiblingKey()).isNull();
+        assertThat(timetable.getGroups().getFirst().getFridayMaxPairs()).as("no Friday limit").isNull();
+    }
+
+    /** The Friday limit of a group comes from the snapshot (core's setting); a group without it has none. */
+    @Test
+    void groupsGetTheirFridayLimit() {
+        Timetable timetable = factory.create(snapshot(List.of(unit("u1").build())), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getGroups()).extracting(StudentGroup::getCode, StudentGroup::getFridayMaxPairs)
+                .containsExactly(tuple("4КІ1", 3), tuple("1КІ2", null), tuple("2ТК1", null));
+        assertThat(timetable.getGroups().getFirst().pairsAboveDayLimit(5, 4)).isEqualTo(1);
+        assertThat(timetable.getGroups().getFirst().pairsAboveDayLimit(4, 4)).as("only Friday").isZero();
     }
 
     @Test
@@ -523,6 +635,17 @@ class TimetableProblemFactoryTest {
                 new ProblemSnapshot.Teacher(BUSY_TEACHER, "Непийвода М.В.", wholeShift(), List.of())));
     }
 
+    /** The given pairs of every weekday of the shift. */
+    private static List<ProblemSnapshot.Timeslot> pairs(int first, int last) {
+        List<ProblemSnapshot.Timeslot> slots = new ArrayList<>();
+        for (int weekday = 1; weekday <= 5; weekday++) {
+            for (int pair = first; pair <= last; pair++) {
+                slots.add(new ProblemSnapshot.Timeslot(weekday, pair));
+            }
+        }
+        return slots;
+    }
+
     private static List<ProblemSnapshot.Timeslot> wholeShift() {
         List<ProblemSnapshot.Timeslot> wholeShift = new ArrayList<>();
         for (int weekday = 1; weekday <= 5; weekday++) {
@@ -539,8 +662,9 @@ class TimetableProblemFactoryTest {
             windows.add(new ProblemSnapshot.ShiftWindow(1, weekday, 1, 4));
         }
         return new ProblemSnapshot(timeslots(), windows,
-                List.of(new ProblemSnapshot.Group(GROUP, "4КІ1", 25, 1, List.of()),
-                        new ProblemSnapshot.Group(SPLIT_GROUP, "1КІ2", 28, 1, List.of(1, 2))),
+                List.of(new ProblemSnapshot.Group(GROUP, "4КІ1", 25, 1, List.of(), 3),
+                        new ProblemSnapshot.Group(SPLIT_GROUP, "1КІ2", 28, 1, List.of(1, 2)),
+                        new ProblemSnapshot.Group(THREE_SUBGROUPS, "2ТК1", 30, 1, List.of(1, 2, 3))),
                 List.of(new ProblemSnapshot.Room(ROOM_304, "304", RoomType.CLASSROOM, 30, 1),
                         new ProblemSnapshot.Room(ROOM_SMALL, "12", RoomType.CLASSROOM, 14, 1),
                         new ProblemSnapshot.Room(LAB, "6", RoomType.COMPUTER_LAB, 0, 1),
@@ -557,6 +681,7 @@ class TimetableProblemFactoryTest {
         private final String id;
         private UUID group = GROUP;
         private UUID loadItem = UUID.randomUUID();
+        private UUID discipline = DISCIPLINE;
         private int subgroup;
         private UUID teacher;
         private UnitWeight weight = UnitWeight.WHOLE;
@@ -580,6 +705,11 @@ class TimetableProblemFactoryTest {
 
         UnitBuilder loadItem(UUID loadItem) {
             this.loadItem = loadItem;
+            return this;
+        }
+
+        UnitBuilder discipline(UUID discipline) {
+            this.discipline = discipline;
             return this;
         }
 
@@ -639,7 +769,7 @@ class TimetableProblemFactoryTest {
         }
 
         ProblemSnapshot.Unit build() {
-            return new ProblemSnapshot.Unit(id, loadItem, group, subgroup, DISCIPLINE, teacher, weight,
+            return new ProblemSnapshot.Unit(id, loadItem, group, subgroup, discipline, teacher, weight,
                     requiredRoomType, preferredRoom, homeRoom, pinned, initial, teacherRoom, online, siblingKey);
         }
     }

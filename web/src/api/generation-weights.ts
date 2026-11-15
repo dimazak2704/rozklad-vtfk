@@ -6,18 +6,19 @@ import type { GenerationWeights, GenerationWeightsWire } from './types';
 
 /**
  * Ваги за замовчуванням — ті самі, що підставляє core для `weights: null` (GenerationWeights.DEFAULT,
- * genfix §1.1 після оцінки на реальних запитах: 30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30).
+ * genfix §1.1 після оцінки на реальних запитах; відповіді власника 15.11.2026: 4-та пара зміни вимкнена, підгрупи
+ * разом — найсильніше: 30, 10, 0, 5, 1, 10, 3, 1, 30, 10, 5, 3, 10, 30).
  */
 export const DEFAULT_WEIGHTS: Readonly<GenerationWeights> = {
   windows: 30,
   brokenDays: 10,
-  latePairs: 9,
+  latePairs: 0,
   preferences: 5,
   homeRoom: 1,
   teacherWindows: 10,
   teacherShiftWait: 3,
   stability: 1,
-  subgroupsTogether: 10,
+  subgroupsTogether: 30,
   studentOnePairDay: 10,
   teacherDays: 5,
   teacherOverload: 3,

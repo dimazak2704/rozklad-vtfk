@@ -23,7 +23,7 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
 |---|---|
 | `solver.domain` | Timefold model: `Timetable` (`@PlanningSolution`), `LessonUnit` (`@PlanningEntity`), facts `Timeslot`, `Room`, `Teacher`, `StudentGroup`, `ShiftWindow`, CH difficulty `LessonUnitDifficulty` |
 | `solver.score` | `TimetableConstraintProvider`, `TimetableConstraint` (ASCII id + Ukrainian title + kind), incremental collectors (`DayCollectors` over `GroupDay`, `TeacherDay`, `TeacherWeek`, `DisciplineDay`; `LaneCounts`, `WeekBalance`), `ConstraintWeights`, `TimetableAnalyzer` |
-| `solver.move` | `SiblingMoveIteratorFactory` + `SiblingChangeMove`: the subgroup copies of one occurrence move together |
+| `solver.move` | `SiblingMoveIteratorFactory` + `SiblingChangeMove`: the subgroup copies of one occurrence move together; `GroupSlotSwapMoveIteratorFactory`: a group's lessons at two slots change places as columns |
 | `solver` | `TimetableProblemFactory` (snapshot → model, value ranges, room warm start), `ProblemSnapshotValidator`, `TimetableResults` (model → event payload) |
 | `generation` | job entity/repository, `GenerationIntake` (requests, cancels), `GenerationSolver` (SolverManager), `ProgressTracker`, `GenerationLifecycle` (state + completion), `JobMaintenance` (restart recovery, re-send, purge), RabbitMQ listener, REST controller |
 | `messaging` | `EventPublisher` (after commit; completion with publisher confirms), `ProcessedEvents` (dedupe by `eventId`) |
@@ -38,8 +38,12 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
     (unknown capacity/size = fits); the sports hall and sports ground (`GYM`, `SPORTS_GROUND`) only for
     units that require them, name them as preferred, teacher's or home room, stood there in the base version, or
     belong to a load item whose base lessons with a room all stood there (`baseRoomTypes`: those rooms come first in
-    the range and get the warm start, ordinary rooms stay in the range for the soft rule `specialRooms`); if nothing
-    fits, every room (reported by the hard constraint);
+    the range and get the warm start, ordinary rooms stay in the range for the soft rule `specialRooms`); an item
+    without any base lesson in a room (from scratch) whose preferred or teacher's usual room is the hall or the
+    ground gets both types the same way (the PE teacher's room is the hall), the teacher's room only when the
+    discipline has no trace of an ordinary room (a base or pinned lesson there, or another unit's preferred or
+    teacher's room), so a PE teacher's theory discipline taught in classrooms elsewhere stays out of the hall; if
+    nothing fits, every room (reported by the hard constraint);
   * parity: `BOTH` for WHOLE units, `NUMERATOR`/`DENOMINATOR` for HALF units.
   Timefold 2.8 validates assigned values against these ranges, so swaps that would break a range are
   never made.
@@ -49,14 +53,25 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
   occupancy, capacity or room type is checked for it — and comes back with its pinned room unchanged
   (`LessonUnit.keptRoomId`), so core keeps the room for reference.
 * **Student cohorts**: a group without subgroups is one cohort; a split group has cohorts = its
-  subgroups, and a whole-group lesson belongs to all of them. Up to 8 subgroups per group.
+  subgroups, and a whole-group lesson belongs to all of them. Up to 8 subgroups per group. A group carries the Friday
+  limit of the snapshot (`groups[].fridayMaxPairs`, `null` = none; owner's rule of 15.11.2026).
 * **Base placement**: `initial` of a free unit is where it stands in the base version. It is the warm
   start (when the slot and parity are inside the value ranges) and it stays on the unit
   (`LessonUnit.baseSlot/baseParity/baseRoomId`) for the stability rules, even when it is out of range.
 * **Siblings**: units with an equal `siblingKey` are the subgroup copies of one weekly occurrence of a
   split load item (`loadItemId:w1`, `:w2`, `:h`). The factory keeps a key only on at least two free units
   of one group with distinct subgroups; any other use is dropped with a warning (a core data error should
-  not mislead the subgroup rules or fail the job).
+  not mislead the subgroup rules or fail the job). Copies of two teachers must share the slot and the weeks (hard
+  «Subgroups not together», owner's rule of 15.11.2026); one teacher's copies cannot, so they should stand on
+  neighbouring pairs of one day in the same weeks (soft «Subgroups apart», `subgroupsTogether`, default 30). Pinned
+  units carry no key, so a pinned pair is never scored. A key whose copies cannot all be parallel by the data is
+  soft as a whole (`LessonUnit.softSiblingRule`, a warning in the log): one teacher teaches two of three or more
+  copies (A, A, B: B cannot be parallel to both of A's copies), or the copies share no allowed slot or parity (their
+  teachers' free slots never meet in the group's shift). Its pairs fall to «Subgroups apart», where two teachers'
+  copies count as together in one slot or on neighbouring pairs. Real data has neither: every key of the four real
+  requests (72 on the whole college, 2 in each scope) has two copies of two teachers with common slots, so no key is
+  soft there. The sibling move does not help such a key (it moves
+  copies with a common slot only; A, A, B go to three consecutive pairs).
 * **Teachers**: `maxPairsPerDay` from the snapshot (`null` = no limit) and a **baseline of teaching days**
   per kind of week: the weekdays of the teacher's base (`initial`) and pinned lessons in that week, but at
   least `ceil(load / limit)` days (load = whole units + half of the halves, limit 4 when the snapshot has
@@ -87,14 +102,16 @@ in `generation.completed` uses the Ukrainian titles.
 | Room too small | Аудиторія замала для групи | hard | whole-group unit, week occurrences | — |
 | Outside shift window | Пара поза межами зміни | hard | unit, week occurrences | — |
 | Teacher unavailable | Викладач недоступний у цей час | hard | unit, week occurrences | — |
-| Group windows | Вікна в розкладі групи | soft | group-day: free pairs between lessons, per kind of week the **worst cohort** (B10; the core metric does the same), summed over both kinds of week | `windows` |
+| Subgroups not together | Підгрупи дисципліни не одночасно | hard | two copies with one sibling key (at least one free) and different teachers not in one slot with one parity; the larger week occurrences of the two. A key whose copies cannot all be parallel by the data (one teacher for two of three or more copies; no common allowed slot or parity) is left to «Subgroups apart» (§2 «Sibling keys») | — |
+| Group windows | Вікна в розкладі групи | hard | group-day with a free unit: free pairs between lessons, per kind of week the **worst cohort** (B10, as the core metric), summed over both kinds of week, except a lone subgroup pair at the edge of the day (another subgroup studies there, between the pairs with every cohort at a lesson and the cohort's own nearest lesson on that side; a wait between two own lessons counts) | — (`windows` weighs nothing since round 2) |
+| Friday overload | Забагато пар у пʼятницю | hard | group-day on Friday with a free unit: occupied pairs (any cohort) above the group's `fridayMaxPairs`, per kind of week | — |
 | Teacher windows | Вікна у викладача | soft | teacher-day: free pairs between lessons per kind of week, **except waits between shifts** | `teacherWindows` (absent → `windows`) |
 | Teacher shift wait | Очікування викладача між змінами | soft | teacher-day: free pairs of a gap a < b where every lesson at a is with groups of one shift and every lesson at b with groups of the other shift (one definition with the core metric) | `teacherShiftWait` |
 | Broken day | Рваний день (чисельник і знаменник різні) | soft | group-day: \|Δ pair count\| + 1 if the first pair differs | `brokenDays` |
-| Late pair | 4-та пара зміни | soft | unit on the 4th pair of its shift window (`contracts.LatePairs`) costs 1, the 5th 2, …, × week occurrences; Friday shift 2 (pairs 4–6) has none | `latePairs` |
+| Late pair | 4-та пара зміни | soft | unit on the 4th pair of its shift window (`contracts.LatePairs`) costs 1, the 5th 2, …, × week occurrences; Friday shift 2 (pairs 4–6) has none; off by default (owner: the 4th pair is normal) | `latePairs` |
 | Group one pair day | День з однією парою в групи | soft | group-day: kinds of week with exactly one occupied pair (union of cohorts) | `studentOnePairDay` |
-| Subgroup alone | Підгрупа на парі, а інша без заняття | soft | group-day: pair × kind of week where a subgroup lesson is active and some cohort of the group has no lesson | `subgroupsTogether` |
-| Subgroups apart | Підгрупи одного викладача не підряд | soft | two siblings with the same teacher not on one day in neighbouring pairs, shared weeks | `subgroupsTogether` |
+| Subgroup alone | Підгрупа на парі, а інша без заняття | soft | group-day: pair × kind of week where a subgroup lesson is active and some cohort of the group has no lesson (next to the hard rule it covers subgroup lessons without a counterpart in the load and crossed disciplines) | `subgroupsTogether` |
+| Subgroups apart | Підгрупи не підряд, де одночасно неможливо | soft | two copies with one sibling key (at least one free) and one teacher not on neighbouring pairs of one day with one parity (alternating numerator/denominator in one slot counts too); in a key that cannot be parallel by the data, two teachers' copies neither parallel nor on neighbouring pairs too; the larger week occurrences | `subgroupsTogether` |
 | Teacher one pair day | День з однією парою у викладача | soft | teacher-day: kinds of week with exactly one occupied pair | `teacherDays` |
 | Teacher extra day | Зайвий робочий день викладача | soft | teacher: per kind of week `max(0, teaching days − baseline)` (§2) | `teacherDays` |
 | Teacher overload | Забагато пар на день у викладача | soft | teacher-day: pairs above `maxPairsPerDay` per kind of week | `teacherOverload` |
@@ -104,26 +121,48 @@ in `generation.completed` uses the Ukrainian titles.
 | Room preference | Заняття не в аудиторії викладача | soft | unit outside its desired room (load item's preferred room, else the teacher's usual room), week occurrences | `homeRoom` |
 | Unit moved | Пару переставлено відносно базової версії | soft | unit whose slot or parity differs from its base placement, week occurrences | `stability` |
 | Room changed | Пара в іншій аудиторії, ніж у базовій версії | soft | unit in its base slot and parity but not in its base room (only when the base had a room), week occurrences | `stability` |
-| Special room lost | Пара не в спортзалі чи на спортмайданчику, як у базовій версії | soft | free unit of a load item whose base lessons with a room all stood in GYM/SPORTS_GROUND rooms, placed in a room of another type, week occurrences (data-driven, never by discipline name; replaces core's derived hard room type, B11) | `specialRooms` |
+| Special room lost | Пара не в спортзалі чи на спортмайданчику | soft | free unit with `baseRoomTypes` (§2: its item's base lessons with a room all stood in GYM/SPORTS_GROUND rooms, or, without a base, its teacher's or preferred room is one) placed in a room of another type, week occurrences (data-driven, never by discipline name; replaces core's derived hard room type, B11) | `specialRooms` |
 | Halves paired | Чисельник і знаменник в одному слоті (бонус) | soft **reward** | two halves of one cohort in one slot with different parities | `brokenDays` |
 
-Every rule added after the generator review (shift wait, one-pair days, subgroups, teacher days and
-overload, a discipline twice, stability, PE in the hall) is a **preference with a weight**, not a college rule: `0`
-switches it off, and the defaults come from the college's real timetable (CONTRACTS «GenerationWeights»):
-the published timetable has 0 student windows in 560 group-days but 309 teacher gap pairs, 186 of them
-between the shifts; 72 of 75 subgroup slots have both subgroups; 3 student one-pair days; 98 of 781
-teacher day-weeks with one pair and 35 with 5–6 pairs; a discipline twice a day on 12 of 560 group-days;
-all 60 PE items stand only in the hall or on the ground (none in a classroom), so `specialRooms` defaults to 30,
-the strongest default; when the hall is full or closed, PE goes to a classroom at that cost instead of the run
-staying infeasible.
-The 4th pair of the shift is used on 321 of 560 group day-weeks (57 %), so «4-та пара зміни» is not a
-college rule either: its weight only spreads pairs across the week. Rules over one day share a grouping
-node (`GroupDay`, `TeacherDay`, `DisciplineDay`), so adding them did not add passes over the units.
+**Owner's answers (15.11.2026, DOMAIN §5, §13).** The subgroups of a split discipline at the same time is **hard** for
+copies of two teachers: in the published timetable 70 of the 72 sibling keys have a base placement, all of them
+parallel (all keys are of two teachers); the other 2 have none and the construction heuristic places them, so a run
+from the published version ends the construction heuristic at −2 hard and reaches 0 hard within seconds (3.3–4.2 s on
+the whole college), and from scratch the run reached 0 hard far sooner than with the old soft
+rule (§11 «Owner's rules»). One teacher cannot teach both copies at once, so for them the neighbouring pairs are a
+**soft rule with the strongest default** (`subgroupsTogether` 30): the published timetable has no such case, and hard
+neighbouring pairs left the synthetic full second shift (interlocked labs of one teacher) infeasible in 3 of 3 runs,
+while soft at 30 reaches 0 hard in every run. A group's one-pair day and PE in the hall are confirmed rules kept
+**soft** (`studentOnePairDay` 10, `specialRooms` 30): the hall has 5 places and the published timetable fills all 5 in
+4 slot-weeks, so a full or closed hall must cost points, not make the run infeasible. The web does not offer these three
+weights as priorities. The 4th pair of the shift is normal: «4-та пара зміни» defaults to 0 and stays switchable.
 
-Weights: `GenerationWeights.DEFAULT` = windows 30, brokenDays 10, latePairs 9, preferences 5,
-homeRoom 1, teacherWindows 10, teacherShiftWait 3, stability 1, subgroupsTogether 10, studentOnePairDay 10,
+**Owner's answers, round 2 (15.11.2026, DOMAIN §5, §13 Q7).** «Вікна групам не варто лишати, краще викладачам вікна»:
+group windows are **hard**; teacher windows and waits between shifts stay soft trade-offs. The count is the worst cohort as
+before, with one exemption so that the soft rule for one teacher's two subgroups (neighbouring pairs) is not made
+impossible: a free pair of a cohort where another subgroup studies does not count when it lies between the pairs at which
+every cohort has a lesson and the cohort's own nearest lesson on that side of them (a lone subgroup pair at the edge of
+the day). Between two whole-group pairs, or between two of the cohort's own lessons (sub 1, sub 2, sub 1, also on a day
+without a full pair), it still counts, and «Subgroup alone» still weighs every lone slot. Friday is an unloading day: at most
+`fridayMaxPairs` occupied pairs (default 3, setting «Максимум пар у пʼятницю»), **hard**. Both rules judge only a group-day
+with a free unit (`GroupDay.hasFreeUnit`), so a window or a 4-pair Friday between lessons pinned outside the scope never
+makes a run infeasible; a free unit that joins such a day makes it the run's. The published version has 4 Friday pairs in
+1КІ1, 1М, 4РТ1 and 4РТ2, so the whole-college run ends its construction heuristic at −11 hard (those 8 Friday pairs, the
+2 sibling keys without a base, 1 window where the base misses a unit: 2КІ1 Thursday pair 6 numerator, whose published
+lesson names Овчар Ін.М. and the load unit Овчар Ів.М.; the published timetable itself has no window) and moves them (§11 «Owner's rules, round 2»). The usual 3–4 pairs a day is left to the soft day-balance rules (no hard minimum).
+
+The other rules added after the generator review (shift wait, teacher days and overload, a discipline twice,
+stability) are **preferences with a weight**: `0` switches them off, and the defaults come from the college's real
+timetable (CONTRACTS «GenerationWeights»): the published timetable has 0 student windows in 560 group-days but 309
+teacher gap pairs, 186 of them between the shifts; 3 student one-pair days; 98 of 781 teacher day-weeks with one pair
+and 35 with 5–6 pairs; a discipline twice a day on 12 of 560 group-days; all 60 PE items stand only in the hall or on
+the ground (none in a classroom). Rules over one day share a grouping node (`GroupDay`, `TeacherDay`,
+`DisciplineDay`), so adding them did not add passes over the units.
+
+Weights: `GenerationWeights.DEFAULT` = windows 30 (weighs nothing since round 2: group windows are hard), brokenDays 10, latePairs 0, preferences 5,
+homeRoom 1, teacherWindows 10, teacherShiftWait 3, stability 1, subgroupsTogether 30, studentOnePairDay 10,
 teacherDays 5, teacherOverload 3, disciplineTwice 10, specialRooms 30 (the request keeps the name `homeRoom`; since round 7
-it weights the teacher's room), tuned on replays of the real requests (§11 «Default weights»). A request of
+it weights the teacher's room), tuned on replays of the real requests (§11 «Default weights», «Owner's rules»). A request of
 the first schema (five weights) gets the defaults for the rest and `teacherWindows = windows`. `0` switches a constraint off
 (`ConstraintWeightOverrides`). Hard constraints are not weighted. The day rules use custom incremental
 collectors over «lanes» (cohort × week type) — `TimetableSolverTest` runs the solver in `FULL_ASSERT`
@@ -135,7 +174,7 @@ and throws in the Community edition. `TimetableAnalyzer` therefore computes matc
 constraint with the same domain rules and the same match granularity; `TimetableAnalyzerTest`
 checks, on a planted and on a deliberately broken timetable (every hard constraint violated), that
 each constraint's impact equals the solver's (`ConstraintVerifier`) and that the sum equals the
-solver's score. The analysis always lists all 26 constraints (hard first); a switched-off
+solver's score. The analysis always lists all 28 constraints (hard first); a switched-off
 constraint shows its matches with score `0hard/0soft`. Each row also carries the ASCII `constraintId`,
 `bonus` (true for «Halves paired», which the UI shows as achieved, not as a problem) and
 `scopeMatchCount` (B7): the matches that involve at least one free unit — for a group-day, teacher-day
@@ -147,15 +186,33 @@ problems of the run.
 
 * Construction heuristic: `FIRST_FIT_DECREASING` over the cartesian product timeslot × parity (rooms
   are warm-started). Difficulty (`LessonUnitDifficulty`): WHOLE before HALF (halves then pair up in
-  the remaining slots), scarce rooms first (sports hall, labs), then busy teachers, then units with
-  fewer allowed timeslots.
+  the remaining slots), scarce rooms first (sports hall, labs), then busy teachers, then units with fewer allowed
+  timeslots. The copies of one sibling key take the
+  difficulty of the hardest of them and are placed one after another, so the second copy finds the slot of the
+  first still free: in the old order the synthetic real-shaped college stayed at −2…−6 hard after 180 s (5 runs), in
+  the new one it reaches 0 hard in 22–153 s (7 runs, §11 «Owner's rules»).
 * Local search: late acceptance (400) with union of change (timeslot, room, parity) and swap
   (timeslot, room) moves plus the **sibling move** (`SiblingMoveIteratorFactory`, M3): all free units of
   one sibling key go to one slot and parity in one step (parallel when their teachers differ, neighbouring
   pairs of one day when one teacher teaches two of them), so subgroups that study together stay together
-  while they move. The union picks a selector in proportion to its size, so the sibling move is a small
-  share of the moves (it has ~72 groups × ~20 slots). `acceptedCountLimit` 16 (chosen by the benchmark
-  in §11).
+  while they move; an ordinary move of one copy of two teachers breaks the hard rule, so the sibling move is the
+  way such copies move. A random sibling move also gives a copy whose room is taken at the target a free room of
+  its range (its desired room first): without it a pair could only move into slots where both its rooms happened
+  to be free. The room use is counted once per step (`RoomUse`, at the step's first sibling move): a step's
+  iterator lives one step and every move it gives is evaluated and undone before the next, so the moves read two
+  slots of that count instead of scanning all ~1077 units each (whole college, same seed and trajectory: 12.5k → 14.5k
+  moves/s, §11 «Owner's rules»). In random selection order the union gives each child selector the same chance
+  (Timefold 2.8's default without `fixedProbabilityWeight`), so about one move in seven is a sibling move.
+  `acceptedCountLimit` 16 (chosen by the benchmark in §11).
+* The **group slot swap** (`GroupSlotSwapMoveIteratorFactory`, round 2): a random free unit and a random slot of its
+  range; everything the unit's group has at the two slots changes places (each lesson keeps its weeks; a slot free for the
+  group takes the column), with free rooms as in the sibling move. For a subgroup lesson, every other time only that
+  subgroup's own lessons at the two slots swap (none when the subgroup sits in a whole-group lesson at either slot): this
+  puts a copy next to its sibling without touching the other cohorts. A pinned lesson that would move or a target outside
+  a lesson's range gives no move. With hard group windows a lesson can leave the middle of a day only by opening a window
+  (−2 hard), so a single change move rarely helps there; a swap keeps a day without windows when both slots are taken by
+  the cohorts that move, and changes the teachers of two slots in one step. It is the union's seventh child (each child
+  about one move in seven); the evidence is in §11 «Owner's rules, round 2».
 * Termination per job (`SolverConfigOverride`, it replaces the solver config's own; `JobTermination`):
   * **Auto mode** — the request has no `timeLimitSeconds` (the web app since 15.11.2026, owner's decision: «хай генерує,
     скільки треба»). Timefold terminations `OR(spentLimit = auto.time-cap, unimprovedSpentLimit = auto.stuck-limit,
@@ -240,7 +297,7 @@ problems of the run.
 |---|---|
 | `timeslots` | slots of the semester's bell profile (weekday × pair) |
 | `shiftWindows` | table `shift_window` (every shift used by a group needs its windows) |
-| `groups` | active groups in scope: `size` (0 if unknown), `shift`, stored subgroup numbers |
+| `groups` | active groups in scope: `size` (0 if unknown), `shift`, stored subgroup numbers, `fridayMaxPairs` = the college setting `generation.fridayMaxPairs` (`null` = no limit, older cores) |
 | `rooms` | active rooms: `capacity` (0 if unknown), `max_parallel`, `type` |
 | `teachers` | every teacher referenced by a unit, with `teacher_preference` UNAVAILABLE / UNWANTED of the semester |
 | `units` | load items split by DOMAIN §4 (whole pairs + at most one HALF), one unit per subgroup for split items with that subgroup's teacher; `requiredRoomType`/`preferredRoomId` from the load item; `teacherRoomId` (round 7) = the teacher's usual room for the discipline in the published version (DOMAIN §5); `homeRoomId` null since round 7 |
@@ -294,12 +351,27 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
 
 * `TimetableConstraintProviderTest` — ConstraintVerifier for every constraint (positive and negative
   cases, parity overlap, subgroups, worst cohort, shift waits per kind of week, daily limits and
-  baselines, siblings, stability, `maxParallel`, pins without a room) and request weights (old and new).
+  baselines, stability, `maxParallel`, pins without a room) and request weights (old and new). `SubgroupsTogether`:
+  the hard rule for copies of two teachers (one slot and parity; other slots or weeks break it), the soft one for one
+  teacher (neighbouring pairs; a gap, another day or alternating numerator/denominator are penalized), the pinned
+  exemption and that no request weight changes the hard rule. `Windows` (round 2): hard whatever the weights, a day of
+  pinned lessons only is exempt and a free lesson makes it count, the worst subgroup, lone subgroup pairs at the edge of
+  the day are no window, between two whole-group pairs they are, a subgroup waiting between two of its own lessons (sub
+  1, sub 2, sub 1, with and without a whole-group pair) has one, parallel subgroups are a full pair. `FridayLimit`: a 4th
+  pair in both weeks, a half in its week, subgroups on different pairs are two pairs of the group, other days and groups
+  without a limit, the pinned exemption until a free lesson joins, the limit follows the setting, hard whatever the
+  weights.
 * `TimetableAnalyzerTest` — analysis = solver, constraint by constraint (every constraint is in the
   cross-check map), on a planted, a perturbed (with base placements) and a hand-made week where every new
   rule matches; scope matches of pinned-only matches are 0.
 * `SiblingMoveIteratorFactoryTest` — sibling groups (shared slots, pinned and lone keys), parallel vs
-  neighbouring targets, a `FULL_ASSERT` run with sibling moves only.
+  neighbouring targets, free rooms at the target (desired room first, undone cleanly), one room use per step serving
+  several moves without a move's choice leaking into the next, a `FULL_ASSERT` run with sibling moves only.
+* `GroupSlotSwapMoveIteratorFactoryTest` — a group's lessons at two slots change places as columns (parallel subgroups
+  together, no window), a free slot takes the whole column with its weeks, a pinned lesson or a target outside a range
+  gives no move, a `FULL_ASSERT` run with group slot swaps only.
+* `LessonUnitDifficultyTest` — construction order: sibling copies take the hardest copy's difficulty and come one
+  after another; copies of two keys with equal difficulty do not interleave.
 * `RealSnapshotGateTest` (opt-in, `-Dgenfix.snapshots=<dir>|classpath`) — speed gate, see §11.
 * `SnapshotReplayTest` (opt-in: tag `replay`, which the build excludes, plus `-Dreplay=<datasets>`) — replays a
   `generation.requested` with the production solver config and termination and logs the generator study's table
@@ -313,7 +385,12 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
   `src/test/resources/replay`, completed the way this branch's core sends them), a JSON file, or
   `synthetic:<shape>[@warm]` (`ShapedCollege`). Batches: `SnapshotReplay.main` on the test classpath
   (`datasets=… weights=name=v,… label=… out=results.jsonl seed=…`).
-* `ReplayMetricsTest` — the harness's metric definitions on a hand-made week (hand-counted values).
+* `ReplayMetricsTest` — the harness's metric definitions on a hand-made week (hand-counted values), including
+  `grpWinH` (group windows of the hard rule: without the lone subgroup pairs at the edge of the day, in group-days with a
+  free unit; a subgroup waiting between two of its own lessons counts), `fri4` (group-weeks above the Friday limit) and
+  `friOver` (Friday pairs above it, the hard rule), `sibApart` (copies of one sibling key not together, the hard rule
+  counted independently), `loneScope` (lone subgroup slots of groups with a free unit), `grp2p` (two-pair group days)
+  and `spread` (most minus fewest pairs over the weekdays of a group, a balance measure).
 * `ShapedCollegeTest` — every synthetic shape plants a timetable without hard violations and has its feature
   (pairs a week, a full second shift, parallel and crossed subgroups with sibling keys, UNAVAILABLE/unwanted
   slots and part-time teachers, pinned streams with followers without teacher and room).
@@ -489,6 +566,58 @@ twice 4, teacher windows 45, waits 180, teaching days 381, one-pair teacher days
 moved 131, room changed 53; `ki4-scope-3groups` 60 s — the same as before the repair (moved 5 of 53, PE outside 0).
 With `specialRooms` 0 the same whole-college run is in the evaluation file (PE may then leave the hall).
 
+### Owner's rules (15.11.2026)
+
+`SnapshotReplayTest` again, production config and termination, the limits of the default-weights study (whole
+college 150 s, `ki4` 60 s, `course4` 120 s, from scratch 600 s, synthetic 60–180 s), 3–4 JVMs on the laptop, seed 0
+unless noted. «before» = develop before this change (soft subgroups, `latePairs` 9); «after» = the hard rule, the
+sibling-aware construction order and room-aware sibling move, PE from the teacher's room, defaults with `latePairs` 0
+and `subgroupsTogether` 30. New harness columns: `apart` = sibling copies not together (week occurrences; after the
+change only one teacher's copies can be apart, those of two teachers are hard and every final score is 0 hard),
+`lone` = lone subgroup slots of the scope's groups, `2-pair` = group day-weeks with two pairs, `spread` = per group and
+week the most minus the fewest pairs over its weekdays, summed (balance).
+
+| Dataset | Run | 0 hard, s | apart | lone | group win. | 1-pair | 2-pair | spread | twice | 4th | teacher days | 1-pair teacher | waits | PE outside | moved |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| whole college, published base | published | — | 0 | 2 | 1 | 5 | 75 | 178 | 12 | 289 | 380 | 100 | 191 | 0 | — |
+| | before | 4.2 | 0 | 2 | 0 | 2 | 57 | 161 | 9 | 264 | 383 | 106 | 182 | 0 | 111 |
+| | **after** | 3.4 | 0 | 2 | 0 | 2 | 86 | 186 | 12 | 337 | 374 | 89 | 139 | 0 | 120 |
+| `ki4` (53 free) | before / **after** | 0.4 / 0.1 | 0 / 0 | 0 / 0 | 0 / 0 | 3 / 3 | 76 / 76 | 177 / 177 | 12 / 12 | 291 / 295 | 380 / 380 | 102 / 100 | 187 / 189 | 0 / 0 | 5 / 4 |
+| `course4` (168 free) | before / **after** | 0.2 / 0.1 | 0 / 0 | 0 / 0 | 0 / 0 | 3 / 3 | 68 / 82 | 168 / 179 | 7 / 8 | 282 / 305 | 379 / 383 | 97 / 104 | 194 / 180 | 0 / 0 | 28 / 30 |
+| from scratch | before | 438 | 39 | 28 | 2 | 0 | 76 | 178 | 60 | 314 | 385 | 128 | 290 | 10 | — |
+| | **after** | 66 | 0 | 2 | 2 | 0 | 85 | 195 | 57 | 376 | 374 | 90 | 251 | 0 | — |
+| `real-shaped` | before / **after** | 41 / 23 | 74 / 24 | 16 / 0 | 0 / 1 | 0 / 0 | 80 / 77 | 176 / 211 | 14 / 22 | 296 / 384 | 394 / 379 | 154 / 121 | 320 / 273 | 0 / 0 | — |
+| `tight-shift2` | before / **after** | 13.5 / 14.2 | 20 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 10 / 22 | 52 / 58 | 10 / 8 | 120 / 154 | 158 / 156 | 62 / 42 | 139 / 106 | 0 / 0 | — |
+| `many-splits` | before / **after** | 0.6 / 1.7 | 90 / 16 | 4 / 0 | 0 / 0 | 0 / 0 | 20 / 38 | 63 / 83 | 24 / 24 | 97 / 158 | 213 / 203 | 106 / 67 | 102 / 59 | 0 / 0 | — |
+| `teacher-limits` | before / **after** | 17.8 / 4.0 | 48 / 14 | 20 / 4 | 1 / 3 | 1 / 0 | 13 / 26 | 61 / 70 | 6 / 14 | 132 / 171 | 198 / 188 | 101 / 65 | 134 / 61 | 0 / 0 | — |
+| `small-stream` | before / **after** | 0.1 / 0.1 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 6 / 8 | 16 / 24 | 0 / 0 | 18 / 36 | 55 / 55 | 28 / 36 | 47 / 32 | 0 / 0 | — |
+
+Reading. In the published version 70 of the 72 sibling keys have a base placement, all parallel; the other 2 have
+none and the construction heuristic places them, ending at −2 hard on the whole college, so the runs from it reach 0
+hard within seconds (0.1 s in the scopes, 3.3–4.2 s on the whole college), not from the start. The only lone
+subgroup slot left in the real college is 1ОП1 English on Wednesday pair 1 (2 slot-weeks), a subgroup-1 lesson whose load has no subgroup-2 counterpart (DOMAIN §13 Q4); the
+scope runs have none. From scratch the run reaches 0 hard after 66 s instead of 438 s, with 2 lone slot-weeks instead of
+28 and no PE lesson in a classroom (the teacher's room marks PE now, instead of 10 units in classrooms). Without the
+4th-pair penalty the 4th pair is used more (337 vs 289 published) and the days are a little less even than published,
+not equal (spread 186 vs 178 from the published version, 195 from scratch; scope runs 177–179 as published): one-pair
+days 2 vs 5, a discipline twice a day at the published 12 and broken days 28 vs 36 are better or equal, but two-pair
+days grow (86 vs 75). This is the open follow-up of DOMAIN §13 Q1, for the owner to judge. Teacher metrics improve
+(teaching days 380 → 374, one-pair teacher days 100 → 89, waits 191 → 139). The synthetic colleges reach 0 hard in every run, with up to 3 group windows (`teacher-limits`; before 0–1) and 14–24
+week occurrences of one teacher's copies not on neighbouring pairs (soft); real data has no such copies.
+
+How the parts were chosen (single runs unless noted; all in `scratchpad/owner-rules/candidates.md` of the session):
+- the hard rule for one teacher's copies too (neighbouring pairs) left `tight-shift2` at −1 hard in 3 of 3 seeds; soft at
+  30 reached 0 hard in all 13 synthetic runs (8 candidate runs over 4 shapes and 2 seeds, and the final 5);
+- the old construction order never brought `real-shaped` to 0 hard in 180 s (5 runs, −2…−6); placing the copies of a
+  key one after another did in 22–153 s (7 runs);
+- the room-aware sibling move, same order: `many-splits` −2 → 0 hard after 6.5 s, `real-shaped` 48 → 22 s; with the old
+  order it did not rescue `teacher-limits` (1 run at −1), so it is kept as a help, not as the fix;
+- `studentOnePairDay` 30 instead of 10: one-pair days 1 → 0 on the whole college, but from scratch the spread went 195
+  → 225 and a discipline twice 44 → 66; kept at 10;
+- `latePairs` 0 alone (old soft subgroups, `real-shaped`) raised the spread 176 → 192 and the two-pair days 80 → 94;
+  the hard rule alone with `latePairs` 9 left the run at −4 hard, so the windows and infeasibility came from the rule,
+  not from the 4th pair.
+
 ### Auto mode (evidence, 15.11.2026)
 
 Owner's decision: the dispatcher sets no time limit; the solver stops by itself when the timetable stops getting better,
@@ -535,6 +664,63 @@ ends with the metrics the evaluation's 600 s runs had (twice 58, lone 20). Scope
 with the same result as 10–15 min runs. Raw lines: `scratchpad/autostop/{trajectories,results}.jsonl` of the autostop
 session; reproduce with `-Dreplay.termination=spent|auto`.
 
+### Owner's rules, round 2 (15.11.2026)
+
+Hard group windows and at most 3 Friday pairs (§3). `SnapshotReplayTest` batches, production solver config; the real
+requests in the production **auto mode** (cap 30 min), the synthetic shapes with the fixed limits of the earlier studies;
+3–5 JVMs on the laptop at once, so times are indicative. «no swap» = the two rules without the group slot swap (§4);
+«final» = this branch. New harness columns: `grpWinH` the hard rule's windows (`grpWin` stays the core metric), `fri4`
+group-weeks above the Friday limit (all groups), `friOver` Friday pairs above it in the run's group-days (the hard rule).
+The solver's own counts equal the metrics in every run (`grpWinH`, `friOver` included).
+
+| Dataset | Run | 0 hard, s | stop, s | soft | grpWin | fri4 | 1-pair | 2-pair | spread | twice | 4th | broken | tch. win. | waits | tch. days | 1-pair tch. | 5+ pairs | moved |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| whole college, published base | published | — | — | −9 hard | 1 | 8 | 5 | 75 | 178 | 12 | 289 | 36 | 117 | 191 | 380 | 100 | 39 | — |
+| | round 1 (150 s, §«Owner's rules») | 3.4 | 150 | −2075 | 0 | — | 2 | 86 | 186 | 12 | 337 | 28 | — | 139 | 374 | 89 | — | 120 |
+| | no swap | 25.2 | 376 | −1965 | 0 | 0 | 3 | 75 | 177 | 9 | 348 | 24 | 52 | 151 | 378 | 96 | 25 | 114 |
+| | **final** | **12.3** | 304 | **−1264** | 0 | 0 | 0 | 80 | 173 | 1 | 354 | 22 | 7 | 89 | 369 | 55 | 16 | 287 |
+| | final at 150 s | 12.3 | — | −1349 | 0 | 0 | 0 | 82 | 174 | 0 | 350 | 22 | 7 | 86 | 372 | 63 | 24 | 288 |
+| | final, `stability` 5 | 12.9 | 443 | −2385 | 0 | 0 | 0 | 79 | 169 | 4 | 327 | 28 | 27 | 122 | 379 | 93 | 31 | 120 |
+| `ki4` (53 free) | no swap / **final** | 1.7 / 1.7 | 71 / 68 | −2407 / −2329 | 0 / 0 | 8 / 8 | 3 / 3 | 76 / 78 | 177 / 179 | 12 / 12 | 295 / 295 | 32 / 32 | 116 / 108 | 189 / 189 | 380 / 379 | 100 / 97 | 41 / 41 | 3 / 9 |
+| `course4` (168 free) | no swap / **final** | 2.7 / 1.1 | 155 / 104 | −2173 / −1968 | 0 / 0 | 4 / 4 | 3 / 3 | 74 / 75 | 176 / 171 | 6 / 5 | 297 / 314 | 32 / 32 | 91 / 75 | 175 / 168 | 381 / 375 | 104 / 91 | 42 / 40 | 23 / 60 |
+| from scratch | round 1 (600 s) | 66 | 600 | — | 2 | — | 0 | 85 | 195 | 57 | 376 | 29 | — | 251 | 374 | 90 | — | — |
+| | no swap | 772.8 | 885 | −3301 | 0 | 0 | 2 | 93 | 199 | 59 | 390 | 28 | 47 | 248 | 373 | 100 | 47 | — |
+| | **final** | **119.5** | 408 | −1420 | 0 | 0 | 0 | 82 | 192 | 18 | 369 | 23 | 10 | 115 | 349 | 36 | 41 | — |
+
+The published version, scored by the new rules, is −9 hard: the 8 Friday pairs of 1КІ1, 1М, 4РТ1 and 4РТ2 and 1 window
+where the base misses a unit (2КІ1 Thursday pair 6 numerator: the published lesson names Овчар Ін.М., the load unit
+Овчар Ів.М., so the unit has no base; the timetable itself has no window); the construction heuristic ends at −11 (2
+more: the sibling keys without a base). Every run ends at 0 hard: the whole college moves those Friday pairs (`fri4`
+0), the scopes leave the groups outside them pinned (`ki4` all four outside, `fri4` 8, `friOver` 0; `course4` moves 4РТ1 and 4РТ2, leaves 1КІ1 and 1М). No group window in any
+run. Days stay even (spread 173 vs 178 published, two-pair days 80 vs 75). With the group slot swap the solver also finds
+much better teacher days (windows 7 vs 117 published, one-pair teacher days 55 vs 100) and moves more lessons: 287 of 1074
+at the default `stability` 1 (round 1: 120). Weight 5 («Не переставляти без потреби» = «Важливо») keeps it at 120 with the
+same hard result. The fixed-limit `ki4`/`course4` runs of round 1 moved 4 and 30; the auto runs move 9 and 60.
+
+Synthetic shapes (planted timetables have no windows and at most 3 Friday pairs):
+
+| Shape (limit) | Round 1 (§«Owner's rules») | No swap | Column swap only | **Final** (seed 0 / 1) |
+|---|---|---|---|---|
+| `tight-shift2` (120 s) | 14.2 s | 23.4 s | — | 30.4 s / 26.0 s |
+| `real-shaped` (180 s) | 23.3 s | −3 hard (teacher clash); auto 30 min: −2 | 106.6 s | 116.3 s / 85.6 s |
+| `many-splits` (120 s) | 1.7 s | −2 hard (siblings apart); auto 16 min: −2 | −2 hard | 11.0 s / 5.4 s |
+| `teacher-limits` (120 s) | 4.0 s | −2 hard (siblings apart); auto 16 min: −2 | −4 hard | 10.1 s / 7.5 s |
+| `small-stream` (60 s) | 0.1 s | 0.2 s | — | 0.2 s |
+
+Without new moves the hard window rule left three shapes infeasible: a lesson can leave the middle of a day only by
+opening a window, and a two-teacher sibling pair apart can only be joined by moving one copy into its sibling's slot, where
+the other subgroup already has a lesson. The column swap fixed the clash of `real-shaped`; swapping one subgroup's own
+lessons fixed the siblings. The tight second shift (18–19 pairs in 19 slots) is feasible in every run, so the load
+pre-check gains the Friday limit (19 slots in the first shift; no real group is near it: 17 pairs at most) but not a
+«gap-free day», which needs no extra slot. Raw lines: `scratchpad/owner-rules2/results.jsonl` of the session.
+
+After the review the edge exemption was narrowed (a subgroup that waits between two of its own lessons has a window).
+The same batches end at 0 hard again with no group window: the whole college from the published version after 12.0 s,
+`ki4` and `course4` as before, from scratch, and every synthetic shape with both seeds (`tight-shift2` 25.3 / 15.8 s).
+On the same seed `real-shaped` ends at the same score under the old and the new definition, so the search never used
+such a day; `teacher-limits` reaches 0 hard after about the same number of steps. Raw lines:
+`scratchpad/owner-rules2/results-r3.jsonl` of the session (genfix evaluation §13).
+
 ## 12. Decisions (short)
 
 1. **One entity class with per-unit value ranges** instead of separate WHOLE/HALF classes: one set of
@@ -549,12 +735,13 @@ session; reproduce with `-Dreplay.termination=spent|auto`.
    (what a student of a subgroup actually waits); graded broken-day penalty for a better gradient.
 5. **Late pair** = 4th pair of the shift window or later, by the one definition in `contracts.LatePairs`
    (shared with the core metric and the web; title «4-та пара зміни»); the 3-pair Friday window of the
-   second shift has none. It is not a college rule (57 % of real group day-weeks use that pair); the
-   weight only spreads pairs across the week.
+   second shift has none. The owner confirmed it is a normal pair (15.11.2026): the weight defaults to 0 and
+   the rule stays for a dispatcher who wants it.
 6. **Halves bonus** only for the same cohort (group + subgroup) and different parities; weight =
    `brokenDays` because it serves the same goal.
 7. **Discipline repeat weight** from configuration (the request has no field for it), default 5.
-8. **Special-purpose rooms** (sports hall/ground) only for units that require or name them.
+8. **Special-purpose rooms** (sports hall/ground) only for units that require or name them, stood there in the
+   base, or whose item keeps to them (`baseRoomTypes`, from the base or, from scratch, the teacher's room).
 9. **Own score analysis** (Timefold Community has no ScoreAnalysis); cross-checked against the solver.
 10. **Strict snapshot validation**: a broken snapshot fails fast with every problem listed in Ukrainian;
     desired rooms are preferences and an unknown one is only dropped (audit 12.11.2026).
@@ -562,7 +749,8 @@ session; reproduce with `-Dreplay.termination=spent|auto`.
     confirm, re-sent with the same event id until confirmed.
 12. **CANCELLED keeps the best timetable** found so far, so «stop and apply» is possible.
 13. **New rules are soft and weighted** (generator review, Nov 2026): every default comes from the real
-    timetable's statistics, `0` switches a rule off, and nothing new is a college rule.
+    timetable's statistics and `0` switches a rule off — except what the owner made a college rule on
+    15.11.2026 (decision 22).
 14. **One grouping per day shape**: the group-day rules (windows, broken day, one-pair day, lone
     subgroup), the teacher-day rules (windows, shift wait, one-pair day, overload) and the discipline
     rules (twice, three times) each read one shared incremental collector, so the solver did not get a
@@ -578,9 +766,27 @@ session; reproduce with `-Dreplay.termination=spent|auto`.
 19. **A discipline twice a day is judged per student** (busiest cohort), so a teacher's two subgroups one
     after the other — what «Subgroups apart» asks for — are not «twice».
 20. **Sibling move** instead of a «follower» entity: the model keeps one entity class; the custom move
-    keeps subgroups together while they move, and «Subgroup alone» keeps them together otherwise.
+    keeps subgroups together while they move, and the hard «Subgroups not together» keeps them together
+    otherwise.
 21. **Warm-start rooms are free at the start slot** (B2): a run never starts with a room clash the base
     did not have.
+22. **Subgroups of a split discipline at the same time is hard** for copies of two teachers (owner, 15.11.2026);
+    one teacher's copies on neighbouring pairs is soft with the strongest default, because hard it made a full
+    second shift infeasible. Only units with a sibling key are scored and pinned units have none, so lessons pinned
+    outside the scope cannot make a run infeasible. A group's one-pair day and PE in the hall stay soft (the hall's 5
+    places), and the web shows these rules as fixed, not as priorities.
+23. **Sibling copies are placed one after another** by the construction heuristic and **move with free rooms**:
+    with a hard rule the copies cannot be fixed one at a time.
+24. **Group windows are hard** (owner, round 2), with the lone subgroup pair at the edge of the day exempt, so one
+    teacher's two subgroups can stand one after the other first or last in the day; a subgroup that waits between two
+    of its own lessons has a window (only the wait next to the full pairs is exempt); teacher windows stay soft. The core
+    metric and warnings still count every subgroup wait (worst cohort), so a one-teacher pair at the edge shows there as
+    a window while the generator calls the day fine (real data has no such pair).
+25. **At most `fridayMaxPairs` pairs on Friday is hard**, counted on the group's row (any subgroup), a college setting
+    sent per group like the teacher's daily limit. Both day rules exempt days without a free unit.
+26. **Group slot swap** in the local search: with hard windows the solver moves a group's columns (or one subgroup's
+    own lessons), not single lessons; without it the synthetic `many-splits` and `teacher-limits` stayed at −2 hard for
+    16 minutes in auto mode (§11).
 
 ## 13. Known gaps
 
@@ -594,8 +800,17 @@ session; reproduce with `-Dreplay.termination=spent|auto`.
 * Teacher preferences are only UNAVAILABLE (hard) and UNWANTED (soft) slots from the snapshot. The daily
   pair limit and the teaching-day baseline are soft rules; a methodical day is not modelled (no evidence
   the college needs one, DOMAIN open questions).
-* The sibling move covers subgroup copies of one occurrence only; crossing two split disciplines (sub 1
-  of A with sub 2 of B, then swapped) is left to the ordinary moves, guided by «Subgroup alone».
+* The sibling move covers subgroup copies of one occurrence only. Crossing two split disciplines (sub 1 of A
+  with sub 2 of B, then swapped) breaks the hard rule for copies of two teachers; with one teacher per discipline it
+  is what «Subgroups apart» asks for, and the synthetic colleges still end with some of those pairs apart (soft).
+* A free subgroup unit whose sibling is pinned (the dispatcher pinned one subgroup's lesson in the scope) has no
+  key (core sends keys on free units only), so the hard rule does not tie it to the pinned copy; only «Subgroup
+  alone» pulls it there.
+* A subgroup lesson without a counterpart in the load (1ОП1 English, Wednesday pair 1; DOMAIN §13 Q4) cannot be
+  paired by any timetable: it stays one lone slot in both weeks.
+* The core metric «Вікна груп» and the soft warning count every subgroup wait (worst cohort); the generator's hard rule
+  exempts a lone subgroup pair at the edge of the day. Real data has no pair of one teacher's subgroups, so the two agree
+  there; with such pairs the metric can show a window the generator accepted.
 * Stability counts every move from the base the same, whatever the reason; the dispatcher sets
   `stability` 0 to rebuild freely.
 * **Online lessons that are not pinned** (owner question): a free unit comes from a load item, which has

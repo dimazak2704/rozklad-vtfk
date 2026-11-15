@@ -308,13 +308,16 @@ public final class SnapshotReplay {
         Map<TimetableConstraint, TimetableAnalyzer.ConstraintResult> rows = new LinkedHashMap<>();
         TimetableAnalyzer.analyze(solution).forEach(row -> rows.put(row.constraint(), row));
         Map<String, String> checks = new LinkedHashMap<>();
-        check(checks, "grpWin", rows.get(TimetableConstraint.GROUP_WINDOWS).impact(), metrics.get("grpWin"));
+        check(checks, "grpWinH", rows.get(TimetableConstraint.GROUP_WINDOWS).impact(), metrics.get("grpWinH"));
+        check(checks, "friOver", rows.get(TimetableConstraint.FRIDAY_OVERLOAD).impact(), metrics.get("friOver"));
         check(checks, "tchWin", rows.get(TimetableConstraint.TEACHER_WINDOWS).impact(), metrics.get("tchWin"));
         check(checks, "shWait", rows.get(TimetableConstraint.TEACHER_SHIFT_WAIT).impact(), metrics.get("shWait"));
         check(checks, "broken", rows.get(TimetableConstraint.BROKEN_DAY).matchCount(), metrics.get("broken"));
         check(checks, "grp1p", rows.get(TimetableConstraint.GROUP_ONE_PAIR_DAY).impact(), metrics.get("grp1p"));
         check(checks, "tch1p", rows.get(TimetableConstraint.TEACHER_ONE_PAIR_DAY).impact(), metrics.get("tch1p"));
         check(checks, "lone", rows.get(TimetableConstraint.SUBGROUP_ALONE).impact(), metrics.get("lone"));
+        check(checks, "sibApart", rows.get(TimetableConstraint.SUBGROUPS_APART).impact()
+                + rows.get(TimetableConstraint.SIBLINGS_APART).impact(), metrics.get("sibApart"));
         check(checks, "twice", rows.get(TimetableConstraint.DISCIPLINE_TWICE).impact(), metrics.get("twice"));
         return checks;
     }
@@ -387,7 +390,8 @@ public final class SnapshotReplay {
                     .weight(unit.getWeight())
                     .requiredRoomType(unit.getRequiredRoomType())
                     .desiredRoom(unit.getDesiredRoom())
-                    .siblingKey(unit.getSiblingKey());
+                    .siblingKey(unit.getSiblingKey())
+                    .softSiblingRule(unit.hasSoftSiblingRule());
             if (unit.hasBase()) {
                 builder.base(unit.getBaseSlot(), unit.getBaseParity(), unit.getBaseRoomId());
             }

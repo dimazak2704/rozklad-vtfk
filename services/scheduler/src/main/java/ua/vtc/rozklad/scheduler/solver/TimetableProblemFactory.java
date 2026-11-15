@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -56,13 +57,17 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * <p>A load item whose base lessons with a room all sit in special-purpose rooms (PE in the sports hall or on the
  * ground; data-driven, never by discipline name) gives its free units those room types as
  * {@link LessonUnit#getBaseRoomTypes()}: the units start there, and the soft rule {@code specialRooms} penalizes
- * any other room. Ordinary compatible rooms stay in the range, so a full or closed hall costs soft points instead
- * of making the run infeasible, and weight 0 switches the preference off. Core sends no derived room type.
+ * any other room. An item without any base lesson in a room (a run from scratch) gets both special-purpose types
+ * when its teacher's usual room or its preferred room is one (the PE teacher's room is the hall). Ordinary
+ * compatible rooms stay in the range, so a full or closed hall costs soft points instead of making the run
+ * infeasible, and weight 0 switches the preference off. Core sends no derived room type.
  *
- * <p>Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
+ * <p>Each group gets the Friday limit of the snapshot (hard rule «Забагато пар у пʼятницю»; absent = none).
+ * Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
  * week: the weekdays of the teacher's base and pinned lessons in that week, but at least the days the
  * teacher's load needs at the daily limit (4 pairs when there is none). Sibling keys are kept only on
- * free units of one group with distinct subgroups; any other use is dropped with a warning.
+ * free units of one group with distinct subgroups; any other use is dropped with a warning. A key whose copies
+ * cannot all be parallel by the data is marked soft ({@link LessonUnit#hasSoftSiblingRule()}), also with a warning.
  */
 public final class TimetableProblemFactory {
 
@@ -98,7 +103,7 @@ public final class TimetableProblemFactory {
         Map<Integer, ShiftWindow> windows = shiftWindows(snapshot.shiftWindows());
         Map<UUID, StudentGroup> groups = snapshot.groups().stream()
                 .map(group -> new StudentGroup(group.id(), group.code(), group.size(), group.shift(),
-                        group.subgroups(), windows.get(group.shift())))
+                        group.subgroups(), windows.get(group.shift()), group.fridayMaxPairs()))
                 .collect(Collectors.toMap(StudentGroup::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
 
         Set<String> siblingKeys = siblingKeys(snapshot.units());
@@ -106,7 +111,7 @@ public final class TimetableProblemFactory {
         List<UnitPlan> plans = snapshot.units().stream()
                 .map(unit -> plan(unit, timeslots, rooms, teachers, groups, siblingKeys, sportItems))
                 .toList();
-        List<LessonUnit> units = new RoomWarmStart(plans).buildUnits();
+        List<LessonUnit> units = new RoomWarmStart(plans).buildUnits(softSiblingKeys(plans));
         return new Timetable(timeslots, List.copyOf(rooms.values()), List.copyOf(teachers.values()),
                 List.copyOf(groups.values()), units, ConstraintWeights.of(weights, disciplineRepeatWeight));
     }
@@ -176,6 +181,48 @@ public final class TimetableProblemFactory {
             }
         });
         return valid;
+    }
+
+    /**
+     * Sibling keys whose copies cannot all stand in parallel, whatever the timetable: one teacher teaches two of
+     * three or more copies (A, A, B: B cannot be parallel to both of A's copies, and A's copies cannot be parallel
+     * to each other), or the copies share no allowed slot or parity (the teachers' free slots never meet in the
+     * group's shift). The hard rule would make such a run infeasible by the data alone, so standing together is
+     * soft for every pair of the key. Two copies of one teacher are the ordinary soft case and are not listed.
+     */
+    private static Set<String> softSiblingKeys(List<UnitPlan> plans) {
+        Map<String, List<UnitPlan>> byKey = new LinkedHashMap<>();
+        for (UnitPlan plan : plans) {
+            if (plan.siblingKey() != null) {
+                byKey.computeIfAbsent(plan.siblingKey(), key -> new ArrayList<>()).add(plan);
+            }
+        }
+        Set<String> soft = new HashSet<>();
+        byKey.forEach((key, copies) -> {
+            List<UUID> teachers = copies.stream().map(copy -> copy.unit().teacherId()).filter(Objects::nonNull)
+                    .toList();
+            if (teachers.stream().distinct().count() < teachers.size()) {
+                if (copies.size() > 2) {
+                    soft.add(key);
+                    log.warn("Sibling key {}: one teacher teaches two of its {} subgroup copies, so they cannot all "
+                            + "be parallel; together is a soft rule for this key", key, copies.size());
+                }
+                return;
+            }
+            Set<Timeslot> slots = new HashSet<>(copies.getFirst().timeslotRange());
+            Set<Parity> parities = EnumSet.copyOf(copies.getFirst().parityRange());
+            for (UnitPlan copy : copies.subList(1, copies.size())) {
+                slots.retainAll(copy.timeslotRange());
+                parities.retainAll(copy.parityRange());
+            }
+            if (slots.isEmpty() || parities.isEmpty()) {
+                soft.add(key);
+                log.warn("Sibling key {}: its subgroup copies share no allowed slot or week (the teachers' free slots "
+                        + "do not meet in the shift), so they cannot be parallel; together is a soft rule for this key",
+                        key);
+            }
+        });
+        return soft;
     }
 
     private static Set<Timeslot> slots(List<ProblemSnapshot.Timeslot> slots) {
@@ -275,10 +322,18 @@ public final class TimetableProblemFactory {
     /**
      * Load items whose base lessons with a room (free units' {@code initial}, pinned units' pin; online lessons
      * left out) all sit in special-purpose rooms, with those room types. On the real college these are the 60 PE
-     * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom.
+     * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom. An item with
+     * no base lesson in a room (from scratch) gets both special-purpose types when its free unit's preferred room is
+     * one, or when its teacher's usual room is one and its discipline has no trace of an ordinary room: the college
+     * keeps PE in the hall or on the ground (owner, 15.11.2026), and from scratch the teacher's room is the only
+     * trace of it (all 100 PE units of the real request from scratch have the hall as the teacher's room, no other
+     * unit has). The discipline check keeps a PE teacher's theory discipline out of the hall when that discipline is
+     * taught in classrooms elsewhere; a discipline that only the PE teacher teaches has no such trace and follows
+     * the teacher's room.
      */
     static Map<UUID, Set<RoomType>> specialPurposeItems(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
         Map<UUID, Set<RoomType>> types = new HashMap<>();
+        Set<UUID> based = new HashSet<>();
         Set<UUID> elsewhere = new HashSet<>();
         for (ProblemSnapshot.Unit unit : units) {
             ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
@@ -286,6 +341,7 @@ public final class TimetableProblemFactory {
             if (unit.loadItemId() == null || unit.online() || room == null) {
                 continue;
             }
+            based.add(unit.loadItemId());
             if (SPECIAL_PURPOSE.contains(room.getType())) {
                 types.computeIfAbsent(unit.loadItemId(), id -> EnumSet.noneOf(RoomType.class)).add(room.getType());
             } else {
@@ -293,7 +349,45 @@ public final class TimetableProblemFactory {
             }
         }
         elsewhere.forEach(types::remove);
+        Set<UUID> ordinary = disciplinesInOrdinaryRooms(units, rooms);
+        for (ProblemSnapshot.Unit unit : units) {
+            if (unit.loadItemId() != null && unit.pinned() == null && !based.contains(unit.loadItemId())
+                    && (isSpecial(unit.preferredRoomId(), rooms) || isSpecial(unit.teacherRoomId(), rooms)
+                    && !ordinary.contains(unit.disciplineId()))) {
+                types.put(unit.loadItemId(), SPECIAL_PURPOSE);
+            }
+        }
         return types;
+    }
+
+    /**
+     * Disciplines with a trace of an ordinary room: a base or pinned lesson in one (online lessons left out), or a
+     * unit without such a lesson whose preferred room or teacher's usual room is one.
+     */
+    private static Set<UUID> disciplinesInOrdinaryRooms(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
+        Set<UUID> ordinary = new HashSet<>();
+        for (ProblemSnapshot.Unit unit : units) {
+            ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
+            Room room = placed == null || placed.roomId() == null || unit.online() ? null : rooms.get(placed.roomId());
+            boolean trace = room != null ? !SPECIAL_PURPOSE.contains(room.getType())
+                    : isOrdinary(unit.preferredRoomId(), rooms) || isOrdinary(unit.teacherRoomId(), rooms);
+            if (trace) {
+                ordinary.add(unit.disciplineId());
+            }
+        }
+        return ordinary;
+    }
+
+    /** The room is a sports hall or ground of the snapshot. */
+    private static boolean isSpecial(UUID roomId, Map<UUID, Room> rooms) {
+        Room room = roomId == null ? null : rooms.get(roomId);
+        return room != null && SPECIAL_PURPOSE.contains(room.getType());
+    }
+
+    /** The room is an ordinary room of the snapshot (not a sports hall or ground). */
+    private static boolean isOrdinary(UUID roomId, Map<UUID, Room> rooms) {
+        Room room = roomId == null ? null : rooms.get(roomId);
+        return room != null && !SPECIAL_PURPOSE.contains(room.getType());
     }
 
     /**
@@ -392,7 +486,7 @@ public final class TimetableProblemFactory {
             return unit.weight() == UnitWeight.HALF ? 1 : 2;
         }
 
-        LessonUnit build(Room initialRoom) {
+        LessonUnit build(Room initialRoom, boolean softSiblingRule) {
             LessonUnit.Builder builder = LessonUnit.builder(unit.unitId(), group, unit.disciplineId())
                     .loadItemId(unit.loadItemId())
                     .subgroup(unit.subgroup())
@@ -409,6 +503,7 @@ public final class TimetableProblemFactory {
                     .roomRange(roomRange)
                     .parityRange(parityRange)
                     .siblingKey(siblingKey)
+                    .softSiblingRule(softSiblingRule)
                     .baseRoomTypes(baseRoomTypes)
                     .initialRoom(initialRoom);
             if (baseSlot != null) {
@@ -440,7 +535,7 @@ public final class TimetableProblemFactory {
             this.plans = plans;
         }
 
-        List<LessonUnit> buildUnits() {
+        List<LessonUnit> buildUnits(Set<String> softSiblingKeys) {
             Room[] initialRooms = new Room[plans.size()];
             for (int i = 0; i < plans.size(); i++) {
                 UnitPlan plan = plans.get(i);
@@ -473,7 +568,9 @@ public final class TimetableProblemFactory {
             }
             List<LessonUnit> units = new ArrayList<>(plans.size());
             for (int i = 0; i < plans.size(); i++) {
-                units.add(plans.get(i).build(initialRooms[i]));
+                UnitPlan plan = plans.get(i);
+                units.add(plan.build(initialRooms[i], plan.siblingKey() != null
+                        && softSiblingKeys.contains(plan.siblingKey())));
             }
             return units;
         }

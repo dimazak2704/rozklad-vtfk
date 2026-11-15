@@ -3,6 +3,7 @@ package ua.vtc.rozklad.contracts.events;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -155,8 +156,8 @@ class EventJsonRoundTripTest {
     @Test
     void weightsOfTheThirteenFieldSchemaReadWithTheSpecialRoomsDefault() {
         String json = """
-                {"windows":30,"brokenDays":10,"latePairs":9,"preferences":5,"homeRoom":1,"teacherWindows":10,
-                 "teacherShiftWait":3,"stability":1,"subgroupsTogether":10,"studentOnePairDay":10,"teacherDays":5,
+                {"windows":30,"brokenDays":10,"latePairs":0,"preferences":5,"homeRoom":1,"teacherWindows":10,
+                 "teacherShiftWait":3,"stability":1,"subgroupsTogether":30,"studentOnePairDay":10,"teacherDays":5,
                  "teacherOverload":3,"disciplineTwice":10}
                 """;
 
@@ -173,12 +174,13 @@ class EventJsonRoundTripTest {
     @Test
     void weightsDefaultIsCompleteAndNegativeWeightsAreRefused() {
         assertThat(GenerationWeights.DEFAULT)
-                .isEqualTo(new GenerationWeights(30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30));
+                .as("owner, 15.11.2026: the 4th pair is normal (latePairs 0), subgroups together the strongest (30)")
+                .isEqualTo(new GenerationWeights(30, 10, 0, 5, 1, 10, 3, 1, 30, 10, 5, 3, 10, 30));
         assertThat(new GenerationWeights(10, 10, 3, 5, 1, 0, null, 0, null, null, null, null, null))
                 .satisfies(weights -> {
                     assertThat(weights.teacherWindows()).as("an explicit 0 switches teacher windows off").isZero();
                     assertThat(weights.stability()).isZero();
-                    assertThat(weights.subgroupsTogether()).isEqualTo(10);
+                    assertThat(weights.subgroupsTogether()).isEqualTo(GenerationWeights.DEFAULT_SUBGROUPS_TOGETHER);
                 });
         org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
                 .isThrownBy(() -> new GenerationWeights(10, 10, 3, 5, 1, null, null, -1, null, null, null, null, null));
@@ -202,6 +204,22 @@ class EventJsonRoundTripTest {
         assertThat(teacher.maxPairsPerDay()).as("no limit").isNull();
         assertThat(unit.siblingKey()).isNull();
         assertThat(unit.online()).isFalse();
+    }
+
+    /** Owner's rule of 15.11.2026: {@code fridayMaxPairs} is additive; an older group reads without a limit. */
+    @Test
+    void snapshotGroupReadsWithAndWithoutTheFridayLimit() {
+        String old = """
+                {"id":"3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f","code":"4КІ1","size":25,"shift":1,"subgroups":[1,2]}
+                """;
+        ProblemSnapshot.Group group = mapper.readValue(old, ProblemSnapshot.Group.class);
+        assertThat(group.fridayMaxPairs()).as("no limit").isNull();
+
+        ProblemSnapshot.Group limited = new ProblemSnapshot.Group(group.id(), "4КІ1", 25, 1, List.of(1, 2), 3);
+        assertThat(mapper.readValue(mapper.writeValueAsString(limited), ProblemSnapshot.Group.class))
+                .isEqualTo(limited);
+        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ProblemSnapshot.Group(group.id(), "4КІ1", 25, 1, List.of(), 0));
     }
 
     /** genfix: an analysis row of the first schema reads as a non-bonus row with unknown scope matches. */

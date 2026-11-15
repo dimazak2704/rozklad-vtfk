@@ -20,15 +20,17 @@ public enum TimetableConstraint {
     ROOM_CAPACITY("Room too small", "Аудиторія замала для групи", Kind.HARD),
     OUTSIDE_SHIFT("Outside shift window", "Пара поза межами зміни", Kind.HARD),
     TEACHER_UNAVAILABLE("Teacher unavailable", "Викладач недоступний у цей час", Kind.HARD),
+    SUBGROUPS_APART("Subgroups not together", "Підгрупи дисципліни не одночасно", Kind.HARD),
+    GROUP_WINDOWS("Group windows", "Вікна в розкладі групи", Kind.HARD),
+    FRIDAY_OVERLOAD("Friday overload", "Забагато пар у пʼятницю", Kind.HARD),
 
-    GROUP_WINDOWS("Group windows", "Вікна в розкладі групи", Kind.PENALTY),
     TEACHER_WINDOWS("Teacher windows", "Вікна у викладача", Kind.PENALTY),
     TEACHER_SHIFT_WAIT("Teacher shift wait", "Очікування викладача між змінами", Kind.PENALTY),
     BROKEN_DAY("Broken day", "Рваний день (чисельник і знаменник різні)", Kind.PENALTY),
     LATE_PAIR("Late pair", "4-та пара зміни", Kind.PENALTY),
     GROUP_ONE_PAIR_DAY("Group one pair day", "День з однією парою в групи", Kind.PENALTY),
     SUBGROUP_ALONE("Subgroup alone", "Підгрупа на парі, а інша без заняття", Kind.PENALTY),
-    SIBLINGS_APART("Subgroups apart", "Підгрупи одного викладача не підряд", Kind.PENALTY),
+    SIBLINGS_APART("Subgroups apart", "Підгрупи не підряд, де одночасно неможливо", Kind.PENALTY),
     TEACHER_ONE_PAIR_DAY("Teacher one pair day", "День з однією парою у викладача", Kind.PENALTY),
     TEACHER_EXTRA_DAY("Teacher extra day", "Зайвий робочий день викладача", Kind.PENALTY),
     TEACHER_OVERLOAD("Teacher overload", "Забагато пар на день у викладача", Kind.PENALTY),
@@ -38,8 +40,7 @@ public enum TimetableConstraint {
     ROOM_PREFERENCE("Room preference", "Заняття не в аудиторії викладача", Kind.PENALTY),
     UNIT_MOVED("Unit moved", "Пару переставлено відносно базової версії", Kind.PENALTY),
     ROOM_CHANGED("Room changed", "Пара в іншій аудиторії, ніж у базовій версії", Kind.PENALTY),
-    SPECIAL_ROOM_LOST("Special room lost", "Пара не в спортзалі чи на спортмайданчику, як у базовій версії",
-            Kind.PENALTY),
+    SPECIAL_ROOM_LOST("Special room lost", "Пара не в спортзалі чи на спортмайданчику", Kind.PENALTY),
     HALF_PAIRING("Halves paired", "Чисельник і знаменник в одному слоті (бонус)", Kind.BONUS);
 
     private static final Map<String, TimetableConstraint> BY_ID = Arrays.stream(values())
