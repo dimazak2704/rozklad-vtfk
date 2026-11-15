@@ -52,6 +52,9 @@ public class LessonUnit {
     private Room desiredRoom;
     private UUID keptRoomId;
     private String siblingKey;
+    // копії ключа не можуть стояти всі паралельно (один викладач на дві з трьох і більше, або в їхніх викладачів
+    // немає спільного вільного слоту): «разом» для всього ключа — м'яке правило
+    private boolean softSiblingRule;
     // місце в базовій версії (null — заняття в базі немає)
     private Timeslot baseSlot;
     private Parity baseParity;
@@ -95,6 +98,7 @@ public class LessonUnit {
         this.desiredRoom = builder.desiredRoom;
         this.keptRoomId = builder.keptRoomId;
         this.siblingKey = builder.siblingKey;
+        this.softSiblingRule = builder.softSiblingRule;
         this.baseSlot = builder.baseSlot;
         this.baseParity = builder.baseParity;
         this.baseRoomId = builder.baseRoomId;
@@ -227,6 +231,16 @@ public class LessonUnit {
 
     public boolean hasSiblingKey() {
         return siblingKey != null;
+    }
+
+    /**
+     * The copies of the unit's sibling key cannot all stand in parallel: one teacher teaches two of three or more
+     * copies, or the copies share no allowed slot or parity (their teachers' free slots never meet in the group's
+     * shift). Then standing together is soft for every pair of the key, and neighbouring pairs count as together
+     * for copies of two teachers too (see {@code TimetableProblemFactory}).
+     */
+    public boolean hasSoftSiblingRule() {
+        return softSiblingRule;
     }
 
     /** Slot of the unit in the base version, {@code null} when it has none. */
@@ -390,13 +404,26 @@ public class LessonUnit {
     /**
      * Two subgroup copies of one occurrence (equal sibling key) stand together, the college rule: in the same
      * slot and weeks when their teachers differ; when one teacher teaches both, parallel is impossible, so on
-     * neighbouring pairs of one day in the same weeks.
+     * neighbouring pairs of one day in the same weeks. In a key whose copies cannot all be parallel
+     * ({@link #hasSoftSiblingRule()}) neighbouring pairs count as together for copies of two teachers as well.
      */
     public boolean isTogetherWith(LessonUnit sibling) {
         if (parity != sibling.parity) {
             return false;
         }
-        return sharesTeacherWith(sibling) ? isAdjacentTo(sibling) : timeslot.equals(sibling.timeslot);
+        if (sharesTeacherWith(sibling)) {
+            return isAdjacentTo(sibling);
+        }
+        return timeslot.equals(sibling.timeslot)
+                || (softSiblingRule || sibling.softSiblingRule) && isAdjacentTo(sibling);
+    }
+
+    /**
+     * The hard rule applies to the two copies: different teachers in a key whose copies can all be parallel.
+     * Otherwise (one teacher, or a key with {@link #hasSoftSiblingRule()}) together is the soft rule.
+     */
+    public boolean mustBeParallelTo(LessonUnit sibling) {
+        return !sharesTeacherWith(sibling) && !softSiblingRule && !sibling.softSiblingRule;
     }
 
     /** Both lessons have the same teacher (then subgroup copies cannot be parallel). */
@@ -428,6 +455,7 @@ public class LessonUnit {
         private Room desiredRoom;
         private UUID keptRoomId;
         private String siblingKey;
+        private boolean softSiblingRule;
         private Timeslot baseSlot;
         private Parity baseParity;
         private UUID baseRoomId;
@@ -484,6 +512,12 @@ public class LessonUnit {
 
         public Builder siblingKey(String siblingKey) {
             this.siblingKey = siblingKey;
+            return this;
+        }
+
+        /** The copies of the key cannot all be parallel (see {@link LessonUnit#hasSoftSiblingRule()}). */
+        public Builder softSiblingRule(boolean softSiblingRule) {
+            this.softSiblingRule = softSiblingRule;
             return this;
         }
 

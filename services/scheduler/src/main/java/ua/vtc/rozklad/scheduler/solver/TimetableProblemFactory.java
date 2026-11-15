@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -64,7 +65,8 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * <p>Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
  * week: the weekdays of the teacher's base and pinned lessons in that week, but at least the days the
  * teacher's load needs at the daily limit (4 pairs when there is none). Sibling keys are kept only on
- * free units of one group with distinct subgroups; any other use is dropped with a warning.
+ * free units of one group with distinct subgroups; any other use is dropped with a warning. A key whose copies
+ * cannot all be parallel by the data is marked soft ({@link LessonUnit#hasSoftSiblingRule()}), also with a warning.
  */
 public final class TimetableProblemFactory {
 
@@ -108,7 +110,7 @@ public final class TimetableProblemFactory {
         List<UnitPlan> plans = snapshot.units().stream()
                 .map(unit -> plan(unit, timeslots, rooms, teachers, groups, siblingKeys, sportItems))
                 .toList();
-        List<LessonUnit> units = new RoomWarmStart(plans).buildUnits();
+        List<LessonUnit> units = new RoomWarmStart(plans).buildUnits(softSiblingKeys(plans));
         return new Timetable(timeslots, List.copyOf(rooms.values()), List.copyOf(teachers.values()),
                 List.copyOf(groups.values()), units, ConstraintWeights.of(weights, disciplineRepeatWeight));
     }
@@ -178,6 +180,48 @@ public final class TimetableProblemFactory {
             }
         });
         return valid;
+    }
+
+    /**
+     * Sibling keys whose copies cannot all stand in parallel, whatever the timetable: one teacher teaches two of
+     * three or more copies (A, A, B: B cannot be parallel to both of A's copies, and A's copies cannot be parallel
+     * to each other), or the copies share no allowed slot or parity (the teachers' free slots never meet in the
+     * group's shift). The hard rule would make such a run infeasible by the data alone, so standing together is
+     * soft for every pair of the key. Two copies of one teacher are the ordinary soft case and are not listed.
+     */
+    private static Set<String> softSiblingKeys(List<UnitPlan> plans) {
+        Map<String, List<UnitPlan>> byKey = new LinkedHashMap<>();
+        for (UnitPlan plan : plans) {
+            if (plan.siblingKey() != null) {
+                byKey.computeIfAbsent(plan.siblingKey(), key -> new ArrayList<>()).add(plan);
+            }
+        }
+        Set<String> soft = new HashSet<>();
+        byKey.forEach((key, copies) -> {
+            List<UUID> teachers = copies.stream().map(copy -> copy.unit().teacherId()).filter(Objects::nonNull)
+                    .toList();
+            if (teachers.stream().distinct().count() < teachers.size()) {
+                if (copies.size() > 2) {
+                    soft.add(key);
+                    log.warn("Sibling key {}: one teacher teaches two of its {} subgroup copies, so they cannot all "
+                            + "be parallel; together is a soft rule for this key", key, copies.size());
+                }
+                return;
+            }
+            Set<Timeslot> slots = new HashSet<>(copies.getFirst().timeslotRange());
+            Set<Parity> parities = EnumSet.copyOf(copies.getFirst().parityRange());
+            for (UnitPlan copy : copies.subList(1, copies.size())) {
+                slots.retainAll(copy.timeslotRange());
+                parities.retainAll(copy.parityRange());
+            }
+            if (slots.isEmpty() || parities.isEmpty()) {
+                soft.add(key);
+                log.warn("Sibling key {}: its subgroup copies share no allowed slot or week (the teachers' free slots "
+                        + "do not meet in the shift), so they cannot be parallel; together is a soft rule for this key",
+                        key);
+            }
+        });
+        return soft;
     }
 
     private static Set<Timeslot> slots(List<ProblemSnapshot.Timeslot> slots) {
@@ -417,7 +461,7 @@ public final class TimetableProblemFactory {
             return unit.weight() == UnitWeight.HALF ? 1 : 2;
         }
 
-        LessonUnit build(Room initialRoom) {
+        LessonUnit build(Room initialRoom, boolean softSiblingRule) {
             LessonUnit.Builder builder = LessonUnit.builder(unit.unitId(), group, unit.disciplineId())
                     .loadItemId(unit.loadItemId())
                     .subgroup(unit.subgroup())
@@ -434,6 +478,7 @@ public final class TimetableProblemFactory {
                     .roomRange(roomRange)
                     .parityRange(parityRange)
                     .siblingKey(siblingKey)
+                    .softSiblingRule(softSiblingRule)
                     .baseRoomTypes(baseRoomTypes)
                     .initialRoom(initialRoom);
             if (baseSlot != null) {
@@ -465,7 +510,7 @@ public final class TimetableProblemFactory {
             this.plans = plans;
         }
 
-        List<LessonUnit> buildUnits() {
+        List<LessonUnit> buildUnits(Set<String> softSiblingKeys) {
             Room[] initialRooms = new Room[plans.size()];
             for (int i = 0; i < plans.size(); i++) {
                 UnitPlan plan = plans.get(i);
@@ -498,7 +543,9 @@ public final class TimetableProblemFactory {
             }
             List<LessonUnit> units = new ArrayList<>(plans.size());
             for (int i = 0; i < plans.size(); i++) {
-                units.add(plans.get(i).build(initialRooms[i]));
+                UnitPlan plan = plans.get(i);
+                units.add(plan.build(initialRooms[i], plan.siblingKey() != null
+                        && softSiblingKeys.contains(plan.siblingKey())));
             }
             return units;
         }

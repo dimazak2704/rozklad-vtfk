@@ -258,7 +258,8 @@ public record ReplayMetrics(Map<String, Long> values) {
     /**
      * Subgroup copies of one weekly occurrence (equal sibling key) that are not together: with different teachers
      * they must share the slot and the week, with one teacher they must stand on neighbouring pairs of one day in
-     * the same week. Pairs where both copies are pinned are left out, like the hard rule does.
+     * the same week. In a key that cannot be parallel by the data (soft sibling rule) neighbouring pairs are also
+     * together for two teachers. Pairs where both copies are pinned are left out, like the hard rule does.
      */
     private static void siblingMetrics(Map<String, Long> values, List<Placement> placements) {
         Map<String, List<Placement>> byKey = new HashMap<>();
@@ -276,9 +277,11 @@ public record ReplayMetrics(Map<String, Long> values) {
                         continue;
                     }
                     boolean oneTeacher = a.unit().hasTeacher() && a.unit().getTeacherId().equals(b.unit().getTeacherId());
-                    boolean together = a.parity() == b.parity() && (oneTeacher
-                            ? a.slot().weekday() == b.slot().weekday() && Math.abs(a.slot().pair() - b.slot().pair()) == 1
-                            : a.slot().equals(b.slot()));
+                    boolean adjacent = a.slot().weekday() == b.slot().weekday()
+                            && Math.abs(a.slot().pair() - b.slot().pair()) == 1;
+                    boolean soft = a.unit().hasSoftSiblingRule() || b.unit().hasSoftSiblingRule();
+                    boolean together = a.parity() == b.parity()
+                            && (oneTeacher ? adjacent : a.slot().equals(b.slot()) || soft && adjacent);
                     if (!together) {
                         add(values, "sibApart", Math.max(a.weeks().length, b.weeks().length));
                     }

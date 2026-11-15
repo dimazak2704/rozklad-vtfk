@@ -473,6 +473,9 @@ class TimetableConstraintProviderTest {
     @Nested
     class SubgroupsTogether {
 
+        private static final StudentGroup THREE_SUBGROUPS = new StudentGroup(UUID.randomUUID(), "2ТК1", 30, 1,
+                List.of(1, 2, 3), FIRST_SHIFT);
+
         @Test
         void subgroupsOfTwoTeachersInOneSlotAndWeekAreTogether() {
             verifier.verifyThat(TimetableConstraintProvider::subgroupsApart)
@@ -539,6 +542,59 @@ class TimetableConstraintProviderTest {
                             lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).build(),
                             lesson(KI2, slot(4, 4), BOTH).subgroup(2).teacher(KRENTSIN).build())
                     .hasNoImpact();
+        }
+
+        /**
+         * A key whose copies cannot all be parallel by the data (here A, A, B: B cannot be parallel to both of A's
+         * copies) would make every run infeasible under the hard rule. The factory marks it soft: the hard rule leaves
+         * it, and the soft one takes two teachers' copies as together in one slot or on neighbouring pairs.
+         */
+        @Test
+        void aKeyThatCannotBeParallelByTheDataIsLeftToTheSoftRule() {
+            // A на 1-й і 2-й парі, B паралельно з першою: краще не буває, а жорстке правило дає −2 за пару «A2—B»
+            LessonUnit[] hard = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t").build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t").build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t").build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) hard).penalizesBy(2);
+
+            LessonUnit[] together = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t")
+                            .softSiblingRule().build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) together).hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart).given((Object[]) together).hasNoImpact();
+
+            // B в інший день: дві пари «A—B» не разом, по 2 тижні — лише м'яко
+            LessonUnit[] apart = {
+                    lesson(THREE_SUBGROUPS, slot(1, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(1, 2), BOTH).subgroup(2).teacher(NEPYIVODA).siblingKey("t")
+                            .softSiblingRule().build(),
+                    lesson(THREE_SUBGROUPS, slot(3, 1), BOTH).subgroup(3).teacher(KRENTSIN).siblingKey("t")
+                            .softSiblingRule().build()};
+            verifier.verifyThat(TimetableConstraintProvider::subgroupsApart).given((Object[]) apart).hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart).given((Object[]) apart).penalizesBy(4);
+        }
+
+        /** Two teachers without a common free slot: neighbouring pairs are together, other slots cost softly. */
+        @Test
+        void twoTeachersOfASoftKeyOnNeighbouringPairsAreTogether() {
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
+                    .given(lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("n")
+                                    .softSiblingRule().build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("n")
+                                    .softSiblingRule().build())
+                    .hasNoImpact();
+            verifier.verifyThat(TimetableConstraintProvider::siblingsApart)
+                    .given(lesson(KI2, slot(2, 1), BOTH).subgroup(1).teacher(NEPYIVODA).siblingKey("n")
+                                    .softSiblingRule().build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).teacher(KRENTSIN).siblingKey("n")
+                                    .softSiblingRule().build())
+                    .penalizesBy(2);
         }
 
         @Test
@@ -881,6 +937,7 @@ class TimetableConstraintProviderTest {
         private Room desiredRoom;
         private UUID discipline = UUID.randomUUID();
         private String siblingKey;
+        private boolean softSiblingRule;
         private Timeslot baseSlot;
         private Parity baseParity;
         private UUID baseRoom;
@@ -928,6 +985,11 @@ class TimetableConstraintProviderTest {
             return this;
         }
 
+        UnitBuilder softSiblingRule() {
+            this.softSiblingRule = true;
+            return this;
+        }
+
         UnitBuilder baseRoomTypes(Set<RoomType> types) {
             this.baseRoomTypes = types;
             return this;
@@ -953,6 +1015,7 @@ class TimetableConstraintProviderTest {
                     .requiredRoomType(requiredRoomType)
                     .desiredRoom(desiredRoom)
                     .siblingKey(siblingKey)
+                    .softSiblingRule(softSiblingRule)
                     .baseRoomTypes(baseRoomTypes);
             if (pinned) {
                 builder.pinnedAt(slot, room, parity);

@@ -29,7 +29,7 @@ public enum TimetableConstraint {
     LATE_PAIR("Late pair", "4-та пара зміни", Kind.PENALTY),
     GROUP_ONE_PAIR_DAY("Group one pair day", "День з однією парою в групи", Kind.PENALTY),
     SUBGROUP_ALONE("Subgroup alone", "Підгрупа на парі, а інша без заняття", Kind.PENALTY),
-    SIBLINGS_APART("Subgroups apart", "Підгрупи одного викладача не підряд", Kind.PENALTY),
+    SIBLINGS_APART("Subgroups apart", "Підгрупи не підряд, де одночасно неможливо", Kind.PENALTY),
     TEACHER_ONE_PAIR_DAY("Teacher one pair day", "День з однією парою у викладача", Kind.PENALTY),
     TEACHER_EXTRA_DAY("Teacher extra day", "Зайвий робочий день викладача", Kind.PENALTY),
     TEACHER_OVERLOAD("Teacher overload", "Забагато пар на день у викладача", Kind.PENALTY),

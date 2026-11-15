@@ -209,7 +209,7 @@ public final class TimetableAnalyzer {
      * Pairs of sibling copies (at least one free) that are not together: of two teachers (hard) or of one teacher
      * (soft); a free copy puts the match in scope.
      */
-    private static void siblingPairs(Tally parallel, Tally oneTeacher, List<LessonUnit> units) {
+    private static void siblingPairs(Tally parallel, Tally apart, List<LessonUnit> units) {
         Map<String, List<LessonUnit>> siblings = new HashMap<>();
         for (LessonUnit unit : units) {
             if (unit.hasSiblingKey()) {
@@ -222,7 +222,7 @@ public final class TimetableAnalyzer {
                     LessonUnit first = same.get(i);
                     LessonUnit second = same.get(j);
                     if ((!first.isPinned() || !second.isPinned()) && !first.isTogetherWith(second)) {
-                        (first.sharesTeacherWith(second) ? oneTeacher : parallel).add(first.apartPenalty(second), true);
+                        (first.mustBeParallelTo(second) ? parallel : apart).add(first.apartPenalty(second), true);
                     }
                 }
             }

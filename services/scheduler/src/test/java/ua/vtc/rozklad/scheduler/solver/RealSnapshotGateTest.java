@@ -180,7 +180,8 @@ class RealSnapshotGateTest {
                     .weight(unit.getWeight())
                     .requiredRoomType(unit.getRequiredRoomType())
                     .desiredRoom(unit.getDesiredRoom())
-                    .siblingKey(unit.getSiblingKey());
+                    .siblingKey(unit.getSiblingKey())
+                    .softSiblingRule(unit.hasSoftSiblingRule());
             if (unit.hasBase()) {
                 builder.base(unit.getBaseSlot(), unit.getBaseParity(), unit.getBaseRoomId());
             }

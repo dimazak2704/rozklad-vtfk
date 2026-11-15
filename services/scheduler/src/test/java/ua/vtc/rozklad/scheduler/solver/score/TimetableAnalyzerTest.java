@@ -153,6 +153,24 @@ class TimetableAnalyzerTest {
                 .singleElement().satisfies(result -> assertThat(result.score().hardScore()).isEqualTo(-2));
     }
 
+    /** A soft sibling key is analysed under «Subgroups apart», never as the hard rule, like the solver scores it. */
+    @Test
+    void aSoftSiblingKeyIsAnalysedAsTheSoftRule() {
+        Timetable week = NewRulesWeek.softSiblingKeys();
+
+        List<TimetableAnalyzer.ConstraintResult> results = TimetableAnalyzer.analyze(week);
+
+        assertThat(results).filteredOn(result -> result.constraint() == TimetableConstraint.SUBGROUPS_APART)
+                .singleElement().satisfies(result -> assertThat(result.matchCount()).isZero());
+        assertThat(results).filteredOn(result -> result.constraint() == TimetableConstraint.SIBLINGS_APART)
+                .singleElement().satisfies(result -> {
+                    assertThat(result.matchCount()).isEqualTo(1);
+                    assertThat(result.impact()).isEqualTo(2);
+                });
+        assertThat(TimetableAnalyzer.totalScore(results)).isEqualTo(solutionManager.update(week));
+        assertImpactsMatchTheSolver(week, results);
+    }
+
     @Test
     void unplacedTimetableIsRejected() {
         Timetable problem = new TimetableProblemFactory(5).create(
@@ -206,6 +224,7 @@ class TimetableAnalyzerTest {
                     .requiredRoomType(unit.getRequiredRoomType())
                     .desiredRoom(unit.getDesiredRoom())
                     .siblingKey(unit.getSiblingKey())
+                    .softSiblingRule(unit.hasSoftSiblingRule())
                     .base(unit.getTimeslot(), unit.getParity(), unit.getRoom().getId())
                     .timeslotRange(timeslots)
                     .roomRange(rooms)

@@ -84,6 +84,24 @@ final class NewRulesWeek {
                 units, ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
     }
 
+    /**
+     * Two sibling keys of two teachers whose copies cannot be parallel by the data (soft sibling rule): one on
+     * neighbouring pairs (together), one on different days (apart, 2 week occurrences of «Subgroups apart»).
+     */
+    static Timetable softSiblingKeys() {
+        List<LessonUnit> units = List.of(
+                unit("mon1", KI2, 1, 1, FREE, ROOM_304, false).subgroup(1).siblingKey("n:w1").softSiblingRule(true)
+                        .build(),
+                unit("mon2", KI2, 1, 2, LIMITED, ROOM_6, false).subgroup(2).siblingKey("n:w1").softSiblingRule(true)
+                        .build(),
+                unit("tue1", KI2, 2, 1, FREE, ROOM_304, false).subgroup(1).siblingKey("n:w2").softSiblingRule(true)
+                        .build(),
+                unit("wed1", KI2, 3, 1, LIMITED, ROOM_6, false).subgroup(2).siblingKey("n:w2").softSiblingRule(true)
+                        .build());
+        return new Timetable(List.of(), List.of(ROOM_304, ROOM_6), List.of(LIMITED, FREE), List.of(KI1, KI2, EA1),
+                units, ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
+    }
+
     private static LessonUnit.Builder unit(String id, StudentGroup group, int weekday, int pair, Teacher teacher,
                                            Room room, boolean pinned) {
         return unit(id, UUID.randomUUID(), group, weekday, pair, teacher, room, pinned);

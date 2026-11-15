@@ -26,6 +26,7 @@ class TimetableProblemFactoryTest {
 
     private static final UUID GROUP = UUID.randomUUID();
     private static final UUID SPLIT_GROUP = UUID.randomUUID();
+    private static final UUID THREE_SUBGROUPS = UUID.randomUUID();
     private static final UUID TEACHER = UUID.randomUUID();
     private static final UUID BUSY_TEACHER = UUID.randomUUID();
     private static final UUID ROOM_304 = UUID.randomUUID();
@@ -412,6 +413,39 @@ class TimetableProblemFactoryTest {
     }
 
     /**
+     * A key whose copies cannot all be parallel by the data is soft on every copy (review of the owner-rules branch):
+     * one teacher for two of three copies, or two teachers whose free slots never meet in the shift. Two teachers
+     * with common slots and two copies of one teacher (the ordinary soft case) keep the flag off.
+     */
+    @Test
+    void keysThatCannotBeParallelByTheDataAreSoft() {
+        UUID morning = UUID.randomUUID();
+        UUID afternoon = UUID.randomUUID();
+        List<ProblemSnapshot.Teacher> teachers = List.of(
+                new ProblemSnapshot.Teacher(TEACHER, "Кренцін М.Д.", List.of(), List.of()),
+                new ProblemSnapshot.Teacher(BUSY_TEACHER, "Непийвода М.В.", List.of(), List.of()),
+                new ProblemSnapshot.Teacher(morning, "Колесник А.І.", pairs(3, 4), List.of()),
+                new ProblemSnapshot.Teacher(afternoon, "Алексєєнко О.А.", pairs(1, 2), List.of()));
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("a1").group(THREE_SUBGROUPS).subgroup(1).teacher(TEACHER).siblingKey("aab").build(),
+                unit("a2").group(THREE_SUBGROUPS).subgroup(2).teacher(TEACHER).siblingKey("aab").build(),
+                unit("b").group(THREE_SUBGROUPS).subgroup(3).teacher(BUSY_TEACHER).siblingKey("aab").build(),
+                unit("early").group(SPLIT_GROUP).subgroup(1).teacher(morning).siblingKey("noCommonSlot").build(),
+                unit("late").group(SPLIT_GROUP).subgroup(2).teacher(afternoon).siblingKey("noCommonSlot").build(),
+                unit("p1").group(SPLIT_GROUP).subgroup(1).teacher(TEACHER).siblingKey("parallel").build(),
+                unit("p2").group(SPLIT_GROUP).subgroup(2).teacher(BUSY_TEACHER).siblingKey("parallel").build(),
+                unit("o1").group(SPLIT_GROUP).subgroup(1).teacher(TEACHER).siblingKey("oneTeacher").build(),
+                unit("o2").group(SPLIT_GROUP).subgroup(2).teacher(TEACHER).siblingKey("oneTeacher").build()),
+                teachers), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits()).extracting(LessonUnit::hasSoftSiblingRule)
+                .containsExactly(true, true, true, true, true, false, false, false, false);
+        assertThat(timetable.getUnits()).extracting(LessonUnit::getSiblingKey)
+                .containsExactly("aab", "aab", "aab", "noCommonSlot", "noCommonSlot", "parallel", "parallel",
+                        "oneTeacher", "oneTeacher");
+    }
+
+    /**
      * The daily limit comes from the snapshot; the day baseline is the weekdays of base and pinned
      * lessons per kind of week, at least the days the load needs at the limit (4 without one).
      */
@@ -554,6 +588,17 @@ class TimetableProblemFactoryTest {
                 new ProblemSnapshot.Teacher(BUSY_TEACHER, "Непийвода М.В.", wholeShift(), List.of())));
     }
 
+    /** The given pairs of every weekday of the shift. */
+    private static List<ProblemSnapshot.Timeslot> pairs(int first, int last) {
+        List<ProblemSnapshot.Timeslot> slots = new ArrayList<>();
+        for (int weekday = 1; weekday <= 5; weekday++) {
+            for (int pair = first; pair <= last; pair++) {
+                slots.add(new ProblemSnapshot.Timeslot(weekday, pair));
+            }
+        }
+        return slots;
+    }
+
     private static List<ProblemSnapshot.Timeslot> wholeShift() {
         List<ProblemSnapshot.Timeslot> wholeShift = new ArrayList<>();
         for (int weekday = 1; weekday <= 5; weekday++) {
@@ -571,7 +616,8 @@ class TimetableProblemFactoryTest {
         }
         return new ProblemSnapshot(timeslots(), windows,
                 List.of(new ProblemSnapshot.Group(GROUP, "4КІ1", 25, 1, List.of()),
-                        new ProblemSnapshot.Group(SPLIT_GROUP, "1КІ2", 28, 1, List.of(1, 2))),
+                        new ProblemSnapshot.Group(SPLIT_GROUP, "1КІ2", 28, 1, List.of(1, 2)),
+                        new ProblemSnapshot.Group(THREE_SUBGROUPS, "2ТК1", 30, 1, List.of(1, 2, 3))),
                 List.of(new ProblemSnapshot.Room(ROOM_304, "304", RoomType.CLASSROOM, 30, 1),
                         new ProblemSnapshot.Room(ROOM_SMALL, "12", RoomType.CLASSROOM, 14, 1),
                         new ProblemSnapshot.Room(LAB, "6", RoomType.COMPUTER_LAB, 0, 1),

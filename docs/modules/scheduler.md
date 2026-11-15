@@ -61,7 +61,13 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
   not mislead the subgroup rules or fail the job). Copies of two teachers must share the slot and the weeks (hard
   «Subgroups not together», owner's rule of 15.11.2026); one teacher's copies cannot, so they should stand on
   neighbouring pairs of one day in the same weeks (soft «Subgroups apart», `subgroupsTogether`, default 30). Pinned
-  units carry no key, so a pinned pair is never scored.
+  units carry no key, so a pinned pair is never scored. A key whose copies cannot all be parallel by the data is
+  soft as a whole (`LessonUnit.softSiblingRule`, a warning in the log): one teacher teaches two of three or more
+  copies (A, A, B: B cannot be parallel to both of A's copies), or the copies share no allowed slot or parity (their
+  teachers' free slots never meet in the group's shift). Its pairs fall to «Subgroups apart», where two teachers'
+  copies count as together in one slot or on neighbouring pairs. Real data has neither: all 72 keys of the four real
+  requests have two copies of two teachers with common slots. The sibling move does not help such a key (it moves
+  copies with a common slot only; A, A, B go to three consecutive pairs).
 * **Teachers**: `maxPairsPerDay` from the snapshot (`null` = no limit) and a **baseline of teaching days**
   per kind of week: the weekdays of the teacher's base (`initial`) and pinned lessons in that week, but at
   least `ceil(load / limit)` days (load = whole units + half of the halves, limit 4 when the snapshot has
@@ -92,7 +98,7 @@ in `generation.completed` uses the Ukrainian titles.
 | Room too small | Аудиторія замала для групи | hard | whole-group unit, week occurrences | — |
 | Outside shift window | Пара поза межами зміни | hard | unit, week occurrences | — |
 | Teacher unavailable | Викладач недоступний у цей час | hard | unit, week occurrences | — |
-| Subgroups not together | Підгрупи дисципліни не одночасно | hard | two copies with one sibling key (at least one free) and different teachers not in one slot with one parity; the larger week occurrences of the two | — |
+| Subgroups not together | Підгрупи дисципліни не одночасно | hard | two copies with one sibling key (at least one free) and different teachers not in one slot with one parity; the larger week occurrences of the two. A key whose copies cannot all be parallel by the data (one teacher for two of three or more copies; no common allowed slot or parity) is left to «Subgroups apart» (§2 «Sibling keys») | — |
 | Group windows | Вікна в розкладі групи | soft | group-day: free pairs between lessons, per kind of week the **worst cohort** (B10; the core metric does the same), summed over both kinds of week | `windows` |
 | Teacher windows | Вікна у викладача | soft | teacher-day: free pairs between lessons per kind of week, **except waits between shifts** | `teacherWindows` (absent → `windows`) |
 | Teacher shift wait | Очікування викладача між змінами | soft | teacher-day: free pairs of a gap a < b where every lesson at a is with groups of one shift and every lesson at b with groups of the other shift (one definition with the core metric) | `teacherShiftWait` |
@@ -100,7 +106,7 @@ in `generation.completed` uses the Ukrainian titles.
 | Late pair | 4-та пара зміни | soft | unit on the 4th pair of its shift window (`contracts.LatePairs`) costs 1, the 5th 2, …, × week occurrences; Friday shift 2 (pairs 4–6) has none; off by default (owner: the 4th pair is normal) | `latePairs` |
 | Group one pair day | День з однією парою в групи | soft | group-day: kinds of week with exactly one occupied pair (union of cohorts) | `studentOnePairDay` |
 | Subgroup alone | Підгрупа на парі, а інша без заняття | soft | group-day: pair × kind of week where a subgroup lesson is active and some cohort of the group has no lesson (next to the hard rule it covers subgroup lessons without a counterpart in the load and crossed disciplines) | `subgroupsTogether` |
-| Subgroups apart | Підгрупи одного викладача не підряд | soft | two copies with one sibling key (at least one free) and one teacher not on neighbouring pairs of one day with one parity (alternating numerator/denominator in one slot counts too); the larger week occurrences | `subgroupsTogether` |
+| Subgroups apart | Підгрупи не підряд, де одночасно неможливо | soft | two copies with one sibling key (at least one free) and one teacher not on neighbouring pairs of one day with one parity (alternating numerator/denominator in one slot counts too); in a key that cannot be parallel by the data, two teachers' copies neither parallel nor on neighbouring pairs too; the larger week occurrences | `subgroupsTogether` |
 | Teacher one pair day | День з однією парою у викладача | soft | teacher-day: kinds of week with exactly one occupied pair | `teacherDays` |
 | Teacher extra day | Зайвий робочий день викладача | soft | teacher: per kind of week `max(0, teaching days − baseline)` (§2) | `teacherDays` |
 | Teacher overload | Забагато пар на день у викладача | soft | teacher-day: pairs above `maxPairsPerDay` per kind of week | `teacherOverload` |

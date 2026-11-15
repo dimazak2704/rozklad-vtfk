@@ -161,11 +161,14 @@ public class TimetableConstraintProvider implements ConstraintProvider {
      * The subgroup copies of one weekly occurrence of a split discipline (equal sibling key) with different
      * teachers are not in the same slot and weeks (owner's rule, 15.11.2026: both subgroups at the same time).
      * Only free units carry a sibling key (core sends none on pinned lessons), and a pair of two pinned copies
-     * is skipped anyway, so a pinned pair that already breaks the rule never makes a run infeasible.
+     * is skipped anyway, so a pinned pair that already breaks the rule never makes a run infeasible. A key whose
+     * copies cannot all be parallel by the data (one teacher for two of three copies, no common free slot) is
+     * left to the soft rule below ({@link LessonUnit#mustBeParallelTo}), so the data alone cannot make a run
+     * infeasible either.
      */
     Constraint subgroupsApart(ConstraintFactory factory) {
         return siblingPairs(factory)
-                .filter((first, second) -> !first.sharesTeacherWith(second) && !first.isTogetherWith(second))
+                .filter((first, second) -> first.mustBeParallelTo(second) && !first.isTogetherWith(second))
                 .penalize(HardSoftScore.ONE_HARD, LessonUnit::apartPenalty)
                 .asConstraint(SUBGROUPS_APART.id());
     }
@@ -255,13 +258,14 @@ public class TimetableConstraintProvider implements ConstraintProvider {
     // ---- soft: lesson rules
 
     /**
-     * One teacher teaches both subgroup copies, so they cannot be parallel: they should stand on neighbouring
-     * pairs of one day in the same weeks. Soft with the strongest default ({@code subgroupsTogether}): a hard
-     * version left full second shifts with interlocked labs infeasible (scheduler.md §11 «Owner's rules»).
+     * Subgroup copies that cannot be parallel are not on neighbouring pairs of one day in the same weeks: one
+     * teacher teaches both, or the key's copies cannot all be parallel by the data (then two teachers' copies may
+     * also be parallel). Soft with the strongest default ({@code subgroupsTogether}): a hard version for one teacher
+     * left full second shifts with interlocked labs infeasible (scheduler.md §11 «Owner's rules»).
      */
     Constraint siblingsApart(ConstraintFactory factory) {
         return siblingPairs(factory)
-                .filter((first, second) -> first.sharesTeacherWith(second) && !first.isTogetherWith(second))
+                .filter((first, second) -> !first.mustBeParallelTo(second) && !first.isTogetherWith(second))
                 .penalize(HardSoftScore.ONE_SOFT, LessonUnit::apartPenalty)
                 .asConstraint(SIBLINGS_APART.id());
     }
