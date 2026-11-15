@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.core.accounting.AccountingStatus;
+import ua.vtc.rozklad.core.calendar.PeriodEffect;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
@@ -44,13 +46,34 @@ class AccountingControllerTest {
                 new GroupRef(groupId, "4КІ1", 4), new DisciplineRef(UUID.randomUUID(), "СТП", "СТП", null),
                 44, 30, 20, 50, AccountingStatus.WILL_OVERRUN, LocalDate.of(2026, 12, 7),
                 new AccountingRowDto.SuggestionDto("DISCIPLINE_FINISHED", "Вичитано 7 грудня: зняти 3 пари після цієї дати",
-                        LocalDate.of(2026, 12, 14), 3, List.of(UUID.randomUUID())))));
+                        LocalDate.of(2026, 12, 14), 3, List.of(UUID.randomUUID())), new BigDecimal("2.0"), "AUTO")));
 
         mockMvc.perform(get("/api/admin/accounting").param("groupId", groupId.toString()).with(TestJwts.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("WILL_OVERRUN"))
                 .andExpect(jsonPath("$[0].forecastFinishDate").value("2026-12-07"))
-                .andExpect(jsonPath("$[0].suggestion.kind").value("DISCIPLINE_FINISHED"));
+                .andExpect(jsonPath("$[0].suggestion.kind").value("DISCIPLINE_FINISHED"))
+                .andExpect(jsonPath("$[0].hoursPerWeek").value(2.0))
+                .andExpect(jsonPath("$[0].planSource").value("AUTO"));
+    }
+
+    @Test
+    void theoryWeeksOfTheGroups() throws Exception {
+        UUID groupId = UUID.randomUUID();
+        given(report.theory(null, null)).willReturn(List.of(new GroupTheoryDto(new GroupRef(groupId, "4КІ2", 4), 18,
+                16, 8, 8, 77, 20, List.of(new GroupTheoryDto.OffPeriodDto(UUID.randomUUID(),
+                        new GroupTheoryDto.KindDto("НС", "Національний спротив", null, PeriodEffect.SUSPEND),
+                        "Основи національного спротиву", LocalDate.of(2026, 11, 30), LocalDate.of(2026, 12, 11))))));
+
+        mockMvc.perform(get("/api/admin/accounting/theory").with(TestJwts.admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].group.code").value("4КІ2"))
+                .andExpect(jsonPath("$[0].theoryWeeks").value(16))
+                .andExpect(jsonPath("$[0].semesterWeeks").value(18))
+                .andExpect(jsonPath("$[0].graphTheoryWeeks").value(20))
+                .andExpect(jsonPath("$[0].offPeriods[0].kind.code").value("НС"))
+                .andExpect(jsonPath("$[0].offPeriods[0].startsOn").value("2026-11-30"));
+        mockMvc.perform(get("/api/admin/accounting/theory").with(TestJwts.teacher())).andExpect(status().isForbidden());
     }
 
     @Test
