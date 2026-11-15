@@ -1796,6 +1796,7 @@ export type EmailVerifiedBy = 'GOOGLE' | 'TRUSTED_DOMAIN';
 export interface EmailKindSettingDto {
   kind: EmailKind;
   audience: EmailAudience;
+  /** Вибір людини для цього виду; зберігається й тоді, коли загальний перемикач вимкнено. */
   enabled: boolean;
   defaultEnabled: boolean;
   /** `false` — лист приходить завжди (лист безпеки): замість перемикача — «Завжди». */

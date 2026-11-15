@@ -60,11 +60,16 @@ public class EmailPreference implements Persistable<UUID> {
 
     /** Whether {@code kind} is on for this account (a kind that cannot be switched is always on). */
     public boolean allows(EmailKind kind) {
+        return !kind.switchable() || enabled && chosen(kind);
+    }
+
+    /**
+     * The person's own choice for {@code kind}, whatever the master switch says: it is kept while letters are off
+     * and comes back when they are switched on again.
+     */
+    public boolean chosen(EmailKind kind) {
         if (!kind.switchable()) {
             return true;
-        }
-        if (!enabled) {
-            return false;
         }
         Boolean override = overrides.get(kind.name());
         return override != null ? override : kind.defaultOn();

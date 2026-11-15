@@ -107,13 +107,31 @@ describe('EmailPreferences', () => {
     expect(bodies[1]).toEqual({ enabled: true, kinds: { SUBSTITUTION_NOTICE: false, GENERATION_FINISHED: false }, version: 4 });
   });
 
-  it('загальний перемикач вимкнено — види недоступні, вибір зберігається', async () => {
-    withPrefs({ enabled: false });
+  it('загальний перемикач вимкнено — види недоступні, але показують збережений вибір', async () => {
+    withPrefs({
+      enabled: false,
+      kinds: [
+        { kind: 'SUBSTITUTION_NOTICE', audience: 'TEACHER', enabled: true, defaultEnabled: true, switchable: true },
+        { kind: 'GENERATION_FINISHED', audience: 'ADMIN', enabled: false, defaultEnabled: true, switchable: true },
+      ],
+    });
+    const bodies = recordPuts();
+    const user = userEvent.setup();
     renderWithProviders(<EmailPreferences audiences={['ADMIN', 'TEACHER']} />);
-    expect(await screen.findByRole('switch', { name: 'Надсилати листи на пошту' }, WAIT)).not.toBeChecked();
-    expect(screen.getByRole('switch', { name: 'Нова заміна' })).toBeDisabled();
-    expect(screen.getByRole('switch', { name: 'Генерацію розкладу завершено' })).toBeDisabled();
+    const master = await screen.findByRole('switch', { name: 'Надсилати листи на пошту' }, WAIT);
+    expect(master).not.toBeChecked();
+    const notice = screen.getByRole('switch', { name: 'Нова заміна' });
+    expect(notice).toBeDisabled();
+    expect(notice).toBeChecked();
+    const generation = screen.getByRole('switch', { name: 'Генерацію розкладу завершено' });
+    expect(generation).toBeDisabled();
+    expect(generation).not.toBeChecked();
     expect(screen.getByText(/вибір за видами збережено/)).toBeInTheDocument();
+
+    // увімкнули знову — повертається саме той вибір, а не «усе вимкнено»
+    await user.click(master);
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual({ enabled: true, kinds: { SUBSTITUTION_NOTICE: true, GENERATION_FINISHED: false }, version: 3 });
   });
 
   it('сервер не зберіг — повідомлення й стан із сервера', async () => {

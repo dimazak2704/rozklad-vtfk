@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import ua.vtc.rozklad.notification.config.TokenRoles;
@@ -33,6 +34,9 @@ class EmailPreferencesApiIT extends IntegrationTest {
     private static final UUID ADMIN = UUID.fromString("33333333-3333-4333-8333-333333333333");
     private static final UUID INVITED = UUID.fromString("77777777-7777-4777-8777-777777777777");
     private static final UUID PRIVATE = UUID.fromString("88888888-8888-4888-8888-888888888888");
+
+    @Autowired
+    private EmailPreferences preferences;
 
     @BeforeEach
     void accounts() {
@@ -117,6 +121,35 @@ class EmailPreferencesApiIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(false))
                 .andExpect(jsonPath("$.version").value(1));
+    }
+
+    @Test
+    void theChoiceOfKindsSurvivesSwitchingLettersOffAndOn() throws Exception {
+        mockMvc.perform(put("/api/notify/email/me").with(as(TEACHER, "TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":true,\"kinds\":{\"SUBSTITUTION_NOTICE\":false,\"ORDER_TEACHER\":true}}"))
+                .andExpect(status().isOk());
+
+        // letters off: each kind still shows the person's choice (the page sends it back as it is)
+        mockMvc.perform(put("/api/notify/email/me").with(as(TEACHER, "TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.kinds[?(@.kind == 'ORDER_TEACHER')].enabled").value(hasItem(true)))
+                .andExpect(jsonPath("$.kinds[?(@.kind == 'SUBSTITUTION_NOTICE')].enabled").value(hasItem(false)))
+                .andExpect(jsonPath("$.kinds[?(@.kind == 'SUBSTITUTION_REQUEST')].enabled").value(hasItem(true)));
+
+        mockMvc.perform(put("/api/notify/email/me").with(as(TEACHER, "TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":true,\"kinds\":{\"SUBSTITUTION_NOTICE\":false,\"ORDER_TEACHER\":true,"
+                                + "\"SUBSTITUTION_REQUEST\":true}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kinds[?(@.kind == 'ORDER_TEACHER')].enabled").value(hasItem(true)))
+                .andExpect(jsonPath("$.kinds[?(@.kind == 'SUBSTITUTION_REQUEST')].enabled").value(hasItem(true)));
+        // while letters were off nothing went out, the choice is what it was
+        EmailPreference saved = preferences.of(TEACHER);
+        assertThat(saved.allows(EmailKind.ORDER_TEACHER)).isTrue();
+        assertThat(saved.allows(EmailKind.SUBSTITUTION_NOTICE)).isFalse();
     }
 
     @Test

@@ -124,7 +124,9 @@ public class EmailSettings {
         Set<EmailAudience> audiences = audiences(me, tokenRoles);
         List<KindSetting> kinds = Arrays.stream(EmailKind.values())
                 .filter(kind -> kind.listed() && audiences.contains(kind.audience()))
-                .map(kind -> new KindSetting(kind, preference.allows(kind)))
+                // the choice itself, not master && choice: the page shows it while letters are off, and sends it
+                // back unchanged when they are switched on again
+                .map(kind -> new KindSetting(kind, preference.chosen(kind)))
                 .toList();
         return new View(accountId, channel.enabled(), channel.enabled() ? null
                 : "Надсилання листів на сервері не налаштовано.", verification(me), preference.isEnabled(),
@@ -155,6 +157,7 @@ public class EmailSettings {
                        MailAddresses.Verification address, boolean enabled, Long version, List<KindSetting> kinds) {
     }
 
+    /** {@code enabled}: the person's choice for the kind; letters go only while the master switch is on too. */
     public record KindSetting(EmailKind kind, boolean enabled) {
     }
 }

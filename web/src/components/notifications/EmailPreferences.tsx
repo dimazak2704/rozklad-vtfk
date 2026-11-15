@@ -117,7 +117,8 @@ function EmailPreferencesForm({ prefs, audiences, emptyNote, footer }: EmailPref
                         labelPosition="start"
                         label={text.label}
                         description={text.description}
-                        checked={prefs.enabled && setting.enabled}
+                        // загальний перемикач вимкнено — вибір за видами лишається видно, лише недоступним
+                        checked={setting.enabled}
                         disabled={channelOff || !prefs.enabled}
                         onCheckedChange={(enabled) => toggleKind(setting, enabled)}
                         className="py-3 sm:py-2.5"
