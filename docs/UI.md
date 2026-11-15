@@ -23,8 +23,11 @@ The main audience is students, parents and teachers who just want *the schedule 
 /login/callback           OIDC callback (the code is exchanged here, then the role decides where to go)
 
 /me                       Teacher cabinet: my day/week, my substitutions (confirm/decline), report absence,
-/me/absences              preferences (unwanted slots grid), connect Telegram (deep link + QR)
-/me/preferences
+/me/absences              preferences (unwanted slots grid), connect Telegram (deep link + QR).
+/me/preferences           /me?change={id} (link in e-mails) scrolls to that request and highlights it
+/me/notifications         «Сповіщення»: which e-mails about my substitutions reach the corporate mailbox
+                          (one switch per kind + a master switch, applied at once), the address read-only with
+                          what to do when it is missing or unverified, a test letter
 
 /admin                    Dispatcher dashboard for today/tomorrow
 /admin/changes            Absences → affected lessons → ranked options → confirmations (main daily screen)
@@ -37,6 +40,8 @@ The main audience is students, parents and teachers who just want *the schedule 
 /admin/catalog/*          Groups, teachers, rooms, disciplines (+aliases): list with search/filter/sort, forms
 /admin/calendar           Semesters, parity overrides, bell profiles, periods (holidays, practice, study modes)
 /admin/telegram           Bot status, chat bindings, binding codes/deep links, delivery log
+/admin/notifications      «Сповіщення»: mail server status line (SMTP / Mailpit / off), my dispatcher e-mails
+                          (+ substitution e-mails if the account has a teacher), «Журнал листів» (masked addresses)
 /admin/settings           Approval mode, signatory, numbering, AI model/budget, public visibility, hours per pair
 ```
 
