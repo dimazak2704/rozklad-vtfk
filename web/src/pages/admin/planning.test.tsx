@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
+import { http, HttpResponse } from 'msw';
+import type { GenerationJobDto } from '@/api/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PUBLISHED_VERSION_ID } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
@@ -132,21 +133,83 @@ describe('Генератор розкладу', () => {
     expect(screen.getByText('Оберіть хоча б один курс')).toBeInTheDocument();
   });
 
-  it('запуск — наприкінці панелі «Параметри»; «типово» не повторюється, змінену вагу скидає її «скинути»', async () => {
-    const user = userEvent.setup();
+  it('запуск — наприкінці панелі «Параметри»; правила — пріоритетами з типовими рівнями core', async () => {
     renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
     const panel = (await screen.findByRole('heading', { name: 'Параметри' }, LONG)).closest('section');
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getByRole('button', { name: 'Запустити генерацію' })).toBeInTheDocument();
-    expect(screen.queryByText(/типово/)).not.toBeInTheDocument();
-    const late = screen.getByRole('slider', { name: 'Пізні пари' });
-    const before = late.getAttribute('aria-valuenow');
-    late.focus();
-    await user.keyboard('{ArrowRight}');
-    expect(late).not.toHaveAttribute('aria-valuenow', before);
-    await user.click(screen.getByRole('button', { name: /Скинути «Пізні пари»/ }));
-    expect(late).toHaveAttribute('aria-valuenow', before);
-    expect(screen.queryByRole('button', { name: /Скинути «/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    // типові ваги після оцінки на реальних запитах: вікна груп 30, 4-та пара 9, очікування між змінами 3
+    expect(screen.getByRole('combobox', { name: 'Вікна груп' })).toHaveTextContent('Дуже важливо');
+    expect(screen.getByRole('combobox', { name: 'Спортзал — як у базовій версії' })).toHaveTextContent('Дуже важливо');
+    expect(screen.getByRole('combobox', { name: '4-та пара зміни' })).toHaveTextContent('Важливо');
+    expect(screen.getByRole('combobox', { name: 'Очікування між змінами' })).toHaveTextContent('Важливо');
+    // чесна підказка: 4-та пара зміни — не правило коледжу
+    expect(screen.getByText(/Це не правило коледжу: у чинному розкладі 4-та пара зміни є в 57 % днів груп/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Типові пріоритети' })).not.toBeInTheDocument();
+    // весь коледж за 1 хв на реальних даних виходив гіршим за чинний розклад — підказка біля ліміту
+    expect(screen.getByText(/Для всього коледжу краще 5 хв/)).toBeInTheDocument();
+  });
+
+  it('422 «навантаження не вміщується» — список проблем під формою (B9)', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post(apiPath('/admin/generation/jobs'), () =>
+        problem({
+          status: 422,
+          slug: 'business-rule',
+          title: 'Порушено правило',
+          code: 'GENERATION_LOAD_EXCEEDS_SLOTS',
+          detail: 'Навантаження не вміщується в сітку занять (1).',
+          extensions: {
+            problems: [
+              { kind: 'GROUP', id: 'g', label: '2ТК', requiredPairs: 20.5, availablePairs: 19, message: 'Група 2ТК: 20,5 пари на тиждень, а в її зміні 19 слотів.' },
+            ],
+          },
+        }),
+      ),
+    );
+    renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
+    await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
+    const alert = await screen.findByRole('alert', { name: 'Навантаження не вміщується в сітку занять' }, LONG);
+    expect(within(alert).getByText('Група 2ТК: 20,5 пари на тиждень, а в її зміні 19 слотів.')).toBeInTheDocument();
+  });
+
+  it('стара задача без нових полів відкривається; SOLVED з hard < 0 — «Готово з конфліктами» (B6, genfix §5)', async () => {
+    const old: GenerationJobDto = {
+      id: 'old-job',
+      semesterId: 'any',
+      status: 'SOLVED',
+      createdAt: '2026-11-11T10:00:00Z',
+      startedAt: '2026-11-11T10:00:00Z',
+      finishedAt: '2026-11-11T10:10:00Z',
+      bestScore: '-1hard/-2089soft',
+      progress: [
+        { t: 0, hard: -34, soft: -9000 },
+        { t: 594, hard: -1, soft: -2089 },
+      ],
+      resultVersionId: null,
+      baseVersionId: null,
+      timeLimitSeconds: 600,
+      analysis: [{ constraint: 'Чисельник і знаменник в одному слоті (бонус)', matchCount: 12, score: '0hard/120soft' }],
+      metricsBefore: null,
+      metricsAfter: { groupWindows: 1, teacherWindows: 123, brokenDays: 22, latePairs: 377, maxPairsPerDay: 4, perGroup: [] },
+      error: null,
+      requestedBy: null,
+    };
+    server.use(
+      http.get(apiPath('/admin/generation/jobs'), () => HttpResponse.json([old])),
+      http.get(apiPath('/admin/generation/jobs/:id'), () => HttpResponse.json(old)),
+    );
+    renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
+    expect(await screen.findByText('Готово з конфліктами', undefined, LONG)).toBeInTheDocument();
+    expect(screen.getByText('З конфліктами')).toBeInTheDocument();
+    expect(screen.getByText('Параметри цього запуску невідомі: сервер їх не зберіг.')).toBeInTheDocument();
+    // без бази «Було» не вигадується з першої точки прогресу (34)
+    const table = screen.getByRole('table', { name: 'Що вийшло' });
+    expect(within(table).getByRole('row', { name: /Жорсткі конфлікти\s*1$/ })).toBeInTheDocument();
+    // бонус — не «що лишилось»
+    expect(screen.getByRole('heading', { name: 'Що вдалося' })).toBeInTheDocument();
   });
 
   it('запуск показує задачу в черзі, а потім хід розвʼязання', async () => {

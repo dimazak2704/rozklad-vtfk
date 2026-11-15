@@ -43,7 +43,7 @@ export function ScoreCharts({ progress, limitSeconds, live, endSeconds }: ScoreC
     <figure className="flex flex-col gap-3" aria-label="Хід розвʼязання">
       <ChartBlock
         title="Мʼякий штраф"
-        note="зважена сума вікон, рваних днів, пізніх пар"
+        note="зважена сума порушень мʼяких правил: вікон, рваних днів, 4-х пар зміни тощо"
         data={data}
         dataKey="soft"
         domainEnd={domainEnd}

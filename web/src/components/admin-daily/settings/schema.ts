@@ -10,6 +10,7 @@ export const LIMITS = SETTINGS_LIMITS;
 const minutes = LIMITS.confirmTimeoutMinutes;
 const hours = LIMITS.hoursPerPair;
 const history = LIMITS.changesHistoryDays;
+const teacherPairs = LIMITS.teacherMaxPairsPerDay;
 
 export const settingsSchema = z.object({
   approvalMode: z.enum(['NOTIFY', 'CONFIRM', 'AUTO'], { error: 'Оберіть режим погодження замін' }),
@@ -44,6 +45,13 @@ export const settingsSchema = z.object({
     .int({ error: 'Лише ціле число днів' })
     .min(history.min, { error: `Від ${history.min} до ${history.max} днів` })
     .max(history.max, { error: `Від ${history.min} до ${history.max} днів` }),
+  // старий сервер поля не надсилає — тоді в формі його немає і в PUT воно не йде
+  teacherMaxPairsPerDay: z
+    .number({ error: 'Вкажіть кількість пар' })
+    .int({ error: 'Лише ціле число пар' })
+    .min(teacherPairs.min, { error: `Від ${teacherPairs.min} до ${teacherPairs.max} пар` })
+    .max(teacherPairs.max, { error: `Від ${teacherPairs.min} до ${teacherPairs.max} пар` })
+    .optional(),
   activeBellProfileId: z.string().nullable(),
 });
 

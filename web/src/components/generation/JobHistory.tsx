@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { parseScore } from '@/api/generation';
+import { jobHardScore, normalizeWeights, solvedWithConflicts } from '@/api/generation';
 import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, Panel } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
-import { elapsedSeconds, formatSeconds } from './model';
+import { elapsedSeconds, formatSeconds, jobScopeText } from './model';
+import { changedPriorities } from './priorities';
 
 const STATUS: Record<GenerationJobDto['status'], { label: string; dot: string }> = {
   QUEUED: { label: 'У черзі', dot: 'bg-[var(--fill-muted)]' },
@@ -14,6 +15,23 @@ const STATUS: Record<GenerationJobDto['status'], { label: string; dot: string }>
   CANCELLED: { label: 'Скасовано', dot: 'bg-[var(--fill-muted)]' },
 };
 
+/** SOLVED з hard < 0 — не зелене «Готово» (genfix B6). */
+const WITH_CONFLICTS = { label: 'З конфліктами', dot: 'bg-[var(--fill-change)]' };
+
+/** Другий рядок запуску (genfix B8): групи, база, змінені пріоритети — щоб запуски можна було розрізнити. */
+function paramsLine(job: GenerationJobDto, versionNames: ReadonlyMap<Uuid, string>): string | null {
+  const scope = jobScopeText(job);
+  if (!scope) return null;
+  const parts = [scope];
+  parts.push(job.baseVersionId ? `від «${versionNames.get(job.baseVersionId) ?? 'видаленої версії'}»` : 'з навантаження');
+  const weights = normalizeWeights(job.weights);
+  const changed = weights ? changedPriorities(weights).length : 0;
+  // стара задача мала лише 5 правил: «змінено N» порівнювало б її з правилами, яких тоді не було
+  if (job.legacyWeights) parts.push('стара версія генератора');
+  else if (changed > 0) parts.push(`пріоритетів змінено: ${changed}`);
+  return parts.join(' · ');
+}
+
 /** Скільки запусків видно одразу; решта — за «Показати всі». */
 const VISIBLE = 5;
 
@@ -21,13 +39,15 @@ interface JobHistoryProps {
   jobs: readonly GenerationJobDto[];
   selectedId: Uuid | null;
   onSelect: (jobId: Uuid) => void;
+  /** Назви версій для «від «…»». */
+  versionNames?: ReadonlyMap<Uuid, string>;
 }
 
 /**
  * Запуски цього семестру: стан словом, коли й скільки тривав. Число жорстких порушень — лише коли
  * воно не нуль; мʼякий штраф — у самому запуску, не в кожному рядку.
  */
-export function JobHistory({ jobs, selectedId, onSelect }: JobHistoryProps) {
+export function JobHistory({ jobs, selectedId, onSelect, versionNames = new Map() }: JobHistoryProps) {
   const [all, setAll] = useState(false);
   const selectedIndex = jobs.findIndex((job) => job.id === selectedId);
   const shown = all || selectedIndex >= VISIBLE ? jobs : jobs.slice(0, VISIBLE);
@@ -35,9 +55,9 @@ export function JobHistory({ jobs, selectedId, onSelect }: JobHistoryProps) {
     <Panel title="Попередні запуски" flush>
       <ul className="divide-y divide-[var(--border-color-separator)]">
         {shown.map((job) => {
-          const score = parseScore(job.bestScore);
-          const status = STATUS[job.status];
-          const hard = score ? Math.abs(score.hard) : 0;
+          const status = solvedWithConflicts(job) ? WITH_CONFLICTS : STATUS[job.status];
+          const hard = Math.abs(jobHardScore(job) ?? 0);
+          const params = paramsLine(job, versionNames);
           return (
             <li key={job.id}>
               <button
@@ -50,7 +70,7 @@ export function JobHistory({ jobs, selectedId, onSelect }: JobHistoryProps) {
                   job.id === selectedId && 'bg-selected hover-fine:bg-selected',
                 )}
               >
-                <span className="inline-flex w-24 items-center gap-2 text-ui font-[550] text-primary">
+                <span className="inline-flex min-w-24 items-center gap-2 text-ui font-[550] text-primary">
                   <span aria-hidden="true" className={cn('size-2 rounded-full', status.dot)} />
                   {status.label}
                 </span>
@@ -59,6 +79,7 @@ export function JobHistory({ jobs, selectedId, onSelect }: JobHistoryProps) {
                   {formatSeconds(elapsedSeconds(job))}
                   {hard > 0 ? <span className="text-cancel"> · {hard} жорстк.</span> : null}
                 </span>
+                {params ? <span className="basis-full text-caption text-secondary">{params}</span> : null}
               </button>
             </li>
           );

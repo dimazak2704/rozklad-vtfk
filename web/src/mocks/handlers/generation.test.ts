@@ -4,7 +4,7 @@ import { ApiError } from '@/api/errors';
 import { appendProgressPoint, DEFAULT_WEIGHTS, parseScore } from '@/api/generation';
 import type { GenerationJobCreated, GenerationJobDto, TemplateLessonDto, TimetableVersionDto } from '@/api/types';
 import { ACTIVE_SEMESTER, GROUPS, PUBLISHED_VERSION_ID, TEMPLATE_LESSONS } from '../fixtures';
-import { solveTimetable } from './generation';
+import { loadProblems, solveTimetable } from './generation';
 import { analyzeLessons } from './timetable';
 
 const jobsPath = '/admin/generation/jobs';
@@ -12,7 +12,7 @@ const jobsPath = '/admin/generation/jobs';
 const softOf = (lessons: readonly TemplateLessonDto[]) => {
   const m = analyzeLessons(lessons).metrics;
   const w = DEFAULT_WEIGHTS;
-  return -(w.windows * (m.groupWindows + m.teacherWindows) + w.brokenDays * m.brokenDays + w.latePairs * m.latePairs);
+  return -(w.windows * m.groupWindows + w.teacherWindows * m.teacherWindows + w.brokenDays * m.brokenDays + w.latePairs * m.latePairs);
 };
 
 async function failure(promise: Promise<unknown>): Promise<ApiError> {
@@ -98,13 +98,62 @@ describe('задачі генерації', () => {
     expect(again.status).toBe(409);
   });
 
+  it('задача несе власні параметри: область, групи, усі 14 ваг, бали й скільки пар переставлено (genfix B8)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = new Date('2026-11-08T10:00:00Z').getTime();
+    vi.setSystemTime(t0);
+    // старий клієнт надсилає лише пʼять ваг: teacherWindows = windows, решта — типові, як у core
+    const { jobId } = await start({ scope: { courses: [4] }, weights: { windows: 20, brokenDays: 10, latePairs: 3, preferences: 5, homeRoom: 1 } });
+    await solved();
+    vi.setSystemTime(t0 + 15_000);
+    const done = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
+    const fourth = GROUPS.filter((g) => g.course === 4);
+    expect(done.scope).toEqual({ groupIds: [], courses: [4] });
+    expect(done.groups?.map((g) => g.id).sort()).toEqual(fourth.map((g) => g.id).sort());
+    expect(done.weights).toEqual({ ...DEFAULT_WEIGHTS, windows: 20, latePairs: 3, teacherWindows: 20 });
+    // поза областю конфлікти (спортзал інших курсів) лишаються: hardScore чесно < 0 — «Готово з конфліктами»
+    expect(done.hardScore).toBe(parseScore(done.bestScore)?.hard);
+    expect(done.softScore).toBe(parseScore(done.bestScore)?.soft);
+    expect(done.metricsBefore?.hardConflicts).toBe(75);
+    expect(done.outcome?.total).toBeGreaterThan(0);
+    expect(done.outcome?.perGroup).toHaveLength(fourth.length);
+    expect(done.outcome?.moved).toBe(done.outcome?.perGroup.reduce((sum, row) => sum + row.moved, 0));
+    // аналіз: бонус позначено, порушення поза областю не входять у scopeMatchCount
+    const halves = done.analysis?.find((a) => a.constraintId === 'Halves paired');
+    expect(halves).toMatchObject({ bonus: true });
+    const broken = done.analysis?.find((a) => a.constraintId === 'Broken day');
+    expect(broken?.scopeMatchCount).toBeLessThanOrEqual(broken?.matchCount ?? 0);
+    // «Що лишилось» має рядки нових правил, які таблиця метрик теж показує
+    for (const id of ['Subgroup alone', 'Group one pair day', 'Teacher shift wait', 'Teacher one pair day']) {
+      expect(done.analysis?.find((a) => a.constraintId === id), id).toMatchObject({ bonus: false });
+    }
+    const lone = done.analysis?.find((a) => a.constraintId === 'Subgroup alone');
+    expect(lone?.matchCount).toBe(done.metricsAfter?.loneSubgroupSlots);
+  });
+
+  it('навантаження, що не вміщується в зміну групи, — 422 GENERATION_LOAD_EXCEEDS_SLOTS зі списком (genfix B9)', () => {
+    const group = GROUPS.find((g) => TEMPLATE_LESSONS.some((l) => l.group.id === g.id)) as (typeof GROUPS)[number];
+    const sample = TEMPLATE_LESSONS.find((l) => l.group.id === group.id) as TemplateLessonDto;
+    const extra = Array.from({ length: 25 }, (_, i) => ({ ...sample, id: `extra-${i}`, subgroup: 0, parity: 'BOTH' as const }));
+    const problems = loadProblems([...TEMPLATE_LESSONS, ...extra]);
+    // група з підгрупами — рядок на кожну підгрупу («4КІ1, підгрупа 1»), без підгруп — один
+    expect(problems.length).toBeGreaterThan(0);
+    for (const problem of problems) {
+      expect(problem).toMatchObject({ kind: 'GROUP', id: group.id });
+      expect(problem.label.startsWith(group.code)).toBe(true);
+      expect(problem.requiredPairs).toBeGreaterThan(problem.availablePairs);
+      expect(problem.message).toMatch(/^Група .+: .+ пари на тиждень, а в її зміні \d+ слотів\.$/);
+    }
+    expect(loadProblems(TEMPLATE_LESSONS)).toEqual([]);
+  });
+
   it('параметри перевіряються як на сервері — 400 з полями', async () => {
     const error = await failure(start({ timeLimitSeconds: 5, scope: { courses: [7] }, weights: { ...DEFAULT_WEIGHTS, windows: -1 } }));
     expect(error.status).toBe(400);
     expect(error.fieldErrors()).toMatchObject({
       timeLimitSeconds: 'Ліміт часу — від 10 до 600 секунд',
       'scope.courses': 'Курс — від 1 до 4',
-      'weights.windows': 'Вага — від 0 до 100',
+      'weights.windows': 'Вага — від 0 до 1000',
     });
   });
 });

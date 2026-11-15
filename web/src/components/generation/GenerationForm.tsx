@@ -1,16 +1,21 @@
 import { RotateCcw } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import { DEFAULT_WEIGHTS } from '@/api/generation';
-import type { PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
+import type { LoadProblemDto, PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
 import { Button, Chip, Combobox, Field, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
 import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
 import { groupDescription } from '@/lib/names';
-import { formatSeconds, validateForm, WEIGHT_FIELDS, WEIGHT_MAX, type GenerationFormState, type ScopeMode } from './model';
+import { formatSeconds, validateForm, type GenerationFormState, type ScopeMode } from './model';
 import { Disclosure } from './Disclosure';
-import { WeightSlider } from './WeightSlider';
+import { LATE_PAIR_HINT, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, type RuleSection } from './priorities';
+import { PrioritySelect } from './PrioritySelect';
+
+const SECTIONS: readonly RuleSection[] = ['groups', 'teachers', 'whole'];
 
 const NO_BASE = 'none';
 const TIME_PRESETS = [30, 60, 120, 300, 600] as const;
+/** З якого ліміту весь коледж на реальних запитах не гірший за чинний розклад (оцінка genfix: 150–180 с). */
+const WHOLE_COLLEGE_SECONDS = 300;
 
 interface GenerationFormProps {
   form: GenerationFormState;
@@ -23,13 +28,27 @@ interface GenerationFormProps {
   submitted: boolean;
   /** Кнопка «Запустити генерацію» — наприкінці панелі, біля параметрів, до яких вона застосовується. */
   submit?: ReactNode;
+  /** Заголовок панелі: «Параметри» або, поки задача йде, «Параметри запуску». */
+  title?: string;
+  /** 422 `GENERATION_LOAD_EXCEEDS_SLOTS`: що не вміщується в сітку — список біля кнопки запуску. */
+  loadProblems?: readonly LoadProblemDto[];
 }
 
 /**
  * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
  * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
  */
-export function GenerationForm({ form, onChange, groups, versions, busy, submitted, submit }: GenerationFormProps) {
+export function GenerationForm({
+  form,
+  onChange,
+  groups,
+  versions,
+  busy,
+  submitted,
+  submit,
+  title = 'Параметри',
+  loadProblems = [],
+}: GenerationFormProps) {
   const errors = submitted ? validateForm(form) : {};
   const groupOptions = useMemo(
     () =>
@@ -37,8 +56,8 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
     [groups],
   );
   const groupsById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
-  // одну змінену вагу скидає її власне «скинути»; загальна кнопка — коли змінено кілька
-  const weightsChanged = WEIGHT_FIELDS.filter(({ key }) => form.weights[key] !== DEFAULT_WEIGHTS[key]).length > 1;
+  // загальне «Типові пріоритети» — коли хоч щось змінено
+  const weightsChanged = changedPriorities(form.weights).length > 0;
   const scopeHint =
     form.scope === 'all'
       ? `Усі ${groups.length} груп.`
@@ -47,7 +66,7 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
         : 'Пари інших груп лишаються як у базовій версії.';
 
   return (
-    <Panel title="Параметри">
+    <Panel title={title}>
       <fieldset disabled={busy} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <RadioGroup<ScopeMode>
@@ -150,6 +169,12 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
             }))}
           />
           {errors.timeLimitSeconds ? <p className="text-caption font-medium text-danger">{errors.timeLimitSeconds}</p> : null}
+          {form.scope === 'all' && form.timeLimitSeconds < WHOLE_COLLEGE_SECONDS ? (
+            <p className="text-caption text-secondary">
+              Для всього коледжу краще 5 хв: за 1–2 хв результат на реальних даних виходив гіршим за чинний розклад
+              (вікна груп, дисципліна двічі на день).
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-4 border-t border-separator pt-4">
@@ -162,43 +187,57 @@ export function GenerationForm({ form, onChange, groups, versions, busy, submitt
                 onClick={() => onChange({ ...form, weights: { ...DEFAULT_WEIGHTS } })}
                 iconStart={<RotateCcw aria-hidden="true" className="size-3.5" />}
               >
-                Скинути ваги
+                Типові пріоритети
               </Button>
             ) : null}
           </div>
-          {WEIGHT_FIELDS.map(({ key, label, hint }) => (
-            <WeightSlider
-              key={key}
-              label={label}
-              hint={hint}
-              value={form.weights[key]}
-              max={WEIGHT_MAX}
-              defaultValue={DEFAULT_WEIGHTS[key]}
-              disabled={busy}
-              onValueChange={(value) =>
-                onChange({
-                  ...form,
-                  weights: { ...form.weights, [key]: value },
-                })
-              }
-            />
+          {SECTIONS.map((section) => (
+            <div key={section} role="group" aria-labelledby={`priority-${section}`} className="flex flex-col gap-1.5">
+              <span id={`priority-${section}`} className="text-caption font-[650] text-secondary">
+                {SECTION_LABEL[section]}
+              </span>
+              {PRIORITY_RULES.filter((rule) => rule.section === section).map((rule) => (
+                <PrioritySelect
+                  key={rule.id}
+                  rule={rule}
+                  weights={form.weights}
+                  disabled={busy}
+                  onChange={(weights) => onChange({ ...form, weights })}
+                />
+              ))}
+            </div>
           ))}
-          <Disclosure summary="Що означають ваги?" contentClassName="ps-5.5">
+          <Disclosure summary="Що означають пріоритети?" contentClassName="ps-5.5">
             <dl className="flex flex-col gap-2 text-caption">
-              {WEIGHT_FIELDS.map(({ key, label, hint }) => (
-                <div key={key}>
-                  <dt className="font-[650] text-primary">{label}</dt>
-                  <dd className="text-secondary">{hint}</dd>
+              {PRIORITIES.map((priority) => (
+                <div key={priority}>
+                  <dt className="font-[650] text-primary">{PRIORITY_LABEL[priority]}</dt>
+                  <dd className="text-secondary">{PRIORITY_HINT[priority]}</dd>
                 </div>
               ))}
-              <div>
-                <dt className="font-[650] text-primary">0</dt>
-                <dd className="text-secondary">Не враховувати це зовсім. Більше число — важливіше.</dd>
-              </div>
+              {PRIORITY_RULES.map((rule) => (
+                <div key={rule.id}>
+                  <dt className="font-[650] text-primary">{rule.label}</dt>
+                  <dd className="text-secondary">{rule.id === 'latePairs' ? LATE_PAIR_HINT : rule.hint}</dd>
+                </div>
+              ))}
             </dl>
           </Disclosure>
         </div>
       </fieldset>
+      {loadProblems.length > 0 ? (
+        <section role="alert" aria-labelledby="load-problems-title" className="mt-5 flex flex-col gap-2 rounded-control border border-cancel bg-danger-subtle px-3 py-2.5">
+          <h3 id="load-problems-title" className="text-ui font-[650] text-danger">
+            Навантаження не вміщується в сітку занять
+          </h3>
+          <ul className="flex list-disc flex-col gap-1 ps-4 text-caption text-primary">
+            {loadProblems.map((problem) => (
+              <li key={`${problem.kind}|${problem.id}`}>{problem.message}</li>
+            ))}
+          </ul>
+          <p className="text-caption text-secondary">Виправте навантаження, недоступність викладачів або аудиторії й запустіть ще раз.</p>
+        </section>
+      ) : null}
       {/* підвал панелі липне до низу екрана, поки панель видно: запуск поруч із параметрами й завжди на виду */}
       {submit ? (
         <div className="sticky bottom-0 z-10 -mx-5 mt-6 -mb-5 flex rounded-b-panel border-t border-separator bg-surface px-5 py-3">{submit}</div>

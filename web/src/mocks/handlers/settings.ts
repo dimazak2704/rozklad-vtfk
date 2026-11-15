@@ -3,7 +3,7 @@
  * область публічних сторінок (handlers/public.ts), витрати ШІ — область імпорту (handlers/import.ts).
  */
 import { http, HttpResponse } from 'msw';
-import { DEFAULT_CHANGES_HISTORY_DAYS, DEFAULT_CONFIRM_TIMEOUT_MINUTES, SETTINGS_LIMITS } from '@/api/settings-limits';
+import { DEFAULT_CHANGES_HISTORY_DAYS, DEFAULT_CONFIRM_TIMEOUT_MINUTES, DEFAULT_TEACHER_MAX_PAIRS_PER_DAY, SETTINGS_LIMITS } from '@/api/settings-limits';
 import type { ApprovalMode, FieldErrorDto, IsoDate, SettingsDto } from '@/api/types';
 import { addDays } from '@/lib/date';
 import { ACTIVE_BELL_PROFILE, BELL_PROFILES } from '../fixtures';
@@ -27,6 +27,7 @@ const seed = (): SettingsDto => ({
   hoursPerPair: 2,
   showTeacherFullNames: false,
   changesHistoryDays: DEFAULT_CHANGES_HISTORY_DAYS,
+  teacherMaxPairsPerDay: DEFAULT_TEACHER_MAX_PAIRS_PER_DAY,
   activeBellProfileId: ACTIVE_BELL_PROFILE.id,
   version: 0,
 });
@@ -91,6 +92,10 @@ export function validateSettings(body: Partial<Record<keyof SettingsDto, unknown
   if (body.changesHistoryDays !== undefined && body.changesHistoryDays !== null && !isInteger(body.changesHistoryDays, history.min, history.max)) {
     errors.push({ field: 'changesHistoryDays', message: `Від ${history.min} до ${history.max} днів` });
   }
+  const teacherPairs = SETTINGS_LIMITS.teacherMaxPairsPerDay;
+  if (body.teacherMaxPairsPerDay !== undefined && body.teacherMaxPairsPerDay !== null && !isInteger(body.teacherMaxPairsPerDay, teacherPairs.min, teacherPairs.max)) {
+    errors.push({ field: 'teacherMaxPairsPerDay', message: `Від ${teacherPairs.min} до ${teacherPairs.max} пар` });
+  }
   if (body.activeBellProfileId !== null && !BELL_PROFILES.some((p) => p.id === body.activeBellProfileId)) {
     errors.push({ field: 'activeBellProfileId', message: 'Такого профілю дзвінків немає' });
   }
@@ -123,6 +128,7 @@ export const handlers = [
       hoursPerPair: body.hoursPerPair as number,
       showTeacherFullNames: body.showTeacherFullNames as boolean,
       changesHistoryDays: (body.changesHistoryDays as number | null | undefined) ?? settings.get().changesHistoryDays,
+      teacherMaxPairsPerDay: (body.teacherMaxPairsPerDay as number | null | undefined) ?? settings.get().teacherMaxPairsPerDay,
       activeBellProfileId: (body.activeBellProfileId as string | null) ?? null,
       version: settings.get().version + 1,
     };
