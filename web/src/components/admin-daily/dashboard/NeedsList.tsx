@@ -87,7 +87,10 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
           const minutes = lesson.startsAt ? timeToMinutes(lesson.startsAt) - clock.minutes : null;
           const started = today && minutes !== null && minutes <= 0;
           const over = started && lesson.endsAt !== null && timeToMinutes(lesson.endsAt) <= clock.minutes;
-          const timing = !today || minutes === null ? null : over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`;
+          // у пари, що чекає відповіді, головне — строк відповіді; час пари вже стоїть ліворуч, двох «за 50 хв» не треба
+          const waiting = entry.state === 'pending' ? pendingInfo(entry.change?.confirmDeadline, now.getTime()) : null;
+          const timing =
+            entry.state === 'pending' || !today || minutes === null ? null : over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`;
           return (
             <li key={`${entry.item.date}-${lesson.id}`}>
               <Row to={`/admin/changes?date=${date}&lesson=${lesson.id}`} className="grid-cols-[3.25rem_minmax(0,1fr)_auto]">
@@ -105,7 +108,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
                     {entry.state === 'declined'
                       ? 'Відмова — потрібен інший варіант'
                       : entry.state === 'pending'
-                        ? `Чекає відповіді · ${pendingInfo(entry.change?.confirmDeadline, now.getTime())?.label ?? ''}`
+                        ? `Чекає відповіді · ${waiting && !waiting.overdue && waiting.minutes >= 1 ? `строк — ${waiting.label}` : (waiting?.label ?? '')}`
                         : 'Потрібне рішення'}
                     {/* коли — одразу після слова стану, а не в далекій правій колонці; на вузькому переноситься цілим */}
                     {timing ? (

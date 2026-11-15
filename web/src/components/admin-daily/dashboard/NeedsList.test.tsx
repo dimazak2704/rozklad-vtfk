@@ -113,7 +113,7 @@ describe('«Що потребує рішення»', () => {
     );
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(1);
-    expect(links[0]).toHaveTextContent(/Чекає відповіді · ще\s50\sхв/);
+    expect(links[0]).toHaveTextContent(/Чекає відповіді · строк — ще\s50\sхв$/);
     expect(links[0]).toHaveAttribute('href', '/admin/changes?date=2026-11-09&lesson=soon');
   });
 });
