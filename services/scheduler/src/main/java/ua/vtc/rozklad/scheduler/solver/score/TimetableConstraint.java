@@ -21,8 +21,9 @@ public enum TimetableConstraint {
     OUTSIDE_SHIFT("Outside shift window", "Пара поза межами зміни", Kind.HARD),
     TEACHER_UNAVAILABLE("Teacher unavailable", "Викладач недоступний у цей час", Kind.HARD),
     SUBGROUPS_APART("Subgroups not together", "Підгрупи дисципліни не одночасно", Kind.HARD),
+    GROUP_WINDOWS("Group windows", "Вікна в розкладі групи", Kind.HARD),
+    FRIDAY_OVERLOAD("Friday overload", "Забагато пар у пʼятницю", Kind.HARD),
 
-    GROUP_WINDOWS("Group windows", "Вікна в розкладі групи", Kind.PENALTY),
     TEACHER_WINDOWS("Teacher windows", "Вікна у викладача", Kind.PENALTY),
     TEACHER_SHIFT_WAIT("Teacher shift wait", "Очікування викладача між змінами", Kind.PENALTY),
     BROKEN_DAY("Broken day", "Рваний день (чисельник і знаменник різні)", Kind.PENALTY),

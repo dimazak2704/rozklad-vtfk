@@ -4,6 +4,7 @@ import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.BROKEN_D
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.COHORT_CONFLICT;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.DISCIPLINE_REPEAT;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.DISCIPLINE_TWICE;
+import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.FRIDAY_OVERLOAD;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.GROUP_ONE_PAIR_DAY;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.GROUP_WINDOWS;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.HALF_PAIRING;
@@ -47,9 +48,9 @@ import ua.vtc.rozklad.scheduler.solver.domain.Teacher;
  * clash of two BOTH lessons costs 2 (numerator and denominator week), a clash involving a half
  * costs 1. Soft weights come from the request ({@link ConstraintWeights}); the weights here are
  * the unit weights. The owner's answers of 15.11.2026 (DOMAIN §13) made subgroups of one discipline
- * together a hard rule; one-pair days and PE in the hall are confirmed rules kept soft with a strong
- * default weight, and the 4th pair of the shift is normal (its preference is off by default). The
- * other soft rules are trade-offs the dispatcher can weigh or switch off.
+ * together, no group windows and at most the Friday limit of pairs hard rules; one-pair days and PE in the
+ * hall are confirmed rules kept soft with a strong default weight, and the 4th pair of the shift is normal (its
+ * preference is off by default). The other soft rules are trade-offs the dispatcher can weigh or switch off.
  *
  * <p>Rules over the same day share one grouping node: the group-day rules read {@link GroupDay}, the
  * teacher-day rules {@link TeacherDay}, the discipline rules {@link DisciplineDay}.
@@ -73,6 +74,7 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 teacherUnavailable(factory),
                 subgroupsApart(factory),
                 groupWindows(factory),
+                fridayOverload(factory),
                 teacherWindows(factory),
                 teacherShiftWait(factory),
                 brokenDays(factory),
@@ -173,15 +175,32 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 .asConstraint(SUBGROUPS_APART.id());
     }
 
-    // ---- soft: group-day rules (one shared grouping)
-
-    /** Free pairs between lessons: per kind of week the worst cohort of the group (B10). */
+    /**
+     * Free pairs between lessons, per kind of week the worst cohort of the group (B10), on a day the run may change
+     * (owner's rule of 15.11.2026: «вікна групам не варто лишати, краще викладачам вікна»). A lone subgroup pair at the
+     * edge of the day is not a window ({@link GroupDay#windows()}), so one teacher's two subgroups one after the other
+     * (the soft rule below) may stand first or last. A day with only pinned lessons is exempt: a window between lessons
+     * pinned outside the scope never makes a run infeasible. Teacher windows stay a soft trade-off.
+     */
     Constraint groupWindows(ConstraintFactory factory) {
         return groupDays(factory)
-                .filter((group, weekday, day) -> day.windows() > 0)
-                .penalize(HardSoftScore.ONE_SOFT, (group, weekday, day) -> day.windows())
+                .filter((group, weekday, day) -> day.hardWindows() > 0)
+                .penalize(HardSoftScore.ONE_HARD, (group, weekday, day) -> day.hardWindows())
                 .asConstraint(GROUP_WINDOWS.id());
     }
+
+    /**
+     * More occupied pairs on Friday than the group's limit (owner's rule of 15.11.2026: Friday is an unloading day; the
+     * college setting «Максимум пар у пʼятницю», default 3), per kind of week, on a day the run may change.
+     */
+    Constraint fridayOverload(ConstraintFactory factory) {
+        return groupDays(factory)
+                .filter((group, weekday, day) -> day.hardPairsAboveDayLimit() > 0)
+                .penalize(HardSoftScore.ONE_HARD, (group, weekday, day) -> day.hardPairsAboveDayLimit())
+                .asConstraint(FRIDAY_OVERLOAD.id());
+    }
+
+    // ---- soft: group-day rules (one shared grouping)
 
     /** «Рваний день»: the numerator and denominator weeks of a group-day differ in pairs or start. */
     Constraint brokenDays(ConstraintFactory factory) {

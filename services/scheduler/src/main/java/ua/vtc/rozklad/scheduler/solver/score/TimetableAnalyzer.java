@@ -161,7 +161,9 @@ public final class TimetableAnalyzer {
         days.forEach((key, counts) -> {
             GroupDay day = counts.result();
             boolean inScope = scope.groupDays.contains(key);
-            tallies.get(TimetableConstraint.GROUP_WINDOWS).addIfPositive(day.windows(), inScope);
+            // жорсткі правила дня судять лише день, який розвʼязувач може змінити (є вільне заняття)
+            tallies.get(TimetableConstraint.GROUP_WINDOWS).addIfPositive(day.hardWindows(), inScope);
+            tallies.get(TimetableConstraint.FRIDAY_OVERLOAD).addIfPositive(day.hardPairsAboveDayLimit(), inScope);
             tallies.get(TimetableConstraint.BROKEN_DAY).addIfPositive(day.brokenness(), inScope);
             tallies.get(TimetableConstraint.GROUP_ONE_PAIR_DAY).addIfPositive(day.onePairWeeks(), inScope);
             tallies.get(TimetableConstraint.SUBGROUP_ALONE).addIfPositive(day.loneSubgroupSlots(), inScope);

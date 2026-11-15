@@ -2,6 +2,7 @@ package ua.vtc.rozklad.scheduler.solver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 import ua.vtc.rozklad.scheduler.solver.domain.Room;
+import ua.vtc.rozklad.scheduler.solver.domain.StudentGroup;
 import ua.vtc.rozklad.scheduler.solver.domain.Teacher;
 import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
@@ -348,7 +350,6 @@ class TimetableProblemFactoryTest {
                 new GenerationWeights(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14));
 
         var overrides = timetable.getConstraintWeightOverrides();
-        assertThat(overrides.getConstraintWeight(TimetableConstraint.GROUP_WINDOWS.id())).isEqualTo(soft(1));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_WINDOWS.id())).isEqualTo(soft(6));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_SHIFT_WAIT.id())).isEqualTo(soft(7));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.BROKEN_DAY.id())).isEqualTo(soft(2));
@@ -368,8 +369,11 @@ class TimetableProblemFactoryTest {
         assertThat(overrides.getConstraintWeight(TimetableConstraint.SPECIAL_ROOM_LOST.id())).isEqualTo(soft(14));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.DISCIPLINE_REPEAT.id())).isEqualTo(soft(4));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_CONFLICT.id())).isNull();
-        // підгрупи однієї дисципліни разом — правило коледжу (жорстке): жодна вага запиту його не вимикає
+        // правила коледжу (жорсткі): підгрупи разом, без вікон у групи, межа пар у пʼятницю — жодна вага запиту
+        // їх не вимикає; {@code windows} лишився в запиті лише для сумісності
         assertThat(overrides.getConstraintWeight(TimetableConstraint.SUBGROUPS_APART.id())).isNull();
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.GROUP_WINDOWS.id())).isNull();
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.FRIDAY_OVERLOAD.id())).isNull();
     }
 
     /** A request of the first schema (five weights): teacher windows follow {@code windows}. */
@@ -527,6 +531,18 @@ class TimetableProblemFactoryTest {
         assertThat(snapshot.units().getFirst().siblingKey()).isNull();
         assertThat(timetable.getTeachers().getFirst().getMaxPairsPerDay()).isNull();
         assertThat(timetable.getUnits().getFirst().getSiblingKey()).isNull();
+        assertThat(timetable.getGroups().getFirst().getFridayMaxPairs()).as("no Friday limit").isNull();
+    }
+
+    /** The Friday limit of a group comes from the snapshot (core's setting); a group without it has none. */
+    @Test
+    void groupsGetTheirFridayLimit() {
+        Timetable timetable = factory.create(snapshot(List.of(unit("u1").build())), GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getGroups()).extracting(StudentGroup::getCode, StudentGroup::getFridayMaxPairs)
+                .containsExactly(tuple("4КІ1", 3), tuple("1КІ2", null), tuple("2ТК1", null));
+        assertThat(timetable.getGroups().getFirst().pairsAboveDayLimit(5, 4)).isEqualTo(1);
+        assertThat(timetable.getGroups().getFirst().pairsAboveDayLimit(4, 4)).as("only Friday").isZero();
     }
 
     @Test
@@ -646,7 +662,7 @@ class TimetableProblemFactoryTest {
             windows.add(new ProblemSnapshot.ShiftWindow(1, weekday, 1, 4));
         }
         return new ProblemSnapshot(timeslots(), windows,
-                List.of(new ProblemSnapshot.Group(GROUP, "4КІ1", 25, 1, List.of()),
+                List.of(new ProblemSnapshot.Group(GROUP, "4КІ1", 25, 1, List.of(), 3),
                         new ProblemSnapshot.Group(SPLIT_GROUP, "1КІ2", 28, 1, List.of(1, 2)),
                         new ProblemSnapshot.Group(THREE_SUBGROUPS, "2ТК1", 30, 1, List.of(1, 2, 3))),
                 List.of(new ProblemSnapshot.Room(ROOM_304, "304", RoomType.CLASSROOM, 30, 1),

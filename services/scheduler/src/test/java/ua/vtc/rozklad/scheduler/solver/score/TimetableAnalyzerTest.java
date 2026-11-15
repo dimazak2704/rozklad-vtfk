@@ -50,6 +50,7 @@ class TimetableAnalyzerTest {
         CONSTRAINTS.put(TimetableConstraint.OUTSIDE_SHIFT, TimetableConstraintProvider::outsideShift);
         CONSTRAINTS.put(TimetableConstraint.TEACHER_UNAVAILABLE, TimetableConstraintProvider::teacherUnavailable);
         CONSTRAINTS.put(TimetableConstraint.GROUP_WINDOWS, TimetableConstraintProvider::groupWindows);
+        CONSTRAINTS.put(TimetableConstraint.FRIDAY_OVERLOAD, TimetableConstraintProvider::fridayOverload);
         CONSTRAINTS.put(TimetableConstraint.TEACHER_WINDOWS, TimetableConstraintProvider::teacherWindows);
         CONSTRAINTS.put(TimetableConstraint.BROKEN_DAY, TimetableConstraintProvider::brokenDays);
         CONSTRAINTS.put(TimetableConstraint.LATE_PAIR, TimetableConstraintProvider::latePairs);
@@ -107,6 +108,19 @@ class TimetableAnalyzerTest {
 
     @Test
     void zeroWeightKeepsMatchesButScoresNothing() {
+        Timetable messy = perturb(planted(new GenerationWeights(10, 0, 3, 5, 1)), 0.2);
+
+        TimetableAnalyzer.ConstraintResult broken = TimetableAnalyzer.analyze(messy).stream()
+                .filter(result -> result.constraint() == TimetableConstraint.BROKEN_DAY)
+                .findFirst().orElseThrow();
+
+        assertThat(broken.matchCount()).isPositive();
+        assertThat(broken.score()).isEqualTo(HardSoftScore.ZERO);
+    }
+
+    /** Group windows are hard since the owner's answers: the old {@code windows} weight no longer scales them. */
+    @Test
+    void groupWindowsAreHardWhateverTheWindowsWeight() {
         Timetable messy = perturb(planted(new GenerationWeights(0, 10, 3, 5, 1)), 0.2);
 
         TimetableAnalyzer.ConstraintResult windows = TimetableAnalyzer.analyze(messy).stream()
@@ -114,7 +128,7 @@ class TimetableAnalyzerTest {
                 .findFirst().orElseThrow();
 
         assertThat(windows.matchCount()).isPositive();
-        assertThat(windows.score()).isEqualTo(HardSoftScore.ZERO);
+        assertThat(windows.score()).isEqualTo(HardSoftScore.ofHard(-windows.impact()));
     }
 
     /** A small week built so that every rule added after the generator review matches. */
@@ -146,9 +160,13 @@ class TimetableAnalyzerTest {
         assertThat(free).filteredOn(result -> result.matchCount() > 0)
                 .allSatisfy(result -> assertThat(result.scopeMatchCount()).as(result.constraint().name())
                         .isEqualTo(result.matchCount()));
-        // два закріплені підгрупові заняття не разом — виняток жорсткого правила, а не порушення
-        assertThat(pinned).filteredOn(result -> result.constraint() == TimetableConstraint.SUBGROUPS_APART)
-                .singleElement().satisfies(result -> assertThat(result.matchCount()).isZero());
+        // закріплені заняття не порушують жорстких правил: підгрупи не разом, вікно групи, понад межу в пʼятницю
+        assertThat(pinned).filteredOn(result -> NewRulesWeek.PINNED_EXEMPT.contains(result.constraint()))
+                .hasSize(NewRulesWeek.PINNED_EXEMPT.size())
+                .allSatisfy(result -> assertThat(result.matchCount()).as(result.constraint().name()).isZero());
+        assertThat(free).filteredOn(result -> NewRulesWeek.PINNED_EXEMPT.contains(result.constraint()))
+                .allSatisfy(result -> assertThat(result.score().hardScore()).as(result.constraint().name())
+                        .isNegative());
         assertThat(free).filteredOn(result -> result.constraint() == TimetableConstraint.SUBGROUPS_APART)
                 .singleElement().satisfies(result -> assertThat(result.score().hardScore()).isEqualTo(-2));
     }

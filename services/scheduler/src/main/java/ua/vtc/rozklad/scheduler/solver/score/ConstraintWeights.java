@@ -9,8 +9,9 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
 /**
  * Soft weights of a generation request mapped to constraints (0 switches a constraint off):
  * <ul>
- *   <li>{@code windows} → group windows; {@code teacherWindows} (falls back to {@code windows} in older
- *       requests) → teacher windows; {@code teacherShiftWait} → a teacher's wait between shifts;</li>
+ *   <li>{@code teacherWindows} (falls back to {@code windows} in older requests) → teacher windows;
+ *       {@code teacherShiftWait} → a teacher's wait between shifts. {@code windows} weighs nothing since group
+ *       windows became a hard rule (owner, 15.11.2026); the request keeps it for compatibility;</li>
  *   <li>{@code brokenDays} → broken days and the bonus for paired halves; {@code latePairs} → the 4th
  *       pair of the shift;</li>
  *   <li>{@code preferences} → unwanted teacher slots; {@code homeRoom} → room preference (the teacher's
@@ -38,7 +39,6 @@ public final class ConstraintWeights {
             throw new IllegalArgumentException("disciplineRepeatWeight must not be negative");
         }
         Map<String, HardSoftScore> overrides = new LinkedHashMap<>();
-        soft(overrides, TimetableConstraint.GROUP_WINDOWS, weights.windows());
         soft(overrides, TimetableConstraint.TEACHER_WINDOWS, weights.teacherWindows());
         soft(overrides, TimetableConstraint.TEACHER_SHIFT_WAIT, weights.teacherShiftWait());
         soft(overrides, TimetableConstraint.BROKEN_DAY, weights.brokenDays());

@@ -62,7 +62,8 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * compatible rooms stay in the range, so a full or closed hall costs soft points instead of making the run
  * infeasible, and weight 0 switches the preference off. Core sends no derived room type.
  *
- * <p>Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
+ * <p>Each group gets the Friday limit of the snapshot (hard rule «Забагато пар у пʼятницю»; absent = none).
+ * Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
  * week: the weekdays of the teacher's base and pinned lessons in that week, but at least the days the
  * teacher's load needs at the daily limit (4 pairs when there is none). Sibling keys are kept only on
  * free units of one group with distinct subgroups; any other use is dropped with a warning. A key whose copies
@@ -102,7 +103,7 @@ public final class TimetableProblemFactory {
         Map<Integer, ShiftWindow> windows = shiftWindows(snapshot.shiftWindows());
         Map<UUID, StudentGroup> groups = snapshot.groups().stream()
                 .map(group -> new StudentGroup(group.id(), group.code(), group.size(), group.shift(),
-                        group.subgroups(), windows.get(group.shift())))
+                        group.subgroups(), windows.get(group.shift()), group.fridayMaxPairs()))
                 .collect(Collectors.toMap(StudentGroup::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
 
         Set<String> siblingKeys = siblingKeys(snapshot.units());

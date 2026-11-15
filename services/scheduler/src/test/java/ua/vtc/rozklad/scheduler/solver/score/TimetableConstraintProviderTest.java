@@ -42,6 +42,10 @@ class TimetableConstraintProviderTest {
             FIRST_SHIFT);
     private static final StudentGroup EA1 = new StudentGroup(UUID.randomUUID(), "2ЕА1", 30, 2, List.of(),
             SECOND_SHIFT);
+    /** The college's Friday limit (setting «Максимум пар у пʼятницю», default 3). */
+    private static final StudentGroup RT1 = new StudentGroup(UUID.randomUUID(), "4РТ1", 25, 1, List.of(), FIRST_SHIFT, 3);
+    private static final StudentGroup M1 = new StudentGroup(UUID.randomUUID(), "1М", 28, 1, List.of(1, 2), FIRST_SHIFT,
+            3);
 
     private static final Teacher KRENTSIN = new Teacher(UUID.randomUUID(), "Кренцін М.Д.",
             Set.of(slot(1, 1)), Set.of(slot(2, 1)));
@@ -265,6 +269,10 @@ class TimetableConstraintProviderTest {
         }
     }
 
+    /**
+     * Group windows are a hard rule since the owner's answers, round 2 (15.11.2026): «вікна групам не варто лишати,
+     * краще викладачам вікна». Teacher windows stay soft.
+     */
     @Nested
     class Windows {
 
@@ -272,6 +280,35 @@ class TimetableConstraintProviderTest {
         void freePairBetweenLessonsIsAWindowInBothWeeks() {
             verifier.verifyThat(TimetableConstraintProvider::groupWindows)
                     .given(lesson(KI1, slot(1, 1), BOTH).build(), lesson(KI1, slot(1, 3), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void aGroupWindowIsHardWhateverTheRequestWeights() {
+            LessonUnit first = lesson(KI1, slot(1, 1), BOTH).build();
+            LessonUnit third = lesson(KI1, slot(1, 3), BOTH).build();
+            Timetable timetable = new Timetable(List.of(), List.of(ROOM_6), List.of(), List.of(KI1),
+                    List.of(first, third), ConstraintWeights.of(new GenerationWeights(0, 0, 0, 0, 0), 0));
+
+            // вага windows 0 вікна групи не вимикає: −2 hard; вікон викладача немає (без викладача)
+            verifier.verifyThat().givenSolution(timetable).scores(HardSoftScore.ofHard(-2));
+        }
+
+        /** A day of lessons pinned outside the scope never makes the run infeasible. */
+        @Test
+        void aWindowBetweenPinnedLessonsOnlyIsExempt() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI1, slot(1, 1), BOTH).pinned().build(), lesson(KI1, slot(1, 3), BOTH).pinned().build(),
+                            lesson(KI2, slot(1, 1), BOTH).pinned().build(), lesson(KI2, slot(1, 4), BOTH).pinned().build())
+                    .hasNoImpact();
+        }
+
+        /** A free lesson on the day makes the day the run's: the window counts, the solver can fill it or leave. */
+        @Test
+        void aFreeLessonOnTheDayMakesThePinnedWindowCount() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI1, slot(1, 1), BOTH).pinned().build(), lesson(KI1, slot(1, 3), BOTH).build(),
+                            lesson(KI1, slot(2, 1), BOTH).pinned().build(), lesson(KI1, slot(2, 3), BOTH).pinned().build())
                     .penalizesBy(2);
         }
 
@@ -309,12 +346,57 @@ class TimetableConstraintProviderTest {
 
         @Test
         void worstSubgroupCountsWhenSubgroupsDiffer() {
-            // підгрупа 1: пари 1, 4 (2 вікна); підгрупа 2: пари 1, 3 (1 вікно) — рахується гірша
+            // підгрупа 1: пари 1, 4 (2 вікна); підгрупа 2: пари 1, 2, 4 (1 вікно) — рахується гірша
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).build(), lesson(KI2, slot(1, 4), BOTH).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(2).build())
+                    .penalizesBy(4);
+            // з порожньою парою 2 й самотньою парою 3 на краю дня: для підгрупи 1 вікно — лише порожня пара 2
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(2, 1), BOTH).build(),
+                            lesson(KI2, slot(2, 4), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).subgroup(2).build())
+                    .penalizesBy(2);
+        }
+
+        /**
+         * One teacher's two subgroups one after the other (the soft «Subgroups apart») at the end or the start of the
+         * day: the subgroup that waits while the other studies has no window, a lone subgroup pair at the edge of
+         * the day is the college's way (DOMAIN §13 Q4).
+         */
+        @Test
+        void loneSubgroupPairsAtTheEdgeOfTheDayAreNoWindow() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).build(), lesson(KI2, slot(1, 2), BOTH).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 4), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 1), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(2, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(2, 3), BOTH).build(), lesson(KI2, slot(2, 4), BOTH).build(),
+                            lesson(KI2, slot(3, 1), BOTH).build(), lesson(KI2, slot(3, 2), BOTH).subgroup(1).build())
+                    .hasNoImpact();
+        }
+
+        /** Between two pairs of the whole group a lone subgroup pair stays a window for the subgroup that waits. */
+        @Test
+        void oneTeachersSubgroupsInTheMiddleOfTheDayLeaveWindows() {
             verifier.verifyThat(TimetableConstraintProvider::groupWindows)
                     .given(lesson(KI2, slot(1, 1), BOTH).build(),
-                            lesson(KI2, slot(1, 4), BOTH).subgroup(1).build(),
-                            lesson(KI2, slot(1, 3), BOTH).subgroup(2).build())
-                    .penalizesBy(4);
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 3), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 4), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        /** Parallel subgroups make a full pair: the day around them is judged like a whole-group day. */
+        @Test
+        void parallelSubgroupsAreAFullPair() {
+            verifier.verifyThat(TimetableConstraintProvider::groupWindows)
+                    .given(lesson(KI2, slot(1, 1), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 1), BOTH).subgroup(2).build(),
+                            lesson(KI2, slot(1, 2), BOTH).subgroup(1).build(),
+                            lesson(KI2, slot(1, 3), BOTH).build())
+                    .penalizesBy(2);
         }
 
         @Test
@@ -325,6 +407,92 @@ class TimetableConstraintProviderTest {
                             lesson(EA1, slot(2, 5), BOTH).teacher(NEPYIVODA).build(),
                             lesson(KI1, slot(2, 6), BOTH).build())
                     .penalizesBy(4);
+        }
+    }
+
+    /**
+     * Owner's rule, round 2 (15.11.2026): Friday is an unloading day, at most the setting «Максимум пар у пʼятницю»
+     * (default 3) for every group; the pairs of the group's row count (any subgroup at a lesson).
+     */
+    @Nested
+    class FridayLimit {
+
+        @Test
+        void aFourthFridayPairIsHardInBothWeeks() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(), lesson(RT1, slot(5, 4), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void aHalfAboveTheLimitCountsInItsWeekOnly() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(), lesson(RT1, slot(5, 4), NUMERATOR).build())
+                    .penalizesBy(1);
+        }
+
+        @Test
+        void subgroupsOnDifferentPairsAreTwoPairsOfTheGroup() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(M1, slot(5, 1), BOTH).build(), lesson(M1, slot(5, 2), BOTH).build(),
+                            lesson(M1, slot(5, 3), BOTH).subgroup(1).build(),
+                            lesson(M1, slot(5, 3), BOTH).subgroup(2).build(),
+                            lesson(M1, slot(5, 4), BOTH).subgroup(1).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void otherDaysGroupsWithoutALimitAndThreeFridayPairsAreFine() {
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(RT1, slot(4, 1), BOTH).build(), lesson(RT1, slot(4, 2), BOTH).build(),
+                            lesson(RT1, slot(4, 3), BOTH).build(), lesson(RT1, slot(4, 4), BOTH).build(),
+                            lesson(RT1, slot(5, 1), BOTH).build(), lesson(RT1, slot(5, 2), BOTH).build(),
+                            lesson(RT1, slot(5, 3), BOTH).build(),
+                            lesson(KI1, slot(5, 1), BOTH).build(), lesson(KI1, slot(5, 2), BOTH).build(),
+                            lesson(KI1, slot(5, 3), BOTH).build(), lesson(KI1, slot(5, 4), BOTH).build())
+                    .hasNoImpact();
+        }
+
+        /** The published 4РТ1 has 4 Friday pairs: pinned outside the scope it does not make the run infeasible. */
+        @Test
+        void aPinnedFridayAboveTheLimitIsExemptUntilAFreeLessonJoinsIt() {
+            List<LessonUnit> pinnedFriday = List.of(lesson(RT1, slot(5, 1), BOTH).pinned().build(),
+                    lesson(RT1, slot(5, 2), BOTH).pinned().build(), lesson(RT1, slot(5, 3), BOTH).pinned().build(),
+                    lesson(RT1, slot(5, 4), BOTH).pinned().build());
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(pinnedFriday.toArray())
+                    .hasNoImpact();
+            List<LessonUnit> withFree = new ArrayList<>(pinnedFriday.subList(0, 3));
+            withFree.add(lesson(RT1, slot(5, 4), BOTH).build());
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(withFree.toArray())
+                    .penalizesBy(2);
+        }
+
+        /** The limit is the college setting the snapshot carries: 4 lets a fourth pair stand, 2 forbids a third. */
+        @Test
+        void theLimitFollowsTheSetting() {
+            StudentGroup four = new StudentGroup(UUID.randomUUID(), "4РТ2", 25, 1, List.of(), FIRST_SHIFT, 4);
+            StudentGroup two = new StudentGroup(UUID.randomUUID(), "1КІ1", 25, 1, List.of(), FIRST_SHIFT, 2);
+            verifier.verifyThat(TimetableConstraintProvider::fridayOverload)
+                    .given(lesson(four, slot(5, 1), BOTH).build(), lesson(four, slot(5, 2), BOTH).build(),
+                            lesson(four, slot(5, 3), BOTH).build(), lesson(four, slot(5, 4), BOTH).build(),
+                            lesson(two, slot(5, 1), BOTH).build(), lesson(two, slot(5, 2), BOTH).build(),
+                            lesson(two, slot(5, 3), BOTH).build())
+                    .penalizesBy(2);
+        }
+
+        @Test
+        void theLimitIsHardWhateverTheRequestWeights() {
+            List<LessonUnit> friday = List.of(lesson(RT1, slot(5, 1), BOTH).build(),
+                    lesson(RT1, slot(5, 2), BOTH).build(), lesson(RT1, slot(5, 3), BOTH).build(),
+                    lesson(RT1, slot(5, 4), BOTH).build());
+            Timetable timetable = new Timetable(List.of(), List.of(ROOM_6), List.of(), List.of(RT1), friday,
+                    ConstraintWeights.of(new GenerationWeights(0, 0, 0, 0, 0), 0));
+
+            verifier.verifyThat().givenSolution(timetable).scores(HardSoftScore.ofHard(-2));
         }
     }
 
@@ -893,8 +1061,9 @@ class TimetableConstraintProviderTest {
         LessonUnit late = lesson(KI1, slot(1, 4), BOTH).desiredRoom(ROOM_6).room(ROOM_304).build();
         LessonUnit first = lesson(KI1, slot(1, 1), BOTH).build();
         Timetable weighted = timetable(List.of(late, first), new GenerationWeights(1, 0, 3, 0, 2));
-        // вікна: пари 2 і 3 в обох тижнях = 4×1; пізня пара 2×3; не своя аудиторія 2×2; замала аудиторія 2 hard
-        verifier.verifyThat().givenSolution(weighted).scores(HardSoftScore.of(-2, -4 - 6 - 4));
+        // вікна групи (жорсткі, без ваги): пари 2 і 3 в обох тижнях = 4 hard; замала аудиторія 2 hard;
+        // пізня пара 2×3; не своя аудиторія 2×2
+        verifier.verifyThat().givenSolution(weighted).scores(HardSoftScore.of(-4 - 2, -6 - 4));
     }
 
     @Test
