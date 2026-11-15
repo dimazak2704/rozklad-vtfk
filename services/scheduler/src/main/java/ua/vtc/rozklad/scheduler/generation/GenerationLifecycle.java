@@ -2,6 +2,7 @@ package ua.vtc.rozklad.scheduler.generation;
 
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -13,9 +14,11 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
+import ua.vtc.rozklad.scheduler.config.SchedulerProperties;
 import ua.vtc.rozklad.scheduler.messaging.EventPublisher;
 import ua.vtc.rozklad.scheduler.solver.TimetableResults;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
@@ -32,6 +35,10 @@ public class GenerationLifecycle {
 
     static final String NOT_PLACED = "За відведений час вдалося розставити лише %d з %d занять. "
             + "Збільште ліміт часу генерації.";
+    static final String NOT_PLACED_AUTO = "За найдовший дозволений час вдалося розставити лише %d з %d занять. "
+            + "Повідомте адміністратора.";
+    /** Measured solving time may fall a little short of the limit that stopped the solver. */
+    static final Duration LIMIT_TOLERANCE = Duration.ofSeconds(1);
     static final String SOLVER_ERROR = "Генерацію зупинено через внутрішню помилку планувальника. "
             + "Спробуйте ще раз або повідомте адміністратора.";
     static final String INTERRUPTED = "Генерацію перервано: сервіс планувальника перезапускався. "
@@ -43,14 +50,17 @@ public class GenerationLifecycle {
     private final EventPublisher publisher;
     private final JsonMapper jsonMapper;
     private final Clock clock;
+    private final SchedulerProperties properties;
     private final TransactionTemplate transactions;
 
     public GenerationLifecycle(GenerationJobRepository repository, EventPublisher publisher, JsonMapper jsonMapper,
-                               Clock clock, PlatformTransactionManager transactionManager) {
+                               Clock clock, PlatformTransactionManager transactionManager,
+                               SchedulerProperties properties) {
         this.repository = repository;
         this.publisher = publisher;
         this.jsonMapper = jsonMapper;
         this.clock = clock;
+        this.properties = properties;
         // викликається з потоків розв'язувача та з afterCommit уже завершених транзакцій — завжди власна транзакція
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -73,25 +83,43 @@ public class GenerationLifecycle {
     }
 
     /**
-     * The solver stopped (time limit, plateau, cancel or shutdown) with its best timetable. A
-     * cancelled job keeps the best timetable found so far, so the dispatcher may still apply it.
+     * The solver stopped (time limit, plateau, safety cap, cancel or shutdown) with its best timetable after
+     * {@code solvingTime}. A cancelled job keeps the best timetable found so far, so the dispatcher may still apply it.
      */
-    public void finishWithSolution(UUID jobId, Timetable solution, boolean interruptedByShutdown) {
+    public void finishWithSolution(UUID jobId, Timetable solution, Duration solvingTime,
+                                   boolean interruptedByShutdown) {
         if (interruptedByShutdown) {
             complete(jobId, job -> Outcome.failed(INTERRUPTED));
             return;
         }
         if (!solution.isFullyPlaced()) {
             long placed = solution.getUnits().stream().filter(LessonUnit::isPlaced).count();
-            String notPlaced = NOT_PLACED.formatted(placed, solution.getUnits().size());
-            complete(jobId, job -> job.isCancelRequested() ? Outcome.cancelledWithoutResult() : Outcome.failed(notPlaced));
+            int total = solution.getUnits().size();
+            complete(jobId, job -> job.isCancelRequested() ? Outcome.cancelledWithoutResult()
+                    : Outcome.failed((job.isAutoMode() ? NOT_PLACED_AUTO : NOT_PLACED).formatted(placed, total)));
             return;
         }
         HardSoftScore score = solution.getScore();
         List<GenerationCompleted.Assignment> assignments = TimetableResults.assignments(solution);
         List<GenerationCompleted.ConstraintScore> analysis = TimetableResults.analysis(solution);
         complete(jobId, job -> new Outcome(job.isCancelRequested() ? GenerationStatus.CANCELLED : GenerationStatus.SOLVED,
-                score.hardScore(), score.softScore(), assignments, analysis, null));
+                score.hardScore(), score.softScore(), assignments, analysis, null, stopReason(job, solvingTime)));
+    }
+
+    /**
+     * Why a job with a timetable stopped. Timefold does not say which termination fired, so a run that lasted its
+     * limit (or the auto mode's safety cap) counts as stopped by it, and a shorter one as stopped by a plateau.
+     */
+    GenerationStopReason stopReason(GenerationJob job, Duration solvingTime) {
+        if (job.isCancelRequested()) {
+            return GenerationStopReason.STOPPED;
+        }
+        Duration limit = job.isAutoMode() ? properties.auto().timeCap()
+                : Duration.ofSeconds(job.getTimeLimitSeconds());
+        if (solvingTime.compareTo(limit.minus(LIMIT_TOLERANCE)) >= 0) {
+            return job.isAutoMode() ? GenerationStopReason.SAFETY_CAP : GenerationStopReason.TIME_LIMIT;
+        }
+        return GenerationStopReason.NO_IMPROVEMENT;
     }
 
     public void fail(UUID jobId, String error) {
@@ -116,7 +144,7 @@ public class GenerationLifecycle {
             Outcome outcome = decide.apply(job);
             GenerationCompleted completed = new GenerationCompleted(EventEnvelope.create(clock), jobId,
                     outcome.status(), orZero(outcome.hardScore()), orZero(outcome.softScore()), outcome.assignments(),
-                    outcome.analysis(), outcome.error());
+                    outcome.analysis(), outcome.error(), outcome.stopReason());
             job.finish(outcome.status(), outcome.hardScore(), outcome.softScore(), outcome.error(),
                     jsonMapper.valueToTree(completed), clock.instant());
             return completed;

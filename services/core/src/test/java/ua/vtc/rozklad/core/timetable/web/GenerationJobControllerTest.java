@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -67,6 +68,40 @@ class GenerationJobControllerTest {
                 .andExpect(jsonPath("$.jobId").value(JOB.toString()));
         verify(generation).start(new GenerationRequestCommand(SEMESTER, List.of(GROUP), List.of(4), null, 120,
                 new GenerationWeights(10, 20, 3, 5, 1)), "admin");
+    }
+
+    /** Auto mode: without {@code timeLimitSeconds} the request is valid and carries no limit. */
+    @Test
+    void startWithoutTimeLimitIsAutoMode() throws Exception {
+        given(generation.start(any(GenerationRequestCommand.class), eq("admin"))).willReturn(job(GenerationStatus.QUEUED));
+
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","scope":{"courses":[4]}}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","scope":{"courses":[4]},"timeLimitSeconds":null}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isAccepted());
+
+        verify(generation, times(2)).start(new GenerationRequestCommand(SEMESTER, List.of(), List.of(4), null, null,
+                null), "admin");
+    }
+
+    @Test
+    void anOldRequestKeepsItsLimitWithinTheOldRange() throws Exception {
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","timeLimitSeconds":601}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("timeLimitSeconds"));
+        verify(generation, never()).start(any(), any());
     }
 
     @Test
@@ -140,9 +175,10 @@ class GenerationJobControllerTest {
         given(generation.cancel(JOB)).willReturn(job(GenerationStatus.CANCELLED));
         mockMvc.perform(post("/api/admin/generation/jobs/{id}/cancel", JOB).with(TestJwts.admin()))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.status").value("CANCELLED"));
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.stopRequested").value(false));
 
-        given(generation.cancel(JOB)).willThrow(new ConflictException("Генерацію вже завершено: скасувати її не можна."));
+        given(generation.cancel(JOB)).willThrow(new ConflictException("Генерацію вже завершено: зупинити її не можна."));
         mockMvc.perform(post("/api/admin/generation/jobs/{id}/cancel", JOB).with(TestJwts.admin()))
                 .andExpect(status().isConflict());
     }
@@ -162,7 +198,10 @@ class GenerationJobControllerTest {
                 .andExpect(jsonPath("$[0].scope.courses[0]").value(4))
                 .andExpect(jsonPath("$[0].groups[0].code").value("4КІ1"))
                 .andExpect(jsonPath("$[0].weights.teacherWindows").value(10))
-                .andExpect(jsonPath("$[0].weights.stability").value(1));
+                .andExpect(jsonPath("$[0].weights.stability").value(1))
+                .andExpect(jsonPath("$[0].timeLimitSeconds").value(120))
+                .andExpect(jsonPath("$[0].stopRequested").value(false))
+                .andExpect(jsonPath("$[0].stopReason").doesNotExist());
         mockMvc.perform(get("/api/admin/generation/jobs").with(TestJwts.teacher())).andExpect(status().isForbidden());
     }
 
@@ -171,6 +210,7 @@ class GenerationJobControllerTest {
                 Instant.parse("2026-11-07T10:00:03Z"), null, "-2hard/-120soft",
                 List.of(new GenerationJobDto.ProgressPoint(2.0, -2, -120)), null, null, 120, null, null, null, null,
                 "admin", new GenerationJobDto.Scope(List.of(GROUP), List.of(4)),
-                List.of(new GroupRef(GROUP, "4КІ1", 4)), GenerationWeights.DEFAULT, -2L, -120L, null, false);
+                List.of(new GroupRef(GROUP, "4КІ1", 4)), GenerationWeights.DEFAULT, -2L, -120L, null, false, false,
+                null);
     }
 }

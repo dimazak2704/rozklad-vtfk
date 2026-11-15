@@ -63,8 +63,8 @@ timefold:
     parallel-solver-count: ${SCHEDULER_PARALLEL_SOLVERS:1}
   solver:
     termination:
-      # запобіжник: кожна задача задає власний ліміт часу (timeLimitSeconds)
-      spent-limit: 15m
+      # запобіжник на випадок задачі без власної зупинки: кожна задача замінює його своєю (JobTermination)
+      spent-limit: ${SCHEDULER_AUTO_TIME_CAP:30m}
 
 app:
   auth:
@@ -79,6 +79,14 @@ app:
     min-unimproved-limit: ${SCHEDULER_MIN_UNIMPROVED_LIMIT:15s}
     unimproved-ratio: ${SCHEDULER_UNIMPROVED_RATIO:0.25}
     discipline-repeat-weight: ${SCHEDULER_DISCIPLINE_REPEAT_WEIGHT:5}
+    # задача без ліміту часу (автоматичний режим) зупиняється сама: без жорстких порушень — коли за останнє вікно
+    # розклад покращився менше ніж на min-improvement мʼяких балів; з порушеннями — після stuck-limit без жодного
+    # покращення; у будь-якому разі — на межі time-cap. stuck-limit має бути меншим за запас сторожа core (10 хв)
+    auto:
+      time-cap: ${SCHEDULER_AUTO_TIME_CAP:30m}
+      window: ${SCHEDULER_AUTO_WINDOW:60s}
+      min-improvement: ${SCHEDULER_AUTO_MIN_IMPROVEMENT:20}
+      stuck-limit: ${SCHEDULER_AUTO_STUCK_LIMIT:3m}
     completion-resend-interval: 30s
     retention: 30d
 

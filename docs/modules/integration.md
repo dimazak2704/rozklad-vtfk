@@ -111,8 +111,9 @@ Paths of every SPA call exist in the backend. Shapes and codes that differ:
     `ABSENCE_MISMATCH`, and 409 for overlaps.
 11. Settings — core limits `confirmTimeoutMinutes` 5..1440 (default 120), signatory position ≤ 200 and name
     ≤ 100 characters; the web form and mock use 5..240 (default 15), 120 and 80.
-12. Generation job — core adds `timeLimitSeconds`, `semesterId`, `baseVersionId`, `requestedBy`, `createdAt`;
-    web reads the time limit from an optional `params` that core does not send.
+12. Generation job — core adds `timeLimitSeconds` (null = auto mode since 15.11.2026), `semesterId`, `baseVersionId`,
+    `requestedBy`, `createdAt`, `stopRequested`, `stopReason`; the web sends no time limit and reads the old one from
+    `timeLimitSeconds`.
 13. `LessonView.reasonText` is now null for ADDITIONAL/BLOCK/ROOM_CHANGE lessons (same as the order).
     `startsAt/endsAt` are null without a bell profile; `weekdayLabel` is upper case («ПОНЕДІЛОК»).
 14. SSE — core also sends `absence.updated` (substitution); web listens to `absence.created` only (web side).

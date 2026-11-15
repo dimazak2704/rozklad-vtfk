@@ -1,13 +1,5 @@
-/** Генератор: параметри форми, перетворення в запит, тривалості, рядки «Було / Стало», параметри задачі. */
-import {
-  DEFAULT_WEIGHTS,
-  jobHardScore,
-  normalizeWeights,
-  parseScore,
-  solvedWithConflicts,
-  TIME_LIMIT_MAX,
-  TIME_LIMIT_MIN,
-} from '@/api/generation';
+/** Генератор: параметри форми, перетворення в запит, тривалості й причина зупинки, «Було / Стало», параметри задачі. */
+import { DEFAULT_WEIGHTS, jobHardScore, normalizeWeights, parseScore, solvedWithConflicts } from '@/api/generation';
 import type {
   ConstraintAnalysisDto,
   GenerationJobDto,
@@ -29,11 +21,8 @@ export interface GenerationFormState {
   groupIds: Uuid[];
   /** null — без базової версії (одиниці з навантаження). */
   baseVersionId: Uuid | null;
-  timeLimitSeconds: number;
   weights: GenerationWeights;
 }
-
-export const DEFAULT_TIME_LIMIT = 60;
 
 export function initialForm(baseVersionId: Uuid | null): GenerationFormState {
   return {
@@ -41,23 +30,22 @@ export function initialForm(baseVersionId: Uuid | null): GenerationFormState {
     courses: [],
     groupIds: [],
     baseVersionId,
-    timeLimitSeconds: DEFAULT_TIME_LIMIT,
     weights: { ...DEFAULT_WEIGHTS },
   };
 }
 
 /** Помилки форми до відправлення (сервер перевірить ще раз). Порожньо — можна запускати. */
-export function validateForm(form: GenerationFormState): Partial<Record<'scope' | 'timeLimitSeconds', string>> {
-  const errors: Partial<Record<'scope' | 'timeLimitSeconds', string>> = {};
+export function validateForm(form: GenerationFormState): Partial<Record<'scope', string>> {
+  const errors: Partial<Record<'scope', string>> = {};
   if (form.scope === 'courses' && form.courses.length === 0) errors.scope = 'Оберіть хоча б один курс';
   if (form.scope === 'groups' && form.groupIds.length === 0) errors.scope = 'Додайте хоча б одну групу';
-  if (!Number.isInteger(form.timeLimitSeconds) || form.timeLimitSeconds < TIME_LIMIT_MIN || form.timeLimitSeconds > TIME_LIMIT_MAX) {
-    errors.timeLimitSeconds = `Ліміт — від ${TIME_LIMIT_MIN} до ${TIME_LIMIT_MAX} секунд`;
-  }
   return errors;
 }
 
-/** Запит несе всі 13 ваг: core прийняв би й частину, але так задача точно та, яку бачила людина. */
+/**
+ * Запит несе всі ваги: core прийняв би й частину, але так задача точно та, яку бачила людина. Ліміту часу немає:
+ * генерація зупиняється сама, коли розклад перестає покращуватися (автоматичний режим).
+ */
 export function toJobRequest(form: GenerationFormState, semesterId: Uuid): GenerationJobRequest {
   return {
     semesterId,
@@ -66,7 +54,6 @@ export function toJobRequest(form: GenerationFormState, semesterId: Uuid): Gener
       ...(form.scope === 'groups' ? { groupIds: form.groupIds } : {}),
     },
     baseVersionId: form.baseVersionId,
-    timeLimitSeconds: form.timeLimitSeconds,
     weights: form.weights,
   };
 }
@@ -85,6 +72,65 @@ export function elapsedSeconds(job: GenerationJobDto): number {
   if (job.startedAt && job.finishedAt) return (Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000;
   return job.progress.at(-1)?.t ?? 0;
 }
+
+/**
+ * Скільки секунд задача йде зараз — лічильник «Минуло» тикає й тоді, коли покращень немає (саме тоді вона
+ * зупиниться сама). `startedAt` core ставить на першу точку прогресу, тож додаємо її час від старту розвʼязувача.
+ */
+export function liveElapsedSeconds(job: GenerationJobDto, nowMs: number): number {
+  const lastPoint = job.progress.at(-1)?.t ?? 0;
+  if (!job.startedAt) return lastPoint;
+  const sinceStart = (nowMs - Date.parse(job.startedAt)) / 1000 + (job.progress[0]?.t ?? 0);
+  return Math.max(lastPoint, sinceStart);
+}
+
+/** Що бачить диспетчер, поки генерація йде без ліміту часу. */
+export const AUTO_STOP_SENTENCE =
+  'Генерація зупиниться сама, коли розклад перестане покращуватися. Можна зупинити раніше — збережеться найкращий варіант.';
+
+/**
+ * Чому задача зупинилась — одним реченням для панелі. Старі задачі причини не мають: для них лише ліміт, з яким
+ * їх запускали. null — задача ще йде або закінчилась без розкладу (тоді пояснює статус).
+ */
+export function stopReasonSentence(job: GenerationJobDto): string | null {
+  if (job.status !== 'SOLVED') return null;
+  const limit = job.timeLimitSeconds ? formatSeconds(job.timeLimitSeconds) : null;
+  switch (job.stopReason) {
+    case 'NO_IMPROVEMENT':
+      return limit ? `Зупинилась раніше ліміту ${limit}: розклад перестав покращуватися.` : 'Зупинилась сама: розклад перестав покращуватися.';
+    case 'STOPPED':
+      return 'Зупинено вручну — збережено найкращий варіант на той момент.';
+    case 'SAFETY_CAP':
+      return 'Зупинилась на найдовшому часі, який дозволяє сервер; розклад ще міг покращитися.';
+    case 'TIME_LIMIT':
+      return limit ? `Зупинилась на ліміті часу ${limit} (старий режим із фіксованим лімітом).` : null;
+    // стара задача: причини сервер не знав
+    case null:
+    case undefined:
+      return limit ? `Запуск зі старим фіксованим лімітом ${limit}.` : null;
+  }
+}
+
+/** Причина зупинки двома-трьома словами для рядка історії; null — немає що сказати. */
+export function stopReasonLabel(job: GenerationJobDto): string | null {
+  if (isActiveStatus(job.status)) return job.stopRequested ? 'зупиняється' : null;
+  if (job.status !== 'SOLVED') return null;
+  const limit = job.timeLimitSeconds ? `ліміт ${formatSeconds(job.timeLimitSeconds)}` : null;
+  switch (job.stopReason) {
+    case 'NO_IMPROVEMENT':
+      return 'зупинилась сама';
+    case 'STOPPED':
+      return 'зупинено вручну';
+    case 'SAFETY_CAP':
+      return 'межа часу сервера';
+    case 'TIME_LIMIT':
+    case null:
+    case undefined:
+      return limit;
+  }
+}
+
+const isActiveStatus = (status: GenerationJobDto['status']) => status === 'QUEUED' || status === 'RUNNING';
 
 // ───────────────────────── «Було / Стало» ─────────────────────────
 
@@ -420,7 +466,6 @@ export function formFromJob(job: GenerationJobDto): GenerationFormState {
     courses: mode === 'courses' && scope ? [...scope.courses] : [],
     groupIds: mode === 'groups' && scope ? [...scope.groupIds] : [],
     baseVersionId: job.baseVersionId,
-    timeLimitSeconds: job.timeLimitSeconds ?? DEFAULT_TIME_LIMIT,
     weights: normalizeWeights(job.weights) ?? { ...DEFAULT_WEIGHTS },
   };
 }
@@ -457,6 +502,13 @@ export function completionNotice(job: GenerationJobDto): CompletionNotice | null
       level: 'warning',
       title: 'Генерацію завершено з конфліктами',
       description: `Чернетку збережено, але в ній ${countLabel(hard, ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'])}: виправте їх перед публікацією.`,
+    };
+  }
+  if (job.stopReason === 'STOPPED') {
+    return {
+      level: 'success',
+      title: 'Генерацію зупинено',
+      description: 'Найкращий варіант на момент зупинки збережено як нову чернетку — відкрийте й перегляньте її.',
     };
   }
   return {

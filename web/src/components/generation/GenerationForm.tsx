@@ -2,10 +2,10 @@ import { RotateCcw } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import { DEFAULT_WEIGHTS } from '@/api/generation';
 import type { LoadProblemDto, PublicGroupDto, TimetableVersionDto, Uuid } from '@/api/types';
-import { Button, Chip, Combobox, Field, Panel, RadioGroup, SegmentedControl, Select } from '@/components/ui';
+import { Button, Chip, Combobox, Field, Panel, RadioGroup, Select } from '@/components/ui';
 import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
 import { groupDescription } from '@/lib/names';
-import { formatSeconds, validateForm, type GenerationFormState, type ScopeMode } from './model';
+import { validateForm, type GenerationFormState, type ScopeMode } from './model';
 import { Disclosure } from './Disclosure';
 import { LATE_PAIR_HINT, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, type RuleSection } from './priorities';
 import { PrioritySelect } from './PrioritySelect';
@@ -13,9 +13,6 @@ import { PrioritySelect } from './PrioritySelect';
 const SECTIONS: readonly RuleSection[] = ['groups', 'teachers', 'whole'];
 
 const NO_BASE = 'none';
-const TIME_PRESETS = [30, 60, 120, 300, 600] as const;
-/** З якого ліміту весь коледж на реальних запитах не гірший за чинний розклад (оцінка genfix: 150–180 с). */
-const WHOLE_COLLEGE_SECONDS = 300;
 
 interface GenerationFormProps {
   form: GenerationFormState;
@@ -35,8 +32,9 @@ interface GenerationFormProps {
 }
 
 /**
- * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
- * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
+ * Параметри генерації: які групи, від якої версії, що важливіше. Ліміту часу немає: генерація зупиняється сама,
+ * коли розклад перестає покращуватися. Пояснення ваг — в одній розгортці «Що означають пріоритети?»;
+ * «Типові пріоритети» повертає типові значення core.
  */
 export function GenerationForm({
   form,
@@ -152,30 +150,6 @@ export function GenerationForm({
             ]}
           />
         </Field>
-
-        {/* одне керування на одне значення: лише швидкий вибір, без окремого поля з плюсом і мінусом */}
-        <div className="flex flex-col gap-1.5">
-          <span aria-hidden="true" className="text-caption font-[650] text-primary">
-            Ліміт часу
-          </span>
-          <SegmentedControl
-            aria-label="Ліміт часу"
-            stretch
-            value={TIME_PRESETS.includes(form.timeLimitSeconds as (typeof TIME_PRESETS)[number]) ? String(form.timeLimitSeconds) : ''}
-            onValueChange={(value) => onChange({ ...form, timeLimitSeconds: Number(value) })}
-            options={TIME_PRESETS.map((seconds) => ({
-              value: String(seconds),
-              label: formatSeconds(seconds),
-            }))}
-          />
-          {errors.timeLimitSeconds ? <p className="text-caption font-medium text-danger">{errors.timeLimitSeconds}</p> : null}
-          {form.scope === 'all' && form.timeLimitSeconds < WHOLE_COLLEGE_SECONDS ? (
-            <p className="text-caption text-secondary">
-              Для всього коледжу краще 5 хв: за 1–2 хв результат на реальних даних виходив гіршим за чинний розклад
-              (вікна груп, дисципліна двічі на день).
-            </p>
-          ) : null}
-        </div>
 
         <div className="flex flex-col gap-4 border-t border-separator pt-4">
           <div className="flex items-center justify-between gap-2">

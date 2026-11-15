@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.scheduler.generation;
 
+import ai.timefold.solver.core.config.solver.termination.TerminationConfig;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
@@ -68,7 +69,7 @@ public class GenerationIntake {
         repository.save(GenerationJob.requested(jobId, request.semesterId(), request.timeLimitSeconds(),
                 request.problem().units().size(), jsonMapper.valueToTree(request.weights()), clock.instant()));
         long maxSeconds = properties.maxTimeLimit().toSeconds();
-        if (request.timeLimitSeconds() > maxSeconds) {
+        if (!request.autoMode() && request.timeLimitSeconds() > maxSeconds) {
             String error = TIME_LIMIT_TOO_LONG.formatted(request.timeLimitSeconds(), maxSeconds);
             afterCommit(() -> lifecycle.fail(jobId, error));
             return;
@@ -86,9 +87,12 @@ public class GenerationIntake {
             afterCommit(() -> lifecycle.fail(jobId, GenerationLifecycle.SOLVER_ERROR));
             return;
         }
-        log.info("Job {} queued: {} units, {} s", jobId, problem.getUnits().size(), request.timeLimitSeconds());
-        Duration limit = Duration.ofSeconds(request.timeLimitSeconds());
-        afterCommit(() -> solver.start(jobId, problem, JobTermination.forLimit(limit, properties)));
+        long freeUnits = problem.getUnits().stream().filter(unit -> !unit.isPinned()).count();
+        TerminationConfig termination = request.autoMode() ? JobTermination.auto(properties)
+                : JobTermination.forLimit(Duration.ofSeconds(request.timeLimitSeconds()), properties);
+        log.info("Job {} queued: {} units ({} free), {}", jobId, problem.getUnits().size(), freeUnits,
+                request.autoMode() ? "auto mode" : request.timeLimitSeconds() + " s");
+        afterCommit(() -> solver.start(jobId, problem, termination));
     }
 
     @Transactional

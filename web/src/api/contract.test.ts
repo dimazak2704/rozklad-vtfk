@@ -276,10 +276,10 @@ describe('контракт мок-API ↔ core', () => {
     await expectShape(await api.get('/admin/settings'), `${CORE}settings/web/SettingsDto.java`, 'SettingsDto');
     const versions = await api.get<TimetableVersionDto[]>('/admin/timetable/versions', { semesterId: ACTIVE_SEMESTER.id });
     await expectShape(first(versions, 'версії'), `${CORE}timetable/internal/version/TimetableVersionDto.java`, 'TimetableVersionDto');
+    // без ліміту часу — автоматичний режим, як надсилає вебзастосунок
     const { jobId } = await api.post<GenerationJobCreated>('/admin/generation/jobs', {
       semesterId: ACTIVE_SEMESTER.id,
       scope: {},
-      timeLimitSeconds: 10,
     });
     await expectShape(await api.get(`/admin/generation/jobs/${jobId}`), `${CORE}timetable/internal/generation/GenerationJobDto.java`, 'GenerationJobDto');
     await expectShape(await api.get('/me'), `${CORE}identity/UserProfile.java`, 'UserProfile');

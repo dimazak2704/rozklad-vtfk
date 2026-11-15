@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
@@ -93,6 +94,19 @@ class EventsConsumerIT extends IntegrationTest {
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("🧩 <b>Генерацію розкладу завершено</b>")
                 .contains("Жорсткі порушення: 0 · штраф м’яких обмежень: 35")
                 .contains("• Вікна в групи — 3\n• Пізні пари — 1");
+    }
+
+    @Test
+    void aStoppedRunThatKeptItsBestTimetableIsNotReportedAsCancelled() {
+        // «Зупинити» на запущеній задачі: scheduler повертає CANCELLED із розкладом, core зберігає чернетку
+        GenerationCompleted stopped = new GenerationCompleted(EventEnvelope.create(Clock.systemUTC()),
+                UUID.randomUUID(), GenerationStatus.CANCELLED, 0, -120,
+                List.of(new GenerationCompleted.Assignment("u-1", 1, 2, Parity.BOTH, null)), List.of(), null);
+        publish(stopped);
+        await(WAIT, () -> queuedFor(OWNER_CHAT) == 1);
+        worker.drain();
+        assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("⏹ <b>Генерацію розкладу зупинено</b>")
+                .contains("збережено як чернетку (жорсткі порушення: 0)");
     }
 
     @Test

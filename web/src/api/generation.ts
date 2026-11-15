@@ -1,6 +1,7 @@
 /**
- * Область «Генератор розкладу» (CONTRACTS §2 Generation): запуск задачі Timefold, хід розвʼязання
- * (опитування + SSE `generation.progress` / `generation.completed`), скасування, результат.
+ * Область «Генератор розкладу» (CONTRACTS §2 Generation): запуск задачі Timefold (без ліміту часу — вона
+ * зупиняється сама), хід розвʼязання (опитування + SSE `generation.progress` / `generation.completed`), зупинка,
+ * результат.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
@@ -17,10 +18,6 @@ import type {
 
 // ваги — в окремому модулі без HTTP-клієнта: його імпортує й мок-API (як settings-limits)
 export { DEFAULT_WEIGHTS, normalizeWeights, WEIGHT_LIMIT } from './generation-weights';
-
-/** Межі ліміту часу з контракту (timeLimitSeconds 10..600). */
-export const TIME_LIMIT_MIN = 10;
-export const TIME_LIMIT_MAX = 600;
 
 const ACTIVE: ReadonlySet<GenerationJobStatus> = new Set(['QUEUED', 'RUNNING']);
 
@@ -85,7 +82,8 @@ export function useStartGeneration() {
 export function useCancelGeneration() {
   const queryClient = useQueryClient();
   return useMutation({
-    // 202 із задачею (повторне скасування CANCELLED — те саме; SOLVED/FAILED → 409)
+    // 202 із задачею: у черзі — CANCELLED одразу; що розвʼязується — stopRequested, доки планувальник не поверне
+    // найкращий варіант (він стане чернеткою); повторна зупинка — те саме; завершена задача → 409
     mutationFn: (jobId: Uuid) => api.post<GenerationJobDto>(`${jobPath(jobId)}/cancel`),
     onSettled: (_data, _error, jobId) => {
       void queryClient.invalidateQueries({ queryKey: qk.admin.generation.job(jobId) });

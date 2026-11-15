@@ -211,6 +211,8 @@ def step_substitution(admin: seed.Client, stream: EventStream, **_) -> None:
 def step_generation(admin: seed.Client, stream: EventStream, **_) -> None:
     semester = seed.semester_by_name(admin, seed.SEMESTER_I)
     groups = seed.group_ids(admin)
+    # старий фіксований ліміт навмисно: коротко і перевіряє, що старі клієнти працюють; веб надсилає запит без
+    # ліміту (автоматичний режим, scheduler.md §4)
     job = admin.post("/api/admin/generation/jobs", {"semesterId": semester["id"], "timeLimitSeconds": 10,
                                                     "scope": {"groupIds": [groups["4КІ1"], groups["4КІ2"]]}})
     for _ in range(90):

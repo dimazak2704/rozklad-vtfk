@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class EventJsonRoundTripTest {
 
@@ -216,6 +217,40 @@ class EventJsonRoundTripTest {
         assertThat(row.constraintId()).isNull();
         assertThat(row.scopeMatchCount()).isNull();
         assertThat(row).isEqualTo(new GenerationCompleted.ConstraintScore("Вікна груп", 3, "0hard/-30soft"));
+    }
+
+    /** Auto mode is additive: a request without {@code timeLimitSeconds} (or with null) has no limit. */
+    @Test
+    void generationRequestWithoutTimeLimitIsAutoModeAndOldRequestsKeepTheirLimit() {
+        GenerationRequested fixed = (GenerationRequested) EventSamples.all().get(2);
+        ObjectNode json = (ObjectNode) mapper.readTree(mapper.writeValueAsString(fixed));
+
+        assertThat(json.get("timeLimitSeconds").asInt()).isEqualTo(120);
+        GenerationRequested old = mapper.readValue(json.toString(), GenerationRequested.class);
+        assertThat(old.timeLimitSeconds()).isEqualTo(120);
+        assertThat(old.autoMode()).isFalse();
+
+        json.remove("timeLimitSeconds");
+        GenerationRequested absent = mapper.readValue(json.toString(), GenerationRequested.class);
+        assertThat(absent.timeLimitSeconds()).isNull();
+        assertThat(absent.autoMode()).isTrue();
+
+        json.putNull("timeLimitSeconds");
+        assertThat(mapper.readValue(json.toString(), GenerationRequested.class).autoMode()).isTrue();
+    }
+
+    /** {@code stopReason} is additive: a completion of the first schema reads without it. */
+    @Test
+    void completionOfTheFirstSchemaHasNoStopReason() {
+        GenerationCompleted completed = (GenerationCompleted) EventSamples.all().get(5);
+        ObjectNode json = (ObjectNode) mapper.readTree(mapper.writeValueAsString(completed));
+
+        assertThat(json.get("stopReason").asString()).isEqualTo("NO_IMPROVEMENT");
+        json.remove("stopReason");
+
+        GenerationCompleted old = mapper.readValue(json.toString(), GenerationCompleted.class);
+        assertThat(old.stopReason()).isNull();
+        assertThat(old.assignments()).isEqualTo(completed.assignments());
     }
 
     @Test

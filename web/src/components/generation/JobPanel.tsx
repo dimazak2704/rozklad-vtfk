@@ -1,12 +1,15 @@
 import { CircleCheck, CircleStop, CircleX, FileDiff, FolderOpen, Hourglass, LoaderCircle, RotateCcw, TriangleAlert } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { isJobActive, jobHardScore, normalizeWeights, parseScore, solvedWithConflicts } from '@/api/generation';
 import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, buttonClass, Panel, StatusDot } from '@/components/ui';
+import { nowMs } from '@/lib/clock';
 import { formatInstant } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { Disclosure } from './Disclosure';
 import {
+  AUTO_STOP_SENTENCE,
   comparisonRows,
   ignoredWeights,
   elapsedSeconds,
@@ -16,8 +19,10 @@ import {
   jobPrioritiesText,
   jobScopeText,
   jobStatusTitle,
+  liveElapsedSeconds,
   outcomeDraftSentence,
   outcomeSentence,
+  stopReasonSentence,
   type BaseVersionInfo,
 } from './model';
 import { changedPriorities } from './priorities';
@@ -30,13 +35,26 @@ interface JobPanelProps {
   publishedId: Uuid | null;
   /** Базова версія задачі (зі списку версій): «Було», якщо задача його не принесла, і її назва. null — версії вже немає. */
   base?: (BaseVersionInfo & { name: string }) | null;
+  /** Запит «Зупинити» ще йде. */
   cancelling: boolean;
+  /** «Зупинити» (у черзі — «Скасувати»): найкращий варіант на цей момент стане чернеткою. */
   onCancel: () => void;
   /** «Взяти ці параметри»: перенести параметри задачі у форму. */
   onUseParams?: () => void;
 }
 
 const HARD_FORMS = ['жорстке порушення', 'жорсткі порушення', 'жорстких порушень'] as const;
+
+/** Секундний такт, поки задача йде: «Минуло» рахує й тоді, коли нових точок прогресу немає. */
+function useTickingNow(enabled: boolean): number {
+  const [now, setNow] = useState(nowMs);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const timer = setInterval(() => setNow(nowMs()), 1000);
+    return () => clearInterval(timer);
+  }, [enabled]);
+  return now;
+}
 
 /** Підсумок одним реченням замість трьох плиток: скільки тривало і що вийшло. */
 function resultSentence(job: GenerationJobDto, elapsed: number): string {
@@ -58,7 +76,10 @@ function resultSentence(job: GenerationJobDto, elapsed: number): string {
 export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUseParams }: JobPanelProps) {
   const active = isJobActive(job.status);
   const limit = job.timeLimitSeconds;
-  const elapsed = elapsedSeconds(job);
+  const now = useTickingNow(job.status === 'RUNNING');
+  const elapsed = job.status === 'RUNNING' ? liveElapsedSeconds(job, now) : elapsedSeconds(job);
+  const stopping = active && Boolean(job.stopRequested);
+  const reason = stopReasonSentence(job);
   const rows = comparisonRows(job, base);
   const groups = groupComparison(job, base);
   const outcome = job.status === 'SOLVED' ? outcomeSentence(job.outcome) : null;
@@ -67,7 +88,7 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
   const scoped = Boolean(job.scope && (job.scope.groupIds.length > 0 || job.scope.courses.length > 0));
   const charts =
     job.progress.length > 0 ? (
-      <ScoreCharts progress={job.progress} limitSeconds={limit} live={active} endSeconds={active ? undefined : elapsed} />
+      <ScoreCharts progress={job.progress} limitSeconds={limit} live={active} endSeconds={elapsed} />
     ) : null;
 
   return (
@@ -90,10 +111,11 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
             variant="danger-ghost"
             size="sm"
             onClick={onCancel}
-            loading={cancelling}
+            loading={cancelling || stopping}
+            loadingText="Зупиняємо…"
             iconStart={<CircleStop aria-hidden="true" className="size-4" />}
           >
-            Скасувати
+            {job.status === 'QUEUED' ? 'Скасувати' : 'Зупинити'}
           </Button>
         ) : null
       }
@@ -104,6 +126,14 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
             {job.status === 'QUEUED' ? <LoaderCircle aria-hidden="true" className="size-4 shrink-0 text-accent motion-safe:animate-spin" /> : null}
             <span>{resultSentence(job, elapsed)}</span>
           </p>
+          {job.status === 'RUNNING' && !stopping ? <p className="text-ui text-secondary">{limit ? 'Можна зупинити раніше — збережеться найкращий варіант.' : AUTO_STOP_SENTENCE}</p> : null}
+          {stopping ? (
+            <p className="flex items-center gap-2 text-ui text-secondary">
+              <LoaderCircle aria-hidden="true" className="size-4 shrink-0 text-accent motion-safe:animate-spin" />
+              Зупиняємо: планувальник повертає найкращий варіант, він стане чернеткою.
+            </p>
+          ) : null}
+          {reason ? <p className="text-ui text-secondary">{reason}</p> : null}
           {withConflicts ? (
             <p className="text-ui text-change">
               Розвʼязувач не прибрав усі жорсткі конфлікти. Чернетку збережено — перегляньте конфлікти в редакторі перед публікацією.
@@ -132,7 +162,13 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
           </p>
         ) : null}
 
-        {job.status === 'CANCELLED' ? <p className="text-ui text-secondary">Генерацію зупинено вручну, чернетку не створено.</p> : null}
+        {job.status === 'CANCELLED' ? (
+          <p className="text-ui text-secondary">
+            {job.stopRequested
+              ? 'Генерацію зупинено до першого повного розкладу, тож чернетку не створено.'
+              : 'Генерацію зупинено вручну, чернетку не створено.'}
+          </p>
+        ) : null}
 
         {job.status === 'SOLVED' && job.resultVersionId ? (
           <div className="flex flex-wrap items-center gap-2">

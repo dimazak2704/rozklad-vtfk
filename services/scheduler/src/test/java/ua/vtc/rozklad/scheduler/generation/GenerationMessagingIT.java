@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.GenerationCancelRequested;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
@@ -105,6 +106,7 @@ class GenerationMessagingIT {
 
         GenerationCompleted completed = awaitCompletion(jobId);
         assertThat(completed.status()).isEqualTo(GenerationStatus.SOLVED);
+        assertThat(completed.stopReason()).as("4 s is shorter than the 15 s plateau").isEqualTo(GenerationStopReason.TIME_LIMIT);
         assertThat(completed.hardScore()).isZero();
         assertThat(completed.error()).isNull();
         assertThat(completed.assignments()).hasSameSizeAs(college.snapshot().units())
@@ -184,11 +186,31 @@ class GenerationMessagingIT {
 
         GenerationCompleted completed = awaitCompletion(jobId);
         assertThat(completed.status()).isEqualTo(GenerationStatus.CANCELLED);
+        assertThat(completed.stopReason()).isEqualTo(GenerationStopReason.STOPPED);
         assertThat(completed.assignments()).hasSameSizeAs(college.snapshot().units());
         assertThat(completed.error()).isNull();
         GenerationJob job = jobs.findById(jobId).orElseThrow();
         assertThat(job.isCancelRequested()).isTrue();
         assertThat(job.getFinishedAt()).isBefore(job.getStartedAt().plusSeconds(60));
+    }
+
+    @Test
+    void autoModeStopsByItselfWhenTheTimetableStopsImproving() {
+        SyntheticCollege.Problem college = SyntheticCollege.generate(SyntheticCollege.Options.small());
+        UUID jobId = UUID.randomUUID();
+
+        send(request(jobId, null, college.snapshot()));
+
+        GenerationCompleted completed = awaitCompletion(jobId);
+        assertThat(completed.status()).isEqualTo(GenerationStatus.SOLVED);
+        assertThat(completed.hardScore()).isZero();
+        assertThat(completed.stopReason()).isEqualTo(GenerationStopReason.NO_IMPROVEMENT);
+        assertThat(completed.assignments()).hasSameSizeAs(college.snapshot().units());
+        GenerationJob job = jobs.findById(jobId).orElseThrow();
+        assertThat(job.isAutoMode()).isTrue();
+        assertThat(job.getTimeLimitSeconds()).isNull();
+        assertThat(job.getFinishedAt()).as("well before the 60 s safety cap")
+                .isBefore(job.getStartedAt().plusSeconds(45));
     }
 
     @Test
@@ -303,7 +325,7 @@ class GenerationMessagingIT {
 
     // ---- helpers
 
-    private GenerationRequested request(UUID jobId, int timeLimitSeconds, ProblemSnapshot snapshot) {
+    private GenerationRequested request(UUID jobId, Integer timeLimitSeconds, ProblemSnapshot snapshot) {
         return new GenerationRequested(EventEnvelope.create(clock), jobId, SEMESTER, timeLimitSeconds,
                 GenerationWeights.DEFAULT, snapshot);
     }

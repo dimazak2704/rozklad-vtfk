@@ -5,10 +5,13 @@ import { formatSeconds, timeTicks } from './model';
 
 interface ScoreChartsProps {
   progress: readonly GenerationProgressPoint[];
-  /** Ліміт часу — права межа осі, щоб було видно, скільки ще лишилось. */
+  /** Старий фіксований ліміт — права межа осі, щоб було видно, скільки лишилось; null — автоматичний режим. */
   limitSeconds: number | null;
   live: boolean;
-  /** Скільки задача справді тривала: лінія тягнеться до кінця, а не обривається на останньому покращенні. */
+  /**
+   * Скільки задача тривала (або йде зараз): лінія тягнеться до цього моменту, а не обривається на останньому
+   * покращенні — рівна ділянка й показує, що розклад перестав покращуватися.
+   */
   endSeconds?: number;
 }
 
@@ -30,9 +33,9 @@ export function ScoreCharts({ progress, limitSeconds, live, endSeconds }: ScoreC
     hard: Math.abs(p.hard),
     soft: Math.abs(p.soft),
   }));
-  // після кінця остання оцінка трималась до зупинки — дотягуємо сходинку до фактичного часу
+  // остання оцінка тримається до зупинки (або до «зараз») — дотягуємо сходинку до цього часу
   const tail = data.at(-1);
-  if (!live && tail && endSeconds && endSeconds > tail.t + 0.5) data.push({ ...tail, t: endSeconds });
+  if (tail && endSeconds && endSeconds > tail.t + 0.5) data.push({ ...tail, t: endSeconds });
   const lastT = data.at(-1)?.t ?? 0;
   // поки йде — вісь до ліміту (видно, скільки лишилось); після кінця — до фактичного часу
   const domainEnd = Math.ceil(live ? Math.max(limitSeconds ?? 0, lastT, 10) : Math.max(lastT, 2));

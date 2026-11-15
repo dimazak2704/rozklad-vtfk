@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.ConstraintScore;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.core.catalog.GroupRef;
@@ -17,7 +18,10 @@ import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
  * before the first score) and the {@code outcome} against the base version (SOLVED jobs only, else
  * {@code null}). {@code legacyWeights} (genfix repair): {@code true} when the job stored only the five weights of
  * the first schema, so the other rules did not exist for that run and {@code weights} shows their defaults only
- * to fill the form; {@code false} for newer jobs, {@code null} when the job stored no weights.
+ * to fill the form; {@code false} for newer jobs, {@code null} when the job stored no weights. Additive (auto mode):
+ * {@code timeLimitSeconds} is {@code null} for a job without a limit; {@code stopRequested} — the dispatcher stopped
+ * the running job and its best timetable is on the way; {@code stopReason} — why a job with a timetable stopped
+ * ({@code null} for older jobs and jobs without a timetable).
  */
 public record GenerationJobDto(
         UUID id,
@@ -42,7 +46,9 @@ public record GenerationJobDto(
         Long hardScore,
         Long softScore,
         GenerationOutcome outcome,
-        Boolean legacyWeights) {
+        Boolean legacyWeights,
+        boolean stopRequested,
+        GenerationStopReason stopReason) {
 
     /** A point of the live chart: seconds since the start and the score at that moment. */
     public record ProgressPoint(double t, long hard, long soft) {
