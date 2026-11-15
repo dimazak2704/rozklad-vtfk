@@ -35,6 +35,7 @@ import ua.vtc.rozklad.notification.bot.UpdateDispatcher;
 import ua.vtc.rozklad.notification.config.TokenRoles;
 import ua.vtc.rozklad.notification.delivery.DeliveryWorker;
 import ua.vtc.rozklad.notification.documents.DocumentPrerenderer;
+import ua.vtc.rozklad.notification.email.EmailWorker;
 
 /**
  * Base of integration tests: the whole service on PostgreSQL, RabbitMQ and Redis in Docker, with
@@ -55,6 +56,18 @@ import ua.vtc.rozklad.notification.documents.DocumentPrerenderer;
         "app.delivery.private-chat-per-second=100000",
         "app.delivery.burst=100000",
         "app.documents.cache-dir=target/it-documents",
+        // e-mail on with a local host (the safety guard allows it); FakeMailTransport replaces SMTP
+        "app.mail.host=localhost",
+        // a developer's shell may hold real MAIL_* values: never let them into a test
+        "app.mail.username=",
+        "app.mail.password=",
+        "app.mail.reply-to=",
+        "app.mail.from=Розклад ВТФК <rozklad@rozklad.local>",
+        "app.mail.worker-enabled=false",
+        "app.mail.global-per-second=100000",
+        "app.mail.recipient-burst=100000",
+        "app.mail.recipient-per-hour=100000000",
+        "app.mail.recipient-per-day=100000",
         "spring.rabbitmq.listener.simple.retry.initial-interval=200ms",
         "spring.rabbitmq.listener.simple.retry.max-interval=500ms"})
 @AutoConfigureMockMvc
@@ -81,6 +94,10 @@ public abstract class IntegrationTest {
     @Autowired
     protected DeliveryWorker worker;
     @Autowired
+    protected EmailWorker mailWorker;
+    @Autowired
+    protected FakeMailTransport mail;
+    @Autowired
     protected ChatBindings bindings;
     @Autowired
     protected BindingCodes codes;
@@ -97,7 +114,7 @@ public abstract class IntegrationTest {
     void resetState() throws IOException {
         prerenderer.awaitIdle(Duration.ofSeconds(10));
         jdbc.execute("TRUNCATE chat_binding, binding_code, outbound_message, published_order, substitution_message, "
-                + "substitution_request, processed_event");
+                + "substitution_request, processed_event, email_message, email_notice, email_preference");
         redis.execute((RedisCallback<Void>) connection -> {
             connection.serverCommands().flushAll();
             return null;
@@ -112,6 +129,7 @@ public abstract class IntegrationTest {
         core.reset();
         importer.reset();
         pdfConverter.reset();
+        mail.reset();
         clock.reset();
     }
 

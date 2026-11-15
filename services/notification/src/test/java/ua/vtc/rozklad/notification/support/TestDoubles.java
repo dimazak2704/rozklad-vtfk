@@ -4,7 +4,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-/** Replaces Telegram, core, importer, LibreOffice and the clock in integration tests. */
+/** Replaces Telegram, core, importer, LibreOffice, SMTP and the clock in integration tests. */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestDoubles {
 
@@ -30,6 +30,12 @@ public class TestDoubles {
     @Primary
     FakePdfConverter fakePdfConverter() {
         return new FakePdfConverter();
+    }
+
+    @Bean
+    @Primary
+    FakeMailTransport fakeMailTransport() {
+        return new FakeMailTransport();
     }
 
     @Bean

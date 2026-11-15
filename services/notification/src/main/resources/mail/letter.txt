@@ -1,0 +1,19 @@
+[(${mail.title})]
+
+[# th:if="${mail.greeting != null}"][(${mail.greeting})]
+[/]
+[# th:each="paragraph : ${mail.intro}"][(${paragraph})]
+[/]
+[# th:each="detail : ${mail.details}"][(${detail.label})]: [(${detail.value})]
+[/][# th:if="${mail.struck}"](більше не актуально)
+[/]
+[# th:each="item : ${mail.items}"]• [(${item})]
+[/]
+[# th:each="paragraph : ${mail.outro}"][(${paragraph})]
+[/]
+[# th:if="${mail.button != null}"][(${mail.button.label})]: [(${mail.button.url})]
+[/][# th:each="link : ${mail.links}"][(${link.label})]: [(${link.url})]
+[/]
+--
+Цей лист надіслала система «Розклад ВТФК» автоматично. Відповідати на нього не потрібно.
+Налаштувати листи: [(${mail.settingsUrl})]
