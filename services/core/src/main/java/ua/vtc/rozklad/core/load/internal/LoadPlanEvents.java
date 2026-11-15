@@ -3,6 +3,7 @@ package ua.vtc.rozklad.core.load.internal;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,12 +75,9 @@ class LoadPlanEvents {
     void recountOnStart() {
         List<UUID> semesters;
         try {
-            semesters = transactions.execute(status -> items.findSemesterIds());
+            semesters = Objects.requireNonNullElse(transactions.execute(status -> items.findSemesterIds()), List.of());
         } catch (RuntimeException e) {
             log.error("Load plans not recounted at start-up: the semesters with load could not be read", e);
-            return;
-        }
-        if (semesters == null) {
             return;
         }
         for (UUID semesterId : semesters) {

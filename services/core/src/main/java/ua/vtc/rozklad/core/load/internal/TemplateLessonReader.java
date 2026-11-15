@@ -56,22 +56,30 @@ class TemplateLessonReader {
      * plan of an item is counted from. One query; empty when nothing is published.
      */
     List<PlanSlotRow> publishedSlots(UUID semesterId, Collection<UUID> groupIds) {
-        return slots("v.semester_id = :semester and v.status = 'PUBLISHED'", Map.of("semester", semesterId), groupIds);
+        if (groupIds == null) {
+            return slots(PUBLISHED_SLOTS, Map.of("semester", semesterId), null);
+        }
+        return slots(PUBLISHED_GROUP_SLOTS, Map.of("semester", semesterId), groupIds);
     }
 
     /** Weekly slots of one version (the one just published, whose status may not be flushed yet). */
     List<PlanSlotRow> versionSlots(UUID versionId) {
-        return slots("v.id = :version", Map.of("version", versionId), null);
+        return slots(VERSION_SLOTS, Map.of("version", versionId), null);
     }
 
-    private List<PlanSlotRow> slots(String where, Map<String, Object> params, Collection<UUID> groupIds) {
+    // постійні тексти запитів: значення йдуть лише параметрами
+    private static final String SLOTS = """
+            select t.group_id, t.discipline_id, t.subgroup_number, t.weekday, t.parity, t.lesson_kind, t.load_item_id
+            from template_lesson t join timetable_version v on v.id = t.version_id
+            """;
+    private static final String PUBLISHED_SLOTS = SLOTS + "where v.semester_id = :semester and v.status = 'PUBLISHED'";
+    private static final String PUBLISHED_GROUP_SLOTS = PUBLISHED_SLOTS + " and t.group_id in (:groups)";
+    private static final String VERSION_SLOTS = SLOTS + "where v.id = :version";
+
+    private List<PlanSlotRow> slots(String sql, Map<String, Object> params, Collection<UUID> groupIds) {
         if (groupIds != null && groupIds.isEmpty()) {
             return List.of();
         }
-        String sql = """
-                select t.group_id, t.discipline_id, t.subgroup_number, t.weekday, t.parity, t.lesson_kind, t.load_item_id
-                from template_lesson t join timetable_version v on v.id = t.version_id
-                where\s""" + where + (groupIds == null ? "" : " and t.group_id in (:groups)");
         var statement = jdbc.sql(sql);
         for (Map.Entry<String, Object> param : params.entrySet()) {
             statement = statement.param(param.getKey(), param.getValue());
