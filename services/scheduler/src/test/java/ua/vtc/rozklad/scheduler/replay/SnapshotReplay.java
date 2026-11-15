@@ -24,6 +24,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -34,6 +35,8 @@ import tools.jackson.databind.node.ObjectNode;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
+import ua.vtc.rozklad.scheduler.config.SchedulerProperties;
+import ua.vtc.rozklad.scheduler.generation.JobTermination;
 import ua.vtc.rozklad.scheduler.solver.TimetableProblemFactory;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
@@ -51,9 +54,11 @@ import ua.vtc.rozklad.scheduler.support.TestSolvers;
  *
  * <p>Datasets: the four real requests of {@link ReplaySnapshots}, a JSON file, or {@code synthetic:<shape>} of
  * {@link ShapedCollege} (from scratch; {@code synthetic:<shape>@warm} starts from the planted timetable).
- * Weights are {@link GenerationWeights#DEFAULT} with the given overrides. Termination is the production one
- * ({@code JobTermination}: the limit, or {@code max(15 s, 25 % of the limit)} without a better score) unless
- * {@code termination=spent}.
+ * Weights are {@link GenerationWeights#DEFAULT} with the given overrides. Termination is the production fixed-limit
+ * one ({@code JobTermination}: the limit, or {@code max(15 s, 25 % of the limit)} without a better score), the
+ * production auto mode with {@code termination=auto} (the seconds are its safety cap), or the limit only with
+ * {@code termination=spent}. Every run records its trajectory (each new best score and when) and the probes: where it
+ * would have stopped with other windows and what it had at fixed times (scheduler.md §11 «Auto mode»).
  */
 public final class SnapshotReplay {
 
@@ -64,6 +69,10 @@ public final class SnapshotReplay {
     /** Production {@code app.scheduler.min-unimproved-limit} and {@code unimproved-ratio} (application.yml). */
     private static final Duration MIN_UNIMPROVED = Duration.ofSeconds(15);
     private static final double UNIMPROVED_RATIO = 0.25;
+    /** Production {@code app.scheduler.auto.window}, {@code min-improvement} and {@code stuck-limit} (application.yml). */
+    private static final Duration AUTO_WINDOW = Duration.ofSeconds(60);
+    private static final int AUTO_MIN_IMPROVEMENT = 20;
+    private static final Duration AUTO_STUCK = Duration.ofMinutes(3);
     private static final Set<RoomType> SPORT_ROOMS = EnumSet.of(RoomType.GYM, RoomType.SPORTS_GROUND);
 
     private SnapshotReplay() {
@@ -86,8 +95,23 @@ public final class SnapshotReplay {
     public record Run(String label, String dataset, int units, long freeUnits, GenerationWeights weights,
                       long limitSeconds, Duration firstPlacedAt, Duration feasibleAt, Duration lastImprovementAt,
                       Duration elapsed, Row reference, Row first, Row last, Map<String, String> checks,
-                      Map<String, Integer> hardViolations, List<String> details) {
+                      Map<String, Integer> hardViolations, List<String> details, List<Probe> probes,
+                      List<long[]> trajectory) {
     }
+
+    /**
+     * Where a run would have stopped under another termination, read from the same run: {@code feasible W} - the
+     * first gap of {@code W} without a better score after 0 hard (the auto mode's window); {@code any W} - the first
+     * such gap whatever the hard score; {@code at T} - the best timetable at {@code T} (a fixed limit). {@code at} is
+     * {@code null} when the run ended before the condition was met.
+     */
+    public record Probe(String label, Duration at, Row row) {
+    }
+
+    /** Windows and checkpoints the probes simulate, in seconds. */
+    private static final long[] FEASIBLE_WINDOWS = {15, 30, 45, 60, 90, 120, 180, 240, 300};
+    private static final long[] ANY_WINDOWS = {60, 120, 180, 300, 600};
+    private static final long[] CHECKPOINTS = {60, 120, 150, 180, 300, 600, 900, 1200};
 
     public static Dataset dataset(String spec, GenerationWeights weights, boolean newCore) {
         TimetableProblemFactory factory = new TimetableProblemFactory(DISCIPLINE_REPEAT_WEIGHT);
@@ -142,32 +166,39 @@ public final class SnapshotReplay {
         return JSON.treeToValue(json, GenerationWeights.class);
     }
 
-    /** @param seed the solver's random seed ({@code null}: production's fixed seed 0) */
-    public static Run run(Dataset dataset, String label, GenerationWeights weights, long seconds, boolean production,
+    /**
+     * @param termination {@code production} (the old fixed limit: the limit, or {@code max(15 s, 25 %)} without a better
+     *                    score), {@code spent} (the limit only, for trajectories) or {@code auto} (the production auto
+     *                    mode of {@code JobTermination}; {@code seconds} is its safety cap)
+     * @param seed        the solver's random seed ({@code null}: production's fixed seed 0)
+     */
+    public static Run run(Dataset dataset, String label, GenerationWeights weights, long seconds, String termination,
                           Long seed) {
         Timetable problem = dataset.problem();
-        TerminationConfig termination = new TerminationConfig().withSpentLimit(Duration.ofSeconds(seconds));
-        Duration unimproved = Duration.ofMillis(Math.max(MIN_UNIMPROVED.toMillis(),
-                Math.round(seconds * 1000 * UNIMPROVED_RATIO)));
-        if (production && unimproved.toSeconds() < seconds) {
-            termination.withUnimprovedSpentLimit(unimproved);
-        }
+        long freeUnits = problem.getUnits().stream().filter(unit -> !unit.isPinned()).count();
+        TerminationConfig config = switch (termination) {
+            case "spent" -> new TerminationConfig().withSpentLimit(Duration.ofSeconds(seconds));
+            case "auto" -> JobTermination.auto(productionProperties(Duration.ofSeconds(seconds)));
+            case "production" -> JobTermination.forLimit(Duration.ofSeconds(seconds),
+                    productionProperties(Duration.ofSeconds(seconds)));
+            default -> throw new IllegalArgumentException("Unknown termination " + termination);
+        };
         Solver<Timetable> solver = SolverFactory.<Timetable>create(
-                TestSolvers.config(TestSolvers.CONFIG, termination, EnvironmentMode.NO_ASSERT)
+                TestSolvers.config(TestSolvers.CONFIG, config, EnvironmentMode.NO_ASSERT)
                         .withRandomSeed(seed)).buildSolver();
         Row reference = row(dataset.reference().label(), dataset.reference().timetable(), dataset);
         long start = System.nanoTime();
         AtomicLong placedAt = new AtomicLong(-1);
         AtomicLong feasibleAt = new AtomicLong(-1);
-        AtomicLong improvedAt = new AtomicLong(-1);
         AtomicReference<Row> first = new AtomicReference<>();
+        Probes probes = new Probes(dataset);
         solver.addEventListener(event -> {
             Timetable best = event.getNewBestSolution();
             if (!best.isFullyPlaced()) {
                 return;
             }
             long now = System.nanoTime() - start;
-            improvedAt.set(now);
+            probes.newBest(now, best);
             if (placedAt.compareAndSet(-1, now)) {
                 first.set(row("first", best, dataset));
             }
@@ -176,13 +207,90 @@ public final class SnapshotReplay {
             }
         });
         Timetable solution = solver.solve(problem);
-        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+        long end = System.nanoTime() - start;
+        probes.end(end);
         Row last = row("final", solution, dataset);
-        return new Run(label, dataset.name(), problem.getUnits().size(),
-                problem.getUnits().stream().filter(unit -> !unit.isPinned()).count(), weights, seconds,
-                nanos(placedAt.get()), nanos(feasibleAt.get()), nanos(improvedAt.get()), elapsed, reference,
+        return new Run(label, dataset.name(), problem.getUnits().size(), freeUnits, weights, seconds,
+                nanos(placedAt.get()), nanos(feasibleAt.get()), nanos(probes.lastAt), Duration.ofNanos(end), reference,
                 first.get(), last, checks(solution, last.metrics()), hardViolations(solution),
-                details(solution, dataset.sportDisciplines()));
+                details(solution, dataset.sportDisciplines()), probes.probes(), probes.trajectory);
+    }
+
+    /** Production {@code app.scheduler.*} values (application.yml) with the given auto-mode safety cap. */
+    static SchedulerProperties productionProperties(Duration autoCap) {
+        return new SchedulerProperties(Duration.ofSeconds(2), Duration.ofMinutes(15), MIN_UNIMPROVED, UNIMPROVED_RATIO,
+                DISCIPLINE_REPEAT_WEIGHT, Duration.ofSeconds(30), Duration.ofDays(30),
+                new SchedulerProperties.Auto(autoCap, AUTO_WINDOW, AUTO_MIN_IMPROVEMENT, AUTO_STUCK));
+    }
+
+    /** Collects the trajectory and resolves the probes while the solver runs (solver thread only). */
+    private static final class Probes {
+
+        private final Dataset dataset;
+        private final List<long[]> trajectory = new ArrayList<>();
+        private final Map<String, Probe> resolved = new LinkedHashMap<>();
+        private Timetable lastBest;
+        private long lastAt = -1;
+
+        private Probes(Dataset dataset) {
+            this.dataset = dataset;
+        }
+
+        void newBest(long now, Timetable best) {
+            resolve(now, false);
+            HardSoftScore score = best.getScore();
+            trajectory.add(new long[] {TimeUnit.NANOSECONDS.toMillis(now), score.hardScore(), score.softScore()});
+            lastBest = best;
+            lastAt = now;
+        }
+
+        void end(long end) {
+            resolve(end, true);
+        }
+
+        /** Resolves every probe whose condition holds between the last best timetable and {@code now}. */
+        private void resolve(long now, boolean end) {
+            if (lastBest == null) {
+                return;
+            }
+            boolean feasible = lastBest.getScore().hardScore() == 0;
+            for (long window : FEASIBLE_WINDOWS) {
+                long nanos = TimeUnit.SECONDS.toNanos(window);
+                if (feasible && now - lastAt >= nanos) {
+                    resolve("feasible " + window + "s", lastAt + nanos);
+                }
+            }
+            for (long window : ANY_WINDOWS) {
+                long nanos = TimeUnit.SECONDS.toNanos(window);
+                if (now - lastAt >= nanos) {
+                    resolve("any " + window + "s", lastAt + nanos);
+                }
+            }
+            for (long checkpoint : CHECKPOINTS) {
+                long nanos = TimeUnit.SECONDS.toNanos(checkpoint);
+                if (now > nanos || (end && now >= nanos)) {
+                    resolve("at " + checkpoint + "s", nanos);
+                }
+            }
+        }
+
+        private void resolve(String label, long at) {
+            resolved.computeIfAbsent(label, key -> new Probe(key, Duration.ofNanos(at), row(key, lastBest, dataset)));
+        }
+
+        List<Probe> probes() {
+            List<String> labels = new ArrayList<>();
+            for (long window : FEASIBLE_WINDOWS) {
+                labels.add("feasible " + window + "s");
+            }
+            for (long window : ANY_WINDOWS) {
+                labels.add("any " + window + "s");
+            }
+            for (long checkpoint : CHECKPOINTS) {
+                labels.add("at " + checkpoint + "s");
+            }
+            return labels.stream().map(label -> resolved.getOrDefault(label, new Probe(label, null, null))).toList();
+        }
     }
 
     private static Row row(String stage, Timetable timetable, Dataset dataset) {
@@ -314,6 +422,12 @@ public final class SnapshotReplay {
             text.append("hard violations: ").append(run.hardViolations()).append('\n');
         }
         run.details().forEach(line -> text.append("  ").append(line).append('\n'));
+        for (Probe probe : run.probes()) {
+            if (probe.row() != null) {
+                text.append("%-14s %7.1f s ".formatted(probe.label(), probe.at().toMillis() / 1000.0))
+                        .append(line(probe.row())).append('\n');
+            }
+        }
         return text.toString();
     }
 
@@ -363,6 +477,19 @@ public final class SnapshotReplay {
         json.set("checks", JSON.valueToTree(run.checks()));
         json.set("hardViolations", JSON.valueToTree(run.hardViolations()));
         json.set("details", JSON.valueToTree(run.details()));
+        ObjectNode probes = json.putObject("probes");
+        for (Probe probe : run.probes()) {
+            if (probe.row() == null) {
+                probes.putNull(probe.label());
+                continue;
+            }
+            ObjectNode node = probes.putObject(probe.label());
+            node.put("at", probe.at().toMillis());
+            node.put("hard", probe.row().score() == null ? null : probe.row().score().hardScore());
+            node.put("soft", probe.row().score() == null ? null : probe.row().score().softScore());
+            probe.row().metrics().values().forEach(node::put);
+        }
+        json.set("trajectory", JSON.valueToTree(run.trajectory()));
         try {
             Files.writeString(file, JSON.writeValueAsString(json) + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -379,7 +506,7 @@ public final class SnapshotReplay {
     public static List<Run> runAll(Map<String, String> options) {
         GenerationWeights weights = weights(options.get("weights"));
         String label = options.getOrDefault("label", "default");
-        boolean production = !"spent".equals(options.get("termination"));
+        String termination = options.getOrDefault("termination", "production");
         boolean newCore = !"false".equals(options.get("newCore"));
         Long seed = options.containsKey("seed") ? Long.valueOf(options.get("seed")) : null;
         List<Run> runs = new ArrayList<>();
@@ -389,7 +516,7 @@ public final class SnapshotReplay {
             String name = hasSeconds ? spec.substring(0, colon) : spec;
             Dataset dataset = dataset(name, weights, newCore);
             long seconds = hasSeconds ? Long.parseLong(spec.substring(colon + 1)) : dataset.defaultSeconds();
-            Run run = run(dataset, label, weights, seconds, production, seed);
+            Run run = run(dataset, label, weights, seconds, termination, seed);
             log.info("{}", report(run));
             if (options.containsKey("out")) {
                 append(Path.of(options.get("out")), run);

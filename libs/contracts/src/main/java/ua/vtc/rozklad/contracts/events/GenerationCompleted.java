@@ -5,11 +5,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.Parity;
 
 /**
  * {@code generation.completed}: scheduler → core (and notification). {@code status} is one of
- * SOLVED, FAILED, CANCELLED; {@code error} is set only for FAILED.
+ * SOLVED, FAILED, CANCELLED; {@code error} is set only for FAILED. Additive {@code stopReason}: why a job with a
+ * timetable stopped (SOLVED, or CANCELLED with assignments: {@code STOPPED}); {@code null} for FAILED, for CANCELLED
+ * without a timetable and from older schedulers.
  */
 public record GenerationCompleted(
         UUID eventId,
@@ -21,7 +24,8 @@ public record GenerationCompleted(
         long softScore,
         List<Assignment> assignments,
         List<ConstraintScore> analysis,
-        String error) implements RozkladEvent {
+        String error,
+        GenerationStopReason stopReason) implements RozkladEvent {
 
     public GenerationCompleted {
         Objects.requireNonNull(eventId, "eventId");
@@ -37,9 +41,23 @@ public record GenerationCompleted(
 
     public GenerationCompleted(EventEnvelope envelope, UUID jobId, GenerationStatus status, long hardScore,
                                long softScore, List<Assignment> assignments, List<ConstraintScore> analysis,
-                               String error) {
+                               String error, GenerationStopReason stopReason) {
         this(envelope.eventId(), envelope.occurredAt(), envelope.version(), jobId, status, hardScore, softScore,
-                assignments, analysis, error);
+                assignments, analysis, error, stopReason);
+    }
+
+    /** The record's first schema, kept for callers: no stop reason. */
+    public GenerationCompleted(UUID eventId, Instant occurredAt, int version, UUID jobId, GenerationStatus status,
+                               long hardScore, long softScore, List<Assignment> assignments,
+                               List<ConstraintScore> analysis, String error) {
+        this(eventId, occurredAt, version, jobId, status, hardScore, softScore, assignments, analysis, error, null);
+    }
+
+    /** A completion of the first schema: no stop reason. */
+    public GenerationCompleted(EventEnvelope envelope, UUID jobId, GenerationStatus status, long hardScore,
+                               long softScore, List<Assignment> assignments, List<ConstraintScore> analysis,
+                               String error) {
+        this(envelope, jobId, status, hardScore, softScore, assignments, analysis, error, null);
     }
 
     /** Placement of a {@link ProblemSnapshot.Unit}; {@code roomId} may be {@code null}. */

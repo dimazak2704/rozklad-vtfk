@@ -108,12 +108,13 @@ test.describe('генератор', () => {
   test('запуск доходить до кінця: графік, «Було і стало» і нова чернетка', async ({ page }) => {
     await loginWithMockRoles(page, 'ADMIN');
     await page.goto('/admin/generation');
-    // ліміт — одним перемикачем (без окремого поля з плюсом і мінусом)
-    await page.getByRole('radio', { name: /^30/ }).click();
+    // ліміту часу немає: генерація зупиняється сама, коли розклад перестає покращуватися
+    await expect(page.getByText('Ліміт часу')).toHaveCount(0);
     await page.getByRole('button', { name: 'Запустити генерацію' }).click();
 
     await expect(page.getByText('Розвʼязується').first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('figure', { name: 'Хід розвʼязання' })).toBeVisible();
+    await expect(page.getByText(/^Генерація зупиниться сама, коли розклад перестане покращуватися\./)).toBeVisible();
 
     const table = page.getByRole('table', { name: 'Було і стало' });
     await expect(table).toBeVisible({ timeout: 30_000 });

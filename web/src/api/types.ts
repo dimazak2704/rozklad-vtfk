@@ -66,6 +66,12 @@ export type OrderRowType =
 export type TimetableVersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type TimetableVersionSource = 'MANUAL' | 'IMPORT' | 'GENERATED' | 'COPY';
 export type GenerationJobStatus = 'QUEUED' | 'RUNNING' | 'SOLVED' | 'FAILED' | 'CANCELLED';
+
+/**
+ * Чому задача з розкладом зупинилась (contracts `GenerationStopReason`): розклад перестав покращуватися, вичерпано
+ * старий фіксований ліміт, спрацювала межа часу сервера, диспетчер зупинив (найкращий варіант збережено).
+ */
+export type GenerationStopReason = 'NO_IMPROVEMENT' | 'TIME_LIMIT' | 'SAFETY_CAP' | 'STOPPED';
 export type ControlForm = 'EXAM' | 'CREDIT' | 'NONE';
 export type LoadSource = 'MANUAL' | 'CURRICULUM' | 'PROGRAM' | 'TIMETABLE_DERIVED';
 export type AccountingStatus = 'FINISHED' | 'WILL_OVERRUN' | 'WILL_UNDERRUN' | 'ON_TRACK';
@@ -910,8 +916,11 @@ export interface GenerationJobRequest {
   semesterId: Uuid;
   scope: { groupIds?: Uuid[]; courses?: number[] };
   baseVersionId?: Nullable<Uuid>;
-  /** 10..600 */
-  timeLimitSeconds: number;
+  /**
+   * Старий фіксований ліміт, 10..600 с. Без нього — автоматичний режим: генерація зупиняється сама, коли розклад
+   * перестає покращуватися. Вебзастосунок його більше не надсилає; поле лишається для скриптів.
+   */
+  timeLimitSeconds?: Nullable<number>;
   /** Можна надіслати лише частину нових ваг: решту core підставить типовими. */
   weights?: Nullable<GenerationWeightsWire>;
 }
@@ -972,7 +981,7 @@ export interface GenerationJobDto {
   progress: GenerationProgressPoint[];
   resultVersionId: Nullable<Uuid>;
   baseVersionId: Nullable<Uuid>;
-  /** Ліміт часу запуску, 10..600 с. */
+  /** Старий фіксований ліміт запуску, 10..600 с; null — автоматичний режим (зупиняється сама). */
   timeLimitSeconds: Nullable<number>;
   analysis: Nullable<ConstraintAnalysisDto[]>;
   metricsBefore: Nullable<MetricsDto>;
@@ -997,6 +1006,10 @@ export interface GenerationJobDto {
    * було, а `weights` показує їхні типові значення лише для форми. null — сервер старий або ваг немає.
    */
   legacyWeights?: Nullable<boolean>;
+  /** Адитивно: диспетчер зупинив задачу, що розвʼязується; найкращий варіант на шляху (задача ще активна). */
+  stopRequested?: Nullable<boolean>;
+  /** Адитивно: чому задача з розкладом зупинилась; null — старі задачі й задачі без розкладу. */
+  stopReason?: Nullable<GenerationStopReason>;
 }
 
 /** Рядок `problems[]` у 422 `GENERATION_LOAD_EXCEEDS_SLOTS` (genfix §3.6): навантаження не вміщується в сітку. */

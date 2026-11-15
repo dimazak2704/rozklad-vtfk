@@ -14,6 +14,7 @@ import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 
 /**
@@ -21,7 +22,8 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
  * points ({@code [{t, hard, soft}]}, {@code t} in seconds), result version. {@code plan} keeps the
  * units sent to the scheduler so that its assignments can be turned into template lessons;
  * {@code analysis}, {@code metricsBefore}, {@code metricsAfter} and {@code outcome} are filled on completion.
- * The scheduler keeps its own job table.
+ * A running job the dispatcher stopped stays active ({@code stopRequestedAt}) until the scheduler returns its best
+ * timetable; {@code stopReason} says why a job with a timetable stopped. The scheduler keeps its own job table.
  */
 @Entity
 @Table(name = "generation_job")
@@ -87,6 +89,13 @@ public class GenerationJob extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "outcome", columnDefinition = "jsonb")
     private JsonNode outcome;
+
+    @Column(name = "stop_requested_at")
+    private Instant stopRequestedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stop_reason", length = 16)
+    private GenerationStopReason stopReason;
 
     protected GenerationJob() {
     }
@@ -195,6 +204,34 @@ public class GenerationJob extends BaseEntity {
             startedAt = finishedAt;
         }
         this.error = error;
+    }
+
+    /**
+     * The dispatcher asked a running job to stop: it stays active until the scheduler returns the best timetable so
+     * far (or the watchdog gives up). Asking again changes nothing.
+     */
+    public void requestStop(Instant now) {
+        requireActive();
+        if (stopRequestedAt == null) {
+            stopRequestedAt = Objects.requireNonNull(now, "now");
+        }
+    }
+
+    public Instant getStopRequestedAt() {
+        return stopRequestedAt;
+    }
+
+    public GenerationStopReason getStopReason() {
+        return stopReason;
+    }
+
+    public void setStopReason(GenerationStopReason stopReason) {
+        this.stopReason = stopReason;
+    }
+
+    /** No time limit in the request: the scheduler stops when the timetable stops getting better. */
+    public boolean isAutoMode() {
+        return !params.path("timeLimitSeconds").isNumber();
     }
 
     private void requireActive() {

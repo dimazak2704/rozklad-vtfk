@@ -24,6 +24,7 @@ import ua.vtc.rozklad.contracts.AbsenceSource;
 import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.AcademicYear;
@@ -178,6 +179,8 @@ class PersistenceMappingIT {
         JsonNode params = jsonMapper.readTree("{\"timeLimitSeconds\":120,\"scope\":{\"courses\":[4]}}");
         GenerationJob job = new GenerationJob(semester.getId(), params, "admin");
         job.setProgress(jsonMapper.readTree("[{\"t\":2000,\"hard\":-3,\"soft\":-120}]"));
+        job.requestStop(Instant.parse("2026-11-15T09:00:00Z"));
+        job.setStopReason(GenerationStopReason.STOPPED);
         generationJobs.save(job);
         settings.save(new Setting("substitution.approvalMode", jsonMapper.readTree("\"CONFIRM\""), "admin"));
         OrderDocument order = OrderDocument.mainOrder(semester.getId(), MONDAY,
@@ -190,6 +193,8 @@ class PersistenceMappingIT {
         GenerationJob loadedJob = generationJobs.findById(job.getId()).orElseThrow();
         assertThat(loadedJob.getParams().get("scope").get("courses").get(0).asInt()).isEqualTo(4);
         assertThat(loadedJob.getProgress().get(0).get("soft").asInt()).isEqualTo(-120);
+        assertThat(loadedJob.getStopRequestedAt()).isEqualTo(Instant.parse("2026-11-15T09:00:00Z"));
+        assertThat(loadedJob.getStopReason()).isEqualTo(GenerationStopReason.STOPPED);
         assertThat(settings.findById("substitution.approvalMode").orElseThrow().getValue().asString())
                 .isEqualTo("CONFIRM");
         assertThat(orders.findById(order.getId()).orElseThrow().getNotes())

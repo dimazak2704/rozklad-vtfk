@@ -18,7 +18,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
  * mvn -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.failIfNoSpecifiedTests=false \
  *     -Dscheduler.excludedTags=none -Dreplay=college-from-published:180,ki4-scope-3groups:60 \
  *     [-Dreplay.weights=stability=2,disciplineTwice=3] [-Dreplay.label=A] [-Dreplay.out=results.jsonl] \
- *     [-Dreplay.termination=spent] [-Dreplay.seed=1]
+ *     [-Dreplay.termination=spent|auto] [-Dreplay.seed=1]
  * </pre>
  *
  * Datasets: {@code college-from-published}, {@code ki4-scope-3groups}, {@code course4-scope},

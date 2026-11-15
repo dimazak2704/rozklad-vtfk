@@ -644,6 +644,26 @@ effect each from a closed list, so a new kind (НС this year) needs no code. Al
 | Order notes | Unchanged: `orderNote` is stored text. Kinds carry a `noteTemplate` (placeholders `{хто} {назва} {назва_мала} {вид} {від} {до} {ауд} {режим}`, `[...]` optional) rendered by the web form («Скласти») and by the importer, not by core. | The dispatcher still edits the sentence of record. |
 | Schema compatibility | `calendar_period.kind` stays one release, nullable, written from the kind (never read); `ck_calendar_period_kind` dropped (`V1_203`), and `ck_calendar_period_study_mode_required` too (`V1_204`): it was keyed on the old column, so after the builtin ФН (no periods yet) switched its effect away from ONLINE every new ФН period failed with a misleading 409; the study mode is checked by effect in the service. A trigger fills `kind_id` from `kind` for SQL that inserts only the old column (the demo seed `V9_001` on a new database). Known gap: the migration does not re-materialize lessons, so dated lessons inside an EXAM_SESSION period created before `V1_203` stay until those dates are edited or republished. | A rollback of core still finds the column; applied migrations are not edited. |
 
+## Generation without a time limit (auto mode, 15.11.2026)
+
+Owner's decision: the dispatcher does not set a time limit; generation runs as long as it improves («5 хвилин — не
+проблема»), stops by itself when the timetable stops getting better, and «Зупинити» keeps the best result so far. All
+changes are additive: old payloads and requests with `timeLimitSeconds` keep the old behaviour (scripts, tests,
+`smoke_workflows.py`). Deploy order: scheduler before core (an older scheduler fails a request without a limit).
+Migration: core `V1_809`.
+
+| Area | Decision | Why |
+|---|---|---|
+| `POST /api/admin/generation/jobs` | `timeLimitSeconds` optional: absent/null = auto mode; a value is still validated 10..600 and keeps the fixed limit. `params` stores the field only when it was given. | The web form has no limit any more; old clients keep working. |
+| `GenerationRequested.timeLimitSeconds` | `int` → nullable `Integer` (absent = auto mode, `autoMode()`); a value must be positive. | One event for both modes. |
+| Auto-mode termination (scheduler) | `OR(spent 30 min cap, 3 min without any better score, AND(0 hard, gain < 20 soft points over the last 60 s))`, settings `app.scheduler.auto.{time-cap, window, min-improvement, stuck-limit}`; Timefold's own terminations, no custom code. The timetable keeps improving while hard violations go away (a hard gain passes the threshold). | Chosen on replays of the four real requests: scopes stop in ~2 min, the whole college in ~10 min from the published version and ~16 min from scratch, as good as or better than the 150–180 s runs (scheduler.md §11 «Auto mode»). |
+| `GenerationCompleted.stopReason` | New enum `GenerationStopReason {NO_IMPROVEMENT, TIME_LIMIT, SAFETY_CAP, STOPPED}`, nullable, only with a timetable; the 8- and 10-argument constructors stay. Decided from the measured solving time (within 1 s of the limit or the cap), `STOPPED` for a cancelled job. Append values only. | History and the job panel say why a run stopped; Timefold 2.8 does not report which termination fired. |
+| «Зупинити» keeps the best timetable | Before, core finished a cancelled job at once and ignored the scheduler's CANCELLED completion, which already carried the best timetable, so the result was lost. Now a QUEUED job is still CANCELLED at once; a RUNNING job gets `stop_requested_at`, stays active, and the CANCELLED completion with assignments becomes the draft (SOLVED, `stop_reason` STOPPED); without assignments the job ends CANCELLED. Stopping again returns the job (no 409 for a stop that already ended). | The owner's «можна зупинити раніше — збережеться найкращий варіант». |
+| `GenerationJobDto` | Additive `stopRequested` (boolean) and `stopReason`; `timeLimitSeconds` is null for auto-mode jobs. | Web: «Зупиняємо…», the reason line, history. |
+| Watchdog (core) | A queued auto job waits `app.timetable.generation.auto-time-cap` (30 min, the scheduler's cap) + grace instead of its limit; a running job still fails after the grace (10 min) without progress, which is longer than the scheduler's stuck limit (3 min), so a long healthy run is not lost; a stopped job fails after `stop-grace` (2 min) without its best timetable («Планувальник не повернув найкращий варіант після зупинки…»). | A 10–16 min auto run must not be failed as lost, and a stop must not hang the semester. |
+| Notification (not changed) | The admin chat message for a CANCELLED `generation.completed` still says «Генерацію розкладу скасовано» also when the stopped job's best timetable became a draft. | Out of scope of this change; a follow-up can read `stopReason`. |
+| Web | No time-limit field or hint; the running panel shows «Минуло …» ticking every second and «Генерація зупиниться сама, коли розклад перестане покращуватися. Можна зупинити раніше — збережеться найкращий варіант»; «Зупинити» (queued: «Скасувати»); the result and the history say how long the run took and why it stopped (`stopReason`; old jobs: «старий фіксований ліміт N»). | web-planning.md. |
+
 ## E2E findings (fix/e2e-findings)
 
 All changes are additive REST fields; no event or `libs/contracts` record changes.

@@ -3,15 +3,17 @@ package ua.vtc.rozklad.scheduler.generation;
 import java.util.List;
 import java.util.Objects;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.Assignment;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.ConstraintScore;
 
 /**
  * How a job ended, i.e. the payload of {@code generation.completed}. Scores are {@code null}
- * when no complete timetable was reached; {@code error} is set only for FAILED.
+ * when no complete timetable was reached; {@code error} is set only for FAILED; {@code stopReason}
+ * only when there is a timetable.
  */
 record Outcome(GenerationStatus status, Long hardScore, Long softScore, List<Assignment> assignments,
-               List<ConstraintScore> analysis, String error) {
+               List<ConstraintScore> analysis, String error, GenerationStopReason stopReason) {
 
     Outcome {
         Objects.requireNonNull(status, "status");
@@ -26,10 +28,10 @@ record Outcome(GenerationStatus status, Long hardScore, Long softScore, List<Ass
     }
 
     static Outcome failed(String error) {
-        return new Outcome(GenerationStatus.FAILED, null, null, List.of(), List.of(), error);
+        return new Outcome(GenerationStatus.FAILED, null, null, List.of(), List.of(), error, null);
     }
 
     static Outcome cancelledWithoutResult() {
-        return new Outcome(GenerationStatus.CANCELLED, null, null, List.of(), List.of(), null);
+        return new Outcome(GenerationStatus.CANCELLED, null, null, List.of(), List.of(), null, null);
     }
 }

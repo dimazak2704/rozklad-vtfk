@@ -4,8 +4,10 @@ import ai.timefold.solver.core.api.solver.SolverConfigOverride;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.config.solver.termination.TerminationConfig;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -39,12 +41,14 @@ public class GenerationSolver {
     public void start(UUID jobId, Timetable problem, TerminationConfig termination) {
         // колбеки йдуть на потоках солвера: з MDC запиту, щоб generation.completed ніс його X-Request-Id
         Map<String, String> requestMdc = MDC.getCopyOfContextMap();
+        AtomicLong startedNanos = new AtomicLong(System.nanoTime());
         try {
             solverManager.solveBuilder()
                     .withProblemId(jobId)
                     .withProblem(problem)
                     .withConfigOverride(new SolverConfigOverride().withTerminationConfig(termination))
                     .withSolverJobStartedEventConsumer(event -> withMdc(requestMdc, () -> {
+                        startedNanos.set(System.nanoTime());
                         progress.track(jobId);
                         lifecycle.markRunning(jobId);
                     }))
@@ -55,7 +59,8 @@ public class GenerationSolver {
                     })
                     .withFinalBestSolutionEventConsumer(event -> withMdc(requestMdc, () -> {
                         progress.untrack(jobId);
-                        lifecycle.finishWithSolution(jobId, event.solution(), shuttingDown);
+                        Duration solvingTime = Duration.ofNanos(System.nanoTime() - startedNanos.get());
+                        lifecycle.finishWithSolution(jobId, event.solution(), solvingTime, shuttingDown);
                     }))
                     .withExceptionHandler((id, error) -> withMdc(requestMdc, () -> {
                         progress.untrack(jobId);

@@ -7,6 +7,7 @@ import { PUBLISHED_VERSION_ID } from '@/mocks/fixtures';
 import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
+import { AUTO_STOP_SENTENCE } from '@/components/generation/model';
 import GenerationPage from './GenerationPage';
 import TimetablePage from './TimetablePage';
 
@@ -155,8 +156,10 @@ describe('Генератор розкладу', () => {
     // чесна підказка: 4-ту пару зміни коледж вважає звичайною
     expect(screen.getAllByText(/коледж вважає її звичайною, тому типово вимкнено/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Типові пріоритети' })).not.toBeInTheDocument();
-    // весь коледж за 1 хв на реальних даних виходив гіршим за чинний розклад — підказка біля ліміту
-    expect(screen.getByText(/Для всього коледжу краще 5 хв/)).toBeInTheDocument();
+    // ліміту часу немає: генерація зупиняється сама
+    expect(screen.queryByText('Ліміт часу')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Ліміт часу' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Для всього коледжу краще 5 хв/)).not.toBeInTheDocument();
   });
 
   it('422 «навантаження не вміщується» — список проблем під формою (B9)', async () => {
@@ -213,6 +216,9 @@ describe('Генератор розкладу', () => {
     expect(await screen.findByText('Готово з конфліктами', undefined, LONG)).toBeInTheDocument();
     expect(screen.getByText('З конфліктами')).toBeInTheDocument();
     expect(screen.getByText('Параметри цього запуску невідомі: сервер їх не зберіг.')).toBeInTheDocument();
+    // стара задача без причини зупинки: лише ліміт, з яким її запускали
+    expect(screen.getByText(/^Запуск зі старим фіксованим лімітом 10\sхв\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^10\sхв · ліміт 10\sхв/)).toBeInTheDocument();
     // без бази «Було» не вигадується з першої точки прогресу (34)
     const table = screen.getByRole('table', { name: 'Що вийшло' });
     expect(within(table).getByRole('row', { name: /Жорсткі конфлікти\s*1$/ })).toBeInTheDocument();
@@ -224,14 +230,27 @@ describe('Генератор розкладу', () => {
     expect(result && form && result.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('запуск показує задачу в черзі, а потім хід розвʼязання', async () => {
+  it('запуск показує задачу в черзі, а потім хід розвʼязання і що вона зупиниться сама', async () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
     await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
     expect((await screen.findAllByText(/^(У черзі|Розвʼязується)$/, undefined, LONG)).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Запустити генерацію' })).toBeDisabled());
-    // панель задачі чекає на GET задачі, а мок-генератор рахує розвʼязок у тому ж потоці: на повільній машині
-    // історія вже показує «У черзі», а панель ще вантажиться
-    expect(await screen.findByRole('button', { name: 'Скасувати' }, LONG)).toBeInTheDocument();
+    // кнопка зʼявляється, коли панель перемкнеться на нову задачу (до того видно попередній результат)
+    expect(await screen.findByRole('button', { name: /^(Скасувати|Зупинити)$/ }, LONG)).toBeInTheDocument();
+    expect(await screen.findByText(AUTO_STOP_SENTENCE, undefined, LONG)).toBeInTheDocument();
+    expect(screen.getByText(/^Минуло /)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Зупинити' })).toBeInTheDocument();
+  });
+
+  it('«Зупинити» — панель чекає найкращий варіант, а потім показує чернетку й причину', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
+    await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
+    await user.click(await screen.findByRole('button', { name: 'Зупинити' }, LONG));
+    expect(await screen.findByText('Зупинено вручну — збережено найкращий варіант на той момент.', undefined, LONG)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Відкрити чернетку' })).toBeInTheDocument();
+    // історія оновлюється своїм опитуванням — чекаємо й на неї
+    expect(await screen.findByText(/ · зупинено вручну/, undefined, LONG)).toBeInTheDocument();
   });
 });

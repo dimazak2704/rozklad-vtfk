@@ -164,10 +164,14 @@ app.identity:
   accounts-api:
     url: ${AUTH_INTERNAL_URL:http://localhost:8085/auth/internal}
 
-# timetable: задача генерації без вістей від планувальника довше за запас вважається збійною
+# timetable: задача генерації без вістей від планувальника довше за запас вважається збійною. Задача без ліміту
+# часу в черзі чекає межу планувальника (auto-time-cap = app.scheduler.auto.time-cap) плюс запас; зупинена задача
+# чекає найкращий варіант stop-grace. Запас має бути довшим за app.scheduler.auto.stuck-limit (3 хв)
 app.timetable:
   generation:
     timeout-grace: ${GENERATION_TIMEOUT_GRACE:10m}
+    auto-time-cap: ${GENERATION_AUTO_TIME_CAP:30m}
+    stop-grace: ${GENERATION_STOP_GRACE:2m}
     watchdog-interval: ${GENERATION_WATCHDOG_INTERVAL:PT1M}
 
 # outbox: повтор невдалих публікацій під час роботи й очищення завершених (shared.messaging.OutboxProperties)

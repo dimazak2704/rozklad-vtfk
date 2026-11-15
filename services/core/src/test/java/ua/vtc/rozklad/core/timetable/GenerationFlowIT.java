@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.UnitWeight;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
@@ -61,7 +62,8 @@ import ua.vtc.rozklad.core.timetable.internal.importing.TimetableImportService;
 /**
  * Generation orchestration over RabbitMQ: the problem snapshot leaves through the outbox, progress
  * and results come back on {@code core.q.scheduler-results}, a solved result becomes a draft, a
- * redelivered result is ignored, a cancelled job ignores late results.
+ * redelivered result is ignored, a cancelled queued job ignores late results, a stopped running job keeps
+ * the best timetable the scheduler returns, and a request without a time limit runs in auto mode.
  */
 @CoreIntegrationTest
 class GenerationFlowIT {
@@ -191,6 +193,9 @@ class GenerationFlowIT {
 
         GenerationJobDto solved = generation.get(job.id());
         assertThat(solved.resultVersionId()).isNotNull();
+        assertThat(solved.timeLimitSeconds()).as("an old request keeps its limit").isEqualTo(30);
+        assertThat(solved.stopReason()).as("a completion of the first schema has none").isNull();
+        assertThat(solved.stopRequested()).isFalse();
         assertThat(solved.bestScore()).isEqualTo("0hard/-12soft");
         assertThat(solved.analysis()).extracting(GenerationCompleted.ConstraintScore::constraint)
                 .containsExactly("Вікна груп");
@@ -418,6 +423,102 @@ class GenerationFlowIT {
                 .isEqualTo(GenerationStatus.QUEUED);
     }
 
+    /** Auto mode: no limit in the request or the job; the scheduler's reason is kept with the draft. */
+    @Test
+    void requestWithoutTimeLimitRunsInAutoModeAndKeepsTheStopReason() {
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+
+        GenerationJobDto job = generation.start(autoCommand(), "admin");
+
+        assertThat(job.timeLimitSeconds()).isNull();
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        assertThat(request.autoMode()).isTrue();
+        Boolean storedLimit = transaction.execute(status -> jobs.findById(job.id()).orElseThrow().getParams()
+                .has("timeLimitSeconds"));
+        assertThat(storedLimit).isFalse();
+
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.SOLVED, 0, -8, assignments(request.problem()), List.of(), null,
+                GenerationStopReason.NO_IMPROVEMENT));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.SOLVED));
+
+        assertThat(generation.get(job.id())).satisfies(solved -> {
+            assertThat(solved.stopReason()).isEqualTo(GenerationStopReason.NO_IMPROVEMENT);
+            assertThat(solved.resultVersionId()).isNotNull();
+        });
+    }
+
+    /** «Зупинити» on a running job: it stays active until the scheduler returns the best timetable, which is kept. */
+    @Test
+    void stoppedRunningJobKeepsTheBestTimetableAsADraft() {
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+        Queue cancels = probe(RozkladEvents.GENERATION_CANCEL);
+        GenerationJobDto job = generation.start(autoCommand(), "admin");
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        send(RozkladEvents.GENERATION_PROGRESS, new GenerationProgress(EventEnvelope.create(clock), job.id(), 2_000,
+                0, -40));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.RUNNING));
+
+        GenerationJobDto stopping = generation.cancel(job.id());
+
+        assertThat(stopping.status()).isEqualTo(GenerationStatus.RUNNING);
+        assertThat(stopping.stopRequested()).isTrue();
+        assertThat(stopping.finishedAt()).isNull();
+        assertThat(rabbitTemplate.receiveAndConvert(cancels.getName(), 15_000))
+                .isInstanceOfSatisfying(GenerationCancelRequested.class,
+                        event -> assertThat(event.jobId()).isEqualTo(job.id()));
+        GenerationJobDto again = generation.cancel(job.id());
+        assertThat(again.stopRequested()).as("stopping again changes nothing").isTrue();
+        assertThat(again.status()).isEqualTo(GenerationStatus.RUNNING);
+        assertThatThrownBy(() -> generation.start(autoCommand(), "admin")).as("still the semester's active job")
+                .isInstanceOf(ConflictException.class);
+
+        // планувальник зупинився й повернув найкращий розклад на момент зупинки
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.CANCELLED, 0, -35, assignments(request.problem()), List.of(), null,
+                GenerationStopReason.STOPPED));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.SOLVED));
+
+        GenerationJobDto stopped = generation.get(job.id());
+        assertThat(stopped.stopReason()).isEqualTo(GenerationStopReason.STOPPED);
+        assertThat(stopped.bestScore()).isEqualTo("0hard/-35soft");
+        assertThat(stopped.resultVersionId()).isNotNull();
+        TimetableVersion draft = versions.findById(stopped.resultVersionId()).orElseThrow();
+        assertThat(draft.getStatus()).isEqualTo(VersionStatus.DRAFT);
+        assertThat(templateLessons.findAllByVersionId(draft.getId())).hasSize(4);
+        assertThat(generation.cancel(job.id()).status()).as("no 409 for a stop that already ended")
+                .isEqualTo(GenerationStatus.SOLVED);
+    }
+
+    /** A job stopped before the scheduler had a complete timetable ends CANCELLED without a draft. */
+    @Test
+    void stoppedJobWithoutATimetableIsCancelled() {
+        GenerationJobDto job = generation.start(autoCommand(), "admin");
+        send(RozkladEvents.GENERATION_PROGRESS, new GenerationProgress(EventEnvelope.create(clock), job.id(), 1_000,
+                -3, -40));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.RUNNING));
+        generation.cancel(job.id());
+
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.CANCELLED, 0, 0, List.of(), List.of(), null));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.CANCELLED));
+
+        assertThat(generation.get(job.id())).satisfies(cancelled -> {
+            assertThat(cancelled.resultVersionId()).isNull();
+            assertThat(cancelled.stopReason()).isNull();
+            assertThat(cancelled.stopRequested()).isTrue();
+        });
+    }
+
     @Test
     void invalidSolutionFailsTheJobInsteadOfCreatingAVersion() {
         GenerationJobDto job = generation.start(command(), "admin");
@@ -524,6 +625,12 @@ class GenerationFlowIT {
     private GenerationRequestCommand command() {
         return new GenerationRequestCommand(data.semester.getId(), List.of(data.group4ki1.getId()), null,
                 baseVersionId, 30, null);
+    }
+
+    /** The same scope without a time limit (auto mode). */
+    private GenerationRequestCommand autoCommand() {
+        return new GenerationRequestCommand(data.semester.getId(), List.of(data.group4ki1.getId()), null,
+                baseVersionId, null, null);
     }
 
     /** A feasible answer: wholes on Tuesday/Wednesday, the half in a denominator week, pinned units at their pins. */
