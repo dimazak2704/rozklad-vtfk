@@ -129,10 +129,14 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
     switched it off, and the B9 pre-check blamed the load for it); the base rooms reach the scheduler in
     `initial`/`pinned`, and keeping PE in the hall is its soft rule `specialRooms`;
   - free units of a split item with 2+ subgroups carry `siblingKey = loadItemId:w1|…|h`; every teacher carries
-    `maxPairsPerDay` = the setting `teacherMaxPairsPerDay`;
+    `maxPairsPerDay` = the setting `teacherMaxPairsPerDay`, every group `fridayMaxPairs` = the setting `fridayMaxPairs`
+    (hard in the scheduler, owner's rule of 15.11.2026);
   - pre-check before the job is stored (`LoadFitCheck`, B9): per group cohort, per teacher and per required room
     type, week occurrences (BOTH 2, a half 1) against 2 × slots of the shift windows (teachers minus UNAVAILABLE,
-    room types × Σ maxParallel); any excess → 422 `GENERATION_LOAD_EXCEEDS_SLOTS` with `problems[]`;
+    room types × Σ maxParallel); a group with a free unit counts Friday at most `fridayMaxPairs` (or its pinned Friday
+    pairs, when more; «(у пʼятницю не більше 3 пар)» in the message); any excess → 422
+    `GENERATION_LOAD_EXCEEDS_SLOTS` with `problems[]`. A day without windows needs no extra slot, so it is not counted
+    (no real group is near the limit: at most 17 pairs in the first shift, 18,5 in the second);
   - unknown group size → 0, unknown room capacity → `Integer.MAX_VALUE` in the snapshot (no invented violations);
     timeslots = union of the shift windows;
   - every free unit carries `teacherRoomId` = `TeacherRooms.forDiscipline(teacher, discipline)` over the published
@@ -183,7 +187,7 @@ the scheduler's `auto.stuck-limit`), `auto-time-cap` (`GENERATION_AUTO_TIME_CAP`
 (`GENERATION_WATCHDOG_INTERVAL`, default `PT1M`). Migration `V1_401__generation_results.sql`
 (job plan, analysis, metrics before/after, base version, last progress; one active job per semester),
 `V1_808__generation_job_outcome.sql` (`outcome jsonb`), `V1_809__generation_job_stop.sql` (`stop_requested_at`,
-`stop_reason`). Setting `generation.teacherMaxPairsPerDay` (settings.md).
+`stop_reason`). Settings `generation.teacherMaxPairsPerDay` and `generation.fridayMaxPairs` (settings.md).
 
 ## 5. How to test
 

@@ -8,7 +8,7 @@ depends on nothing but `shared`).
 - `SettingsService`: `current()` → `SystemSettings`, `update(settings, actor)`, convenience accessors
   (`approvalMode()`, `requiresConfirmation()`, `confirmTimeoutMinutes()`, `signatoryPosition()`,
   `signatoryName()`, `collegeName()`, `hoursPerPair()`, `showTeacherFullNames()`, `changesHistoryDays()`,
-  `activeBellProfileId()`, `teacherMaxPairsPerDay()`). Inside a transaction the table is read once: `current()` is kept as a
+  `activeBellProfileId()`, `teacherMaxPairsPerDay()`, `fridayMaxPairs()`). Inside a transaction the table is read once: `current()` is kept as a
   transaction resource until the transaction ends, and `update` in the same transaction drops it. Outside a
   transaction each call reads the table.
 - `ChangeApprovalMode {AUTO, CONFIRM, NOTIFY}` — own enum so settings does not depend on substitution; the
@@ -38,6 +38,7 @@ depends on nothing but `shared`).
 | `public.changesHistoryDays` | `changesHistoryDays` (0..365) | `7` (no migration row) |
 | `calendar.activeBellProfileId` | `activeBellProfileId` | profile «2 зміни, 60 хв» (migration) |
 | `generation.teacherMaxPairsPerDay` | `teacherMaxPairsPerDay` (1..8) | `4` (no migration row). The generator's soft limit «Забагато пар на день у викладача» (sent as `ProblemSnapshot.Teacher.maxPairsPerDay`) and the metric `teacherOverloadDays`. Not a college rule: 35 of 781 real teacher-days have 5–6 pairs (DOMAIN §13, Q2) |
+| `generation.fridayMaxPairs` | `fridayMaxPairs` (1..8) | `3` (no migration row). «Максимум пар у пʼятницю»: the most pairs a group has on Friday, a hard rule of the generator (owner, 15.11.2026: Friday is an unloading day; DOMAIN §5), sent as `ProblemSnapshot.Group.fridayMaxPairs`, and counted by the B9 load pre-check |
 
 Migration `V1_802__setting_defaults.sql` inserts the rows (only missing keys); `SystemSettings.DEFAULTS`
 holds the same values for keys without a row (`activeBellProfileId` → `null`). A stored value of the
@@ -46,9 +47,10 @@ wrong type is an error (500 + log), never silently replaced by the default.
 ## Endpoints
 
 `GET/PUT /api/admin/settings` (ADMIN) — the `SettingsDto` of CONTRACTS §2; PUT replaces all values
-(`activeBellProfileId` may be `null`; a PUT without `changesHistoryDays` or `teacherMaxPairsPerDay`, from an older
-client, keeps the stored value); only changed keys get a new `updated_by`/`updated_at`. A `SystemSettings` built
-with the 9-argument constructor (callers that do not deal with generation) has the default daily limit.
+(`activeBellProfileId` may be `null`; a PUT without `changesHistoryDays`, `teacherMaxPairsPerDay` or `fridayMaxPairs`,
+from an older client, keeps the stored value); only changed keys get a new `updated_by`/`updated_at`. A `SystemSettings`
+built with the 9-argument constructor (callers that do not deal with generation) has the default daily limit and Friday
+limit, one built with the 10-argument constructor the default Friday limit.
 
 ## How to test
 

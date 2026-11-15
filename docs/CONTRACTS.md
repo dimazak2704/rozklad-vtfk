@@ -165,7 +165,7 @@ displayName?, roles, teacherId?}` → 201, `PATCH /{accountId}`, `POST /{account
 `DELETE /{accountId}/google`;
 `GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing account of the sign-in service → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
-`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, changesHistoryDays, activeBellProfileId, teacherMaxPairsPerDay, version}` (PUT needs the `version` of GET, stale → 409; `changesHistoryDays` 0..365, default 7, days of substitution history visitors see; a PUT without it keeps the stored value; `teacherMaxPairsPerDay` 1..8, default 4, the generator's soft daily limit of a teacher, kept the same way).
+`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, changesHistoryDays, activeBellProfileId, teacherMaxPairsPerDay, fridayMaxPairs, version}` (PUT needs the `version` of GET, stale → 409; `changesHistoryDays` 0..365, default 7, days of substitution history visitors see; a PUT without it keeps the stored value; `teacherMaxPairsPerDay` 1..8, default 4, the generator's soft daily limit of a teacher, kept the same way; `fridayMaxPairs` 1..8, default 3, the most pairs a group has on Friday, a hard rule of the generator (owner, 15.11.2026), kept the same way).
 
 Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
@@ -260,13 +260,15 @@ its MDC (`requestId`, `eventId`) while it handles the message and forwards `X-Re
 makes; a message without the header gets a new request id. Events re-sent after a restart or a broker failure
 (outbox resubmission, scheduler's resend of `generation.completed`) have no header.
 
-`ProblemSnapshot { timeslots:[{weekday,pair}], shiftWindows:[{shift,weekday,firstPair,lastPair}], groups:[{id,code,size,shift,subgroups:[n]}],
+`ProblemSnapshot { timeslots:[{weekday,pair}], shiftWindows:[{shift,weekday,firstPair,lastPair}], groups:[{id,code,size,shift,subgroups:[n],fridayMaxPairs?}],
 rooms:[{id,name,type,capacity,maxParallel}], teachers:[{id,name,unavailable:[{weekday,pair}], unwanted:[{weekday,pair}], maxPairsPerDay?}],
 units:[{unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight: WHOLE|HALF, requiredRoomType?, preferredRoomId?, homeRoomId?,
 pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?, online?, siblingKey?}] }`
 (`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7;
 `online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5;
 genfix, additive: `maxPairsPerDay` the teacher's daily limit (absent = none; core sends the setting `teacherMaxPairsPerDay`);
+owner's answers round 2, additive: `groups[].fridayMaxPairs` the most pairs of the group on Friday, hard for the group-days the run may change
+(absent = no limit; core sends the setting `fridayMaxPairs` for every group);
 `siblingKey` = `loadItemId:w1|w2|…|h`, equal on the subgroup copies of one weekly occurrence of a split item (free units of an
 item with 2+ subgroups only); `initial` is also the base placement for stability, and the `teacherId` of a unit matched to a base
 lesson is that lesson's teacher; `requiredRoomType` is only the load's own type: core derives none from the base version,
@@ -274,7 +276,8 @@ the scheduler reads the base rooms from `initial`/`pinned` for the soft rule `sp
 
 `GenerationWeights {windows, brokenDays, latePairs, preferences, homeRoom, teacherWindows, teacherShiftWait, stability,
 subgroupsTogether, studentOnePairDay, teacherDays, teacherOverload, disciplineTwice, specialRooms}`: soft weights, 0 = off,
-never negative. The last nine are additive: an absent one takes its default, an absent `teacherWindows` equals `windows` (one
+never negative. `windows` weighs nothing since group windows became a hard rule of the scheduler (owner's answers round 2,
+15.11.2026); it stays for compatibility and as the fallback of an absent `teacherWindows`. The last nine are additive: an absent one takes its default, an absent `teacherWindows` equals `windows` (one
 weight covered groups and teachers before). `DEFAULT` = (30, 10, 0, 5, 1, 10, 3, 1, 30, 10, 5, 3, 10, 30), tuned by replaying
 the college's real generation requests (scheduler `SnapshotReplayTest`); since the owner's answers of 15.11.2026 `latePairs`
 is 0 (the 4th pair is normal) and `subgroupsTogether` 30. The defaults and the statistics behind them are in CHANGELOG-CONTRACTS «Generator
