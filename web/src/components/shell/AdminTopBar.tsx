@@ -36,16 +36,18 @@ export function AdminTopBar({ live, onOpenMenu }: AdminTopBarProps) {
       </div>
       {dated ? <WorkingDateSwitcher /> : null}
       <div className="ms-auto flex shrink-0 items-center sm:gap-2">
-        {/* стан звʼязку — у власному слоті; на телефоні це крапка-кнопка 44 px, і дата поруч лишається цілою */}
-        <StandTimeBadge className={dated ? 'hidden sm:inline-flex' : undefined} />
+        {/* стан звʼязку — першим у правій групі: коли він зʼявляється, росте вліво у вільне місце, а годинник
+            стенда й кнопки праворуч не зсуваються; на телефоні це крапка-кнопка 44 px, і дата лишається цілою */}
         <LiveStatus state={live} className="shrink-0" />
+        {/* на телефоні панель однакова на всіх сторінках: меню, дата чи логотип, пошук; годинник стенда й журнал —
+            з ширшого екрана (журнал на телефоні — з палітри «Пошук і команди») */}
+        <StandTimeBadge className="hidden sm:inline-flex" />
         <IconButton
           label="Журнал дій"
           shortcut="mod+shift+h"
           size="lg"
           icon={<History aria-hidden="true" className="size-5" />}
-          // на телефоні місце — даті; журнал там відкривається з палітри «Пошук і команди»
-          className={dated ? 'hidden sm:inline-flex' : undefined}
+          className="hidden sm:inline-flex"
           onClick={() => openJournal(true)}
         />
         <IconButton

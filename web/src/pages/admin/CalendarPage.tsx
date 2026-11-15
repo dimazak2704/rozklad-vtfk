@@ -42,6 +42,7 @@ import {
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { confirm } from '@/stores/confirm';
+import { parityConfirmation } from '@/components/calendar/parity-confirmation';
 import { formatNumericDate, startOfWeek, todayInKyiv } from '@/lib/date';
 import { countLabel, PARITY_LABEL } from '@/lib/labels';
 import { useRegisterCommands } from '@/stores/commands';
@@ -221,10 +222,16 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
   const overridden = weeks.data?.filter((w) => w.overridden).length ?? 0;
   const current = weeks.data?.find((w) => w.weekStart === startOfWeek(today));
 
-  const toggle = (week: CalendarWeek) => {
+  /**
+   * Парність тижня міняють рідко (перенесені свята), а вона перебудовує розклад усіх груп на тиждень — тому
+   * лише з меню тижня й після підтвердження, яке каже, що станеться. Скасування — з журналу дій.
+   */
+  const toggle = async (week: CalendarWeek) => {
     const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
     const parity = next === week.computedParity ? null : next;
     const previous = week.overridden ? week.parity : null;
+    const ok = await confirm(parityConfirmation(week, today));
+    if (!ok) return;
     override.mutate(
       { weekStart: week.weekStart, parity },
       {
@@ -250,7 +257,7 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
       description={
         <>
           {current ? `Зараз ${current.weekNumber}-й тиждень, ${PARITY_LABEL[current.parity]}. ` : null}
-          Натисніть тиждень, щоб поміняти парність вручну
+          Парність тижня можна змінити вручну з його меню
           {overridden > 0 ? ` (уже змінено: ${overridden})` : ''}.
         </>
       }
@@ -266,7 +273,7 @@ function WeeksSection({ semester, onOpenPeriod }: { semester: CalendarSemester; 
           weeks={weeks.data}
           periods={periods.data ?? []}
           today={today}
-          onToggleWeek={override.isPending ? null : toggle}
+          onToggleWeek={override.isPending ? null : (week) => void toggle(week)}
           onOpenPeriod={onOpenPeriod}
         />
       )}

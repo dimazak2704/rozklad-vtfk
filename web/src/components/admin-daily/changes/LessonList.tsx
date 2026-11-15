@@ -7,23 +7,24 @@ import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { ABSENCE_REASON_LABEL } from '@/lib/labels';
-import { formatTeacherName } from '@/lib/teacher-name';
 import { ABSENCE_SOURCE_TEXT, absencePeriod, decisionSummary, momentText } from '../format';
 import { lessonButtonId, noticeAnswer, type LessonEntry, type TeacherGroup } from '../model';
 import { PendingCountdown, StateText } from '../StateBadge';
+import type { TeacherLabel } from '../teacher-label';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 /** Хто відмовився і коли — тихий рядок аудиту під станом пари; відмова не сьогодні — з датою. */
-function declinedLine(change: ChangeDto | null): string | null {
+function declinedLine(change: ChangeDto | null, name: TeacherLabel): string | null {
   if (!change) return null;
   const last = [...change.history].reverse().find((step) => step.to === 'DECLINED');
   if (!last) return null;
-  return `${change.new.teacher ? formatTeacherName(change.new.teacher, 'grid') : 'Викладач'} відмовився ${momentText(last.at)}`;
+  return `${change.new.teacher ? name(change.new.teacher) : 'Викладач'} відмовився ${momentText(last.at)}`;
 }
 
 /** Стан пари одним рядком: слово стану, далі — що саме вирішено. */
-function StatusLine({ entry }: { entry: LessonEntry }) {
+function StatusLine({ entry, name }: { entry: LessonEntry; name: TeacherLabel }) {
   const change = entry.change;
-  const summary = change ? decisionSummary(change) : null;
+  const summary = change ? decisionSummary(change, name) : null;
   const rest = (content: ReactNode) => <span className="font-normal text-secondary"> · {content}</span>;
   switch (entry.state) {
     case 'uncovered':
@@ -46,7 +47,7 @@ function StatusLine({ entry }: { entry: LessonEntry }) {
       return (
         <StateText state="objected">
           <span>Потрібне доповнення</span>
-          {rest(`${change?.new.teacher?.shortName ?? 'викладач'} не може`)}
+          {rest(`${change?.new.teacher ? name(change.new.teacher) : 'викладач'} не може`)}
         </StateText>
       );
     case 'cancelled':
@@ -90,12 +91,13 @@ interface LessonRowProps {
   selected: boolean;
   pulsing: boolean;
   onSelect: (entry: LessonEntry) => void;
+  name: TeacherLabel;
 }
 
-function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
+function LessonRow({ entry, selected, pulsing, onSelect, name }: LessonRowProps) {
   const { lesson, date } = entry.item;
   const subgroup = lesson.subgroup > 0 ? `${lesson.subgroup} п/г` : null;
-  const audit = entry.state === 'declined' ? declinedLine(entry.change) : null;
+  const audit = entry.state === 'declined' ? declinedLine(entry.change, name) : null;
   return (
     <li>
       <HoverCard openDelay={400} closeDelay={120}>
@@ -124,16 +126,14 @@ function LessonRow({ entry, selected, pulsing, onSelect }: LessonRowProps) {
               <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-cell font-[650] text-primary">
                 <span className="font-display font-semibold tracking-[0.01em]">{lesson.group.code}</span>
                 {subgroup ? <span className="text-ui font-normal text-secondary">{subgroup}</span> : null}
-                <span aria-hidden="true" className="text-muted">
-                  ·
-                </span>
-                <span className="inline-flex min-w-0 items-center gap-1.5">
+                {/* кольорова крапка дисципліни сама відділяє її від групи — без «·» поруч (дві крапки підряд) */}
+                <span className="ms-1 inline-flex min-w-0 items-center gap-1.5">
                   <span {...lineAttr(lesson.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
                   <span className="truncate">{lesson.discipline.shortName}</span>
                 </span>
                 {lesson.room ? <span className="text-ui font-normal text-secondary">· ауд. {lesson.room.name}</span> : null}
               </span>
-              <StatusLine entry={entry} />
+              <StatusLine entry={entry} name={name} />
               {audit ? <span className="text-caption text-muted">{audit}</span> : null}
             </span>
           </button>
@@ -163,13 +163,14 @@ interface LessonListProps {
 export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, onEditAbsence, onCancelAbsence, before }: LessonListProps) {
   const { absence } = group;
   const headingId = `absence-${absence.id}`;
+  const name = useTeacherLabel();
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
       {before}
       <header className="flex items-start justify-between gap-2 px-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h3 id={headingId} className="text-heading font-bold text-primary">
-            {absence.teacher.shortName}
+            {name(absence.teacher)}
           </h3>
           <p className="text-caption text-secondary">
             {absencePeriod(absence)} · {ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}
@@ -177,7 +178,7 @@ export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, o
           </p>
         </div>
         <MoreMenu
-          label={`Дії з відсутністю: ${absence.teacher.shortName}`}
+          label={`Дії з відсутністю: ${name(absence.teacher)}`}
           items={[
             { label: 'Змінити дати чи пари', icon: <Pencil aria-hidden="true" />, onSelect: () => onEditAbsence(absence) },
             {
@@ -204,6 +205,7 @@ export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, o
                   selected={selectedKey === lessonButtonId(entry)}
                   pulsing={pulsing.has(entry.item.lesson.id)}
                   onSelect={onSelect}
+                  name={name}
                 />
               ))}
             </ul>

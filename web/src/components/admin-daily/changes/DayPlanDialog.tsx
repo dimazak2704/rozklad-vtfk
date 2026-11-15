@@ -6,6 +6,7 @@ import { formatWeekdayDate } from '@/lib/date';
 import { subgroupLabel } from '@/lib/labels';
 import { optionKey, optionTitle, planActionLabel, planSummary, type PlanChoice } from '../model';
 import { OptionChips } from './OptionRow';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 const SKIP = 'skip';
 
@@ -44,7 +45,8 @@ export function DayPlanDialog({ open, onOpenChange, absence, date, approvalMode,
       }),
     [lessons, overrides],
   );
-  const summary = planSummary(choices, approvalMode);
+  const name = useTeacherLabel();
+  const summary = planSummary(choices, approvalMode, name);
 
   return (
     <Dialog
@@ -56,7 +58,7 @@ export function DayPlanDialog({ open, onOpenChange, absence, date, approvalMode,
     >
       <DialogContent
         size="lg"
-        title={`План дня: ${absence.teacher.shortName}`}
+        title={`План дня: ${name(absence.teacher)}`}
         description={`${formatWeekdayDate(date)}. Це пропозиція: нічого не надіслано, доки ви не підтвердите.`}
         footer={
           <>
@@ -109,7 +111,10 @@ export function DayPlanDialog({ open, onOpenChange, absence, date, approvalMode,
                         value={key}
                         onValueChange={(value) => setOverrides((prev) => ({ ...prev, [item.lesson.id]: value }))}
                         options={[
-                          ...item.options.map((option) => ({ value: optionKey(option), label: optionTitle(option) })),
+                          ...item.options.map((option) => ({
+                            value: optionKey(option),
+                            label: optionTitle(option, name),
+                          })),
                           { value: SKIP, label: 'Не вирішувати зараз' },
                         ]}
                       />

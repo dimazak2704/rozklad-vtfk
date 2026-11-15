@@ -204,7 +204,7 @@ describe('варіанти рішення (рекомендатор v2)', () => 
     // смуги — реченнями: «Теж підходить», «З нюансами»
     expect(within(list).getByText('З нюансами')).toBeInTheDocument();
     expect(screen.queryByText('Рівноцінні варіанти — оберіть самі')).not.toBeInTheDocument();
-    expect(screen.getByText('Відмовились: Ганза (14:05)')).toBeInTheDocument();
+    expect(screen.getByText(/^Відмовились: Ганза.* 14:05$/)).toBeInTheDocument();
     // аудиторія, куди прийде група: своя аудиторія замінника й аудиторія іншої підгрупи
     expect(within(list).getByText('ауд. 6')).toBeInTheDocument();
     expect(within(list).getByText('ауд. 12')).toBeInTheDocument();
@@ -456,7 +456,7 @@ describe('екран «Заміни»', () => {
     renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
 
     // демо-ранок: три відсутні, пара 3Ф (Крисак) — перша без рішення, її варіанти вже відкриті
-    expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л.В.' }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л. В.' }, WAIT)).toBeInTheDocument();
     // мок працює в режимі CONFIRM: вибір викладача лише просить його згоди
     const list = await screen.findByRole('list', { name: 'Варіанти' }, WAIT);
     expect(screen.getByRole('button', { name: /3Ф/, current: true })).toBeInTheDocument();
@@ -485,16 +485,16 @@ describe('екран «Заміни»', () => {
       const user = userEvent.setup();
       renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
       // перший рівень — лише відсутні, без пар і варіантів
-      const krysak = await screen.findByRole('button', { name: /Крисак Л\.В\./ }, WAIT);
+      const krysak = await screen.findByRole('button', { name: /Крисак Л\.\sВ\./ }, WAIT);
       expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
       expect(screen.queryByRole('list', { name: 'Варіанти' })).not.toBeInTheDocument();
 
       await user.click(krysak);
-      expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л.В.' }, WAIT)).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 3, name: 'Крисак Л. В.' }, WAIT)).toBeInTheDocument();
       // назад на рівень відсутніх і знову до пар
       await user.click(screen.getByRole('button', { name: 'Усі відсутні' }));
       await waitFor(() => expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument(), WAIT);
-      await user.click(screen.getByRole('button', { name: /Крисак Л\.В\./ }));
+      await user.click(screen.getByRole('button', { name: /Крисак Л\.\sВ\./ }));
 
       // пара відкриває варіанти в шторці (там є «Закрити» і Esc)
       await user.click(await screen.findByRole('button', { name: /3Ф/ }, WAIT));
@@ -580,35 +580,48 @@ describe('екран «Заміни»', () => {
     }
   });
 
-  it('пари ще їдуть — силует замість хибного «пар немає» і без лічильника «вирішено»', { timeout: 30_000 }, async () => {
-    let release = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    // зачеплені пари приходять пізніше за відсутніх; без відповіді обробник передає запит далі, до мок-API
-    server.use(
-      http.get(apiPath('/admin/absences/:id/affected'), async () => {
-        await gate;
-      }),
-    );
-    const width = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
-    try {
-      renderWithProviders(<ChangesPage />, { route: '/admin/changes?date=2026-11-09' });
-      expect(await screen.findByRole('button', { name: /Крисак Л\.В\./ }, WAIT)).toBeInTheDocument();
-      expect(screen.getAllByText('завантажуємо пари').length).toBeGreaterThan(0);
-      expect(screen.queryByText('пар у цей період немає')).not.toBeInTheDocument();
-      expect(screen.queryByRole('progressbar', { name: 'Вирішено пар' })).not.toBeInTheDocument();
+  it(
+    'перше завантаження — силует усієї панелі, доки не прийшли пари: без напівзаповненого списку й хибного «пар немає»',
+    { timeout: 30_000 },
+    async () => {
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      // зачеплені пари приходять пізніше за відсутніх; без відповіді обробник передає запит далі, до мок-API
+      server.use(
+        http.get(apiPath('/admin/absences/:id/affected'), async () => {
+          await gate;
+        }),
+      );
+      const width = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: 375,
+      });
+      try {
+        renderWithProviders(<ChangesPage />, {
+          route: '/admin/changes?date=2026-11-09',
+        });
+        expect(await screen.findByText('Завантажуємо відсутніх і їхні пари…', undefined, WAIT)).toBeInTheDocument();
+        // відсутні вже прийшли, але панель їх ще не показує: інакше рядки без смужок «вирішено» стрибали б
+        expect(screen.queryByRole('button', { name: /Крисак Л\.\sВ\./ })).not.toBeInTheDocument();
+        expect(screen.queryByText('пар у цей період немає')).not.toBeInTheDocument();
+        expect(screen.queryByRole('progressbar', { name: 'Вирішено пар' })).not.toBeInTheDocument();
 
-      release();
-      expect(await screen.findByRole('progressbar', { name: 'Вирішено пар' }, WAIT)).toBeInTheDocument();
-      expect(screen.queryByText('завантажуємо пари')).not.toBeInTheDocument();
-      expect(within(screen.getByRole('button', { name: /Крисак Л\.В\./ })).getByText(/вирішено|усе вирішено/)).toBeInTheDocument();
-    } finally {
-      release();
-      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
-    }
-  });
+        release();
+        expect(await screen.findByRole('progressbar', { name: 'Вирішено пар' }, WAIT)).toBeInTheDocument();
+        expect(screen.queryByText('Завантажуємо відсутніх і їхні пари…')).not.toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /Крисак Л\.\sВ\./ })).getByText(/вирішено|усе вирішено/)).toBeInTheDocument();
+      } finally {
+        release();
+        Object.defineProperty(window, 'innerWidth', {
+          configurable: true,
+          value: width,
+        });
+      }
+    },
+  );
 
   it('помилка сервера — повідомлення з повтором, а не порожня сторінка', { timeout: 20_000 }, async () => {
     server.use(http.get(apiPath('/admin/absences'), () => problem({ status: 503 })));

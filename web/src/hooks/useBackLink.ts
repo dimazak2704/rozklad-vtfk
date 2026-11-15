@@ -17,7 +17,7 @@ export function routeForPath(pathname: string): AppRoute | undefined {
 
 /**
  * Куди веде «‹ Назад» з поточної сторінки: рівень вище за реєстром маршрутів (`parent` у routes.ts).
- * null — сторінка верхнього рівня свого розділу (головна, «Мій розклад», «Сьогодні»).
+ * null — сторінка верхнього рівня свого розділу (головна, «Мій розклад», «Сьогодні» і розділи панелі диспетчера).
  * Працює з будь-яким роутером (і з MemoryRouter у тестах): бере лише адресу.
  */
 export function useBackLink(): BackLink | null {
@@ -25,6 +25,14 @@ export function useBackLink(): BackLink | null {
   return useMemo(() => {
     const route = routeForPath(pathname);
     const parent = parentRoute(route?.id);
-    return parent ? { to: parent.path, label: backLabel(parent), sidebarShell: route?.layout === 'admin' } : null;
+    if (!parent) return null;
+    // розділ панелі диспетчера (Заміни, Розклад, Календар…) — верхній рівень: шлях до інших розділів дає меню,
+    // а «‹ Сьогодні» над заголовком читалося б як «ви всередині Сьогодні»
+    if (route?.layout === 'admin' && parent.id === 'admin') return null;
+    return {
+      to: parent.path,
+      label: backLabel(parent),
+      sidebarShell: route?.layout === 'admin',
+    };
   }, [pathname]);
 }

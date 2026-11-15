@@ -32,6 +32,7 @@ import { countLabel } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 const NOUN = ['група', 'групи', 'груп'] as const;
 const ALL = 'all';
@@ -40,6 +41,7 @@ const SHIFT_HINT = { 1: 'Пари 1–4', 2: 'Пари 5–8 (пн–чт), 4–
 
 /** Довідник груп: код, курс, спеціальність, зміна, куратор, домашня аудиторія, підгрупи. */
 export default function GroupsPage() {
+  const name = useTeacherLabel();
   const navigate = useNavigate();
   const table = useTableUrlState({ columnId: 'code', direction: 'asc' }, ['course', 'specialty', 'shift', 'active']);
   const q = useDebouncedValue(table.q.trim(), 250);
@@ -124,7 +126,13 @@ export default function GroupsPage() {
           </Tooltip>
         ),
       },
-      { id: 'curator', header: 'Куратор', hideBelow: 'lg', className: 'max-md:hidden!', cell: (g) => g.curator?.shortName ?? <EmptyValue /> },
+      {
+        id: 'curator',
+        header: 'Куратор',
+        hideBelow: 'lg',
+        className: 'max-md:hidden!',
+        cell: (g) => (g.curator ? name(g.curator) : <EmptyValue />),
+      },
       {
         id: 'homeRoom',
         header: 'Аудиторія',
@@ -141,7 +149,7 @@ export default function GroupsPage() {
       },
       { id: 'size', header: 'Студентів', sortable: true, numeric: true, hideBelow: 'lg', className: 'max-md:hidden!', cell: (g) => g.size ?? <EmptyValue label="невідомо" /> },
     ],
-    [specialtyName],
+    [specialtyName, name],
   );
 
   const data = list.data;

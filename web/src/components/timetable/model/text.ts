@@ -15,7 +15,7 @@ export function chipText(
   lesson: TemplateLessonDto,
   view: BoardView,
   names: TeacherNameOptions = {},
-): { title: string; detail: string; lines: string[]; room: string | null } {
+): { title: string; detail: string; lines: string[]; room: string | null; teacher: string | null } {
   const room = roomLabel(lesson.room?.name);
   const cohort = lesson.subgroup > 0 ? `${lesson.group.code}/${lesson.subgroup}` : lesson.group.code;
   // викладач у клітинці — «Прізвище І. Б.» (lib/teacher-name)
@@ -27,7 +27,7 @@ export function chipText(
         ? { title: cohort, lines: [lesson.discipline.shortName, room] }
         : { title: cohort, lines: [lesson.discipline.shortName, teacher] };
   const lines = parts.lines.filter((line): line is string => Boolean(line));
-  return { title: parts.title, detail: lines.join(' · '), lines, room };
+  return { title: parts.title, detail: lines.join(' · '), lines, room, teacher: view === 'teacher' ? null : teacher };
 }
 
 /** Усе, що видно в клітинці (і конфлікти), одним рядком для читача екрана. */
@@ -35,7 +35,7 @@ export function lessonAriaLabel(lesson: TemplateLessonDto, conflicts: readonly T
   const parts = [
     lesson.discipline.name || lesson.discipline.shortName,
     lesson.subgroup > 0 ? `${lesson.group.code}, ${lesson.subgroup} підгрупа` : lesson.group.code,
-    lesson.teacher?.shortName,
+    lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null,
     lesson.room ? `аудиторія ${lesson.room.name}` : null,
     `${weekdayName(lesson.weekday)}, ${lesson.pair} пара, ${PARITY_SHORT[lesson.parity]}`,
   ];

@@ -4,6 +4,7 @@ import { useTeacherAvailability } from '@/api/admin-daily';
 import type { TeacherAvailabilityDto, Uuid } from '@/api/types';
 import { Button, Dialog, DialogClose, DialogContent, ErrorState, Input, LoadingRegion, RadioGroup, Skeleton } from '@/components/ui';
 import { assignLabel, availabilityLabel } from '../model';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 interface OtherTeacherDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface OtherTeacherDialogProps {
  * нічого; дія — окрема кнопка внизу.
  */
 export function OtherTeacherDialog({ open, onOpenChange, lessonId, pair, approvalMode, busy, onAssign }: OtherTeacherDialogProps) {
+  const name = useTeacherLabel();
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<Uuid | null>(null);
   const deferred = useDeferredValue(query);
@@ -84,7 +86,7 @@ export function OtherTeacherDialog({ open, onOpenChange, lessonId, pair, approva
               onValueChange={setChosen}
               options={items.map((item) => ({
                 value: item.teacher.id,
-                label: item.teacher.displayName || item.teacher.shortName,
+                label: name(item.teacher),
                 description: availabilityLabel(item),
                 disabled: item.status !== 'FREE',
               }))}

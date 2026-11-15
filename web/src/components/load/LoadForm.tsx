@@ -11,6 +11,7 @@ import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { ROOM_TYPE_OPTIONS } from '@/components/catalog/labels';
 import { Checkbox, Combobox, Field, NumberInput, Select, Textarea } from '@/components/ui';
+import { formatTeacherName } from '@/lib/teacher-name';
 import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 import { loadRequest } from './request';
 import { CONTROL_FORM_LABEL, LESSON_KIND_OPTIONS } from './labels';
@@ -150,7 +151,8 @@ export function LoadFormDialog({ semester, item, defaultGroupId, open, onOpenCha
     }
   });
 
-  const teacherOptions = (teachers.items ?? []).map((t) => ({ value: t.id, label: t.shortName, keywords: [t.displayName] }));
+  // «Стахова О. А.», як у таблиці навантаження; шукати можна й за короткою формою коледжу
+  const teacherOptions = (teachers.items ?? []).map((t) => ({ value: t.id, label: formatTeacherName(t, 'grid'), keywords: [t.displayName, t.shortName] }));
   const teacherField = (subgroup: number, label: string) => (
     <Controller
       key={subgroup}

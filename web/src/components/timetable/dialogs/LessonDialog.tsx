@@ -23,6 +23,7 @@ import { roomLabel } from '@/lib/schedule';
 import { WEEKDAYS } from '../model/grid';
 import { LESSON_FORM_FIELDS, lessonSchema, requestOf, type LessonFormValues } from '../model/lessonForm';
 import { SlotIndex, type Busy } from '../model/occupancy';
+import { formatTeacherName } from '@/lib/teacher-name';
 
 const LESSON_KINDS: readonly LessonKind[] = ['LECTURE', 'PRACTICE', 'LAB', 'SEMINAR', 'MIXED'];
 
@@ -126,9 +127,9 @@ function LessonForm({
     const busy = values.groupId ? index.teacherLessons({ ...slotQuery, teacherId: t.id }) : [];
     return {
       value: t.id,
-      label: t.shortName,
+      label: formatTeacherName(t, 'grid'),
       description: busy.length > 0 ? `Зайнятий: ${busy.map((l) => `${l.group.code} · ${l.discipline.shortName}`).join(', ')}` : 'Вільний у цей час',
-      keywords: [t.displayName, t.cycleCommission ?? ''],
+      keywords: [t.shortName, t.displayName, t.cycleCommission ?? ''],
     };
   });
   const roomOptions: ComboboxOption[] = catalog.rooms.map((r) => {

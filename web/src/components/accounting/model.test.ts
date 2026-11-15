@@ -66,7 +66,7 @@ describe('облік годин у інтерфейсі', () => {
           lessons: 3,
         },
       }),
-    ).toBe('/admin/changes?group=g-4ki1&discipline=d-stp&suggest=ADDITIONAL');
+    ).toBe('/admin/changes?group=g-4ki1&discipline=d-stp&suggest=ADDITIONAL&lessons=3');
     expect(changesLink({ ...base, suggestion: null })).toBeNull();
   });
 

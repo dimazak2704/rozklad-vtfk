@@ -101,10 +101,9 @@ describe('PageHeader', () => {
     expect(screen.queryByRole('link', { name: /Назад/ })).not.toBeInTheDocument();
   });
 
-  it('в адмінці «назад» ховається там, де видно бічну панель', () => {
+  it('розділ панелі диспетчера — верхній рівень: без «‹ Сьогодні» (до інших розділів веде меню)', () => {
     renderWithProviders(<PageHeader title="Навантаження" />, { route: '/admin/load' });
-    const back = screen.getByRole('link', { name: 'Назад: Сьогодні' });
-    expect(back.parentElement).toHaveClass('lg:hidden');
+    expect(screen.queryByRole('link', { name: /^Назад/ })).not.toBeInTheDocument();
   });
 
   it('заголовок сторінки — роль headline (30 px), а не title розділу', () => {

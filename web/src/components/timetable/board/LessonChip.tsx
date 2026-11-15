@@ -66,7 +66,7 @@ export const LessonChip = memo(function LessonChip({
   // показує свою одразу; сама картка мишу не ловить (лише читання), тож не накриває шлях до сусідньої клітинки
   const hover = useHoverIntent({ openDelay: CARD_OPEN_DELAY_MS, closeDelay: CARD_CLOSE_DELAY_MS });
   const hasHard = conflicts.some((c) => c.severity === 'HARD');
-  const { title, detail, lines, room } = chipText(lesson, view, useGridNames());
+  const { title, detail, lines, room, teacher } = chipText(lesson, view, useGridNames());
   const oneLine = compact || narrow;
   // підгрупа на всю пару: під назвою — викладач і аудиторія окремими рядками, як у друкованому розкладі
   const stacked = narrow && !compact;
@@ -157,9 +157,7 @@ export const LessonChip = memo(function LessonChip({
             </span>
             {/* у половинці (чисельник/знаменник) викладач поруч — лише коли є місце; інакше назва
                 лишається цілою, а викладач — у картці й панелі «Вибрана пара» */}
-            {oneLine && !narrow && detail ? (
-              <span className="hidden min-w-0 shrink truncate text-meta font-normal text-secondary @[11rem]:block">{detail}</span>
-            ) : null}
+            {oneLine && !narrow && detail ? <DetailText lines={lines} room={room} teacher={teacher} className="hidden shrink @[11rem]:flex" /> : null}
             <span className="ms-auto flex shrink-0 items-center gap-0.5 text-muted">
               {lesson.pinned ? <Pin aria-hidden="true" className="size-3" /> : null}
               {lesson.streamId ? <Layers aria-hidden="true" className="size-3" /> : null}
@@ -167,7 +165,7 @@ export const LessonChip = memo(function LessonChip({
               {hasHard ? <TriangleExclamationPoint aria-hidden="true" className="size-3.5 text-danger" /> : null}
             </span>
           </span>
-          {!oneLine && detail ? <span className="truncate text-meta font-normal text-secondary">{detail}</span> : null}
+          {!oneLine && detail ? <DetailText lines={lines} room={room} teacher={teacher} className="flex" /> : null}
           {stacked
             ? lines.map((line) => (
                 // довге прізвище — з трикрапкою (повне — у картці й підписі для читача екрана): рядки клітинки
@@ -185,6 +183,46 @@ export const LessonChip = memo(function LessonChip({
     </HoverCard>
   );
 });
+
+/**
+ * «Шароварська С. П.   ауд. 108» у клітинці: аудиторія праворуч і лишається цілою — без неї клітинка нічого не каже
+ * («· а…»). Коли місця бракує, спершу зникають ініціали цілком («Стахова · ауд. 307», а не «Стахова О. …»),
+ * і лише потім обрізається прізвище. Повністю обидва — у картці при наведенні й у панелі «Вибрана пара».
+ */
+function DetailText({
+  lines,
+  room,
+  teacher,
+  className,
+}: {
+  lines: readonly string[];
+  room: string | null;
+  teacher: string | null;
+  className?: string;
+}) {
+  const head = lines.filter((line) => line !== room).join(' · ');
+  // ініціали — після першого пробілу підпису «Прізвище І. Б.» і лише коли викладач стоїть у кінці рядка
+  const space = teacher ? teacher.indexOf(' ') : -1;
+  const cut = teacher && space > 0 && head.endsWith(teacher) ? head.length - teacher.length + space : -1;
+  const splits = cut > 0;
+  return (
+    <span className={cn('min-w-0 text-meta font-normal text-secondary', className)}>
+      {head && splits ? (
+        // перенос, а не обрізання: ініціали, що не вміщаються, падають на другий рядок, а його сховано
+        <span className="flex max-h-[1lh] min-w-0 flex-wrap overflow-hidden">
+          <span className="min-w-0 truncate">{head.slice(0, cut)}</span>
+          <span data-initials="" className="shrink-0 whitespace-pre">
+            {head.slice(cut)}
+          </span>
+        </span>
+      ) : head ? (
+        <span className="min-w-0 truncate">{head}</span>
+      ) : null}
+      {/* аудиторія — колонкою праворуч: коли ініціали зникають, рядок не лишає порожнечі перед «· ауд.» */}
+      {room ? <span className="ms-auto shrink-0 ps-2 tabular-nums">{room}</span> : null}
+    </span>
+  );
+}
 
 /** Перша картка — після паузи на парі; далі, поки картка відкрита, сусідні показуються одразу. */
 const CARD_OPEN_DELAY_MS = 350;

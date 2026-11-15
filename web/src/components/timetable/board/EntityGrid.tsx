@@ -192,6 +192,7 @@ export const EntityGrid = memo(function EntityGrid({
                 pair={pair}
                 lastRow={rowIndex === rows.length - 1}
                 lastColumn={dayIndex === days.length - 1}
+                labelEmpty={single}
                 lessons={byCell.get(`${weekday}|${pair}`) ?? []}
                 inWindow={inShiftWindow(entity, windows, weekday, pair)}
                 editable={editable}
@@ -221,6 +222,11 @@ interface SlotCellProps {
   pair: number;
   lastRow: boolean;
   lastColumn: boolean;
+  /**
+   * Один день (телефон): порожня клітинка каже «пари немає», як публічний розклад, а не стоїть пустою.
+   * У тижневій сітці п'ять колонок таких написів були б шумом — там порожнє видно й так.
+   */
+  labelEmpty?: boolean;
   lessons: TemplateLessonDto[];
   inWindow: boolean;
   editable: boolean;
@@ -253,6 +259,7 @@ const SlotCell = memo(function SlotCell({
   pair,
   lastRow,
   lastColumn,
+  labelEmpty = false,
   lessons,
   inWindow,
   editable,
@@ -295,6 +302,16 @@ const SlotCell = memo(function SlotCell({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-10 rounded-tag bg-selected-hover/70 outline-2 outline-offset-[-2px] outline-[var(--border-color-accent)] motion-safe:animate-[fade-out_2.2s_var(--ease-in)_forwards]"
         />
+      ) : null}
+      {labelEmpty && inWindow && lessons.length === 0 ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none z-[1] flex items-center px-1 text-caption text-muted"
+          style={{ gridRow: '1 / span 2', gridColumn: '1 / -1' }}
+        >
+          {/* тло клітинки під словами ховає пунктир між чисельником і знаменником */}
+          <span className="bg-surface px-1">пари немає</span>
+        </span>
       ) : null}
       {layout.items.map((item) => (
         <LessonChip

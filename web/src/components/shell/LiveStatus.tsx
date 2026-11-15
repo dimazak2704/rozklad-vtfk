@@ -1,4 +1,5 @@
 import { RotateCcw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { EventStreamState } from '@/api/useEventStream';
 import { cn } from '@/lib/cn';
 import { Button } from '../ui/Button';
@@ -6,6 +7,25 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 
 const RECONNECTING_HINT = 'Оновлення на екрані можуть запізнюватися, доки звʼязок не повернеться.';
 const CLOSED_HINT = 'Дані на екрані можуть бути застарілими.';
+/**
+ * Скільки перепідключення має тривати, щоб про нього сказати. Коротке (перший вхід, поки токен ще в дорозі,
+ * або обрив на секунду) минає непомітно — інакше «Перепідключення…» блимало б на кожному завантаженні сторінки.
+ */
+export const RECONNECTING_GRACE_MS = 2_000;
+
+/** true, лише коли `active` тримається довше за `delayMs` (і одразу false, щойно минуло). */
+function useLasting(active: boolean, delayMs: number): boolean {
+  const [lasting, setLasting] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setTimeout(() => setLasting(true), delayMs);
+    return () => {
+      window.clearTimeout(timer);
+      setLasting(false);
+    };
+  }, [active, delayMs]);
+  return active && lasting;
+}
 
 function RetryButton({ onRetry }: { onRetry?: () => void }) {
   return (
@@ -36,7 +56,7 @@ export function LiveStatus({
   onRetry?: () => void;
   className?: string;
 }) {
-  const reconnecting = state.status === 'reconnecting';
+  const reconnecting = useLasting(state.status === 'reconnecting', RECONNECTING_GRACE_MS);
   const closed = state.status === 'closed';
   const dot = (
     <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', reconnecting ? 'bg-change' : 'bg-[var(--fill-cancel)]')} />

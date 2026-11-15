@@ -11,6 +11,7 @@ import { NeedsList } from '@/components/admin-daily/dashboard/NeedsList';
 import { useFreshSources } from '@/components/admin-daily/dashboard/useFreshSources';
 import { useServiceAlerts } from '@/components/admin-daily/dashboard/useServiceAlerts';
 import { buildFeed, LESSON_STATE } from '@/components/admin-daily/model';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
 import { NowIndicator } from '@/components/schedule';
 import {
@@ -143,10 +144,10 @@ export default function DashboardPage() {
     [dayOrders],
   );
 
+  const name = useTeacherLabel();
   const feed = useMemo(
-    () =>
-      workspace.offline ? [] : buildFeed([...workspace.changesById.values()], workspace.absences, dayOrders?.items ?? [], date),
-    [workspace.offline, workspace.changesById, workspace.absences, dayOrders, date],
+    () => (workspace.offline ? [] : buildFeed([...workspace.changesById.values()], workspace.absences, dayOrders?.items ?? [], date, name)),
+    [workspace.offline, workspace.changesById, workspace.absences, dayOrders, date, name],
   );
 
   // події, що прийшли наживо після відкриття сторінки, коротко підсвічуються

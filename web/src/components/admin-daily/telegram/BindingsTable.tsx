@@ -10,6 +10,7 @@ import { sortRows, type SortState } from '@/lib/sort';
 import { confirm } from '@/stores/confirm';
 import { BINDING_TYPE_LABEL } from './labels';
 import { track, trackFinal } from '@/lib/undo/actions';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 const PAGE_SIZE = 15;
 const TYPES: readonly BindingType[] = ['GROUP_CHAT', 'TEACHER', 'ADMIN_CHAT', 'SUBSCRIBER'];
@@ -38,7 +39,8 @@ export function BindingsTable({ bindings, loading, error, onRetry }: BindingsTab
   const [sort, setSort] = useState<SortState | null>(null);
 
   const groupCode = useMemo(() => new Map((groups.data ?? []).map((g) => [g.id, g.code])), [groups.data]);
-  const teacherName = useMemo(() => new Map((teachers.data ?? []).map((t) => [t.id, t.shortName])), [teachers.data]);
+  const name = useTeacherLabel();
+  const teacherName = useMemo(() => new Map((teachers.data ?? []).map((t) => [t.id, name(t)])), [teachers.data, name]);
   const target = useCallback(
     (row: ChatBindingDto): string | null =>
       row.groupId ? (row.groupCode ?? groupCode.get(row.groupId) ?? null) : row.teacherId ? (teacherName.get(row.teacherId) ?? null) : null,

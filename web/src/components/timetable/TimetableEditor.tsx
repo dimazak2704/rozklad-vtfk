@@ -29,6 +29,7 @@ import { LessonInspector } from './panels/LessonInspector';
 import { MetricsBar } from './panels/MetricsBar';
 import { useLessonEditing } from './useLessonEditing';
 import { useMediaQuery } from './useMediaQuery';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 interface TimetableEditorProps {
   version: TimetableVersionDto;
@@ -106,9 +107,11 @@ export function TimetableEditor({
   }, [conflictsQuery.data]);
   const hardLessonIds = useMemo(() => new Set((conflictsQuery.data?.hard ?? []).flatMap((c) => c.lessonIds)), [conflictsQuery.data]);
 
+  // викладач у рядку подання «Викладачі» — «Прізвище І. Б.» з іменами каталогу, як у клітинках
+  const teacherLabel = useTeacherLabel();
   const entities = useMemo(
-    () => (catalog.data ? buildEntities(view, lessons, catalog.data) : []),
-    [catalog.data, lessons, view],
+    () => (catalog.data ? buildEntities(view, lessons, catalog.data, teacherLabel) : []),
+    [catalog.data, lessons, view, teacherLabel],
   );
   const visible = useMemo(() => filterEntities(entities, filters, hardLessonIds), [entities, filters, hardLessonIds]);
   const departments = useMemo(

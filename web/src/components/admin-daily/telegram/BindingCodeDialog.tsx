@@ -10,6 +10,7 @@ import { useNow } from '@/hooks/useNow';
 import { formatInstant } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
 import { groupDescription } from '@/lib/names';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 type CodeType = Exclude<BindingType, 'SUBSCRIBER'>;
 
@@ -125,6 +126,7 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
   const [result, setResult] = useState<BindingCodeDto | null>(null);
   const groups = usePublicGroups();
   const teachers = usePublicTeachers();
+  const name = useTeacherLabel();
   const create = useCreateBindingCode();
 
   const groupOptions = useMemo(
@@ -132,8 +134,13 @@ export function BindingCodeDialog({ open, onOpenChange }: BindingCodeDialogProps
     [groups.data],
   );
   const teacherOptions = useMemo(
-    () => (teachers.data ?? []).map((t) => ({ value: t.id, label: t.shortName, keywords: [t.displayName] })),
-    [teachers.data],
+    () =>
+      (teachers.data ?? []).map((t) => ({
+        value: t.id,
+        label: name(t),
+        keywords: [t.shortName, t.displayName],
+      })),
+    [teachers.data, name],
   );
   const needsTarget = type !== 'ADMIN_CHAT';
 

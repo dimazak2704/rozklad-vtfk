@@ -4,7 +4,8 @@ import type { ChangeOption } from '@/api/admin-daily';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { NBSP } from '../format';
-import { optionTitle, rowChips } from '../model';
+import { optionNotes, optionTitle, rowChips } from '../model';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 /** Аудиторія, куди прийде група: своя аудиторія замінника чи аудиторія іншої підгрупи. */
 function suggestedRoomName(option: ChangeOption): string | null {
@@ -30,7 +31,8 @@ function Warning({ text }: { text: string }) {
  * одним рядком, застереження — бурштиновим.
  */
 export function OptionChips({ option }: { option: ChangeOption }) {
-  const chips = rowChips(option);
+  const name = useTeacherLabel();
+  const chips = rowChips(option, name);
   if (chips.length === 0) return null;
   return (
     <ul className="flex flex-col gap-0.5" aria-label="Коротко про варіант">
@@ -74,11 +76,25 @@ export interface OptionRowProps {
  * рядок: він розгортається (усі причини й застереження, причина в розпорядженні) і показує єдину кнопку дії;
  * дія — ця кнопка або Enter на обраному рядку. Без балів і номерів.
  */
-export function OptionRow({ option, selectId, hotkey, selected, best = false, busy, disabled, actionLabel, onSelect, onAct, actionExtra }: OptionRowProps) {
-  const title = optionTitle(option);
+export function OptionRow({
+  option,
+  selectId,
+  hotkey,
+  selected,
+  best = false,
+  busy,
+  disabled,
+  actionLabel,
+  onSelect,
+  onAct,
+  actionExtra,
+}: OptionRowProps) {
+  const name = useTeacherLabel();
+  const title = optionTitle(option, name);
   const room = suggestedRoomName(option);
-  const reasons = selected ? option.reasons : option.reasons.slice(0, 2);
-  const warnings = selected ? option.warnings : option.warnings.slice(0, 1);
+  const notes = optionNotes(option, name);
+  const reasons = selected ? notes.reasons : notes.reasons.slice(0, 2);
+  const warnings = selected ? notes.warnings : notes.warnings.slice(0, 1);
   const cancel = option.kind === 'CANCEL';
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {

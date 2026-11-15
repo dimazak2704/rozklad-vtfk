@@ -28,7 +28,14 @@ describe('Базовий розклад', () => {
     expect(await screen.findByRole('button', { name: /Конфлікти: 75 жорстких/ }, LONG)).toBeInTheDocument();
     expect(screen.getByLabelText('Рвані дні: 32')).toBeInTheDocument();
     const grid = screen.getByRole('grid', { name: /4КІ3/ });
-    expect(within(grid).getAllByRole('button', { name: /Сучасні технології проєктування/ })).toHaveLength(2);
+    expect(
+      within(grid).getAllByRole('button', {
+        name: /Сучасні технології проєктування/,
+      }),
+    ).toHaveLength(2);
+    // у тижневій сітці порожні клітинки без напису (пʼять колонок «пари немає» — шум); пошук — підказка-приклад
+    expect(screen.queryByText('пари немає')).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Пошук у сітці' })).toHaveAttribute('placeholder', 'Пошук групи, напр. 4КІ1');
   });
 
   it('поки є жорсткі конфлікти, «Опублікувати» вимкнена, а шлях до конфліктів — одне речення (без глухого кута)', async () => {
@@ -87,7 +94,20 @@ describe('Базовий розклад', () => {
       const headers = within(grid).getAllByRole('columnheader');
       expect(headers).toHaveLength(2);
       expect(headers[1]).toHaveTextContent('Вівторок');
-      expect(within(grid).getAllByRole('button', { name: /Сучасні технології проєктування.*вівторок, 4 пара/ })).toHaveLength(1);
+      expect(
+        within(grid).getAllByRole('button', {
+          name: /Сучасні технології проєктування.*вівторок, 4 пара/,
+        }),
+      ).toHaveLength(1);
+      // порожній рядок дня не стоїть пустим: «пари немає», як у публічному розкладі
+      let labelled = 0;
+      for (const day of screen.getAllByRole('radio', {
+        name: /понеділок|вівторок|середа|четвер|ятниця/,
+      })) {
+        await user.click(day);
+        labelled += within(grid).queryAllByText('пари немає').length;
+      }
+      expect(labelled).toBeGreaterThan(0);
     } finally {
       window.matchMedia = original;
     }

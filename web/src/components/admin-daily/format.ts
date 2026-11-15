@@ -2,6 +2,7 @@
 import type { AbsenceDto, AbsenceSource, ChangeDto, IsoDate, ReasonCode } from '@/api/types';
 import { formatDateRange, formatInstantTime, parseIsoDate, todayInKyiv } from '@/lib/date';
 import { countLabel, PAIR_FORMS_GEN, REASON_CODE_HINT } from '@/lib/labels';
+import { gridTeacherName, type TeacherLabel } from './teacher-label';
 
 const PAIRS_FORMS = ['пара', 'пари', 'пар'] as const;
 
@@ -57,30 +58,30 @@ export function pairsCountGenitive(count: number): string {
 }
 
 /** «СТП — Кренцін» без висячих тире, коли якоїсь частини немає. */
-function partiesText(side: ChangeDto['new']): string {
-  return [side.discipline?.shortName, side.teacher?.shortName].filter(Boolean).join(' — ') || 'без змін у складі';
+function partiesText(side: ChangeDto['new'], name: TeacherLabel): string {
+  return [side.discipline?.shortName, side.teacher ? name(side.teacher) : null].filter(Boolean).join(' — ') || 'без змін у складі';
 }
 
-/** Що буде з парою після рішення: «→ Михальчук», «Пари не буде», «4 пара → на 2». */
-export function decisionSummary(change: ChangeDto): string {
+/** Що буде з парою після рішення: «Михальчук О. І.», «Пари не буде», «Переставлено 4 пару: …». */
+export function decisionSummary(change: ChangeDto, name: TeacherLabel = gridTeacherName): string {
   switch (change.kind) {
     case 'CANCEL':
       return 'Пари не буде';
     case 'SWAP':
       // swapFromPair — пара, з якої переставили заняття на звільнене місце (pairFrom)
-      return `${change.swapFromPair !== null ? `Переставлено ${change.swapFromPair} пару` : 'Перестановка'}: ${partiesText(change.new)}`;
+      return `${change.swapFromPair !== null ? `Переставлено ${change.swapFromPair}${NBSP}пару` : 'Перестановка'}: ${partiesText(change.new, name)}`;
     case 'REPLACE_DISCIPLINE':
-      return partiesText(change.new);
+      return partiesText(change.new, name);
     case 'MERGE_SUBGROUPS':
-      return `${change.new.teacher?.shortName ?? "Викладач"}: обидві підгрупи`;
+      return `${change.new.teacher ? name(change.new.teacher) : 'Викладач'}: обидві підгрупи`;
     case 'ADDITIONAL':
-      return `Додаткова пара: ${partiesText(change.new)}`;
+      return `Додаткова пара: ${partiesText(change.new, name)}`;
     case 'ROOM_CHANGE':
       return change.new.room ? `Аудиторія ${change.new.room.name}` : 'Заміна аудиторії';
     case 'REPLACE_TEACHER':
     case 'BLOCK':
     case 'DISCIPLINE_FINISHED':
-      return change.new.teacher?.shortName ?? 'Без викладача';
+      return change.new.teacher ? name(change.new.teacher) : 'Без викладача';
   }
 }
 

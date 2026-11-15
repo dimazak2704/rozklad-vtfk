@@ -309,9 +309,9 @@ describe('стрічка подій', () => {
       ],
     };
     expect(buildFeed([notice], [], [], '2026-11-09').map((f) => [f.kind, f.text])).toEqual([
-      ['declined', 'Не може, потрібне доповнення: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
-      ['confirmed', '«Добре»: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
-      ['confirmed', 'Призначено: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+      ['declined', 'Не може, потрібне доповнення: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+      ['confirmed', '«Добре»: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
+      ['confirmed', 'Призначено: Михальчук — 1КІ2, 2 пара (Ін.мова)'],
     ]);
   });
 
@@ -352,17 +352,23 @@ describe('стрічка подій', () => {
       new: { ...change.new, teacher: null },
       history: [{ at: '2026-11-09T05:00:00Z', actor: 'admin', from: null, to: 'CONFIRMED', comment: null }],
     };
-    expect(buildFeed([roomChange], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: Кренцін — 1КІ2, 2 пара (Ін.мова)']);
-    const nobody: ChangeDto = { ...roomChange, original: { ...roomChange.original, teacher: null } };
-    expect(buildFeed([nobody], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: 1КІ2, 2 пара (Ін.мова)']);
+    expect(buildFeed([roomChange], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: Кренцін — 1КІ2, 2 пара (Ін.мова)']);
+    const nobody: ChangeDto = {
+      ...roomChange,
+      original: { ...roomChange.original, teacher: null },
+    };
+    expect(buildFeed([nobody], [], [], '2026-11-09').map((f) => f.text)).toEqual(['Підтверджено: 1КІ2, 2 пара (Ін.мова)']);
   });
 
   it('найновіші події першими, відповідь з Telegram названо прямо', () => {
     const feed = buildFeed([change], [absence], [order], '2026-11-09');
     expect(feed.map((f) => f.kind)).toEqual(['order', 'confirmed', 'request', 'absence']);
-    expect(feed[1]?.text).toBe('Підтверджено в Telegram: Михальчук — 1КІ2, 2 пара (Ін.мова)');
-    expect(feed[3]?.text).toBe('Відсутність: Крисак Л.В. (через Telegram-бота)');
-    expect(feed[0]).toMatchObject({ sourceId: 'o-36', text: 'Розпорядження №36 опубліковано' });
+    expect(feed[1]?.text).toBe('Підтверджено в Telegram: Михальчук — 1КІ2, 2 пара (Ін.мова)');
+    expect(feed[3]?.text).toBe('Відсутність: Крисак Л. В. (через Telegram-бота)');
+    expect(feed[0]).toMatchObject({
+      sourceId: 'o-36',
+      text: 'Розпорядження №36 опубліковано',
+    });
   });
 });
 

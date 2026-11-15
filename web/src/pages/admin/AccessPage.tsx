@@ -32,6 +32,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatInstant } from '@/lib/date';
 import { confirm } from '@/stores/confirm';
 import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 const ALL = 'all';
 type RoleFilter = AccessRole | typeof ALL;
@@ -64,6 +65,7 @@ function Muted({ children }: { children: string }) {
  * сама за одноразовим посиланням. Відкликаний доступ повертає лише «Повернути доступ».
  */
 export default function AccessPage() {
+  const name = useTeacherLabel();
   const [search, setSearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   useHotkeys([{ keys: '/', handler: () => searchRef.current?.focus(), description: 'Пошук користувача', group: 'Доступ' }]);
@@ -148,7 +150,7 @@ export default function AccessPage() {
         header: 'Викладач',
         hideBelow: 'md',
         className: 'max-md:hidden!',
-        cell: (a) => (a.teacher ? a.teacher.shortName : <Muted>—</Muted>),
+        cell: (a) => (a.teacher ? name(a.teacher) : <Muted>—</Muted>),
       },
       {
         id: 'signIn',
@@ -174,7 +176,7 @@ export default function AccessPage() {
         cell: (a) => (a.lastLoginAt ? <span className="text-secondary figures">{formatInstant(a.lastLoginAt)}</span> : <Muted>—</Muted>),
       },
     ],
-    [],
+    [name],
   );
 
   const actionsFor = (a: AccessDto): RowAction[] => {

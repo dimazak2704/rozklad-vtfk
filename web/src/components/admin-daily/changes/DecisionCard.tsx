@@ -14,6 +14,8 @@ import { reasonWords } from '../format';
 import { lessonIsOver, noticeAnswer, pendingInfo, type LessonState } from '../model';
 import { StateText } from '../StateBadge';
 import { ReasonPicker } from './ReasonPicker';
+import type { TeacherLabel } from '../teacher-label';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 /**
  * Зміна причини вже ухваленого рішення (PUT з `version`): аудиторію лишаємо як є, викладача й дисципліну
@@ -89,9 +91,9 @@ function useRequestDelivery(teacherId: string | undefined, enabled: boolean): 's
   return bindings.data.some((binding) => binding.type === 'TEACHER' && binding.teacherId === teacherId) ? 'sent' : 'noTelegram';
 }
 
-/** «СТП · Кренцін» — сторона зміни без висячих розділювачів. */
-function side(part: ChangeDto['original']): string {
-  return [part.discipline?.shortName, part.teacher?.shortName].filter(Boolean).join(' · ') || '—';
+/** «СТП · Кренцін М. Д.» — сторона зміни без висячих розділювачів. */
+function side(part: ChangeDto['original'], name: TeacherLabel): string {
+  return [part.discipline?.shortName, part.teacher ? name(part.teacher) : null].filter(Boolean).join(' · ') || '—';
 }
 
 const WORD: Record<LessonState, string> = {
@@ -120,7 +122,8 @@ export function DecisionCard({ change, state, lessonEndsAt = null, busy, onResen
   const over = (state === 'pending' || state === 'declined') && lessonIsOver(change.date, lessonEndsAt, now);
   const canAsk = !over && (state === 'declined' || (state === 'pending' && !undelivered));
   const pending = state === 'pending' && !undelivered && !over ? pendingInfo(change.confirmDeadline, now.getTime()) : null;
-  const substitute = change.new.teacher?.shortName ?? 'Викладач';
+  const name = useTeacherLabel();
+  const substitute = change.new.teacher ? name(change.new.teacher) : 'Викладач';
   const canCancel = state === 'pending' || state === 'confirmed' || state === 'cancelled' || state === 'substituteAbsent';
   const [editingReason, setEditingReason] = useState(false);
   // core дозволяє правити відкриті й відхилені рішення; «вичитано» має лише одну причину
@@ -205,16 +208,16 @@ export function DecisionCard({ change, state, lessonEndsAt = null, busy, onResen
 
       {change.kind !== 'CANCEL' ? (
         <p className="flex flex-wrap items-baseline gap-x-2 text-cell">
-          <s className="text-muted decoration-[var(--fill-muted)]">{side(change.original)}</s>
+          <s className="text-muted decoration-[var(--fill-muted)]">{side(change.original, name)}</s>
           <span aria-hidden="true" className="text-muted">
             →
           </span>
           <span className="sr-only">замінено на</span>
-          <span className="font-[650] text-primary">{side(change.new)}</span>
+          <span className="font-[650] text-primary">{side(change.new, name)}</span>
         </p>
       ) : (
         <p className="text-cell">
-          <s className="text-muted decoration-[var(--fill-cancel)]">{side(change.original)}</s>{' '}
+          <s className="text-muted decoration-[var(--fill-cancel)]">{side(change.original, name)}</s>{' '}
           <span className="font-[650] text-cancel">— пари не буде</span>
         </p>
       )}
