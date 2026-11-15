@@ -45,9 +45,9 @@ from `V1`). `V9`: `email_notice` (intents), `email_message` (letters = the lette
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` | ADMIN | draft preview, `no-store`; 400 `errors[format]` |
 | `GET /api/notify/events/dead-letters` | ADMIN | `{queue, count}`: events in `notification.q.events.dlq`; 503 RabbitMQ unreachable (§5) |
 | `POST /api/notify/events/dead-letters/replay` | ADMIN | `{replayed}`: moves the messages now in the DLQ back to the consumer, each once (§5) |
-| `GET /api/notify/email/me` | TEACHER, ADMIN | the caller's own e-mail settings (§4a): `{channel:{enabled, reason?}, address?, addressStatus: VERIFIED\|UNVERIFIED\|MISSING, verifiedBy?: GOOGLE\|TRUSTED_DOMAIN, enabled, version?, kinds:[{kind, audience, label, description, enabled, defaultEnabled, switchable}]}`; the account is the token's `sub`, teacher kinds for an account linked to a teacher, dispatcher kinds for ADMIN; 503 core down |
+| `GET /api/notify/email/me` | TEACHER, ADMIN | the caller's own e-mail settings (§4a): `{channel:{enabled, reason?}, address?, addressStatus: VERIFIED\|UNVERIFIED\|MISSING, verifiedBy?: GOOGLE\|TRUSTED_DOMAIN, enabled, version?, kinds:[{kind, audience, label, description, enabled, defaultEnabled, switchable}]}`; the account is the token's `sub`, teacher kinds for an account linked to a teacher, dispatcher kinds for ADMIN; a kind's `enabled` is the person's choice and stays as it is while the master `enabled` is off (the page shows it greyed out); 503 core down |
 | `PUT /api/notify/email/me` `{enabled, kinds?: {KIND: bool}, version?}` | TEACHER, ADMIN | 200 the same DTO; 400 `errors[enabled]`, `errors[kinds.X]` (unknown kind); 422 `email-kind-not-allowed` (another audience's kind, or one that cannot be switched); 409 outdated `version` |
-| `POST /api/notify/email/me/test` | TEACHER, ADMIN | 202 `{status: QUEUED}`: a test letter to the caller's own verified address; 422 `email-missing` / `email-not-verified`; 503 `email-disabled`; 429 `email-test-limit` (3 per hour) |
+| `POST /api/notify/email/me/test` | TEACHER, ADMIN | 202 `{status: QUEUED}`: a test letter to the caller's own verified address (a dispatcher's links back to `/admin/notifications`); 422 `email-account-inactive` (disabled, revoked or demo account: the worker would drop it) / `email-missing` / `email-not-verified`; 503 `email-disabled`; 429 `email-test-limit` (3 per hour; Redis down → no limit, logged) |
 | `GET /api/notify/email/status` | ADMIN | `{enabled, mode: OFF\|DEV_CATCHER\|SMTP, host, port, from, replyTo, tls: STARTTLS\|SSL\|NONE, problem?}` — never the username or password; `problem`: why the channel is off, or the last SMTP failure of the past 15 minutes |
 | `GET /api/notify/email/deliveries?status&kind&page&size` | ADMIN | page `{items,page,size,total}` of `{id, kind, to (masked «k•••@vtc.vn.ua»), accountName, subject, status QUEUED/RETRYING/SENT/FAILED/SUPERSEDED, attempts, error, createdAt, sentAt, nextAttemptAt}`; newest first; size ≤ 200 |
 | `POST /api/notify/telegram/webhook` | open | WEBHOOK mode only (404 otherwise); `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET` (403). Both are checked before the body is read; at most 256 KB is read (400 `errors[body]` «Оновлення Telegram завелике.»), so an anonymous client cannot make the service buffer large bodies |
@@ -291,13 +291,17 @@ account. Empty `MAIL_HOST` = the channel is off: no intent is written, nothing i
 | `SUBSTITUTION_CANCELLED` | teacher | `status-changed` CANCELLED, or the change went to another teacher (to the previous one); only after a letter of that change reached him | on |
 | `SUBSTITUTION_REMINDER` | teacher | the deadline round (`remindOverdue` or core's re-sent request with the same passed deadline, one key `reminder:{change}:{deadline}:mail`) | on |
 | `ORDER_TEACHER` | teacher | `order.published`: his rows (the Telegram matching by name) + PDF link | off |
-| `SECURITY_TELEGRAM_RELINKED` | teacher | his Telegram chat was taken over by a newer code (`BindingFlow`) | always |
-| `GENERATION_FINISHED` | dispatchers | `generation.completed` SOLVED/FAILED/CANCELLED: scores, top 5 penalties (rewards excluded), error, `/admin/generation?job=` | on |
+| `SECURITY_TELEGRAM_RELINKED` | teacher | his Telegram chat was taken over by a newer code (`BindingFlow`); one letter per takeover, also when the same chat later takes over another teacher | always |
+| `GENERATION_FINISHED` | dispatchers | `generation.completed`: SOLVED (scores, why it stopped, «Найбільше порушень:» with the top 5 penalties, rewards excluded); hard > 0 is «з конфліктами» with «Перегляньте конфлікти перед застосуванням», as the web panel's «Готово з конфліктами»; CANCELLED with assignments = stopped, best timetable kept (scores and penalties as above), without = nothing kept; FAILED (the reason without a Java class name); `/admin/generation?job=` | on |
 | `SUBSTITUTION_DECLINED` | dispatchers | `status-changed` DECLINED | on |
 | `SUBSTITUTION_OBJECTION` | dispatchers | `teacher-replied` «Не можу» after the order | on |
 | `REQUEST_OVERDUE` | dispatchers | `remindOverdue` (CONFIRM, deadline passed, lesson not over) | on |
 | `ABSENCE_REPORTED` | dispatchers | `absence.reported` (never the reason) | off |
 | `TEACHER_UNREACHABLE` | dispatchers | `reportTeachersWithoutTelegram` (one per teacher and date) | off |
+
+The every-minute deadline jobs run while either channel is on. With the bot off they write only the e-mail
+intents: no Telegram reminder or admin row is queued (nothing would send it, and a bot switched back on within the
+day would send it late).
 
 Not offered: echoes of the teacher's own answers, «внесено до розпорядження», the morning digest, binding codes,
 order summaries for the dispatcher. «Generation finished» goes to every dispatcher who keeps it on (the job's
@@ -317,7 +321,10 @@ backoff; Telegram is not affected. Then it **sends** due letters.
 
 **Anti-noise.** Substitution letters wait `app.mail.settle-delay` (2 min). A newer letter of the same change to the
 same person replaces the ones still waiting (SUPERSEDED): a room change within the delay gives one letter of the
-first kind with the final room, a cancellation within the delay gives nothing. Right before sending,
+first kind with the final room, a cancellation within the delay gives nothing. «Reached him» counts only letters
+sent since the last cancellation he got, so a change that went to another teacher and came back, then was cancelled
+within the delay, sends no cancellation. The person's settings are checked against the kind the letter is finally
+written as: a change folded into a waiting notice follows the notice setting. Right before sending,
 `SubstitutionMailRelevance` drops a notice, request or reminder the change no longer needs (answered in Telegram
 during the delay, cancelled, reassigned) and a changed letter of a change no longer in force — FAILED «Неактуальне:
 …», like Telegram; every substitution letter is dropped once the lesson is over.
@@ -331,11 +338,17 @@ signed-in settings page; no one-click token). Every header value from data goes 
 CR/LF), recipients are parsed strictly. Templates: Thymeleaf with SpEL, standalone (`MailConfig`), one
 `mail/letter.html` (every value through `th:text`, inline CSS, ≤ 600 px, no images or remote resources) and one
 `mail/letter.txt` for every kind; the wording is `MailTexts` (the Telegram details in plain text). Links come from
-`PUBLIC_WEB_URL` (`MailLinks`; local links are fine in e-mail).
+`PUBLIC_WEB_URL` (`MailLinks`; local links are fine in e-mail). Wording: subjects read «what: which lesson»
+(«Вам поставили заміну: пн, 16 листопада, 3 пара, 4КІ1»; dispatcher letters put the teacher first), the greeting
+is a plain «Добрий день!» (an account name is a nominative full name or «Адміністратор»), teacher letters show the
+facts right after it, dispatcher letters never assume the teacher's gender. No letter says whether a reply is
+read: with `MAIL_REPLY_TO` a reply reaches that mailbox, without it nobody; the answer itself goes through the
+cabinet or Telegram, as the hints say. The test letter has no `List-Unsubscribe` (nothing to unsubscribe from).
 
-**Retries** (`EmailRetryPolicy`): connection problems, timeouts, 4xx, a refused login (logged once a minute as a
-configuration problem) → 30 s · 2^(n-1) up to 30 min, FAILED after 6 attempts; a 5xx refusal of the recipient or a
-letter that cannot be built → FAILED at once; not sent within 12 h → FAILED as stale. **Limits** (`EmailRateGuard`,
+**Retries** (`EmailRetryPolicy`): connection problems, timeouts, 4xx, a 5xx after `DATA`, a refused login or a
+refused sender (`MAIL FROM`, e.g. a relay that does not accept `MAIL_FROM`; both logged once a minute as a
+configuration problem) → 30 s · 2^(n-1) up to 30 min, FAILED after 6 attempts; a 5xx refusal of the recipient
+(`RCPT TO`) or a letter that cannot be built → FAILED at once; not sent within 12 h → FAILED as stale. **Limits** (`EmailRateGuard`,
 Redis, keys hold a SHA-256 prefix of the address): 2 letters/s overall, 20/hour per address with a burst of 5 (wait,
 no attempt spent), 60 per address and day (then FAILED «Перевищено денний ліміт листів…»); Redis down → letters go
 without limits (logged). Metrics: `notification.emails{outcome=sent|retry|failed|deferred|stale|obsolete|superseded|

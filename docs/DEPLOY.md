@@ -370,9 +370,11 @@ tells them so. Demo, disabled and revoked accounts get nothing.
 
 Port 25 is blocked by many VPS providers; 587 (STARTTLS) or 465 (`MAIL_SSL=true`, `MAIL_STARTTLS=false`) work.
 SPF and DKIM of `vtc.vn.ua` are Google's when the letters go through Google. `MAIL_REPLY_TO` may name the
-dispatcher office; the letters say that replies are not read by the system and point to the cabinet. Bounces
-(an unknown address) come back to the `MAIL_FROM` mailbox; nobody parses them, the letter log shows the
-server's refusal when it came at once.
+dispatcher office: a reply then lands there. The letters make no promise either way about replies; a substitution
+is answered in the cabinet or in Telegram, as each letter says. Bounces (an unknown address) come back to the
+`MAIL_FROM` mailbox; nobody parses them, the letter log shows the server's refusal when it came at once. A relay
+that refuses the sender (`MAIL FROM`, e.g. an address outside the domain or the server's IP not allowed) is
+treated like a wrong password: the letters wait and are retried, and «Сповіщення» shows the problem.
 
 Apply: edit `infra/deploy/.env`, then `infra/deploy/scripts/compose.sh up -d notification`. notification stops
 at start when `MAIL_HOST` is set without a valid `MAIL_FROM`. An SMTP outage never makes the service unready:

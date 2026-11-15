@@ -41,7 +41,8 @@ The main audience is students, parents and teachers who just want *the schedule 
 /admin/calendar           Semesters, parity overrides, bell profiles, periods (holidays, practice, study modes)
 /admin/telegram           Bot status, chat bindings, binding codes/deep links, delivery log
 /admin/notifications      «Сповіщення»: mail server status line (SMTP / Mailpit / off), my dispatcher e-mails
-                          (+ substitution e-mails if the account has a teacher), «Журнал листів» (masked addresses)
+                          (+ substitution e-mails if the account has a teacher), «Журнал листів» (masked addresses,
+                          filters by status and kind)
 /admin/settings           Approval mode, signatory, numbering, AI model/budget, public visibility, hours per pair
 ```
 
