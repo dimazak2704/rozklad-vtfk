@@ -9,11 +9,13 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
  * A request to generate a timetable (CONTRACTS.md §2). Empty {@code groupIds} and {@code courses}
  * mean every active group; when both are given their union is generated.
  *
- * @param baseVersionId version whose lessons stay for groups outside the scope (default: the published one)
- * @param weights       soft constraint weights, {@code null} = defaults
+ * @param baseVersionId    version whose lessons stay for groups outside the scope (default: the published one)
+ * @param timeLimitSeconds the old fixed limit; {@code null} = auto mode (the scheduler stops when the timetable stops
+ *                         getting better)
+ * @param weights          soft constraint weights, {@code null} = defaults
  */
 public record GenerationRequestCommand(UUID semesterId, List<UUID> groupIds, List<Integer> courses,
-                                       UUID baseVersionId, int timeLimitSeconds, GenerationWeights weights) {
+                                       UUID baseVersionId, Integer timeLimitSeconds, GenerationWeights weights) {
 
     public GenerationRequestCommand {
         Objects.requireNonNull(semesterId, "semesterId");

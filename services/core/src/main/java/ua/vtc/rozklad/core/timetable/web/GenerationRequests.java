@@ -15,12 +15,15 @@ final class GenerationRequests {
     private GenerationRequests() {
     }
 
-    /** {@code POST /api/admin/generation/jobs}. */
+    /**
+     * {@code POST /api/admin/generation/jobs}. {@code timeLimitSeconds} is optional: absent = auto mode (the
+     * scheduler stops when the timetable stops getting better); a value keeps the old fixed limit.
+     */
     record StartGeneration(
             @NotNull UUID semesterId,
             @Valid Scope scope,
             UUID baseVersionId,
-            @NotNull @Min(10) @Max(600) Integer timeLimitSeconds,
+            @Min(10) @Max(600) Integer timeLimitSeconds,
             @Valid Weights weights) {
 
         GenerationRequestCommand toCommand() {

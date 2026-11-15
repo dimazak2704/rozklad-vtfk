@@ -70,6 +70,7 @@ public class GenerationService {
         this.clock = clock;
     }
 
+    /** Starts a job; {@code timeLimitSeconds == null} is auto mode (the scheduler stops when it stops improving). */
     @Transactional
     public GenerationJobDto start(GenerationRequestCommand command, String actor) {
         if (!semesters.existsById(command.semesterId())) {
@@ -113,21 +114,27 @@ public class GenerationService {
     }
 
     /**
-     * Cancels a queued or running job at once (the scheduler is told to stop; its later results are
-     * ignored). Cancelling a cancelled job is a no-op; a finished job cannot be cancelled.
+     * «Зупинити». The scheduler is told to stop. A queued job has no timetable yet and is cancelled at once (its
+     * later results are ignored). A running job stays active with {@code stopRequested} until the scheduler returns
+     * its best timetable so far, which becomes a draft (SOLVED, stop reason STOPPED); the watchdog fails it if that
+     * never comes. Stopping a stopped or cancelled job again is a no-op; a finished job cannot be stopped.
      */
     @Transactional
     public GenerationJobDto cancel(UUID jobId) {
         GenerationJob job = jobs.findByIdForUpdate(jobId)
                 .orElseThrow(() -> NotFoundException.of("Задачу генерації", jobId));
-        if (job.getStatus() == GenerationStatus.CANCELLED) {
+        if (job.getStatus() == GenerationStatus.CANCELLED || job.getStopRequestedAt() != null) {
             return mapper.toDto(job);
         }
         if (!job.isActive()) {
-            throw new ConflictException("Генерацію вже завершено: скасувати її не можна.");
+            throw new ConflictException("Генерацію вже завершено: зупинити її не можна.");
+        }
+        events.publishEvent(new GenerationCancelRequested(EventEnvelope.create(clock), jobId));
+        if (job.getStatus() == GenerationStatus.RUNNING) {
+            job.requestStop(clock.instant());
+            return mapper.toDto(job);
         }
         job.finish(GenerationStatus.CANCELLED, clock.instant(), null);
-        events.publishEvent(new GenerationCancelRequested(EventEnvelope.create(clock), jobId));
         GenerationJobDto dto = mapper.toDto(job);
         sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto);
         return dto;
@@ -175,9 +182,11 @@ public class GenerationService {
 
     private ObjectNode params(GenerationRequestCommand command, Collection<StudentGroup> scope, TimetableVersion base,
                               GenerationWeights weights) {
-        ObjectNode params = (ObjectNode) mapper.json(Map.of(
-                "timeLimitSeconds", command.timeLimitSeconds(),
-                "weights", weights));
+        ObjectNode params = (ObjectNode) mapper.json(Map.of("weights", weights));
+        // без ліміту — автоматичний режим: поле відсутнє, як і в generation.requested
+        if (command.timeLimitSeconds() != null) {
+            params.put("timeLimitSeconds", command.timeLimitSeconds());
+        }
         params.set("scope", mapper.json(Map.of("groupIds", command.groupIds(), "courses", command.courses())));
         params.set("groupIds", mapper.json(scope.stream().map(StudentGroup::getId).toList()));
         if (base != null) {

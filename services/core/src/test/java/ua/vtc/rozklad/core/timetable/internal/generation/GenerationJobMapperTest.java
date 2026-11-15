@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.ConstraintScore;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.core.catalog.GroupRef;
@@ -74,6 +75,28 @@ class GenerationJobMapperTest {
         assertThat(dto.outcome()).isNull();
         assertThat(dto.groups()).isEmpty();
         assertThat(dto.legacyWeights()).as("no weights stored").isNull();
+        assertThat(dto.stopRequested()).isFalse();
+        assertThat(dto.stopReason()).isNull();
+    }
+
+    /** Auto mode: no limit stored, the stop request and the reason reach the DTO. */
+    @Test
+    void autoModeJobHasNoLimitAndShowsItsStop() {
+        GenerationJob job = new GenerationJob(UUID.randomUUID(), jsonMapper.readTree("{}"), "admin");
+        job.recordProgress(Instant.parse("2026-11-07T10:00:00Z"), mapper.withProgressPoint(null, 2.0, 0, -10),
+                GenerationJobMapper.score(0, -10));
+        job.requestStop(Instant.parse("2026-11-07T10:03:00Z"));
+
+        GenerationJobDto stopping = mapper.toDto(job);
+
+        assertThat(job.isAutoMode()).isTrue();
+        assertThat(stopping.timeLimitSeconds()).isNull();
+        assertThat(stopping.stopRequested()).isTrue();
+        assertThat(stopping.status()).isEqualTo(GenerationStatus.RUNNING);
+
+        job.setStopReason(GenerationStopReason.STOPPED);
+        job.finish(GenerationStatus.SOLVED, Instant.parse("2026-11-07T10:03:02Z"), null);
+        assertThat(mapper.toDto(job).stopReason()).isEqualTo(GenerationStopReason.STOPPED);
     }
 
     /** genfix repair: a job that stored the genfix weights is not legacy, also when a later weight is absent. */

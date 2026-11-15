@@ -16,14 +16,17 @@ import ua.vtc.rozklad.core.timetable.GenerationJobRepository;
 
 /**
  * Fails jobs the scheduler went silent on, so a lost message or a crashed scheduler never blocks the
- * semester (only one active job per semester is allowed). A queued job may wait its time limit plus
- * the grace period, a running one the grace period after its last progress. The scheduler is told
- * to stop, in case it is still alive.
+ * semester (only one active job per semester is allowed). A queued job may wait its time limit (auto mode:
+ * the scheduler's safety cap) plus the grace period, a running one the grace period after its last progress
+ * (the scheduler stops a job that has not improved for its stuck limit, which is shorter), a stopped one the stop
+ * grace for its best timetable. The scheduler is told to stop, in case it is still alive.
  */
 @Component
 class GenerationWatchdog {
 
     static final String TIMEOUT_REASON = "Планувальник не відповів вчасно: задачу зупинено. Спробуйте ще раз.";
+    static final String STOP_TIMEOUT_REASON = "Планувальник не повернув найкращий варіант після зупинки: "
+            + "чернетку не створено. Спробуйте ще раз.";
 
     private static final Logger log = LoggerFactory.getLogger(GenerationWatchdog.class);
 
@@ -51,7 +54,8 @@ class GenerationWatchdog {
         jobs.findAllByStatusIn(GenerationService.ACTIVE).stream()
                 .filter(job -> now.isAfter(deadline(job)))
                 .forEach(job -> transaction.executeWithoutResult(status -> handler
-                        .failIfStale(job.getId(), locked -> now.isAfter(deadline(locked)), now, TIMEOUT_REASON)
+                        .failIfStale(job.getId(), locked -> now.isAfter(deadline(locked)), now,
+                                GenerationWatchdog::reason)
                         .ifPresent(failed -> {
                             log.warn("Generation job {} failed by the watchdog: no news from the scheduler",
                                     failed.id());
@@ -61,11 +65,19 @@ class GenerationWatchdog {
     }
 
     Instant deadline(GenerationJob job) {
+        if (job.getStopRequestedAt() != null) {
+            return job.getStopRequestedAt().plus(properties.stopGrace());
+        }
         Duration grace = properties.timeoutGrace();
         if (job.getLastProgressAt() != null) {
             return job.getLastProgressAt().plus(grace);
         }
-        int timeLimit = job.getParams().path("timeLimitSeconds").asInt(0);
-        return job.getCreatedAt().plusSeconds(timeLimit).plus(grace);
+        Duration limit = job.isAutoMode() ? properties.autoTimeCap()
+                : Duration.ofSeconds(job.getParams().path("timeLimitSeconds").asInt(0));
+        return job.getCreatedAt().plus(limit).plus(grace);
+    }
+
+    static String reason(GenerationJob job) {
+        return job.getStopRequestedAt() != null ? STOP_TIMEOUT_REASON : TIMEOUT_REASON;
     }
 }
