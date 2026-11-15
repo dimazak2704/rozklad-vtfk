@@ -174,6 +174,9 @@ describe('параметри і наслідки задачі (B8)', () => {
     );
     expect(form).toMatchObject({ scope: 'groups', groupIds: ['a'], baseVersionId: 'v1', timeLimitSeconds: 45 });
     expect(form.weights).toEqual({ ...DEFAULT_WEIGHTS, windows: 20, latePairs: 3, teacherWindows: 20 });
+    // правила «Діє завжди» не вибирають: «Взяти ці параметри» повертає їм типові ваги, а не приховану стару
+    const old = formFromJob(job({ scope: { groupIds: [], courses: [] }, weights: { ...DEFAULT_WEIGHTS, subgroupsTogether: 10, specialRooms: 0 } }));
+    expect(old.weights).toEqual(DEFAULT_WEIGHTS);
   });
 
   it('таблиця по групах: було → стало і переставлені пари', () => {

@@ -139,13 +139,21 @@ describe('Генератор розкладу', () => {
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getByRole('button', { name: 'Запустити генерацію' })).toBeInTheDocument();
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    // типові ваги після оцінки на реальних запитах: вікна груп 30, 4-та пара 9, очікування між змінами 3
+    // лише компроміси: 9 пріоритетів; вікна груп — «Дуже важливо», 4-та пара зміни типово вимкнена (власник)
+    expect(within(panel as HTMLElement).getAllByRole('combobox').filter((box) => box.closest('[data-rule]'))).toHaveLength(9);
     expect(screen.getByRole('combobox', { name: 'Вікна груп' })).toHaveTextContent('Дуже важливо');
-    expect(screen.getByRole('combobox', { name: 'Спортзал — як у базовій версії' })).toHaveTextContent('Дуже важливо');
-    expect(screen.getByRole('combobox', { name: '4-та пара зміни' })).toHaveTextContent('Важливо');
-    expect(screen.getByRole('combobox', { name: 'Очікування між змінами' })).toHaveTextContent('Важливо');
-    // чесна підказка: 4-та пара зміни — не правило коледжу
-    expect(screen.getByText(/Це не правило коледжу: у чинному розкладі 4-та пара зміни є в 57 % днів груп/)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '4-та пара зміни' })).toHaveTextContent('Не враховувати');
+    expect(screen.getByRole('combobox', { name: 'Вікна викладачів' })).toHaveTextContent('Важливо');
+    // підтверджені правила коледжу — не вибір: їх немає серед пріоритетів, вони в списку «Діє завжди»
+    for (const name of ['Підгрупи разом', 'Спортзал — як у базовій версії', 'Очікування між змінами', 'Рівномірні дні']) {
+      expect(screen.queryByRole('combobox', { name })).not.toBeInTheDocument();
+    }
+    const always = screen.getByRole('list', { name: 'Діє завжди' });
+    expect(within(always).getByText(/Підгрупи однієї дисципліни займаються одночасно/)).toBeInTheDocument();
+    expect(within(always).getByText(/Фізкультура — у спортзалі чи на спортмайданчику/)).toBeInTheDocument();
+    expect(within(always).getByText(/заради однієї пари/)).toBeInTheDocument();
+    // чесна підказка: 4-ту пару зміни коледж вважає звичайною
+    expect(screen.getAllByText(/коледж вважає її звичайною, тому типово вимкнено/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Типові пріоритети' })).not.toBeInTheDocument();
     // весь коледж за 1 хв на реальних даних виходив гіршим за чинний розклад — підказка біля ліміту
     expect(screen.getByText(/Для всього коледжу краще 5 хв/)).toBeInTheDocument();

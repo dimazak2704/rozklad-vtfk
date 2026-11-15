@@ -505,6 +505,8 @@ function constraintAnalysis(
     { id: 'Teacher conflict', constraint: 'Викладач у двох місцях', matchCount: hardCount('TEACHER'), scopeMatchCount: hardInScope('TEACHER'), hard: -hardCount('TEACHER'), soft: 0, bonus: false },
     { id: 'Group conflict', constraint: 'Накладка в групі', matchCount: hardCount('GROUP'), scopeMatchCount: hardInScope('GROUP'), hard: -hardCount('GROUP'), soft: 0, bonus: false },
     { id: 'Outside shift', constraint: 'Пара поза зміною', matchCount: hardCount('SHIFT'), scopeMatchCount: hardInScope('SHIFT'), hard: -hardCount('SHIFT'), soft: 0, bonus: false },
+    // правило коледжу (власник, 15.11.2026): підгрупи однієї дисципліни разом — жорстке; мок їх не розводить
+    { id: 'Subgroups not together', constraint: 'Підгрупи дисципліни не одночасно', matchCount: 0, scopeMatchCount: 0, hard: 0, soft: 0, bonus: false },
     // мок не знає, чиї вікна викладача в області, тож рахує їх усі як «в області»
     { id: 'Teacher windows', constraint: 'Вікна викладачів', matchCount: metrics.teacherWindows, scopeMatchCount: metrics.teacherWindows, hard: 0, soft: -weights.teacherWindows * metrics.teacherWindows, bonus: false },
     { id: 'Group windows', constraint: 'Вікна груп', matchCount: metrics.groupWindows, scopeMatchCount: sum((row) => row.windows), hard: 0, soft: -weights.windows * metrics.groupWindows, bonus: false },

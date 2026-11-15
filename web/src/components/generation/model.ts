@@ -20,6 +20,7 @@ import type {
   Uuid,
 } from '@/api/types';
 import { countLabel, plural } from '@/lib/labels';
+import { withFixedRules } from './priorities';
 
 export type ScopeMode = 'all' | 'courses' | 'groups';
 
@@ -57,7 +58,10 @@ export function validateForm(form: GenerationFormState): Partial<Record<'scope' 
   return errors;
 }
 
-/** Запит несе всі 13 ваг: core прийняв би й частину, але так задача точно та, яку бачила людина. */
+/**
+ * Запит несе всі 14 ваг (і ті, що не показані як пріоритети, — з типовими значеннями): core прийняв би й
+ * частину, але так задача точно та, яку бачила людина.
+ */
 export function toJobRequest(form: GenerationFormState, semesterId: Uuid): GenerationJobRequest {
   return {
     semesterId,
@@ -326,7 +330,8 @@ export function formFromJob(job: GenerationJobDto): GenerationFormState {
     groupIds: mode === 'groups' && scope ? [...scope.groupIds] : [],
     baseVersionId: job.baseVersionId,
     timeLimitSeconds: job.timeLimitSeconds ?? DEFAULT_TIME_LIMIT,
-    weights: normalizeWeights(job.weights) ?? { ...DEFAULT_WEIGHTS },
+    // правила «Діє завжди» не вибирають: стара задача могла нести для них іншу вагу, у формі — типова
+    weights: withFixedRules(normalizeWeights(job.weights) ?? { ...DEFAULT_WEIGHTS }),
   };
 }
 
@@ -393,7 +398,7 @@ export function baselineSentence(version: TimetableVersionDto): string {
   // одне число, що вирішує: конфлікти; вікна й рвані дні — у «Подробицях» редактора розкладу
   if (version.hardConflicts > 0) return `${countLabel(version.hardConflicts, BASELINE_FORMS.hard)}.`;
   const m = version.metrics;
-  // «4-та пара зміни» — не вада (вона є в 57 % днів груп), тож до «лишились вікна» не входить
+  // «4-та пара зміни» — не вада (коледж вважає її звичайною), тож до «лишились вікна» не входить
   const soft = m ? m.teacherWindows + m.groupWindows + m.brokenDays : 0;
   return soft > 0 ? 'Конфліктів немає, лишились вікна чи рвані дні.' : 'Конфліктів і вікон немає.';
 }

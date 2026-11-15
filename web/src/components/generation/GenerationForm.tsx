@@ -7,7 +7,7 @@ import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
 import { groupDescription } from '@/lib/names';
 import { formatSeconds, validateForm, type GenerationFormState, type ScopeMode } from './model';
 import { Disclosure } from './Disclosure';
-import { LATE_PAIR_HINT, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, type RuleSection } from './priorities';
+import { FIXED_RULES, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, type RuleSection } from './priorities';
 import { PrioritySelect } from './PrioritySelect';
 
 const SECTIONS: readonly RuleSection[] = ['groups', 'teachers', 'whole'];
@@ -35,8 +35,9 @@ interface GenerationFormProps {
 }
 
 /**
- * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пояснення ваг — в одній
- * розгортці «Що означають ваги?»; «Скинути ваги» повертає типові значення core.
+ * Параметри генерації: які групи, від якої версії, скільки часу, що важливіше. Пріоритети — лише справжні
+ * компроміси; правила коледжу, які діють завжди, перелічено окремо без вибору. Пояснення рівнів — в одній
+ * розгортці «Що означають пріоритети?»; «Типові пріоритети» повертає типові значення core.
  */
 export function GenerationForm({
   form,
@@ -207,6 +208,16 @@ export function GenerationForm({
               ))}
             </div>
           ))}
+          <div className="flex flex-col gap-1.5">
+            <span id="fixed-rules" className="text-caption font-[650] text-secondary">
+              Діє завжди
+            </span>
+            <ul aria-labelledby="fixed-rules" className="flex list-disc flex-col gap-1 ps-4 text-caption text-secondary">
+              {FIXED_RULES.map((rule) => (
+                <li key={rule.id}>{rule.text}</li>
+              ))}
+            </ul>
+          </div>
           <Disclosure summary="Що означають пріоритети?" contentClassName="ps-5.5">
             <dl className="flex flex-col gap-2 text-caption">
               {PRIORITIES.map((priority) => (
@@ -218,7 +229,7 @@ export function GenerationForm({
               {PRIORITY_RULES.map((rule) => (
                 <div key={rule.id}>
                   <dt className="font-[650] text-primary">{rule.label}</dt>
-                  <dd className="text-secondary">{rule.id === 'latePairs' ? LATE_PAIR_HINT : rule.hint}</dd>
+                  <dd className="text-secondary">{rule.hint}</dd>
                 </div>
               ))}
             </dl>
