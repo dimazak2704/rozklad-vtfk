@@ -187,21 +187,25 @@ are acceptable is open (§13).
   infeasible (the published timetable has no such case). Pinned lessons carry no sibling key and a pair of two pinned
   copies is never scored, so lessons pinned outside the scope cannot make a run infeasible. A subgroup lesson without a counterpart
   in the load (the three lone subgroup slots of the published timetable, §13 Q4) is not covered: it stays the soft
-  «Subgroup alone» (`subgroupsTogether`). The published timetable keeps the rule in all its 72 sibling pairs.
+  «Subgroup alone» (`subgroupsTogether`). In the published timetable 70 of the 72 sibling keys have a base placement and
+  all 70 are parallel; the other 2 have none, so a run from it reaches 0 hard within seconds, not from the start. A key
+  whose copies cannot all be parallel by the data (one teacher for two of three or more copies, or teachers without a
+  common free slot in the shift) is soft as a whole, so data alone cannot make a run infeasible; the real data has none.
 - **A group's one-pair day is to be avoided** and **PE stands in the sports hall or on the sports ground**: confirmed,
   soft (`studentOnePairDay` 10, `specialRooms` 30, the strongest default), not offered to the dispatcher as a choice
   (replay: one-pair days 0–3 at 10, 30 did not help the rest of the week, scheduler.md §11). PE stays
   soft because the hall has 5 places and the published timetable fills all 5 in 4 slot-weeks: a full or closed hall
   must cost points, not make the run infeasible. The PE items are found from the data, never by discipline name: a load
   item whose base lessons with a room all stood in the hall or on the ground, or, without a base (from scratch), whose
-  teacher's usual room is the hall (all 100 PE units of the real request from scratch, no other unit). Generation
-  derives no hard room type.
+  teacher's usual room is the hall and the discipline is nowhere in an ordinary room (all 100 PE units of the real
+  request from scratch, no other unit). Generation derives no hard room type.
 - **The 4th pair of the shift is normal** (shift 1 the 4th pair 12:10–13:10, shift 2 the 8th; `contracts.LatePairs`;
   the college uses it on 321 of 560 group-day-weeks, 57 %): the preference «4-та пара зміни» defaults to weight 0 and
   stays switchable. The days stay balanced through the one-pair day, a discipline twice a day, broken days and the
-  teacher's daily limit (replay, scheduler.md §11 «Owner's rules»: scope runs as even as the published timetable, the
-  whole college a little less even, with more two-pair days, 86 vs 75 group day-weeks; one-pair days 0–2). Whether a
-  two-pair day next to four-pair days is acceptable is open (§13 Q1).
+  teacher's daily limit (replay, scheduler.md §11 «Owner's rules»: scope runs as even as the published timetable; the
+  whole college a little less even, not equal: spread 186 vs 178, two-pair days 86 vs 75 group day-weeks, the 4th pair
+  337 vs 289, while one-pair days 2 vs 5 and broken days 28 vs 36 are better). Whether a two-pair day next to
+  four-pair days is acceptable is open (§13 Q1).
 
 **Generator preferences (genfix) are trade-offs, not college rules.** They are soft, each has a request weight
 (0 = off), and the defaults come from the real timetable (`seed/schedule-2025-26.xlsx`, 560 group-day-weeks, 781
@@ -507,7 +511,8 @@ The open ones keep the soft defaults of `GenerationWeights.DEFAULT` (CONTRACTS; 
 weight). Weights compare as costs per week occurrence: a group window costs 30, the strongest default.
 - Q1 (answered). Is the 4th pair of a shift «late»? No: for the 1st shift it is a normal pair. Now: «4-та пара зміни»
   defaults to 0 and the dispatcher may switch it on. Follow-up (open): without that preference the generator makes
-  more two-pair days next to full four-pair days (whole college 86 vs 75 group day-weeks); is that fine?
+  more two-pair days next to full four-pair days (whole college 86 vs 75 group day-weeks, spread 186 vs 178), while
+  one-pair and broken days are fewer than published; is that fine?
 - Q2. Are a teacher's waits between a 1st-shift and a 2nd-shift lesson acceptable, and what is a teacher's maximum
   number of pairs a day? Now: waits weight 3 (a third of an in-shift teacher window); setting
   `teacherMaxPairsPerDay` = 4, soft, weight 3 per pair above it.

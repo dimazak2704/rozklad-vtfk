@@ -67,8 +67,9 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
   soft as a whole (`LessonUnit.softSiblingRule`, a warning in the log): one teacher teaches two of three or more
   copies (A, A, B: B cannot be parallel to both of A's copies), or the copies share no allowed slot or parity (their
   teachers' free slots never meet in the group's shift). Its pairs fall to «Subgroups apart», where two teachers'
-  copies count as together in one slot or on neighbouring pairs. Real data has neither: all 72 keys of the four real
-  requests have two copies of two teachers with common slots. The sibling move does not help such a key (it moves
+  copies count as together in one slot or on neighbouring pairs. Real data has neither: every key of the four real
+  requests (72 on the whole college, 2 in each scope) has two copies of two teachers with common slots, so no key is
+  soft there. The sibling move does not help such a key (it moves
   copies with a common slot only; A, A, B go to three consecutive pairs).
 * **Teachers**: `maxPairsPerDay` from the snapshot (`null` = no limit) and a **baseline of teaching days**
   per kind of week: the weekdays of the teacher's base (`initial`) and pinned lessons in that week, but at
@@ -122,8 +123,10 @@ in `generation.completed` uses the Ukrainian titles.
 | Halves paired | Чисельник і знаменник в одному слоті (бонус) | soft **reward** | two halves of one cohort in one slot with different parities | `brokenDays` |
 
 **Owner's answers (15.11.2026, DOMAIN §5, §13).** The subgroups of a split discipline at the same time is **hard** for
-copies of two teachers: the real timetable keeps it in all 72 sibling pairs (all of two teachers), a run from the
-published version starts and stays at 0 hard, and from scratch the run reached 0 hard far sooner than with the old soft
+copies of two teachers: in the published timetable 70 of the 72 sibling keys have a base placement, all of them
+parallel (all keys are of two teachers); the other 2 have none and the construction heuristic places them, so a run
+from the published version ends the construction heuristic at −2 hard and reaches 0 hard within seconds (3.3–4.2 s on
+the whole college), and from scratch the run reached 0 hard far sooner than with the old soft
 rule (§11 «Owner's rules»). One teacher cannot teach both copies at once, so for them the neighbouring pairs are a
 **soft rule with the strongest default** (`subgroupsTogether` 30): the published timetable has no such case, and hard
 neighbouring pairs left the synthetic full second shift (interlocked labs of one teacher) infeasible in 3 of 3 runs,
@@ -523,15 +526,16 @@ week the most minus the fewest pairs over its weekdays, summed (balance).
 | `teacher-limits` | before / **after** | 17.8 / 4.0 | 48 / 14 | 20 / 4 | 1 / 3 | 1 / 0 | 13 / 26 | 61 / 70 | 6 / 14 | 132 / 171 | 198 / 188 | 101 / 65 | 134 / 61 | 0 / 0 | — |
 | `small-stream` | before / **after** | 0.1 / 0.1 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 6 / 8 | 16 / 24 | 0 / 0 | 18 / 36 | 55 / 55 | 28 / 36 | 47 / 32 | 0 / 0 | — |
 
-Reading. The published version keeps the hard rule in all 72 sibling pairs, so runs from it start and stay at 0 hard
-(the first progress point, 0.1–3.4 s). The only lone subgroup slot left in the real college is 1ОП1 English on
+Reading. In the published version 70 of the 72 sibling keys have a base placement, all parallel; the other 2 have
+none and the construction heuristic places them, ending at −2 hard on the whole college, so the runs from it reach 0
+hard within seconds (0.1 s in the scopes, 3.3–4.2 s on the whole college), not from the start. The only lone subgroup slot left in the real college is 1ОП1 English on
 Wednesday pair 1 (2 slot-weeks), a subgroup-1 lesson whose load has no subgroup-2 counterpart (DOMAIN §13 Q4); the
 scope runs have none. From scratch the run reaches 0 hard after 66 s instead of 438 s, with 2 lone slot-weeks instead of
 28 and no PE lesson in a classroom (the teacher's room marks PE now, instead of 10 units in classrooms). Without the
-4th-pair penalty the 4th pair is used more (337 vs 289 published) and the days are a little less even than published
-(spread 186 vs 178 from the published version, 195 from scratch; scope runs 177–179 as published): one-pair days stay
-at 0–2, a discipline twice a day at the published 12, broken days below the published 36, but two-pair days grow
-(86 vs 75). Teacher metrics improve (teaching days 380 → 374, one-pair teacher days 100 → 89, waits 191 → 139). The
+4th-pair penalty the 4th pair is used more (337 vs 289 published) and the days are a little less even than published,
+not equal (spread 186 vs 178 from the published version, 195 from scratch; scope runs 177–179 as published): one-pair
+days 2 vs 5, a discipline twice a day at the published 12 and broken days 28 vs 36 are better or equal, but two-pair
+days grow (86 vs 75). This is the open follow-up of DOMAIN §13 Q1, for the owner to judge. Teacher metrics improve (teaching days 380 → 374, one-pair teacher days 100 → 89, waits 191 → 139). The
 synthetic colleges reach 0 hard in every run, with up to 3 group windows (`teacher-limits`; before 0–1) and 14–24
 week occurrences of one teacher's copies not on neighbouring pairs (soft); real data has no such copies.
 

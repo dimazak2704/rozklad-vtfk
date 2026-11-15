@@ -279,10 +279,12 @@ weight covered groups and teachers before). `DEFAULT` = (30, 10, 0, 5, 1, 10, 3,
 the college's real generation requests (scheduler `SnapshotReplayTest`); since the owner's answers of 15.11.2026 `latePairs`
 is 0 (the 4th pair is normal) and `subgroupsTogether` 30. The defaults and the statistics behind them are in CHANGELOG-CONTRACTS «Generator
 quality» and «Owner's answers». `specialRooms`: a lesson of a load item that keeps to the sports hall or the sports ground (its
-base lessons with a room all stood there or, without a base, its teacher's usual room is one) is placed in another kind of
+base lessons with a room all stood there or, without a base, its preferred room is one or its teacher's usual room is one
+and its discipline is nowhere in an ordinary room) is placed in another kind of
 room (per week occurrence). The subgroup copies of one occurrence (`siblingKey`) of two teachers in one slot is a hard rule
 of the scheduler (no weight); `subgroupsTogether` weighs what it cannot demand: one teacher's two copies on neighbouring
-pairs, and a lone subgroup lesson. `contracts.LatePairs` holds the one definition of a «4-та пара зміни»: a pair
+pairs, a key whose copies cannot all be parallel by the data (one teacher for two of three copies, no common free slot),
+and a lone subgroup lesson. `contracts.LatePairs` holds the one definition of a «4-та пара зміни»: a pair
 whose position in the group's shift window is 3 or more (0-based): shift 1 the 4th pair, shift 2 the 8th, none on Friday shift 2.
 
 Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники: only for a kind with effect
