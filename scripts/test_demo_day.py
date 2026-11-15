@@ -60,8 +60,14 @@ class ScenarioTest(unittest.TestCase):
         friday = [d.answer for d in demo_day.DECISIONS if d.teacher == demo_day.SUBSTITUTE and d.date == demo_day.FRIDAY]
         thursday = [d.answer for d in demo_day.DECISIONS
                     if d.teacher == demo_day.SUBSTITUTE and d.date == demo_day.THURSDAY]
-        self.assertEqual([None, "decline", "pending"], friday)
+        self.assertEqual([None, "decline", None, "pending"], friday)
         self.assertEqual(["ok"], thursday)
+
+    def test_friday_requests_are_on_pairs_that_have_not_started_at_ten(self):
+        # the stand clock is 10:00 (pair 2 in progress); a request for a started pair is refused (CHANGE_LESSON_OVER)
+        for decision in demo_day.DECISIONS:
+            if decision.date == demo_day.FRIDAY and decision.answer in ("pending", "decline"):
+                self.assertGreaterEqual(decision.pair, 3, decision)
 
     @unittest.skipIf(openpyxl is None, "openpyxl is not installed")
     def test_no_decision_falls_on_a_group_the_academic_calendar_takes_off_pairs(self):
