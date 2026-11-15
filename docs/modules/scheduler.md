@@ -167,8 +167,8 @@ problems of the run.
 
 * Construction heuristic: `FIRST_FIT_DECREASING` over the cartesian product timeslot × parity (rooms
   are warm-started). Difficulty (`LessonUnitDifficulty`): WHOLE before HALF (halves then pair up in
-  the remaining slots), subgroup copies with a sibling key (hard rule), scarce rooms first (sports hall,
-  labs), then busy teachers, then units with fewer allowed timeslots. The copies of one sibling key take the
+  the remaining slots), scarce rooms first (sports hall, labs), then busy teachers, then units with fewer allowed
+  timeslots. The copies of one sibling key take the
   difficulty of the hardest of them and are placed one after another, so the second copy finds the slot of the
   first still free: in the old order the synthetic real-shaped college stayed at −2…−6 hard after 180 s (5 runs), in
   the new one it reaches 0 hard in 22–153 s (7 runs, §11 «Owner's rules»).
@@ -179,7 +179,9 @@ problems of the run.
   while they move; an ordinary move of one copy of two teachers breaks the hard rule, so the sibling move is the
   way such copies move. A random sibling move also gives a copy whose room is taken at the target a free room of
   its range (its desired room first): without it a pair could only move into slots where both its rooms happened
-  to be free. In random selection order the union gives each child selector the same chance (Timefold's default
+  to be free. The room use is counted once per step (`RoomUse`, at the step's first sibling move): a step's
+  iterator lives one step and every move it gives is evaluated and undone before the next, so the moves read two
+  slots of that count instead of scanning all ~1077 units each. In random selection order the union gives each child selector the same chance (Timefold's default
   without `fixedProbabilityWeight`), so about one move in six is a sibling move. `acceptedCountLimit` 16 (chosen by
   the benchmark in §11).
 * Termination per job (`SolverConfigOverride`): the requested `timeLimitSeconds`, or earlier when the
@@ -305,8 +307,10 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
   cross-check map), on a planted, a perturbed (with base placements) and a hand-made week where every new
   rule matches; scope matches of pinned-only matches are 0.
 * `SiblingMoveIteratorFactoryTest` — sibling groups (shared slots, pinned and lone keys), parallel vs
-  neighbouring targets, free rooms at the target (desired room first, undone cleanly), a `FULL_ASSERT` run with
-  sibling moves only.
+  neighbouring targets, free rooms at the target (desired room first, undone cleanly), one room use per step serving
+  several moves without a move's choice leaking into the next, a `FULL_ASSERT` run with sibling moves only.
+* `LessonUnitDifficultyTest` — construction order: sibling copies take the hardest copy's difficulty and come one
+  after another; copies of two keys with equal difficulty do not interleave.
 * `RealSnapshotGateTest` (opt-in, `-Dgenfix.snapshots=<dir>|classpath`) — speed gate, see §11.
 * `SnapshotReplayTest` (opt-in: tag `replay`, which the build excludes, plus `-Dreplay=<datasets>`) — replays a
   `generation.requested` with the production solver config and termination and logs the generator study's table

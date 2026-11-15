@@ -5,13 +5,11 @@ import ai.timefold.solver.core.impl.score.director.ScoreDirector;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.random.RandomGenerator;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
@@ -74,6 +72,10 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
             return Collections.emptyIterator();
         }
         return new Iterator<>() {
+
+            // зайнятість аудиторій на початку кроку: ітератор живе один крок, а кожен оцінений хід відкочується
+            private RoomUse roomUse;
+
             @Override
             public boolean hasNext() {
                 return true;
@@ -89,7 +91,10 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
                     Parity parity = group.parities().get(random.nextInt(group.parities().size()));
                     move = group.moveTo(slot, parity);
                     if (!group.isAt(move)) {
-                        return withFreeRooms(move, builtFor.getUnits());
+                        if (roomUse == null) {
+                            roomUse = RoomUse.of(builtFor.getUnits());
+                        }
+                        return withFreeRooms(move, roomUse);
                     }
                 }
                 return move;
@@ -106,27 +111,20 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
         }
     }
 
+    /** {@link #withFreeRooms(SiblingChangeMove, RoomUse)} with the room use of {@code all} counted now. */
+    static SiblingChangeMove withFreeRooms(SiblingChangeMove move, List<LessonUnit> all) {
+        return withFreeRooms(move, RoomUse.of(all));
+    }
+
     /**
      * The move with a free room for every unit whose room is taken at its target slot (in a week the unit would
      * meet): its current room if free, else the desired room, else the first free room of its range; a unit
      * keeps its room when none is free (the room rule then reports it). The moving units do not count as
-     * occupants, and each chosen room counts for the next unit.
+     * occupants, and each chosen room counts for the next unit. {@code roomUse} is read, never changed.
      */
-    static SiblingChangeMove withFreeRooms(SiblingChangeMove move, List<LessonUnit> all) {
+    static SiblingChangeMove withFreeRooms(SiblingChangeMove move, RoomUse roomUse) {
         List<LessonUnit> units = move.units();
-        Set<LessonUnit> moving = Collections.newSetFromMap(new IdentityHashMap<>());
-        moving.addAll(units);
-        Map<Timeslot, Map<Room, int[]>> use = new HashMap<>();
-        move.slots().forEach(slot -> use.put(slot, new HashMap<>()));
-        for (LessonUnit other : all) {
-            if (moving.contains(other) || !other.isPlaced() || other.getRoom().isNone()) {
-                continue;
-            }
-            Map<Room, int[]> atSlot = use.get(other.getTimeslot());
-            if (atSlot != null) {
-                occupy(atSlot, other.getRoom(), other.weekLanes());
-            }
-        }
+        Map<Timeslot, Map<Room, int[]>> use = roomUse.atTargetsWithout(move);
         List<Room> rooms = new ArrayList<>(units.size());
         boolean changed = false;
         for (int k = 0; k < units.size(); k++) {
@@ -181,6 +179,52 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
         int[] used = atSlot.computeIfAbsent(room, ignored -> new int[LessonUnit.WEEK_TYPES]);
         for (int week : weeks) {
             used[week]++;
+        }
+    }
+
+    /**
+     * Lessons per room, slot and week of a solution, counted once (a random move iterator counts it at its first
+     * sibling move and keeps it for the step: every move it gives is evaluated and undone before the next one), so
+     * a sibling move reads two slots instead of scanning every unit.
+     */
+    static final class RoomUse {
+
+        private final Map<Timeslot, Map<Room, int[]>> bySlot = new HashMap<>();
+
+        static RoomUse of(List<LessonUnit> units) {
+            RoomUse use = new RoomUse();
+            for (LessonUnit unit : units) {
+                if (unit.isPlaced() && !unit.getRoom().isNone()) {
+                    occupy(use.bySlot.computeIfAbsent(unit.getTimeslot(), slot -> new HashMap<>()), unit.getRoom(),
+                            unit.weekLanes());
+                }
+            }
+            return use;
+        }
+
+        /** A copy of the use at the move's target slots, the moving units left out (they leave their rooms). */
+        Map<Timeslot, Map<Room, int[]>> atTargetsWithout(SiblingChangeMove move) {
+            Map<Timeslot, Map<Room, int[]>> use = new HashMap<>();
+            for (Timeslot slot : move.slots()) {
+                use.computeIfAbsent(slot, this::copyAt);
+            }
+            for (LessonUnit unit : move.units()) {
+                Map<Room, int[]> atSlot = unit.isPlaced() && !unit.getRoom().isNone()
+                        ? use.get(unit.getTimeslot()) : null;
+                int[] used = atSlot == null ? null : atSlot.get(unit.getRoom());
+                if (used != null) {
+                    for (int week : unit.weekLanes()) {
+                        used[week]--;
+                    }
+                }
+            }
+            return use;
+        }
+
+        private Map<Room, int[]> copyAt(Timeslot slot) {
+            Map<Room, int[]> copy = new HashMap<>();
+            bySlot.getOrDefault(slot, Map.of()).forEach((room, used) -> copy.put(room, used.clone()));
+            return copy;
         }
     }
 

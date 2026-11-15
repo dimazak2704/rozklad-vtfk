@@ -177,6 +177,44 @@ class SiblingMoveIteratorFactoryTest {
                 .isSameAs(move);
     }
 
+    /**
+     * The random iterator counts the room use once per step and every move of the step reads it: a move's own room
+     * choice must not leak into the next move (they are evaluated and undone one by one), and the result is the
+     * same as counting the units afresh.
+     */
+    @Test
+    void oneRoomUseServesEveryMoveOfAStep() {
+        Room lab2 = new Room(UUID.randomUUID(), "7", RoomType.COMPUTER_LAB, 16, 1);
+        // у лабораторії 8 два місця, одне з них уже зайняте у 2-й парі
+        Room lab3 = new Room(UUID.randomUUID(), "8", RoomType.COMPUTER_LAB, 16, 2);
+        List<Timeslot> range = slots(1, 1, 1, 2);
+        LessonUnit first = LessonUnit.builder("a", KI2, DISCIPLINE).subgroup(1).teacher(KRENTSIN)
+                .weight(UnitWeight.WHOLE).siblingKey("k").desiredRoom(lab3).timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), LAB, Parity.BOTH).build();
+        LessonUnit second = LessonUnit.builder("b", KI2, DISCIPLINE).subgroup(2).teacher(NEPYIVODA)
+                .weight(UnitWeight.WHOLE).siblingKey("k").timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), lab2, Parity.BOTH).build();
+        LessonUnit other = unit("x", 0, null, null, List.of(range.get(1)), false);
+        LessonUnit sharing = LessonUnit.builder("y", KI2, DISCIPLINE).weight(UnitWeight.WHOLE)
+                .placedAt(range.get(1), lab3, Parity.BOTH).build();
+        List<LessonUnit> all = List.of(first, second, other, sharing);
+        SiblingChangeMove move = SiblingMoveIteratorFactory.siblingGroups(List.of(first, second)).getFirst()
+                .moveTo(range.get(1), Parity.BOTH);
+        SiblingMoveIteratorFactory.RoomUse use = SiblingMoveIteratorFactory.RoomUse.of(all);
+
+        SiblingChangeMove once = SiblingMoveIteratorFactory.withFreeRooms(move, use);
+        SiblingChangeMove again = SiblingMoveIteratorFactory.withFreeRooms(move, use);
+
+        // з витоком друге місце лабораторії 8 «зайняв» би попередній хід, і перша копія пішла б у 7
+        assertThat(once.getPlanningValues()).containsExactly(range.get(1), range.get(1), Parity.BOTH, Parity.BOTH,
+                lab3);
+        assertThat(again.getPlanningValues()).containsExactlyElementsOf(once.getPlanningValues());
+        assertThat(SiblingMoveIteratorFactory.withFreeRooms(move, all).getPlanningValues())
+                .containsExactlyElementsOf(once.getPlanningValues());
+    }
+
     /** Local search with sibling moves only, in FULL_ASSERT: the move keeps the score consistent. */
     @Test
     void siblingMovesKeepTheIncrementalScoreConsistent() {
