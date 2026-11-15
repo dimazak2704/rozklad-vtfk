@@ -18,20 +18,22 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 
 /**
- * A hand-made week in which every soft rule added after the generator review (and the windows and
- * late pairs they interact with) has at least one match; optionally with every unit pinned.
+ * A hand-made week in which every rule added after the generator review (and the windows and late pairs
+ * they interact with) has at least one match; optionally with every unit pinned. «Subgroups not together»
+ * is hard since the owner's answers (15.11.2026) and exempts a pair of pinned copies.
  */
 final class NewRulesWeek {
 
     static final Set<TimetableConstraint> RULES = EnumSet.of(TimetableConstraint.GROUP_WINDOWS,
             TimetableConstraint.TEACHER_WINDOWS, TimetableConstraint.TEACHER_SHIFT_WAIT, TimetableConstraint.LATE_PAIR,
             TimetableConstraint.GROUP_ONE_PAIR_DAY, TimetableConstraint.SUBGROUP_ALONE,
-            TimetableConstraint.SIBLINGS_APART, TimetableConstraint.TEACHER_ONE_PAIR_DAY,
+            TimetableConstraint.SUBGROUPS_APART, TimetableConstraint.SIBLINGS_APART,
+            TimetableConstraint.TEACHER_ONE_PAIR_DAY,
             TimetableConstraint.TEACHER_EXTRA_DAY, TimetableConstraint.TEACHER_OVERLOAD,
             TimetableConstraint.DISCIPLINE_TWICE, TimetableConstraint.UNIT_MOVED, TimetableConstraint.ROOM_CHANGED,
             TimetableConstraint.SPECIAL_ROOM_LOST);
-    /** Rules whose matches may consist of pinned units only. */
-    static final Set<TimetableConstraint> PINNABLE_RULES = RULES;
+    /** Rules whose matches may consist of pinned units only (two pinned subgroup copies apart are never scored). */
+    static final Set<TimetableConstraint> PINNABLE_RULES = withoutSubgroupsApart();
 
     private static final ShiftWindow FIRST_SHIFT = window(1, 4, 1, 4);
     private static final ShiftWindow SECOND_SHIFT = window(5, 8, 4, 6);
@@ -51,6 +53,13 @@ final class NewRulesWeek {
     private NewRulesWeek() {
     }
 
+    private static Set<TimetableConstraint> withoutSubgroupsApart() {
+        Set<TimetableConstraint> rules = EnumSet.copyOf(RULES);
+        rules.remove(TimetableConstraint.SUBGROUPS_APART);
+        rules.remove(TimetableConstraint.SIBLINGS_APART);
+        return rules;
+    }
+
     static Timetable timetable(boolean pinned) {
         List<LessonUnit> units = new ArrayList<>();
         // понеділок: викладач FREE — вікно на 2-й парі й очікування до 2-ї зміни; 2ЕА1 приходить на одну пару
@@ -68,6 +77,9 @@ final class NewRulesWeek {
         // четвер: другий робочий день обмеженого викладача; його підгрупи не підряд і кожна сама
         units.add(unit("thu1", KI2, 4, 1, LIMITED, ROOM_304, pinned).subgroup(1).siblingKey("lab:w1").build());
         units.add(unit("thu3", KI2, 4, 3, LIMITED, ROOM_304, pinned).subgroup(2).siblingKey("lab:w1").build());
+        // п'ятниця: англійська двох викладачів, підгрупи не одночасно (жорстке правило)
+        units.add(unit("fri2", KI2, 5, 2, FREE, ROOM_304, pinned).subgroup(1).siblingKey("eng:w1").build());
+        units.add(unit("fri3", KI2, 5, 3, null, ROOM_6, pinned).subgroup(2).siblingKey("eng:w1").build());
         return new Timetable(List.of(), List.of(ROOM_304, ROOM_6), List.of(LIMITED, FREE), List.of(KI1, KI2, EA1),
                 units, ConstraintWeights.of(GenerationWeights.DEFAULT, 5));
     }

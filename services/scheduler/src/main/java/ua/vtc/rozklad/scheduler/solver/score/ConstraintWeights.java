@@ -18,7 +18,9 @@ import ua.vtc.rozklad.contracts.events.GenerationWeights;
  *   <li>{@code stability} → a unit moved from its base slot and a unit in another room than in the base;
  *       {@code specialRooms} → a lesson of a load item that kept to the sports hall or ground in the base
  *       version placed in another kind of room;</li>
- *   <li>{@code subgroupsTogether} → a lone subgroup and subgroups of one teacher not one after the other;</li>
+ *   <li>{@code subgroupsTogether} → a lone subgroup (a subgroup lesson the hard rule «subgroups of one
+ *       discipline together» does not cover: no counterpart in the load, two split disciplines crossed) and the
+ *       two subgroups of one teacher not on neighbouring pairs;</li>
  *   <li>{@code studentOnePairDay} → a group's one-pair day; {@code teacherDays} → a teacher's one-pair day
  *       and extra teaching days; {@code teacherOverload} → pairs above a teacher's daily limit;
  *       {@code disciplineTwice} → a discipline twice a day.</li>

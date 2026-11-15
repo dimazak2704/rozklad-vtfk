@@ -20,6 +20,7 @@ public enum TimetableConstraint {
     ROOM_CAPACITY("Room too small", "Аудиторія замала для групи", Kind.HARD),
     OUTSIDE_SHIFT("Outside shift window", "Пара поза межами зміни", Kind.HARD),
     TEACHER_UNAVAILABLE("Teacher unavailable", "Викладач недоступний у цей час", Kind.HARD),
+    SUBGROUPS_APART("Subgroups not together", "Підгрупи дисципліни не одночасно", Kind.HARD),
 
     GROUP_WINDOWS("Group windows", "Вікна в розкладі групи", Kind.PENALTY),
     TEACHER_WINDOWS("Teacher windows", "Вікна у викладача", Kind.PENALTY),

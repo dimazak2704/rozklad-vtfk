@@ -16,6 +16,7 @@ import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.ROOM_PRE
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.ROOM_TYPE;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.SIBLINGS_APART;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.SPECIAL_ROOM_LOST;
+import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.SUBGROUPS_APART;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.SUBGROUP_ALONE;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.TEACHER_CONFLICT;
 import static ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint.TEACHER_EXTRA_DAY;
@@ -33,6 +34,7 @@ import ai.timefold.solver.core.api.score.stream.ConstraintCollectors;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.Joiners;
+import ai.timefold.solver.core.api.score.stream.bi.BiConstraintStream;
 import ai.timefold.solver.core.api.score.stream.quad.QuadConstraintStream;
 import ai.timefold.solver.core.api.score.stream.tri.TriConstraintStream;
 import java.util.UUID;
@@ -44,9 +46,10 @@ import ua.vtc.rozklad.scheduler.solver.domain.Teacher;
  * Hard and soft rules of the college timetable (DOMAIN §5). Penalties count week occurrences: a
  * clash of two BOTH lessons costs 2 (numerator and denominator week), a clash involving a half
  * costs 1. Soft weights come from the request ({@link ConstraintWeights}); the weights here are
- * the unit weights. The soft rules added after the generator review (waits between shifts,
- * stability, subgroups, daily balance, a discipline twice a day) are preferences with a weight the
- * dispatcher can set to 0, not college rules.
+ * the unit weights. The owner's answers of 15.11.2026 (DOMAIN §13) made subgroups of one discipline
+ * together a hard rule; one-pair days and PE in the hall are confirmed rules kept soft with a strong
+ * default weight, and the 4th pair of the shift is normal (its preference is off by default). The
+ * other soft rules are trade-offs the dispatcher can weigh or switch off.
  *
  * <p>Rules over the same day share one grouping node: the group-day rules read {@link GroupDay}, the
  * teacher-day rules {@link TeacherDay}, the discipline rules {@link DisciplineDay}.
@@ -68,6 +71,7 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 roomCapacity(factory),
                 outsideShift(factory),
                 teacherUnavailable(factory),
+                subgroupsApart(factory),
                 groupWindows(factory),
                 teacherWindows(factory),
                 teacherShiftWait(factory),
@@ -153,6 +157,19 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 .asConstraint(TEACHER_UNAVAILABLE.id());
     }
 
+    /**
+     * The subgroup copies of one weekly occurrence of a split discipline (equal sibling key) with different
+     * teachers are not in the same slot and weeks (owner's rule, 15.11.2026: both subgroups at the same time).
+     * Only free units carry a sibling key (core sends none on pinned lessons), and a pair of two pinned copies
+     * is skipped anyway, so a pinned pair that already breaks the rule never makes a run infeasible.
+     */
+    Constraint subgroupsApart(ConstraintFactory factory) {
+        return siblingPairs(factory)
+                .filter((first, second) -> !first.sharesTeacherWith(second) && !first.isTogetherWith(second))
+                .penalize(HardSoftScore.ONE_HARD, LessonUnit::apartPenalty)
+                .asConstraint(SUBGROUPS_APART.id());
+    }
+
     // ---- soft: group-day rules (one shared grouping)
 
     /** Free pairs between lessons: per kind of week the worst cohort of the group (B10). */
@@ -179,7 +196,11 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                 .asConstraint(GROUP_ONE_PAIR_DAY.id());
     }
 
-    /** A subgroup studies while another cohort of the group has no lesson: per pair and kind of week. */
+    /**
+     * A subgroup studies while another cohort of the group has no lesson: per pair and kind of week. Next to the
+     * hard rule above it catches what a sibling key does not cover: a subgroup lesson without a counterpart in
+     * the load, or two split disciplines crossed.
+     */
     Constraint subgroupAlone(ConstraintFactory factory) {
         return groupDays(factory)
                 .filter((group, weekday, day) -> day.loneSubgroupSlots() > 0)
@@ -233,28 +254,24 @@ public class TimetableConstraintProvider implements ConstraintProvider {
 
     // ---- soft: lesson rules
 
+    /**
+     * One teacher teaches both subgroup copies, so they cannot be parallel: they should stand on neighbouring
+     * pairs of one day in the same weeks. Soft with the strongest default ({@code subgroupsTogether}): a hard
+     * version left full second shifts with interlocked labs infeasible (scheduler.md §11 «Owner's rules»).
+     */
+    Constraint siblingsApart(ConstraintFactory factory) {
+        return siblingPairs(factory)
+                .filter((first, second) -> first.sharesTeacherWith(second) && !first.isTogetherWith(second))
+                .penalize(HardSoftScore.ONE_SOFT, LessonUnit::apartPenalty)
+                .asConstraint(SIBLINGS_APART.id());
+    }
+
     /** The 4th pair of the shift and later ({@code LatePairs}), the later the worse. */
     Constraint latePairs(ConstraintFactory factory) {
         return factory.forEach(LessonUnit.class)
                 .filter(LessonUnit::isLate)
                 .penalize(HardSoftScore.ONE_SOFT, LessonUnit::latePenalty)
                 .asConstraint(LATE_PAIR.id());
-    }
-
-    /**
-     * Subgroup copies of one occurrence taught by the same teacher cannot be parallel, so they should
-     * follow each other on one day. Penalized per kind of week both meet in.
-     */
-    Constraint siblingsApart(ConstraintFactory factory) {
-        return factory.forEach(LessonUnit.class)
-                .filter(LessonUnit::hasSiblingWithTeacher)
-                .join(factory.forEach(LessonUnit.class).filter(LessonUnit::hasSiblingWithTeacher),
-                        Joiners.equal(LessonUnit::getSiblingKey),
-                        Joiners.equal(LessonUnit::getTeacherId),
-                        Joiners.lessThan(LessonUnit::getId))
-                .filter((first, second) -> !first.isAdjacentTo(second) && first.weeksSharedWith(second) > 0)
-                .penalize(HardSoftScore.ONE_SOFT, LessonUnit::weeksSharedWith)
-                .asConstraint(SIBLINGS_APART.id());
     }
 
     /** A discipline more than once a day for a student (a subgroup counts its own pairs). */
@@ -335,6 +352,16 @@ public class TimetableConstraintProvider implements ConstraintProvider {
     }
 
     // ---- shared groupings (equal streams share one node)
+
+    /** Pairs of subgroup copies with one sibling key, at least one of them free. */
+    private static BiConstraintStream<LessonUnit, LessonUnit> siblingPairs(ConstraintFactory factory) {
+        return factory.forEach(LessonUnit.class)
+                .filter(LessonUnit::hasSiblingKey)
+                .join(factory.forEach(LessonUnit.class).filter(LessonUnit::hasSiblingKey),
+                        Joiners.equal(LessonUnit::getSiblingKey),
+                        Joiners.lessThan(LessonUnit::getId))
+                .filter((first, second) -> !first.isPinned() || !second.isPinned());
+    }
 
     private static TriConstraintStream<UUID, Integer, GroupDay> groupDays(ConstraintFactory factory) {
         return factory.forEach(LessonUnit.class)

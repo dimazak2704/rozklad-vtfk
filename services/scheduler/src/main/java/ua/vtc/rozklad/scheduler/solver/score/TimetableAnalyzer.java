@@ -71,12 +71,13 @@ public final class TimetableAnalyzer {
                 LessonUnit::weeklyOccurrences);
         perUnit(tallies.get(TimetableConstraint.TEACHER_UNAVAILABLE), units, LessonUnit::isTeacherUnavailable,
                 LessonUnit::weeklyOccurrences);
+        siblingPairs(tallies.get(TimetableConstraint.SUBGROUPS_APART), tallies.get(TimetableConstraint.SIBLINGS_APART),
+                units);
 
         groupDays(tallies, units, scope);
         teacherDays(tallies, units, scope);
         teacherWeeks(tallies.get(TimetableConstraint.TEACHER_EXTRA_DAY), units, scope);
         disciplineDays(tallies, units, scope);
-        siblingsApart(tallies.get(TimetableConstraint.SIBLINGS_APART), units);
 
         perUnit(tallies.get(TimetableConstraint.LATE_PAIR), units, LessonUnit::isLate, LessonUnit::latePenalty);
         perUnit(tallies.get(TimetableConstraint.UNWANTED_SLOT), units, LessonUnit::isTeacherUnwanted,
@@ -204,12 +205,15 @@ public final class TimetableAnalyzer {
         });
     }
 
-    private static void siblingsApart(Tally tally, List<LessonUnit> units) {
-        Map<SiblingKey, List<LessonUnit>> siblings = new HashMap<>();
+    /**
+     * Pairs of sibling copies (at least one free) that are not together: of two teachers (hard) or of one teacher
+     * (soft); a free copy puts the match in scope.
+     */
+    private static void siblingPairs(Tally parallel, Tally oneTeacher, List<LessonUnit> units) {
+        Map<String, List<LessonUnit>> siblings = new HashMap<>();
         for (LessonUnit unit : units) {
-            if (unit.hasSiblingWithTeacher()) {
-                siblings.computeIfAbsent(new SiblingKey(unit.getSiblingKey(), unit.getTeacherId()),
-                        key -> new ArrayList<>()).add(unit);
+            if (unit.hasSiblingKey()) {
+                siblings.computeIfAbsent(unit.getSiblingKey(), key -> new ArrayList<>()).add(unit);
             }
         }
         for (List<LessonUnit> same : siblings.values()) {
@@ -217,9 +221,8 @@ public final class TimetableAnalyzer {
                 for (int j = i + 1; j < same.size(); j++) {
                     LessonUnit first = same.get(i);
                     LessonUnit second = same.get(j);
-                    int weeks = first.weeksSharedWith(second);
-                    if (weeks > 0 && !first.isAdjacentTo(second)) {
-                        tally.add(weeks, !first.isPinned() || !second.isPinned());
+                    if ((!first.isPinned() || !second.isPinned()) && !first.isTogetherWith(second)) {
+                        (first.sharesTeacherWith(second) ? oneTeacher : parallel).add(first.apartPenalty(second), true);
                     }
                 }
             }
@@ -285,9 +288,6 @@ public final class TimetableAnalyzer {
     }
 
     private record TeacherDayKey(Teacher teacher, int weekday) {
-    }
-
-    private record SiblingKey(String siblingKey, UUID teacherId) {
     }
 
     /** Group-days, teacher-days and teachers that have at least one free unit. */

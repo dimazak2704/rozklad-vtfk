@@ -229,11 +229,6 @@ public class LessonUnit {
         return siblingKey != null;
     }
 
-    /** Has a sibling key and a teacher (the input of «Підгрупи одного викладача не підряд»). */
-    public boolean hasSiblingWithTeacher() {
-        return siblingKey != null && teacher != null;
-    }
-
     /** Slot of the unit in the base version, {@code null} when it has none. */
     public Timeslot getBaseSlot() {
         return baseSlot;
@@ -390,6 +385,28 @@ public class LessonUnit {
     /** Same weekday, neighbouring pairs. */
     public boolean isAdjacentTo(LessonUnit other) {
         return timeslot.weekday() == other.timeslot.weekday() && Math.abs(timeslot.pair() - other.timeslot.pair()) == 1;
+    }
+
+    /**
+     * Two subgroup copies of one occurrence (equal sibling key) stand together, the college rule: in the same
+     * slot and weeks when their teachers differ; when one teacher teaches both, parallel is impossible, so on
+     * neighbouring pairs of one day in the same weeks.
+     */
+    public boolean isTogetherWith(LessonUnit sibling) {
+        if (parity != sibling.parity) {
+            return false;
+        }
+        return sharesTeacherWith(sibling) ? isAdjacentTo(sibling) : timeslot.equals(sibling.timeslot);
+    }
+
+    /** Both lessons have the same teacher (then subgroup copies cannot be parallel). */
+    public boolean sharesTeacherWith(LessonUnit other) {
+        return teacher != null && teacher.getId().equals(other.getTeacherId());
+    }
+
+    /** Week occurrences two siblings that are not together cost: the more of the two. */
+    public int apartPenalty(LessonUnit sibling) {
+        return Math.max(weeklyOccurrences(), sibling.weeklyOccurrences());
     }
 
     @Override

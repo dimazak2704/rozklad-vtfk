@@ -60,6 +60,7 @@ class TimetableAnalyzerTest {
         CONSTRAINTS.put(TimetableConstraint.TEACHER_SHIFT_WAIT, TimetableConstraintProvider::teacherShiftWait);
         CONSTRAINTS.put(TimetableConstraint.GROUP_ONE_PAIR_DAY, TimetableConstraintProvider::groupOnePairDays);
         CONSTRAINTS.put(TimetableConstraint.SUBGROUP_ALONE, TimetableConstraintProvider::subgroupAlone);
+        CONSTRAINTS.put(TimetableConstraint.SUBGROUPS_APART, TimetableConstraintProvider::subgroupsApart);
         CONSTRAINTS.put(TimetableConstraint.SIBLINGS_APART, TimetableConstraintProvider::siblingsApart);
         CONSTRAINTS.put(TimetableConstraint.TEACHER_ONE_PAIR_DAY, TimetableConstraintProvider::teacherOnePairDays);
         CONSTRAINTS.put(TimetableConstraint.TEACHER_EXTRA_DAY, TimetableConstraintProvider::teacherExtraDays);
@@ -118,7 +119,7 @@ class TimetableAnalyzerTest {
 
     /** A small week built so that every rule added after the generator review matches. */
     @Test
-    void everyNewSoftRuleIsAnalysedLikeTheSolverScoresIt() {
+    void everyNewRuleIsAnalysedLikeTheSolverScoresIt() {
         Timetable week = NewRulesWeek.timetable(false);
 
         List<TimetableAnalyzer.ConstraintResult> results = TimetableAnalyzer.analyze(week);
@@ -145,6 +146,11 @@ class TimetableAnalyzerTest {
         assertThat(free).filteredOn(result -> result.matchCount() > 0)
                 .allSatisfy(result -> assertThat(result.scopeMatchCount()).as(result.constraint().name())
                         .isEqualTo(result.matchCount()));
+        // два закріплені підгрупові заняття не разом — виняток жорсткого правила, а не порушення
+        assertThat(pinned).filteredOn(result -> result.constraint() == TimetableConstraint.SUBGROUPS_APART)
+                .singleElement().satisfies(result -> assertThat(result.matchCount()).isZero());
+        assertThat(free).filteredOn(result -> result.constraint() == TimetableConstraint.SUBGROUPS_APART)
+                .singleElement().satisfies(result -> assertThat(result.score().hardScore()).isEqualTo(-2));
     }
 
     @Test

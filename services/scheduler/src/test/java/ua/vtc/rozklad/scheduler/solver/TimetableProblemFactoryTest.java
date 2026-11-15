@@ -336,6 +336,8 @@ class TimetableProblemFactoryTest {
         assertThat(overrides.getConstraintWeight(TimetableConstraint.SPECIAL_ROOM_LOST.id())).isEqualTo(soft(14));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.DISCIPLINE_REPEAT.id())).isEqualTo(soft(4));
         assertThat(overrides.getConstraintWeight(TimetableConstraint.TEACHER_CONFLICT.id())).isNull();
+        // підгрупи однієї дисципліни разом — правило коледжу (жорстке): жодна вага запиту його не вимикає
+        assertThat(overrides.getConstraintWeight(TimetableConstraint.SUBGROUPS_APART.id())).isNull();
     }
 
     /** A request of the first schema (five weights): teacher windows follow {@code windows}. */
