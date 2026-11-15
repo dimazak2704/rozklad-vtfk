@@ -85,7 +85,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       # the same tests as npm test, with coverage/lcov.info for SonarCloud
       - run: npm run test:coverage
