@@ -322,10 +322,13 @@ public final class TimetableProblemFactory {
      * Load items whose base lessons with a room (free units' {@code initial}, pinned units' pin; online lessons
      * left out) all sit in special-purpose rooms, with those room types. On the real college these are the 60 PE
      * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom. An item with
-     * no base lesson in a room (from scratch) whose free unit names a special-purpose room as its preferred or its
-     * teacher's usual room gets both special-purpose types: the college keeps PE in the hall or on the ground
-     * (owner, 15.11.2026), and from scratch the teacher's room is the only trace of it (all 100 PE units of the
-     * real request from scratch have the hall as the teacher's room, no other unit has).
+     * no base lesson in a room (from scratch) gets both special-purpose types when its free unit's preferred room is
+     * one, or when its teacher's usual room is one and its discipline has no trace of an ordinary room: the college
+     * keeps PE in the hall or on the ground (owner, 15.11.2026), and from scratch the teacher's room is the only
+     * trace of it (all 100 PE units of the real request from scratch have the hall as the teacher's room, no other
+     * unit has). The discipline check keeps a PE teacher's theory discipline out of the hall when that discipline is
+     * taught in classrooms elsewhere; a discipline that only the PE teacher teaches has no such trace and follows
+     * the teacher's room.
      */
     static Map<UUID, Set<RoomType>> specialPurposeItems(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
         Map<UUID, Set<RoomType>> types = new HashMap<>();
@@ -345,24 +348,45 @@ public final class TimetableProblemFactory {
             }
         }
         elsewhere.forEach(types::remove);
+        Set<UUID> ordinary = disciplinesInOrdinaryRooms(units, rooms);
         for (ProblemSnapshot.Unit unit : units) {
             if (unit.loadItemId() != null && unit.pinned() == null && !based.contains(unit.loadItemId())
-                    && namesSpecialRoom(unit, rooms)) {
+                    && (isSpecial(unit.preferredRoomId(), rooms) || isSpecial(unit.teacherRoomId(), rooms)
+                    && !ordinary.contains(unit.disciplineId()))) {
                 types.put(unit.loadItemId(), SPECIAL_PURPOSE);
             }
         }
         return types;
     }
 
-    /** The unit's preferred room or its teacher's usual room is a sports hall or ground of the snapshot. */
-    private static boolean namesSpecialRoom(ProblemSnapshot.Unit unit, Map<UUID, Room> rooms) {
-        for (UUID id : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId()}) {
-            Room room = id == null ? null : rooms.get(id);
-            if (room != null && SPECIAL_PURPOSE.contains(room.getType())) {
-                return true;
+    /**
+     * Disciplines with a trace of an ordinary room: a base or pinned lesson in one (online lessons left out), or a
+     * unit without such a lesson whose preferred room or teacher's usual room is one.
+     */
+    private static Set<UUID> disciplinesInOrdinaryRooms(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
+        Set<UUID> ordinary = new HashSet<>();
+        for (ProblemSnapshot.Unit unit : units) {
+            ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
+            Room room = placed == null || placed.roomId() == null || unit.online() ? null : rooms.get(placed.roomId());
+            boolean trace = room != null ? !SPECIAL_PURPOSE.contains(room.getType())
+                    : isOrdinary(unit.preferredRoomId(), rooms) || isOrdinary(unit.teacherRoomId(), rooms);
+            if (trace) {
+                ordinary.add(unit.disciplineId());
             }
         }
-        return false;
+        return ordinary;
+    }
+
+    /** The room is a sports hall or ground of the snapshot. */
+    private static boolean isSpecial(UUID roomId, Map<UUID, Room> rooms) {
+        Room room = roomId == null ? null : rooms.get(roomId);
+        return room != null && SPECIAL_PURPOSE.contains(room.getType());
+    }
+
+    /** The room is an ordinary room of the snapshot (not a sports hall or ground). */
+    private static boolean isOrdinary(UUID roomId, Map<UUID, Room> rooms) {
+        Room room = roomId == null ? null : rooms.get(roomId);
+        return room != null && !SPECIAL_PURPOSE.contains(room.getType());
     }
 
     /**

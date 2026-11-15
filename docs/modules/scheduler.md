@@ -40,8 +40,10 @@ core ──generation.cancel──► GenerationIntake ──► terminateEarly(
     belong to a load item whose base lessons with a room all stood there (`baseRoomTypes`: those rooms come first in
     the range and get the warm start, ordinary rooms stay in the range for the soft rule `specialRooms`); an item
     without any base lesson in a room (from scratch) whose preferred or teacher's usual room is the hall or the
-    ground gets both types the same way (the PE teacher's room is the hall); if nothing fits, every room (reported
-    by the hard constraint);
+    ground gets both types the same way (the PE teacher's room is the hall), the teacher's room only when the
+    discipline has no trace of an ordinary room (a base or pinned lesson there, or another unit's preferred or
+    teacher's room), so a PE teacher's theory discipline taught in classrooms elsewhere stays out of the hall; if
+    nothing fits, every room (reported by the hard constraint);
   * parity: `BOTH` for WHOLE units, `NUMERATOR`/`DENOMINATOR` for HALF units.
   Timefold 2.8 validates assigned values against these ranges, so swaps that would break a range are
   never made.

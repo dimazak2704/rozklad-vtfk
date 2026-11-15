@@ -111,14 +111,15 @@ class TimetableProblemFactoryTest {
                 unit("teacher").teacherRoom(LAB).homeRoom(ROOM_304).build(),
                 unit("preferred").preferredRoom(ROOM_304).teacherRoom(LAB).build(),
                 unit("tooSmallTeacherRoom").teacherRoom(ROOM_SMALL).homeRoom(ROOM_304).build(),
-                unit("peTeacher").teacherRoom(GYM).build())), GenerationWeights.DEFAULT);
+                unit("peTeacher").discipline(UUID.randomUUID()).teacherRoom(GYM).build())), GenerationWeights.DEFAULT);
 
         assertThat(timetable.getUnits()).extracting(unit -> unit.getDesiredRoom().getId())
                 .containsExactly(LAB, ROOM_304, ROOM_304, GYM);
         assertThat(timetable.getUnits().getFirst().getRoom().getId()).as("warm start in the teacher's room")
                 .isEqualTo(LAB);
         // спортзал лише для тих, кому він потрібен або чия це аудиторія; предмет без базових пар, чий викладач
-        // веде його в залі, тримається спецаудиторій (зал першим), звичайні лишаються для м'якого правила
+        // веде його в залі (і якого ніде не ведуть у класі), тримається спецаудиторій (зал першим), звичайні
+        // лишаються для м'якого правила
         assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(GYM, ROOM_304, LAB);
         assertThat(roomIds(timetable.getUnits().get(0))).doesNotContain(GYM);
     }
@@ -156,8 +157,9 @@ class TimetableProblemFactoryTest {
     void withoutABaseTheTeachersHallKeepsTheItemInSpecialPurposeRooms() {
         UUID pe = UUID.randomUUID();
         UUID taughtInClass = UUID.randomUUID();
+        UUID physicalEducation = UUID.randomUUID();
         Timetable timetable = factory.create(snapshot(List.of(
-                unit("peFromScratch").loadItem(pe).teacherRoom(GYM).build(),
+                unit("peFromScratch").loadItem(pe).discipline(physicalEducation).teacherRoom(GYM).build(),
                 unit("pePreferred").preferredRoom(GYM).build(),
                 unit("ordinary").teacherRoom(ROOM_304).build(),
                 unit("classBase").loadItem(taughtInClass).teacherRoom(GYM)
@@ -171,6 +173,35 @@ class TimetableProblemFactoryTest {
         assertThat(timetable.getUnits().get(1).getBaseRoomTypes()).isNotEmpty();
         assertThat(timetable.getUnits().get(2).getBaseRoomTypes()).isEmpty();
         assertThat(timetable.getUnits().get(3).getBaseRoomTypes()).as("its base stood in a classroom").isEmpty();
+    }
+
+    /**
+     * The PE teacher's hall marks only disciplines without a trace of an ordinary room (review of the owner-rules
+     * branch): his theory discipline, taught by another teacher in a classroom or standing in a classroom elsewhere,
+     * stays out of the hall; a pinned PE lesson in the hall is no such trace, and a preferred hall always counts.
+     */
+    @Test
+    void thePeTeachersTheoryDisciplineIsNotPulledIntoTheHall() {
+        UUID physicalEducation = UUID.randomUUID();
+        UUID healthBasics = UUID.randomUUID();
+        UUID defence = UUID.randomUUID();
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("pe").discipline(physicalEducation).teacherRoom(GYM).build(),
+                unit("pePinned").discipline(physicalEducation).teacherRoom(GYM)
+                        .pinned(new ProblemSnapshot.PinnedSlot(1, 2, Parity.BOTH, GYM)).build(),
+                unit("healthByPeTeacher").discipline(healthBasics).teacherRoom(GYM).build(),
+                unit("healthElsewhere").discipline(healthBasics).teacherRoom(ROOM_304).build(),
+                unit("defenceByPeTeacher").discipline(defence).teacherRoom(GYM).build(),
+                unit("defencePinned").discipline(defence)
+                        .pinned(new ProblemSnapshot.PinnedSlot(1, 3, Parity.BOTH, ROOM_304)).build(),
+                unit("defencePreferringTheHall").discipline(defence).preferredRoom(GYM).build())),
+                GenerationWeights.DEFAULT);
+
+        List<LessonUnit> units = timetable.getUnits();
+        assertThat(units.get(0).getBaseRoomTypes()).containsExactlyInAnyOrder(RoomType.GYM, RoomType.SPORTS_GROUND);
+        assertThat(units.get(2).getBaseRoomTypes()).as("taught in a classroom by another teacher").isEmpty();
+        assertThat(units.get(4).getBaseRoomTypes()).as("pinned in a classroom elsewhere").isEmpty();
+        assertThat(units.get(6).getBaseRoomTypes()).as("its own preferred room").isNotEmpty();
     }
 
     /**
@@ -634,6 +665,7 @@ class TimetableProblemFactoryTest {
         private final String id;
         private UUID group = GROUP;
         private UUID loadItem = UUID.randomUUID();
+        private UUID discipline = DISCIPLINE;
         private int subgroup;
         private UUID teacher;
         private UnitWeight weight = UnitWeight.WHOLE;
@@ -657,6 +689,11 @@ class TimetableProblemFactoryTest {
 
         UnitBuilder loadItem(UUID loadItem) {
             this.loadItem = loadItem;
+            return this;
+        }
+
+        UnitBuilder discipline(UUID discipline) {
+            this.discipline = discipline;
             return this;
         }
 
@@ -716,7 +753,7 @@ class TimetableProblemFactoryTest {
         }
 
         ProblemSnapshot.Unit build() {
-            return new ProblemSnapshot.Unit(id, loadItem, group, subgroup, DISCIPLINE, teacher, weight,
+            return new ProblemSnapshot.Unit(id, loadItem, group, subgroup, discipline, teacher, weight,
                     requiredRoomType, preferredRoom, homeRoom, pinned, initial, teacherRoom, online, siblingKey);
         }
     }
