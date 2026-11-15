@@ -50,6 +50,7 @@
         <commons-text.version>1.15.0</commons-text.version>
         <archunit.version>1.5.1</archunit.version>
         <mock-oauth2-server.version>6.1.5</mock-oauth2-server.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -199,9 +200,36 @@
                         </execution>
                     </executions>
                 </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
+            <!-- Coverage of unit (surefire) and integration (failsafe) tests together: both forks get the
+                 agent through @{argLine} and append to one target/jacoco.exec; the report is written
+                 at verify, after the integration tests (target/site/jacoco/jacoco.xml, read by SonarCloud) -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>

@@ -186,6 +186,15 @@ export default defineConfig(({ mode }) => {
       restoreMocks: true,
       unstubGlobals: true,
       unstubEnvs: true,
+      // npm run test:coverage → coverage/lcov.info (SonarCloud у CI) і підсумок у консолі.
+      // Лічимо лише код застосунку: без тестів, мок-API, тестових утиліт і dev-сторінки kitchen-sink
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/mocks/**', 'src/pages/dev/**', 'src/**/*.d.ts'],
+        reporter: ['text-summary', 'lcov'],
+        reportsDirectory: 'coverage',
+      },
     },
   };
 });

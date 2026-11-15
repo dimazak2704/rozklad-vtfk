@@ -7,6 +7,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,8 +39,12 @@ class ForwardedForIT {
 
         assertThat(Browser.location(client.signIn(identifier, "wrong-password"))).isEqualTo("/auth/login?error");
 
-        assertThat(jdbc.sql("SELECT host(ip) FROM login_attempt WHERE identifier_hash = ?")
-                .param(LoginAttempts.hash(identifier)).query(String.class).single()).isEqualTo(lan.get());
+        // The server may see another address of this machine than the one dialled: on a GitHub runner a
+        // request to docker0 (172.17.0.1) arrives from eth0 (10.x), as Docker's NAT rules rewrite it.
+        // Either way it is a private, non-loopback (so untrusted) address here, never the forwarded one.
+        String recorded = jdbc.sql("SELECT host(ip) FROM login_attempt WHERE identifier_hash = ?")
+                .param(LoginAttempts.hash(identifier)).query(String.class).single();
+        assertThat(recorded).isNotEqualTo("198.18.7.77").isIn(privateAddresses());
     }
 
     @Test
@@ -54,6 +59,11 @@ class ForwardedForIT {
     }
 
     private static Optional<String> privateAddress() throws SocketException {
+        return privateAddresses().stream().findFirst();
+    }
+
+    /** IPv4 site-local addresses of the interfaces that are up, loopback excluded. */
+    private static List<String> privateAddresses() throws SocketException {
         return NetworkInterface.networkInterfaces()
                 .filter(nic -> {
                     try {
@@ -65,6 +75,6 @@ class ForwardedForIT {
                 .flatMap(NetworkInterface::inetAddresses)
                 .filter(address -> address instanceof Inet4Address && address.isSiteLocalAddress())
                 .map(InetAddress::getHostAddress)
-                .findFirst();
+                .toList();
     }
 }

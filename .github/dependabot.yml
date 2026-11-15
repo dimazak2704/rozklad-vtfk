@@ -1,10 +1,12 @@
 # Dependency and base image updates (docs/DEPLOY.md, section 13). Version updates come weekly as
 # grouped pull requests; CI tests them before anything reaches main. Security updates come as soon as
 # an advisory is published once "Dependabot security updates" is on in the repository settings.
+# Version updates target develop, the default branch; main gets them with the next release.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     groups:
@@ -13,6 +15,7 @@ updates:
 
   - package-ecosystem: "maven"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -22,6 +25,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/web"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -40,6 +44,7 @@ updates:
       - "/services/importer"
       - "/services/notification"
       - "/services/gateway"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     ignore:
@@ -54,6 +59,7 @@ updates:
     directories:
       - "/infra"
       - "/infra/deploy"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     ignore:

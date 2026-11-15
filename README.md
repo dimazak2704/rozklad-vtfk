@@ -118,6 +118,14 @@ CI (`.github/workflows/ci.yml`) запускає бекенд, клієнт і �
   `Deploy` (`.github/workflows/deploy.yml`): той самий CI, а після нього збірку образів і викатку на VPS. Поки
   у репозиторії не задано змінну `DOMAIN`, викатки немає, проходить лише CI.
 
+**Якість коду.** CI аналізує бекенд і клієнт у SonarCloud як один проєкт
+([дашборд](https://sonarcloud.io/project/overview?id=dimazak2704_rozklad-vtfk)) з покриттям тестами
+(JaCoCo для юніт- та інтеграційних тестів, Vitest для клієнта). Quality gate — «Sonar way» на новому коді: покриття
+щонайменше 80 %, дублювання не більше 3 %, усі security hotspots переглянуті, рейтинги надійності,
+безпеки й супроводжуваності — A. Джоба SonarCloud червоніє, коли gate не пройдено; обов'язковою вона є лише для `main`.
+CodeQL (`.github/workflows/codeql.yml`) перевіряє Java і TypeScript на кожному pull request-і та щотижня,
+результати — у Security → Code scanning. Як отримати звіт покриття локально: `docs/RUNNING.md`, розділ 8.
+
 ## Секрети
 
 Справжні значення зберігаються лише в `.env`, а він у `.gitignore`. У репозиторії є тільки `.env.example`, `infra/deploy/.env.example` і dev-значення для локального стенда (`infra/dev/`).
