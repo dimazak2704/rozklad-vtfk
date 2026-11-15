@@ -4,6 +4,7 @@ import static ua.vtc.rozklad.notification.text.Html.b;
 
 import java.time.Clock;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -136,12 +137,17 @@ public class BindingFlow {
         return false;
     }
 
-    /** The security letter about a takeover; a failure to queue it never spoils the binding. */
+    /**
+     * The security letter about a takeover; a failure to queue it never spoils the binding. One letter per
+     * takeover: a binding code is redeemed once, so nothing repeats it, while the chat's binding row is reused when
+     * the same chat later takes over another teacher (or the same one again) — its id alone would swallow that
+     * letter as a duplicate.
+     */
     private void mailRelinked(BindingTarget target, ChatBinding binding) {
         try {
             mail.toTeacher(EmailKind.SECURITY_TELEGRAM_RELINKED, target.teacherId(),
                     new RelinkedMail(target.label(), binding.getTelegramAccount(), clock.instant()), null, null, null,
-                    null, "relinked:" + binding.getId() + ":mail");
+                    null, "relinked:" + target.teacherId() + ":" + UUID.randomUUID() + ":mail");
         } catch (RuntimeException e) {
             log.warn("Security e-mail about teacher chat {} not queued: {}", ChatIds.mask(binding.getChatId()),
                     e.getMessage());

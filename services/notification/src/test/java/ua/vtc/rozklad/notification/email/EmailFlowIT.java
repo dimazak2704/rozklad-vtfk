@@ -359,6 +359,18 @@ class EmailFlowIT extends IntegrationTest {
     }
 
     @Test
+    void theSameChatTakingOverASecondTeacherWarnsThatOneToo() {
+        teacherChat(2002, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        say(3003, "/start " + issue(BindingTarget.teacher(CoreFixtures.TEACHER_NEPYIVODA, "Непийвода М.В.")));
+        // the chat's binding row is reused for the next teacher: its id must not make the letter a duplicate
+        say(3003, "/start " + issue(BindingTarget.teacher(CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.")));
+        mailWorker.drain();
+
+        assertThat(single(NEPYIVODA).subject()).isEqualTo("Ваш Telegram у «Розклад ВТФК» підключено в іншому чаті");
+        assertThat(single(KRENTSIN).subject()).isEqualTo("Ваш Telegram у «Розклад ВТФК» підключено в іншому чаті");
+    }
+
+    @Test
     void orderRowsGoToTeachersWhoAskedForThem() {
         preferences.update(KRENTSIN_ACCOUNT, true, Map.of(EmailKind.ORDER_TEACHER, true), null);
         handlers.handle(new OrderPublished(EventEnvelope.create(Clock.systemUTC()), Order35.payload()));
