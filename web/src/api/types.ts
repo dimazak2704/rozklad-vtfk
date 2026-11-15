@@ -948,6 +948,12 @@ export interface GenerationOutcomeDto {
   /** Пари, що мали базове місце. */
   total: number;
   perGroup: Array<{ group: GroupRef; moved: number; total: number }>;
+  /** Адитивно: пари на тому самому місці, яким дали аудиторію, коли в базовій її не було. null — стара задача. */
+  roomAssigned?: Nullable<number>;
+  /** Адитивно: пари з навантаження, яких у базовій не було (нові). null — стара задача. */
+  added?: Nullable<number>;
+  /** Адитивно: пари, які розвʼязувач не рухав (закріплені, потоки, поза вибором). null — стара задача. */
+  kept?: Nullable<number>;
 }
 
 /**

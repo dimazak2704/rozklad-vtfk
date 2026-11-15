@@ -147,7 +147,9 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
     before the flag keep the old rule;
   - the job's `outcome` (`generation_job.outcome`, `GenerationOutcome`): free units with a base lesson (`total`), those
     on another weekday, pair or week or unplaced (`moved`), those in their slot with another room than the base's
-    (`roomChanged`), per group of the scope; the job DTO also shows its scope, resolved groups (one batch query per
+    (`roomChanged`), those in their slot that got a room where the base had none (`roomAssigned`), placed free units
+    without a base lesson (`added`) and lessons the solver did not move (`kept`: pinned, streams, outside the scope),
+    per group of the scope; the job DTO also shows its scope, resolved groups (one batch query per
     list), normalised weights and the parsed score;
   - the load and the catalog may change during a run: a room, teacher or load item deleted meanwhile is left out of its
     lessons (null) and counted in the version notes; load items are read `FOR SHARE`, so a delete that starts while the

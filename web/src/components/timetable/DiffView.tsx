@@ -1,4 +1,4 @@
-import { ArrowRight, Crosshair, Minus, Plus, Search } from 'lucide-react';
+import { ArrowRight, Crosshair, DoorOpen, Minus, Plus, Search } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useVersionDiff } from '@/api/timetable';
 import type { TemplateLessonDto, TimetableVersionDto, Uuid } from '@/api/types';
@@ -22,8 +22,21 @@ import { VERSION_STATUS_LABEL } from './model/labels';
 import { slotShort } from './model/text';
 import { formatTeacherName } from '@/lib/teacher-name';
 
-type DiffKind = 'moved' | 'added' | 'removed';
+export type DiffKind = 'moved' | 'room' | 'roomAssigned' | 'added' | 'removed';
 type DiffFilter = 'all' | DiffKind;
+
+/**
+ * Що сталося з парою, яку сервер повернув як «переміщену»: інший день, пару чи тиждень — «Переміщено»; той самий
+ * слот, але інша аудиторія — «Інша аудиторія»; аудиторію дали там, де її не було, — «Аудиторію призначено».
+ * Ті самі три види рахує й підсумок генерації (`outcomeSentence`).
+ */
+export function movedKind(from: TemplateLessonDto, to: TemplateLessonDto): 'moved' | 'room' | 'roomAssigned' {
+  const sameSlot = from.weekday === to.weekday && from.pair === to.pair && from.parity === to.parity;
+  if (!sameSlot) return 'moved';
+  return !from.room && to.room ? 'roomAssigned' : 'room';
+}
+
+const KIND_ORDER: readonly DiffKind[] = ['moved', 'room', 'roomAssigned', 'added', 'removed'];
 
 interface DiffRow {
   kind: DiffKind;
@@ -48,6 +61,8 @@ const PAGE = 120;
 
 const KIND_META: Record<DiffKind, { label: string; tone: string; icon: ReactNode }> = {
   moved: { label: 'Переміщено', tone: 'text-change', icon: <ArrowRight aria-hidden="true" className="size-3.5" /> },
+  room: { label: 'Інша аудиторія', tone: 'text-change', icon: <DoorOpen aria-hidden="true" className="size-3.5" /> },
+  roomAssigned: { label: 'Аудиторію призначено', tone: 'text-secondary', icon: <DoorOpen aria-hidden="true" className="size-3.5" /> },
   added: { label: 'Додано', tone: 'text-add', icon: <Plus aria-hidden="true" className="size-3.5" /> },
   removed: { label: 'Прибрано', tone: 'text-cancel', icon: <Minus aria-hidden="true" className="size-3.5" /> },
 };
@@ -61,6 +76,7 @@ const who = (lesson: TemplateLessonDto) =>
     .filter(Boolean)
     .join(' · ');
 const where = (lesson: TemplateLessonDto) => [slotShort(lesson), roomLabel(lesson.room?.name)].filter(Boolean).join(', ');
+const roomOf = (lesson: TemplateLessonDto) => roomLabel(lesson.room?.name) ?? 'без аудиторії';
 
 /**
  * Порівняння версій: що в «цільовій» версії додано, прибрано й переміщено відносно базової (зазвичай
@@ -78,7 +94,7 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
     if (!diff.data) return [];
     const list: DiffRow[] = [
       ...diff.data.moved.map(({ from, to }) => ({
-        kind: 'moved' as const,
+        kind: movedKind(from, to),
         key: `m-${to.id}`,
         groupCode: to.group.code,
         course: to.group.course,
@@ -114,7 +130,11 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
     const lesson = (row.after ?? row.before) as TemplateLessonDto;
     return matchScore(query, row.groupCode, lesson.discipline.shortName, lesson.discipline.name, lesson.teacher?.shortName) >= 40;
   });
-  const counts = { moved: diff.data?.moved.length ?? 0, added: diff.data?.added.length ?? 0, removed: diff.data?.removed.length ?? 0 };
+  const counts = useMemo(() => {
+    const result: Record<DiffKind, number> = { moved: 0, room: 0, roomAssigned: 0, added: 0, removed: 0 };
+    for (const row of rows) result[row.kind] += 1;
+    return result;
+  }, [rows]);
   const groups = groupRows(visible.slice(0, limit));
 
   if (!base) {
@@ -158,9 +178,10 @@ export function DiffView({ versions, target, baseId, onBaseChange, onShowInGrid 
           // нульові види змін не показуємо: «Додано 0» — шум, а не вибір
           options={[
             { value: 'all' as const, label: `Усі ${rows.length}` },
-            ...(counts.moved > 0 || filter === 'moved' ? [{ value: 'moved' as const, label: `Переміщено ${counts.moved}` }] : []),
-            ...(counts.added > 0 || filter === 'added' ? [{ value: 'added' as const, label: `Додано ${counts.added}` }] : []),
-            ...(counts.removed > 0 || filter === 'removed' ? [{ value: 'removed' as const, label: `Прибрано ${counts.removed}` }] : []),
+            ...KIND_ORDER.filter((kind) => counts[kind] > 0 || filter === kind).map((kind) => ({
+              value: kind,
+              label: `${KIND_META[kind].label} ${counts[kind]}`,
+            })),
           ]}
         />
         <Input
@@ -251,7 +272,18 @@ function DiffRowItem({ row, onShowInGrid }: { row: DiffRow; onShowInGrid: (lesso
         {who(lesson)}
       </span>
       <span className="text-ui text-secondary figures">
-        {row.kind === 'moved' && row.before && row.after ? (
+        {row.kind === 'room' && row.before && row.after ? (
+          <>
+            {slotShort(row.after)},{' '}
+            <s className="text-muted decoration-[var(--text-decoration-color-muted)]">{roomOf(row.before)}</s>
+            <ArrowRight aria-label="на" className="mx-1.5 inline size-3.5 text-change" />
+            <span className="font-semibold text-primary">{roomOf(row.after)}</span>
+          </>
+        ) : row.kind === 'roomAssigned' && row.after ? (
+          <>
+            {slotShort(row.after)}, <span className="font-semibold text-primary">{roomOf(row.after)}</span>
+          </>
+        ) : row.kind === 'moved' && row.before && row.after ? (
           <>
             <s className="text-muted decoration-[var(--text-decoration-color-muted)]">{where(row.before)}</s>
             <ArrowRight aria-label="на" className="mx-1.5 inline size-3.5 text-change" />

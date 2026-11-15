@@ -12,6 +12,7 @@ import {
   jobScopeText,
   jobPrioritiesText,
   jobStatusTitle,
+  outcomeDraftSentence,
   outcomeSentence,
   splitAnalysis,
   timeTicks,
@@ -159,6 +160,26 @@ describe('параметри і наслідки задачі (B8)', () => {
     expect(outcomeSentence({ moved: 1, roomChanged: 5, total: 21, perGroup: [] })).toBe('Переставлено 1 з 21\u00a0пари, ще 5 — в іншій аудиторії.');
     expect(outcomeSentence(null)).toBeNull();
     expect(outcomeSentence({ moved: 0, roomChanged: 0, total: 0, perGroup: [] })).toBeNull();
+  });
+
+  it('аудиторію, якої не було, рахує окремо від іншої аудиторії — як порівняння версій', () => {
+    expect(outcomeSentence({ moved: 2, roomChanged: 0, roomAssigned: 1, total: 35, perGroup: [] })).toBe(
+      'Переставлено 2 з 35 пар, ще 1 отримала аудиторію, якої не було.',
+    );
+    expect(outcomeSentence({ moved: 5, roomChanged: 3, roomAssigned: 44, total: 400, perGroup: [] })).toBe(
+      'Переставлено 5 з 400 пар, ще 3 — в іншій аудиторії, 44 отримали аудиторію, якої не було.',
+    );
+  });
+
+  it('пояснює, чому в чернетці пар більше, ніж «з M»', () => {
+    expect(outcomeDraftSentence({ moved: 128, roomChanged: 30, total: 1074, perGroup: [], kept: 2, added: 1 })).toBe(
+      'Ще 3 пари чернетки: 2 — закріплені чи поза вибором, стоять, як у базовій; 1 нова пара з навантаження — у базовій її не було.',
+    );
+    expect(outcomeDraftSentence({ moved: 2, roomChanged: 0, total: 35, perGroup: [], kept: 1042, added: 0 })).toBe(
+      'Ще 1042 пари чернетки: 1042 — закріплені чи поза вибором, стоять, як у базовій.',
+    );
+    // стара задача без нових полів — нічого не вигадуємо
+    expect(outcomeDraftSentence({ moved: 2, roomChanged: 0, total: 35, perGroup: [] })).toBeNull();
   });
 
   it('область задачі словами', () => {

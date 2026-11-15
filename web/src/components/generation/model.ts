@@ -219,12 +219,39 @@ export function splitAnalysis(items: readonly ConstraintAnalysisDto[]): Analysis
 // ───────────────────────── Що змінилось і по групах (genfix B8) ─────────────────────────
 
 const PAIR_FORMS_GEN = ['пари', 'пар', 'пар'] as const;
+const PAIR_FORMS = ['пара', 'пари', 'пар'] as const;
 
-/** «Переставлено 34 з 53 пар, ще 5 — в іншій аудиторії.» null — сервер не порахував або бази не було. */
+/**
+ * «Переставлено 34 з 53 пар, ще 5 — в іншій аудиторії, 44 отримали аудиторію.» — ті самі три види, що й у порівнянні
+ * версій («Переміщено», «Інша аудиторія», «Аудиторію призначено»). null — сервер не порахував або бази не було.
+ */
 export function outcomeSentence(outcome: GenerationOutcomeDto | null | undefined): string | null {
   if (!outcome || outcome.total === 0) return null;
-  const rooms = outcome.roomChanged > 0 ? `, ще ${outcome.roomChanged} — в іншій аудиторії` : '';
-  return `Переставлено ${outcome.moved} з ${outcome.total}\u00a0${plural(outcome.total, PAIR_FORMS_GEN)}${rooms}.`;
+  const assigned = outcome.roomAssigned ?? 0;
+  const rooms = [
+    outcome.roomChanged > 0 ? `ще ${outcome.roomChanged} — в іншій аудиторії` : null,
+    assigned > 0 ? `${outcome.roomChanged > 0 ? '' : 'ще '}${assigned} ${assigned % 10 === 1 && assigned % 100 !== 11 ? 'отримала' : 'отримали'} аудиторію, якої не було` : null,
+  ].filter(Boolean);
+  return `Переставлено ${outcome.moved} з ${outcome.total}\u00a0${plural(outcome.total, PAIR_FORMS_GEN)}${rooms.length > 0 ? `, ${rooms.join(', ')}` : ''}.`;
+}
+
+const NEW_PAIR_FORMS = ['нова пара', 'нові пари', 'нових пар'] as const;
+
+/**
+ * Чому в чернетці пар більше, ніж «з M»: решта не мала базового місця, яке можна порівняти, — закріплені чи поза
+ * вибором (стоять, як у базовій) і нові з навантаження. «Ще 3 пари чернетки: 2 — закріплені чи поза вибором, 1 нова
+ * пара — у базовій її не було.» null — нічого понад «з M» або стара задача.
+ */
+export function outcomeDraftSentence(outcome: GenerationOutcomeDto | null | undefined): string | null {
+  if (!outcome) return null;
+  const kept = outcome.kept ?? 0;
+  const added = outcome.added ?? 0;
+  if (kept + added === 0) return null;
+  const parts = [
+    kept > 0 ? `${kept} — закріплені чи поза вибором, стоять, як у базовій` : null,
+    added > 0 ? `${countLabel(added, NEW_PAIR_FORMS)} з навантаження — у базовій ${added === 1 ? 'її' : 'їх'} не було` : null,
+  ].filter(Boolean);
+  return `Ще ${countLabel(kept + added, PAIR_FORMS)} чернетки: ${parts.join('; ')}.`;
 }
 
 export type GroupColumnKey = 'latePairs' | 'windows' | 'brokenDays' | 'onePairDays';
