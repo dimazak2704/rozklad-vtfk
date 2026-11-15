@@ -194,6 +194,44 @@ class EmailFlowIT extends IntegrationTest {
     }
 
     @Test
+    void aChangeThatCameBackAndWasCancelledInTheDelaySendsNoCancellation() {
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, "6"));
+        deliverMail();
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_KRENTSIN, "6"));
+        deliverMail();
+        // back to her: a new notice waits for the settle delay, and the change is cancelled before it goes
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, "6"));
+        mailWorker.drain();
+        handlers.handle(statusChanged(CHANGE, ChangeStatus.CANCELLED, CoreFixtures.TEACHER_NEPYIVODA));
+        deliverMail();
+
+        // she never got the second notice, so there is nothing to cancel for her
+        assertThat(mail.sentTo(NEPYIVODA)).extracting(OutgoingMail::subject).containsExactly(
+                "Вам поставили заміну: пн, 19 жовтня, 2 пара, 4КІ1",
+                "Заміну передано іншому викладачу: пн, 19 жовтня, 2 пара, 4КІ1");
+    }
+
+    @Test
+    void aChangeFoldedIntoAWaitingNoticeFollowsTheNoticeSetting() {
+        // «changed» letters off, notices on: the notice still waiting goes out with the new room
+        preferences.update(NEPYIVODA_ACCOUNT, true, Map.of(EmailKind.SUBSTITUTION_CHANGED, false), null);
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, "6"));
+        mailWorker.drain();
+        clock.advance(Duration.ofMinutes(1));
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, "214"));
+        deliverMail();
+
+        OutgoingMail letter = single(NEPYIVODA);
+        assertThat(letter.subject()).startsWith("Вам поставили заміну:");
+        assertThat(letter.text()).contains("Аудиторія: 214").doesNotContain("Аудиторія: 6");
+
+        // a change after the notice went out is a «changed» letter: switched off, nothing more
+        handlers.handle(notice(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, "302"));
+        deliverMail();
+        assertThat(mail.sentTo(NEPYIVODA)).hasSize(1);
+    }
+
+    @Test
     void switchedOffUnverifiedOrMissingAddressesGetNothingAndTheLogNeverShowsThem(CapturedOutput output) {
         core.reset();
         core.addMailRecipient(person(NEPYIVODA_ACCOUNT, CoreFixtures.TEACHER_NEPYIVODA, "Непийвода",

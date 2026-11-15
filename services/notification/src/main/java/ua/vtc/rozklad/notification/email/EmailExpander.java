@@ -36,7 +36,9 @@ import ua.vtc.rozklad.notification.email.MailModels.MailModel;
  * <p>Letters about one change to one person settle: a new letter replaces the earlier ones still waiting
  * (status SUPERSEDED), a change while the first letter still waits gives one letter of the first kind with the
  * final details, and a cancellation is sent only after a letter of that change reached the person — a notice
- * cancelled within the settle delay sends nothing.
+ * cancelled within the settle delay sends nothing. What reached him counts only since the last cancellation he
+ * got: a change that went to another teacher and came back starts afresh. The person's settings are checked
+ * against the kind the letter is finally written as (a change folded into a waiting notice is a notice).
  */
 @Component
 public class EmailExpander {
@@ -47,6 +49,7 @@ public class EmailExpander {
             EmailKind.SUBSTITUTION_REMINDER);
     private static final Set<EmailMessageStatus> LIVE = EnumSet.of(EmailMessageStatus.QUEUED,
             EmailMessageStatus.RETRYING, EmailMessageStatus.SENT);
+    private static final String OPTED_OUT = "вимкнув такі листи";
 
     private final EmailNoticeRepository notices;
     private final EmailMessageRepository messages;
@@ -138,7 +141,10 @@ public class EmailExpander {
         }
     }
 
-    /** Who gets a letter; the others are counted and logged by account id (never by address). */
+    /**
+     * Who gets a letter; the others are counted and logged by account id (never by address). The settings of a
+     * letter that settles are checked later, against the kind it is written as.
+     */
     private Selection select(EmailNotice notice, List<MailRecipient> people) {
         EmailKind kind = notice.getKind();
         List<Recipient> targets = new ArrayList<>();
@@ -148,7 +154,7 @@ public class EmailExpander {
                     ? "викладач не має облікового запису" : "немає адресатів");
             log.info("E-mail {} ({}): nobody to write to ({})", notice.getId(), kind, notice.getTarget());
             count("no_address");
-            return new Selection(targets, skipped);
+            return new Selection(targets, skipped, Map.of());
         }
         Map<UUID, EmailPreference> settings = preferences.of(people.stream().map(MailRecipient::accountId).toList());
         for (MailRecipient person : people) {
@@ -156,8 +162,8 @@ public class EmailExpander {
                     properties.trustedDomains());
             String reason = null;
             String outcome = null;
-            if (!settings.get(person.accountId()).allows(kind)) {
-                reason = "вимкнув такі листи";
+            if (!settles(notice) && !settings.get(person.accountId()).allows(kind)) {
+                reason = OPTED_OUT;
                 outcome = "opted_out";
             } else if (address.status() == MailAddresses.Status.MISSING) {
                 reason = "немає e-mail";
@@ -175,7 +181,11 @@ public class EmailExpander {
             }
             targets.add(new Recipient(person.accountId(), person.displayName(), address.address()));
         }
-        return new Selection(targets, skipped);
+        return new Selection(targets, skipped, settings);
+    }
+
+    private static boolean settles(EmailNotice notice) {
+        return notice.getKind().followsChange() && notice.getCorrelationId() != null;
     }
 
     private void record(UUID noticeId, MailModel model, Selection selection) {
@@ -188,8 +198,25 @@ public class EmailExpander {
             if (messages.existsByDedupKey(noticeId + ":" + target.accountId())) {
                 continue;
             }
-            Optional<EmailKind> kind = notice.getKind().followsChange() && notice.getCorrelationId() != null
-                    ? settle(notice, target, now) : Optional.of(notice.getKind());
+            Optional<EmailKind> kind;
+            if (settles(notice)) {
+                Settled settled = settle(notice, target, now);
+                kind = settled.kind();
+                if (kind.isPresent() && !selection.settings().get(target.accountId()).allows(kind.get())) {
+                    // switched off: the letters still waiting stay as they are, as if this one never came
+                    log.info("E-mail {} ({} as {}) skipped for account {}: opted_out", noticeId, notice.getKind(),
+                            kind.get(), target.accountId());
+                    notes.add(target.accountId() + ": " + OPTED_OUT);
+                    count("opted_out");
+                    continue;
+                }
+                settled.waiting().forEach(message -> {
+                    message.markSuperseded(now);
+                    count("superseded");
+                });
+            } else {
+                kind = Optional.of(notice.getKind());
+            }
             if (kind.isEmpty()) {
                 notes.add(target.accountId() + ": попереднього листа про цю заміну не було");
                 count("not_needed");
@@ -207,29 +234,36 @@ public class EmailExpander {
     }
 
     /**
-     * Earlier letters of the same change to the same person: those still waiting are superseded, and the kind of
-     * the new letter is decided (empty = nothing to send).
+     * Earlier letters of the same change to the same person (locked, oldest first): the kind of the new letter
+     * (empty = nothing to send) and the letters still waiting, which the new one replaces.
      */
-    private Optional<EmailKind> settle(EmailNotice notice, Recipient target, Instant now) {
+    private Settled settle(EmailNotice notice, Recipient target, Instant now) {
         List<EmailMessage> earlier = messages.lockEarlier(notice.getCorrelationId(), target.accountId(),
                 CHANGE_KINDS, LIVE);
         List<EmailMessage> waiting = earlier.stream()
                 .filter(message -> message.getStatus().isPending() && !message.isLeased(now))
                 .toList();
-        // відправлений або саме зараз у роботі в іншого воркера лист уже дійшов (чи от-от дійде)
-        boolean reached = earlier.stream()
-                .anyMatch(message -> message.getStatus() == EmailMessageStatus.SENT || message.isLeased(now));
+        // лише те, що дійшло після останнього скасування: заміна пішла до іншого й повернулась — рахунок наново
+        int lastCancellation = -1;
+        for (int i = 0; i < earlier.size(); i++) {
+            if (earlier.get(i).getKind() == EmailKind.SUBSTITUTION_CANCELLED && reached(earlier.get(i), now)) {
+                lastCancellation = i;
+            }
+        }
+        boolean reached = earlier.subList(lastCancellation + 1, earlier.size()).stream()
+                .anyMatch(message -> reached(message, now));
         Optional<EmailKind> kind = switch (notice.getKind()) {
             case SUBSTITUTION_CANCELLED -> reached ? Optional.of(EmailKind.SUBSTITUTION_CANCELLED) : Optional.empty();
             case SUBSTITUTION_CHANGED -> reached ? Optional.of(EmailKind.SUBSTITUTION_CHANGED)
                     : waiting.isEmpty() ? Optional.empty() : Optional.of(waiting.getLast().getKind());
             default -> Optional.of(notice.getKind());
         };
-        for (EmailMessage message : waiting) {
-            message.markSuperseded(now);
-            count("superseded");
-        }
-        return kind;
+        return new Settled(kind, waiting);
+    }
+
+    /** Sent, or being sent right now by another worker: it reached the person (or is about to). */
+    private static boolean reached(EmailMessage message, Instant now) {
+        return message.getStatus() == EmailMessageStatus.SENT || message.isLeased(now);
     }
 
     private void finish(UUID noticeId, Consumer<EmailNotice> change) {
@@ -240,6 +274,9 @@ public class EmailExpander {
         meters.counter("notification.emails", "outcome", outcome).increment();
     }
 
-    private record Selection(List<Recipient> targets, List<String> skipped) {
+    private record Selection(List<Recipient> targets, List<String> skipped, Map<UUID, EmailPreference> settings) {
+    }
+
+    private record Settled(Optional<EmailKind> kind, List<EmailMessage> waiting) {
     }
 }
