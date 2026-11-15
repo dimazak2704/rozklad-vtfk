@@ -5,6 +5,8 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.core.calendar.CalendarEdited;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
@@ -38,7 +40,14 @@ class CalendarChangeListener {
         this.refresher = refresher;
     }
 
+    /**
+     * First of the {@link CalendarEdited} listeners: a refused edit goes no further, and the publication locks of the
+     * semesters are taken before any other listener locks something of theirs (the load module's plan recount takes
+     * the semester's load lock), in the same order as a publication, which takes its lock and then, through its
+     * listeners, the load lock. Opposite orders would let an edit and a publication of the semester deadlock.
+     */
     @EventListener
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     void on(CalendarEdited event) {
         DatedLessonRefresh.Result result = refresher.reconcile(event.dates(), event.groupIds(), event.before());
         // dry run (зміна ефекту виду, імпорт графіка) показує ці числа, навіть коли правку буде відхилено

@@ -3,11 +3,14 @@ package ua.vtc.rozklad.core.calendar;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import ua.vtc.rozklad.contracts.Parity;
 
 /**
  * Study calendar of DOMAIN.md §2 over one or more semesters: which dates have lessons for a group,
@@ -85,6 +88,47 @@ public final class StudyCalendar {
                         && period.supervisorIds().contains(teacherId))
                 .sorted(BY_START)
                 .toList();
+    }
+
+    /**
+     * The days {@code group} is on theory in the semester (owner's rule 15.11.2026): study days of the group per
+     * weekday and parity, the weeks that have any, and the periods that take the group off its pairs. One pass over
+     * the semester's dates, no queries.
+     *
+     * @throws IllegalArgumentException when the semester is not part of this calendar
+     */
+    public GroupTheory theory(UUID semesterId, GroupScope group) {
+        Objects.requireNonNull(group, "group");
+        StudySemester semester = semesters.stream().filter(candidate -> candidate.semesterId().equals(semesterId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("semester " + semesterId + " is not in the calendar"));
+        List<StudyPeriod> closing = semester.periods().stream()
+                .filter(period -> period.closesLessons() && period.appliesTo(group))
+                .toList();
+        GroupTheory.StudyDays.Builder days = GroupTheory.StudyDays.builder();
+        Set<LocalDate> numeratorWeeks = new HashSet<>();
+        Set<LocalDate> denominatorWeeks = new HashSet<>();
+        Set<StudyPeriod> taking = new LinkedHashSet<>();
+        int studyDays = 0;
+        for (LocalDate date = semester.startsOn(); !date.isAfter(semester.endsOn()); date = date.plusDays(1)) {
+            int weekday = date.getDayOfWeek().getValue();
+            if (weekday > 5) {
+                continue;
+            }
+            LocalDate day = date;
+            List<StudyPeriod> closedBy = closing.stream().filter(period -> period.covers(day)).toList();
+            if (!closedBy.isEmpty()) {
+                taking.addAll(closedBy);
+                continue;
+            }
+            Parity parity = semester.parity(date);
+            days.add(weekday, parity);
+            (parity == Parity.NUMERATOR ? numeratorWeeks : denominatorWeeks).add(SemesterCalendar.weekStartOf(date));
+            studyDays++;
+        }
+        return new GroupTheory(semesterId, group.groupId(), semester.weeks().calendarWeeks(),
+                numeratorWeeks.size() + denominatorWeeks.size(), numeratorWeeks.size(), denominatorWeeks.size(),
+                studyDays, taking.stream().sorted(BY_START).toList(), days.build());
     }
 
     /** Monday–Friday dates of {@code [from, to]} inside a semester that a global holiday does not close. */

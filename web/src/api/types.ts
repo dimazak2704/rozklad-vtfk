@@ -75,6 +75,8 @@ export type GenerationStopReason = 'NO_IMPROVEMENT' | 'TIME_LIMIT' | 'SAFETY_CAP
 export type ControlForm = 'EXAM' | 'CREDIT' | 'NONE';
 export type LoadSource = 'MANUAL' | 'CURRICULUM' | 'PROGRAM' | 'TIMETABLE_DERIVED';
 export type AccountingStatus = 'FINISHED' | 'WILL_OVERRUN' | 'WILL_UNDERRUN' | 'ON_TRACK';
+/** Звідки план годин запису навантаження (рішення власника 15.11.2026). */
+export type PlanSource = 'AUTO' | 'FIXED';
 export type PreferenceKind = 'UNWANTED' | 'UNAVAILABLE';
 /**
  * Старий вид періоду (enum core до довідника видів). @deprecated Лишається один реліз: core досі пише його в
@@ -706,7 +708,9 @@ export interface LoadItemDto {
   discipline: DisciplineRef;
   lessonKind: LessonKind;
   hoursPerWeek: number;
+  /** За семестр. AUTO — рахує система за днями, коли група на теорії; FIXED — число задали вручну чи імпортом. */
   plannedHours: number;
+  planSource: PlanSource;
   splitSubgroups: boolean;
   teachers: LoadItemTeacherDto[];
   requiredRoomType: Nullable<RoomType>;
@@ -1383,6 +1387,37 @@ export interface AccountingRowDto {
   status: AccountingStatus;
   forecastFinishDate?: Nullable<IsoDate>;
   suggestion?: Nullable<AccountingSuggestion>;
+  /** Сума годин на тиждень записів навантаження дисципліни. */
+  hoursPerWeek: number;
+  /** Звідки план: AUTO — рахує система, FIXED — задане число, MIXED — записи різні. */
+  planSource: PlanSource | 'MIXED';
+}
+
+/**
+ * GET /api/admin/accounting/theory: скільки тижнів група на теорії в семестрі системи (рішення власника
+ * 15.11.2026: тижні НС, практики, сесії, зборів і канікул не рахуються й не надолужуються) і що її знімає.
+ */
+export interface GroupTheoryDto {
+  group: GroupRef;
+  /** Тижні семестру (від понеділка). */
+  semesterWeeks: number;
+  /** Тижні, у яких група має хоч один навчальний день. */
+  theoryWeeks: number;
+  numeratorWeeks: number;
+  denominatorWeeks: number;
+  studyDays: number;
+  /** Тижні теорії з графіка освітнього процесу — лише для звірки; null, якщо графік не імпортовано. */
+  graphTheoryWeeks: Nullable<number>;
+  offPeriods: GroupOffPeriodDto[];
+}
+
+/** Період, що знімає групу з пар: код виду — як у графіку (НС, НП, К…). */
+export interface GroupOffPeriodDto {
+  id: Nullable<Uuid>;
+  kind: { code: string; name: string; color: Nullable<string>; effect: PeriodEffect };
+  title: string;
+  startsOn: IsoDate;
+  endsOn: IsoDate;
 }
 
 /** GET /api/admin/accounting/teachers?month=2026-10 */

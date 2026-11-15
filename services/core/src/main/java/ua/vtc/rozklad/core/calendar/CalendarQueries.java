@@ -91,6 +91,13 @@ public interface CalendarQueries {
     /** Bell times of every semester of the calendar (semester id → times; none without a profile). */
     Map<UUID, BellTimes> bellTimes(StudyCalendar calendar);
 
+    /**
+     * Theory weeks per group from the college's academic calendar (table {@code group_semester}, «К-сть тижн. теор.
+     * навч.»), group id → weeks; groups without a number are absent. One query. Only a cross-check: the graph's
+     * semester may be longer than the system's (4th course to 14.02), so the plan counts {@link StudyCalendar#theory}.
+     */
+    Map<UUID, Integer> theoryWeeksFromGraph(UUID semesterId);
+
     /** Profile reference for DTOs. */
     record BellProfileInfo(UUID id, String name) {
     }

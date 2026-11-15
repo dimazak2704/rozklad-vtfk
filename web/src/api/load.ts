@@ -38,7 +38,10 @@ export interface LoadItemRequest {
   lessonKind?: LessonKind;
   /** Академічні години на тиждень з одним знаком після коми: 3 → «1 + ½». */
   hoursPerWeek: number;
-  /** null — сервер порахує: години на тиждень × навчальні тижні семестру. */
+  /**
+   * Число — план задано (FIXED), система його не змінює. null — план рахує система: години на тиждень лише за
+   * тижні, коли група на теорії (AUTO). Те саме число AUTO-плану, надіслане назад, план не фіксує.
+   */
   plannedHours?: number | null;
   splitSubgroups?: boolean;
   teachers?: LoadTeacherRequest[];

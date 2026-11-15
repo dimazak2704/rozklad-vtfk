@@ -1,9 +1,12 @@
 import { GitMerge, ListFilter, Pencil, Plus, Search, Trash } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
+import { useGroupTheory } from '@/api/accounting';
 import { useSemesters, activeSemesterOf, useShiftWindows } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
 import { useDeleteLoadItem, useLoadItems, type LoadItem } from '@/api/load';
 import type { LoadSource } from '@/api/types';
+import { GroupTheoryNote } from '@/components/accounting/GroupTheoryNote';
+import { PLAN_RULE, planHint } from '@/components/accounting/theory';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { DeriveDialog } from '@/components/load/DeriveDialog';
@@ -54,6 +57,9 @@ export default function LoadPage() {
   const source = table.get('source') as LoadSource | undefined;
   const items = useLoadItems(semester?.id, groupId);
   const groups = useCatalogOptions('groups');
+  // тижні теорії групи — лише коли групу вибрано: за ними система рахує план «За семестр»
+  const theory = useGroupTheory(groupId ? semester?.id : null, groupId);
+  const groupTheory = theory.data?.find((t) => t.group.id === groupId);
   const shiftWindows = useShiftWindows();
   const remove = useDeleteLoadItem();
   const [editing, setEditing] = useState<LoadItem | 'new' | null>(null);
@@ -162,7 +168,18 @@ export default function LoadPage() {
         hideBelow: 'lg',
         className: 'max-md:hidden!',
         sortValue: (item) => item.plannedHours,
-        cell: (item) => `${item.plannedHours} год`,
+        // задане число — з позначкою: система його не перераховує, на відміну від автоматичного плану
+        cell: (item) => (
+          <Tooltip content={planHint(item, groupTheory)}>
+            <span
+              tabIndex={0}
+              className="inline-flex flex-col items-end rounded-tag focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              <span>{item.plannedHours} год</span>
+              {item.planSource === 'FIXED' ? <span className="text-caption text-muted">задано</span> : null}
+            </span>
+          </Tooltip>
+        ),
       },
       {
         id: 'teachers',
@@ -201,7 +218,7 @@ export default function LoadPage() {
           ),
       },
     ],
-    [groupId, groupStarts, name],
+    [groupId, groupStarts, name, groupTheory],
   );
 
   // сортуємо всі знайдені записи, а не лише сторінку, і лише потім ділимо на сторінки
@@ -377,6 +394,9 @@ export default function LoadPage() {
               />
             </span>
           ) : null}
+          {/* план «За семестр» — лише за тижні теорії групи: чому числа саме такі */}
+          {groupTheory ? <GroupTheoryNote theory={groupTheory} className="mt-1" /> : null}
+          <p className="text-caption text-muted">{PLAN_RULE}</p>
         </section>
       ) : null}
 

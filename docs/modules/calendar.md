@@ -23,11 +23,15 @@ the internal catalog snapshot for the importer.
 | `shiftWindow(shift, weekday)`, `shiftWindows()` | shift 1 → pairs 1–4; shift 2 → 5–8 Mon–Thu, 4–6 Fri |
 | `shiftWindowTable()` | the whole table as `ShiftWindows` for rule engines; the DOMAIN §2 windows when the table is empty (logged once) |
 | `studyCalendar(from, to)`, `studyCalendar(semesterId)` | batch read model `StudyCalendar` (semesters, parity with overrides, periods) built with a constant number of queries — use it over date ranges instead of per-date calls |
+| `theoryWeeksFromGraph(semesterId)` | group → theory weeks of the academic calendar (`group_semester`), one query; a cross-check only |
 | `bellTimes(StudyCalendar)` | semester id → `BellTimes` with the same profile rule as `bellProfileOn` |
 
 Value types for bulk rules (moved here from the timetable module at integration): `StudyCalendar`
 (`day(date, GroupScope)` → `DayInfo {parity, weekNumber, studyDay, online, note, semesterId}`,
-`studyDates`, `practices(date, GroupScope)` and `supervisedPractices(date, teacherId)`: the blocks of the day —
+`studyDates`, `theory(semesterId, GroupScope)` → `GroupTheory` (the group's study days per weekday and parity, its
+theory weeks — weeks with any study day — by parity, and the DAY_OFF/SUSPEND periods that take it off its pairs; the
+plan of the load module counts these days, owner's rule 15.11.2026), `practices(date, GroupScope)` and
+`supervisedPractices(date, teacherId)`: the blocks of the day —
 SUSPEND periods of a group / of their supervisor on Mon–Fri dates no applicable DAY_OFF closes), `StudySemester`,
 `StudyPeriod` (`kind: PeriodKindInfo {id, code, name, color, effect}`, `roomId`, `effect()`, `closesLessons`, `isDayOff`,
 `suspends`, `marksOnline`, `appliesTo`, `decidingStudyMode`; the legacy-kind constructors build the builtin kind for tests),
@@ -132,7 +136,8 @@ migrated with the profile must keep it (the V9 rows are in Flyway history).
 
 ## How to test
 
-`SemesterCalendarTest` (week 8 / ЗНАМЕННИК, overrides), `PeriodRulesTest` and `StudyCalendarTest` (the old kinds as
+`SemesterCalendarTest` (week 8 / ЗНАМЕННИК, overrides), `GroupTheoryTest` (НС block, holidays for all and a course
+block, online kept, partial block, parity override), `PeriodRulesTest` and `StudyCalendarTest` (the old kinds as
 before, custom kinds by effect, priority, exam session suspends), `PairClockTest`,
 `CalendarApiIT` (reference data, weeks, overrides, activation, periods, meta/bells, profile guards,
 snapshot security), `PeriodKindApiIT` (builtin seed, kind CRUD and validation, periods with `kindId`/`roomId`/legacy

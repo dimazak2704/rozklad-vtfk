@@ -35,6 +35,8 @@ const base: AccountingRow = {
     lessons: 11,
     lessonIds: [],
   },
+  hoursPerWeek: 3,
+  planSource: 'FIXED',
 };
 
 describe('облік годин у інтерфейсі', () => {

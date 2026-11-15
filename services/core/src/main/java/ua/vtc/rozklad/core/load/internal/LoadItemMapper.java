@@ -46,7 +46,7 @@ class LoadItemMapper {
         return items.stream()
                 .map(item -> new LoadItemDto(item.getId(), item.getSemesterId(), groups.get(item.getGroupId()),
                         disciplines.get(item.getDisciplineId()), item.getLessonKind(), item.getHoursPerWeek(),
-                        item.getPlannedHours(), item.isSplitSubgroups(),
+                        item.getPlannedHours(), item.getPlanSource(), item.isSplitSubgroups(),
                         item.getTeachers().stream()
                                 .map(link -> new LoadTeacherDto(link.getSubgroupNumber(), teachers.get(link.getTeacherId())))
                                 .toList(),

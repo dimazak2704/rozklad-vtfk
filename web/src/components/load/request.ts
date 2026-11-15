@@ -8,7 +8,8 @@ export function loadRequest(item: LoadItem): LoadItemRequest {
     disciplineId: item.discipline.id,
     lessonKind: item.lessonKind,
     hoursPerWeek: item.hoursPerWeek,
-    plannedHours: item.plannedHours,
+    // автоматичний план лишається автоматичним: число шлемо лише для заданого
+    plannedHours: item.planSource === 'AUTO' ? null : item.plannedHours,
     splitSubgroups: item.splitSubgroups,
     teachers: item.teachers.map((t) => ({ subgroup: t.subgroup, teacherId: t.teacher.id })),
     requiredRoomType: item.requiredRoomType,

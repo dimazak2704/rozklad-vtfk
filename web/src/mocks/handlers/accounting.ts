@@ -1,13 +1,14 @@
 /**
  * Облік годин (CONTRACTS §2 «Accounting», DOMAIN §9). План — сума планових годин навантаження
- * (handlers/load.ts), факт і прогноз — заняття опублікованого шаблону, розгорнуті на дати семестру з
- * парністю, перевизначеннями тижнів і періодами календаря (handlers/calendar.ts). «Зараз» — київський час.
+ * (handlers/load.ts; AUTO — лише за тижні, коли група на теорії, handlers/plan.ts), факт і прогноз — заняття
+ * опублікованого шаблону, розгорнуті на дати семестру з парністю, перевизначеннями тижнів і періодами календаря
+ * (handlers/calendar.ts), з демо-змінами розпоряджень (DEMO_LESSON_CHANGES). «Зараз» — київський час.
  * Правила — як у core (accounting/internal/HoursLedger): допуск 2 години, поділена дисципліна рахується
  * за когортою з найбільшим прогнозом.
  */
 import { http, HttpResponse } from 'msw';
 import type { AccountingRow, AccountingSuggestionDetail } from '@/api/accounting';
-import type { AccountingStatus, IsoDate, TeacherStatsDto, TemplateLessonDto, Uuid } from '@/api/types';
+import type { AccountingStatus, GroupTheoryDto, IsoDate, TeacherStatsDto, TemplateLessonDto, Uuid } from '@/api/types';
 import { addDays, compareIsoDates, formatDayMonth, isoWeekday, kyivClock, timeToMinutes } from '@/lib/date';
 import { plural } from '@/lib/labels';
 import { ukCollator } from '@/lib/sort';
@@ -16,7 +17,8 @@ import { mockId } from '../ids';
 import { apiPath, badRequest } from '../kit';
 import { bellProfiles, parityOfDate, periods, semesters, activeSemester } from './calendar';
 import { disciplineRefOf, disciplines, groupRefOf, groups, teacherRefOf, teachers } from './catalog';
-import { loadItems } from './load';
+import { loadItems, withCurrentPlans } from './load';
+import { theoryCache } from '../plan';
 import type { CalendarPeriod, CalendarSemester } from '@/api/calendar';
 
 const HOURS_PER_PAIR = 2;
@@ -52,6 +54,16 @@ function groupStudiesOn(date: IsoDate, groupId: Uuid, course: number, semesterPe
   );
 }
 
+/**
+ * ДЕМО-зміни розпоряджень, що зачіпають облік: пару віддано іншій дисципліні (`to`) або її не буде (`to: null`).
+ * Синтетичні: дві пари ТОЕ 2КІ1 скасовано без заміни, тож облік чесно показує «Не вистачить 4 год» — справжню
+ * нестачу, а не тижні поза теорією.
+ */
+const DEMO_LESSON_CHANGES: ReadonlyArray<{ date: IsoDate; group: string; pairs: readonly number[]; to: string | null }> = [
+  { date: '2026-11-02', group: '2КІ1', pairs: [8], to: null },
+  { date: '2026-11-04', group: '2КІ1', pairs: [6], to: null },
+];
+
 /** Заняття шаблону, розгорнуті на дати семестру для потрібних пар «група|дисципліна». */
 function ledgerLessons(semester: CalendarSemester, keys: ReadonlySet<string>, now: Date): Map<string, LedgerLesson[]> {
   const clock = kyivClock(now);
@@ -80,7 +92,31 @@ function ledgerLessons(semester: CalendarSemester, keys: ReadonlySet<string>, no
       ]);
     }
   }
+  applyDemoChanges(out, keys, clock);
   return out;
+}
+
+/** Знімає пари, які змінило розпорядження, і додає пари дисципліни, якій їх віддали. */
+function applyDemoChanges(out: Map<string, LedgerLesson[]>, keys: ReadonlySet<string>, clock: { date: IsoDate }): void {
+  for (const change of DEMO_LESSON_CHANGES) {
+    const group = groups.all().find((g) => g.code === change.group);
+    if (!group) continue;
+    for (const [key, lessons] of out) {
+      if (!key.startsWith(`${group.id}|`)) continue;
+      out.set(
+        key,
+        lessons.filter((l) => !(l.date === change.date && change.pairs.includes(l.pair))),
+      );
+    }
+    const target = change.to ? disciplines.all().find((d) => d.shortName === change.to) : undefined;
+    const key = target ? `${group.id}|${target.id}` : null;
+    if (!key || !keys.has(key)) continue;
+    const ended = compareIsoDates(change.date, clock.date) < 0;
+    out.set(key, [
+      ...(out.get(key) ?? []),
+      ...change.pairs.map((pair) => ({ id: mockId('lesson', `${key}@${change.date}|${pair}`), date: change.date, pair, subgroup: 0, ended })),
+    ]);
+  }
 }
 
 const chronological = (a: LedgerLesson, b: LedgerLesson) => compareIsoDates(a.date, b.date) || a.pair - b.pair;
@@ -145,20 +181,31 @@ function ledger(plan: number, lessons: readonly LedgerLesson[]) {
 export function accountingRows(semesterId: Uuid | null, groupId: Uuid | null, now: Date = new Date()): AccountingRow[] {
   const semester = semesterId ? semesters.get(semesterId) : activeSemester();
   if (groupId) groups.get(groupId);
-  const plans = new Map<string, number>();
-  for (const item of loadItems.all()) {
-    if (item.semesterId !== semester.id || (groupId && item.group.id !== groupId)) continue;
+  const plans = new Map<string, { plan: number; hoursPerWeek: number; sources: Set<'AUTO' | 'FIXED'> }>();
+  const items = withCurrentPlans(loadItems.all().filter((i) => i.semesterId === semester.id && (!groupId || i.group.id === groupId)));
+  for (const item of items) {
     const key = `${item.group.id}|${item.discipline.id}`;
-    plans.set(key, (plans.get(key) ?? 0) + item.plannedHours);
+    const entry = plans.get(key) ?? { plan: 0, hoursPerWeek: 0, sources: new Set() };
+    entry.plan += item.plannedHours;
+    entry.hoursPerWeek += item.hoursPerWeek;
+    entry.sources.add(item.planSource);
+    plans.set(key, entry);
   }
   const lessonsByKey = ledgerLessons(semester, new Set(plans.keys()), now);
   const rows: AccountingRow[] = [];
-  for (const [key, plan] of plans) {
+  for (const [key, { plan, hoursPerWeek, sources }] of plans) {
     const [gid = '', did = ''] = key.split('|');
     const group = groups.find(gid);
     const discipline = disciplines.find(did);
     if (!group || !discipline) continue;
-    rows.push({ group: groupRefOf(group), discipline: disciplineRefOf(discipline), plan, ...ledger(plan, lessonsByKey.get(key) ?? []) });
+    rows.push({
+      group: groupRefOf(group),
+      discipline: disciplineRefOf(discipline),
+      plan,
+      ...ledger(plan, lessonsByKey.get(key) ?? []),
+      hoursPerWeek,
+      planSource: sources.size === 1 ? [...sources][0] ?? 'AUTO' : 'MIXED',
+    });
   }
   return rows.sort(
     (a, b) =>
@@ -166,6 +213,24 @@ export function accountingRows(semesterId: Uuid | null, groupId: Uuid | null, no
       ukCollator.compare(a.group.code, b.group.code) ||
       ukCollator.compare(a.discipline.shortName, b.discipline.shortName),
   );
+}
+
+/** Тижні теорії груп з навантаженням (або однієї групи), за курсом і кодом — як core AccountingTheory. */
+export function groupTheories(semesterId: Uuid | null, groupId: Uuid | null): GroupTheoryDto[] {
+  const semester = semesterId ? semesters.get(semesterId) : activeSemester();
+  const ids = groupId
+    ? [groups.get(groupId).id]
+    : [...new Set(loadItems.all().filter((i) => i.semesterId === semester.id).map((i) => i.group.id))];
+  const theory = theoryCache(semester);
+  return ids
+    .map((id) => groups.find(id))
+    .filter((g) => g !== undefined)
+    .map(groupRefOf)
+    .sort((a, b) => a.course - b.course || ukCollator.compare(a.code, b.code))
+    .map((group) => {
+      const { days: _days, ...dto } = theory(group);
+      return dto;
+    });
 }
 
 // ───────────────────────── Статистика викладачів ─────────────────────────
@@ -229,6 +294,10 @@ export const handlers = [
   http.get(apiPath('/admin/accounting'), ({ request }) => {
     const url = new URL(request.url);
     return HttpResponse.json(accountingRows(url.searchParams.get('semesterId'), url.searchParams.get('groupId')));
+  }),
+  http.get(apiPath('/admin/accounting/theory'), ({ request }) => {
+    const url = new URL(request.url);
+    return HttpResponse.json(groupTheories(url.searchParams.get('semesterId'), url.searchParams.get('groupId')));
   }),
   http.get(apiPath('/admin/accounting/teachers'), ({ request }) => {
     const raw = new URL(request.url).searchParams.get('month');

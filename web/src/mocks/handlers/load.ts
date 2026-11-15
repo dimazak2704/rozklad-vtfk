@@ -3,6 +3,10 @@
  * Початкові записи — TIMETABLE_DERIVED з опублікованого шаблону (DOMAIN §12): пара щотижня — 1, лише
  * чисельник або знаменник — ½; уся група й підгрупи — окремі записи, як у core (LoadDerivation).
  * Вид заняття в таблиці не вказано (MIXED), форма контролю невідома (NONE).
+ *
+ * План годин — як у core (рішення власника 15.11.2026, handlers/plan.ts): без числа в запиті його рахує система
+ * (AUTO) за днями, коли група на теорії, і перераховує на кожному читанні, тож правка календаря одразу видна; число
+ * в запиті фіксує план (FIXED), те саме число AUTO-плану, надіслане назад, план не фіксує.
  */
 import { http, HttpResponse } from 'msw';
 import type { DerivedLoadResult, LoadItem, LoadItemRequest, SkippedDerivation } from '@/api/load';
@@ -20,6 +24,8 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, notFound, problem, readJson } from '../kit';
 import { createMockCollection } from '../store';
 import { activeSemester, semesters } from './calendar';
+import type { CalendarSemester } from '@/api/calendar';
+import { autoPlan, theoryCache } from '../plan';
 import {
   disciplineRefOf,
   disciplines,
@@ -107,17 +113,19 @@ export function deriveFromTemplate(lessons: readonly TemplateLessonDto[], hoursP
   return drafts;
 }
 
-function itemFromDraft(draft: DerivedDraft, semesterId: Uuid, teachingWeeks: number): LoadItem {
+function itemFromDraft(draft: DerivedDraft, semester: CalendarSemester, theory = theoryCache(semester)): LoadItem {
   const group = groups.get(draft.groupId);
   const discipline = disciplines.get(draft.disciplineId);
+  const ref = { group: groupRefOf(group), discipline: disciplineRefOf(discipline), splitSubgroups: draft.split };
   return {
-    id: mockId('load-item', `${semesterId}|${draft.groupId}|${draft.disciplineId}|MIXED|${draft.split}`),
-    semesterId,
-    group: groupRefOf(group),
-    discipline: disciplineRefOf(discipline),
+    id: mockId('load-item', `${semester.id}|${draft.groupId}|${draft.disciplineId}|MIXED|${draft.split}`),
+    semesterId: semester.id,
+    group: ref.group,
+    discipline: ref.discipline,
     lessonKind: 'MIXED',
     hoursPerWeek: draft.hoursPerWeek,
-    plannedHours: Math.round(draft.hoursPerWeek * teachingWeeks),
+    plannedHours: autoPlan({ ...ref, hoursPerWeek: draft.hoursPerWeek }, theory(ref.group)),
+    planSource: 'AUTO',
     splitSubgroups: draft.split,
     teachers: [...draft.teachers.entries()].map(([subgroup, teacherId]) => ({ subgroup, teacher: teacherRefOf(teachers.get(teacherId)) })),
     requiredRoomType: null,
@@ -144,14 +152,34 @@ const PROGRAM_PLANS: ReadonlyArray<{ group: string; discipline: string; plannedH
 
 export const loadItems = createMockCollection<LoadItem>('Запис навантаження', () => {
   const semester = activeSemester();
+  const theory = theoryCache(semester);
   return deriveFromTemplate(TEMPLATE_LESSONS).map((draft) => {
-    const item = itemFromDraft(draft, semester.id, semester.teachingWeeks);
+    const item = itemFromDraft(draft, semester, theory);
     const program = PROGRAM_PLANS.find((p) => p.group === item.group.code && p.discipline === item.discipline.shortName);
     return program && !item.splitSubgroups
-      ? { ...item, plannedHours: program.plannedHours, source: 'PROGRAM' as const, note: program.note }
+      ? { ...item, plannedHours: program.plannedHours, planSource: 'FIXED' as const, source: 'PROGRAM' as const, note: program.note }
       : item;
   });
 });
+
+/**
+ * Записи з чинним планом: AUTO перераховується за поточним календарем (як core після правки періоду чи
+ * публікації), FIXED лишається як є. Кеш тижнів теорії — на один виклик.
+ */
+export function withCurrentPlans(items: readonly LoadItem[]): LoadItem[] {
+  const caches = new Map<Uuid, ReturnType<typeof theoryCache>>();
+  return items.map((item) => {
+    if (item.planSource !== 'AUTO') return item;
+    const semester = semesters.find(item.semesterId);
+    if (!semester) return item;
+    let theory = caches.get(semester.id);
+    if (!theory) {
+      theory = theoryCache(semester);
+      caches.set(semester.id, theory);
+    }
+    return { ...item, plannedHours: autoPlan(item, theory(item.group)) };
+  });
+}
 
 registerCatalogUsage((entity, id, extra) => {
   const items = loadItems.all();
@@ -243,13 +271,22 @@ function save(body: LoadItemRequest, id?: Uuid): LoadItem {
   const group = groups.get(body.groupId);
   const discipline = disciplines.get(body.disciplineId);
   const room = body.preferredRoomId ? rooms.get(body.preferredRoomId) : null;
+  const current = id ? withCurrentPlans([loadItems.get(id)])[0] : undefined;
+  // число AUTO-плану, надіслане назад без зміни годин, нічого не вирішує: план лишається автоматичним
+  const echo =
+    current?.planSource === 'AUTO' && body.plannedHours === current.plannedHours && body.hoursPerWeek === current.hoursPerWeek;
+  const fixed = body.plannedHours != null && !echo;
+  const ref = { group: groupRefOf(group), discipline: disciplineRefOf(discipline), splitSubgroups: body.splitSubgroups === true };
   const fields = {
     semesterId: semester.id,
-    group: groupRefOf(group),
-    discipline: disciplineRefOf(discipline),
+    group: ref.group,
+    discipline: ref.discipline,
     lessonKind: body.lessonKind ?? 'MIXED',
     hoursPerWeek: body.hoursPerWeek,
-    plannedHours: body.plannedHours ?? Math.round(body.hoursPerWeek * semester.teachingWeeks),
+    plannedHours: fixed
+      ? (body.plannedHours as number)
+      : autoPlan({ ...ref, hoursPerWeek: body.hoursPerWeek }, theoryCache(semester)(ref.group)),
+    planSource: fixed ? ('FIXED' as const) : ('AUTO' as const),
     splitSubgroups: body.splitSubgroups === true,
     teachers: (body.teachers ?? [])
       .map((t) => ({ subgroup: t.subgroup, teacher: teacherRefOf(teachers.get(t.teacherId)) }))
@@ -282,6 +319,7 @@ function derive(versionId: Uuid): DerivedLoadResult {
   if (versionId !== PUBLISHED_VERSION_ID) throw notFound(`Версію розкладу з id ${versionId} не знайдено.`);
   const semester = activeSemester();
   const drafts = deriveFromTemplate(TEMPLATE_LESSONS);
+  const theory = theoryCache(semester);
   const existing = loadItems.all().filter((i) => i.semesterId === semester.id);
   let created = 0;
   let updated = 0;
@@ -299,7 +337,7 @@ function derive(versionId: Uuid): DerivedLoadResult {
       });
       continue;
     }
-    const next = itemFromDraft(draft, semester.id, semester.teachingWeeks);
+    const next = itemFromDraft(draft, semester, theory);
     keep.add(next.id);
     const previous = loadItems.find(next.id);
     if (!previous) {
@@ -325,7 +363,7 @@ function derive(versionId: Uuid): DerivedLoadResult {
     updated,
     removed,
     skipped,
-    items: loadItems.all().filter((i) => i.semesterId === semester.id && i.source === 'TIMETABLE_DERIVED'),
+    items: withCurrentPlans(loadItems.all().filter((i) => i.semesterId === semester.id && i.source === 'TIMETABLE_DERIVED')),
   };
 }
 
@@ -338,9 +376,7 @@ export const handlers = [
     if (!semesterId) throw badRequest('Не вказано семестр.', [{ field: 'semesterId', message: 'Обовʼязковий параметр' }]);
     semesters.get(semesterId);
     const groupId = url.searchParams.get('groupId');
-    const list = loadItems
-      .all()
-      .filter((i) => i.semesterId === semesterId && (!groupId || i.group.id === groupId))
+    const list = withCurrentPlans(loadItems.all().filter((i) => i.semesterId === semesterId && (!groupId || i.group.id === groupId)))
       .sort(
         (a, b) =>
           a.group.code.localeCompare(b.group.code, 'uk', { numeric: true }) ||
@@ -349,13 +385,13 @@ export const handlers = [
       );
     return HttpResponse.json(list);
   }),
-  http.get(apiPath('/admin/load/:id'), ({ params }) => HttpResponse.json(loadItems.get(String(params.id)))),
+  http.get(apiPath('/admin/load/:id'), ({ params }) => HttpResponse.json(withCurrentPlans([loadItems.get(String(params.id))])[0])),
   http.post(apiPath('/admin/load/derive-from-version/:versionId'), ({ params }) => HttpResponse.json(derive(String(params.versionId)))),
   http.post(apiPath('/admin/load'), async ({ request }) =>
-    HttpResponse.json(save(await readJson<LoadItemRequest>(request)), { status: 201 }),
+    HttpResponse.json(withCurrentPlans([save(await readJson<LoadItemRequest>(request))])[0], { status: 201 }),
   ),
   http.put(apiPath('/admin/load/:id'), async ({ request, params }) =>
-    HttpResponse.json(save(await readJson<LoadItemRequest>(request), String(params.id))),
+    HttpResponse.json(withCurrentPlans([save(await readJson<LoadItemRequest>(request), String(params.id))])[0]),
   ),
   http.delete(apiPath('/admin/load/:id'), ({ params }) => {
     loadItems.remove(String(params.id));
