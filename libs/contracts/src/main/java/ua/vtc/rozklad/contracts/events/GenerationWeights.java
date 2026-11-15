@@ -14,6 +14,13 @@ package ua.vtc.rozklad.contracts.events;
  * <p>{@code specialRooms} (14th, genfix repair): a lesson whose load item stood only in special-purpose rooms (sports
  * hall, sports ground) in the base version is placed in another kind of room. It replaces core's derived required
  * room type, which was hard and could not be switched off.
+ *
+ * <p>Owner's answers of 15.11.2026: the 4th pair of the shift is normal, so {@code latePairs} defaults to 0 (the
+ * preference stays and a request may switch it on). Subgroups of one discipline at the same time became a hard rule
+ * of the scheduler with no weight (two teachers); {@code subgroupsTogether} (10 → 30, the strongest default) weighs
+ * what the hard rule cannot demand: one teacher's two subgroups on neighbouring pairs and a lone subgroup lesson.
+ * {@code studentOnePairDay} and {@code specialRooms} are confirmed college rules kept soft; the web sends their
+ * defaults and does not offer them, nor {@code subgroupsTogether}, as priorities.
  */
 public record GenerationWeights(int windows, int brokenDays, int latePairs, int preferences, int homeRoom,
         Integer teacherWindows, Integer teacherShiftWait, Integer stability, Integer subgroupsTogether,
@@ -23,14 +30,14 @@ public record GenerationWeights(int windows, int brokenDays, int latePairs, int 
     // Declared before DEFAULT: static fields initialise in order and the compact constructor reads these.
     public static final int DEFAULT_TEACHER_SHIFT_WAIT = 3;
     public static final int DEFAULT_STABILITY = 1;
-    public static final int DEFAULT_SUBGROUPS_TOGETHER = 10;
+    public static final int DEFAULT_SUBGROUPS_TOGETHER = 30;
     public static final int DEFAULT_STUDENT_ONE_PAIR_DAY = 10;
     public static final int DEFAULT_TEACHER_DAYS = 5;
     public static final int DEFAULT_TEACHER_OVERLOAD = 3;
     public static final int DEFAULT_DISCIPLINE_TWICE = 10;
     public static final int DEFAULT_SPECIAL_ROOMS = 30;
 
-    public static final GenerationWeights DEFAULT = new GenerationWeights(30, 10, 9, 5, 1, 10,
+    public static final GenerationWeights DEFAULT = new GenerationWeights(30, 10, 0, 5, 1, 10,
             DEFAULT_TEACHER_SHIFT_WAIT, DEFAULT_STABILITY, DEFAULT_SUBGROUPS_TOGETHER, DEFAULT_STUDENT_ONE_PAIR_DAY,
             DEFAULT_TEACHER_DAYS, DEFAULT_TEACHER_OVERLOAD, DEFAULT_DISCIPLINE_TWICE, DEFAULT_SPECIAL_ROOMS);
 

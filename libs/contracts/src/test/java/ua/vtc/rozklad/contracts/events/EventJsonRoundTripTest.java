@@ -154,8 +154,8 @@ class EventJsonRoundTripTest {
     @Test
     void weightsOfTheThirteenFieldSchemaReadWithTheSpecialRoomsDefault() {
         String json = """
-                {"windows":30,"brokenDays":10,"latePairs":9,"preferences":5,"homeRoom":1,"teacherWindows":10,
-                 "teacherShiftWait":3,"stability":1,"subgroupsTogether":10,"studentOnePairDay":10,"teacherDays":5,
+                {"windows":30,"brokenDays":10,"latePairs":0,"preferences":5,"homeRoom":1,"teacherWindows":10,
+                 "teacherShiftWait":3,"stability":1,"subgroupsTogether":30,"studentOnePairDay":10,"teacherDays":5,
                  "teacherOverload":3,"disciplineTwice":10}
                 """;
 
@@ -172,12 +172,13 @@ class EventJsonRoundTripTest {
     @Test
     void weightsDefaultIsCompleteAndNegativeWeightsAreRefused() {
         assertThat(GenerationWeights.DEFAULT)
-                .isEqualTo(new GenerationWeights(30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30));
+                .as("owner, 15.11.2026: the 4th pair is normal (latePairs 0), subgroups together the strongest (30)")
+                .isEqualTo(new GenerationWeights(30, 10, 0, 5, 1, 10, 3, 1, 30, 10, 5, 3, 10, 30));
         assertThat(new GenerationWeights(10, 10, 3, 5, 1, 0, null, 0, null, null, null, null, null))
                 .satisfies(weights -> {
                     assertThat(weights.teacherWindows()).as("an explicit 0 switches teacher windows off").isZero();
                     assertThat(weights.stability()).isZero();
-                    assertThat(weights.subgroupsTogether()).isEqualTo(10);
+                    assertThat(weights.subgroupsTogether()).isEqualTo(GenerationWeights.DEFAULT_SUBGROUPS_TOGETHER);
                 });
         org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
                 .isThrownBy(() -> new GenerationWeights(10, 10, 3, 5, 1, null, null, -1, null, null, null, null, null));

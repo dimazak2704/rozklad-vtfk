@@ -275,10 +275,14 @@ the scheduler reads the base rooms from `initial`/`pinned` for the soft rule `sp
 `GenerationWeights {windows, brokenDays, latePairs, preferences, homeRoom, teacherWindows, teacherShiftWait, stability,
 subgroupsTogether, studentOnePairDay, teacherDays, teacherOverload, disciplineTwice, specialRooms}`: soft weights, 0 = off,
 never negative. The last nine are additive: an absent one takes its default, an absent `teacherWindows` equals `windows` (one
-weight covered groups and teachers before). `DEFAULT` = (30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30), tuned by replaying
-the college's real generation requests (scheduler `SnapshotReplayTest`); the defaults and the statistics behind them are in
-CHANGELOG-CONTRACTS «Generator quality». `specialRooms`: a lesson of a load item whose base lessons with a room all stood in
-the sports hall or on the sports ground is placed in another kind of room (per week occurrence). `contracts.LatePairs` holds the one definition of a «4-та пара зміни»: a pair
+weight covered groups and teachers before). `DEFAULT` = (30, 10, 0, 5, 1, 10, 3, 1, 30, 10, 5, 3, 10, 30), tuned by replaying
+the college's real generation requests (scheduler `SnapshotReplayTest`); since the owner's answers of 15.11.2026 `latePairs`
+is 0 (the 4th pair is normal) and `subgroupsTogether` 30. The defaults and the statistics behind them are in CHANGELOG-CONTRACTS «Generator
+quality» and «Owner's answers». `specialRooms`: a lesson of a load item that keeps to the sports hall or the sports ground (its
+base lessons with a room all stood there or, without a base, its teacher's usual room is one) is placed in another kind of
+room (per week occurrence). The subgroup copies of one occurrence (`siblingKey`) of two teachers in one slot is a hard rule
+of the scheduler (no weight); `subgroupsTogether` weighs what it cannot demand: one teacher's two copies on neighbouring
+pairs, and a lone subgroup lesson. `contracts.LatePairs` holds the one definition of a «4-та пара зміни»: a pair
 whose position in the group's shift window is 3 or more (0-based): shift 1 the 4th pair, shift 2 the 8th, none on Friday shift 2.
 
 Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники: only for a kind with effect
