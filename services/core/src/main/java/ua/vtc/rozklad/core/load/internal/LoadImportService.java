@@ -20,6 +20,7 @@ import ua.vtc.rozklad.core.catalog.RoomInfo;
 import ua.vtc.rozklad.core.catalog.TeacherInfo;
 import ua.vtc.rozklad.core.load.LoadItem;
 import ua.vtc.rozklad.core.load.LoadItemRepository;
+import ua.vtc.rozklad.core.load.LoadSource;
 import ua.vtc.rozklad.core.load.PlanSource;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportItem;
 import ua.vtc.rozklad.core.load.internal.LoadDtos.LoadImportRequest;
@@ -39,8 +40,9 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
  * that group × discipline × lesson kind and keeps its split (a new item is for the whole group). When the
  * semester has both a whole-group and a split item for it the row is refused ({@code items[i].splitSubgroups}).
  * <p>
- * {@code plannedHours} in a row fixes the plan (FIXED, e.g. a program's 40 h). Without it a FIXED plan of the stored
- * item stays, otherwise the system counts the plan from the group's theory days and keeps it current (AUTO).
+ * {@code plannedHours} in a row fixes the plan (FIXED, e.g. a program's 40 h), except in a CURRICULUM row (its total
+ * assumes the curriculum's weeks). Without it a FIXED plan of the stored item stays, otherwise the system counts the
+ * plan from the group's theory days and keeps it current (AUTO).
  * <p>
  * An update keeps what the request does not carry: a field that is absent ({@code null}) leaves the
  * stored value as it is, so a program or a curriculum (hours only) does not erase the teachers, the
@@ -201,10 +203,12 @@ public class LoadImportService {
 
     /**
      * The plan the row gives the item: its own number (FIXED); without one a FIXED plan of the stored item stays as the
-     * dispatcher set it, otherwise the system counts it from the group's theory days (AUTO).
+     * dispatcher set it, otherwise the system counts it from the group's theory days (AUTO). A CURRICULUM row's number
+     * is the curriculum's weeks × hours (22 for 4КІ): by the owner's rule of 15.11.2026 weeks off theory are not
+     * planned, so it does not fix the plan — the curriculum's hours per week are counted over the group's theory days.
      */
     private static Plan plan(Resolved item, LoadItem target, LoadPlanner.Context plans, List<LoadItem> existing) {
-        Integer given = item.source().plannedHours();
+        Integer given = item.source().source() == LoadSource.CURRICULUM ? null : item.source().plannedHours();
         if (given != null) {
             return new Plan(given, PlanSource.FIXED);
         }

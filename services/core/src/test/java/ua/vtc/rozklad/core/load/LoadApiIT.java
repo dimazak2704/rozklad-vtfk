@@ -419,6 +419,7 @@ class LoadApiIT {
         mvc.perform(get("/api/admin/load/" + item).with(TestJwts.admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.plannedHours").value(60))
+                .andExpect(jsonPath("$.planSource").value("FIXED"))
                 .andExpect(jsonPath("$.source").value("PROGRAM"))
                 .andExpect(jsonPath("$.teachers[0].teacher.id").value(krentsin.toString()))
                 .andExpect(jsonPath("$.requiredRoomType").value("COMPUTER_LAB"))
@@ -463,7 +464,9 @@ class LoadApiIT {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].id").value(item.toString()))
                 .andExpect(jsonPath("$[0].splitSubgroups").value(true))
-                .andExpect(jsonPath("$[0].plannedHours").value(44))
+                // підсумок навчального плану (тижні плану × години) план не фіксує: 2 год × 87 днів / 5 = 35
+                .andExpect(jsonPath("$[0].plannedHours").value(35))
+                .andExpect(jsonPath("$[0].planSource").value("AUTO"))
                 .andExpect(jsonPath("$[0].controlForm").value("CREDIT"))
                 .andExpect(jsonPath("$[0].source").value("CURRICULUM"))
                 .andExpect(jsonPath("$[0].teachers", hasSize(2)));
@@ -487,7 +490,7 @@ class LoadApiIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("items[0].splitSubgroups"));
         mvc.perform(get("/api/admin/load/" + item).with(TestJwts.admin()))
-                .andExpect(jsonPath("$.plannedHours").value(44));
+                .andExpect(jsonPath("$.plannedHours").value(35));
     }
 
     /** Without any item of the group × discipline a row without the split creates a whole-group item. */
