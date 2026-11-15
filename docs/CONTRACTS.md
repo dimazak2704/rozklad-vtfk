@@ -73,8 +73,12 @@ PracticeDto { periodId, title, startsOn, endsOn, supervisors:[TeacherRef], group
             # group schedule: the practice the group is at; teacher schedule: practices the teacher supervises
             # (керівник практики); room schedule and days off: []
 LessonView  { id, pair, startsAt, endsAt, discipline:DisciplineRef, teacher:TeacherRef?, room:RoomRef?,
-              group:GroupRef, subgroup (0..n), kind: REGULAR|SUBSTITUTED|CANCELLED|ADDITIONAL|MOVED|ROOM_CHANGED|BLOCK,
+              group:GroupRef, subgroup (0..n), parity: BOTH|NUMERATOR|DENOMINATOR?,
+              kind: REGULAR|SUBSTITUTED|CANCELLED|ADDITIONAL|MOVED|ROOM_CHANGED|BLOCK,
               online:bool, original:{discipline?,teacher?,room?,pair?}?, reasonText?, changeId? }
+            # parity: of the template row a base-timetable lesson comes from (BOTH = every week; NUMERATOR /
+            # DENOMINATOR = «лише по чисельниках / знаменниках»), also when it was cancelled; null for a lesson
+            # a change, an additional pair or a block created
 ChangeView  { pairLabel, rowType, from:{discipline?,teacher?}, reasonText?, to:{discipline?,teacher?}, room?, subgroupNote?, orderNumber? }
 ```
 

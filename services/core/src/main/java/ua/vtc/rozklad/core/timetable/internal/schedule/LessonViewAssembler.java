@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import ua.vtc.rozklad.contracts.ChangeKind;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.calendar.BellTimes;
 import ua.vtc.rozklad.core.shared.domain.ReasonCode;
 import ua.vtc.rozklad.core.timetable.LessonOrigin;
@@ -77,9 +78,17 @@ final class LessonViewAssembler {
             endsAt = bells.slot(weekday, row.change().pairTo()).map(BellTimes.Slot::endsAt).orElse(endsAt);
         }
         return new LessonView(row.id(), row.pair(), startsAt, endsAt, row.discipline(), row.teacher(), row.room(),
-                row.group(), row.subgroup(), kind, row.online(), original(row, kind),
+                row.group(), row.subgroup(), parity(row), kind, row.online(), original(row, kind),
                 row.change() == null ? null : printedReason(row.change()),
                 row.changeId());
+    }
+
+    /**
+     * Parity of the template row behind a base-timetable lesson (cancelled ones included); a lesson a
+     * change, an additional pair or a block created happens once and has none.
+     */
+    private static Parity parity(LessonRow row) {
+        return row.origin() == LessonOrigin.TEMPLATE ? row.templateParity() : null;
     }
 
     static LessonViewKind kind(LessonRow row) {

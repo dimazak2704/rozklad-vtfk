@@ -63,7 +63,8 @@
 
 <footer class="auth-footer">
   <a th:href="${publicWebUrl}" href="/">← До розкладу</a>
-  <span aria-hidden="true">·</span>
+  <!-- крапка лише в один рядок: на вузькому екрані підвал стає стовпчиком і крапку ховає (auth-page.css) -->
+  <span class="auth-footer-sep" aria-hidden="true">·</span>
   <span>Вінницький технічний фаховий коледж</span>
 </footer>
 

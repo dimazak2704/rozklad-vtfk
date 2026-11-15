@@ -3,6 +3,7 @@ package ua.vtc.rozklad.core.timetable.internal.schedule;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.RoomRef;
@@ -14,7 +15,8 @@ import ua.vtc.rozklad.core.timetable.LessonStatus;
  * A dated lesson joined with its catalog references and the change that created, modified or
  * cancelled it (change columns are {@code null} for a lesson of the base timetable). A cancelled
  * lesson shows the applied change that cancelled it, a scheduled one the change that created it;
- * {@code createdBy} is always the creating change ({@code lesson.change_id}).
+ * {@code createdBy} is always the creating change ({@code lesson.change_id}); {@code templateParity} is the
+ * parity of the template lesson the row was materialised from ({@code null} without one).
  */
 record LessonRow(
         UUID id,
@@ -30,7 +32,8 @@ record LessonRow(
         TeacherRef teacher,
         RoomRef room,
         Change change,
-        UUID createdBy) {
+        UUID createdBy,
+        Parity templateParity) {
 
     boolean scheduled() {
         return status == LessonStatus.SCHEDULED;

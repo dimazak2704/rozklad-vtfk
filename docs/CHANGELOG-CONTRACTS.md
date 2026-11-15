@@ -571,3 +571,12 @@ could bring the teacher «🙋 Прохання про заміну» about a lo
 | `POST /api/admin/changes/{id}/request-confirmation` | For a pair that is already over → 422 `business-rule`, `code: CHANGE_LESSON_OVER`, «Пара вже минула — просити викладача підтвердити заміну запізно.» | A new additive error code; the dispatcher confirms or cancels instead. |
 | Reminders (core) | A pending request whose pair is over is not reminded (no repeated `substitution.confirmation-requested`, no SSE); earlier days are not even selected. | Same rule as the bot. |
 | notification | `substitution.confirmation-requested` in CONFIRM mode about a lesson that is over sends nothing (as NOTIFY already did); the bot's own deadline reminder and the admin «Немає відповіді» skip lessons that are over today too, not only earlier days. | Defence in depth for events queued before the pair ended and for an older core. |
+
+## Lesson parity in the schedule (15.11.2026)
+
+The lesson card already printed «лише по чисельниках» / «лише по знаменниках», but core never sent the parity, so
+the mark was never shown. Additive: older clients ignore the field.
+
+| Area | Decision | Why |
+|---|---|---|
+| `LessonView.parity` | Additive `parity` (`BOTH`, `NUMERATOR`, `DENOMINATOR` or `null`): the parity of the template row (`template_lesson.parity`) of a lesson with origin TEMPLATE, cancelled ones included; `null` for lessons a change, an additional pair or a block created, and for a template lesson whose template row is gone. Always present in JSON (no `NON_NULL`). Served everywhere `LessonView` is: public schedules, `…/absences/{id}/affected`, `…/lessons/{id}/options`, `…/absences/{id}/plan`. | A student sees that a pair is only on numerator or denominator weeks; a one-off pair happens once and has no week parity. |

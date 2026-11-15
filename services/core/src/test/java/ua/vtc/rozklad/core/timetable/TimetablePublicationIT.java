@@ -221,7 +221,9 @@ class TimetablePublicationIT {
                 .jsonPath("$.days[0].lessons[1].discipline.shortName").isEqualTo("СТП")
                 .jsonPath("$.days[0].lessons[1].teacher.shortName").isEqualTo("Кренцін М.Д.")
                 .jsonPath("$.days[0].lessons[1].kind").isEqualTo("REGULAR")
+                .jsonPath("$.days[0].lessons[1].parity").isEqualTo("BOTH")
                 .jsonPath("$.days[2].lessons[0].discipline.shortName").isEqualTo("НДЕКСМ")
+                .jsonPath("$.days[2].lessons[0].parity").isEqualTo("NUMERATOR")
                 .returnResult();
         String etag = result.getResponseHeaders().getETag();
         assertThat(etag).isNotBlank();
@@ -282,13 +284,18 @@ class TimetablePublicationIT {
                 .jsonPath("$.days[0].lessons[1].kind").isEqualTo("SUBSTITUTED")
                 .jsonPath("$.days[0].lessons[1].teacher.shortName").isEqualTo("Непийвода М.В.")
                 .jsonPath("$.days[0].lessons[1].original.teacher.shortName").isEqualTo("Кренцін М.Д.")
-                .jsonPath("$.days[0].lessons[1].reasonText").isEqualTo("Відп.");
+                .jsonPath("$.days[0].lessons[1].reasonText").isEqualTo("Відп.")
+                // заміна разова: парності шаблону в неї немає
+                .jsonPath("$.days[0].lessons[1].parity").hasJsonPath()
+                .jsonPath("$.days[0].lessons[1].parity").value(parity -> assertThat(parity).isNull())
+                .jsonPath("$.days[0].lessons[0].parity").isEqualTo("BOTH");
         client.get().uri("/api/public/schedule/teacher/{id}?from={day}&to={day}", data.krentsin.getId(), nextMonday,
                         nextMonday)
                 .exchange()
                 .expectBody()
                 .jsonPath("$.days[0].lessons[0].kind").isEqualTo("CANCELLED")
-                .jsonPath("$.days[0].lessons[0].reasonText").isEqualTo("Відп.");
+                .jsonPath("$.days[0].lessons[0].reasonText").isEqualTo("Відп.")
+                .jsonPath("$.days[0].lessons[0].parity").isEqualTo("BOTH");
         assertThat(conflictChecker.preview(List.of(new PlannedLesson(UUID.randomUUID(), nextMonday, 2,
                 data.group4ki2.getId(), 0, data.ndeksm.getId(), data.nepyivoda.getId(), null, null)), List.of()))
                 .filteredOn(conflict -> conflict.kind() == ConflictKind.TEACHER)

@@ -224,6 +224,10 @@ describe('контракт мок-API ↔ core', () => {
     await expectShape(schedule, view, 'ScheduleView');
     await expectShape(schedule.owner, view, 'Owner');
     await expectShape(first(schedule.days, 'дні'), view, 'Day');
+    const lesson = first(first(schedule.days, 'дні').lessons, 'заняття дня');
+    await expectShape(lesson, `${CORE}timetable/LessonView.java`, 'LessonView');
+    // парність рядка шаблону: позначка «лише по чисельниках/знаменниках» на картці
+    expect(['BOTH', 'NUMERATOR', 'DENOMINATOR']).toContain(lesson.parity);
 
     const changesPath = `${CORE}order/internal/publicview/PublicChangesDto.java`;
     // №35 (19.10) давніше за тиждень від «зараз» тесту: архів бачить лише персонал (будь-який Bearer для мока)

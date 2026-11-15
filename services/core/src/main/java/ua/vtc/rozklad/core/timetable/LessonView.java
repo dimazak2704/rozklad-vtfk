@@ -2,6 +2,7 @@ package ua.vtc.rozklad.core.timetable;
 
 import java.time.LocalTime;
 import java.util.UUID;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.RoomRef;
@@ -13,6 +14,8 @@ import ua.vtc.rozklad.core.catalog.TeacherRef;
  * {@code reasonText} the short public reason printed in orders («Відп.», «Зв.зам.» …).
  *
  * @param subgroup 0 = the whole group, 1..n = subgroup
+ * @param parity   week parity of the template lesson behind a base-timetable lesson ({@code BOTH} = every
+ *                 week); {@code null} for lessons a change or an additional/block pair created
  */
 public record LessonView(
         UUID id,
@@ -24,6 +27,7 @@ public record LessonView(
         RoomRef room,
         GroupRef group,
         int subgroup,
+        Parity parity,
         LessonViewKind kind,
         boolean online,
         Original original,

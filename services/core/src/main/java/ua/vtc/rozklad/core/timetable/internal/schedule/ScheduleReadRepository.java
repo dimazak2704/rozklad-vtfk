@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.catalog.DisciplineRef;
 import ua.vtc.rozklad.core.catalog.GroupRef;
@@ -42,12 +43,13 @@ class ScheduleReadRepository {
                    ot.id AS orig_teacher_id, ot.short_name AS orig_teacher_short_name,
                    ot.display_name AS orig_teacher_display_name,
                    orm.id AS orig_room_id, orm.name AS orig_room_name, orm.type AS orig_room_type,
-                   ol.pair_number AS orig_pair, sl.pair_number AS swap_pair
+                   ol.pair_number AS orig_pair, sl.pair_number AS swap_pair, tl.parity AS template_parity
             FROM lesson l
             JOIN student_group g ON g.id = l.group_id
             JOIN discipline d ON d.id = l.discipline_id
             LEFT JOIN teacher t ON t.id = l.teacher_id
             LEFT JOIN room r ON r.id = l.room_id
+            LEFT JOIN template_lesson tl ON tl.id = l.template_lesson_id
             LEFT JOIN LATERAL (
                 SELECT ch.id, ch.kind, ch.reason_code, ch.reason_text, ch.pair_from, ch.pair_to,
                        ch.original_lesson_id, ch.swap_lesson_id, ch.orig_discipline_id, ch.orig_teacher_id,
@@ -123,7 +125,12 @@ class ScheduleReadRepository {
                 teacher(rs, "teacher_"),
                 room(rs, "room_"),
                 change,
-                rs.getObject("own_change_id", UUID.class));
+                rs.getObject("own_change_id", UUID.class),
+                parity(rs.getString("template_parity")));
+    }
+
+    private static Parity parity(String value) {
+        return value == null ? null : Parity.valueOf(value);
     }
 
     private static DisciplineRef discipline(ResultSet rs, String prefix) throws SQLException {
