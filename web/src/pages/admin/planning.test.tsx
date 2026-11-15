@@ -230,6 +230,8 @@ describe('Генератор розкладу', () => {
     await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
     expect((await screen.findAllByText(/^(У черзі|Розвʼязується)$/, undefined, LONG)).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Запустити генерацію' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Скасувати' })).toBeInTheDocument();
+    // панель задачі чекає на GET задачі, а мок-генератор рахує розвʼязок у тому ж потоці: на повільній машині
+    // історія вже показує «У черзі», а панель ще вантажиться
+    expect(await screen.findByRole('button', { name: 'Скасувати' }, LONG)).toBeInTheDocument();
   });
 });
