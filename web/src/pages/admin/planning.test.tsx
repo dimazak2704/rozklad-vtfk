@@ -228,7 +228,8 @@ describe('Генератор розкладу', () => {
     await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
     expect((await screen.findAllByText(/^(У черзі|Розвʼязується)$/, undefined, LONG)).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Запустити генерацію' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: /^(Скасувати|Зупинити)$/ })).toBeInTheDocument();
+    // кнопка зʼявляється, коли панель перемкнеться на нову задачу (до того видно попередній результат)
+    expect(await screen.findByRole('button', { name: /^(Скасувати|Зупинити)$/ }, LONG)).toBeInTheDocument();
     expect(await screen.findByText(AUTO_STOP_SENTENCE, undefined, LONG)).toBeInTheDocument();
     expect(screen.getByText(/^Минуло /)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Зупинити' })).toBeInTheDocument();
