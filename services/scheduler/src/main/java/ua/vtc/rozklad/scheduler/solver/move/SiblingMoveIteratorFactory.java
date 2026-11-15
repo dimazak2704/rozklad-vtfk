@@ -4,14 +4,18 @@ import ai.timefold.solver.core.impl.heuristic.selector.move.factory.MoveIterator
 import ai.timefold.solver.core.impl.score.director.ScoreDirector;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
+import ua.vtc.rozklad.scheduler.solver.domain.Room;
 import ua.vtc.rozklad.scheduler.solver.domain.Timeslot;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 
@@ -21,7 +25,9 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
  * slot (parallel); when one teacher teaches two of them, they go to neighbouring pairs of one day
  * instead (parallel would be a teacher clash). Only slots and parities every sibling may take are
  * offered, and a group keeps only the start slots that give a valid move, so every offered move exists;
- * a group with none (one teacher whose pairs are never consecutive) offers nothing.
+ * a group with none (one teacher whose pairs are never consecutive) offers nothing. A random move also
+ * gives a unit whose room is taken at its target a free room of its range (the desired room first):
+ * the copies must stand together (a hard rule), so they cannot move one by one and change rooms later.
  */
 public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable, SiblingChangeMove> {
 
@@ -83,7 +89,7 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
                     Parity parity = group.parities().get(random.nextInt(group.parities().size()));
                     move = group.moveTo(slot, parity);
                     if (!group.isAt(move)) {
-                        return move;
+                        return withFreeRooms(move, builtFor.getUnits());
                     }
                 }
                 return move;
@@ -98,6 +104,92 @@ public class SiblingMoveIteratorFactory implements MoveIteratorFactory<Timetable
             groups = siblingGroups(solution.getUnits());
             builtFor = solution;
         }
+    }
+
+    /**
+     * The move with a free room for every unit whose room is taken at its target slot (in a week the unit would
+     * meet): its current room if free, else the desired room, else the first free room of its range; a unit
+     * keeps its room when none is free (the room rule then reports it). The moving units do not count as
+     * occupants, and each chosen room counts for the next unit.
+     */
+    static SiblingChangeMove withFreeRooms(SiblingChangeMove move, List<LessonUnit> all) {
+        List<LessonUnit> units = move.units();
+        Set<LessonUnit> moving = Collections.newSetFromMap(new IdentityHashMap<>());
+        moving.addAll(units);
+        Map<Timeslot, Map<Room, int[]>> use = new HashMap<>();
+        move.slots().forEach(slot -> use.put(slot, new HashMap<>()));
+        for (LessonUnit other : all) {
+            if (moving.contains(other) || !other.isPlaced() || other.getRoom().isNone()) {
+                continue;
+            }
+            Map<Room, int[]> atSlot = use.get(other.getTimeslot());
+            if (atSlot != null) {
+                occupy(atSlot, other.getRoom(), other.weekLanes());
+            }
+        }
+        List<Room> rooms = new ArrayList<>(units.size());
+        boolean changed = false;
+        for (int k = 0; k < units.size(); k++) {
+            LessonUnit unit = units.get(k);
+            Map<Room, int[]> atSlot = use.get(move.slots().get(k));
+            int[] weeks = weekLanes(move.parities().get(k));
+            Room chosen = unit.getRoom();
+            if (chosen == null || !isFree(atSlot, chosen, weeks)) {
+                chosen = firstFree(unit, atSlot, weeks);
+            }
+            occupy(atSlot, chosen, weeks);
+            boolean keep = chosen.equals(unit.getRoom());
+            rooms.add(keep ? null : chosen);
+            changed |= !keep;
+        }
+        return changed ? move.withRooms(rooms) : move;
+    }
+
+    private static Room firstFree(LessonUnit unit, Map<Room, int[]> atSlot, int[] weeks) {
+        Room desired = unit.getDesiredRoom();
+        if (desired != null && unit.getRoomRange().contains(desired) && isFree(atSlot, desired, weeks)) {
+            return desired;
+        }
+        for (Room candidate : unit.getRoomRange()) {
+            if (isFree(atSlot, candidate, weeks)) {
+                return candidate;
+            }
+        }
+        return unit.getRoom() == null ? unit.getRoomRange().getFirst() : unit.getRoom();
+    }
+
+    private static boolean isFree(Map<Room, int[]> atSlot, Room room, int[] weeks) {
+        if (room.isNone()) {
+            return true;
+        }
+        int[] used = atSlot.get(room);
+        if (used == null) {
+            return true;
+        }
+        for (int week : weeks) {
+            if (used[week] >= room.getMaxParallel()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void occupy(Map<Room, int[]> atSlot, Room room, int[] weeks) {
+        if (room.isNone()) {
+            return;
+        }
+        int[] used = atSlot.computeIfAbsent(room, ignored -> new int[LessonUnit.WEEK_TYPES]);
+        for (int week : weeks) {
+            used[week]++;
+        }
+    }
+
+    private static int[] weekLanes(Parity parity) {
+        return switch (parity) {
+            case BOTH -> new int[] {LessonUnit.NUMERATOR_WEEK, LessonUnit.DENOMINATOR_WEEK};
+            case NUMERATOR -> new int[] {LessonUnit.NUMERATOR_WEEK};
+            case DENOMINATOR -> new int[] {LessonUnit.DENOMINATOR_WEEK};
+        };
     }
 
     static List<SiblingGroup> siblingGroups(List<LessonUnit> units) {

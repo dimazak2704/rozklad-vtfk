@@ -139,6 +139,44 @@ class SiblingMoveIteratorFactoryTest {
         assertThat(move.getPlanningEntities()).containsExactly(first, second);
     }
 
+    /**
+     * The copies must stand together (hard), so a random sibling move also finds rooms: a unit whose room is taken at
+     * the target goes to its desired room if free, else to a free room of its range; a free room is kept, and the
+     * moving copies do not block each other's current rooms.
+     */
+    @Test
+    void movedCopiesTakeFreeRoomsAtTheTarget() {
+        Room lab2 = new Room(UUID.randomUUID(), "7", RoomType.COMPUTER_LAB, 16, 1);
+        Room lab3 = new Room(UUID.randomUUID(), "8", RoomType.COMPUTER_LAB, 16, 1);
+        List<Timeslot> range = slots(1, 1, 1, 2);
+        LessonUnit first = LessonUnit.builder("a", KI2, DISCIPLINE).subgroup(1).teacher(KRENTSIN)
+                .weight(UnitWeight.WHOLE).siblingKey("k").desiredRoom(lab3).timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), LAB, Parity.BOTH).build();
+        LessonUnit second = LessonUnit.builder("b", KI2, DISCIPLINE).subgroup(2).teacher(NEPYIVODA)
+                .weight(UnitWeight.WHOLE).siblingKey("k").timeslotRange(range)
+                .roomRange(List.of(LAB, lab2, lab3)).parityRange(List.of(Parity.BOTH))
+                .placedAt(range.getFirst(), lab2, Parity.BOTH).build();
+        // у 2-й парі лабораторію 6 займає інша група: першій копії потрібна інша аудиторія
+        LessonUnit other = unit("x", 0, null, null, List.of(range.get(1)), false);
+        SiblingChangeMove move = SiblingMoveIteratorFactory.siblingGroups(List.of(first, second)).getFirst()
+                .moveTo(range.get(1), Parity.BOTH);
+
+        SiblingChangeMove withRooms = SiblingMoveIteratorFactory.withFreeRooms(move, List.of(first, second, other));
+
+        assertThat(withRooms.getPlanningValues()).containsExactly(range.get(1), range.get(1), Parity.BOTH, Parity.BOTH,
+                lab3);
+        Timetable timetable = new Timetable(range, List.of(LAB, lab2, lab3), List.of(KRENTSIN, NEPYIVODA),
+                List.of(KI2), List.of(first, second, other), null);
+        MoveTestContext<Timetable> context = MoveTester.build(PlanningSolutionMetaModel.of(Timetable.class,
+                LessonUnit.class)).using(timetable);
+        context.executeTemporarily(withRooms, view -> assertThat(List.of(first.getRoom(), second.getRoom()))
+                .containsExactly(lab3, lab2));
+        assertThat(first.getRoom()).as("undone").isEqualTo(LAB);
+        assertThat(SiblingMoveIteratorFactory.withFreeRooms(move, List.of(first, second))).as("rooms free: kept")
+                .isSameAs(move);
+    }
+
     /** Local search with sibling moves only, in FULL_ASSERT: the move keeps the score consistent. */
     @Test
     void siblingMovesKeepTheIncrementalScoreConsistent() {
