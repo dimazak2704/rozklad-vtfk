@@ -104,7 +104,8 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
       const job = await upload.mutateAsync({
         file: picked.file,
         kind: picked.kind,
-        semesterId: semester?.id ?? null,
+        // графік ділить періоди за семестрами сам: семестр importer для нього не читає
+        semesterId: picked.kind === 'ACADEMIC_CALENDAR_XLSX' ? null : (semester?.id ?? null),
         options: optionsFor(picked.kind),
       });
       notify.success(`«${picked.file.name}» завантажено — розбираємо`);
@@ -156,14 +157,17 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
             >
               <Select<ImportKind> value={picked.kind} onValueChange={(kind) => setPicked({ ...picked, kind, reason: 'Вибрано вручну' })} options={IMPORT_KIND_OPTIONS} />
             </Field>
-            <Field label="Семестр" hint="До якого семестру належать розклад чи години">
-              <Select<string>
-                value={semester?.id ?? null}
-                onValueChange={setSemesterId}
-                options={(semesters.data ?? []).map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
-                placeholder="Оберіть семестр"
-              />
-            </Field>
+            {/* графік охоплює весь навчальний рік і сам ділить періоди за семестрами — семестр не питаємо */}
+            {picked.kind === 'ACADEMIC_CALENDAR_XLSX' ? null : (
+              <Field label="Семестр" hint="До якого семестру належать розклад чи години">
+                <Select<string>
+                  value={semester?.id ?? null}
+                  onValueChange={setSemesterId}
+                  options={(semesters.data ?? []).map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
+                  placeholder="Оберіть семестр"
+                />
+              </Field>
+            )}
           </div>
           {needsGroups ? (
             <Field label="Групи" required error={groupError} hint="Семестр у програмі часто застарілий — години привʼяжемо до цих груп">
@@ -222,7 +226,7 @@ export function UploadPanel({ onUploaded }: UploadPanelProps) {
               variant="primary"
               loading={upload.isPending}
               loadingLabel="Завантажуємо"
-              disabled={formatMismatch || !semester}
+              disabled={formatMismatch || (!semester && picked.kind !== 'ACADEMIC_CALENDAR_XLSX')}
               iconStart={<Upload aria-hidden="true" className="size-4" />}
               onClick={() => void submit()}
             >

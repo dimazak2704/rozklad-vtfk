@@ -79,6 +79,10 @@ describe('рішення щодо назв', () => {
     expect(creates('DISCIPLINE_PROGRAM', 'GROUP')).toBe(false);
     expect(creates('CURRICULUM', 'DISCIPLINE')).toBe(true);
     expect(creates('TIMETABLE_XLSX', 'GROUP')).toBe(true);
+    // графік пише періоди наявним групам: невідому групу зіставляють або пропускають
+    expect(creates('ACADEMIC_CALENDAR_XLSX', 'GROUP')).toBe(false);
+    const unknownCode = { severity: 'ERROR' as const, type: 'PERIOD_KIND' as const, raw: 'Ф', location: 'X44', suggestions: [] };
+    expect(blockingReason({ kind: 'ACADEMIC_CALENDAR_XLSX', report: [unknownCode] }).tab).toBe('draft');
   });
 
   it('для розпорядження — довідка без «Створити …»', () => {

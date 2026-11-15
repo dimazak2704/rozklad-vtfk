@@ -107,6 +107,36 @@ describe('ScheduleExplorer: тиждень без пар', () => {
     expect(screen.getByText(/Електрорадіомонтажна практика 2КІ3\. Розклад на інші тижні/)).toBeInTheDocument();
     expect(screen.queryByText(/канікули або дні поза семестром/)).not.toBeInTheDocument();
   });
+
+  it('тиждень НС: блок виду з аудиторією й керівником замість голої примітки, назва не двічі', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const ons = {
+      periodId: 'p-ns',
+      title: 'Основи національного спротиву',
+      startsOn: '2026-11-16',
+      endsOn: '2026-11-27',
+      supervisors: [{ id: 't-1', shortName: 'Кренцін М.Д.', displayName: 'Кренцін' }],
+      groups: [{ id: 'g-1', code: '4КІ1', course: 4 }],
+      courses: [],
+      kind: { code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' as const },
+      room: { id: 'r-401', name: '401', type: 'CLASSROOM' as const },
+    };
+    const week: ScheduleDto = {
+      ...DEMO_WEEK,
+      days: DEMO_WEEK.days.map((d) => ({ ...d, studyDay: false, note: ons.title, lessons: [], practices: [ons] })),
+    };
+    renderWithProviders(
+      <ScheduleExplorer
+        query={query(week, { placeholder: false, paused: false })}
+        params={params('2026-11-16', '2026-11-16', '2026-11-20')}
+        perspective="group"
+        ownerLabel="4КІ1"
+      />,
+    );
+    expect(
+      screen.getByText(/^Національний спротив: Основи національного спротиву, ауд\. 401\. Керівник: Кренцін\sМ\.\sД\.\. Розклад на інші тижні/),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('ScheduleExplorer: сьогодні без пар у поданні «День»', () => {

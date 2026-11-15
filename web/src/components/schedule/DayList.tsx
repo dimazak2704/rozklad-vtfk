@@ -9,7 +9,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { Skeleton } from '../ui/Skeleton';
 import { LessonCell } from './LessonCell';
 import { dayPractices, noteWithoutPractices } from './practice';
-import { PracticeBlock } from './PracticeBlock';
+import { PeriodBlock } from './PeriodBlock';
 import { VacatedSlot } from './VacatedSlot';
 
 export interface DayListProps {
@@ -103,7 +103,7 @@ export function DayList({
       ) : null}
 
       {/* практика групи стоїть замість «Не навчальний день»; керівник бачить її над своїми парами */}
-      {practices.length > 0 ? <PracticeBlock practices={practices} perspective={perspective} /> : null}
+      {practices.length > 0 ? <PeriodBlock practices={practices} perspective={perspective} /> : null}
 
       {!day.studyDay || slots.length === 0 ? (
         practices.length > 0 ? null : (

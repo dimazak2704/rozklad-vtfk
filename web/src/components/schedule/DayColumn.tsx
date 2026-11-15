@@ -7,7 +7,7 @@ import { capitalize, weekdayName } from '@/lib/labels';
 import { daySlots, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
 import { dayPractices, noteWithoutPractices } from './practice';
-import { PracticeBlock } from './PracticeBlock';
+import { PeriodBlock } from './PeriodBlock';
 import { VacatedSlot } from './VacatedSlot';
 
 export interface DayColumnProps {
@@ -56,14 +56,14 @@ export function DayColumn({ day, bells, perspective = 'group', today = todayInKy
 
       {note ? <p className="border-b border-separator px-3 py-2 text-caption text-secondary">{note}</p> : null}
 
-      {/* група на практиці: блок замість «Не навчальний день»; керівник: блок над своїми парами */}
+      {/* група на практиці чи НС: блок замість «Не навчальний день»; керівник: блок над своїми парами */}
       {practices.length > 0 && day.studyDay && slots.length > 0 ? (
-        <PracticeBlock practices={practices} perspective={perspective} className="border-b border-separator px-3 py-2" />
+        <PeriodBlock practices={practices} perspective={perspective} className="border-b border-separator px-3 py-2" />
       ) : null}
 
       {!day.studyDay || slots.length === 0 ? (
         practices.length > 0 ? (
-          <PracticeBlock practices={practices} perspective={perspective} className="px-3 py-4" />
+          <PeriodBlock practices={practices} perspective={perspective} className="px-3 py-4" />
         ) : (
           <p className="px-3 py-5 text-caption text-muted">{day.studyDay ? 'Пар немає' : 'Не навчальний день'}</p>
         )

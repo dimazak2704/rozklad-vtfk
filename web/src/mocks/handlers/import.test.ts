@@ -182,6 +182,21 @@ describe('завантаження файлу', () => {
     expect(noGroups).toMatchObject({ status: 422, code: 'GROUPS_REQUIRED' });
   });
 
+  it('графік освітнього процесу: невідомий код блокує; після «пропустити» — застосування одним кроком calendar', async () => {
+    const wrong = await failure(upload('графік.pdf', 'ACADEMIC_CALENDAR_XLSX'));
+    expect(wrong.status).toBe(415);
+    const created = await upload('Графік освітнього процесу 2026-2027.xlsx', 'ACADEMIC_CALENDAR_XLSX');
+    let current = created;
+    for (let i = 0; i < 5 && current.status !== 'NEEDS_REVIEW'; i += 1) current = await job(created.id);
+    expect(current).toMatchObject({ status: 'NEEDS_REVIEW', canApply: false });
+    expect(current.report.find((r) => r.severity === 'ERROR')).toMatchObject({ type: 'PERIOD_KIND', raw: 'Ф' });
+    const fixed = await api.put<ImportJob>(`/import/jobs/${created.id}/options`, { version: current.version, options: { skipCodes: ['Ф'] } });
+    expect(fixed).toMatchObject({ status: 'READY', canApply: true, options: { skipCodes: ['Ф'] } });
+    expect((await api.post<ImportJob>(`/import/jobs/${created.id}/apply`)).status).toBe('APPLYING');
+    for (let i = 0; i < 5 && current.status !== 'APPLIED'; i += 1) current = await job(created.id);
+    expect(current).toMatchObject({ status: 'APPLIED', result: { calendar: { dryRun: false, created: 3, unchanged: 1, academicYear: '2026/2027' } } });
+  });
+
   it('фото розпорядження розпізнає модель зору й рахує витрати дня', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));

@@ -1,6 +1,26 @@
 import type { CalendarPeriod, CalendarPeriodRequest } from '@/api/calendar';
-import type { TeacherRef } from '@/api/types';
-import { SCOPE_LABEL } from './labels';
+import type { Nullable, PeriodEffect, TeacherRef, Uuid } from '@/api/types';
+import { LEGACY_KIND, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
+
+/** Вид періоду для показу: з `periodKind`, а від старішого core — вбудований вид за старим `kind`. */
+export interface ShownKind {
+  id: Uuid | null;
+  code: string;
+  name: string;
+  color: Nullable<string>;
+  effect: PeriodEffect;
+}
+
+export function periodKindOf(period: Pick<CalendarPeriod, 'kind' | 'periodKind'>): ShownKind {
+  if (period.periodKind) return period.periodKind;
+  return { id: null, color: null, ...LEGACY_KIND[period.kind] };
+}
+
+/** Вид словом у таблиці: для форми навчання вистачає самої форми («Дистанційно»). */
+export function periodKindLabel(period: Pick<CalendarPeriod, 'kind' | 'periodKind' | 'studyMode'>): string {
+  const kind = periodKindOf(period);
+  return kind.effect === 'ONLINE' && period.studyMode ? STUDY_MODE_LABEL[period.studyMode] : kind.name;
+}
 
 /** Кого стосується період: «Усі групи», «3 курс», «2КІ3» або «4КІ1, 4КІ2, 4КІ3 та ще 2». */
 export function periodAudience(period: Pick<CalendarPeriod, 'scope' | 'courses' | 'groups'>): string {
@@ -15,11 +35,15 @@ export function periodAudience(period: Pick<CalendarPeriod, 'scope' | 'courses' 
   return SCOPE_LABEL.ALL;
 }
 
-/** Період → тіло PUT (для повернення попередніх значень із журналу дій). */
+/**
+ * Період → тіло PUT (для повернення попередніх значень із журналу дій). Вид — `kindId`; лише від старішого
+ * core без довідника видів — старий `kind`.
+ */
 export function periodRequest(period: CalendarPeriod): CalendarPeriodRequest {
+  const suspend = periodKindOf(period).effect === 'SUSPEND';
   return {
     semesterId: period.semesterId,
-    kind: period.kind,
+    ...(period.kindId ? { kindId: period.kindId } : { kind: period.kind }),
     title: period.title,
     startsOn: period.startsOn,
     endsOn: period.endsOn,
@@ -28,7 +52,8 @@ export function periodRequest(period: CalendarPeriod): CalendarPeriodRequest {
     scope: period.scope,
     courses: period.courses,
     groupIds: period.groupIds ?? period.groups.map((g) => g.id),
-    supervisorIds: period.kind === 'PRACTICE' ? (period.supervisorIds ?? []) : [],
+    roomId: suspend ? (period.roomId ?? null) : null,
+    supervisorIds: suspend ? (period.supervisorIds ?? []) : [],
     version: period.version,
   };
 }

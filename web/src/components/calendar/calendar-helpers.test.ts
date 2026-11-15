@@ -3,63 +3,73 @@ import type { BellProfileSlotDto } from '@/api/types';
 import { BELL_PROFILES } from '@/mocks/fixtures';
 import { breakAfter, gridFromSlots, hasErrors, mostCommon, nextSlot, normalizeTime, slotsFromGrid, validateDay } from './bells';
 import { isoToText, textToIso } from './dateText';
-import { composeOrderNote, orderDate } from './notes';
-import { periodAudience } from './periods';
+import { composeOrderNote, orderDate, renderNoteTemplate, T_DAYOFF, T_INFO, T_SUSPEND, type NoteInput } from './notes';
+import { periodAudience, periodKindLabel, periodKindOf, periodRequest } from './periods';
 
 describe('примітка періоду для розпорядження', () => {
-  it('практика групи — як у розпорядженні №35', () => {
-    expect(
-      composeOrderNote({
-        kind: 'PRACTICE',
-        title: 'Електрорадіомонтажна практика',
-        startsOn: '2026-10-19',
-        endsOn: '2026-10-30',
-        scope: 'GROUPS',
-        courses: [],
-        groupCodes: ['2КІ3'],
-        studyMode: null,
-      }),
-    ).toBe('2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р.');
+  const FN = '{хто} з {від}р. по {до} {режим}.';
+  const base: NoteInput = {
+    template: T_SUSPEND,
+    kindName: 'Практика',
+    title: 'Електрорадіомонтажна практика',
+    startsOn: '2026-10-19',
+    endsOn: '2026-10-30',
+    scope: 'GROUPS',
+    courses: [],
+    groupCodes: ['2КІ3'],
+    studyMode: null,
+    roomName: null,
+  };
+
+  // спільні вектори з контракту: так само шаблон рендерить importer
+  it.each<[string, Partial<NoteInput>, string]>([
+    ['T_SUSPEND, практика 2КІ3', {}, '2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р.'],
+    [
+      'T_SUSPEND, НС 4КІ1 з аудиторією',
+      { title: 'Основи національного спротиву', startsOn: '2026-11-16', endsOn: '2026-11-27', groupCodes: ['4КІ1'], roomName: '401' },
+      '4КІ1 – Основи національного спротиву з 16.11.26р. по 27.11.26 р., ауд. 401',
+    ],
+    [
+      'T_DAYOFF, зимові канікули для всіх',
+      { template: T_DAYOFF, title: 'Зимові канікули', startsOn: '2026-12-28', endsOn: '2026-12-30', scope: 'ALL', groupCodes: [] },
+      'Усі групи: зимові канікули з 28.12.26р. по 30.12.26 р.',
+    ],
+    [
+      'ФН, дистанційно для трьох груп',
+      { template: FN, title: 'Дистанційне навчання', startsOn: '2026-09-01', endsOn: '2026-10-31', groupCodes: ['4КІ1', '4КІ2', '4КІ3'], studyMode: 'ONLINE' },
+      'Групи 4КІ1, 4КІ2, 4КІ3 з 01.09.26р. по 31.10.26 навчаються – дистанційно.',
+    ],
+  ])('%s', (_name, patch, expected) => {
+    const input = { ...base, ...patch };
+    expect(renderNoteTemplate(input.template ?? T_SUSPEND, input).text).toBe(expected);
+    expect(composeOrderNote(input)).toBe(expected);
   });
 
-  it('дистанційне навчання кількох груп', () => {
-    expect(
-      composeOrderNote({
-        kind: 'STUDY_MODE',
-        title: 'Дистанційне навчання',
-        startsOn: '2026-09-01',
-        endsOn: '2026-10-31',
-        scope: 'GROUPS',
-        courses: [],
-        groupCodes: ['4КІ1', '4КІ2', '4КІ3'],
-        studyMode: 'ONLINE',
-      }),
-    ).toBe('Групи 4КІ1, 4КІ2, 4КІ3 з 01.09.26р. по 31.10.26 навчаються – дистанційно.');
+  it('необовʼязкова частина зникає без аудиторії, невідоме поле лишається, курси — за зростанням', () => {
+    expect(composeOrderNote({ ...base, roomName: null })).toBe('2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р.');
+    expect(renderNoteTemplate('{хто} {інше} [({вид})]', base).text).toBe('2КІ3 {інше} (Практика)');
+    expect(composeOrderNote({ ...base, template: T_INFO, scope: 'COURSES', courses: [2, 1], groupCodes: [] })).toBe(
+      '1, 2 курси – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р.',
+    );
+    expect(composeOrderNote({ ...base, template: '{вид}: {назва_мала}', title: '' })).toBe('Практика: занять немає');
+  });
+
+  it('вид без шаблону складає примітку шаблоном «група не на парах»', () => {
+    expect(composeOrderNote({ ...base, template: null, roomName: '401' })).toBe('2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р., ауд. 401');
   });
 
   it('не складає неповну примітку', () => {
-    const base = { kind: 'PRACTICE' as const, title: 'Практика', scope: 'GROUPS' as const, courses: [], studyMode: null };
-    expect(composeOrderNote({ ...base, startsOn: '2026-10-19', endsOn: '2026-10-30', groupCodes: [] })).toBe('');
-    expect(composeOrderNote({ ...base, startsOn: '', endsOn: '2026-10-30', groupCodes: ['2КІ3'] })).toBe('');
-    expect(
-      composeOrderNote({ ...base, kind: 'STUDY_MODE', startsOn: '2026-09-01', endsOn: '2026-10-31', groupCodes: ['4КІ1'], studyMode: null }),
-    ).toBe('');
+    expect(composeOrderNote({ ...base, groupCodes: [] })).toBe('');
+    expect(composeOrderNote({ ...base, startsOn: '' })).toBe('');
+    expect(composeOrderNote({ ...base, title: '' })).toBe('');
+    expect(composeOrderNote({ ...base, template: FN, groupCodes: ['4КІ1'], studyMode: null })).toBe('');
   });
 
   it('канікули для всіх і дата з двома цифрами року', () => {
     expect(orderDate('2026-01-05')).toBe('05.01.26');
-    expect(
-      composeOrderNote({
-        kind: 'HOLIDAY',
-        title: 'Осінні канікули',
-        startsOn: '2026-10-26',
-        endsOn: '2026-10-30',
-        scope: 'ALL',
-        courses: [],
-        groupCodes: [],
-        studyMode: null,
-      }),
-    ).toBe('Усі групи: осінні канікули з 26.10.26р. по 30.10.26 р.');
+    expect(composeOrderNote({ ...base, template: T_DAYOFF, title: 'Осінні канікули', startsOn: '2026-10-26', endsOn: '2026-10-30', scope: 'ALL', groupCodes: [] })).toBe(
+      'Усі групи: осінні канікули з 26.10.26р. по 30.10.26 р.',
+    );
   });
 
   it('кого стосується період', () => {
@@ -68,6 +78,43 @@ describe('примітка періоду для розпорядження', ()
     const groups = ['1КІ1', '1КІ2', '1КІ3', '1ТК1', '1ТК2'].map((code, i) => ({ id: String(i), code, course: 1 }));
     expect(periodAudience({ scope: 'GROUPS', courses: null, groups })).toBe('1КІ1, 1КІ2, 1КІ3 та ще 2');
     expect(periodAudience({ scope: 'ALL', courses: null, groups: [] })).toBe('Усі групи');
+  });
+
+  it('вид періоду: з довідника, а від старішого core — вбудований за старим kind', () => {
+    const ons = { id: 'k-ns', code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' as const };
+    expect(periodKindOf({ kind: 'PRACTICE', periodKind: ons })).toBe(ons);
+    expect(periodKindOf({ kind: 'EXAM_SESSION' })).toMatchObject({ code: 'І', name: 'Сесія', effect: 'SUSPEND', color: null });
+    expect(periodKindOf({ kind: 'HOLIDAY' })).toMatchObject({ code: 'К', effect: 'DAY_OFF' });
+    expect(periodKindLabel({ kind: 'STUDY_MODE', studyMode: 'ONLINE' })).toBe('Дистанційно');
+    expect(periodKindLabel({ kind: 'PRACTICE', periodKind: ons, studyMode: null })).toBe('Національний спротив');
+  });
+
+  it('тіло PUT для журналу: kindId, аудиторія й керівники лише для «група не на парах»', () => {
+    const period = {
+      id: 'p-1',
+      semesterId: 's-1',
+      kind: 'PRACTICE' as const,
+      kindId: 'k-ns',
+      periodKind: { id: 'k-ns', code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' as const },
+      title: 'Основи національного спротиву',
+      startsOn: '2026-11-16',
+      endsOn: '2026-11-27',
+      studyMode: null,
+      orderNote: null,
+      scope: 'GROUPS' as const,
+      courses: null,
+      groupIds: ['g-1'],
+      groups: [{ id: 'g-1', code: '4КІ1', course: 4 }],
+      roomId: 'r-401',
+      supervisorIds: ['t-1'],
+      version: 3,
+    };
+    expect(periodRequest(period)).toMatchObject({ kindId: 'k-ns', roomId: 'r-401', supervisorIds: ['t-1'], version: 3 });
+    expect(periodRequest(period)).not.toHaveProperty('kind');
+    const info = { ...period, periodKind: { ...period.periodKind, effect: 'INFO' as const } };
+    expect(periodRequest(info)).toMatchObject({ roomId: null, supervisorIds: [] });
+    // старіший core без довідника: вид — старим enum
+    expect(periodRequest({ ...period, kindId: undefined, periodKind: undefined })).toMatchObject({ kind: 'PRACTICE' });
   });
 });
 

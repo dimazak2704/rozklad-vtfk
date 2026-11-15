@@ -6,8 +6,19 @@ import { isApiError } from '@/api/errors';
 import { useBells, usePublicHistoryFrom } from '@/api/meta';
 import { publicSchedulePath } from '@/api/public';
 import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
-import type { ScheduleDto } from '@/api/types';
-import { DayList, GridNamesProvider, NowIndicator, useArrivedChanges, useNavTransition, WeekGrid } from '@/components/schedule';
+import type { PracticeDto, ScheduleDto } from '@/api/types';
+import {
+  blockTitle,
+  dayPractices,
+  DayList,
+  GridNamesProvider,
+  noteWithoutPractices,
+  NowIndicator,
+  supervisorsLine,
+  useArrivedChanges,
+  useNavTransition,
+  WeekGrid,
+} from '@/components/schedule';
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -212,8 +223,16 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
     }
   } else if (schedule.days.every((d) => d.lessons.length === 0) && !placeholder) {
     const noStudy = schedule.days.every((d) => !d.studyDay);
-    // причина з календаря (практика групи, канікули) важливіша за загальну здогадку
-    const notes = [...new Set(schedule.days.map((d) => d.note?.trim().replace(/\.$/, '')).filter((note): note is string => Boolean(note)))];
+    // причина з календаря важливіша за загальну здогадку: спершу блоки (практика, НС — «{Вид}: назва, ауд.» з
+    // керівниками), далі решта приміток дня без їхніх назв (канікули)
+    const blocks = new Map<string, PracticeDto>();
+    for (const d of schedule.days) for (const block of dayPractices(d, perspective)) blocks.set(block.periodId, block);
+    const blockLines = [...blocks.values()].map((block) => {
+      const supervisors = perspective === 'group' ? supervisorsLine(block) : null;
+      return supervisors ? `${blockTitle(block, perspective)}. ${supervisors}` : blockTitle(block, perspective);
+    });
+    const dayNotes = schedule.days.map((d) => noteWithoutPractices(d, dayPractices(d, perspective))?.trim().replace(/\.$/, ''));
+    const notes = [...new Set([...blockLines, ...dayNotes.filter((note): note is string => Boolean(note))])];
     content = (
       <EmptyState
         title={noStudy ? 'Цього тижня занять немає' : `У ${ownerLabel} цього тижня пар немає`}
