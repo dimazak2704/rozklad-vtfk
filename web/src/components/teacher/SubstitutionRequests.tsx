@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useServerEvent } from '@/api/live';
 import { useBells } from '@/api/meta';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
@@ -155,6 +156,17 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   // пара минула — рядок лише «Підтверджую», без заповненої кнопки: однакова ієрархія в усіх рядках
   const urgent = mostUrgent(waiting, clockNow(), (change) => changePassed(change, today, dayClock));
 
+  // посилання з листа `/me?change={id}`: ця картка підсвічена й прокручена в поле зору (один раз)
+  const [params] = useSearchParams();
+  const linked = params.get('change');
+  const linkedWaiting = linked !== null && waiting.some((change) => change.id === linked);
+  const scrolled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedWaiting || scrolled.current === linked) return;
+    scrolled.current = linked;
+    document.getElementById(`change-${linked}`)?.scrollIntoView?.({ block: 'center' });
+  }, [linked, linkedWaiting]);
+
   // помилку й завантаження показує сторінка (одна на всіх); тут — лише те, що треба вирішити
   return (
     <section aria-labelledby="requests-heading" aria-live="polite" className={waiting.length === 0 ? 'hidden' : 'flex flex-col gap-3'}>
@@ -166,11 +178,11 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
           {/* пласка панель на лініях; про терміновість каже бурштиновий рядок стану, а не рамка */}
           <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
             {waiting.map((change) => (
-              <li key={change.id}>
+              <li key={change.id} id={`change-${change.id}`} className="scroll-mt-(--sticky-top)">
                 <SubstitutionCard
                   change={change}
                   primary={change.id === urgent}
-                  fresh={fresh.has(change.id)}
+                  fresh={fresh.has(change.id) || change.id === linked}
                   onConfirm={() => answer(change, 'CONFIRM')}
                   onDecline={(comment) => answer(change, 'DECLINE', comment)}
                 />
