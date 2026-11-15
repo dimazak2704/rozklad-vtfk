@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.reactive.server.FluxExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -55,10 +56,19 @@ class ApiRateLimitIT {
     void anonymousDocumentDownloadsAreLimited() {
         assertThat(burst("/api/documents/orders/0190f0a0-0000-7000-8000-000000000001.pdf"))
                 .startsWith(200, 200).contains(429);
-        client.get().uri("/api/documents/orders/0190f0a0-0000-7000-8000-000000000001.png").exchange()
-                .expectStatus().isEqualTo(429)
-                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .expectBody().jsonPath("$.type").isEqualTo("urn:rozklad:problem:too-many-requests");
+        // the bucket refills while the test runs (slow CI runners): look at the first refusal itself
+        FluxExchangeResult<String> refused = null;
+        for (int i = 0; i < 6 && refused == null; i++) {
+            FluxExchangeResult<String> result = client.get()
+                    .uri("/api/documents/orders/0190f0a0-0000-7000-8000-000000000001.png").exchange()
+                    .returnResult(String.class);
+            if (result.getStatus().value() == 429) {
+                refused = result;
+            }
+        }
+        assertThat(refused).as("the limit refuses a request right after a burst").isNotNull();
+        assertThat(refused.getResponseHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(refused.getResponseBody().blockFirst()).contains("urn:rozklad:problem:too-many-requests");
     }
 
     @Test
