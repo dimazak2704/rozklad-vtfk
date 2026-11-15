@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.events.OrderPayload;
 import ua.vtc.rozklad.contracts.events.OrderPayload.Item;
+import ua.vtc.rozklad.notification.text.Html;
 import ua.vtc.rozklad.notification.text.Plurals;
 import ua.vtc.rozklad.notification.text.Reasons;
 import ua.vtc.rozklad.notification.text.UaDates;
@@ -114,6 +115,11 @@ public final class OrderTexts {
             case MERGE_SUBGROUPS -> "👥 " + head + ": обидві підгрупи разом — " + boldLesson(to) + room
                     + (from.isEmpty() ? "" : "\n      замість " + s(from)) + reason;
         };
+    }
+
+    /** One row of a teacher's order letter as plain text (the same wording, without Telegram markup). */
+    public static String plain(Item row) {
+        return Html.toPlain(describe(row, true)).replaceAll("\\s*\\n\\s*", " ");
     }
 
     /** «2» → «2 пара», «1-4» → «1–4 пари». */
