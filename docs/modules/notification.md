@@ -80,6 +80,16 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   the codes stay only in the order document), day note «ℹ️ …». A day without lessons that is not a study day
   says «🌿 Навчання немає» + «Наступний навчальний день: **пн, 9 листопада**» and ▶️ jumps to that day: the
   owner's next `studyDay` from one schedule read of the next 30 days (holidays and the group's practice skipped).
+  Periods that take a group off its pairs (`DayDto.practices[]`, every SUSPEND period kind: practice, НС,
+  session, ДПА…) show as a block: group — «🛠 **{kind.name}: {title}, ауд. {room}**» (room part only when core
+  sends one) plus «Керівник: …»/«Керівники: …»; teacher — «🛠 **Керівництво**: {kind.name}: {title}, {groups or
+  «4 курс» / «1, 2 курси»}, ауд. {room}» (room as on the site); inline summary — `{kind.name}` / «Керівництво:
+  {kind.name}», several kinds on one day «Без пар» / «Керівництво». A title equal to the kind name (the academic
+  calendar import titles І, ЗУ, Д… so) is printed once: «🛠 **Сесія**», «🛠 **Керівництво**: Сесія, 4КІ1». The kind
+  «Практика» and periods from an older core without `kind` keep the practice wording («Практика: …», «Керівництво
+  практикою: …»). The day note
+  drops the titles the block already shows. Room schedules show no block. Order notes (period `orderNote` texts
+  included) come ready from core in `OrderPayload.notes` and are printed verbatim, bold.
 * **Моя група**: course (inline 1–4) → group → SUBSCRIBER binding; digest on/off button.
 * **Знайти**: core's fuzzy search; one hit → card, several → buttons, none → hint. Free text outside a dialog is
   a search too.

@@ -122,16 +122,31 @@ public final class CoreDtos {
         }
     }
 
-    /** A practice period on a day: its title, supervisors (керівники) and groups or courses. */
+    /**
+     * A period that takes the group off its pairs on a day (practice, НС, session…, effect SUSPEND): its title,
+     * supervisors (керівники), groups or courses, its {@code kind} and the {@code room} where the group is.
+     * {@code kind} and {@code room} are absent from an older core (then the card reads as a practice).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Practice(UUID periodId, String title, List<TeacherRef> supervisors, List<GroupRef> groups,
-                           List<Integer> courses) {
+                           List<Integer> courses, PeriodKindRef kind, RoomRef room) {
 
         public Practice {
             supervisors = supervisors == null ? List.of() : List.copyOf(supervisors);
             groups = groups == null ? List.of() : List.copyOf(groups);
             courses = courses == null ? List.of() : List.copyOf(courses);
         }
+
+        /** A practice as an older core sends it: no kind, no room. */
+        public Practice(UUID periodId, String title, List<TeacherRef> supervisors, List<GroupRef> groups,
+                        List<Integer> courses) {
+            this(periodId, title, supervisors, groups, courses, null, null);
+        }
+    }
+
+    /** The kind of a calendar period ({@code effect}: DAY_OFF, SUSPEND, ONLINE, INFO; kept as text). */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PeriodKindRef(String code, String name, String color, String effect) {
     }
 
     /**
