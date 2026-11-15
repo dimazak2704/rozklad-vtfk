@@ -16,6 +16,7 @@ import { LessonLinksContext, type LessonLinks } from './lesson-links';
 import { NowIndicator } from './NowIndicator';
 import { pillShift } from './track-hint';
 import { VacatedSlot } from './VacatedSlot';
+import { nowPillShift } from './now-pill';
 import { WeekGrid } from './WeekGrid';
 
 const monday = DEMO_WEEK.days[0]!;
@@ -27,7 +28,9 @@ describe('LessonCell', () => {
   it('показує заміну поверх розкладу: новий предмет, бейдж і закреслений оригінал', () => {
     renderWithProviders(<LessonCell lesson={substituted} />);
     const cell = screen.getByRole('button', { name: /2 пара/ });
-    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\sМ\.\sД\.\. Причина: Зв\.зам\./);
+    // причина — тим самим словом, що й на картці, а не скороченням розпорядження «Зв.зам.»
+    expect(cell).toHaveAccessibleName(/Заміна, замість: СТП, Кренцін\sМ\.\sД\.\. Причина: взаємна заміна\./);
+    expect(cell).not.toHaveAccessibleName(/Зв\.зам/);
     expect(within(cell).getByText('НДЕКСМ')).toBeInTheDocument();
     expect(within(cell).getByText('Заміна')).toBeInTheDocument();
     expect(within(cell).getByText('СТП · Кренцін М. Д.').tagName).toBe('S');
@@ -282,6 +285,30 @@ describe('WeekGrid', () => {
     const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
     const secondRow = within(table).getAllByRole('rowheader')[1]!;
     expect(secondRow).toHaveTextContent('10:00');
+  });
+
+  it('пігулка «зараз» не ховає час пари: стає над чи під підписами, а на вільному місці — на точній хвилині', () => {
+    // клітинка 0–100 px; підписи: номер 0–28 (ліворуч, не під пігулкою), початок 32–52, кінець 52–72
+    const cell = { top: 0, bottom: 100 };
+    const labels = [
+      { top: 32, bottom: 52 },
+      { top: 52, bottom: 72 },
+    ];
+    // 09:52 у парі 09:40–10:40 — центр на 20 % висоти, далеко від підписів: не зсуваємо
+    expect(nowPillShift(20, cell, labels)).toBe(0);
+    // на «09:40» — найближче вільне місце над стовпчиком підписів (32 + 3 − 10 = 25)
+    expect(nowPillShift(36, cell, labels)).toBe(25 - 36);
+    // на «10:40» — під ним (72 − 3 + 10 = 79)
+    expect(nowPillShift(66, cell, labels)).toBe(79 - 66);
+    // низька клітинка без місця — лишаємо як є, а не виносимо за межі рядка
+    expect(nowPillShift(40, { top: 30, bottom: 74 }, labels)).toBe(0);
+  });
+
+  it('час пари, на якій стоїть «зараз», не зникає', () => {
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={9 * 60 + 52} />);
+    const rowHeaders = within(screen.getByRole('table', { name: /Розклад 4КІ1/ })).getAllByRole('rowheader');
+    expect(rowHeaders[1]).toHaveTextContent(/09:40до 10:40/);
+    expect(rowHeaders[1]!.querySelector('.opacity-0')).toBeNull();
   });
 
   it('у останні хвилини пари пігулку «зараз» не накриває колонка часу наступного рядка', () => {

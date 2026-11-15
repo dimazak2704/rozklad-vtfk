@@ -6,7 +6,7 @@ import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { timeToMinutes } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
-import { LESSON_STATE, type LessonEntry } from '../model';
+import { LESSON_STATE, pendingInfo, pendingNeedsAttention, type LessonEntry } from '../model';
 import { StateText } from '../StateBadge';
 import { useTeacherLabel } from '../useTeacherLabel';
 
@@ -55,15 +55,16 @@ interface NeedsListProps {
 }
 
 /**
- * «Що потребує рішення»: спершу пари без рішення за часом (сьогодні — з «вже йде» / «за 35 хв» після слова
+ * «Що потребує рішення»: спершу пари без рішення (і ті, що чекають відповіді, коли строк близько чи минув) за часом (сьогодні — з «вже йде» / «за 35 хв» після слова
  * стану), далі решта сповіщень сервера і зламані сервіси реченнями. Колір несе лише крапка; кожен рядок веде туди, де це вирішують.
  */
 export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAlerts = [] }: NeedsListProps) {
-  const { clock } = useNow();
+  const { clock, now } = useNow();
   const name = useTeacherLabel();
   const today = clock.date === date;
+  // пара, що чекає відповіді, — теж сюди, коли строк близько: змовчить викладач — група без викладача
   const open = entries
-    .filter((entry) => LESSON_STATE[entry.state].needsAction)
+    .filter((entry) => LESSON_STATE[entry.state].needsAction || pendingNeedsAttention(entry, now))
     // без профілю дзвінків часу немає — тоді впорядковуємо за номером пари
     .sort((a, b) => a.item.lesson.pair - b.item.lesson.pair || a.item.lesson.group.code.localeCompare(b.item.lesson.group.code, 'uk'));
   const rest = [...alerts.filter((alert) => !(pairsKnown && COVERED_BY_PAIRS.has(alert.kind))), ...serviceAlerts];
@@ -86,7 +87,10 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
           const minutes = lesson.startsAt ? timeToMinutes(lesson.startsAt) - clock.minutes : null;
           const started = today && minutes !== null && minutes <= 0;
           const over = started && lesson.endsAt !== null && timeToMinutes(lesson.endsAt) <= clock.minutes;
-          const timing = !today || minutes === null ? null : over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`;
+          // у пари, що чекає відповіді, головне — строк відповіді; час пари вже стоїть ліворуч, двох «за 50 хв» не треба
+          const waiting = entry.state === 'pending' ? pendingInfo(entry.change?.confirmDeadline, now.getTime()) : null;
+          const timing =
+            entry.state === 'pending' || !today || minutes === null ? null : over ? 'уже минула' : started ? 'вже йде' : `за ${durationLabel(minutes)}`;
           return (
             <li key={`${entry.item.date}-${lesson.id}`}>
               <Row to={`/admin/changes?date=${date}&lesson=${lesson.id}`} className="grid-cols-[3.25rem_minmax(0,1fr)_auto]">
@@ -100,8 +104,12 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
                     <span className="font-display font-semibold tracking-[0.01em]">{lesson.group.code}</span> · {lesson.discipline.shortName}
                     <span className="text-ui font-[500] text-secondary"> · {name(entry.absence.teacher)}</span>
                   </span>
-                  <StateText state={entry.state}>
-                    {entry.state === 'declined' ? 'Відмова — потрібен інший варіант' : 'Потрібне рішення'}
+                  <StateText state={entry.state} className={entry.state === 'pending' ? 'text-change' : undefined}>
+                    {entry.state === 'declined'
+                      ? 'Відмова — потрібен інший варіант'
+                      : entry.state === 'pending'
+                        ? `Чекає відповіді · ${waiting && !waiting.overdue && waiting.minutes >= 1 ? `строк — ${waiting.label}` : (waiting?.label ?? '')}`
+                        : 'Потрібне рішення'}
                     {/* коли — одразу після слова стану, а не в далекій правій колонці; на вузькому переноситься цілим */}
                     {timing ? (
                       <span className={cn('whitespace-nowrap max-sm:block', started && !over ? 'font-semibold text-cancel' : 'font-normal text-muted')}>

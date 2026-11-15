@@ -2,22 +2,16 @@ import { Check, ChevronRight, FilePlus2, Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
 import { Button, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
-import { pairsText } from '../format';
-import { formatDateRange } from '@/lib/date';
-import { LESSON_STATE, type LessonEntry } from '../model';
+import { PAIR_FORMS_GEN, plural } from '@/lib/labels';
+import { absenceCaption } from './absence-caption';
+import { isWaiting, LESSON_STATE, tallyEntries, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
-/** «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». */
-function absenceCaption(absence: AbsenceDto): string {
-  const when = absence.dateFrom === absence.dateTo ? pairsText(absence.pairs) : formatDateRange(absence.dateFrom, absence.dateTo);
-  return `${when} · ${ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}`;
-}
-
 /**
- * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, решта — нейтральні) і підпис
- * словами. Червоного тут немає: незроблене — це ще не помилка.
+ * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, ті, що чекають відповіді, — бурштинові,
+ * решта — нейтральні) і підпис словами. Червоного тут немає: незроблене — це ще не помилка. Пара, що чекає
+ * відповіді, не «вирішена»: викладач може змовчати, тож «усе вирішено» з галочкою — лише коли чекати нічого.
  */
 export function AbsenceProgress({ entries, status }: { entries: readonly LessonEntry[]; status?: LessonsStatus }) {
   // пари ще їдуть — тиха смужка тієї ж висоти, а не хибне «пар немає» чи «вирішено 1 з 3»
@@ -31,32 +25,40 @@ export function AbsenceProgress({ entries, status }: { entries: readonly LessonE
   }
   if (status === 'failed') return <span className="text-caption text-muted">пари не вдалося завантажити</span>;
   if (entries.length === 0) return <span className="text-caption text-muted">пар у цей період немає</span>;
-  const done = entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
-  const all = done === entries.length;
+  const { done, waiting, total } = tallyEntries(entries);
+  const waitingText = waiting > 0 ? `${waiting} ${waiting === 1 ? 'чекає' : 'чекають'} відповіді` : null;
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       {entries.length <= 8 ? (
         <span aria-hidden="true" className="flex shrink-0 gap-0.5">
           {entries.map((entry) => (
             <span
               key={`${entry.item.date}-${entry.item.lesson.id}`}
+              data-segment={LESSON_STATE[entry.state].needsAction ? 'open' : isWaiting(entry.state) ? 'waiting' : 'done'}
               className={cn(
                 'h-1 w-3 rounded-full',
-                LESSON_STATE[entry.state].needsAction ? 'bg-[var(--fill-track-future)]' : 'bg-[var(--fill-add)]',
+                LESSON_STATE[entry.state].needsAction
+                  ? 'bg-[var(--fill-track-future)]'
+                  : isWaiting(entry.state)
+                    ? 'bg-[var(--fill-change)]'
+                    : 'bg-[var(--fill-add)]',
               )}
             />
           ))}
         </span>
       ) : null}
-      {all ? (
+      {done === total ? (
         <span className="inline-flex items-center gap-1 text-caption text-add">
           <Check aria-hidden="true" className="size-3.5" />
           усе вирішено
         </span>
+      ) : done + waiting === total ? (
+        <span className="text-caption font-[550] text-change">{waitingText}</span>
       ) : (
         <span className="text-caption text-secondary">
-          вирішено <span className="figures">{done}</span> з <span className="figures">{entries.length}</span>
-          <span className="sr-only"> {plural(entries.length, PAIR_FORMS_GEN)}</span>
+          вирішено <span className="figures">{done}</span> з <span className="figures">{total}</span>
+          <span className="sr-only"> {plural(total, PAIR_FORMS_GEN)}</span>
+          {waitingText ? <span className="text-change"> · {waitingText}</span> : null}
         </span>
       )}
     </span>
@@ -76,10 +78,12 @@ interface AbsenceListProps {
   loading: boolean;
   /** Телефон: рядок веде на наступний рівень (стрілка), а не просто підсвічується. */
   drill?: boolean;
+  /** Подання «Тиждень»: у підписі одноденної відсутності — день і дата. */
+  showDates?: boolean;
 }
 
 /** Колонка «Відсутні»: хто, коли й чому, і скільки пар уже вирішено. Вибір показує пари цього викладача. */
-export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, onAddChange, loading, drill = false }: AbsenceListProps) {
+export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, onAddChange, loading, drill = false, showDates = false }: AbsenceListProps) {
   const name = useTeacherLabel();
   if (loading && absences.length === 0) {
     return (
@@ -114,7 +118,7 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-cell font-[650] text-primary">{name(absence.teacher)}</span>
-                  <span className="text-caption text-secondary">{absenceCaption(absence)}</span>
+                  <span className="text-caption text-secondary">{absenceCaption(absence, showDates)}</span>
                   <AbsenceProgress entries={own} status={lessonsStatus?.get(absence.id)} />
                 </span>
                 {drill ? <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted rtl:rotate-180" /> : null}

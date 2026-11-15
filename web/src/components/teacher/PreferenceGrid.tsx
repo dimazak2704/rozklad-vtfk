@@ -33,7 +33,7 @@ interface PreferenceGridProps {
   onCellChange: (key: CellKey, kind: PreferenceKind | null) => void;
   /** Дзвінки профілю, що діє, по днях: скільки пар і о котрій. */
   slotsByWeekday: ReadonlyMap<Weekday, readonly BellSlotDto[]>;
-  /** Мої пари в клітинці за поточним розкладом: «4КІ1 · СТП (чисельник)». */
+  /** Мої пари в клітинці за базовим розкладом семестру: «4КІ1 · СТП (чисельник)». */
   lessons?: ReadonlyMap<CellKey, readonly string[]>;
   describedBy?: string;
 }
@@ -155,10 +155,10 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                           }}
                           type="button"
                           tabIndex={key === active ? 0 : -1}
-                          aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Зараз тут: ${mine.join('; ')}` : ''}`}
+                          aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Ваші пари тут: ${mine.join('; ')}` : ''}`}
                           aria-describedby={describedBy}
                           // код групи в клітинці пояснює підказка, а не окрема примітка під сіткою
-                          title={mine.length > 0 ? `Ваша пара тут за поточним розкладом: ${mine.join('; ')}` : undefined}
+                          title={mine.length > 0 ? `Ваша пара тут за розкладом семестру: ${mine.join('; ')}` : undefined}
                           onFocus={() => setActive(key)}
                           onClick={() => onCellChange(key, nextKind(kind))}
                           onKeyDown={(event) => onKeyDown(event, weekday, pair)}

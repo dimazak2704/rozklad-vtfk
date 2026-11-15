@@ -40,6 +40,7 @@ export const qk = {
     absences: () => ['me', 'absences'] as const,
     changes: (status?: string) => ['me', 'changes', clean({ status })] as const,
     preferences: (semesterId?: Uuid) => ['me', 'preferences', clean({ semesterId })] as const,
+    template: (semesterId?: Uuid) => ['me', 'template', clean({ semesterId })] as const,
   },
   admin: {
     all: ['admin'] as const,

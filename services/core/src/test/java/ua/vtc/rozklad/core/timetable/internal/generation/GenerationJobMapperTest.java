@@ -169,10 +169,18 @@ class GenerationJobMapperTest {
         GroupRef group = new GroupRef(UUID.randomUUID(), "4КІ1", 4);
         GenerationJob job = new GenerationJob(UUID.randomUUID(), jsonMapper.readTree("{}"), "admin");
         GenerationOutcome outcome = new GenerationOutcome(3, 1, 18, List.of(new GenerationOutcome.GroupOutcome(group,
-                3, 18)));
+                3, 18)), 2, 1, 40);
         job.setOutcome(mapper.json(outcome));
 
         assertThat(mapper.toDto(job).outcome()).isEqualTo(outcome);
+    }
+
+    @Test
+    void outcomeStoredBeforeRoomAssignedReadsAsUnknown() {
+        GenerationJob job = new GenerationJob(UUID.randomUUID(), jsonMapper.readTree("{}"), "admin");
+        job.setOutcome(jsonMapper.readTree("{\"moved\":3,\"roomChanged\":1,\"total\":18,\"perGroup\":[]}"));
+
+        assertThat(mapper.toDto(job).outcome()).isEqualTo(new GenerationOutcome(3, 1, 18, List.of()));
     }
 
     @Test

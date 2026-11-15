@@ -5,6 +5,7 @@ import {
   baselineSentence,
   completionNotice,
   comparisonRows,
+  ignoredWeights,
   formFromJob,
   groupComparison,
   hardAfter,
@@ -12,6 +13,7 @@ import {
   jobScopeText,
   jobPrioritiesText,
   jobStatusTitle,
+  outcomeDraftSentence,
   outcomeSentence,
   splitAnalysis,
   timeTicks,
@@ -144,6 +146,26 @@ describe('аналіз обмежень (B7)', () => {
     expect(split.outsideScope).toBe(7 + 4);
   });
 
+  it('правило «Не враховувати» — не «Що лишилось», а довідка; без ваг (стара задача) — як раніше', () => {
+    const items = [
+      { constraint: '4-та пара зміни', constraintId: 'Late pair', matchCount: 59, score: '0hard/0soft', scopeMatchCount: 59 },
+      { constraint: 'Вікна груп', constraintId: 'Group windows', matchCount: 2, score: '0hard/-20soft', scopeMatchCount: 2 },
+    ];
+    const ignored = ignoredWeights(job({ weights: { ...DEFAULT_WEIGHTS, latePairs: 0 } }));
+    const split = splitAnalysis(items, ignored);
+    expect(split.remaining.map((row) => row.constraint)).toEqual(['Вікна груп']);
+    expect(split.ignored).toEqual([{ key: 'Late pair', constraint: '4-та пара зміни', count: 59, hard: false }]);
+    expect(splitAnalysis(items, ignoredWeights(job({}))).remaining).toHaveLength(2);
+  });
+
+  it('«Було і стало»: показник правила, яке не враховувалось, позначено', () => {
+    const rows = comparisonRows(
+      job({ weights: { ...DEFAULT_WEIGHTS, latePairs: 0 }, metricsBefore: metrics({ latePairs: 291, groupWindows: 3, maxPairsPerDay: 4 }), metricsAfter: metrics({ latePairs: 300, groupWindows: 1, maxPairsPerDay: 4 }) }),
+    );
+    expect(rows.find((row) => row.key === 'latePairs')).toMatchObject({ before: 291, after: 300, ignored: true });
+    expect(rows.find((row) => row.key === 'groupWindows')?.ignored).toBe(false);
+  });
+
   it('стара задача без bonus: бонус упізнається за додатним балом', () => {
     const split = splitAnalysis([{ constraint: 'Чисельник і знаменник в одному слоті (бонус)', matchCount: 5, score: '0hard/50soft' }]);
     expect(split.remaining).toEqual([]);
@@ -159,6 +181,26 @@ describe('параметри і наслідки задачі (B8)', () => {
     expect(outcomeSentence({ moved: 1, roomChanged: 5, total: 21, perGroup: [] })).toBe('Переставлено 1 з 21\u00a0пари, ще 5 — в іншій аудиторії.');
     expect(outcomeSentence(null)).toBeNull();
     expect(outcomeSentence({ moved: 0, roomChanged: 0, total: 0, perGroup: [] })).toBeNull();
+  });
+
+  it('аудиторію, якої не було, рахує окремо від іншої аудиторії — як порівняння версій', () => {
+    expect(outcomeSentence({ moved: 2, roomChanged: 0, roomAssigned: 1, total: 35, perGroup: [] })).toBe(
+      'Переставлено 2 з 35 пар, ще 1 отримала аудиторію, якої не було.',
+    );
+    expect(outcomeSentence({ moved: 5, roomChanged: 3, roomAssigned: 44, total: 400, perGroup: [] })).toBe(
+      'Переставлено 5 з 400 пар, ще 3 — в іншій аудиторії, 44 отримали аудиторію, якої не було.',
+    );
+  });
+
+  it('пояснює, чому в чернетці пар більше, ніж «з M»', () => {
+    expect(outcomeDraftSentence({ moved: 128, roomChanged: 30, total: 1074, perGroup: [], kept: 2, added: 1 })).toBe(
+      'Ще 3 пари чернетки: 2 — закріплені чи поза вибором, стоять, як у базовій; 1 нова пара з навантаження — у базовій її не було.',
+    );
+    expect(outcomeDraftSentence({ moved: 2, roomChanged: 0, total: 35, perGroup: [], kept: 1042, added: 0 })).toBe(
+      'Ще 1042 пари чернетки: 1042 — закріплені чи поза вибором, стоять, як у базовій.',
+    );
+    // стара задача без нових полів — нічого не вигадуємо
+    expect(outcomeDraftSentence({ moved: 2, roomChanged: 0, total: 35, perGroup: [] })).toBeNull();
   });
 
   it('область задачі словами', () => {

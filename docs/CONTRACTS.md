@@ -129,7 +129,7 @@ Timetable:
 
 Generation:
 | `POST /api/admin/generation/jobs` `{semesterId, scope:{groupIds?:[], courses?:[]}, baseVersionId?, timeLimitSeconds (10..600), weights?:{windows,brokenDays,latePairs,preferences,homeRoom, teacherWindows?,teacherShiftWait?,stability?,subgroupsTogether?,studentOnePairDay?,teacherDays?,teacherOverload?,disciplineTwice?,specialRooms?}}` (each weight 0..1000; the 9 last ones are optional, absent → default, `teacherWindows` → `windows`) | 202 `{jobId}`; 422 `GENERATION_LOAD_EXCEEDS_SLOTS` with `problems:[{kind: GROUP\|TEACHER\|ROOM_TYPE, id, label, requiredPairs, availablePairs, message}]` when the load does not fit the grid (nothing is stored) |
-| `GET /api/admin/generation/jobs?semesterId` / `GET /{jobId}` | `{id,status,startedAt,finishedAt,bestScore,progress:[{t,hard,soft}],resultVersionId?,analysis?,metricsBefore?,metricsAfter?,error?}` + additive (genfix) `scope:{groupIds,courses}` (as requested), `groups:[GroupRef]` (resolved, by course and code), `weights` (all 14, normalised), `hardScore?`, `softScore?` (parsed from `bestScore`), `outcome?:{moved, roomChanged, total, perGroup:[{group:GroupRef, moved, total}]}` (SOLVED only: units with a base lesson, moved = other weekday, pair or week), `legacyWeights?` (repair: `true` when the job stored only the five weights of the first schema, so the later rules did not exist for that run; `null` without weights) |
+| `GET /api/admin/generation/jobs?semesterId` / `GET /{jobId}` | `{id,status,startedAt,finishedAt,bestScore,progress:[{t,hard,soft}],resultVersionId?,analysis?,metricsBefore?,metricsAfter?,error?}` + additive (genfix) `scope:{groupIds,courses}` (as requested), `groups:[GroupRef]` (resolved, by course and code), `weights` (all 14, normalised), `hardScore?`, `softScore?` (parsed from `bestScore`), `outcome?:{moved, roomChanged, total, perGroup:[{group:GroupRef, moved, total}], roomAssigned?, added?, kept?}` (SOLVED only: units with a base lesson, moved = other weekday, pair or week; additive `roomAssigned` = same slot, the base had no room and got one; `added` = placed free units without a base lesson; `kept` = pinned, stream and out-of-scope lessons the solver did not move; `null` for older jobs), `legacyWeights?` (repair: `true` when the job stored only the five weights of the first schema, so the later rules did not exist for that run; `null` without weights) |
 | `POST /api/admin/generation/jobs/{jobId}/cancel` | 202 |
 
 Substitutions:
@@ -142,7 +142,7 @@ Substitutions:
 | `POST /api/admin/changes/batch` `{changes:[CreateChangeRequest]}` (1..50) | 201 `[ChangeDto]` in request order; one transaction: any 400/409 creates nothing; field errors `changes[i].field` |
 | `GET /api/admin/changes?date&status` · `PUT /{id}` · `DELETE /{id}` (→ CANCELLED) | |
 | `POST /api/admin/changes/{id}/request-confirmation` · `POST /{id}/confirm` (admin override) | request-confirmation for a pair that is already over → 422 `CHANGE_LESSON_OVER` (DOMAIN §7) |
-| `GET /api/admin/dashboard?date` | `{date, parity, absences:n, uncoveredLessons:n, pending:n, confirmed:n, declined:n, orderDraft:{id,itemCount}?, generation:{status}?, aiSpendToday?, alerts:[...]}` |
+| `GET /api/admin/dashboard?date` | `{date, parity, absences:n, uncoveredLessons:n, undecidedLessons:n, pending:n, confirmed:n, declined:n, orderDraft:{id,itemCount}?, generation:{status}?, aiSpendToday?, alerts:[...]}` |
 `Option {kind, score (position only, deprecated), title, reasons:[string], teacher?, discipline?, room?, swapLesson?, warnings:[string], date?, pair?, band: CLEAN|EASY_CANCEL|CAUTION|LAST, recommended:bool, suggestedRoom?}` (`swapLesson`: moved lesson of a SWAP or the other subgroup's lesson of a MERGE_SUBGROUPS; `date`/`pair` always null now)
 `ChangeDto {id, kind, status, date, pairFrom, pairTo, group, subgroup, original:{discipline,teacher,room}, new:{discipline?,teacher?,room?}, reasonCode, reasonText, absenceId?, confirmDeadline?, respondedAt?, orderId?, history:[{at,actor,from,to,comment}], approvalMode: AUTO|CONFIRM|NOTIFY, …, teacherAnswer: CONFIRM|DECLINE|null}` (round 7: `teacherAnswer` is the assigned teacher's answer in the current round; NOTIFY + APPLIED + DECLINE = objection, an amendment is needed; `confirmDeadline` is never later than the start of the first pair, or the end of the last pair while it is going on; a CONFIRM change created for a pair already over comes back CONFIRMED with `approvalMode` AUTO)
 
@@ -189,7 +189,7 @@ reconnects with a fresh token. 429 (`too-many-requests`) above 10 streams of one
 a report starts today to 90 days ahead and at most 10 reports per teacher in 24 hours: 422 `ABSENCE_TOO_FAR`, `ABSENCE_LIMIT`;
 an inactive teacher reports nothing himself: 422 `TEACHER_INACTIVE`);
 `GET /api/me/changes?status` → changes where I am the new teacher; `POST /api/me/changes/{id}/confirm|decline` `{comment?}`;
-`GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`.
+`GET/PUT /api/me/preferences?semesterId` → `[{weekday,pair,kind,note}]`. `GET /api/me/template?semesterId` → `[TemplateLessonDto]`: the teacher's own lessons of the semester's published version (empty without one), for «мої пари» in the wishes grid.
 
 ## 4. Core — internal (service roles, client credentials)
 

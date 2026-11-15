@@ -29,7 +29,7 @@ import {
 import { MyNow } from './MyNow';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
-import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
+import { cellKey, changedCells, nextKind, shorterDaysNote, templateCells, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
 import { useAssignedSchedule } from './useAssignedSchedule';
 import { answered } from '@/api/me';
@@ -350,6 +350,20 @@ describe('побажання', () => {
     expect(toList(new Map<CellKey, PreferenceKind>([[cellKey(1, 1), 'UNAVAILABLE']]), [{ weekday: 1, pair: 1, kind: 'UNWANTED', note: 'рано' }])).toEqual([
       { weekday: 1, pair: 1, kind: 'UNAVAILABLE', note: 'рано' },
     ]);
+  });
+
+  it('мої пари — з базового розкладу семестру: половинка з позначкою тижня, обидві половинки й щотижнева — без', () => {
+    const group = { id: 'g1', code: '4КІ1', course: 4 };
+    const discipline = { id: 'd1', name: 'Сучасні технології проєктування', shortName: 'СТП', color: null };
+    const cells = templateCells([
+      { weekday: 2, pair: 3, parity: 'BOTH', group, subgroup: 0, discipline },
+      { weekday: 3, pair: 1, parity: 'NUMERATOR', group, subgroup: 0, discipline },
+      { weekday: 4, pair: 2, parity: 'NUMERATOR', group, subgroup: 2, discipline },
+      { weekday: 4, pair: 2, parity: 'DENOMINATOR', group, subgroup: 2, discipline },
+    ]);
+    expect(cells.get(cellKey(2, 3))).toEqual(['4КІ1 · СТП']);
+    expect(cells.get(cellKey(3, 1))).toEqual(['4КІ1 · СТП (чисельник)']);
+    expect(cells.get(cellKey(4, 2))).toEqual(['4КІ1/2 · СТП']);
   });
 
   function Harness() {

@@ -222,7 +222,7 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="З" required error={formState.errors.dateFrom?.message}>
+              <Field label="Від" required error={formState.errors.dateFrom?.message}>
                 <Controller
                   control={control}
                   name="dateFrom"

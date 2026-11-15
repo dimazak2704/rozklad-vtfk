@@ -45,7 +45,9 @@ describe('керівники практики в календарі', () => {
     const { semester, practice } = await demoPeriods();
     const { unmount } = renderWithProviders(<PeriodsTable semester={semester} opened={null} onOpen={() => undefined} />);
     const row = (await screen.findByText(practice.title)).closest('tr') as HTMLElement;
-    expect(within(row).getByText('керівника не призначено')).toBeInTheDocument();
+    expect(within(row).getByText('керівника не призначено')).toHaveClass('sr-only');
+    // під назвою немає видимого рядка з самим «—»
+    expect(within(row).queryByText('—')).not.toBeInTheDocument();
     unmount();
 
     server.use(
@@ -71,6 +73,8 @@ describe('керівники практики в календарі', () => {
     );
     const chosen = await screen.findByRole('list', { name: 'Вибрані керівники' });
     expect(within(chosen).getByText(KRENTSIN.shortName)).toBeInTheDocument();
+    // початок — «Від»: кирилична «З» біля дати читалася як цифра 3
+    expect(screen.getByLabelText(/^Від/)).toHaveValue(practice.startsOn.split('-').reverse().join('.'));
 
     await user.click(screen.getByRole('button', { name: `Прибрати керівника ${KRENTSIN.shortName}` }));
     expect(screen.getByText('Керівника не призначено.')).toBeInTheDocument();

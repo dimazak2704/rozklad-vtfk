@@ -2,7 +2,7 @@
  * Рішення щодо назв імпорту (CONTRACTS §5 `mappings[]`): які рядки звіту потребують рішення і як
  * рішення інтерфейсу перетворюється на тіло PUT …/mappings.
  */
-import { isEntityRow, needsDecision, type ImportJob, type ImportReportRow } from '@/api/import';
+import { isEntityRow, needsDecision, typedDraft, type ImportJob, type ImportReportRow } from '@/api/import';
 import type { ImportKind, ImportMapping, MappingType } from '@/api/types';
 
 /** existing — зіставити; alias — зіставити й додати написання псевдонімом; create — новий запис. */
@@ -86,4 +86,20 @@ export function blockingReason(job: Pick<ImportJob, 'kind' | 'report'>): { decis
           ? 'decisions'
           : 'report';
   return { decisions, errors, tab };
+}
+
+/**
+ * Остання перевірка core каже, що файл нічого не змінить (графік уже в календарі): тоді не обіцяємо перебудувати
+ * пари й не кличемо головною кнопкою «Застосувати».
+ */
+export function nothingToApply(job: Pick<ImportJob, 'kind' | 'draft'>): boolean {
+  const typed = typedDraft(job);
+  if (typed?.kind !== 'ACADEMIC_CALENDAR_XLSX' || !typed.draft.check) return false;
+  const check = typed.draft.check;
+  const groups = check.groupSemesters;
+  return (
+    check.created + check.updated + check.deleted === 0 &&
+    check.lessons.added + check.lessons.removed + check.lessons.updated === 0 &&
+    (groups ? groups.created + groups.updated === 0 : true)
+  );
 }

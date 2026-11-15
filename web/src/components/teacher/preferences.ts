@@ -2,8 +2,8 @@
  * Побажання до розкладу як сітка «день × пара»: небажано (мʼяке обмеження генератора) або неможливо
  * (жорстке, DOMAIN §5). Чиста логіка без React — для тестів.
  */
-import type { BellSlotDto, PreferenceDto, PreferenceKind, Weekday } from '@/api/types';
-import { countLabel, PAIR_FORMS, WEEKDAY_ACCUSATIVE } from '@/lib/labels';
+import type { BellSlotDto, PreferenceDto, PreferenceKind, TemplateLessonDto, Weekday } from '@/api/types';
+import { countLabel, PAIR_FORMS, PARITY_LABEL, WEEKDAY_ACCUSATIVE } from '@/lib/labels';
 
 export const WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5];
 
@@ -11,6 +11,36 @@ export type CellKey = `${number}:${number}`;
 export type PreferenceMap = ReadonlyMap<CellKey, PreferenceKind>;
 
 export const cellKey = (weekday: number, pair: number): CellKey => `${weekday}:${pair}`;
+
+/**
+ * «Мої пари» в сітці з базового розкладу семестру: клітинка → «4КІ1 · СТП», а пара лише по чисельниках чи знаменниках —
+ * з позначкою тижня («(чисельник)»). Обидві половинки в одній клітинці — без позначки.
+ */
+export function templateCells(lessons: readonly Pick<TemplateLessonDto, 'weekday' | 'pair' | 'parity' | 'group' | 'subgroup' | 'discipline'>[]): Map<CellKey, string[]> {
+  const byCell = new Map<CellKey, Map<string, Set<string>>>();
+  for (const lesson of lessons) {
+    const key = cellKey(lesson.weekday, lesson.pair);
+    const labels = byCell.get(key) ?? new Map<string, Set<string>>();
+    const label = `${lesson.group.code}${lesson.subgroup > 0 ? `/${lesson.subgroup}` : ''} · ${lesson.discipline.shortName}`;
+    const parities = labels.get(label) ?? new Set<string>();
+    if (lesson.parity === 'BOTH') {
+      parities.add('NUMERATOR');
+      parities.add('DENOMINATOR');
+    } else parities.add(lesson.parity);
+    labels.set(label, parities);
+    byCell.set(key, labels);
+  }
+  const out = new Map<CellKey, string[]>();
+  for (const [key, labels] of byCell) {
+    out.set(
+      key,
+      [...labels].map(([label, parities]) =>
+        parities.size === 1 ? `${label} (${PARITY_LABEL[[...parities][0] as 'NUMERATOR' | 'DENOMINATOR']})` : label,
+      ),
+    );
+  }
+  return out;
+}
 
 /** Клік по клітинці: порожньо → небажано → неможливо → порожньо. */
 export function nextKind(kind: PreferenceKind | null | undefined): PreferenceKind | null {

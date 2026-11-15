@@ -134,8 +134,46 @@ describe('ScheduleExplorer: тиждень без пар', () => {
       />,
     );
     expect(
-      screen.getByText(/^Національний спротив: Основи національного спротиву, ауд\. 401\. Керівник: Кренцін\sМ\.\sД\.\. Розклад на інші тижні/),
+      screen.getByText(
+        /^Національний спротив: Основи національного спротиву, ауд\. 401, до 27\sлистопада\. Керівник: Кренцін\sМ\.\sД\.\. Заняття з 30\sлистопада\. Розклад на інші тижні/,
+      ),
     ).toBeInTheDocument();
+  });
+
+  it('подання «День» на НС: «Сьогодні занять немає», до якого числа період і коли заняття', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-18T08:00:00Z'));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const ons = {
+      periodId: 'p-ns',
+      title: 'Основи національного спротиву',
+      startsOn: '2026-11-16',
+      endsOn: '2026-11-27',
+      supervisors: [],
+      groups: [{ id: 'g-1', code: '4КІ1', course: 4 }],
+      courses: [],
+      kind: { code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' as const },
+      room: { id: 'r-401', name: '401', type: 'CLASSROOM' as const },
+    };
+    const week: ScheduleDto = {
+      ...DEMO_WEEK,
+      days: DEMO_WEEK.days.map((d, i) => ({ ...d, date: `2026-11-${16 + i}`, studyDay: false, note: ons.title, lessons: [], practices: [ons] })),
+    };
+    try {
+      renderWithProviders(
+        <ScheduleExplorer
+          query={query(week, { placeholder: false, paused: false })}
+          params={{ ...params('2026-11-18', '2026-11-16', '2026-11-20'), today: '2026-11-18', view: 'day' }}
+          perspective="group"
+          ownerLabel="4КІ1"
+        />,
+      );
+      expect(screen.getByText('Сьогодні занять немає')).toBeInTheDocument();
+      expect(screen.queryByText('Цього тижня занять немає')).not.toBeInTheDocument();
+      expect(screen.getByText(/до 27\sлистопада\. Заняття з 30\sлистопада\. Розклад на інші дні/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

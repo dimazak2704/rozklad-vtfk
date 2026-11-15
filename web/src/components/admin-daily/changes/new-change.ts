@@ -4,7 +4,18 @@
  */
 import type { LoadItem } from '@/api/load';
 import type { ChangeDto, ChangeKind, CreateChangeRequest, IsoDate, LessonView, ReasonCode, Uuid } from '@/api/types';
-import { formatShortWeekdayDate } from '@/lib/date';
+import { formatShortWeekdayDate, isIsoDate } from '@/lib/date';
+
+const ALL_PAIRS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+
+/**
+ * Номери пар, які є в цей день за дзвінками: у пʼятницю 2-га зміна коротша, тож 7–8 пар немає. Поки дзвінків
+ * не знаємо (вантажаться чи профілю немає), — усі вісім: сервер сам відповість, якщо пари не буде.
+ */
+export function pairsOfDay(slots: ReadonlyArray<{ pair: number }> | null | undefined): number[] {
+  if (!slots || slots.length === 0) return [...ALL_PAIRS];
+  return [...new Set(slots.map((slot) => slot.pair))].sort((a, b) => a - b);
+}
 
 /** Текст причини, якої розпорядження не друкує: додаткова пара й заміна аудиторії йдуть окремими розділами. */
 const ADDITIONAL_REASON = 'Додаткова пара';
@@ -163,6 +174,7 @@ export function validateNewChange(values: NewChangeValues): NewChangeErrors {
   const errors: NewChangeErrors = {};
   if (!values.groupId) errors.groupId = 'Оберіть групу';
   if (!values.date) errors.date = 'Вкажіть дату';
+  else if (!isIsoDate(values.date)) errors.date = 'Дата у форматі дд.мм.рррр';
   if (values.mode === 'additional') {
     if (values.pairs.length === 0) errors.pairs = 'Оберіть пару';
     else if (!pairRange(values.pairs)) errors.pairs = 'Додаткові пари мають іти підряд';

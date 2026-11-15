@@ -8,6 +8,7 @@ import {
   newChangeLabel,
   newChangeRequest,
   pairRange,
+  pairsOfDay,
   prefillFromDeclined,
   prefillFromParams,
   standaloneChanges,
@@ -137,6 +138,12 @@ describe('посилання з «Обліку годин»', () => {
 });
 
 describe('додаткова пара', () => {
+  it('номери пар — лише ті, що є цього дня за дзвінками; без дзвінків — усі вісім', () => {
+    expect(pairsOfDay([1, 2, 3, 4, 5, 6].map((pair) => ({ pair })))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(pairsOfDay([])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(pairsOfDay(undefined)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
   it('пари — лише суцільним блоком', () => {
     expect(pairRange([4, 3])).toEqual({ from: 3, to: 4 });
     expect(pairRange([5])).toEqual({ from: 5, to: 5 });

@@ -95,4 +95,30 @@ describe('чернетка графіка освітнього процесу', 
     expect(screen.getByText('Змінені вручну не чіпали: 1.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Відкрити календар' })).toHaveAttribute('href', '/admin/calendar');
   });
+
+  it('файл нічого не змінить — «Змін немає», без обіцянки перебудувати пари, і не головна кнопка «Застосувати»', () => {
+    const { draft } = academicCalendarDraft({ skipCodes: ['Ф'] });
+    const check = draft.check as NonNullable<typeof draft.check>;
+    const same = {
+      ...check,
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      unchanged: 76,
+      lessons: { added: 0, removed: 0, updated: 0 },
+      groupSemesters: { ...check.groupSemesters, created: 0, updated: 0 },
+    };
+    renderWithProviders(<ApplyPanel job={calendarJob({ status: 'READY', canApply: true, draft: { ...draft, check: same } })} onShowTab={() => undefined} />);
+    expect(screen.getByText('Змін немає — календар уже такий')).toBeInTheDocument();
+    expect(screen.queryByText(/Пари груп перебудуються/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Застосувати' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Позначити як перевірене' })).toBeEnabled();
+  });
+
+  it('файл зі змінами — як і раніше «Застосувати» з поясненням', () => {
+    const { draft } = academicCalendarDraft({ skipCodes: ['Ф'] });
+    renderWithProviders(<ApplyPanel job={calendarJob({ status: 'READY', canApply: true, draft })} onShowTab={() => undefined} />);
+    expect(screen.getByText(/Пари груп перебудуються від сьогодні/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Застосувати' })).toBeEnabled();
+  });
 });

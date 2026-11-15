@@ -27,6 +27,7 @@ import {
   optionButtonId,
   optionKey,
   reasonForOption,
+  tallyEntries,
   teacherAnswered,
   VISIBLE_OPTIONS,
   type LessonEntry,
@@ -518,7 +519,7 @@ export default function ChangesPage() {
     />
   );
 
-  const done = workspace.entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
+  const tally = tallyEntries(workspace.entries);
   const weekend = period === 'day' && isWeekend(date);
   const nextStudyDay = shiftStudyDay(date, 1);
 
@@ -608,6 +609,7 @@ export default function ChangesPage() {
       onAddChange={narrow ? openNewChange : undefined}
       loading={workspace.loading}
       drill={drill}
+      showDates={period === 'week'}
     />
   );
 
@@ -741,7 +743,7 @@ export default function ChangesPage() {
               <Skeleton className="h-3 w-48" />
             </span>
           ) : workspace.entries.length > 0 ? (
-            <ResolvedProgress done={done} total={workspace.entries.length} />
+            <ResolvedProgress done={tally.done} waiting={tally.waiting} total={tally.total} />
           ) : null
         }
         controls={

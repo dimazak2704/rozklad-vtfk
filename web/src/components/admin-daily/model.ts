@@ -76,6 +76,47 @@ export function lessonState(decision: Decision, asSubstitute = false): LessonSta
   }
 }
 
+/** Чекає відповіді викладача: дії диспетчера ще не треба, але й вирішеною пару не назвеш — викладач може змовчати. */
+export function isWaiting(state: LessonState): boolean {
+  return state === 'pending';
+}
+
+/** Підсумок пар: вирішено (нічого не чекаємо), чекають відповіді, потребують дії диспетчера. */
+export interface ResolveTally {
+  done: number;
+  waiting: number;
+  open: number;
+  total: number;
+}
+
+export function tallyEntries(entries: readonly { state: LessonState }[]): ResolveTally {
+  let waiting = 0;
+  let open = 0;
+  for (const { state } of entries) {
+    if (LESSON_STATE[state].needsAction) open += 1;
+    else if (isWaiting(state)) waiting += 1;
+  }
+  return { done: entries.length - waiting - open, waiting, open, total: entries.length };
+}
+
+/** За скільки хвилин до строку відповіді пара, що чекає, зʼявляється в «Що потребує рішення». */
+export const PENDING_ALERT_MINUTES = 60;
+
+/**
+ * Пара чекає відповіді, а строк близько чи минув (і сама пара ще не минула): якщо викладач змовчить, група лишиться
+ * без викладача — диспетчер має це бачити серед того, що потребує рішення.
+ */
+export function pendingNeedsAttention(
+  entry: { state: LessonState; change: Pick<ChangeDto, 'confirmDeadline'> | null; item: { date: IsoDate; lesson: { endsAt: IsoTime | null } } },
+  now: Date,
+): boolean {
+  if (!isWaiting(entry.state)) return false;
+  const info = pendingInfo(entry.change?.confirmDeadline, now.getTime());
+  if (!info) return false;
+  if (lessonIsOver(entry.item.date, entry.item.lesson.endsAt, now)) return false;
+  return info.overdue || info.minutes <= PENDING_ALERT_MINUTES;
+}
+
 /** Рішення ще можна змінити: на пару можна обрати інший варіант. */
 export function isOpen(state: LessonState): boolean {
   return state === 'uncovered' || state === 'declined';

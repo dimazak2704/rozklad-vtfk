@@ -69,6 +69,7 @@ class DailySubstitutionSummary implements SubstitutionOverview {
         int uncovered = (int) affected.stream()
                 .filter(lesson -> LessonDecisions.needsDecision(decided.get(lesson.getId())))
                 .count();
+        int undecided = (int) affected.stream().filter(lesson -> !decided.containsKey(lesson.getId())).count();
 
         List<Change> dayChanges = changes.findAllByDateOrderByCreatedAt(date);
         Instant now = clock.instant();
@@ -80,6 +81,7 @@ class DailySubstitutionSummary implements SubstitutionOverview {
                 date,
                 active.size(),
                 uncovered,
+                undecided,
                 count(dayChanges, ChangeStatus.PENDING_CONFIRMATION),
                 count(dayChanges, ChangeStatus.CONFIRMED),
                 unresolvedDeclined.size(),

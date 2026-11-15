@@ -20,7 +20,7 @@ class DashboardAlertsTest {
             "21, 21 заміна довше встановленого часу чекає підтвердження"
     })
     void overduePendingVerbAgreesWithTheCount(int overdue, String message) {
-        SubstitutionDaySummary summary = new SubstitutionDaySummary(DATE, 0, 0, overdue, 0, 0, overdue,
+        SubstitutionDaySummary summary = new SubstitutionDaySummary(DATE, 0, 0, 0, overdue, 0, 0, overdue,
                 List.of(), List.of());
 
         List<DashboardDto.Alert> alerts = Dashboard.alerts(DATE, true, summary);

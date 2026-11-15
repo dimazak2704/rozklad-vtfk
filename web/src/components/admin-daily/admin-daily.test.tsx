@@ -537,6 +537,28 @@ describe('екран «Заміни»', () => {
     expect(screen.queryByRole('button', { name: /Опублікувати/ })).not.toBeInTheDocument();
   });
 
+  it('чернетка називає й пари без рішення, а не лише очікування й відмови', { timeout: 20_000 }, async () => {
+    // демо-ранок 9.11: 4 пари без заміни, з них 1 після відмови, і 2 заміни чекають відповіді
+    renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-11-09' });
+    expect(
+      await screen.findByText(/^3\sпари без рішення, 2\sзаміни ще чекають підтвердження і 1 без нового кандидата після відмови — у цей документ не потраплять\./, undefined, WAIT),
+    ).toBeInTheDocument();
+  });
+
+  it('дата з опублікованим документом: «Чернетки» поруч немає, коли сервер віддав сам документ чи лише автопримітки', { timeout: 20_000 }, async () => {
+    const summary = { id: ORDER.id, number: 35, date: ORDER.date, kind: 'ORDER', status: 'PUBLISHED', itemCount: 5, publishedAt: ORDER.publishedAt, imported: false };
+    server.use(
+      // як core для 19.11: на дату з опублікованим документом /draft повертає його самого
+      http.get(apiPath('/admin/orders/draft'), () => HttpResponse.json(ORDER)),
+      http.get(apiPath('/admin/orders'), () => HttpResponse.json({ items: [summary], page: 0, size: 50, total: 1 })),
+      http.get(apiPath(`/admin/orders/${ORDER.id}`), () => HttpResponse.json(ORDER)),
+    );
+    renderWithProviders(<OrdersPage />, { route: `/admin/orders?date=${ORDER.date}` });
+    const documents = await screen.findByRole('group', { name: 'Документи на цю дату' }, WAIT);
+    expect(within(documents).getByRole('button', { name: /Розпорядження №35/ })).toBeInTheDocument();
+    expect(within(documents).queryByRole('button', { name: /Чернетка/ })).not.toBeInTheDocument();
+  });
+
   it('без мережі — пояснення замість вічних силуетів', { timeout: 20_000 }, async () => {
     onlineManager.setOnline(false);
     try {

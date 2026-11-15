@@ -11,7 +11,8 @@ import { useStalled } from '../useStalled';
 import { isMyGroup } from '../changes/changes-filter';
 import { homeDayWords, useHomeDay } from './useHomeDay';
 
-const CHANGE_FORMS = ['заміна', 'заміни', 'замін'] as const;
+/** «Змін», а не «замін»: тут і скасовані пари, інші аудиторії, додаткові — не лише інший викладач. */
+const CHANGE_FORMS = ['зміна', 'зміни', 'змін'] as const;
 const GROUP_FORMS = ['групі', 'групах', 'групах'] as const;
 
 /**
@@ -57,7 +58,7 @@ export function TodayChanges({ className }: { className?: string }) {
     body = (
       <p className="text-body text-secondary">
         {changes.data.order
-          ? `${day} замін немає — заняття за розкладом.`
+          ? `${day} змін немає — заняття за розкладом.`
           : changes.data.studyDay
             ? `Розпорядження ${onDay} ще не опубліковано. Поки що діє звичайний розклад.`
             : `${day} занять немає.`}

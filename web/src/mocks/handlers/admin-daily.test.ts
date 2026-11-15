@@ -52,7 +52,7 @@ async function absenceFor(shortName: string): Promise<AbsenceDto> {
 describe('демо-ранок', () => {
   it('панель рахує відсутніх, пари без рішення, очікування й відмови', async () => {
     const dashboard = await api.get<DashboardDto>('/admin/dashboard', { date: DAY });
-    expect(dashboard).toMatchObject({ date: DAY, parity: 'NUMERATOR', absences: 3, uncoveredLessons: 4, pending: 2, confirmed: 2, declined: 1 });
+    expect(dashboard).toMatchObject({ date: DAY, parity: 'NUMERATOR', absences: 3, uncoveredLessons: 4, undecidedLessons: 3, pending: 2, confirmed: 2, declined: 1 });
     expect(dashboard.orderDraft?.itemCount).toBe(2);
     // рівно ті види й у тому порядку, що й у core: відмови, без рішення, прострочені, неопубліковані
     expect(dashboard.alerts.map((a) => a.kind)).toEqual(['DECLINED', 'UNCOVERED_LESSONS', 'PENDING_OVERDUE', 'ORDER_NOT_PUBLISHED']);
