@@ -43,12 +43,16 @@ by natural keys.
     in Java is FIXED; the services hand the plan to the system with `autoPlan`.
   - Recount (`LoadPlanner.recount`, `LoadPlanEvents`): on `CalendarEdited` (the groups it names, in the semesters its
     dates fall in, one calendar read whatever the dates), on `TimetableVersionPublished` (the whole semester with that
-    version's lessons) and once at start-up for every semester with load (plans stored by the old rule). Both run in
-    the transaction of the change and take the semester's load lock first, so a dry run or a refused edit rolls them
-    back and a concurrent load write waits for the new calendar. A context reads a constant number of queries: the
+    version's lessons) and once at start-up for every semester with load (plans stored by the old rule; a semester that
+    fails is logged and left for its next edit or publication, core still starts). Both run in the transaction of the
+    change and take the semester's load lock first, so a dry run or a refused edit rolls them back and a concurrent load
+    write waits for the new calendar. Lock order is the publication's: the timetable's `CalendarEdited` listener runs
+    first (`@Order`: it may refuse the edit and takes the publication locks), the recount last, so an edit and a
+    publication of one semester never wait for each other's lock in opposite order. A context reads a constant number of queries: the
     study calendar, the groups' courses and one slot query (`TemplateLessonReader.publishedSlots`/`versionSlots`).
   - `V1_302` marks existing plans that differ from the old default `round(hoursPerWeek × teachingWeeks)` FIXED, the
-    rest AUTO.
+    rest AUTO. CURRICULUM items stay AUTO whatever their number: the import stored the curriculum's own total (22 weeks
+    × hours for 4КІ), which by the owner's rule does not fix the plan (`LoadPlanSourceMigrationIT`).
 - Whole group: at most a teacher for subgroup 0. Split: the group must have subgroups in the catalog;
   teachers only for existing subgroups 1..n. Weekly units of a split item are created for every
   catalog subgroup of the group (a subgroup without a teacher gets `teacherId = null`).
@@ -79,4 +83,6 @@ by natural keys.
 for all, no lessons, scaled hours, split cohort), `LoadApiIT` (CRUD and pattern, split validation, weekly units,
 subgroup guard, derivation incl. skip, idempotency and two derivations at once, the unique key, import; AUTO plan
 follows a period both ways, a FIXED plan stays, the echo rule, import keeps a FIXED plan, the published timetable makes
-the plan exact).
+the plan exact, a parity override and new semester dates recount it), `LoadPlanEventsTest` and `LoadPlanEventsIT`
+(start-up recount of stored AUTO plans, a failing semester does not stop start-up, the timetable's calendar listener
+runs before the recount), `LoadPlanSourceMigrationIT` (`V1_302`: a set plan FIXED, a curriculum total AUTO).

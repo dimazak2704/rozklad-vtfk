@@ -408,16 +408,18 @@ of the group closes, kept per weekday and per week parity with overrides):
   `C` pairs per two-week cycle, and `plan = 2 × hoursPerWeek × T / C` (rounded half up) — exactly the timetable's pairs
   on theory days when it gives the load's hours, scaled when the load says more or less; a split item takes its busiest
   subgroup. Lessons are the item's by `load_item_id`, else (imported versions) by group × discipline × split, and by
-  lesson kind when two items share that key;
+  lesson kind when two items share that key. `T` comes from the version published now, over the whole semester: after a
+  mid-semester republication the weeks before its `effectiveFrom` ran on the earlier version, so «exactly the
+  timetable's pairs» holds for one version only and the plan follows the new one (usually close);
 - without lessons (nothing published, or the discipline is not in it): `plan = hoursPerWeek × studyDays / 5`.
 Example (the live stand, 15.11.2026): 4КІ2 ДК 3 h/week (Monday every week + Wednesday numerator), НС 30.11–11.12 and
 holidays 28.12–30.12: 15 Mondays + 8 numerator Wednesdays = 23 pairs = 46 h (the old `3 × 18 = 54` was never reachable,
 «Додати 4 пари»). The theory-week count of the college's academic calendar (`group_semester.theory_weeks`) is only a
 cross-check shown when it differs. A plan set as a number (the dispatcher in the form, a program in the import) is
-FIXED and never recounted; a curriculum row's total (its own weeks × hours) does not fix the plan. AUTO plans are
-recounted on every calendar edit (`CalendarEdited`), on version publication and at start-up. So «Не вистачить» means a
-real shortfall: cancelled pairs, pairs given to another discipline, a discipline finished early, a fixed plan above
-what the timetable gives.
+FIXED and never recounted; a curriculum row's total (its own weeks × hours) does not fix the plan, neither in the
+import nor in the migration that marked the plans stored before this rule. AUTO plans are recounted on every calendar
+edit (`CalendarEdited`), on version publication and at start-up. So «Не вистачить» means a real shortfall: cancelled
+pairs, pairs given to another discipline, a discipline finished early, a fixed plan above what the timetable gives.
 
 For semester S, group G, discipline D: `plan = Σ planned_hours(load items)`, `fact = (#SCHEDULED lessons that
 already ended) × hoursPerPair`, `remaining = #future SCHEDULED × hoursPerPair`, `forecast = fact + remaining`,
