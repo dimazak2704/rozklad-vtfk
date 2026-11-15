@@ -25,14 +25,20 @@ import ua.vtc.rozklad.core.shared.text.UkrainianText;
  * that spends its whole time limit and ends with hard conflicts. Counts are week occurrences (a BOTH unit
  * is 2, a numerator or denominator half is 1) against 2 × slots, so 18,5 pairs fit 19 slots.
  * <ul>
- *   <li>GROUP: whole-group units plus one cohort's own units against the slots of the group's shift window;</li>
+ *   <li>GROUP: whole-group units plus one cohort's own units against the slots of the group's shift window; on
+ *       Friday a group the run may change gets at most its Friday limit (the scheduler's hard rule), or the pairs
+ *       pinned there when they are more;</li>
  *   <li>TEACHER: the teacher's units against the union of the windows of their groups minus UNAVAILABLE slots;</li>
  *   <li>ROOM_TYPE: units that require a type against its rooms' parallel places over their groups' windows.</li>
  * </ul>
+ * A day without windows needs no extra slot (the pairs of a day can always stand one after another), so it is not
+ * counted here: whether the days can be packed depends on teachers and rooms, which the solver reports.
  */
 public final class LoadFitCheck {
 
     public static final String LOAD_EXCEEDS_SLOTS = "GENERATION_LOAD_EXCEEDS_SLOTS";
+
+    private static final int FRIDAY = 5;
 
     private LoadFitCheck() {
     }
@@ -58,7 +64,11 @@ public final class LoadFitCheck {
             if (units.isEmpty()) {
                 continue;
             }
-            int slots = slotsOfShift.getOrDefault(group.shift(), Set.of()).size();
+            Set<Integer> shiftSlots = slotsOfShift.getOrDefault(group.shift(), Set.of());
+            int fridaySlots = (int) shiftSlots.stream().filter(slot -> slot / 10 == FRIDAY).count();
+            // межа пʼятниці — жорстке правило лише для групи, яку генерація може змінити (є вільна пара)
+            boolean limited = group.fridayMaxPairs() != null && group.fridayMaxPairs() < fridaySlots
+                    && units.stream().anyMatch(unit -> unit.pinned() == null);
             int whole = occurrences(units.stream().filter(unit -> unit.subgroup() == 0).toList());
             Set<Integer> cohorts = new TreeSet<>(group.subgroups());
             units.stream().map(ProblemSnapshot.Unit::subgroup).filter(subgroup -> subgroup > 0).forEach(cohorts::add);
@@ -68,11 +78,21 @@ public final class LoadFitCheck {
             for (int cohort : cohorts) {
                 int own = cohort == 0 ? 0 : occurrences(units.stream().filter(unit -> unit.subgroup() == cohort)
                         .toList());
+                int slots = shiftSlots.size();
+                String friday = "";
+                if (limited) {
+                    // закріплені пʼятничні пари понад межу стоять, але вільна пара до них уже не стане
+                    int pinnedFriday = occurrences(units.stream()
+                            .filter(unit -> unit.subgroup() == 0 || unit.subgroup() == cohort)
+                            .filter(unit -> unit.pinned() != null && unit.pinned().weekday() == FRIDAY).toList());
+                    slots = slots - fridaySlots + Math.max(group.fridayMaxPairs(), (pinnedFriday + 1) / 2);
+                    friday = " (у пʼятницю не більше %s)".formatted(fridayPairs(group.fridayMaxPairs()));
+                }
                 if (whole + own > 2 * slots) {
                     String label = cohort == 0 ? group.code() : group.code() + ", підгрупа " + cohort;
                     problems.add(new Problem(Kind.GROUP, group.id().toString(), label, (whole + own) / 2.0, slots,
-                            "Група %s: %s на тиждень, а в її зміні %s.".formatted(label, pairs(whole + own),
-                                    slots(slots))));
+                            "Група %s: %s на тиждень, а в її зміні %s%s.".formatted(label, pairs(whole + own),
+                                    slots(slots), friday)));
                 }
             }
         }
@@ -158,6 +178,11 @@ public final class LoadFitCheck {
             return (occurrences / 2) + ",5 пари";
         }
         return UkrainianText.pairs(occurrences / 2);
+    }
+
+    /** «3 пар», «1 пари» after «не більше». */
+    private static String fridayPairs(int count) {
+        return count + (count % 10 == 1 && count % 100 != 11 ? " пари" : " пар");
     }
 
     private static String slots(int count) {
