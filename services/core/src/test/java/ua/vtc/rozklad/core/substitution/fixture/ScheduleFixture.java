@@ -18,6 +18,7 @@ import ua.vtc.rozklad.core.calendar.AcademicYear;
 import ua.vtc.rozklad.core.calendar.BellProfile;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodKind;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 import ua.vtc.rozklad.core.catalog.CycleCommission;
@@ -203,7 +204,9 @@ public final class ScheduleFixture {
 
     public void period(Semester semester, CalendarPeriodKind kind, String title, LocalDate from, LocalDate to,
                        String orderNote, Collection<UUID> groupIds) {
-        persist(new CalendarPeriod(semester.getId(), kind, title, from, to), period -> {
+        transaction.executeWithoutResult(status -> {
+            CalendarPeriod period = new CalendarPeriod(semester.getId(),
+                    entityManager.find(PeriodKind.class, kind.builtinKindId()), title, from, to);
             period.setOrderNote(orderNote);
             if (kind == CalendarPeriodKind.STUDY_MODE) {
                 period.setStudyMode(StudyMode.ONLINE);
@@ -211,6 +214,7 @@ public final class ScheduleFixture {
             if (groupIds != null) {
                 period.applyToGroups(groupIds);
             }
+            entityManager.persist(period);
         });
     }
 

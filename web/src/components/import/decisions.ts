@@ -25,11 +25,12 @@ export function decisionRows(job: Pick<ImportJob, 'report' | 'mappings'>): Entit
 
 /**
  * Чи застосування цього виду створює новий запис каталогу (як ImportHandler.creates importer):
- * розпорядження зберігається як текст і не створює нічого; програма й навчальний план додають
- * навантаження наявним групам і можуть створити лише дисципліну; розклад створює все.
+ * розпорядження зберігається як текст і не створює нічого; графік освітнього процесу пише періоди наявним групам
+ * (невідому групу зіставляють або пропускають); програма й навчальний план додають навантаження наявним групам і
+ * можуть створити лише дисципліну; розклад створює все.
  */
 export function creates(kind: ImportKind, type: MappingType): boolean {
-  if (kind === 'ORDER_DOCUMENT') return false;
+  if (kind === 'ORDER_DOCUMENT' || kind === 'ACADEMIC_CALENDAR_XLSX') return false;
   if (kind === 'DISCIPLINE_PROGRAM' || kind === 'CURRICULUM') return type === 'DISCIPLINE';
   return true;
 }
@@ -69,7 +70,7 @@ export const OPTIONS_LOCATION = 'параметри імпорту';
 
 /**
  * Що блокує застосування і де це виправити: рішення щодо назв — «Рішення»; заголовок і рядки
- * розпорядження, параметри програми чи плану — «Чернетка»; решта — «Звіт».
+ * розпорядження, параметри програми чи плану, невідомі коди графіка — «Чернетка»; решта — «Звіт».
  */
 export function blockingReason(job: Pick<ImportJob, 'kind' | 'report'>): { decisions: number; errors: ImportReportRow[]; tab: ReviewTab } {
   const decisions = job.report.filter(needsDecision).length;
@@ -79,7 +80,7 @@ export function blockingReason(job: Pick<ImportJob, 'kind' | 'report'>): { decis
   const tab: ReviewTab =
     !first
       ? 'report'
-      : job.kind === 'ORDER_DOCUMENT' || first.location === OPTIONS_LOCATION
+      : job.kind === 'ORDER_DOCUMENT' || first.location === OPTIONS_LOCATION || first.type === 'PERIOD_KIND'
         ? 'draft'
         : isEntityRow(first)
           ? 'decisions'

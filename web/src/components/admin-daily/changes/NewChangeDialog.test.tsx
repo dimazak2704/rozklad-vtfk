@@ -184,12 +184,13 @@ describe('«Нова зміна» — зміна без відсутності',
 
   it('з «Обліку годин» у неділю: дата — понеділок, видно, скільки пар бракує і які пари в групи вже є', async () => {
     renderWithProviders(<ChangesPage />, {
-      route: `/admin/changes?date=2026-11-15&group=${group.id}&discipline=${discipline.id}&suggest=ADDITIONAL&lessons=2`,
+      // неділя 29.11: 16–27.11 у 4КІ1 тижні НС без пар, тож беремо понеділок після них
+      route: `/admin/changes?date=2026-11-29&group=${group.id}&discipline=${discipline.id}&suggest=ADDITIONAL&lessons=2`,
     });
     const dialog = await screen.findByRole('dialog', { name: 'Нова зміна' }, WAIT);
-    expect(within(dialog).getByLabelText(/Дата/)).toHaveValue('2026-11-16');
+    expect(within(dialog).getByLabelText(/Дата/)).toHaveValue('2026-11-30');
     expect(within(dialog).getByRole('note')).toHaveTextContent(/бракує 2\sпар\./);
-    // понеділок 16.11 у 4КІ1 є пари: їхні номери позначені ще до збереження
+    // понеділок 30.11 у 4КІ1 є пари: їхні номери позначені ще до збереження
     await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /у групи вже/ }).length).toBeGreaterThan(0), WAIT);
   });
 });

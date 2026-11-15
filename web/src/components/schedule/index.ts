@@ -10,4 +10,5 @@ export { TONE_BADGE } from './tones';
 export { useArrivedChanges } from './useArrivedChanges';
 export { navEnter, useNavTransition, type NavKey } from './useNavTransition';
 export { WeekGrid } from './WeekGrid';
+export { blockTitle, dayPractices, noteWithoutPractices, supervisorsLine } from './practice';
 export { LessonLinksContext, lessonLinkSearch, useLessonLinks, type LessonLinks, type ScheduleEntityKind } from './lesson-links';

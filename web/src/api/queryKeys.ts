@@ -95,6 +95,7 @@ export const qk = {
       weeks: (semesterId: Uuid) => ['admin', 'calendar', 'weeks', semesterId] as const,
       bellProfiles: () => ['admin', 'calendar', 'bell-profiles'] as const,
       periods: (semesterId?: Uuid) => ['admin', 'calendar', 'periods', clean({ semesterId })] as const,
+      periodKinds: (params?: Params) => ['admin', 'calendar', 'period-kinds', clean(params)] as const,
       shiftWindows: () => ['admin', 'calendar', 'shift-windows'] as const,
     },
     settings: () => ['admin', 'settings'] as const,

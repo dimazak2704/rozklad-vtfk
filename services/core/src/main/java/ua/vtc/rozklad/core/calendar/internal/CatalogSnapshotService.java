@@ -8,6 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.RoomType;
+import ua.vtc.rozklad.core.calendar.PeriodEffect;
+import ua.vtc.rozklad.core.calendar.PeriodKindRepository;
 import ua.vtc.rozklad.core.catalog.DisciplineAlias;
 import ua.vtc.rozklad.core.catalog.DisciplineAliasRepository;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
@@ -25,7 +27,8 @@ import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.SemesterDto;
 /**
  * {@code GET /api/internal/catalog/snapshot}: everything the importer needs to normalize a file
  * (groups with subgroups, teachers and disciplines with aliases, rooms, specialties) plus the
- * semesters to attach a timetable or load to. Lives in the calendar module because it combines
+ * semesters to attach a timetable or load to, and every period kind (inactive ones too) to read the codes of the
+ * academic calendar. Lives in the calendar module because it combines
  * catalog data with semesters; calendar already depends on catalog, the reverse would be a cycle.
  */
 @Service
@@ -41,11 +44,13 @@ public class CatalogSnapshotService {
     private final RoomRepository rooms;
     private final SpecialtyRepository specialties;
     private final SemesterService semesters;
+    private final PeriodKindRepository periodKinds;
 
     public CatalogSnapshotService(StudentGroupRepository groups, SubgroupRepository subgroups,
                                   TeacherRepository teachers, TeacherAliasRepository teacherAliases,
                                   DisciplineRepository disciplines, DisciplineAliasRepository disciplineAliases,
-                                  RoomRepository rooms, SpecialtyRepository specialties, SemesterService semesters) {
+                                  RoomRepository rooms, SpecialtyRepository specialties, SemesterService semesters,
+                                  PeriodKindRepository periodKinds) {
         this.groups = groups;
         this.subgroups = subgroups;
         this.teachers = teachers;
@@ -55,6 +60,7 @@ public class CatalogSnapshotService {
         this.rooms = rooms;
         this.specialties = specialties;
         this.semesters = semesters;
+        this.periodKinds = periodKinds;
     }
 
     public CatalogSnapshot snapshot() {
@@ -90,12 +96,22 @@ public class CatalogSnapshotService {
                 specialties.findAll().stream()
                         .map(specialty -> new SpecialtyItem(specialty.getId(), specialty.getLetters(), specialty.getName()))
                         .toList(),
-                semesters.list());
+                semesters.list(),
+                periodKinds.findAllByOrderByPositionAscCodeAsc().stream()
+                        .map(kind -> new PeriodKindItem(kind.getId(), kind.getCode(), kind.getName(), kind.getEffect(),
+                                kind.getColor(), kind.getAliases(), kind.getNoteTemplate(), kind.isActive()))
+                        .toList());
     }
 
-    /** Contract fields plus additive {@code active} flags and {@code specialties}. */
+    /** Contract fields plus additive {@code active} flags, {@code specialties} and {@code periodKinds}. */
     public record CatalogSnapshot(List<GroupItem> groups, List<TeacherItem> teachers, List<DisciplineItem> disciplines,
-                                  List<RoomItem> rooms, List<SpecialtyItem> specialties, List<SemesterDto> semesters) {
+                                  List<RoomItem> rooms, List<SpecialtyItem> specialties, List<SemesterDto> semesters,
+                                  List<PeriodKindItem> periodKinds) {
+    }
+
+    /** A period kind for the academic calendar import (all kinds, inactive ones too). */
+    public record PeriodKindItem(UUID id, String code, String name, PeriodEffect effect, String color,
+                                 List<String> aliases, String noteTemplate, boolean active) {
     }
 
     public record GroupItem(UUID id, String code, int course, List<Integer> subgroups, boolean active) {

@@ -92,6 +92,28 @@ public final class CoreImportPayloads {
                                  String signatoryPosition, String signatoryName, Boolean replace) {
     }
 
+    /**
+     * {@code POST /api/admin/import/calendar-periods[?dryRun=true]}: the academic calendar's periods (upsert by
+     * {@code sourceKey}, IMPORT rows of the year that the request no longer has are deleted) and the theory weeks
+     * and exams of every group per semester.
+     */
+    public record CalendarPeriodsRequest(String academicYear, List<CalendarPeriod> periods,
+                                         List<GroupSemester> groupSemesters) {
+    }
+
+    /**
+     * One period: {@code scope} ALL (no groups, no courses), COURSES ({@code courses}) or GROUPS
+     * ({@code groupCodes}); {@code kindCode} is a period kind's code; {@code roomName} only for SUSPEND kinds.
+     */
+    public record CalendarPeriod(String sourceKey, String kindCode, String title, LocalDate startsOn, LocalDate endsOn,
+                                 String scope, List<String> groupCodes, List<Integer> courses, String roomName,
+                                 String studyMode, String orderNote) {
+    }
+
+    /** {@code theoryWeeks} 1..53 and {@code exams} 0..20, {@code null} when the file's cell is empty. */
+    public record GroupSemester(String groupCode, int semesterNumber, Integer theoryWeeks, Integer exams) {
+    }
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ChangeItem(String section, String groupCode, String pairLabel, OrderRowType rowType,
                              String fromDiscipline, String fromTeacher, String reasonText, String toDiscipline,

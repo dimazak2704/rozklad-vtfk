@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
+import ua.vtc.rozklad.core.calendar.PeriodKindRepository;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
 import ua.vtc.rozklad.core.catalog.CatalogQueries;
 import ua.vtc.rozklad.core.catalog.Specialty;
@@ -51,6 +52,9 @@ class DemoSeedIT {
     @Autowired
     private CatalogQueries catalog;
 
+    @Autowired
+    private PeriodKindRepository kinds;
+
     @Test
     void demoSqlSeedsCalendarAndStructureAndGroupPeriodsFollowTheImport() {
         transaction.executeWithoutResult(status -> {
@@ -68,8 +72,12 @@ class DemoSeedIT {
                     .isEqualTo("123");
             assertThat(jdbc.queryForObject("SELECT count(*) FROM calendar_period WHERE scope = 'COURSES'", Integer.class))
                     .isEqualTo(1);
+            // старий SQL пише лише kind: тригер сумісності V1_203 дає йому вбудований вид
+            assertThat(jdbc.queryForObject("""
+                    SELECT k.code FROM calendar_period p JOIN period_kind k ON k.id = p.kind_id
+                    WHERE p.scope = 'COURSES'""", String.class)).isEqualTo("ФН");
 
-            DemoGroupPeriods demo = new DemoGroupPeriods(semesters, periods, catalog);
+            DemoGroupPeriods demo = new DemoGroupPeriods(semesters, periods, catalog, kinds);
             demo.ensurePeriods();
             assertThat(count("calendar_period")).as("груп ще немає").isEqualTo(1);
 
@@ -88,6 +96,8 @@ class DemoSeedIT {
                     .containsExactlyInAnyOrder(
                             org.assertj.core.groups.Tuple.tuple("Електрорадіомонтажна практика 2КІ3", Set.of(group2ki3)),
                             org.assertj.core.groups.Tuple.tuple("4КІ навчаються дистанційно", Set.of(group4ki1, group4ki2)));
+            assertThat(byGroups).extracting(period -> period.getKind().getCode())
+                    .containsExactlyInAnyOrder("НП", "ФН");
             status.setRollbackOnly();
         });
     }

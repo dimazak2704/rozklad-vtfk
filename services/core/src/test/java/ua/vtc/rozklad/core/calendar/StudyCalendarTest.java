@@ -141,6 +141,74 @@ class StudyCalendarTest {
         assertThat(withSupervisor.practices(LocalDate.of(2026, 11, 2), GROUP_2KI3)).as("після практики").isEmpty();
     }
 
+    /** A kind the dispatcher adds with effect SUSPEND behaves like practice: no pairs, a block of the day. */
+    @Test
+    void customSuspendKindIsABlockOfTheDayForItsGroup() {
+        UUID supervisor = UUID.randomUUID();
+        UUID room401 = UUID.randomUUID();
+        StudyPeriod block = new StudyPeriod(CalendarFixtures.customKind("ХХ", "Новий вид", PeriodEffect.SUSPEND),
+                "Основи національного спротиву", LocalDate.of(2026, 11, 16), LocalDate.of(2026, 11, 27), null,
+                PeriodScope.GROUPS, Set.of(), Set.of(GROUP_4KI1.groupId()), UUID.randomUUID(), Set.of(supervisor),
+                room401);
+        StudyCalendar withBlock = calendar(List.of(block));
+        LocalDate friday = LocalDate.of(2026, 11, 20);
+
+        assertThat(withBlock.day(friday, GROUP_4KI1)).satisfies(day -> {
+            assertThat(day.studyDay()).isFalse();
+            assertThat(day.note()).isEqualTo("Основи національного спротиву");
+        });
+        assertThat(withBlock.day(friday, GROUP_2KI3).studyDay()).isTrue();
+        assertThat(withBlock.practices(friday, GROUP_4KI1)).singleElement().satisfies(found -> {
+            assertThat(found.kind().code()).isEqualTo("ХХ");
+            assertThat(found.roomId()).isEqualTo(room401);
+        });
+        assertThat(withBlock.supervisedPractices(friday, supervisor)).containsExactly(block);
+    }
+
+    /** Owner's decision of 15.11.2026: the exam session (І) suspends the group's pairs and is a block of the day. */
+    @Test
+    void examSessionSuspendsTheGroupsLessons() {
+        StudyCalendar session = calendar(List.of(new StudyPeriod(CalendarPeriodKind.EXAM_SESSION,
+                "Екзаменаційна сесія 4 курсу", LocalDate.of(2026, 12, 21), LocalDate.of(2026, 12, 30), null,
+                PeriodScope.COURSES, Set.of(4), Set.of())));
+        LocalDate date = LocalDate.of(2026, 12, 22);
+
+        assertThat(session.day(date, GROUP_4KI1)).satisfies(day -> {
+            assertThat(day.studyDay()).isFalse();
+            assertThat(day.note()).isEqualTo("Екзаменаційна сесія 4 курсу");
+        });
+        assertThat(session.practices(date, GROUP_4KI1)).singleElement()
+                .satisfies(found -> assertThat(found.kind().name()).isEqualTo("Сесія"));
+        assertThat(session.day(date, GROUP_2KI3).studyDay()).isTrue();
+        assertThat(session.studyDates(date, date)).as("коледж працює").containsExactly(date);
+    }
+
+    /** Priority DAY_OFF > SUSPEND > ONLINE > INFO; ONLINE is decided on its own, INFO is a note only. */
+    @Test
+    void dayOffWinsOverABlockAndNotesFollowThePriority() {
+        GroupScope group = new GroupScope(UUID.randomUUID(), 4);
+        LocalDate monday = LocalDate.of(2026, 11, 16);
+        StudyCalendar overlapping = calendar(List.of(
+                new StudyPeriod(CalendarFixtures.customKind("Р", "Резерв", PeriodEffect.INFO), "Резерв часу",
+                        monday, monday.plusDays(4), null, PeriodScope.ALL, Set.of(), Set.of()),
+                onlineForCourses("4 курс дистанційно", monday, monday.plusDays(4), 4),
+                new StudyPeriod(CalendarFixtures.customKind("ХХ", "Новий вид", PeriodEffect.SUSPEND), "Блок",
+                        monday, monday.plusDays(4), null, PeriodScope.GROUPS, Set.of(), Set.of(group.groupId())),
+                holiday("Свято", monday.plusDays(2), monday.plusDays(2))));
+
+        assertThat(overlapping.day(monday, group)).satisfies(day -> {
+            assertThat(day.studyDay()).isFalse();
+            assertThat(day.online()).as("онлайн рахується окремо від блоку").isTrue();
+            assertThat(day.note()).isEqualTo("Блок; 4 курс дистанційно; Резерв часу");
+        });
+        assertThat(overlapping.practices(monday, group)).hasSize(1);
+        assertThat(overlapping.practices(monday.plusDays(2), group)).as("вихідний перемагає блок").isEmpty();
+        assertThat(overlapping.day(monday, GROUP_2KI3)).satisfies(day -> {
+            assertThat(day.studyDay()).as("позначка нічого не знімає").isTrue();
+            assertThat(day.note()).isEqualTo("Резерв часу");
+        });
+    }
+
     @Test
     void studyDatesSkipWeekendsAndHolidays() {
         assertThat(calendar.studyDates(LocalDate.of(2026, 10, 19), LocalDate.of(2026, 11, 2))).containsExactly(

@@ -25,6 +25,11 @@ public final class FieldErrors {
         return errors.isEmpty();
     }
 
+    /** Number of errors added so far (a caller can tell whether one item of a list added any). */
+    public int size() {
+        return errors.size();
+    }
+
     /** @throws FieldValidationException (400) when at least one error was added */
     public void throwIfAny() {
         if (!errors.isEmpty()) {

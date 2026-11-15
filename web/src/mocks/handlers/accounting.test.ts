@@ -21,27 +21,27 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+// НС 4КІ1 16.11–27.11 (графік 2026/27) знімає два тижні пар групи: прогнози нижче це враховують
 describe('GET /api/admin/accounting', () => {
-  it('ОПЦЗ 4КІ1 вичитано 3 листопада: план 20 год досягнуто, 8 пар після цього — зайві', async () => {
+  it('ОПЦЗ 4КІ1 вичитано 3 листопада: план 20 год досягнуто, 6 пар після цього (без тижнів НС) — зайві', async () => {
     const opcz = row(await rowsOf(group4ki1.id), 'ОПЦЗ');
-    expect(opcz).toMatchObject({ plan: 20, fact: 20, remaining: 16, forecast: 36, status: 'FINISHED', forecastFinishDate: '2026-11-03' });
-    expect(opcz.suggestion).toMatchObject({ kind: 'DISCIPLINE_FINISHED', fromDate: '2026-11-10', lessons: 8 });
-    expect(opcz.suggestion?.text).toBe('Вичитано 3 листопада: зняти 8 пар після цієї дати');
-    expect(opcz.suggestion?.lessonIds).toHaveLength(8);
+    expect(opcz).toMatchObject({ plan: 20, fact: 20, remaining: 12, forecast: 32, status: 'FINISHED', forecastFinishDate: '2026-11-03' });
+    expect(opcz.suggestion).toMatchObject({ kind: 'DISCIPLINE_FINISHED', fromDate: '2026-11-10', lessons: 6 });
+    expect(opcz.suggestion?.text).toBe('Вичитано 3 листопада: зняти 6 пар після цієї дати');
+    expect(opcz.suggestion?.lessonIds).toHaveLength(6);
   });
 
-  it('СТП перевищить план: прогноз 70 год проти 48, вичитано буде 23 листопада', async () => {
+  it('СТП перевищить план: прогноз 62 год проти 48, вичитано буде 7 грудня (16–27.11 — НС)', async () => {
     const stp = row(await rowsOf(group4ki1.id), 'СТП');
-    expect(stp).toMatchObject({ plan: 48, fact: 38, forecast: 70, status: 'WILL_OVERRUN', forecastFinishDate: '2026-11-23' });
-    expect(stp.suggestion).toMatchObject({ kind: 'DISCIPLINE_FINISHED', fromDate: '2026-11-24', lessons: 11 });
+    expect(stp).toMatchObject({ plan: 48, fact: 38, forecast: 62, status: 'WILL_OVERRUN', forecastFinishDate: '2026-12-07' });
+    expect(stp.suggestion).toMatchObject({ kind: 'DISCIPLINE_FINISHED', fromDate: '2026-12-08', lessons: 7 });
   });
 
-  it('НДЕКСМ не встигне: 17 пʼятниць = 34 год проти 40 за програмою', async () => {
+  it('НДЕКСМ не встигне: 15 пʼятниць (дві забрав НС) = 30 год проти 40 за програмою', async () => {
     const ndeksm = row(await rowsOf(group4ki1.id), 'НДЕКСМ');
-    expect(ndeksm).toMatchObject({ plan: 40, forecast: 34, status: 'WILL_UNDERRUN', forecastFinishDate: null });
-    expect(ndeksm.suggestion).toMatchObject({ kind: 'ADDITIONAL', text: 'Не вистачає 6 год: додати 3 пари', lessons: 3 });
+    expect(ndeksm).toMatchObject({ plan: 40, forecast: 30, status: 'WILL_UNDERRUN', forecastFinishDate: null });
+    expect(ndeksm.suggestion).toMatchObject({ kind: 'ADDITIONAL', text: 'Не вистачає 10 год: додати 5 пар', lessons: 5 });
   });
-
   it('практика 2КІ3 (19–30.10) знімає пари групи — прогноз менший за план', async () => {
     const group2ki3 = GROUPS.find((g) => g.code === '2КІ3') as (typeof GROUPS)[number];
     const rows = await rowsOf(group2ki3.id);

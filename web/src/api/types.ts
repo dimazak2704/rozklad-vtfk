@@ -70,7 +70,19 @@ export type ControlForm = 'EXAM' | 'CREDIT' | 'NONE';
 export type LoadSource = 'MANUAL' | 'CURRICULUM' | 'PROGRAM' | 'TIMETABLE_DERIVED';
 export type AccountingStatus = 'FINISHED' | 'WILL_OVERRUN' | 'WILL_UNDERRUN' | 'ON_TRACK';
 export type PreferenceKind = 'UNWANTED' | 'UNAVAILABLE';
+/**
+ * Старий вид періоду (enum core до довідника видів). @deprecated Лишається один реліз: core досі пише його в
+ * `CalendarPeriodDto.kind` і приймає в запиті, але поведінку визначає `periodKind.effect`.
+ */
 export type CalendarPeriodKind = 'HOLIDAY' | 'NO_CLASSES' | 'PRACTICE' | 'STUDY_MODE' | 'EXAM_SESSION';
+/**
+ * Що період робить із парами (закритий список у core; пріоритет при накладанні — у порядку переліку):
+ * DAY_OFF — вихідний, пар немає; SUSPEND — група не на парах (практика, НС), викладачі працюють;
+ * ONLINE — пари лишаються онлайн чи змішано; INFO — лише позначка.
+ */
+export type PeriodEffect = 'DAY_OFF' | 'SUSPEND' | 'ONLINE' | 'INFO';
+/** Звідки період: вручну з адмінки чи з імпорту графіка освітнього процесу. */
+export type PeriodSource = 'MANUAL' | 'IMPORT';
 export type StudyMode = 'OFFLINE' | 'ONLINE' | 'MIXED';
 export type PeriodScope = 'ALL' | 'COURSES' | 'GROUPS';
 export type Employment = 'STAFF' | 'PART_TIME';
@@ -349,13 +361,16 @@ export interface DayDto {
   note: Nullable<string>;
   lessons: LessonView[];
   /**
-   * Практика дня: для групи — та, на якій вона, для викладача — ті, якими він керує; для аудиторії порожньо.
-   * Старіший core поля не має.
+   * Періоди дня, коли група не на парах (SUSPEND: практика, НС…): для групи — ті, що її стосуються (порожньо, якщо
+   * день вихідний), для викладача — ті, якими він керує; для аудиторії порожньо. Старіший core поля не має.
    */
   practices?: PracticeDto[];
 }
 
-/** Період практики в розкладі дня: назва, керівники (може ще не бути), групи або курси. */
+/**
+ * Період дня, коли група не на парах (ефект SUSPEND: практика, НС, збори): назва, керівники (може ще не бути),
+ * групи або курси. Назва поля й типу — історична (раніше тут була лише практика).
+ */
 export interface PracticeDto {
   periodId: Uuid;
   title: string;
@@ -364,6 +379,10 @@ export interface PracticeDto {
   supervisors: TeacherRef[];
   groups: GroupRef[];
   courses: number[];
+  /** Вид періоду; старіший core поля не має — тоді це практика. */
+  kind?: Nullable<{ code: string; name: string; color: Nullable<string>; effect: PeriodEffect }>;
+  /** Аудиторія періоду: «ауд. 401»; null — не вказано. */
+  room?: Nullable<RoomRef>;
 }
 
 /** GET /api/public/schedule/{group|teacher|room}/{id}?from=&to= (не більше 31 дня) */
@@ -566,10 +585,76 @@ export interface SemesterWeekDto {
   overridden: boolean;
 }
 
-/** @inferred */
+/** Вид періоду коротко: у періоді календаря, у блоці дня. */
+export interface PeriodKindRef {
+  id: Uuid;
+  /** Код як у графіку коледжу: «НС», «К», «НП». */
+  code: string;
+  name: string;
+  /** `#RRGGBB` з легенди графіка або null. */
+  color: Nullable<string>;
+  effect: PeriodEffect;
+}
+
+/** GET /api/admin/period-kinds — вид періоду з довідника. */
+export interface PeriodKindDto {
+  id: Uuid;
+  code: string;
+  name: string;
+  effect: PeriodEffect;
+  color: Nullable<string>;
+  /** Інші написання коду (у легенді «З», у клітинках «ЗУ»). */
+  aliases: string[];
+  /** Шаблон примітки для розпорядження: `{хто} – {назва} з {від}р. по {до} р.[, ауд. {ауд}]`. */
+  noteTemplate: Nullable<string>;
+  /** Вбудований: код не змінюється, видалити не можна (лише вимкнути). */
+  builtin: boolean;
+  active: boolean;
+  position: number;
+  /** Скільки періодів календаря цього виду. */
+  usage: number;
+  version: number;
+}
+
+/** POST/PUT /api/admin/period-kinds */
+export interface PeriodKindRequest {
+  code: string;
+  name: string;
+  effect: PeriodEffect;
+  color?: Nullable<string>;
+  aliases?: string[];
+  noteTemplate?: Nullable<string>;
+  active?: boolean;
+  position?: number;
+  version?: number;
+}
+
+/** PUT /api/admin/period-kinds/{id}?dryRun=true — що зачепить зміна виду (нічого не зберігається). */
+export interface PeriodKindImpactDto {
+  /** Вид, яким він став би після збереження. */
+  kind: PeriodKindDto;
+  effectChanged: boolean;
+  /** Скільки періодів цього виду. */
+  periods: number;
+  /** Навчальні дні (пн–пт) усіх періодів виду в межах їхніх семестрів. */
+  dates: IsoDate[];
+  groups: GroupRef[];
+  lessons: { added: number; removed: number; updated: number };
+  /** Живі заміни, які зміна зачепила б (як 409 правки періоду). */
+  conflicts: Conflict[];
+  /** Чому зміну не можна зберегти (тексти 409). */
+  blockers: string[];
+  canApply: boolean;
+}
+
+/**
+ * GET/POST/PUT /api/admin/calendar-periods. Поведінку періоду визначає `periodKind.effect`; `kind` — старий
+ * вид (@deprecated, ще один реліз). Поля довідника видів адитивні: старіший core їх не має.
+ */
 export interface CalendarPeriodDto {
   id: Uuid;
   semesterId: Uuid;
+  /** @deprecated Старий вид: для К/БЗ/НП/ФН/І — свій, для решти — за ефектом. Читайте `periodKind`. */
   kind: CalendarPeriodKind;
   title: string;
   startsOn: IsoDate;
@@ -579,9 +664,17 @@ export interface CalendarPeriodDto {
   scope: PeriodScope;
   courses: Nullable<number[]>;
   groupIds: Nullable<Uuid[]>;
-  /** Керівники практики (лише PRACTICE); старіший core полів не має. */
+  /** Керівники (лише для виду з ефектом SUSPEND); старіший core полів не має. */
   supervisorIds?: Uuid[];
   supervisors?: TeacherRef[];
+  kindId?: Uuid;
+  periodKind?: PeriodKindRef;
+  /** Аудиторія періоду (лише SUSPEND, «ауд. 401» у блоці дня); у кроці 1 лише показується. */
+  roomId?: Nullable<Uuid>;
+  room?: Nullable<RoomRef>;
+  source?: PeriodSource;
+  /** Ключ рядка графіка, з якого імпортовано період. */
+  sourceKey?: Nullable<string>;
 }
 
 /** GET/PUT /api/admin/shift-windows */
@@ -1422,11 +1515,13 @@ export interface CatalogSnapshotDto {
   disciplines: Array<{ id: Uuid; shortName: string; name: string; aliases: string[] }>;
   rooms: Array<{ id: Uuid; name: string; type: RoomType }>;
   semesters: SemesterDto[];
+  /** Усі види періодів, і вимкнені теж (адитивно; старіший core поля не має). */
+  periodKinds?: Array<Pick<PeriodKindDto, 'id' | 'code' | 'name' | 'effect' | 'color' | 'aliases' | 'noteTemplate' | 'active'>>;
 }
 
 // ───────────────────────── 5. Importer ─────────────────────────
 
-export type ImportKind = 'TIMETABLE_XLSX' | 'DISCIPLINE_PROGRAM' | 'CURRICULUM' | 'ORDER_DOCUMENT';
+export type ImportKind = 'TIMETABLE_XLSX' | 'DISCIPLINE_PROGRAM' | 'CURRICULUM' | 'ORDER_DOCUMENT' | 'ACADEMIC_CALENDAR_XLSX';
 export type ImportJobStatus =
   | 'UPLOADED'
   | 'PARSING'

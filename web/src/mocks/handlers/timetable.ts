@@ -45,6 +45,7 @@ import {
   isStudyDay,
   parityOn,
   periodsOn,
+  closesLessons,
   PUBLISHED_VERSION_EFFECTIVE_FROM,
   PUBLISHED_VERSION_ID,
   ROOMS,
@@ -770,7 +771,7 @@ function materializedCount(lessons: readonly TemplateLessonDto[], from: IsoDate,
     for (const lesson of lessons) {
       if (lesson.weekday !== weekday || !runsIn(lesson.parity, parity)) continue;
       const group = groupOf(lesson);
-      if (periodsOn(date, group).some((p) => p.kind === 'PRACTICE')) continue;
+      if (periodsOn(date, group).some(closesLessons)) continue;
       count += 1;
     }
   }

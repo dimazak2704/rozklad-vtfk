@@ -19,5 +19,7 @@ public interface SemesterRepository extends JpaRepository<Semester, UUID> {
 
     Optional<Semester> findByAcademicYearIdAndNumber(UUID academicYearId, int number);
 
+    List<Semester> findAllByAcademicYearIdOrderByNumber(UUID academicYearId);
+
     boolean existsByBellProfileId(UUID bellProfileId);
 }

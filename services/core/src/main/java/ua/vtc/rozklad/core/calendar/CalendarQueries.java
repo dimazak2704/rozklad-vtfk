@@ -30,18 +30,18 @@ public interface CalendarQueries {
     int weekNumber(LocalDate date);
 
     /**
-     * {@code true} for Mon–Fri inside a semester and outside every HOLIDAY / NO_CLASSES period
+     * {@code true} for Mon–Fri inside a semester and outside every period of a DAY_OFF kind
      * that applies to everybody (scope ALL).
      */
     boolean isStudyDay(LocalDate date);
 
     /**
-     * Study day for one group: additionally no HOLIDAY, NO_CLASSES or PRACTICE period whose scope
+     * Study day for one group: additionally no period of a DAY_OFF or SUSPEND kind whose scope
      * includes the group (all, its course or the group itself).
      */
     boolean isGroupStudyDay(LocalDate date, UUID groupId);
 
-    /** Study mode of a STUDY_MODE period for the group (groups scope wins over courses over all); OFFLINE by default. */
+    /** Study mode of an ONLINE period for the group (groups scope wins over courses over all); OFFLINE by default. */
     StudyMode studyModeFor(LocalDate date, UUID groupId);
 
     /** Periods covering {@code date} that apply to the group, ordered by start. */

@@ -212,6 +212,16 @@ public class ImportJob implements Persistable<UUID> {
         updatedAt = now;
     }
 
+    /**
+     * The part of a parsed draft that depends on the catalog and the options was rebuilt with the report
+     * ({@link ImportHandler#review}); the file's part is the same. Ignored before parsing finished.
+     */
+    public void derivedDraft(JsonNode refreshed) {
+        if (refreshed != null && draft != null && parsedAt != null && !refreshed.equals(draft)) {
+            this.draft = refreshed;
+        }
+    }
+
     public void startApplying(UUID semesterId, Instant now) {
         require(canApply(), "apply");
         if (semesterId != null) {

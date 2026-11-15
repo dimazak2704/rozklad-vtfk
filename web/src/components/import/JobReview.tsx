@@ -17,6 +17,7 @@ import { formatInstant } from '@/lib/date';
 import { ApplyPanel } from './ApplyPanel';
 import { blockingReason, decisionRows, type ReviewTab } from './decisions';
 import { CurriculumPreview } from './drafts/CurriculumPreview';
+import { AcademicCalendarPreview } from './drafts/AcademicCalendarPreview';
 import { OrderDraftEditor } from './drafts/OrderDraftEditor';
 import { OrderPreview } from './drafts/OrderPreview';
 import { ProgramPreview } from './drafts/ProgramPreview';
@@ -161,6 +162,8 @@ export function JobReview({ jobId }: { jobId: Uuid }) {
                   <LoadOptionsPanel key={`${data.id}-${data.version ?? 0}`} job={data} />
                   <ProgramPreview draft={draft.draft} checks={data.report.filter((row) => row.type === 'HOURS')} />
                 </div>
+              ) : draft.kind === 'ACADEMIC_CALENDAR_XLSX' ? (
+                <AcademicCalendarPreview key={`${data.id}-${data.version ?? 0}`} job={data} draft={draft.draft} />
               ) : (
                 <div className="flex flex-col gap-4">
                   <LoadOptionsPanel key={`${data.id}-${data.version ?? 0}`} job={data} />

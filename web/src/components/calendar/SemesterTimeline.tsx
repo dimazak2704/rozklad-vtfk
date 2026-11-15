@@ -2,14 +2,15 @@ import { ArrowLeftRight } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import { useMemo, type ComponentPropsWithRef, type ReactElement } from 'react';
 import type { CalendarPeriod, CalendarWeek } from '@/api/calendar';
-import type { CalendarPeriodKind, IsoDate } from '@/api/types';
+import type { IsoDate, PeriodEffect } from '@/api/types';
 import { HoverDetails, ParityMark, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, compareIsoDates, formatDateRange, formatNumericDate, parseIsoDate, startOfWeek } from '@/lib/date';
 import { MONTHS_NOMINATIVE, PARITY_LABEL } from '@/lib/labels';
-import { PERIOD_KIND_LABEL, STUDY_MODE_LABEL } from './labels';
+import { KindSwatch } from './KindSwatch';
+import { STUDY_MODE_LABEL } from './labels';
 import { parityActionLabel } from './parity-confirmation';
-import { periodAudience } from './periods';
+import { periodAudience, periodKindOf } from './periods';
 
 interface SemesterTimelineProps {
   weeks: readonly CalendarWeek[];
@@ -24,7 +25,8 @@ interface SemesterTimelineProps {
 }
 
 /**
- * Смуга періоду кольором його дії: зняті пари — червоний, практика — бурштин, форма навчання — блакитний.
+ * Смуга періоду тоном його ефекту: вихідний — червоний, «група не на парах» — бурштин, форма навчання — блакитний,
+ * позначка — акцентний. Колір виду з графіка — крапкою на початку смуги.
  * Тло — низькохроматичний «wash» (у темній темі C ≤ 0,03), колір несуть рамка 1 px і слово.
  */
 const PARITY_SHORT_WORD = { NUMERATOR: 'чис', DENOMINATOR: 'знам' } as const;
@@ -75,12 +77,11 @@ function WeekMenu({
   );
 }
 
-const BAR_TONE: Record<CalendarPeriodKind, string> = {
-  HOLIDAY: 'border-cancel bg-cancel-subtle text-cancel',
-  NO_CLASSES: 'border-cancel bg-cancel-subtle text-cancel',
-  PRACTICE: 'border-change bg-change-subtle text-change',
-  STUDY_MODE: 'border-room bg-room-subtle text-room',
-  EXAM_SESSION: 'border-accent-subtle bg-selected text-accent',
+const BAR_TONE: Record<PeriodEffect, string> = {
+  DAY_OFF: 'border-cancel bg-cancel-subtle text-cancel',
+  SUSPEND: 'border-change bg-change-subtle text-change',
+  ONLINE: 'border-room bg-room-subtle text-room',
+  INFO: 'border-accent-subtle bg-selected text-accent',
 };
 
 /**
@@ -109,7 +110,7 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
         .map((period) => {
           const first = weeks.findIndex((w) => compareIsoDates(w.weekEnd, period.startsOn) >= 0);
           const lastFound = weeks.findLastIndex((w) => compareIsoDates(w.weekStart, period.endsOn) <= 0);
-          return { period, first, last: lastFound };
+          return { period, kind: periodKindOf(period), first, last: lastFound };
         })
         .filter((bar) => bar.first >= 0 && bar.last >= bar.first),
     [periods, weeks],
@@ -222,7 +223,7 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
             </Tooltip>
           );
         })}
-        {bars.map(({ period, first, last }, row) => (
+        {bars.map(({ period, kind, first, last }, row) => (
           <HoverDetails
             key={period.id}
             label={`Період: ${period.title}`}
@@ -230,8 +231,9 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
               <div className="flex flex-col gap-1.5 text-ui">
                 <p className="font-semibold text-primary">{period.title}</p>
                 <p className="text-secondary">
-                  {PERIOD_KIND_LABEL[period.kind]}
+                  {kind.name}
                   {period.studyMode ? ` · ${STUDY_MODE_LABEL[period.studyMode]}` : ''} · {periodAudience(period)}
+                  {period.room ? ` · ауд. ${period.room.name}` : ''}
                 </p>
                 <p className="text-caption text-muted figures">
                   {formatNumericDate(period.startsOn)} – {formatNumericDate(period.endsOn)}
@@ -247,9 +249,10 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
               className={cn(
                 'flex h-7 min-w-0 items-center gap-1.5 truncate rounded-tag border px-2 text-start text-caption font-semibold',
                 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
-                BAR_TONE[period.kind],
+                BAR_TONE[kind.effect],
               )}
             >
+              {kind.color ? <KindSwatch color={kind.color} effect={kind.effect} /> : null}
               {/* назва — завжди всередині смуги (обрізана); повна назва, кому й коли — у підказці */}
               <span className="truncate">{period.title}</span>
             </button>

@@ -7,8 +7,12 @@ import type {
   BellProfileSlotDto,
   BellSlotDto,
   CalendarPeriodDto,
+  CalendarPeriodKind,
   GroupDto,
   IsoDate,
+  PeriodEffect,
+  PeriodKindDto,
+  PeriodKindRef,
   SemesterDto,
   SemesterWeekDto,
   ShiftWindowDto,
@@ -18,7 +22,7 @@ import type {
 } from '@/api/types';
 import { addDays, compareIsoDates, diffDays, isoWeekday, startOfWeek } from '@/lib/date';
 import { mockId } from '../ids';
-import { groupNamed } from './catalog';
+import { groupNamed, roomNamed, roomRef } from './catalog';
 
 // ───────────────────────── Дзвінки ─────────────────────────
 
@@ -198,18 +202,121 @@ export function isWithinSemester(date: IsoDate, semester: SemesterDto = ACTIVE_S
   return compareIsoDates(date, semester.startsOn) >= 0 && compareIsoDates(date, semester.endsOn) <= 0;
 }
 
+// ───────────────────────── Види періодів ─────────────────────────
+
+/** Шаблони приміток вбудованих видів (CONTRACTS, «Види періодів»). */
+const T_SUSPEND = '{хто} – {назва} з {від}р. по {до} р.[, ауд. {ауд}]';
+const T_DAYOFF = '{хто}: {назва_мала} з {від}р. по {до} р.';
+const T_INFO = '{хто} – {назва} з {від}р. по {до} р.';
+
+type KindSeed = [code: string, name: string, effect: PeriodEffect, color: string | null, aliases: string[], template: string];
+
+/**
+ * Вбудовані види з графіка освітнього процесу 2026/27 (кольори — з легенди XLSX) за рішеннями власника:
+ * І, Д, А знімають пари (SUSPEND), Р і ВКР — лише позначка, НС — «група не на парах» з ауд. 401.
+ */
+const KIND_SEEDS: readonly KindSeed[] = [
+  ['К', 'Канікули', 'DAY_OFF', '#FFFFCC', [], T_DAYOFF],
+  ['С', 'Святкові дні', 'DAY_OFF', null, [], T_DAYOFF],
+  ['БЗ', 'Без занять', 'DAY_OFF', null, [], T_DAYOFF],
+  ['НП', 'Практика', 'SUSPEND', null, [], T_SUSPEND],
+  ['ВП', 'Виробнича практика', 'SUSPEND', '#33CCCC', [], T_SUSPEND],
+  ['ПП', 'Переддипломна практика', 'SUSPEND', '#33CCCC', [], T_SUSPEND],
+  ['Т', 'Технологічна практика', 'SUSPEND', null, [], T_SUSPEND],
+  ['ЗУ', 'Збори', 'SUSPEND', null, ['З'], T_SUSPEND],
+  ['НС', 'Національний спротив', 'SUSPEND', null, [], T_SUSPEND],
+  ['І', 'Сесія', 'SUSPEND', null, [], T_SUSPEND],
+  ['Д', 'ДПА', 'SUSPEND', null, [], T_SUSPEND],
+  ['А', 'Атестація', 'SUSPEND', '#CCFFCC', [], T_SUSPEND],
+  ['ФН', 'Форма навчання', 'ONLINE', null, [], '{хто} з {від}р. по {до} {режим}.'],
+  ['Р', 'Резерв навчального часу', 'INFO', null, [], T_INFO],
+  ['ВКР', 'Виконання кваліфікаційної роботи', 'INFO', null, [], T_INFO],
+];
+
+/** Вид без лічильника періодів (`usage` мок рахує зі сховища періодів). */
+export type PeriodKindFixture = Omit<PeriodKindDto, 'usage'>;
+
+export const PERIOD_KINDS: readonly PeriodKindFixture[] = KIND_SEEDS.map(([code, name, effect, color, aliases, noteTemplate], index) => ({
+  id: mockId('period-kind', code),
+  code,
+  name,
+  effect,
+  color,
+  aliases,
+  noteTemplate,
+  builtin: true,
+  active: true,
+  position: (index + 1) * 10,
+  version: 0,
+}));
+
+/** Старий `kind` → код вбудованого виду (як міграція core: HOLIDAY→К, NO_CLASSES→БЗ, PRACTICE→НП, STUDY_MODE→ФН, EXAM_SESSION→І). */
+export const LEGACY_KIND_CODE: Readonly<Record<CalendarPeriodKind, string>> = {
+  HOLIDAY: 'К',
+  NO_CLASSES: 'БЗ',
+  PRACTICE: 'НП',
+  STUDY_MODE: 'ФН',
+  EXAM_SESSION: 'І',
+};
+
+const LEGACY_BY_EFFECT: Readonly<Record<PeriodEffect, CalendarPeriodKind>> = {
+  DAY_OFF: 'NO_CLASSES',
+  SUSPEND: 'PRACTICE',
+  ONLINE: 'STUDY_MODE',
+  INFO: 'EXAM_SESSION',
+};
+
+/** Старий `kind`, який core ще пише у відповідь: свій для К/БЗ/НП/ФН/І, для решти — за ефектом. */
+export function legacyKindOf(kind: Pick<PeriodKindRef, 'code' | 'effect'>): CalendarPeriodKind {
+  const own = (Object.keys(LEGACY_KIND_CODE) as CalendarPeriodKind[]).find((legacy) => LEGACY_KIND_CODE[legacy] === kind.code);
+  return own ?? LEGACY_BY_EFFECT[kind.effect];
+}
+
+export function periodKindNamed(code: string): PeriodKindFixture {
+  const kind = PERIOD_KINDS.find((k) => k.code === code);
+  if (!kind) throw new Error(`Мок-дані неузгоджені: немає виду періоду «${code}»`);
+  return kind;
+}
+
+export const kindRef = (kind: Pick<PeriodKindDto, 'id' | 'code' | 'name' | 'color' | 'effect'>): PeriodKindRef => ({
+  id: kind.id,
+  code: kind.code,
+  name: kind.name,
+  color: kind.color,
+  effect: kind.effect,
+});
+
+/** Ефект періоду: з виду, а для запису без виду — за старим `kind`. */
+export function periodEffect(period: Pick<CalendarPeriodDto, 'kind' | 'periodKind'>): PeriodEffect {
+  return period.periodKind?.effect ?? periodKindNamed(LEGACY_KIND_CODE[period.kind]).effect;
+}
+
+/** Період знімає пари групи (DAY_OFF чи SUSPEND), як `StudyPeriod.closesLessons` у core. */
+export function closesLessons(period: Pick<CalendarPeriodDto, 'kind' | 'periodKind'>): boolean {
+  const effect = periodEffect(period);
+  return effect === 'DAY_OFF' || effect === 'SUSPEND';
+}
+
 // ───────────────────────── Календарні періоди ─────────────────────────
 
 const groupIdsOf = (...codes: string[]): Uuid[] => codes.map((code) => groupNamed(code).id);
 
+function ofKind(code: string): Pick<CalendarPeriodDto, 'kind' | 'kindId' | 'periodKind'> {
+  const kind = periodKindNamed(code);
+  return { kind: legacyKindOf(kind), kindId: kind.id, periodKind: kindRef(kind) };
+}
+
+const MANUAL = { roomId: null, room: null, source: 'MANUAL', sourceKey: null } as const;
+
 /**
- * Періоди з приміток розпорядження №35 (DOMAIN §11–12). Осінні канікули не відомі — їх немає.
+ * Періоди з приміток розпорядження №35 (DOMAIN §11–12) і НС 4КІ1 з графіка освітнього процесу 2026/27
+ * (16.11–27.11, ауд. 401 — рішення власника). Осінні канікули не відомі — їх немає.
  */
 export const CALENDAR_PERIODS: readonly CalendarPeriodDto[] = [
   {
     id: mockId('calendar-period', '2КІ3-practice-2026-10'),
     semesterId: ACTIVE_SEMESTER.id,
-    kind: 'PRACTICE',
+    ...ofKind('НП'),
     title: 'Електрорадіомонтажна практика',
     startsOn: '2026-10-19',
     endsOn: '2026-10-30',
@@ -218,11 +325,12 @@ export const CALENDAR_PERIODS: readonly CalendarPeriodDto[] = [
     scope: 'GROUPS',
     courses: null,
     groupIds: groupIdsOf('2КІ3'),
+    ...MANUAL,
   },
   {
     id: mockId('calendar-period', 'course-3-online-2026'),
     semesterId: ACTIVE_SEMESTER.id,
-    kind: 'STUDY_MODE',
+    ...ofKind('ФН'),
     title: 'Дистанційне навчання 3 курсу',
     startsOn: '2026-09-01',
     endsOn: '2026-10-31',
@@ -231,11 +339,12 @@ export const CALENDAR_PERIODS: readonly CalendarPeriodDto[] = [
     scope: 'COURSES',
     courses: [3],
     groupIds: null,
+    ...MANUAL,
   },
   {
     id: mockId('calendar-period', '4КІ-online-2026'),
     semesterId: ACTIVE_SEMESTER.id,
-    kind: 'STUDY_MODE',
+    ...ofKind('ФН'),
     title: 'Дистанційне навчання груп 4КІ',
     startsOn: '2026-09-01',
     endsOn: '2026-10-31',
@@ -244,6 +353,25 @@ export const CALENDAR_PERIODS: readonly CalendarPeriodDto[] = [
     scope: 'GROUPS',
     courses: null,
     groupIds: groupIdsOf('4КІ1', '4КІ2', '4КІ3'),
+    ...MANUAL,
+  },
+  {
+    // з графіка освітнього процесу: у 4КІ1 тижні 16.11–27.11 з кодом НС; ключ — такий, як його дає імпорт графіка
+    id: mockId('calendar-period', '4КІ1-ons-2026-11'),
+    semesterId: ACTIVE_SEMESTER.id,
+    ...ofKind('НС'),
+    title: 'Основи національного спротиву',
+    startsOn: '2026-11-16',
+    endsOn: '2026-11-27',
+    studyMode: null,
+    orderNote: '4КІ1 – Основи національного спротиву з 16.11.26р. по 27.11.26 р., ауд. 401',
+    scope: 'GROUPS',
+    courses: null,
+    groupIds: groupIdsOf('4КІ1'),
+    roomId: roomNamed('401').id,
+    room: roomRef(roomNamed('401')),
+    source: 'IMPORT',
+    sourceKey: '2026/2027|НС|2026-11-16|2026-11-27|2a3c2b4f',
   },
 ];
 
@@ -266,8 +394,8 @@ export function periodsOn(date: IsoDate, group?: GroupDto, periods: readonly Cal
   );
 }
 
-/** Навчальний день: пн–пт, у межах семестру і не в загальні канікули чи «без занять». */
+/** Навчальний день коледжу: пн–пт, у межах семестру і без вихідного (DAY_OFF) для всіх груп. */
 export function isStudyDay(date: IsoDate, semester: SemesterDto = ACTIVE_SEMESTER): boolean {
   if (isoWeekday(date) > 5 || !isWithinSemester(date, semester)) return false;
-  return !periodsOn(date).some((p) => p.kind === 'HOLIDAY' || p.kind === 'NO_CLASSES');
+  return !periodsOn(date).some((p) => periodEffect(p) === 'DAY_OFF');
 }

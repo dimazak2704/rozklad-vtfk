@@ -11,7 +11,8 @@ import java.util.UUID;
 
 /**
  * Study calendar of DOMAIN.md §2 over one or more semesters: which dates have lessons for a group,
- * their week parity and whether lessons are online. Pure logic; get it from {@link CalendarQueries#studyCalendar}.
+ * their week parity and whether lessons are online. Behaviour comes from the effects of the periods' kinds
+ * (priority DAY_OFF > SUSPEND > ONLINE > INFO). Pure logic; get it from {@link CalendarQueries#studyCalendar}.
  */
 public final class StudyCalendar {
 
@@ -55,31 +56,32 @@ public final class StudyCalendar {
     }
 
     /**
-     * PRACTICE periods of {@code group} on a Monday–Friday date of a semester. A holiday or a day without
-     * classes that applies to the group wins: nobody is at practice then, so the list is empty.
+     * Blocks of the day of {@code group}: periods of a SUSPEND kind (practice, НС, сесія…) on a Monday–Friday
+     * date of a semester. A DAY_OFF period that applies to the group wins: nobody is at a block then, so the
+     * list is empty.
      */
     public List<StudyPeriod> practices(LocalDate date, GroupScope group) {
         if (group == null) {
             return List.of();
         }
         List<StudyPeriod> active = activePeriods(date, group);
-        return active.stream().anyMatch(StudyCalendar::isDayOff) ? List.of() : active.stream()
-                .filter(period -> period.kind() == CalendarPeriodKind.PRACTICE)
+        return active.stream().anyMatch(StudyPeriod::isDayOff) ? List.of() : active.stream()
+                .filter(StudyPeriod::suspends)
                 .sorted(BY_START)
                 .toList();
     }
 
     /**
-     * PRACTICE periods {@code teacherId} supervises on a Monday–Friday date of a semester that no
-     * college-wide holiday or day without classes closes.
+     * Periods of a SUSPEND kind {@code teacherId} supervises on a Monday–Friday date of a semester that no
+     * college-wide DAY_OFF period closes.
      */
     public List<StudyPeriod> supervisedPractices(LocalDate date, UUID teacherId) {
-        if (teacherId == null || activePeriods(date, null).stream().anyMatch(StudyCalendar::isDayOff)) {
+        if (teacherId == null || activePeriods(date, null).stream().anyMatch(StudyPeriod::isDayOff)) {
             return List.of();
         }
         return semesterOf(date).filter(semester -> date.getDayOfWeek().getValue() <= 5).stream()
                 .flatMap(semester -> semester.periods().stream())
-                .filter(period -> period.kind() == CalendarPeriodKind.PRACTICE && period.covers(date)
+                .filter(period -> period.suspends() && period.covers(date)
                         && period.supervisorIds().contains(teacherId))
                 .sorted(BY_START)
                 .toList();
@@ -100,11 +102,11 @@ public final class StudyCalendar {
         if (active.isEmpty()) {
             return null;
         }
-        // спершу те, що скасовує заняття, далі форма навчання й сесія
+        // спершу те, що скасовує заняття (вихідні й блоки), далі форма навчання, потім позначки
         Set<String> titles = new LinkedHashSet<>();
         active.stream().filter(StudyPeriod::closesLessons).map(StudyPeriod::title).forEach(titles::add);
         online.map(StudyPeriod::title).ifPresent(titles::add);
-        active.stream().filter(period -> period.kind() == CalendarPeriodKind.EXAM_SESSION)
+        active.stream().filter(period -> period.effect() == PeriodEffect.INFO)
                 .map(StudyPeriod::title).forEach(titles::add);
         return titles.isEmpty() ? null : String.join(NOTE_SEPARATOR, titles);
     }
@@ -118,9 +120,5 @@ public final class StudyCalendar {
                 .flatMap(semester -> semester.periods().stream())
                 .filter(period -> period.covers(date) && period.appliesTo(group))
                 .toList();
-    }
-
-    private static boolean isDayOff(StudyPeriod period) {
-        return period.kind() == CalendarPeriodKind.HOLIDAY || period.kind() == CalendarPeriodKind.NO_CLASSES;
     }
 }

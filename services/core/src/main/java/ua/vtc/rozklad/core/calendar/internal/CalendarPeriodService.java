@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -17,15 +18,21 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
+import ua.vtc.rozklad.core.calendar.PeriodEffect;
+import ua.vtc.rozklad.core.calendar.PeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodKindRepository;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
+import ua.vtc.rozklad.core.calendar.PeriodSource;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
 import ua.vtc.rozklad.core.calendar.StudyCalendar;
 import ua.vtc.rozklad.core.calendar.internal.CalendarChangePublisher.PeriodSnapshot;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.CalendarPeriodDto;
 import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.CalendarPeriodRequest;
+import ua.vtc.rozklad.core.calendar.internal.CalendarDtos.PeriodKindRef;
 import ua.vtc.rozklad.core.catalog.CatalogQueries;
 import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.catalog.UkrainianOrder;
 import ua.vtc.rozklad.core.shared.error.FieldErrors;
@@ -33,24 +40,39 @@ import ua.vtc.rozklad.core.shared.error.FieldValidationException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
 
 /**
- * Календарні періоди: holidays, days without classes, practice, study mode (online/mixed) and
- * exam sessions, for everybody, for courses or for listed groups. A period lies inside its
- * semester; every change publishes {@code schedule.changed} for the affected dates and groups.
+ * Календарні періоди: a {@link PeriodKind} (holidays, practice, НС, study mode, сесія…) over dates, for
+ * everybody, for courses or for listed groups. A period lies inside its semester; what the form may carry
+ * follows the kind's effect (study mode for ONLINE, supervisors and a room for SUSPEND). Every change
+ * publishes {@code schedule.changed} for the affected dates and groups. An edit of an imported row makes it
+ * MANUAL, so the academic calendar import leaves it alone afterwards.
  */
 @Service
 @Transactional(readOnly = true)
 public class CalendarPeriodService {
 
+    static final String NO_KIND = "Вкажіть вид періоду.";
+    static final String UNKNOWN_KIND = "Вид періоду не знайдено.";
+    static final String INACTIVE_KIND = "Вид «%s» вимкнено: увімкніть його в «Видах періодів» або виберіть інший.";
+    static final String STUDY_MODE_REQUIRED = "Для виду з ефектом «онлайн» вкажіть режим: офлайн, онлайн або змішаний.";
+    static final String STUDY_MODE_FORBIDDEN = "Режим навчання задають лише для виду з ефектом «онлайн».";
+    static final String ROOM_FORBIDDEN = "Аудиторію вказують лише для виду, коли група не на парах.";
+    static final String UNKNOWN_ROOM = "Аудиторію не знайдено.";
+    static final String SUPERVISORS_FORBIDDEN =
+            "Керівників призначають лише для виду, коли група не на парах (практика, НС…).";
+
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     private final CalendarPeriodRepository periods;
+    private final PeriodKindRepository kinds;
     private final SemesterRepository semesters;
     private final CatalogQueries catalog;
     private final CalendarChangePublisher changes;
 
-    public CalendarPeriodService(CalendarPeriodRepository periods, SemesterRepository semesters,
-                                 CatalogQueries catalog, CalendarChangePublisher changes) {
+    public CalendarPeriodService(CalendarPeriodRepository periods, PeriodKindRepository kinds,
+                                 SemesterRepository semesters, CatalogQueries catalog,
+                                 CalendarChangePublisher changes) {
         this.periods = periods;
+        this.kinds = kinds;
         this.semesters = semesters;
         this.catalog = catalog;
         this.changes = changes;
@@ -61,30 +83,25 @@ public class CalendarPeriodService {
         List<CalendarPeriod> found = semesterId == null
                 ? periods.findAllByOrderByStartsOn()
                 : periods.findAllBySemesterIdOrderByStartsOn(semesterId);
-        Map<UUID, GroupRef> groups = catalog.groupRefs(found.stream()
-                .flatMap(period -> period.getGroupIds().stream()).collect(Collectors.toSet()));
-        Set<UUID> supervisorIds = found.stream().filter(CalendarPeriodService::isPractice)
-                .flatMap(period -> period.getSupervisorIds().stream()).collect(Collectors.toSet());
-        Map<UUID, TeacherRef> teachers = supervisorIds.isEmpty() ? Map.of() : catalog.teacherRefs(supervisorIds);
-        return found.stream().map(period -> toDto(period, groups, teachers)).toList();
+        return toDtos(found);
     }
 
     public CalendarPeriodDto get(UUID id) {
-        return toDto(find(id));
+        return toDtos(List.of(find(id))).getFirst();
     }
 
     @Transactional
     public CalendarPeriodDto create(CalendarPeriodRequest request) {
         Semester semester = semester(request.semesterId());
-        validate(request, semester);
+        PeriodKind kind = validate(request, semester, null);
         StudyCalendar before = changes.before(semester.getStartsOn(), semester.getEndsOn());
-        CalendarPeriod period = new CalendarPeriod(semester.getId(), request.kind(), request.title().strip(),
+        CalendarPeriod period = new CalendarPeriod(semester.getId(), kind, request.title().strip(),
                 request.startsOn(), request.endsOn());
         copy(request, period);
         periods.save(period);
         changes.periodsChanged(List.of(PeriodSnapshot.of(period)), semester.getStartsOn(), semester.getEndsOn(),
                 before);
-        return toDto(period);
+        return toDtos(List.of(period)).getFirst();
     }
 
     @Transactional
@@ -95,17 +112,19 @@ public class CalendarPeriodService {
             new FieldErrors().add("semesterId", "Період не можна перенести в інший семестр: створіть новий.").throwIfAny();
         }
         Semester semester = semester(period.getSemesterId());
-        validate(request, semester);
+        PeriodKind kind = validate(request, semester, period.getKind());
         StudyCalendar calendarBefore = changes.before(semester.getStartsOn(), semester.getEndsOn());
         PeriodSnapshot before = PeriodSnapshot.of(period);
-        period.setKind(request.kind());
+        period.setKind(kind);
         period.setTitle(request.title().strip());
         period.setPeriod(request.startsOn(), request.endsOn());
         copy(request, period);
+        // правка диспетчера: наступний імпорт графіка цей рядок не чіпає
+        period.markManual();
         periods.flush();
         changes.periodsChanged(List.of(before, PeriodSnapshot.of(period)), semester.getStartsOn(),
                 semester.getEndsOn(), calendarBefore);
-        return toDto(period);
+        return toDtos(List.of(period)).getFirst();
     }
 
     @Transactional
@@ -121,7 +140,7 @@ public class CalendarPeriodService {
     }
 
     private CalendarPeriod find(UUID id) {
-        return periods.findById(id).orElseThrow(() -> NotFoundException.of("Період календаря", id));
+        return periods.findWithKindById(id).orElseThrow(() -> NotFoundException.of("Період календаря", id));
     }
 
     private Semester semester(UUID id) {
@@ -129,8 +148,13 @@ public class CalendarPeriodService {
                 .orElseThrow(() -> FieldValidationException.of("semesterId", "Семестр не знайдено."));
     }
 
-    private void validate(CalendarPeriodRequest request, Semester semester) {
+    /**
+     * All field errors of the request at once; returns the resolved kind. {@code current} is the kind the
+     * period has now ({@code null} on create): an inactive kind may stay, but cannot be chosen anew.
+     */
+    private PeriodKind validate(CalendarPeriodRequest request, Semester semester, PeriodKind current) {
         FieldErrors errors = new FieldErrors();
+        PeriodKind kind = resolveKind(request, current, errors);
         if (request.endsOn().isBefore(request.startsOn())) {
             errors.add("endsOn", "Кінець періоду не може бути раніше за початок.");
         }
@@ -138,16 +162,55 @@ public class CalendarPeriodService {
             errors.add("startsOn", "Період має бути в межах семестру (%s–%s).".formatted(
                     DATE.format(semester.getStartsOn()), DATE.format(semester.getEndsOn())));
         }
-        if (request.kind() == CalendarPeriodKind.STUDY_MODE && request.studyMode() == null) {
-            errors.add("studyMode", "Для періоду форми навчання вкажіть режим: офлайн, онлайн або змішаний.");
+        if (kind != null) {
+            validateByEffect(request, kind.getEffect(), errors);
         }
-        if (request.kind() != CalendarPeriodKind.STUDY_MODE && request.studyMode() != null) {
-            errors.add("studyMode", "Режим навчання задають лише для періоду форми навчання.");
+        validateScope(request, errors);
+        errors.throwIfAny();
+        return kind;
+    }
+
+    /** {@code kindId} wins; else the legacy {@code kind} → its builtin kind; else 400. */
+    private PeriodKind resolveKind(CalendarPeriodRequest request, PeriodKind current, FieldErrors errors) {
+        UUID kindId = request.kindId() != null ? request.kindId()
+                : request.kind() != null ? request.kind().builtinKindId() : null;
+        if (kindId == null) {
+            errors.add("kindId", NO_KIND);
+            return null;
         }
-        PeriodScope scope = scopeOf(request);
+        PeriodKind kind = kinds.findById(kindId).orElse(null);
+        if (kind == null) {
+            errors.add("kindId", UNKNOWN_KIND);
+            return null;
+        }
+        boolean chosenAnew = current == null || !current.getId().equals(kind.getId());
+        if (chosenAnew && !kind.isActive()) {
+            errors.add("kindId", INACTIVE_KIND.formatted(kind.getName()));
+        }
+        return kind;
+    }
+
+    private void validateByEffect(CalendarPeriodRequest request, PeriodEffect effect, FieldErrors errors) {
+        if (effect == PeriodEffect.ONLINE && request.studyMode() == null) {
+            errors.add("studyMode", STUDY_MODE_REQUIRED);
+        }
+        if (effect != PeriodEffect.ONLINE && request.studyMode() != null) {
+            errors.add("studyMode", STUDY_MODE_FORBIDDEN);
+        }
+        if (request.roomId() != null) {
+            if (effect != PeriodEffect.SUSPEND) {
+                errors.add("roomId", ROOM_FORBIDDEN);
+            } else if (catalog.room(request.roomId()).isEmpty()) {
+                errors.add("roomId", UNKNOWN_ROOM);
+            }
+        }
+        validateSupervisors(request, effect, errors);
+    }
+
+    private void validateScope(CalendarPeriodRequest request, FieldErrors errors) {
         List<Integer> courses = request.courses() == null ? List.of() : request.courses();
         List<UUID> groupIds = request.groupIds() == null ? List.of() : request.groupIds();
-        switch (scope) {
+        switch (scopeOf(request)) {
             case ALL -> {
                 if (!courses.isEmpty() || !groupIds.isEmpty()) {
                     errors.add("scope", "Для періоду «для всіх» не вказують курси чи групи.");
@@ -176,18 +239,16 @@ public class CalendarPeriodService {
                 }
             }
         }
-        validateSupervisors(request, errors);
-        errors.throwIfAny();
     }
 
-    /** Керівники практики: only for PRACTICE, each an existing active teacher, named once. */
-    private void validateSupervisors(CalendarPeriodRequest request, FieldErrors errors) {
+    /** Керівники: only for a SUSPEND kind, each an existing active teacher, named once. */
+    private void validateSupervisors(CalendarPeriodRequest request, PeriodEffect effect, FieldErrors errors) {
         List<UUID> supervisorIds = request.supervisorIds() == null ? List.of() : request.supervisorIds();
         if (supervisorIds.isEmpty()) {
             return;
         }
-        if (request.kind() != CalendarPeriodKind.PRACTICE) {
-            errors.add("supervisorIds", "Керівників призначають лише для періоду практики.");
+        if (effect != PeriodEffect.SUSPEND) {
+            errors.add("supervisorIds", SUPERVISORS_FORBIDDEN);
             return;
         }
         Set<UUID> seen = new HashSet<>();
@@ -216,38 +277,50 @@ public class CalendarPeriodService {
             case GROUPS -> period.applyToGroups(new LinkedHashSet<>(request.groupIds()));
         }
         period.setSupervisors(request.supervisorIds());
+        period.setRoomId(request.roomId());
     }
 
     private static PeriodScope scopeOf(CalendarPeriodRequest request) {
         return request.scope() == null ? PeriodScope.ALL : request.scope();
     }
 
-    private CalendarPeriodDto toDto(CalendarPeriod period) {
-        Set<UUID> supervisorIds = isPractice(period) ? period.getSupervisorIds() : Set.of();
-        return toDto(period, catalog.groupRefs(period.getGroupIds()),
-                supervisorIds.isEmpty() ? Map.of() : catalog.teacherRefs(supervisorIds));
+    /** DTOs with one batch lookup each for groups, supervisors and rooms (none when nobody needs them). */
+    List<CalendarPeriodDto> toDtos(Collection<CalendarPeriod> found) {
+        Map<UUID, GroupRef> groups = catalog.groupRefs(found.stream()
+                .flatMap(period -> period.getGroupIds().stream()).collect(Collectors.toSet()));
+        Set<UUID> supervisorIds = found.stream().filter(CalendarPeriodService::suspends)
+                .flatMap(period -> period.getSupervisorIds().stream()).collect(Collectors.toSet());
+        Map<UUID, TeacherRef> teachers = supervisorIds.isEmpty() ? Map.of() : catalog.teacherRefs(supervisorIds);
+        Set<UUID> roomIds = found.stream().map(CalendarPeriod::getRoomId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, RoomRef> rooms = roomIds.isEmpty() ? Map.of() : catalog.roomRefs(roomIds);
+        return found.stream().map(period -> toDto(period, groups, teachers, rooms)).toList();
     }
 
-    private static boolean isPractice(CalendarPeriod period) {
-        return period.getKind() == CalendarPeriodKind.PRACTICE;
+    private static boolean suspends(CalendarPeriod period) {
+        return period.getEffect() == PeriodEffect.SUSPEND;
     }
 
     private static CalendarPeriodDto toDto(CalendarPeriod period, Map<UUID, GroupRef> groups,
-                                           Map<UUID, TeacherRef> teachers) {
+                                           Map<UUID, TeacherRef> teachers, Map<UUID, RoomRef> rooms) {
         List<GroupRef> refs = period.getGroupIds().stream()
                 .map(groups::get)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(GroupRef::code, UkrainianOrder.NATURAL))
                 .toList();
         Collection<UUID> groupIds = refs.stream().map(GroupRef::id).toList();
-        List<TeacherRef> supervisors = !isPractice(period) ? List.of() : period.getSupervisorIds().stream()
+        List<TeacherRef> supervisors = !suspends(period) ? List.of() : period.getSupervisorIds().stream()
                 .map(teachers::get)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(TeacherRef::shortName, UkrainianOrder.NATURAL))
                 .toList();
-        return new CalendarPeriodDto(period.getId(), period.getSemesterId(), period.getKind(), period.getTitle(),
-                period.getStartsOn(), period.getEndsOn(), period.getStudyMode(), period.getOrderNote(), period.getScope(),
-                period.getCourses(), List.copyOf(groupIds), refs, period.getVersion(),
-                supervisors.stream().map(TeacherRef::id).toList(), supervisors);
+        PeriodKind kind = period.getKind();
+        RoomRef room = period.getRoomId() == null ? null : rooms.get(period.getRoomId());
+        return new CalendarPeriodDto(period.getId(), period.getSemesterId(), CalendarPeriodKind.of(kind),
+                period.getTitle(), period.getStartsOn(), period.getEndsOn(), period.getStudyMode(),
+                period.getOrderNote(), period.getScope(), period.getCourses(), List.copyOf(groupIds), refs,
+                period.getVersion(), supervisors.stream().map(TeacherRef::id).toList(), supervisors, kind.getId(),
+                PeriodKindRef.of(kind), period.getRoomId(), room,
+                period.getSource() == null ? PeriodSource.MANUAL : period.getSource(), period.getSourceKey());
     }
 }

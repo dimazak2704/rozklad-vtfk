@@ -35,6 +35,7 @@ import ua.vtc.rozklad.contracts.events.RozkladEvents;
 import ua.vtc.rozklad.contracts.events.ScheduleChangeReason;
 import ua.vtc.rozklad.contracts.events.ScheduleChanged;
 import ua.vtc.rozklad.contracts.events.TimetableVersionPublished;
+import ua.vtc.rozklad.core.calendar.CalendarFixtures;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
@@ -134,13 +135,15 @@ class TimetablePublicationIT {
         data = new TimetableItData(LocalDate.now(clock)).create(transaction, em);
         transaction.executeWithoutResult(status -> {
             UUID semesterId = data.semester.getId();
-            em.persist(new CalendarPeriod(semesterId, CalendarPeriodKind.HOLIDAY, "День самоврядування",
-                    data.monday(9), data.monday(9)));
-            CalendarPeriod practice = new CalendarPeriod(semesterId, CalendarPeriodKind.PRACTICE,
+            em.persist(new CalendarPeriod(semesterId, CalendarFixtures.builtin(em, CalendarPeriodKind.HOLIDAY),
+                    "День самоврядування", data.monday(9), data.monday(9)));
+            CalendarPeriod practice = new CalendarPeriod(semesterId,
+                    CalendarFixtures.builtin(em, CalendarPeriodKind.PRACTICE),
                     "4КІ2 – Переддипломна практика", data.monday(6), data.monday(6).plusDays(4));
             practice.applyToGroups(List.of(data.group4ki2.getId()));
             em.persist(practice);
-            CalendarPeriod online = new CalendarPeriod(semesterId, CalendarPeriodKind.STUDY_MODE,
+            CalendarPeriod online = new CalendarPeriod(semesterId,
+                    CalendarFixtures.builtin(em, CalendarPeriodKind.STUDY_MODE),
                     "Групи 4КІ навчаються дистанційно", data.monday(7), data.monday(8).plusDays(4));
             online.setStudyMode(StudyMode.ONLINE);
             online.applyToCourses(List.of(4));

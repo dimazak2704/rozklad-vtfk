@@ -54,14 +54,46 @@ class CalendarChangePublisher {
         return studyCalendars.forRange(from, to);
     }
 
-    /** Dates of every period (before and after an edit) and the union of their groups. */
-    void periodsChanged(Collection<PeriodSnapshot> periods, LocalDate semesterStart, LocalDate semesterEnd,
-                        StudyCalendar before) {
+    /**
+     * Dates of every period (before and after an edit) and the union of their groups: the in-process
+     * {@link CalendarEdited} (lessons are re-materialized or the edit is refused with 409) and then
+     * {@code schedule.changed}. Returns what the listeners did with the lessons.
+     */
+    CalendarEdited.Outcome periodsChanged(Collection<PeriodSnapshot> periods, LocalDate semesterStart,
+                                          LocalDate semesterEnd, StudyCalendar before) {
+        return periodsChanged(periods, semesterStart, semesterEnd, before, new CalendarEdited.Outcome());
+    }
+
+    /**
+     * The same, with the caller's {@code outcome}: the listeners fill it before they may refuse the edit, so a dry
+     * run that catches the 409 still reads how many lessons the edit would change.
+     */
+    CalendarEdited.Outcome periodsChanged(Collection<PeriodSnapshot> periods, LocalDate semesterStart,
+                                          LocalDate semesterEnd, StudyCalendar before,
+                                          CalendarEdited.Outcome outcome) {
+        Affected affected = affected(periods, semesterStart, semesterEnd);
+        return publish(affected.dates(), affected.groupIds(), before, outcome);
+    }
+
+    /**
+     * Only texts of the periods changed (the name or colour of their kind): site and bot caches of those dates
+     * and groups are told, lessons are not touched.
+     */
+    void textsChanged(Collection<PeriodSnapshot> periods, LocalDate from, LocalDate to) {
+        Affected affected = affected(periods, from, to);
+        if (!affected.dates().isEmpty()) {
+            events.publishEvent(new ScheduleChanged(EventEnvelope.create(clock), List.copyOf(affected.dates()),
+                    List.copyOf(affected.groupIds()), List.of(), ScheduleChangeReason.CALENDAR_CHANGED));
+        }
+    }
+
+    /** Mon–Fri dates of the periods inside {@code [from, to]} and every group in their scopes. */
+    Affected affected(Collection<PeriodSnapshot> periods, LocalDate from, LocalDate to) {
         SortedSet<LocalDate> dates = new TreeSet<>();
         Set<UUID> groupIds = new java.util.LinkedHashSet<>();
         List<GroupInfo> allGroups = null;
         for (PeriodSnapshot period : periods) {
-            dates.addAll(studyWeekdays(period.startsOn(), period.endsOn(), semesterStart, semesterEnd));
+            dates.addAll(studyWeekdays(period.startsOn(), period.endsOn(), from, to));
             switch (period.scope()) {
                 case GROUPS -> groupIds.addAll(period.groupIds());
                 case COURSES -> {
@@ -75,13 +107,13 @@ class CalendarChangePublisher {
                 }
             }
         }
-        publish(dates, groupIds, before);
+        return new Affected(dates, groupIds);
     }
 
     /** A parity override changes the lessons of every group in that week. */
     void weekChanged(LocalDate weekStart, LocalDate semesterStart, LocalDate semesterEnd, StudyCalendar before) {
         publish(new TreeSet<>(studyWeekdays(weekStart, weekStart.plusDays(4), semesterStart, semesterEnd)),
-                everyGroup(), before);
+                everyGroup(), before, new CalendarEdited.Outcome());
     }
 
     /**
@@ -92,7 +124,7 @@ class CalendarChangePublisher {
                          StudyCalendar before) {
         LocalDate from = oldStart.isBefore(newStart) ? oldStart : newStart;
         LocalDate to = oldEnd.isAfter(newEnd) ? oldEnd : newEnd;
-        publish(new TreeSet<>(studyWeekdays(from, to, from, to)), everyGroup(), before);
+        publish(new TreeSet<>(studyWeekdays(from, to, from, to)), everyGroup(), before, new CalendarEdited.Outcome());
     }
 
     private Set<UUID> everyGroup() {
@@ -100,14 +132,17 @@ class CalendarChangePublisher {
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
-    private void publish(SortedSet<LocalDate> dates, Set<UUID> groupIds, StudyCalendar before) {
+    private CalendarEdited.Outcome publish(SortedSet<LocalDate> dates, Set<UUID> groupIds, StudyCalendar before,
+                                           CalendarEdited.Outcome outcome) {
         if (dates.isEmpty()) {
-            return;
+            return outcome;
         }
         // спершу внутрішня подія: розклад може відхилити правку, і тоді нічого не піде в outbox
-        events.publishEvent(new CalendarEdited(List.copyOf(dates), List.copyOf(groupIds), before));
+        CalendarEdited edited = new CalendarEdited(List.copyOf(dates), List.copyOf(groupIds), before, outcome);
+        events.publishEvent(edited);
         events.publishEvent(new ScheduleChanged(EventEnvelope.create(clock), List.copyOf(dates),
                 List.copyOf(groupIds), List.of(), ScheduleChangeReason.CALENDAR_CHANGED));
+        return edited.outcome();
     }
 
     private static List<LocalDate> studyWeekdays(LocalDate from, LocalDate to, LocalDate semesterStart,
@@ -121,6 +156,10 @@ class CalendarChangePublisher {
             }
         }
         return dates;
+    }
+
+    /** Dates and groups an edit reaches. */
+    record Affected(SortedSet<LocalDate> dates, Set<UUID> groupIds) {
     }
 
     /** Values of a period at one moment (an edit publishes both the old and the new state). */

@@ -21,8 +21,11 @@ import ua.vtc.rozklad.importer.report.Severity;
 @Component
 class JobNormalizer {
 
-    /** Normalization result plus the report rows derived from it. */
-    record Normalized(NormalizationResult result, List<ReportRow> rows) {
+    /**
+     * Normalization result plus the report rows derived from it, and the draft to keep (refreshed by
+     * {@link ImportHandler#review}; the same draft for most kinds).
+     */
+    record Normalized(NormalizationResult result, List<ReportRow> rows, JsonNode draft) {
 
         boolean blocking() {
             return rows.stream().anyMatch(ReportRow::blocking);
@@ -56,7 +59,7 @@ class JobNormalizer {
                 row = handler.entitiesBlockApply()
                         ? new ReportRow(Severity.ERROR, row.type(), row.raw(), null, row.suggestions(), row.location(),
                                 "Немає в каталозі. " + handler.cannotCreate(resolution.entity()).get() + " "
-                                        + missingHint(type))
+                                        + handler.missingHint(type))
                         : new ReportRow(Severity.INFO, row.type(), row.raw(), null, row.suggestions(), row.location(),
                                 "Немає в каталозі (для інформації: розпорядження зберігається як текст, каталог не "
                                         + "змінюється).");
@@ -71,23 +74,21 @@ class JobNormalizer {
             }
             rows.add(row);
         }
+        JsonNode kept = draft;
         if (draft != null) {
-            rows.addAll(handler.readiness(draft, options, result));
+            ImportHandler.Review review = handler.review(draft, options, catalog, result);
+            rows.addAll(review.rows());
+            if (review.draft() != null) {
+                kept = review.draft();
+            }
         }
-        return new Normalized(result, rows);
+        return new Normalized(result, rows, kept);
     }
 
     /** The blocking row used when core's catalog cannot be fetched: matching has to be repeated. */
     static ReportRow catalogUnavailable(String reason) {
         return ReportRow.of(Severity.ERROR, RowType.CATALOG, null, null, reason
                 + " Зіставлення з каталогом не виконано — повторіть його (збережіть зіставлення), коли сервер розкладу буде доступний.");
-    }
-
-    private static String missingHint(EntityType type) {
-        return type == EntityType.GROUP
-                ? "Навантаження додається лише наявним групам: виправте код групи в параметрах імпорту або спершу "
-                        + "імпортуйте розклад."
-                : "Зіставте значення з наявним записом каталогу.";
     }
 
     private static boolean needsShortName(Resolution resolution) {

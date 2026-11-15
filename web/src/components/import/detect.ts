@@ -15,6 +15,7 @@ export const KIND_EXTENSIONS: Readonly<Record<ImportKind, readonly string[]>> = 
   DISCIPLINE_PROGRAM: ['docx', 'doc', 'pdf'],
   CURRICULUM: ['pdf', 'jpg', 'jpeg', 'png', 'xlsx'],
   ORDER_DOCUMENT: ['docx', 'jpg', 'jpeg', 'png', 'pdf'],
+  ACADEMIC_CALENDAR_XLSX: ['xlsx'],
 };
 
 export function extensionOf(fileName: string): string {
@@ -35,7 +36,7 @@ export interface Detection {
 }
 
 /**
- * Вид за назвою й розширенням: таблиця Excel — розклад (або план, якщо так названо), документ —
+ * Вид за назвою й розширенням: таблиця Excel — розклад (або план чи графік освітнього процесу, якщо так названо), документ —
  * програма (або розпорядження), фото — розпорядження (або план). null — файл не підходить.
  */
 export function detectImportKind(fileName: string): Detection | null {
@@ -44,8 +45,10 @@ export function detectImportKind(fileName: string): Detection | null {
   const curriculum = has(name, 'план', 'plan', 'curriculum');
   const order = has(name, 'розпоряд', 'наказ', 'order', 'замін', 'zamin');
   const program = has(name, 'програм', 'program', 'робоча');
+  const academicCalendar = has(name, 'графік', 'grafik', 'освітнього процесу', 'calendar');
   switch (ext) {
     case 'xlsx':
+      if (academicCalendar) return { kind: 'ACADEMIC_CALENDAR_XLSX', reason: 'Таблиця з назвою «графік» — графік освітнього процесу' };
       return curriculum
         ? { kind: 'CURRICULUM', reason: 'Таблиця з назвою «план»' }
         : { kind: 'TIMETABLE_XLSX', reason: 'Таблиця Excel — схоже на розклад занять' };

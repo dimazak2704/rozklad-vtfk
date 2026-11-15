@@ -113,6 +113,27 @@ class OrderDocxRendererTest {
     }
 
     @Test
+    void periodKindNotesFromCoreArePrintedVerbatimInTheirOrder() throws IOException {
+        // примітки періодів (НС з аудиторією, канікули, форма навчання) core кладе в notes готовим текстом
+        List<String> notes = List.of(
+                "4КІ1 – Основи національного спротиву з 16.11.26р. по 27.11.26 р., ауд. 401",
+                "Усі групи: зимові канікули з 28.12.26р. по 30.12.26 р.",
+                "Групи 4КІ1, 4КІ2, 4КІ3 з 01.09.26р. по 31.10.26 навчаються – дистанційно.");
+        OrderPayload base = Order35.payload();
+        OrderPayload order = new OrderPayload(base.id(), base.number(), base.date(), base.kind(), base.parentId(),
+                base.status(), base.title(), base.weekdayLabel(), base.parityLabel(), base.items(), base.roomChanges(),
+                notes, base.signatoryPosition(), base.signatoryName(), base.semesterName(), base.affectedGroups(),
+                base.affectedTeachers());
+        try (XWPFDocument document = render(order)) {
+            List<XWPFParagraph> paragraphs = document.getParagraphs();
+            assertThat(paragraphs).extracting(XWPFParagraph::getText).containsSubsequence(notes);
+            paragraphs.stream().filter(paragraph -> notes.contains(paragraph.getText()))
+                    .flatMap(paragraph -> paragraph.getRuns().stream())
+                    .forEach(run -> assertThat(run.isBold()).isTrue());
+        }
+    }
+
+    @Test
     void subgroupsArePrintedOneUnderAnotherAndRoomChangesGetTheirSection() throws IOException {
         OrderPayload order = withRows(
                 List.of(Order35.row("1Ф", "4", OrderRowType.REPLACEMENT, "Ін.мова", "Харченко О./Михальчук",

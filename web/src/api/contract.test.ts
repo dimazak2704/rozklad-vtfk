@@ -228,6 +228,35 @@ describe('контракт мок-API ↔ core', () => {
     await expectShape(lesson, `${CORE}timetable/LessonView.java`, 'LessonView');
     // парність рядка шаблону: позначка «лише по чисельниках/знаменниках» на картці
     expect(['BOTH', 'NUMERATOR', 'DENOMINATOR']).toContain(lesson.parity);
+    // блок дня: НС 4КІ1 16.11 з видом і аудиторією (персонал, бо дата може бути давнішою за відкриту історію)
+    const ons = await api.get<ScheduleDto>(
+      `/public/schedule/group/${groupNamed('4КІ1').id}`,
+      { from: '2026-11-16', to: '2026-11-16' },
+      { headers: { Authorization: 'Bearer staff' } },
+    );
+    const block = first(first(ons.days, 'дні НС').practices, 'блок НС');
+    await expectShape(block, view, 'Practice');
+    await expectShape(block.kind, view, 'Kind');
+
+    // масове оновлення календаря з графіка (пробне)
+    const importPath = `${CORE}calendar/internal/CalendarPeriodImportDtos.java`;
+    const imported = await api.post<{ periods: unknown[]; outOfSemester: Array<{ kept: unknown[] }>; groupSemesters: unknown; lessons: unknown }>(
+      '/admin/import/calendar-periods',
+      {
+        academicYear: '2026/2027',
+        periods: [
+          { sourceKey: 'k1', kindCode: 'К', title: 'Зимові канікули', startsOn: '2026-12-28', endsOn: '2027-01-08', scope: 'ALL', groupCodes: null, courses: null, roomName: null, studyMode: null, orderNote: null },
+        ],
+        groupSemesters: [{ groupCode: '4КІ1', semesterNumber: 1, theoryWeeks: 20, exams: 4 }],
+      },
+      { query: { dryRun: true } },
+    );
+    await expectShape(imported, importPath, 'CalendarPeriodImportResult');
+    await expectShape(first(imported.periods, 'рядки імпорту'), importPath, 'PeriodRow');
+    const out = first(imported.outOfSemester, 'поза семестрами');
+    await expectShape(out, importPath, 'OutOfSemester');
+    await expectShape(first(out.kept, 'збережені частини'), importPath, 'KeptPart');
+    await expectShape(imported.groupSemesters, importPath, 'GroupSemesterCounts');
 
     const changesPath = `${CORE}order/internal/publicview/PublicChangesDto.java`;
     // №35 (19.10) давніше за тиждень від «зараз» тесту: архів бачить лише персонал (будь-який Bearer для мока)
@@ -281,7 +310,23 @@ describe('контракт мок-API ↔ core: каталог, календар
     const profile = first(await api.get<Array<{ slots: unknown[] }>>('/admin/bell-profiles'), 'профілі');
     await expectShape(profile, calendar, 'BellProfileDto');
     await expectShape(first(profile.slots, 'слоти'), calendar, 'BellSlotDto');
-    await expectShape(first(await api.get<unknown[]>('/admin/calendar-periods', { semesterId: semester.id }), 'періоди'), calendar, 'CalendarPeriodDto');
+    const periods = await api.get<Array<{ periodKind?: unknown; room?: unknown }>>('/admin/calendar-periods', { semesterId: semester.id });
+    await expectShape(first(periods, 'періоди'), calendar, 'CalendarPeriodDto');
+    await expectShape(first(periods, 'періоди').periodKind, calendar, 'PeriodKindRef');
+    await expectShape(periods.find((p) => p.room)?.room, `${CORE}catalog/RoomRef.java`, 'RoomRef');
+
+    // довідник видів і пробне збереження зміни ефекту
+    const kindsPath = `${CORE}calendar/internal/PeriodKindDtos.java`;
+    const kinds = await api.get<Array<{ id: string; code: string; name: string; effect: string; version: number }>>('/admin/period-kinds');
+    await expectShape(first(kinds, 'види періодів'), kindsPath, 'PeriodKindDto');
+    const practice = kinds.find((k) => k.code === 'НП') as (typeof kinds)[number];
+    const impact = await api.put<{ lessons: unknown }>(
+      `/admin/period-kinds/${practice.id}`,
+      { code: practice.code, name: practice.name, effect: 'INFO', version: practice.version },
+      { query: { dryRun: true } },
+    );
+    await expectShape(impact, kindsPath, 'PeriodKindImpactDto');
+    await expectShape(impact.lessons, kindsPath, 'LessonCounts');
     await expectShape(first(await api.get<unknown[]>('/admin/shift-windows'), 'вікна змін'), calendar, 'ShiftWindowDto');
   });
 

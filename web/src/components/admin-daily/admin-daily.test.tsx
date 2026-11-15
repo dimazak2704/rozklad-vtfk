@@ -530,8 +530,9 @@ describe('екран «Заміни»', () => {
   });
 
   it('порожня чернетка — речення, а не порожній аркуш A4', { timeout: 20_000 }, async () => {
-    renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-11-17' });
-    expect(await screen.findByText(/^На вівторок, 17\sлистопада підтверджених змін ще немає\.$/, undefined, WAIT)).toBeInTheDocument();
+    // 1 грудня: ні змін, ні приміток періодів (16–27.11 розпорядження несуть примітку НС 4КІ1)
+    renderWithProviders(<OrdersPage />, { route: '/admin/orders?date=2026-12-01' });
+    expect(await screen.findByText(/^На вівторок, 1\sгрудня підтверджених змін ще немає\.$/, undefined, WAIT)).toBeInTheDocument();
     expect(screen.queryByRole('article')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Опублікувати/ })).not.toBeInTheDocument();
   });

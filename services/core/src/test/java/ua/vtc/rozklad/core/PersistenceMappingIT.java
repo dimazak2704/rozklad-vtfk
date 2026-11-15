@@ -30,6 +30,7 @@ import ua.vtc.rozklad.core.calendar.AcademicYear;
 import ua.vtc.rozklad.core.calendar.BellProfile;
 import ua.vtc.rozklad.core.calendar.BellProfileRepository;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
+import ua.vtc.rozklad.core.calendar.CalendarFixtures;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
 import ua.vtc.rozklad.core.calendar.Semester;
@@ -234,8 +235,9 @@ class PersistenceMappingIT {
                 AbsenceSource.BOT, "krentsin");
         absence.setPairs(List.of(3, 1, 3));
         absences.save(absence);
-        CalendarPeriod online = new CalendarPeriod(semester.getId(), CalendarPeriodKind.STUDY_MODE,
-                "4 курс дистанційно", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 31));
+        CalendarPeriod online = new CalendarPeriod(semester.getId(),
+                CalendarFixtures.builtin(em, CalendarPeriodKind.STUDY_MODE), "4 курс дистанційно",
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 31));
         online.setStudyMode(StudyMode.ONLINE);
         online.applyToCourses(List.of(4, 3));
         periods.save(online);
@@ -257,8 +259,9 @@ class PersistenceMappingIT {
         profile.addSlot(1, 1, LocalTime.of(8, 30), LocalTime.of(9, 30));
         profile.addSlot(1, 2, LocalTime.of(9, 40), LocalTime.of(10, 40));
         bellProfiles.save(profile);
-        CalendarPeriod practice = new CalendarPeriod(semester.getId(), CalendarPeriodKind.PRACTICE,
-                "Електрорадіомонтажна практика", LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 30));
+        CalendarPeriod practice = new CalendarPeriod(semester.getId(),
+                CalendarFixtures.builtin(em, CalendarPeriodKind.PRACTICE), "Електрорадіомонтажна практика",
+                LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 30));
         practice.applyToGroups(Set.of(group.getId()));
         periods.save(practice);
         LoadItem item = new LoadItem(semester.getId(), group.getId(), discipline.getId(), new BigDecimal("3.0"), 66);

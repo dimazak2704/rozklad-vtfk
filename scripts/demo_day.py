@@ -5,15 +5,19 @@ Everything goes through the REST API the way a dispatcher (and the teacher «kre
 so the scenario also exercises the substitution workflow. Run it on the demo stack after `scripts/seed_demo.py`.
 
   Friday 20.11 (the stand clock may be moved to 2026-11-20T10:00, pair 2 in progress):
-    absences of Непийвода, Стахова, Голєва, Крисак Л.В. and Марцинюк (pair 1 only) and a decision of every kind:
+    absences of Непийвода, Ординський, Стахова, Голєва, Крисак Л.В., Марцинюк (pair 1 only) and Паламарчук (pair 3
+    only) and a decision of every kind:
     REPLACE_DISCIPLINE (the group's own teacher of another discipline), REPLACE_TEACHER, SWAP, MERGE_SUBGROUPS,
-    CANCEL, ROOM_CHANGE, ADDITIONAL, BLOCK, DISCIPLINE_FINISHED; for Кренцін one NOTIFY assignment, one request
-    left PENDING_CONFIRMATION (he declined, the dispatcher asked again) and one he declined; four lessons stay
+    CANCEL, ROOM_CHANGE, ADDITIONAL, BLOCK, DISCIPLINE_FINISHED; for Кренцін two NOTIFY assignments, one request
+    left PENDING_CONFIRMATION on pair 3 (he declined, the dispatcher asked again) and one he declined; four lessons stay
     «Потрібне рішення». The order of Friday is NOT published.
-  Thursday 19.11: absences of Колесник, Прокопчук (pair 4), Феліксов and Непийвода, decisions of most kinds,
+  Thursday 19.11: absences of Колесник, Можаровська (pair 1), Феліксов and Непийвода, decisions of most kinds,
     Кренцін answers «Добре», and with --publish the order (or the amendment of an already published order) of the
     date is published. Publication sends Telegram messages, so it also needs every bound chat to be allowed with
     --allow-chat (the masked chat id as GET /api/notify/bindings shows it); any other bound chat aborts it.
+
+4КІ1 is on national resistance from 16.11 to 27.11 (seed step `academic`, the college's academic calendar): it has
+no pairs on both days, so the scenario uses 4КІ2, 4КІ3 and other groups that study then.
 
 Before the data the script turns on «Показувати повні імена викладачів» (setting showTeacherFullNames), so public
 cards show «Прізвище Ім'я» where the first name is known; grids keep the surname. Turn it off in /admin/settings.
@@ -77,25 +81,30 @@ class Decision:
 
 ABSENCES = [
     Absence(FRIDAY, "Непийвода", "SICK_LEAVE", comment="Лікарняний"),
+    Absence(FRIDAY, "Ординський", "PERSONAL"),
     Absence(FRIDAY, "Стахова О.А.", "BUSINESS_TRIP", comment="Олімпіада з математики"),
     Absence(FRIDAY, "Голєва Т.В.", "PERSONAL"),
     Absence(FRIDAY, "Крисак Л.В.", "SICK_LEAVE"),
     Absence(FRIDAY, "Марцинюк Т.Ю.", "OTHER", pairs=(1,), comment="Запізниться на першу пару"),
+    Absence(FRIDAY, "Паламарчук", "PERSONAL", pairs=(3,)),
     Absence(THURSDAY, "Колесник А.", "VACATION"),
-    Absence(THURSDAY, "Прокопчук", "PERSONAL", pairs=(4,)),
+    Absence(THURSDAY, "Можаровська О.Е.", "PERSONAL", pairs=(1,)),
     Absence(THURSDAY, "Феліксов Ю.Л.", "SICK_LEAVE"),
     Absence(THURSDAY, "Непийвода", "BUSINESS_TRIP"),
 ]
 
 DECISIONS = [
     # ---- Friday 20.11 (not published)
-    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ1", 2, absent="Непийвода", discipline="СТП", teacher=SUBSTITUTE,
+    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ2", 2, absent="Ординський", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", note="NOTIFY: Кренцін is informed in Telegram"),
-    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ1", 3, absent="Непийвода", discipline="СТП", teacher=SUBSTITUTE,
+    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ3", 3, absent="Ординський", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", answer="decline", note="Кренцін declines: the lesson needs a decision again"),
     Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ2", 1, absent="Непийвода", discipline="СТП", teacher=SUBSTITUTE,
+             reason="MUTUAL", note="NOTIFY: the pair is over by 10:00, so no request can be sent for it"),
+    # a request can be sent only before the pair starts (CHANGE_LESSON_OVER): the pending one is on pair 3
+    Decision(FRIDAY, "REPLACE_DISCIPLINE", "4КІ2", 3, absent="Паламарчук", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", answer="pending", note="declined, asked again: PENDING_CONFIRMATION"),
-    Decision(FRIDAY, "ROOM_CHANGE", "4КІ1", 1, rooms=("309", "305", "210"), reason="OTHER",
+    Decision(FRIDAY, "ROOM_CHANGE", "4ЕА2", 1, rooms=("309", "305", "210"), reason="OTHER",
              reason_text="Ремонт в аудиторії"),
     Decision(FRIDAY, "REPLACE_DISCIPLINE", "1ВЕ", 1, absent="Стахова О.А.", discipline="ФіА", teacher="Грабенко О.А.",
              reason="MUTUAL"),
@@ -107,13 +116,14 @@ DECISIONS = [
     Decision(FRIDAY, "MERGE_SUBGROUPS", "3Ф", 1, subgroup=1, absent="Крисак Л.В.", swap_pair=1, swap_subgroup=2),
     Decision(FRIDAY, "REPLACE_TEACHER", "3ВЕ", 1, subgroup=2, absent="Марцинюк Т.Ю.", teacher="Михальчук",
              note="manual «Інший викладач…»"),
-    Decision(FRIDAY, "BLOCK", "4КІ3", 2, pair_to=3, discipline="ЗУ", teacher="Ємельяненко", rooms=("204",),
+    Decision(FRIDAY, "BLOCK", "4ОП1", 2, pair_to=3, discipline="ЗУ", teacher="Ємельяненко", rooms=("204", "205"),
              reason="OTHER"),
     Decision(FRIDAY, "DISCIPLINE_FINISHED", "2М", 4, reason="FINISHED"),
     # ---- Thursday 19.11 (published with --publish)
-    Decision(THURSDAY, "REPLACE_DISCIPLINE", "4КІ1", 3, absent="Колесник А.", discipline="СТП", teacher=SUBSTITUTE,
+    Decision(THURSDAY, "REPLACE_DISCIPLINE", "4КІ2", 2, absent="Колесник А.", discipline="СТП", teacher=SUBSTITUTE,
              reason="MUTUAL", answer="ok", note="Кренцін answers «Добре»"),
-    Decision(THURSDAY, "MERGE_SUBGROUPS", "4КІ1", 4, subgroup=1, absent="Прокопчук", swap_pair=4, swap_subgroup=2),
+    Decision(THURSDAY, "MERGE_SUBGROUPS", "1ОП2", 1, subgroup=1, absent="Можаровська О.Е.", swap_pair=1,
+             swap_subgroup=2),
     Decision(THURSDAY, "SWAP", "4КІ3", 1, absent="Колесник А.", swap_pair=4),
     Decision(THURSDAY, "CANCEL", "4КІ3", 3, absent="Непийвода", reason="BUSINESS_TRIP"),
     # the moved ФіА must not stay in the sports hall of the cancelled ФК: the dispatcher gives it its own room

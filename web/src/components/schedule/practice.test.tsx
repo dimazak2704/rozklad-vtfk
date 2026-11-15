@@ -5,7 +5,7 @@ import { DEMO_WEEK } from '@/pages/dev/demo-data';
 import { renderWithProviders } from '@/test/render';
 import { DayColumn } from './DayColumn';
 import { DayList } from './DayList';
-import { noteWithoutPractices, practiceTitle, supervisorsLine } from './practice';
+import { blocksLabel, blockTitle, noteWithoutPractices, supervisorsLine } from './practice';
 import { WeekGrid } from './WeekGrid';
 
 const PRACTICE: PracticeDto = {
@@ -27,14 +27,66 @@ const practiceDay: DayDto = { ...monday, studyDay: false, note: PRACTICE.title, 
 // «Кренцін М. Д.» з нерозривними пробілами — у тексті порівнюємо зі звичайними
 const plain = (text: string | null) => text?.replace(/\s/g, ' ') ?? null;
 
+// НС 4КІ1 з графіка 2026/27: вид «група не на парах» з аудиторією 401 (рішення власника)
+const ONS: PracticeDto = {
+  periodId: 'p-ns',
+  title: 'Основи національного спротиву',
+  startsOn: '2026-11-16',
+  endsOn: '2026-11-27',
+  supervisors: [],
+  groups: [{ id: 'g-4ki1', code: '4КІ1', course: 4 }],
+  courses: [],
+  kind: { code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' },
+  room: { id: 'r-401', name: '401', type: 'CLASSROOM' },
+};
+
 describe('тексти практики', () => {
   it('група бачить «Практика: назва» і керівників, викладач — «Керівництво практикою» з групою', () => {
-    expect(practiceTitle(PRACTICE, 'group')).toBe('Практика: Електрорадіомонтажна практика');
-    expect(practiceTitle(PRACTICE, 'teacher')).toBe('Керівництво практикою: Електрорадіомонтажна практика, 2КІ3');
-    expect(practiceTitle({ ...PRACTICE, groups: [], courses: [4] }, 'teacher')).toBe('Керівництво практикою: Електрорадіомонтажна практика, 4 курс');
+    expect(blockTitle(PRACTICE, 'group')).toBe('Практика: Електрорадіомонтажна практика');
+    expect(blockTitle(PRACTICE, 'teacher')).toBe('Керівництво практикою: Електрорадіомонтажна практика, 2КІ3');
+    expect(blockTitle({ ...PRACTICE, groups: [], courses: [4] }, 'teacher')).toBe('Керівництво практикою: Електрорадіомонтажна практика, 4 курс');
     expect(plain(supervisorsLine(PRACTICE))).toBe('Керівники: Кренцін М. Д., Непийвода М. В.');
     expect(plain(supervisorsLine({ supervisors: PRACTICE.supervisors.slice(0, 1) }))).toBe('Керівник: Кренцін М. Д.');
     expect(supervisorsLine({ supervisors: [] })).toBeNull();
+  });
+
+  it('загальний блок: «{Вид}: назва, ауд. 401»; керівник — «Керівництво: {Вид}: …»; практика від нового core — як раніше', () => {
+    expect(blockTitle(ONS, 'group')).toBe('Національний спротив: Основи національного спротиву, ауд. 401');
+    expect(blockTitle(ONS, 'teacher')).toBe('Керівництво: Національний спротив: Основи національного спротиву, 4КІ1, ауд. 401');
+    const practiceKind = { ...PRACTICE, kind: { code: 'НП', name: 'Практика', color: null, effect: 'SUSPEND' as const }, room: null };
+    expect(blockTitle(practiceKind, 'group')).toBe('Практика: Електрорадіомонтажна практика');
+    expect(blockTitle(practiceKind, 'teacher')).toBe('Керівництво практикою: Електрорадіомонтажна практика, 2КІ3');
+    expect(blocksLabel([PRACTICE, practiceKind], 'teacher')).toBe('Практика');
+    expect(blocksLabel([ONS], 'group')).toBe('Національний спротив');
+    expect(blocksLabel([ONS], 'teacher')).toBe('Керівництво');
+    expect(blocksLabel([PRACTICE, ONS], 'teacher')).toBe('Керівництво');
+    expect(blocksLabel([PRACTICE, ONS], 'group')).toBe('Без пар');
+  });
+
+  it('назву, що лише повторює вид (імпорт графіка: «Сесія», «Збори»), пишемо один раз', () => {
+    const session: PracticeDto = {
+      ...ONS,
+      title: 'Сесія',
+      groups: [{ id: 'g-4ki1', code: '4КІ1', course: 4 }],
+      kind: { code: 'І', name: 'Сесія', color: null, effect: 'SUSPEND' },
+      room: null,
+    };
+    expect(blockTitle(session, 'group')).toBe('Сесія');
+    expect(blockTitle(session, 'teacher')).toBe('Керівництво: Сесія, 4КІ1');
+    expect(blockTitle({ ...session, title: ' збори ', kind: { ...session.kind!, name: 'Збори' }, room: ONS.room }, 'group')).toBe(
+      'Збори, ауд. 401',
+    );
+    // назва, що відрізняється від виду, лишається як є
+    expect(blockTitle({ ...session, title: 'Сесія 4 курсу' }, 'group')).toBe('Сесія: Сесія 4 курсу');
+  });
+
+  it('керівник курсів бачить «4 курс» чи «1, 2 курси»', () => {
+    expect(blockTitle({ ...ONS, groups: [], courses: [1, 2], room: null }, 'teacher')).toBe(
+      'Керівництво: Національний спротив: Основи національного спротиву, 1, 2 курси',
+    );
+    expect(blockTitle({ ...PRACTICE, groups: [], courses: [1, 2] }, 'teacher')).toBe(
+      'Керівництво практикою: Електрорадіомонтажна практика, 1, 2 курси',
+    );
   });
 
   it('примітка не повторює назву практики, решту лишає', () => {
@@ -50,6 +102,15 @@ describe('практика в розкладі', () => {
     expect(screen.getByText('Практика: Електрорадіомонтажна практика')).toBeInTheDocument();
     expect(screen.getByText(/^Керівники: Кренцін\sМ\.\sД\., Непийвода\sМ\.\sВ\.$/)).toBeInTheDocument();
     expect(screen.queryByText('Не навчальний день')).not.toBeInTheDocument();
+  });
+
+  it('день групи на НС: блок виду з аудиторією, список названо видом', () => {
+    renderWithProviders(<DayList day={{ ...practiceDay, note: ONS.title, practices: [ONS] }} />);
+    const block = screen.getByRole('list', { name: 'Національний спротив' });
+    expect(block).toHaveTextContent('Національний спротив: Основи національного спротиву, ауд. 401');
+    expect(screen.queryByText('Не навчальний день.')).not.toBeInTheDocument();
+    // назва вже в блоці — у примітці дня її не повторюємо
+    expect(screen.getAllByText(/Основи національного спротиву/)).toHaveLength(1);
   });
 
   it('без керівника публічно лише назва практики', () => {

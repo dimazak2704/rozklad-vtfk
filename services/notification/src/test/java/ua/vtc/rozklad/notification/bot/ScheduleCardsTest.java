@@ -8,7 +8,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.notification.core.CoreDtos.GroupRef;
+import ua.vtc.rozklad.notification.core.CoreDtos.PeriodKindRef;
 import ua.vtc.rozklad.notification.core.CoreDtos.Practice;
+import ua.vtc.rozklad.notification.core.CoreDtos.RoomRef;
 import ua.vtc.rozklad.notification.core.CoreDtos.ScheduleDay;
 import ua.vtc.rozklad.notification.core.CoreDtos.TeacherRef;
 import ua.vtc.rozklad.notification.core.CoreQueries.DaySchedule;
@@ -114,6 +116,134 @@ class ScheduleCardsTest {
                 .endsWith("🛠 <b>Керівництво практикою</b>: Переддипломна практика, 4 курс")
                 .doesNotContain("Пар немає");
         assertThat(ScheduleCards.summary(onlyPractice)).isEqualTo("Керівництво практикою");
+    }
+
+    @Test
+    void groupOffItsPairsForAnotherKindSeesTheKindTitleAndRoom() {
+        // НС (SUSPEND): «вид: назва, ауд. 401» жирним, керівник окремим рядком, назва не дублюється в примітці
+        Practice ns = new Practice(UUID.randomUUID(), "Основи національного спротиву",
+                List.of(new TeacherRef(CoreFixtures.TEACHER_NEPYIVODA, "Непийвода М.В.", "Непийвода")),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4)), List.of(),
+                new PeriodKindRef("НС", "Національний спротив", null, "SUSPEND"),
+                new RoomRef(UUID.randomUUID(), "401", "CLASSROOM"));
+        ScheduleDay day = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false,
+                "Основи національного спротиву", List.of(), List.of(ns));
+        String card = ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1", day));
+
+        assertThat(card).endsWith("""
+                🛠 <b>Національний спротив: Основи національного спротиву, ауд. 401</b>
+                Керівник: Непийвода М. В.""").doesNotContain("Навчання немає", "ℹ️", "Практика");
+        assertThat(ScheduleCards.summary(day)).isEqualTo("Національний спротив");
+
+        // сесія без аудиторії й керівників
+        Practice session = new Practice(UUID.randomUUID(), "Екзаменаційна сесія", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4)), List.of(),
+                new PeriodKindRef("І", "Сесія", null, "SUSPEND"), null);
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1",
+                new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, null, List.of(),
+                        List.of(session)))))
+                .endsWith("🛠 <b>Сесія: Екзаменаційна сесія</b>");
+    }
+
+    @Test
+    void practiceKindKeepsTodaysWordingAndShowsItsRoom() {
+        Practice practice = new Practice(UUID.randomUUID(), "Електрорадіомонтажна практика", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "2КІ3", 2)), List.of(),
+                new PeriodKindRef("НП", "Практика", null, "SUSPEND"), new RoomRef(UUID.randomUUID(), "204", null));
+        ScheduleDay day = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, null, List.of(),
+                List.of(practice));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, UUID.randomUUID(), "2КІ3", day)))
+                .endsWith("🛠 <b>Практика: Електрорадіомонтажна практика, ауд. 204</b>");
+        assertThat(ScheduleCards.summary(day)).isEqualTo("Практика");
+
+        ScheduleDay supervised = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of(),
+                List.of(practice));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", supervised)))
+                .endsWith("🛠 <b>Керівництво практикою</b>: Електрорадіомонтажна практика, 2КІ3, ауд. 204");
+        assertThat(ScheduleCards.summary(supervised)).isEqualTo("Керівництво практикою");
+    }
+
+    @Test
+    void supervisorOfAnotherKindSeesKindNameAfterLeadership() {
+        Practice ns = new Practice(UUID.randomUUID(), "Основи національного спротиву", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4), new GroupRef(UUID.randomUUID(), "4КІ2", 4)),
+                List.of(), new PeriodKindRef("НС", "Національний спротив", null, "SUSPEND"),
+                new RoomRef(UUID.randomUUID(), "401", "CLASSROOM"));
+        ScheduleDay day = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of(),
+                List.of(ns));
+        String card = ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", day));
+        assertThat(card)
+                .endsWith("🛠 <b>Керівництво</b>: Національний спротив: Основи національного спротиву, 4КІ1, 4КІ2, "
+                        + "ауд. 401")
+                .doesNotContain("Пар немає", "практик");
+        assertThat(ScheduleCards.summary(day)).isEqualTo("Керівництво: Національний спротив");
+
+        // курс замість груп, HTML у назві екранується
+        Practice dpa = new Practice(UUID.randomUUID(), "ДПА <іспит>", List.of(), List.of(), List.of(4),
+                new PeriodKindRef("Д", "ДПА", null, "SUSPEND"), null);
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of(),
+                        List.of(dpa)))))
+                .endsWith("🛠 <b>Керівництво</b>: ДПА: ДПА &lt;іспит&gt;, 4 курс");
+    }
+
+    /** The academic calendar import titles І, ЗУ, Д… with the kind name: the card does not print it twice. */
+    @Test
+    void titleThatOnlyRepeatsTheKindNameIsPrintedOnce() {
+        Practice session = new Practice(UUID.randomUUID(), "Сесія", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4)), List.of(),
+                new PeriodKindRef("І", "Сесія", null, "SUSPEND"), null);
+        ScheduleDay day = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, "Сесія", List.of(),
+                List.of(session));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, CoreFixtures.GROUP_4KI1, "4КІ1", day)))
+                .endsWith("🛠 <b>Сесія</b>").doesNotContain("Сесія: Сесія", "ℹ️");
+        ScheduleDay supervised = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of(),
+                List.of(session));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", supervised)))
+                .endsWith("🛠 <b>Керівництво</b>: Сесія, 4КІ1");
+
+        // регістр і пробіли не важать; аудиторія лишається
+        Practice meeting = new Practice(UUID.randomUUID(), " збори ", List.of(), List.of(), List.of(1, 2),
+                new PeriodKindRef("ЗУ", "Збори", null, "SUSPEND"), new RoomRef(UUID.randomUUID(), "401", "CLASSROOM"));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.TEACHER, CoreFixtures.TEACHER_NEPYIVODA,
+                "Непийвода М.В.", new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null, List.of(),
+                        List.of(meeting)))))
+                .endsWith("🛠 <b>Керівництво</b>: Збори, 1, 2 курси, ауд. 401");
+    }
+
+    /** Two kinds on one day: the summary does not pick the first one, as on the site. */
+    @Test
+    void summaryOfSeveralKindsOnOneDayNamesNone() {
+        Practice ns = new Practice(UUID.randomUUID(), "Основи національного спротиву", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4)), List.of(),
+                new PeriodKindRef("НС", "Національний спротив", null, "SUSPEND"), null);
+        Practice meeting = new Practice(UUID.randomUUID(), "Збори", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "4КІ1", 4)), List.of(),
+                new PeriodKindRef("ЗУ", "Збори", null, "SUSPEND"), null);
+        assertThat(ScheduleCards.summary(new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, null,
+                List.of(), List.of(ns, meeting)))).isEqualTo("Без пар");
+        assertThat(ScheduleCards.summary(new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null,
+                List.of(), List.of(ns, meeting)))).isEqualTo("Керівництво");
+        assertThat(ScheduleCards.summary(new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, null,
+                List.of(), List.of(ns, ns)))).isEqualTo("Національний спротив");
+    }
+
+    @Test
+    void kindWithoutNameAndRoomWithoutNameFallBackToPracticeWording() {
+        Practice blank = new Practice(UUID.randomUUID(), "Технологічна практика", List.of(),
+                List.of(new GroupRef(UUID.randomUUID(), "2КІ3", 2)), List.of(),
+                new PeriodKindRef("Т", " ", null, "SUSPEND"), new RoomRef(UUID.randomUUID(), null, null));
+        ScheduleDay day = new ScheduleDay(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, false, null, List.of(),
+                List.of(blank));
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.GROUP, UUID.randomUUID(), "2КІ3", day)))
+                .endsWith("🛠 <b>Практика: Технологічна практика</b>");
+        assertThat(ScheduleCards.summary(day)).isEqualTo("Практика");
+        // розклад аудиторії не показує блок періодів
+        assertThat(ScheduleCards.day(new DaySchedule(OwnerType.ROOM, CoreFixtures.ROOM_6, "6", day)))
+                .doesNotContain("🛠");
     }
 
     @Test
