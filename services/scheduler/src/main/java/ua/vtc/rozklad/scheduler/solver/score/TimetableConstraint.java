@@ -38,8 +38,7 @@ public enum TimetableConstraint {
     ROOM_PREFERENCE("Room preference", "Заняття не в аудиторії викладача", Kind.PENALTY),
     UNIT_MOVED("Unit moved", "Пару переставлено відносно базової версії", Kind.PENALTY),
     ROOM_CHANGED("Room changed", "Пара в іншій аудиторії, ніж у базовій версії", Kind.PENALTY),
-    SPECIAL_ROOM_LOST("Special room lost", "Пара не в спортзалі чи на спортмайданчику, як у базовій версії",
-            Kind.PENALTY),
+    SPECIAL_ROOM_LOST("Special room lost", "Пара не в спортзалі чи на спортмайданчику", Kind.PENALTY),
     HALF_PAIRING("Halves paired", "Чисельник і знаменник в одному слоті (бонус)", Kind.BONUS);
 
     private static final Map<String, TimetableConstraint> BY_ID = Arrays.stream(values())

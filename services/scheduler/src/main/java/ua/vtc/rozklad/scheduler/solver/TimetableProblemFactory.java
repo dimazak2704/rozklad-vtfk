@@ -56,8 +56,10 @@ import ua.vtc.rozklad.scheduler.solver.score.ConstraintWeights;
  * <p>A load item whose base lessons with a room all sit in special-purpose rooms (PE in the sports hall or on the
  * ground; data-driven, never by discipline name) gives its free units those room types as
  * {@link LessonUnit#getBaseRoomTypes()}: the units start there, and the soft rule {@code specialRooms} penalizes
- * any other room. Ordinary compatible rooms stay in the range, so a full or closed hall costs soft points instead
- * of making the run infeasible, and weight 0 switches the preference off. Core sends no derived room type.
+ * any other room. An item without any base lesson in a room (a run from scratch) gets both special-purpose types
+ * when its teacher's usual room or its preferred room is one (the PE teacher's room is the hall). Ordinary
+ * compatible rooms stay in the range, so a full or closed hall costs soft points instead of making the run
+ * infeasible, and weight 0 switches the preference off. Core sends no derived room type.
  *
  * <p>Each teacher gets the daily limit of the snapshot and a baseline of teaching days per kind of
  * week: the weekdays of the teacher's base and pinned lessons in that week, but at least the days the
@@ -275,10 +277,15 @@ public final class TimetableProblemFactory {
     /**
      * Load items whose base lessons with a room (free units' {@code initial}, pinned units' pin; online lessons
      * left out) all sit in special-purpose rooms, with those room types. On the real college these are the 60 PE
-     * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom.
+     * items: 56 only in the hall, 2 only on the ground, 2 in both; no PE lesson stands in a classroom. An item with
+     * no base lesson in a room (from scratch) whose free unit names a special-purpose room as its preferred or its
+     * teacher's usual room gets both special-purpose types: the college keeps PE in the hall or on the ground
+     * (owner, 15.11.2026), and from scratch the teacher's room is the only trace of it (all 100 PE units of the
+     * real request from scratch have the hall as the teacher's room, no other unit has).
      */
     static Map<UUID, Set<RoomType>> specialPurposeItems(List<ProblemSnapshot.Unit> units, Map<UUID, Room> rooms) {
         Map<UUID, Set<RoomType>> types = new HashMap<>();
+        Set<UUID> based = new HashSet<>();
         Set<UUID> elsewhere = new HashSet<>();
         for (ProblemSnapshot.Unit unit : units) {
             ProblemSnapshot.PinnedSlot placed = unit.pinned() != null ? unit.pinned() : unit.initial();
@@ -286,6 +293,7 @@ public final class TimetableProblemFactory {
             if (unit.loadItemId() == null || unit.online() || room == null) {
                 continue;
             }
+            based.add(unit.loadItemId());
             if (SPECIAL_PURPOSE.contains(room.getType())) {
                 types.computeIfAbsent(unit.loadItemId(), id -> EnumSet.noneOf(RoomType.class)).add(room.getType());
             } else {
@@ -293,7 +301,24 @@ public final class TimetableProblemFactory {
             }
         }
         elsewhere.forEach(types::remove);
+        for (ProblemSnapshot.Unit unit : units) {
+            if (unit.loadItemId() != null && unit.pinned() == null && !based.contains(unit.loadItemId())
+                    && namesSpecialRoom(unit, rooms)) {
+                types.put(unit.loadItemId(), SPECIAL_PURPOSE);
+            }
+        }
         return types;
+    }
+
+    /** The unit's preferred room or its teacher's usual room is a sports hall or ground of the snapshot. */
+    private static boolean namesSpecialRoom(ProblemSnapshot.Unit unit, Map<UUID, Room> rooms) {
+        for (UUID id : new UUID[] {unit.preferredRoomId(), unit.teacherRoomId()}) {
+            Room room = id == null ? null : rooms.get(id);
+            if (room != null && SPECIAL_PURPOSE.contains(room.getType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

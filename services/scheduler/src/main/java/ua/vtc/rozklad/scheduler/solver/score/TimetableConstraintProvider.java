@@ -311,9 +311,9 @@ public class TimetableConstraintProvider implements ConstraintProvider {
 
     /**
      * A lesson of a load item whose base lessons all stood in special-purpose rooms (sports hall, sports ground)
-     * sits in another kind of room, per week occurrence. Soft on purpose (the college has not confirmed the rule,
-     * DOMAIN §13 Q6): when the hall is full or closed, PE may go to a classroom at this cost instead of leaving
-     * the run infeasible; weight 0 lets it go there freely.
+     * sits in another kind of room, per week occurrence. The college confirmed the rule (DOMAIN §13 Q6), but it
+     * stays soft with a strong default: when the hall is full or closed, PE goes to a classroom at this cost
+     * instead of leaving the run infeasible (the hall's places are the only reason).
      */
     Constraint specialRoomLost(ConstraintFactory factory) {
         return factory.forEach(LessonUnit.class)

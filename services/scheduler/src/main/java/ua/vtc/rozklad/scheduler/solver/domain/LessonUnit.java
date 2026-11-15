@@ -22,7 +22,7 @@ import ua.vtc.rozklad.contracts.UnitWeight;
  * for a HALF unit. A pinned unit keeps the dispatcher's placement. A unit may know its <em>base
  * placement</em> (where it stands in the base version, for the stability rules) and its
  * {@code siblingKey} (equal on the subgroup copies of one weekly occurrence of a split load item), and the
- * special-purpose room types its load item kept to in the base version ({@link #getBaseRoomTypes()}).
+ * special-purpose room types its load item keeps to ({@link #getBaseRoomTypes()}).
  *
  * <p>Week arithmetic: a lesson with parity BOTH meets in both week types (numerator and
  * denominator weeks), NUMERATOR/DENOMINATOR in one. Penalties count such week occurrences.
@@ -56,7 +56,8 @@ public class LessonUnit {
     private Timeslot baseSlot;
     private Parity baseParity;
     private UUID baseRoomId;
-    // типи спецаудиторій (спортзал, майданчик), де стояли всі базові пари предмета; порожньо — правила немає
+    // типи спецаудиторій (спортзал, майданчик), де стояли всі базові пари предмета (без бази — де аудиторія
+    // викладача); порожньо — правила немає
     private Set<RoomType> baseRoomTypes;
     // доріжки «когорта × тип тижня» для кожної парності (індекс — Parity.ordinal())
     private int[][] cohortLanesByParity;
@@ -253,7 +254,8 @@ public class LessonUnit {
 
     /**
      * Special-purpose room types (sports hall, sports ground) that every base lesson of the unit's load item
-     * with a room stood in; empty when the item has no such base (no base, or a lesson in an ordinary room).
+     * with a room stood in, or, when the item has no base lesson in a room, both types if the teacher's usual or
+     * the preferred room is one; empty otherwise (a lesson of the item in an ordinary room, or no such room).
      */
     public Set<RoomType> getBaseRoomTypes() {
         return baseRoomTypes;
@@ -380,7 +382,7 @@ public class LessonUnit {
         return baseRoomId != null && !isMovedFromBase() && !room.isNone() && !baseRoomId.equals(room.getId());
     }
 
-    /** The load item kept to special-purpose rooms in the base version, and this lesson sits in another kind of room. */
+    /** The load item keeps to special-purpose rooms (PE), and this lesson sits in another kind of room. */
     public boolean isOutsideBaseRoomTypes() {
         return !baseRoomTypes.isEmpty() && !room.isNone() && !baseRoomTypes.contains(room.getType());
     }

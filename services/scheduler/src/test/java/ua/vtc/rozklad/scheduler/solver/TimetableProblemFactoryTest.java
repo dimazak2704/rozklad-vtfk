@@ -78,7 +78,8 @@ class TimetableProblemFactoryTest {
         assertThat(roomIds(timetable.getUnits().get(0))).containsExactly(LAB);
         assertThat(roomIds(timetable.getUnits().get(1))).containsExactly(ROOM_304, LAB);
         assertThat(roomIds(timetable.getUnits().get(2))).containsExactly(ROOM_304, ROOM_SMALL, LAB);
-        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(ROOM_304, LAB, GYM);
+        // бажаний зал без базової версії: спецаудиторія першою, звичайні — для м'якого правила
+        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(GYM, ROOM_304, LAB);
     }
 
     @Test
@@ -115,8 +116,9 @@ class TimetableProblemFactoryTest {
                 .containsExactly(LAB, ROOM_304, ROOM_304, GYM);
         assertThat(timetable.getUnits().getFirst().getRoom().getId()).as("warm start in the teacher's room")
                 .isEqualTo(LAB);
-        // спортзал лише для тих, кому він потрібен або чия це аудиторія
-        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(ROOM_304, LAB, GYM);
+        // спортзал лише для тих, кому він потрібен або чия це аудиторія; предмет без базових пар, чий викладач
+        // веде його в залі, тримається спецаудиторій (зал першим), звичайні лишаються для м'якого правила
+        assertThat(roomIds(timetable.getUnits().get(3))).containsExactly(GYM, ROOM_304, LAB);
         assertThat(roomIds(timetable.getUnits().get(0))).doesNotContain(GYM);
     }
 
@@ -141,6 +143,33 @@ class TimetableProblemFactoryTest {
         assertThat(timetable.getUnits().get(0).getRoom().getId()).isEqualTo(GYM);
         assertThat(timetable.getUnits().get(0).getBaseRoomTypes()).as("the item also has a classroom lesson").isEmpty();
         assertThat(roomIds(timetable.getUnits().get(1))).doesNotContain(GYM);
+    }
+
+    /**
+     * From scratch there is no base to read, so the teacher's usual room decides (owner's rule, 15.11.2026: PE in the
+     * hall or on the ground): an item without a base lesson in a room whose unit names the hall as the teacher's room
+     * or the preferred room keeps to both special-purpose types; an item with a classroom base or a classroom teacher
+     * room does not.
+     */
+    @Test
+    void withoutABaseTheTeachersHallKeepsTheItemInSpecialPurposeRooms() {
+        UUID pe = UUID.randomUUID();
+        UUID taughtInClass = UUID.randomUUID();
+        Timetable timetable = factory.create(snapshot(List.of(
+                unit("peFromScratch").loadItem(pe).teacherRoom(GYM).build(),
+                unit("pePreferred").preferredRoom(GYM).build(),
+                unit("ordinary").teacherRoom(ROOM_304).build(),
+                unit("classBase").loadItem(taughtInClass).teacherRoom(GYM)
+                        .initial(new ProblemSnapshot.PinnedSlot(2, 2, Parity.BOTH, ROOM_304)).build())),
+                GenerationWeights.DEFAULT);
+
+        assertThat(timetable.getUnits().get(0).getBaseRoomTypes())
+                .containsExactlyInAnyOrder(RoomType.GYM, RoomType.SPORTS_GROUND);
+        assertThat(timetable.getUnits().get(0).getRoom().getId()).as("starts in the hall").isEqualTo(GYM);
+        assertThat(roomIds(timetable.getUnits().get(0)).getFirst()).isEqualTo(GYM);
+        assertThat(timetable.getUnits().get(1).getBaseRoomTypes()).isNotEmpty();
+        assertThat(timetable.getUnits().get(2).getBaseRoomTypes()).isEmpty();
+        assertThat(timetable.getUnits().get(3).getBaseRoomTypes()).as("its base stood in a classroom").isEmpty();
     }
 
     /**
