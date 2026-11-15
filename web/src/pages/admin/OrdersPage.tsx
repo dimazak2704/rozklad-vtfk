@@ -95,8 +95,12 @@ export default function OrdersPage() {
   // документ з архіву (чи щойно опублікований), відкритий на цій робочій даті
   const [viewed, setViewed] = useState<{ id: Uuid; forDate: IsoDate } | null>(null);
   const viewedId = viewed && viewed.forDate === date ? viewed.id : null;
-  const draftHasContent = Boolean(draft.data && (draft.data.items.length + draft.data.roomChanges.length + draft.data.notes.length > 0));
-  const defaultPublishedId = !draftHasContent && publishedOfDay.length > 0 ? (publishedOfDay.at(-1)?.id ?? null) : null;
+  // справжня чернетка — лише DRAFT з рядками; сервер на дату з опублікованим документом може віддати сам документ,
+  // а самі автопримітки періодів (НС) — ще не зміни, заради яких варто відкривати чернетку замість документа
+  const draftHasRows = Boolean(
+    draft.data && draft.data.status === 'DRAFT' && draft.data.items.length + draft.data.roomChanges.length > 0,
+  );
+  const defaultPublishedId = !draftHasRows && publishedOfDay.length > 0 ? (publishedOfDay.at(-1)?.id ?? null) : null;
   const detailId = viewedId ?? defaultPublishedId;
   const detail = useOrder(detailId);
   const order: OrderDto | undefined = detailId ? detail.data : draft.data;
@@ -218,7 +222,7 @@ export default function OrdersPage() {
                   {item.kind === 'AMENDMENT' ? 'Доповнення' : 'Розпорядження'} №{item.number ?? '—'}
                 </Chip>
               ))}
-              {draft.data && draftHasContent ? (
+              {draft.data && draftHasRows ? (
                 <Chip selected={isDraft} onToggle={() => setViewed(null)}>
                   {draft.data.kind === 'AMENDMENT' ? 'Чернетка доповнення' : 'Чернетка'}
                 </Chip>

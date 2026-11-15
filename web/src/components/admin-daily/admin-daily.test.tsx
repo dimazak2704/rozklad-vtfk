@@ -545,6 +545,20 @@ describe('екран «Заміни»', () => {
     ).toBeInTheDocument();
   });
 
+  it('дата з опублікованим документом: «Чернетки» поруч немає, коли сервер віддав сам документ чи лише автопримітки', { timeout: 20_000 }, async () => {
+    const summary = { id: ORDER.id, number: 35, date: ORDER.date, kind: 'ORDER', status: 'PUBLISHED', itemCount: 5, publishedAt: ORDER.publishedAt, imported: false };
+    server.use(
+      // як core для 19.11: на дату з опублікованим документом /draft повертає його самого
+      http.get(apiPath('/admin/orders/draft'), () => HttpResponse.json(ORDER)),
+      http.get(apiPath('/admin/orders'), () => HttpResponse.json({ items: [summary], page: 0, size: 50, total: 1 })),
+      http.get(apiPath(`/admin/orders/${ORDER.id}`), () => HttpResponse.json(ORDER)),
+    );
+    renderWithProviders(<OrdersPage />, { route: `/admin/orders?date=${ORDER.date}` });
+    const documents = await screen.findByRole('group', { name: 'Документи на цю дату' }, WAIT);
+    expect(within(documents).getByRole('button', { name: /Розпорядження №35/ })).toBeInTheDocument();
+    expect(within(documents).queryByRole('button', { name: /Чернетка/ })).not.toBeInTheDocument();
+  });
+
   it('без мережі — пояснення замість вічних силуетів', { timeout: 20_000 }, async () => {
     onlineManager.setOnline(false);
     try {
