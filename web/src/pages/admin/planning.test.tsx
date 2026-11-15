@@ -140,16 +140,18 @@ describe('Генератор розкладу', () => {
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getByRole('button', { name: 'Запустити генерацію' })).toBeInTheDocument();
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    // лише компроміси: 9 пріоритетів; вікна груп — «Дуже важливо», 4-та пара зміни типово вимкнена (власник)
-    expect(within(panel as HTMLElement).getAllByRole('combobox').filter((box) => box.closest('[data-rule]'))).toHaveLength(9);
-    expect(screen.getByRole('combobox', { name: 'Вікна груп' })).toHaveTextContent('Дуже важливо');
+    // лише компроміси: 8 пріоритетів; 4-та пара зміни типово вимкнена, вікна викладачів — «Важливо» (власник)
+    expect(within(panel as HTMLElement).getAllByRole('combobox').filter((box) => box.closest('[data-rule]'))).toHaveLength(8);
     expect(screen.getByRole('combobox', { name: '4-та пара зміни' })).toHaveTextContent('Не враховувати');
     expect(screen.getByRole('combobox', { name: 'Вікна викладачів' })).toHaveTextContent('Важливо');
     // підтверджені правила коледжу — не вибір: їх немає серед пріоритетів, вони в списку «Діє завжди»
-    for (const name of ['Підгрупи разом', 'Спортзал — як у базовій версії', 'Очікування між змінами', 'Рівномірні дні']) {
+    for (const name of ['Вікна груп', 'Підгрупи разом', 'Спортзал — як у базовій версії', 'Очікування між змінами', 'Рівномірні дні']) {
       expect(screen.queryByRole('combobox', { name })).not.toBeInTheDocument();
     }
     const always = screen.getByRole('list', { name: 'Діє завжди' });
+    // власник, 15.11.2026: вікна — викладачам, не групам; пʼятниця — з числом із налаштувань (у моку типові 3)
+    expect(within(always).getByText(/Група не чекає між парами: якщо без вікна не обійтися, воно буде у викладача/)).toBeInTheDocument();
+    expect(await within(always).findByText(/Пʼятниця розвантажена: у групи не більше 3 пар/)).toBeInTheDocument();
     expect(within(always).getByText(/Підгрупи однієї дисципліни займаються одночасно/)).toBeInTheDocument();
     expect(within(always).getByText(/Фізкультура — у спортзалі чи на спортмайданчику/)).toBeInTheDocument();
     expect(within(always).getByText(/заради однієї пари/)).toBeInTheDocument();

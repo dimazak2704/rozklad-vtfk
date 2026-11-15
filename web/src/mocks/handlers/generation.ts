@@ -38,6 +38,7 @@ import type {
 } from '@/api/types';
 import { formatInstant } from '@/lib/date';
 import { emitServerEvent } from '../events';
+import { currentSettings } from './settings';
 import { findGroup, findRoom, GROUPS, groupRef, ROOMS, roomRef, SEMESTERS } from '../fixtures';
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, notFound, problem, readJson } from '../kit';
@@ -160,6 +161,20 @@ function isShiftWait(counts: Int16Array, offset: number, a: number, b: number): 
   return sa !== 0 && sb !== 0 && sa !== sb;
 }
 
+/** Пари групи в пʼятницю понад налаштування, у чисельник і знаменник разом (власник, 15.11.2026). */
+function fridayExcess(counts: Int16Array, fridayMaxPairs: number): number {
+  let excess = 0;
+  for (const offset of [0, 9]) {
+    let pairs = 0;
+    for (let pair = 1; pair <= 8; pair += 1) if ((counts[offset + pair] ?? 0) > 0) pairs += 1;
+    excess += Math.max(0, pairs - fridayMaxPairs);
+  }
+  return excess;
+}
+
+/** Мʼяка ціна жорсткого правила дня в жадібному покращенні моку: настільки велика, що його виправляють першим. */
+const DAY_RULE_COST = 1000;
+
 class Solver {
   private readonly units: Unit[];
   private readonly groupIds: Uuid[] = [];
@@ -170,6 +185,9 @@ class Solver {
   private readonly hardBySlot = new Map<number, number>();
   private readonly rooms: RoomDto[];
   private readonly weights: GenerationWeights;
+  /** Групи, які задача може змінити: лише їхні вікна й пʼятниця — жорсткі правила (закріплене поза областю — ні). */
+  private readonly scopeGroups = new Set<number>();
+  private readonly fridayMaxPairs = currentSettings().fridayMaxPairs ?? 3;
   hard = 0;
   soft = 0;
 
@@ -199,6 +217,7 @@ class Solver {
       shift: groupOf(lesson)?.shift ?? 0,
     }));
     this.rooms = [...ROOMS];
+    for (const unit of this.units) if (unit.movable) this.scopeGroups.add(unit.group);
     for (const unit of this.units) this.place(unit);
     for (const slot of this.slotUnits.keys()) this.refreshSlot(slot);
     for (const [key, counts] of this.groupDays) this.soft -= this.groupDayCost(key, counts);
@@ -253,7 +272,21 @@ class Solver {
   private groupDayCost(key: number, counts: Int16Array): number {
     const window = shiftWindowOf(findGroup(this.groupIds[Math.floor(key / 10)] ?? ''), key % 10);
     const stats = dayStats(counts, window?.firstPair ?? 99);
-    return this.weights.windows * stats.windows + this.weights.brokenDays * (stats.broken ? 1 : 0) + this.weights.latePairs * stats.late;
+    // вікна групи — жорстке правило (groupDayRules), вага `windows` нічого не важить (як у scheduler)
+    return this.weights.brokenDays * (stats.broken ? 1 : 0) + this.weights.latePairs * stats.late;
+  }
+
+  /** Жорсткі правила дня групи області: вікна й пари понад межу пʼятниці (закріплене поза областю — ні). */
+  private groupDayRules(key: number, counts: Int16Array): number {
+    if (!this.scopeGroups.has(Math.floor(key / 10))) return 0;
+    return dayStats(counts, null).windows + (key % 10 === 5 ? fridayExcess(counts, this.fridayMaxPairs) : 0);
+  }
+
+  /** Жорсткі правила дня в усіх групах області. */
+  dayHard(): number {
+    let total = 0;
+    for (const [key, counts] of this.groupDays) total += this.groupDayRules(key, counts);
+    return total;
   }
 
   private teacherDayCost(counts: Int16Array): number {
@@ -326,8 +359,16 @@ class Solver {
     }));
   }
 
-  private localCost(days: ReturnType<Solver['dayKeys']>): number {
-    return days.reduce((sum, day) => sum + this.groupDayCost(day.groupKey, day.group) + (day.teacher ? this.teacherDayCost(day.teacher) : 0), 0);
+  /** Вартість днів для вибору ходу; `withRules` — з жорсткими правилами дня за великою ціною (їх виправляють першими). */
+  private localCost(days: ReturnType<Solver['dayKeys']>, withRules = true): number {
+    return days.reduce(
+      (sum, day) =>
+        sum +
+        this.groupDayCost(day.groupKey, day.group) +
+        (withRules ? DAY_RULE_COST * this.groupDayRules(day.groupKey, day.group) : 0) +
+        (day.teacher ? this.teacherDayCost(day.teacher) : 0),
+      0,
+    );
   }
 
   /** Пересуває заняття в обліку присутності без перерахунку оцінок. */
@@ -341,19 +382,19 @@ class Solver {
   }
 
   /** Зміна мʼякої вартості, якщо перенести заняття (мінус — краще); стан не змінюється. */
-  private softDelta(unit: Unit, to: Placement): number {
+  private softDelta(unit: Unit, to: Placement, withRules = true): number {
     const origin: Placement = { weekday: unit.weekday, pair: unit.pair, parity: unit.parity, roomId: unit.roomId };
     const days = this.dayKeys(unit, [unit.weekday, to.weekday]);
-    const before = this.localCost(days);
+    const before = this.localCost(days, withRules);
     this.relocate(unit, to);
-    const after = this.localCost(days);
+    const after = this.localCost(days, withRules);
     this.relocate(unit, origin);
     return after - before;
   }
 
   /** Приймає перенесення: мʼяка оцінка — за різницею, жорстка — перерахунком двох слотів. */
   private commit(unit: Unit, to: Placement): void {
-    const delta = this.softDelta(unit, to);
+    const delta = this.softDelta(unit, to, false);
     const oldSlot = unit.weekday * 10 + unit.pair;
     this.relocate(unit, to);
     this.soft -= delta;
@@ -416,14 +457,19 @@ class Solver {
     }
   }
 
-  /** Крок 2: менше вікон, рваних днів і пізніх пар. Цілі пари — у межах дня, половинки — будь-куди. */
+  /**
+   * Крок 2: без вікон груп і пʼятниці понад межу (жорсткі правила), менше рваних днів і пізніх пар. Цілі пари — у межах
+   * дня, половинки й пари дня з порушеним жорстким правилом — будь-куди.
+   */
   improveSoft(record: () => void, maxPasses = 4): void {
     for (let pass = 0; pass < maxPasses; pass += 1) {
       let improved = false;
       for (const unit of this.units) {
         if (!unit.movable || this.violates(unit)) continue;
         if (this.localCost(this.dayKeys(unit, [unit.weekday])) === 0) continue;
-        const move = this.bestMove(unit, unit.lesson.parity !== 'BOTH', [unit.roomId]);
+        // день порушує жорстке правило (вікно, пʼятниця понад межу) — пару можна перенести в інший день і аудиторію
+        const dayRule = this.groupDayRules(unit.group * 10 + unit.weekday, this.dayArray(this.groupDays, unit.group * 10 + unit.weekday)) > 0;
+        const move = this.bestMove(unit, unit.lesson.parity !== 'BOTH' || dayRule, dayRule ? this.roomCandidates(unit) : [unit.roomId]);
         if (move && move.delta < 0) {
           this.commit(unit, move);
           record();
@@ -432,6 +478,58 @@ class Solver {
       }
       if (!improved) return;
     }
+  }
+
+  /**
+   * Крок 3: вікно групи (жорстке правило) заповнює пара тієї ж групи з іншого місця, якщо так дешевше. Вікна лишає
+   * крок 1: пара, яку переносять через накладку, звільняє слот посеред дня.
+   */
+  fillWindows(record: () => void): void {
+    for (const [key, counts] of [...this.groupDays]) {
+      if (this.groupDayRules(key, counts) === 0) continue;
+      const group = Math.floor(key / 10);
+      const weekday = key % 10;
+      for (const target of this.windowSlots(counts)) {
+        let best: (Placement & { unit: Unit; delta: number }) | null = null;
+        for (const unit of this.units) {
+          if (unit.group !== group || !unit.movable || this.violates(unit)) continue;
+          for (const parity of this.parityOptions(unit).filter((option) => target.parities.includes(option))) {
+            const roomId = this.roomCandidates(unit).find((room) => this.fits(unit, weekday, target.pair, parity, room));
+            if (roomId === undefined) continue;
+            const placement: Placement = { weekday, pair: target.pair, parity, roomId };
+            const delta = this.softDelta(unit, placement);
+            if (delta < 0 && (!best || delta < best.delta)) best = { ...placement, unit, delta };
+          }
+        }
+        if (best) {
+          this.commit(best.unit, best);
+          record();
+        }
+      }
+    }
+  }
+
+  /** Порожні пари між заняттями дня: у який тиждень їх можна заповнити (обидва — будь-яка парність). */
+  private windowSlots(counts: Int16Array): Array<{ pair: number; parities: Parity[] }> {
+    const empty = (offset: number, pair: number) => {
+      let before = false;
+      let after = false;
+      for (let other = 1; other <= 8; other += 1) {
+        if ((counts[offset + other] ?? 0) === 0) continue;
+        if (other < pair) before = true;
+        if (other > pair) after = true;
+      }
+      return (counts[offset + pair] ?? 0) === 0 && before && after;
+    };
+    const slots: Array<{ pair: number; parities: Parity[] }> = [];
+    for (let pair = 1; pair <= 8; pair += 1) {
+      const numerator = empty(0, pair);
+      const denominator = empty(9, pair);
+      if (numerator && denominator) slots.push({ pair, parities: ['BOTH', 'NUMERATOR', 'DENOMINATOR'] });
+      else if (numerator) slots.push({ pair, parities: ['NUMERATOR'] });
+      else if (denominator) slots.push({ pair, parities: ['DENOMINATOR'] });
+    }
+    return slots;
   }
 
   lessons(): TemplateLessonDto[] {
@@ -467,10 +565,13 @@ function bucket<T, K>(items: readonly T[], key: (item: T) => K | null): Map<K, T
 /** Жадібний розвʼязок: оцінка (жорсткі, мʼякі) записується після кожного прийнятого кроку. */
 export function solveTimetable(input: SolveInput): SolveResult {
   const solver = new Solver(input.lessons, input.scopeGroupIds, input.weights);
-  const trajectory = [{ hard: 0 - solver.hard, soft: solver.soft }];
-  const record = () => trajectory.push({ hard: 0 - solver.hard, soft: solver.soft });
+  // жорсткі: накладки слотів плюс вікна груп і пʼятниця понад межу (як у scheduler)
+  const point = () => ({ hard: 0 - solver.hard - solver.dayHard(), soft: solver.soft });
+  const trajectory = [point()];
+  const record = () => trajectory.push(point());
   solver.repairHard(record);
   solver.improveSoft(record);
+  solver.fillWindows(record);
   return { lessons: solver.lessons(), trajectory };
 }
 
@@ -506,6 +607,20 @@ function constraintAnalysis(
   }
   const paired = [...halves.values()].filter((slot) => slot.n && slot.d);
   const pairedInScope = paired.filter((slot) => inScope(slot.groupId)).length;
+  // жорсткі правила дня (власник, 15.11.2026) — лише в групах області, як у scheduler
+  const scopedWindows = sum((row) => row.windows);
+  const fridayLimit = currentSettings().fridayMaxPairs ?? 3;
+  const fridayPairs = new Map<Uuid, [Set<number>, Set<number>]>();
+  for (const lesson of lessons) {
+    if (lesson.weekday !== 5 || !inScope(lesson.group.id)) continue;
+    const weeks = fridayPairs.get(lesson.group.id) ?? [new Set<number>(), new Set<number>()];
+    if (lesson.parity !== 'DENOMINATOR') weeks[0].add(lesson.pair);
+    if (lesson.parity !== 'NUMERATOR') weeks[1].add(lesson.pair);
+    fridayPairs.set(lesson.group.id, weeks);
+  }
+  const fridayRows = [...fridayPairs.values()].map((weeks) => weeks.reduce((excess, pairs) => excess + Math.max(0, pairs.size - fridayLimit), 0));
+  const fridayOver = fridayRows.reduce((total, excess) => total + excess, 0);
+  const fridayGroups = fridayRows.filter((excess) => excess > 0).length;
   const rows: Array<{ id: string; constraint: string; matchCount: number; scopeMatchCount: number; hard: number; soft: number; bonus: boolean }> = [
     { id: 'Room conflict', constraint: 'Аудиторія зайнята', matchCount: hardCount('ROOM'), scopeMatchCount: hardInScope('ROOM'), hard: -hardCount('ROOM'), soft: 0, bonus: false },
     { id: 'Teacher conflict', constraint: 'Викладач у двох місцях', matchCount: hardCount('TEACHER'), scopeMatchCount: hardInScope('TEACHER'), hard: -hardCount('TEACHER'), soft: 0, bonus: false },
@@ -515,7 +630,9 @@ function constraintAnalysis(
     { id: 'Subgroups not together', constraint: 'Підгрупи дисципліни не одночасно', matchCount: 0, scopeMatchCount: 0, hard: 0, soft: 0, bonus: false },
     // мок не знає, чиї вікна викладача в області, тож рахує їх усі як «в області»
     { id: 'Teacher windows', constraint: 'Вікна викладачів', matchCount: metrics.teacherWindows, scopeMatchCount: metrics.teacherWindows, hard: 0, soft: -weights.teacherWindows * metrics.teacherWindows, bonus: false },
-    { id: 'Group windows', constraint: 'Вікна груп', matchCount: metrics.groupWindows, scopeMatchCount: sum((row) => row.windows), hard: 0, soft: -weights.windows * metrics.groupWindows, bonus: false },
+    // вікна груп і пʼятниця понад налаштування — жорсткі правила коледжу (власник, 15.11.2026), без ваги
+    { id: 'Group windows', constraint: 'Вікна в розкладі групи', matchCount: scopedWindows, scopeMatchCount: scopedWindows, hard: -scopedWindows, soft: 0, bonus: false },
+    { id: 'Friday overload', constraint: 'Забагато пар у пʼятницю', matchCount: fridayGroups, scopeMatchCount: fridayGroups, hard: -fridayOver, soft: 0, bonus: false },
     { id: 'Broken day', constraint: 'Рвані дні', matchCount: metrics.brokenDays, scopeMatchCount: sum((row) => row.brokenDays), hard: 0, soft: -weights.brokenDays * metrics.brokenDays, bonus: false },
     { id: 'Late pair', constraint: '4-та пара зміни', matchCount: metrics.latePairs, scopeMatchCount: sum((row) => row.latePairs), hard: 0, soft: -weights.latePairs * metrics.latePairs, bonus: false },
     // правила genfix, що мають метрики в моку (як рядки scheduler з тими самими id і назвами)

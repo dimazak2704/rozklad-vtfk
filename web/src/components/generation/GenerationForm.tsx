@@ -7,7 +7,7 @@ import { VERSION_STATUS_LABEL } from '@/components/timetable/model/labels';
 import { groupDescription } from '@/lib/names';
 import { validateForm, type GenerationFormState, type ScopeMode } from './model';
 import { Disclosure } from './Disclosure';
-import { FIXED_RULES, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, type RuleSection } from './priorities';
+import { FIXED_RULES, PRIORITIES, PRIORITY_HINT, PRIORITY_LABEL, PRIORITY_RULES, SECTION_LABEL, changedPriorities, fridayRuleText, type RuleSection } from './priorities';
 import { PrioritySelect } from './PrioritySelect';
 
 const SECTIONS: readonly RuleSection[] = ['groups', 'teachers', 'whole'];
@@ -29,6 +29,8 @@ interface GenerationFormProps {
   title?: string;
   /** 422 `GENERATION_LOAD_EXCEEDS_SLOTS`: що не вміщується в сітку — список біля кнопки запуску. */
   loadProblems?: readonly LoadProblemDto[];
+  /** Налаштування «Максимум пар у пʼятницю» для рядка «Діє завжди»; невідоме — типове значення core. */
+  fridayMaxPairs?: number;
 }
 
 /**
@@ -47,6 +49,7 @@ export function GenerationForm({
   submit,
   title = 'Параметри',
   loadProblems = [],
+  fridayMaxPairs,
 }: GenerationFormProps) {
   const errors = submitted ? validateForm(form) : {};
   const groupOptions = useMemo(
@@ -188,7 +191,7 @@ export function GenerationForm({
             </span>
             <ul aria-labelledby="fixed-rules" className="flex list-disc flex-col gap-1 ps-4 text-caption text-secondary">
               {FIXED_RULES.map((rule) => (
-                <li key={rule.id}>{rule.text}</li>
+                <li key={rule.id}>{rule.id === 'friday' ? fridayRuleText(fridayMaxPairs) : rule.text}</li>
               ))}
             </ul>
           </div>

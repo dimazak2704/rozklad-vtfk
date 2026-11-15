@@ -12,7 +12,8 @@ const jobsPath = '/admin/generation/jobs';
 const softOf = (lessons: readonly TemplateLessonDto[]) => {
   const m = analyzeLessons(lessons).metrics;
   const w = DEFAULT_WEIGHTS;
-  return -(w.windows * m.groupWindows + w.teacherWindows * m.teacherWindows + w.brokenDays * m.brokenDays + w.latePairs * m.latePairs);
+  // вікна груп — жорстке правило (власник, 15.11.2026): у мʼякій оцінці їх немає, вага `windows` нічого не важить
+  return -(w.teacherWindows * m.teacherWindows + w.brokenDays * m.brokenDays + w.latePairs * m.latePairs);
 };
 
 async function failure(promise: Promise<unknown>): Promise<ApiError> {
@@ -36,7 +37,8 @@ describe('розвʼязувач моку', () => {
   const result = solveTimetable({ lessons: TEMPLATE_LESSONS, scopeGroupIds: null, weights: { ...DEFAULT_WEIGHTS } });
 
   it('прибирає всі жорсткі конфлікти даних з Excel і зменшує штраф', () => {
-    expect(result.trajectory[0]).toEqual({ hard: -75, soft: softOf(TEMPLATE_LESSONS) });
+    // 75 накладок з Excel + 8 пар понад 3 у пʼятницю (1КІ1, 1М, 4РТ1, 4РТ2 — по 4 пари в обидва тижні)
+    expect(result.trajectory[0]).toEqual({ hard: -83, soft: softOf(TEMPLATE_LESSONS) });
     expect(result.trajectory.at(-1)?.hard).toBe(0);
     expect(analyzeLessons(result.lessons).hard).toHaveLength(0);
     expect(result.trajectory.at(-1)?.soft).toBeGreaterThan(softOf(TEMPLATE_LESSONS));
@@ -44,6 +46,22 @@ describe('розвʼязувач моку', () => {
 
   it('оцінка, яку він веде, збігається з метриками результату', () => {
     expect(result.trajectory.at(-1)?.soft).toBe(softOf(result.lessons));
+  });
+
+  it('жорсткі правила коледжу (власник, 15.11.2026): без вікон у груп, у пʼятницю не більше 3 пар', () => {
+    const fridayPairs = (lessons: readonly TemplateLessonDto[]) => {
+      const pairs = new Map<string, Set<string>>();
+      for (const lesson of lessons.filter((l) => l.weekday === 5)) {
+        for (const week of lesson.parity === 'BOTH' ? ['N', 'D'] : [lesson.parity]) {
+          const key = `${lesson.group.code} ${week}`;
+          pairs.set(key, (pairs.get(key) ?? new Set()).add(String(lesson.pair)));
+        }
+      }
+      return Math.max(...[...pairs.values()].map((set) => set.size));
+    };
+    expect(fridayPairs(TEMPLATE_LESSONS)).toBe(4);
+    expect(fridayPairs(result.lessons)).toBeLessThanOrEqual(3);
+    expect(analyzeLessons(result.lessons).metrics.groupWindows).toBe(0);
   });
 
   it('пари поза областю й закріплені не рухає', () => {
