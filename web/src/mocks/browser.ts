@@ -27,7 +27,7 @@ export const worker = setupWorker(controlHandler, ...handlers);
 export async function startMockWorker(): Promise<void> {
   await worker.start({
     // запити без мок-обробника (шрифти, модулі Vite, ще не змоковані ендпоінти) ідуть як є
-    onUnhandledRequest: 'bypass',
+    onUnhandledFrame: 'bypass',
     serviceWorker: { url: `${import.meta.env.BASE_URL}mockServiceWorker.js` },
   });
   window.__rozkladMocks = { emit: emitServerEvent, reset: resetMockStores };
