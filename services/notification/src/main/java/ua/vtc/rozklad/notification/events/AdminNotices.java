@@ -60,7 +60,12 @@ public class AdminNotices {
             case FAILED -> "⚠️ " + b("Генерація розкладу не вдалася")
                     + (event.error() == null || event.error().isBlank() ? "" : "\n" + escape(truncate(event.error())))
                     + links.adminGeneration();
-            case CANCELLED -> "⏹ " + b("Генерацію розкладу скасовано.") + links.adminGeneration();
+            // «Зупинити» на запущеній задачі: найкращий розклад повертається, і core зберігає його чернеткою
+            case CANCELLED -> event.assignments().isEmpty()
+                    ? "⏹ " + b("Генерацію розкладу скасовано.") + links.adminGeneration()
+                    : "⏹ " + b("Генерацію розкладу зупинено")
+                            + "\nНайкращий знайдений варіант збережено як чернетку (жорсткі порушення: "
+                            + Math.abs(event.hardScore()) + ")." + links.adminGeneration();
             case QUEUED, RUNNING -> null;
         };
         if (text != null) {

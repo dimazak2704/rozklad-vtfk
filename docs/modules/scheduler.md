@@ -156,8 +156,19 @@ problems of the run.
   while they move. The union picks a selector in proportion to its size, so the sibling move is a small
   share of the moves (it has ~72 groups × ~20 slots). `acceptedCountLimit` 16 (chosen by the benchmark
   in §11).
-* Termination per job (`SolverConfigOverride`): the requested `timeLimitSeconds`, or earlier when the
-  best score has not improved for `max(15 s, 25 % of the limit)` (`JobTermination`).
+* Termination per job (`SolverConfigOverride`, it replaces the solver config's own; `JobTermination`):
+  * **Auto mode** — the request has no `timeLimitSeconds` (the web app since 15.11.2026, owner's decision: «хай генерує,
+    скільки треба»). Timefold terminations `OR(spentLimit = auto.time-cap, unimprovedSpentLimit = auto.stuck-limit,
+    AND(bestScoreFeasible, unimprovedSpentLimit = auto.window + unimprovedScoreDifferenceThreshold =
+    0hard/<auto.min-improvement>soft))`: with 0 hard the job stops when the best score improved by less than 20 soft
+    points over the last 60 s (about two teacher windows a minute); a hard improvement is always above the threshold,
+    so while conflicts go away the job keeps going; when nothing at all improves for 3 min it stops whatever the hard
+    score (conflicts that cannot be removed, e.g. between pinned lessons); 30 min is the safety cap the dispatcher is
+    never asked about. Defaults and the evidence: §11 «Auto mode». No size factor: the threshold is absolute, so a
+    small scope (few points to gain) stops after ~1.5–2 min and the whole college after 7–13 min by itself.
+  * **Fixed limit** (requests with `timeLimitSeconds`, older clients and `scripts/smoke_workflows.py`): the limit, or
+    earlier when the best score has not improved for `max(15 s, 25 % of the limit)`.
+  * The dispatcher may stop either earlier («Зупинити» → `generation.cancel`): the best timetable so far comes back.
 * `timefold.solver-manager.parallel-solver-count` = `SCHEDULER_PARALLEL_SOLVERS` (default 1); further
   jobs wait as QUEUED. Multi-threaded solving is an Enterprise feature and is not used.
 
@@ -183,12 +194,16 @@ problems of the run.
   is missing); the solver callbacks run with the MDC of the request that started the job, so
   `generation.completed` carries the same `X-Request-Id` and every sent event has `message_id` = `eventId`.
   Periodic progress and the completion re-sent by `JobMaintenance` carry no request id.
-* **Statuses**: SOLVED — time limit or plateau reached, all units placed (may still have hard
-  violations: `hardScore < 0`, the analysis shows which). CANCELLED — after `generation.cancel`; a job
-  that was already solving keeps its best timetable (assignments present), a queued or not yet placed
-  one has none. FAILED — invalid snapshot (all problems listed in Ukrainian), time limit above
-  `app.scheduler.max-time-limit`, the time ran out before every unit was placed, a solver error, or the
-  service restarted/stopped during the job. Scores are 0 when a job has no timetable.
+* **Statuses**: SOLVED — the job stopped by itself (auto mode), at its time limit or plateau, all units placed
+  (may still have hard violations: `hardScore < 0`, the analysis shows which). CANCELLED — after
+  `generation.cancel`; a job that was already solving keeps its best timetable (assignments present, core turns it
+  into a draft), a queued or not yet placed one has none. FAILED — invalid snapshot (all problems listed in
+  Ukrainian), time limit above `app.scheduler.max-time-limit`, the time (or the auto mode's safety cap) ran out
+  before every unit was placed, a solver error, or the service restarted/stopped during the job. Scores are 0 when a
+  job has no timetable.
+* **Stop reason** (`generation.completed.stopReason`, additive, only with a timetable): `STOPPED` when the job was
+  cancelled; otherwise the measured solving time decides, because Timefold 2.8 does not report which termination
+  fired: within 1 s of the limit → `TIME_LIMIT` (auto mode: of the cap → `SAFETY_CAP`), earlier → `NO_IMPROVEMENT`.
 * **Cancel before request**: an unknown `jobId` is recorded as CANCELLED (and announced), so the
   late request is ignored.
 * **Restart**: jobs received by an earlier process and still QUEUED/RUNNING fail with «Генерацію
@@ -200,7 +215,7 @@ problems of the run.
 
 | Method & path | Response |
 |---|---|
-| `GET /api/scheduler/jobs/{id}` | `{id, semesterId, status, receivedAt, startedAt, finishedAt, timeLimitSeconds, unitCount, bestScore, hardScore, softScore, elapsedMs, cancelRequested, error, resultDelivered}`; 404 ProblemDetail «Задачу генерації … не знайдено.» |
+| `GET /api/scheduler/jobs/{id}` | `{id, semesterId, status, receivedAt, startedAt, finishedAt, timeLimitSeconds, unitCount, bestScore, hardScore, softScore, elapsedMs, cancelRequested, error, resultDelivered}` (`timeLimitSeconds` null: auto mode, or a cancel that came before its request); 404 ProblemDetail «Задачу генерації … не знайдено.» |
 | `GET /api/scheduler/status` | `{queuedJobs, runningJobs}` |
 
 ## 7. Configuration
@@ -209,12 +224,15 @@ problems of the run.
 |---|---|---|
 | `timefold.solver-manager.parallel-solver-count` (`SCHEDULER_PARALLEL_SOLVERS`) | 1 | jobs solved at once |
 | `app.scheduler.progress-interval` (`SCHEDULER_PROGRESS_INTERVAL`) | 2s | throttle of `generation.progress` |
-| `app.scheduler.max-time-limit` (`SCHEDULER_MAX_TIME_LIMIT`) | 15m | longer requests fail |
-| `app.scheduler.min-unimproved-limit` / `unimproved-ratio` | 15s / 0.25 | plateau termination |
+| `app.scheduler.max-time-limit` (`SCHEDULER_MAX_TIME_LIMIT`) | 15m | fixed-limit requests above it fail |
+| `app.scheduler.min-unimproved-limit` / `unimproved-ratio` | 15s / 0.25 | plateau termination of fixed-limit jobs |
+| `app.scheduler.auto.time-cap` (`SCHEDULER_AUTO_TIME_CAP`) | 30m | auto mode: safety cap; core's `app.timetable.generation.auto-time-cap` must not be shorter |
+| `app.scheduler.auto.window` / `min-improvement` (`SCHEDULER_AUTO_WINDOW`, `SCHEDULER_AUTO_MIN_IMPROVEMENT`) | 60s / 20 | auto mode with 0 hard: stop when the last window gained fewer soft points |
+| `app.scheduler.auto.stuck-limit` (`SCHEDULER_AUTO_STUCK_LIMIT`) | 3m | auto mode: stop after this long without any better score; keep it below core's watchdog grace (10m) |
 | `app.scheduler.discipline-repeat-weight` (`SCHEDULER_DISCIPLINE_REPEAT_WEIGHT`) | 5 | weight the request does not carry |
 | `app.scheduler.completion-resend-interval` | 30s | re-send of unconfirmed completions |
 | `app.scheduler.retention` | 30d | purge of finished jobs / processed ids |
-| `timefold.solver.termination.spent-limit` | 15m | safety net; every job sets its own limit |
+| `timefold.solver.termination.spent-limit` | 30m (`SCHEDULER_AUTO_TIME_CAP`) | safety net only: every job replaces it with its own termination |
 
 ## 8. What core should put into the snapshot
 
@@ -237,7 +255,11 @@ problems of the run.
 * `analysis[].constraint` is the Ukrainian title, `analysis[].constraintId` the ASCII id, `bonus` marks
   the reward row and `scopeMatchCount` counts matches with a free unit (§3). `analysis[].score` is
   `HardSoftScore.toString()` (`-2hard/-30soft`), weights included.
-* CANCELLED may carry assignments (best timetable before the cancel) — core may offer «apply anyway».
+* CANCELLED may carry assignments (best timetable before the cancel) — core keeps them as a draft of the stopped job
+  (SOLVED, stop reason STOPPED) since the auto mode (15.11.2026).
+* Auto mode (additive in `libs/contracts`): `GenerationRequested.timeLimitSeconds` is a nullable `Integer` (absent =
+  auto mode, `autoMode()`); `GenerationCompleted.stopReason` (`GenerationStopReason`) is new. An older scheduler fails a
+  request without a limit, so the scheduler is deployed before core.
 * `hardScore`/`softScore` are 0 for FAILED and for CANCELLED without assignments.
 * Pinned units without a room come back with `roomId: null`; units of other groups that core wants
   respected (out of scope of a partial generation) should be sent as pinned units.
@@ -266,7 +288,8 @@ mvn -q -pl services/scheduler -am test -Dtest=RealSizeBenchmarkTest -Dsurefire.f
     -Dbenchmark=true [-Dbenchmark.seconds=90] [-Dbenchmark.config=file:/path/to/solverConfig.xml]
 mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.failIfNoSpecifiedTests=false \
     -Dscheduler.excludedTags=none -Dreplay=college-from-published:180,synthetic:tight-shift2 \
-    [-Dreplay.weights=latePairs=3] [-Dreplay.seed=1] [-Dreplay.out=results.jsonl]
+    [-Dreplay.weights=latePairs=3] [-Dreplay.seed=1] [-Dreplay.out=results.jsonl] \
+    [-Dreplay.termination=production|spent|auto]   # auto: the production auto mode, the number after ':' is the cap
 ```
 
 * `TimetableConstraintProviderTest` — ConstraintVerifier for every constraint (positive and negative
@@ -283,7 +306,10 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
   (reference, first placed, final): score, time to 0 hard, group windows, broken days, 4-та пара, one-pair days,
   lone subgroup slots, a discipline twice, teacher windows, waits between shifts, teaching days, one-pair and
   5+-pair teacher days, unwanted slots, PE outside a sports room, moved units, unplaced units, plus the solver's own
-  count next to each metric. Datasets: the four real requests of 15.11.2026 (gzipped in
+  count next to each metric. Every run also records the trajectory (each new best score with its time) and
+  **probes**: where the same run would have stopped with a window of W seconds without a better score after 0 hard
+  (`feasible W`), whatever the hard score (`any W`), and its best timetable at fixed times (`at T`), with the metrics of
+  each; `termination=spent` runs give the evidence for the auto mode (§11). Datasets: the four real requests of 15.11.2026 (gzipped in
   `src/test/resources/replay`, completed the way this branch's core sends them), a JSON file, or
   `synthetic:<shape>[@warm]` (`ShapedCollege`). Batches: `SnapshotReplay.main` on the test classpath
   (`datasets=… weights=name=v,… label=… out=results.jsonl seed=…`).
@@ -301,12 +327,15 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
 * `HalfPairingTest` — the 4КІ1 case: two scattered halves give 2 broken days, one shared slot gives 0;
   the solver pairs them by itself.
 * `TimetableResultsTest` — assignment order, room-less pins, analysis rows and titles.
-* `GenerationJobTest`, `JobTerminationTest`, `ProgressTrackerTest` (throttling, only the latest score),
-  `GenerationLifecycleTest` (SOLVED / CANCELLED with and without a timetable / not placed / shutdown /
-  a second finish / unconfirmed delivery / progress only for running jobs).
-* `GenerationMessagingIT` (PostgreSQL + RabbitMQ in Docker) — solve with progress and analysis,
-  duplicate events/job ids, cancel of a running job, cancel before request, invalid snapshot, time limit
-  too long, restart recovery, re-send of an unconfirmed completion, DLQ, REST.
+* `GenerationJobTest`, `JobTerminationTest` (fixed limit and plateau; the auto mode's cap, stuck limit and
+  feasible-and-settled branch), `ProgressTrackerTest` (throttling, only the latest score),
+  `GenerationLifecycleTest` (SOLVED / CANCELLED with and without a timetable / not placed, also in auto mode /
+  shutdown / a second finish / unconfirmed delivery / progress only for running jobs / stop reasons: plateau, limit,
+  safety cap within the tolerance, stopped).
+* `GenerationMessagingIT` (PostgreSQL + RabbitMQ in Docker) — solve with progress and analysis (stop reason
+  `TIME_LIMIT`), an auto-mode request that stops by itself (`NO_IMPROVEMENT`, short test windows),
+  duplicate events/job ids, cancel of a running job (best timetable kept, `STOPPED`), cancel before request, invalid
+  snapshot, time limit too long, restart recovery, re-send of an unconfirmed completion, DLQ, REST.
 * `SyntheticCollege` (test support) builds a ВТФК-shaped college and **plants** a feasible timetable
   first, so every generated problem is known to have a 0-hard solution. `ShapedCollege` does the same with the
   real shape (14–19 pairs a week, days from the first pair, a lighter Friday, one teacher per load item, parallel
@@ -459,6 +488,52 @@ type), with the same defaults: `college-from-published` 120 s — group windows 
 twice 4, teacher windows 45, waits 180, teaching days 381, one-pair teacher days 102, 5+ pairs 33, **PE outside 0**,
 moved 131, room changed 53; `ki4-scope-3groups` 60 s — the same as before the repair (moved 5 of 53, PE outside 0).
 With `specialRooms` 0 the same whole-college run is in the evaluation file (PE may then leave the hall).
+
+### Auto mode (evidence, 15.11.2026)
+
+Owner's decision: the dispatcher sets no time limit; the solver stops by itself when the timetable stops getting better,
+and the dispatcher may stop it earlier and keep the best result. `SnapshotReplayTest` (§10), production solver config,
+3 JVMs in parallel on the laptop next to another agent's builds (absolute times are indicative).
+
+**Step 1, trajectories.** One long run per real request with the spent limit only (`termination=spent`): whole college
+from the published version 20 min, from scratch 30 min, `ki4-scope-3groups` 10 min, `course4-scope` 15 min. Every new
+best score was recorded, and the stop of each candidate rule was simulated on the same trajectory (Timefold's queue
+logic for the score-difference threshold reproduced exactly):
+
+| Request (free units) | Last improvement | Plain window 15 s / 30 s / 60 s without a better score | Gain < 20 soft in 60 s (chosen) | Gain < 30 in 60 s | At 150 s / 180 s |
+|---|---|---|---|---|---|
+| `ki4-scope-3groups` (53) | 33 s, −5130 | 48 / 63 / 93 s, all −5130 | 88 s, −5130 | 88 s | −5130 |
+| `course4-scope` (168) | 144 s, −4823 | 98 s −4830 / 174 s −4823 / 204 s −4823 | 132 s, −4826 | 111 s, −4826 | −4823 |
+| `college-from-published` (1074) | still improving at 20 min (−4374) | 356 s −4528 / 722 s −4430 / 1008 s −4403 | 490 s, −4467 | 429 s, −4495 | −4817 / −4788 |
+| `college-from-scratch` (1077), 0 hard at 320 s | still improving at 30 min (−6208) | 658 s −6563 / 945 s −6453 / never | 794 s, −6481 | 732 s, −6522 | −2hard / −1hard |
+
+Reading: a scope converges within 0.5–2.5 min and then nothing improves for minutes; the whole college keeps finding
+small gains for half an hour (late acceptance), so a plain «no better score for W» window makes the run length depend
+on one random gap (6–17 min for W 15–60 s). «Less than 20 soft points (about two teacher windows) gained in the last
+minute» behaves evenly and needs no size factor: the gains are absolute, so a small scope stops after its window and
+the whole college after 7–13 min. While hard violations remain, every hard improvement passes the threshold; the
+longest gap without any better score while infeasible was 8 s (from scratch), so the stuck limit of 3 min is ~20 times
+that and still well below core's 10 min watchdog grace. The cap (30 min) is twice the longest auto run.
+
+**Step 2, the auto mode itself** (`termination=auto`, cap 30 min, the defaults of §7):
+
+| Request | Stopped after | 0 hard at | Final | grpWin | broken | late | lone | twice | tchWin | waits | idle | tchDays | 1-pair tch | 5+ pairs | peOut | moved | roomCh |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ki4-scope-3groups` | 109 s | 2 s | 0hard/−5130soft | 0 | 32 | 291 | 2 | 12 | 109 | 187 | 296 | 380 | 102 | 42 | 0 | 5 | 0 |
+| `course4-scope` | 117 s | 0.3 s | 0hard/−4823soft | 0 | 32 | 284 | 2 | 7 | 84 | 194 | 278 | 379 | 97 | 42 | 0 | 29 | 1 |
+| `college-from-published` | 581 s (9.7 min) | 2.5 s | 0hard/−4430soft | 0 | 22 | 261 | 2 | 3 | 47 | 173 | 220 | 381 | 102 | 32 | 0 | 129 | 36 |
+| same run at 150 s / 180 s | — | — | −4979 / −4888 | 0 / 0 | 26 / 26 | 267 / 260 | 2 / 2 | 9 / 9 | 65 / 61 | 184 / 192 | 249 / 253 | 384 / 383 | 108 / 107 | 27 / 29 | 0 | 104 / 111 | 80 / 70 |
+| `college-from-scratch` | 973 s (16.2 min) | 347 s | 0hard/−6229soft | 2 | 30 | 288 | 20 | 58 | 36 | 289 | 325 | 373 | 108 | 52 | 6 | — | — |
+| same run at 150 s / 180 s | — | — | −2hard / −2hard | 9 / 8 | 36 / 34 | 337 / 335 | 43 / 39 | 92 / 82 | 71 / 62 | 311 / 317 | 382 / 379 | 397 / 396 | 164 / 163 | 52 / 50 | 15 / 10 | — | — |
+
+Against the 150–180 s runs of the genfix evaluation («Default weights» above; whole college: broken 21–24, late
+263–270, twice 7–12, teacher windows 41–54, idle 214–244, 5+ pairs 25–36; repair row at 120 s: twice 4, idle 225, room
+changed 53): the auto run of the whole college is as good or better on every student metric, has fewer room changes
+(36), and is within the run-to-run spread on teacher days, one-pair and 5+-pair teacher days (5+ pairs 32 vs 27–29 at
+150–180 s of the same run). From scratch a 150–180 s limit still ends with −2 hard; the auto mode reaches 0 hard and
+ends with the metrics the evaluation's 600 s runs had (twice 58, lone 20). Scopes stop by themselves in under two minutes
+with the same result as 10–15 min runs. Raw lines: `scratchpad/autostop/{trajectories,results}.jsonl` of the autostop
+session; reproduce with `-Dreplay.termination=spent|auto`.
 
 ## 12. Decisions (short)
 

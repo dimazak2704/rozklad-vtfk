@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
 import ua.vtc.rozklad.core.catalog.Discipline;
@@ -47,9 +48,10 @@ import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 
 /**
  * Applies scheduler results to jobs, idempotently: every event id is processed once (duplicates
- * from redelivery are ignored), events of finished or unknown jobs are ignored. A SOLVED result
- * becomes a DRAFT version (source GENERATED) with metrics «було / стало» and the outcome against the base
- * version («Переставлено N з M пар»); its lessons are pinned only where the base pinned them (B1).
+ * from redelivery are ignored), events of finished or unknown jobs are ignored. A SOLVED result, and a
+ * CANCELLED one that carries the best timetable of a job the dispatcher stopped, becomes a DRAFT version (source
+ * GENERATED) with metrics «було / стало» and the outcome against the base version («Переставлено N з M пар»); the
+ * job ends SOLVED with the stop reason. Its lessons are pinned only where the base pinned them (B1).
  * Realtime updates go to admins over SSE after commit. The catalog and the load may change during a run: a room, teacher
  * or load item deleted meanwhile is left out of its lessons (with a note), a deleted group or
  * discipline fails the job, so the result never breaks a foreign key and is never lost silently.
@@ -132,9 +134,16 @@ class GenerationResultHandler {
         job.setAnalysis(mapper.json(event.analysis()));
         Instant now = clock.instant();
         switch (event.status()) {
-            case SOLVED -> applySolution(job, event, now);
+            case SOLVED -> applySolution(job, event, now, event.stopReason());
             case FAILED -> job.finish(GenerationStatus.FAILED, now, truncate(failure(event)));
-            case CANCELLED -> job.finish(GenerationStatus.CANCELLED, now, null);
+            // «Зупинити»: планувальник повертає найкращий розклад на момент зупинки — він стає чернеткою
+            case CANCELLED -> {
+                if (event.assignments().isEmpty()) {
+                    job.finish(GenerationStatus.CANCELLED, now, null);
+                } else {
+                    applySolution(job, event, now, GenerationStopReason.STOPPED);
+                }
+            }
             default -> throw new IllegalStateException("Not a terminal status: " + event.status());
         }
         GenerationJobDto dto = mapper.toDto(job);
@@ -147,17 +156,18 @@ class GenerationResultHandler {
      */
     @Transactional
     public Optional<GenerationJobDto> failIfStale(UUID jobId, Predicate<GenerationJob> stale, Instant now,
-                                                  String reason) {
+                                                  Function<GenerationJob, String> reason) {
         Optional<GenerationJob> found = jobs.findByIdForUpdate(jobId).filter(GenerationJob::isActive).filter(stale);
         found.ifPresent(job -> {
-            job.finish(GenerationStatus.FAILED, now, reason);
+            job.finish(GenerationStatus.FAILED, now, reason.apply(job));
             GenerationJobDto dto = mapper.toDto(job);
             sse.sendToRole(Roles.ADMIN, SseEventTypes.GENERATION_COMPLETED, dto);
         });
         return found.map(mapper::toDto);
     }
 
-    private void applySolution(GenerationJob job, GenerationCompleted event, Instant now) {
+    private void applySolution(GenerationJob job, GenerationCompleted event, Instant now,
+                               GenerationStopReason stopReason) {
         GeneratedLessonsBuilder.Result result;
         try {
             result = GeneratedLessonsBuilder.build(mapper.plan(job), event.assignments());
@@ -197,6 +207,7 @@ class GenerationResultHandler {
         job.setOutcome(mapper.json(GenerationOutcome.of(result, GenerationResultHandler::roomOf, known.groupRefs())));
         job.setMetricsAfter(mapper.json(after));
         job.setMetricsBefore(mapper.json(before));
+        job.setStopReason(stopReason);
         job.finish(GenerationStatus.SOLVED, now, null);
     }
 

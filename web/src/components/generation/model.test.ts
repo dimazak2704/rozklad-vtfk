@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_WEIGHTS } from '@/api/generation';
 import type { GenerationJobDto, MetricsDto, TimetableVersionDto } from '@/api/types';
 import {
+  AUTO_STOP_SENTENCE,
   baselineSentence,
   completionNotice,
   comparisonRows,
@@ -13,11 +14,16 @@ import {
   jobScopeText,
   jobPrioritiesText,
   jobStatusTitle,
+  liveElapsedSeconds,
   outcomeDraftSentence,
   outcomeSentence,
   splitAnalysis,
+  stopReasonLabel,
+  stopReasonSentence,
   timeTicks,
+  toJobRequest,
   usableMetrics,
+  validateForm,
 } from './model';
 
 const metrics = (values: Partial<MetricsDto>): MetricsDto => ({
@@ -210,11 +216,11 @@ describe('параметри і наслідки задачі (B8)', () => {
     expect(jobScopeText({})).toBeNull();
   });
 
-  it('форма з задачі: область, база, ліміт і ваги; старі пʼять ваг доповнюються як у core', () => {
+  it('форма з задачі: область, база і ваги; старі пʼять ваг доповнюються як у core, ліміт старої задачі не переноситься', () => {
     const form = formFromJob(
       job({ scope: { groupIds: ['a'], courses: [] }, weights: { windows: 20, brokenDays: 10, latePairs: 3, preferences: 5, homeRoom: 1 } }),
     );
-    expect(form).toMatchObject({ scope: 'groups', groupIds: ['a'], baseVersionId: 'v1', timeLimitSeconds: 45 });
+    expect(form).toEqual({ scope: 'groups', courses: [], groupIds: ['a'], baseVersionId: 'v1', weights: expect.any(Object) as unknown });
     expect(form.weights).toEqual({ ...DEFAULT_WEIGHTS, windows: 20, latePairs: 3, teacherWindows: 20 });
   });
 
@@ -240,6 +246,62 @@ describe('параметри і наслідки задачі (B8)', () => {
     // старі метрики без onePairDays: «Було» невідоме, а не 0
     expect(rows[0]?.cells.find((cell) => cell.key === 'onePairDays')).toEqual({ key: 'onePairDays', before: null, after: 0 });
     expect(rows[0]?.moved).toEqual({ moved: 3, total: 9 });
+  });
+});
+
+describe('генерація без ліміту часу', () => {
+  it('запит не несе ліміту: генерація зупиняється сама; перевіряється лише область', () => {
+    const form = formFromJob(job({ scope: { groupIds: [], courses: [4] }, weights: { ...DEFAULT_WEIGHTS } }));
+    const request = toJobRequest(form, 's');
+    expect(request).toEqual({ semesterId: 's', scope: { courses: [4] }, baseVersionId: 'v1', weights: { ...DEFAULT_WEIGHTS } });
+    expect('timeLimitSeconds' in request).toBe(false);
+    expect(validateForm(form)).toEqual({});
+    expect(validateForm({ ...form, courses: [] })).toEqual({ scope: 'Оберіть хоча б один курс' });
+  });
+
+  it('«Минуло» тикає між точками прогресу — від першої точки, а не стоїть на останньому покращенні', () => {
+    const running = job({ status: 'RUNNING', startedAt: '2026-11-11T10:00:00Z', finishedAt: null, progress: [{ t: 1.5, hard: 0, soft: -40 }] });
+    expect(liveElapsedSeconds(running, Date.parse('2026-11-11T10:01:00Z'))).toBe(61.5);
+    // годинник браузера трохи позаду — не менше за останню точку
+    expect(liveElapsedSeconds({ ...running, progress: [{ t: 1.5, hard: 0, soft: -40 }, { t: 80, hard: 0, soft: -30 }] }, Date.parse('2026-11-11T10:01:00Z'))).toBe(80);
+    expect(liveElapsedSeconds({ ...running, startedAt: null, progress: [] }, Date.now())).toBe(0);
+  });
+
+  it('чому зупинилась: сама, вручну, межа сервера, старий ліміт; у стару задачу причину не вигадуємо', () => {
+    const auto = { timeLimitSeconds: null };
+    expect(stopReasonSentence(job({ ...auto, stopReason: 'NO_IMPROVEMENT' }))).toBe('Зупинилась сама: розклад перестав покращуватися.');
+    expect(stopReasonSentence(job({ ...auto, stopReason: 'STOPPED' }))).toBe('Зупинено вручну — збережено найкращий варіант на той момент.');
+    expect(stopReasonSentence(job({ ...auto, stopReason: 'SAFETY_CAP' }))).toMatch(/^Зупинилась на найдовшому часі, який дозволяє сервер/);
+    expect(stopReasonSentence(job({ timeLimitSeconds: 300, stopReason: 'TIME_LIMIT' }))).toBe(
+      'Зупинилась на ліміті часу 5\u00a0хв (старий режим із фіксованим лімітом).',
+    );
+    expect(stopReasonSentence(job({ timeLimitSeconds: 300, stopReason: 'NO_IMPROVEMENT' }))).toBe(
+      'Зупинилась раніше ліміту 5\u00a0хв: розклад перестав покращуватися.',
+    );
+    expect(stopReasonSentence(job({ timeLimitSeconds: 45 }))).toBe('Запуск зі старим фіксованим лімітом 45\u00a0с.');
+    expect(stopReasonSentence(job({ ...auto }))).toBeNull();
+    expect(stopReasonSentence(job({ status: 'CANCELLED', stopReason: null }))).toBeNull();
+  });
+
+  it('у рядку історії — коротко; та, що зупиняється, так і позначена', () => {
+    expect(stopReasonLabel(job({ timeLimitSeconds: null, stopReason: 'NO_IMPROVEMENT' }))).toBe('зупинилась сама');
+    expect(stopReasonLabel(job({ timeLimitSeconds: null, stopReason: 'STOPPED' }))).toBe('зупинено вручну');
+    expect(stopReasonLabel(job({ timeLimitSeconds: null, stopReason: 'SAFETY_CAP' }))).toBe('межа часу сервера');
+    expect(stopReasonLabel(job({ timeLimitSeconds: 600 }))).toBe('ліміт 10\u00a0хв');
+    expect(stopReasonLabel(job({ status: 'RUNNING', stopRequested: true }))).toBe('зупиняється');
+    expect(stopReasonLabel(job({ status: 'RUNNING' }))).toBeNull();
+    expect(stopReasonLabel(job({ status: 'FAILED' }))).toBeNull();
+  });
+
+  it('речення для диспетчера — як просив власник', () => {
+    expect(AUTO_STOP_SENTENCE).toBe(
+      'Генерація зупиниться сама, коли розклад перестане покращуватися. Можна зупинити раніше — збережеться найкращий варіант.',
+    );
+  });
+
+  it('сповіщення про зупинену задачу каже, що найкращий варіант збережено', () => {
+    expect(completionNotice(job({ stopReason: 'STOPPED' }))).toMatchObject({ level: 'success', title: 'Генерацію зупинено' });
+    expect(completionNotice(job({ stopReason: 'NO_IMPROVEMENT' }))).toMatchObject({ title: 'Генерацію завершено' });
   });
 });
 

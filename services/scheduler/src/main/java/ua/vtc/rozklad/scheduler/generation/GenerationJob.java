@@ -102,8 +102,8 @@ public class GenerationJob implements Persistable<UUID> {
         this.newEntity = true;
     }
 
-    /** A job accepted from {@code generation.requested}. */
-    public static GenerationJob requested(UUID id, UUID semesterId, int timeLimitSeconds, int unitCount,
+    /** A job accepted from {@code generation.requested}; {@code timeLimitSeconds == null} is auto mode. */
+    public static GenerationJob requested(UUID id, UUID semesterId, Integer timeLimitSeconds, int unitCount,
                                           JsonNode weights, Instant receivedAt) {
         return new GenerationJob(id, Objects.requireNonNull(semesterId, "semesterId"), timeLimitSeconds, unitCount,
                 weights, receivedAt);
@@ -127,6 +127,11 @@ public class GenerationJob implements Persistable<UUID> {
 
     public boolean isActive() {
         return !status.isTerminal();
+    }
+
+    /** No time limit: the job stops when the timetable stops getting better (or at the safety cap). */
+    public boolean isAutoMode() {
+        return timeLimitSeconds == null;
     }
 
     /** QUEUED → RUNNING; {@code false} when the job is no longer queued. */

@@ -10,15 +10,18 @@ import org.springframework.context.annotation.Import;
 
 /**
  * Full scheduler on real PostgreSQL and RabbitMQ (Testcontainers). Every IT uses exactly this
- * configuration, so they share one application context and one set of containers. Progress and
- * re-delivery run faster than in production to keep the tests short.
+ * configuration, so they share one application context and one set of containers. Progress,
+ * re-delivery and the auto mode's windows run faster than in production to keep the tests short.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest(properties = {
         "app.scheduler.progress-interval=300ms",
         "app.scheduler.completion-resend-interval=2s",
-        "app.scheduler.max-time-limit=10m"})
+        "app.scheduler.max-time-limit=10m",
+        "app.scheduler.auto.time-cap=60s",
+        "app.scheduler.auto.window=2s",
+        "app.scheduler.auto.stuck-limit=10s"})
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 public @interface SchedulerIntegrationTest {

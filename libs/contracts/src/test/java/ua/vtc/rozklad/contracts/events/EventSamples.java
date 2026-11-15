@@ -12,6 +12,7 @@ import ua.vtc.rozklad.contracts.ChangeKind;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.contracts.GenerationStatus;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderRowType;
 import ua.vtc.rozklad.contracts.OrderStatus;
@@ -56,7 +57,8 @@ final class EventSamples {
                 absenceReported(List.of(1, 2)),
                 absenceReported(null),
                 orderPublished(),
-                substitutionDetailsChanged());
+                substitutionDetailsChanged(),
+                autoModeGenerationRequested());
     }
 
     static EventEnvelope envelope() {
@@ -102,7 +104,13 @@ final class EventSamples {
                 List.of(new GenerationCompleted.ConstraintScore("Вікна в групи", 3, "0hard/-30soft"),
                         new GenerationCompleted.ConstraintScore("Чисельник і знаменник в одному слоті (бонус)", 2,
                                 "0hard/20soft", "Half pairing", true, 1)),
-                null);
+                null, GenerationStopReason.NO_IMPROVEMENT);
+    }
+
+    /** Auto mode: no time limit, the scheduler stops when the timetable stops getting better. */
+    private static GenerationRequested autoModeGenerationRequested() {
+        GenerationRequested fixed = generationRequested();
+        return new GenerationRequested(envelope(), JOB, SEMESTER, null, fixed.weights(), fixed.problem());
     }
 
     private static SubstitutionConfirmationRequested substitutionConfirmationRequested() {

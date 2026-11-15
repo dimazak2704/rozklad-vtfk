@@ -104,13 +104,14 @@ export default function GenerationPage() {
     }
   };
 
+  // задача, що розвʼязується, зупиняється з найкращим варіантом; у черзі — скасовується без чернетки
   const stop = (jobId: Uuid) =>
     cancel.mutate(jobId, {
-      onSuccess: () =>
-        notify.info('Генерацію скасовано', {
-          description: 'Чернетку не створено.',
-        }),
-      onError: (error) => notify.error(error, 'Не вдалося скасувати генерацію'),
+      onSuccess: (stopped) =>
+        stopped.status === 'CANCELLED'
+          ? notify.info('Генерацію скасовано', { description: 'Розклад ще не склався, тож чернетку не створено.' })
+          : notify.info('Зупиняємо генерацію', { description: 'Найкращий варіант на цей момент збережеться як чернетка.' }),
+      onError: (error) => notify.error(error, 'Не вдалося зупинити генерацію'),
     });
 
   useRegisterCommands([
