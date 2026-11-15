@@ -48,6 +48,14 @@ describe('ConflictsPanel without hard conflicts', () => {
 
     expect(screen.queryByText(/можна публікувати/)).toBeNull();
     expect(screen.getAllByText(/Жорстких конфліктів немає/)).toHaveLength(1);
+    // попередження — теж порушення правил: панель не каже «порушень немає» поруч із «Попередження · 1»
+    expect(screen.getByText(/^Накладок немає; 1\sпопередження\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/порушень правил немає/)).toBeNull();
+  });
+
+  it('without warnings either, says there are no rule violations at all', () => {
+    renderWithProviders(<Screen publishable={false} soft={[]} />);
+
     expect(screen.getByText('Накладок і порушень правил немає.')).toBeInTheDocument();
   });
 
