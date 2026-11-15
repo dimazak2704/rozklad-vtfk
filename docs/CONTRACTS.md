@@ -69,9 +69,12 @@ window to its chats that are not staff's, and bound group chats are visitors: an
 ```
 ScheduleDto { owner:{type,id,label}, from, to, days:[DayDto] }
 DayDto      { date, weekday (1..5), weekdayLabel, parity, studyDay, note?, lessons:[LessonView], practices:[PracticeDto] }
-PracticeDto { periodId, title, startsOn, endsOn, supervisors:[TeacherRef], groups:[GroupRef], courses:[int] }
-            # group schedule: the practice the group is at; teacher schedule: practices the teacher supervises
-            # (керівник практики); room schedule and days off: []
+PracticeDto { periodId, title, startsOn, endsOn, supervisors:[TeacherRef], groups:[GroupRef], courses:[int],
+              kind:{code, name, color?, effect}, room:RoomRef? }
+            # every period of a SUSPEND kind of the day (practice, НС, сесія…; the name is kept): group schedule —
+            # the blocks the group is at ([] when a DAY_OFF applies); teacher schedule — the blocks the teacher
+            # supervises ([] on a college-wide DAY_OFF); room schedule: []. `kind` is always present (absent only
+            # from an older core), `room` is null when none (display only)
 LessonView  { id, pair, startsAt, endsAt, discipline:DisciplineRef, teacher:TeacherRef?, room:RoomRef?,
               group:GroupRef, subgroup (0..n), parity: BOTH|NUMERATOR|DENOMINATOR?,
               kind: REGULAR|SUBSTITUTED|CANCELLED|ADDITIONAL|MOVED|ROOM_CHANGED|BLOCK,
@@ -90,7 +93,20 @@ Catalog (CRUD with `GET list (page, q, filters, sort)`, `GET {id}`, `POST`, `PUT
 
 Calendar: `/api/admin/semesters` (CRUD, `POST /{id}/activate`), `/api/admin/semesters/{id}/weeks` (GET weeks with parity,
 `PUT /{weekStart}` override), `/api/admin/bell-profiles` (CRUD incl. slots), `/api/admin/calendar-periods` (CRUD, filter by semester),
-`/api/admin/shift-windows` (GET/PUT).
+`/api/admin/shift-windows` (GET/PUT), `/api/admin/period-kinds` (CRUD, «Види періодів»), `GET /api/admin/group-semesters?semesterId=`.
+
+Period kinds (owner's decision 15.11.2026, option Б). A kind is data: `PeriodKindDto {id, code, name, effect, color?, aliases:[string],
+noteTemplate?, builtin, active, position, usage, version}`, `PeriodEffect = DAY_OFF|SUSPEND|ONLINE|INFO` (behaviour comes from the
+effect only; priority on overlap DAY_OFF > SUSPEND > ONLINE > INFO; BLOCK is not accepted yet → 400 `effect`). 15 builtin kinds
+(К С БЗ НП ВП ПП Т ЗУ НС І Д А ФН Р ВКР) keep their code and are switched off instead of deleted.
+| Method & path | Notes |
+|---|---|
+| `GET /api/admin/period-kinds?active=` · `GET /{id}` | by `position`, then `code`; `usage` = periods of the kind |
+| `POST /api/admin/period-kinds` `{code, name, effect, color?, aliases?, noteTemplate?, active?, position?}` | 201 + `Location`; code/alias equal (case ignored) to another kind's code or alias → 409 «Код «НС» уже має вид «…».» |
+| `PUT /api/admin/period-kinds/{id}` (+ `version`) | 200; builtin code changed → 400; an effect change of a kind with periods re-checks them like a period edit (409 `conflicts[]` for live changes; 409 plain when switching to/from ONLINE or to a non-SUSPEND effect while a period has a room or supervisors) |
+| `PUT /api/admin/period-kinds/{id}?dryRun=true` | 200 `PeriodKindImpactDto {kind, effectChanged, periods, dates, groups:[GroupRef], lessons:{added, removed, updated}, conflicts, blockers:[string], canApply}`; rolled back, no event |
+| `DELETE /api/admin/period-kinds/{id}` | 204; 409 builtin or in use |
+| `GET /api/admin/group-semesters?semesterId=` | `[{semesterId, group:GroupRef, theoryWeeks?, exams?, source, updatedAt}]` by group code; 400 without `semesterId` |
 
 Load: `/api/admin/load?semesterId&groupId` (CRUD) → `LoadItemDto {id, semesterId, group, discipline, lessonKind, hoursPerWeek,
 plannedHours, splitSubgroups, teachers:[{subgroup, teacher}], requiredRoomType, preferredRoom, controlForm, source, pattern:{whole, half}}`;
@@ -154,7 +170,10 @@ teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOU
 Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
 `POST /api/admin/import/timetable` `{semesterId, name, lessons:[{weekday,pair,parity,groupCode,subgroup,disciplineShortName,teacherShortName?,roomName?,online}]}` → draft version id;
-`POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values; absent `splitSubgroups` updates the one item of group × discipline × lesson kind whatever its split, 400 `items[i].splitSubgroups` when both a whole-group and a split item exist); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import).
+`POST /api/admin/import/load` `{semesterId, items:[...]}` (absent fields keep stored values; absent `splitSubgroups` updates the one item of group × discipline × lesson kind whatever its split, 400 `items[i].splitSubgroups` when both a whole-group and a split item exist); `POST /api/admin/import/changes` `{date, items:[...], replace?}` (historic orders, stored as `imported`; `replace` corrects an earlier import);
+`POST /api/admin/import/calendar-periods[?dryRun=true]` `{academicYear, periods:[{sourceKey, kindCode, title, startsOn, endsOn, scope, groupCodes?, courses?, roomName?, studyMode?, orderNote?}], groupSemesters:[{groupCode, semesterNumber, theoryWeeks?, exams?}]}`
+(the academic calendar: items split over the semesters of the year — key `sourceKey` or `sourceKey|S<n>`; upsert by key of `IMPORT` rows only, `IMPORT` rows of the year the request lacks are deleted, `MANUAL` rows are reported, never touched: those with a key the request produces in `manual`, the others of the same effect that share a group and dates with an item in `manualOverlaps` (hand-made rows, and edited imported rows whose key the file no longer produces); one calendar re-check, live-change clash → 409 `conflicts[]`, in a dry run listed with `canApply: false` and rolled back)
+→ `{dryRun, academicYear, canApply, created, updated, unchanged, deleted, skippedManual, periods:[{sourceKey, storedKey, action: CREATE|UPDATE|UNCHANGED|DELETE|SKIP_MANUAL, periodId?, semesterId, kindCode, startsOn, endsOn, groupCodes}], manual:[{storedKey, periodId, title, differs}], manualOverlaps:[{periodId, kindCode, title, startsOn, endsOn, groupCodes, sourceKey}], outOfSemester:[{sourceKey, kindCode, startsOn, endsOn, groupCodes, kept:[{storedKey, semesterId, startsOn, endsOn}]}], groupSemesters:{created, updated, unchanged, skipped:[{groupCode, semesterNumber, reason}]}, conflicts, lessons:{added, removed, updated}}`.
 `POST /api/admin/import/timetable` honours `Idempotency-Key`. Dates in requests: years 2000–2100.
 
 SSE: `GET /api/events/stream` (ADMIN, TEACHER) → events `change.updated`, `absence.created`, `generation.progress`,
@@ -180,12 +199,12 @@ Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SE
 
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
-`GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...]}`;
+`GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...], periodKinds:[{id, code, name, effect, color, aliases, noteTemplate, active}]}` (`periodKinds`: every kind, inactive ones too);
 `GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens).
 
 ## 5. Importer (role ADMIN; `ai/parse-absence` also SERVICE)
 
-| `POST /api/import/jobs` multipart `file`, `kind` (TIMETABLE_XLSX\|DISCIPLINE_PROGRAM\|CURRICULUM\|ORDER_DOCUMENT), `semesterId?`, `options?` (json) | 202 `ImportJobDto` |
+| `POST /api/import/jobs` multipart `file`, `kind` (TIMETABLE_XLSX\|DISCIPLINE_PROGRAM\|CURRICULUM\|ORDER_DOCUMENT\|ACADEMIC_CALENDAR_XLSX), `semesterId?`, `options?` (json) | 202 `ImportJobDto` |
 | `GET /api/import/jobs?kind&status` · `GET /api/import/jobs/{id}` | `ImportJobDto {id, kind, fileName, status: UPLOADED|PARSING|NEEDS_REVIEW|READY|APPLYING|APPLIED|FAILED, createdAt, summary:{recognized, unknown, conflicts, warnings}, report:[ReportRow], draft:json, ai:{model, inputTokens, outputTokens, costUsd}?, error?}` |
 | `PUT /api/import/jobs/{id}/mappings` `{mappings:[{type: TEACHER|DISCIPLINE|GROUP|ROOM, raw, targetId? , createNew?:{...}, addAlias:bool}]}` | re-normalizes, returns job |
 | `PUT /api/import/jobs/{id}/draft` (ORDER_DOCUMENT) `{version, number, kind, date, …, rows:[…], notes, …}` | reviewed rows replace the draft; AI-read orders cannot be applied before this |
@@ -194,6 +213,12 @@ Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SE
 | `POST /api/import/ai/parse-absence` `{text, teacherId?, today}` | `{dateFrom, dateTo, pairs?, reasonCategory, confidence, clarification?}` |
 | `GET /api/import/ai/usage` | `{today:{calls, inputTokens, outputTokens, costUsd}, dailyBudgetUsd, model:{text,vision}}` |
 `ReportRow {severity: OK|INFO|WARN|ERROR, type, raw, matched?:{id,label,score}, suggestions:[{id,label,score}], location}`
+(`type` adds `PERIOD_KIND`, `PERIOD` for ACADEMIC_CALENDAR_XLSX; a code of a kind with effect ONLINE is a blocking ERROR `PERIOD_KIND`
+until skipped, because the file has no study mode.) ACADEMIC_CALENDAR_XLSX (графік освітнього процесу): XLSX only,
+`semesterId` ignored; options `{sheet?, academicYear?, skipCodes?, skipGroups?, titles?, rooms?}` (defaults: НС «Основи національного
+спротиву», room «401»); draft `{academicYear, sheet, groups, codes, legend, periods, groupSemesters, check}` (`check` = core's last dry
+run); one apply step `calendar` → `POST /api/admin/import/calendar-periods` with `Idempotency-Key: import-job:<id>:calendar`
+(re-sendable; 409 `conflicts[]` → back to NEEDS_REVIEW). Details: `docs/modules/importer.md`.
 
 ## 6. Notification (role ADMIN unless stated)
 
@@ -242,6 +267,11 @@ pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, tea
 (`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7;
 `online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5)
 
-Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники практики:
-only for `kind=PRACTICE`, active teachers, each once; field errors `supervisorIds` / `supervisorIds[i]`);
-`CalendarPeriodDto` adds `supervisorIds:[uuid]` and `supervisors:[TeacherRef]` (empty for other kinds).
+Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники: only for a kind with effect
+SUSPEND, active teachers, each once; field errors `supervisorIds` / `supervisorIds[i]`), `kindId?:uuid` and `roomId?:uuid` (SUSPEND
+only, display only); `kind` (legacy enum HOLIDAY|NO_CLASSES|PRACTICE|STUDY_MODE|EXAM_SESSION) is optional and deprecated, kept one
+release: `kindId` wins, else `kind` → its builtin kind (К, БЗ, НП, ФН, І), else 400 `kindId` «Вкажіть вид періоду.»; an inactive kind
+cannot be chosen for a new period or a kind change; `studyMode` iff effect ONLINE. Any PUT on an imported row makes it `MANUAL`.
+`CalendarPeriodDto` adds `supervisorIds:[uuid]`, `supervisors:[TeacherRef]` (empty for other effects), `kindId`, `periodKind:{id, code,
+name, color?, effect}`, `roomId?`, `room?:RoomRef`, `source: MANUAL|IMPORT`, `sourceKey?`; `kind` stays (deprecated): the builtin's
+legacy value for К/БЗ/НП/ФН/І, else by effect DAY_OFF→NO_CLASSES, SUSPEND→PRACTICE, ONLINE→STUDY_MODE, INFO→EXAM_SESSION.

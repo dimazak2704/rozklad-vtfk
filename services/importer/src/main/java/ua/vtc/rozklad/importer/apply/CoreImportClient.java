@@ -30,7 +30,8 @@ public class CoreImportClient {
     private static final Pattern INDEXED = Pattern.compile("^([A-Za-z]+)\\[(\\d+)]");
     private static final Map<String, String> POSITIONS = Map.of(
             "items", "рядок", "teachers", "викладач", "groups", "група", "disciplines", "дисципліна",
-            "rooms", "аудиторія", "aliases", "синонім", "lessons", "заняття");
+            "rooms", "аудиторія", "aliases", "синонім", "lessons", "заняття", "periods", "період",
+            "groupSemesters", "тижні групи");
 
     private final RestClient coreRestClient;
 
@@ -56,15 +57,28 @@ public class CoreImportClient {
     }
 
     /**
+     * {@code POST /api/admin/import/calendar-periods}: an upsert of the calendar's periods by source key in one
+     * transaction; {@code dryRun} checks everything and rolls back (no Idempotency-Key then, a check is not a step).
+     */
+    public JsonNode importCalendarPeriods(CoreImportPayloads.CalendarPeriodsRequest request, boolean dryRun,
+                                         String idempotencyKey) {
+        return post("/api/admin/import/calendar-periods" + (dryRun ? "?dryRun=true" : ""), "періоди графіка",
+                request, dryRun ? null : idempotencyKey);
+    }
+
+    /**
      * The exception message is shown to the dispatcher: plain Ukrainian, without paths, HTTP codes
      * or JSON field names; those go to the log.
      */
     private JsonNode post(String path, String what, Object body, String idempotencyKey) {
         try {
-            JsonNode response = coreRestClient.post()
+            RestClient.RequestBodySpec request = coreRestClient.post()
                     .uri(path)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(IDEMPOTENCY_HEADER, idempotencyKey)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (idempotencyKey != null) {
+                request = request.header(IDEMPOTENCY_HEADER, idempotencyKey);
+            }
+            JsonNode response = request
                     .body(body)
                     .retrieve()
                     .body(JsonNode.class);
@@ -73,7 +87,7 @@ public class CoreImportClient {
             int status = e.getStatusCode().value();
             String detail = detailOf(e);
             log.warn("Core rejected {}: HTTP {} {}", path, status, detail);
-            throw new CoreImportException(status, rejection(status, what, detail), e);
+            throw new CoreImportException(status, rejection(status, what, detail), problemOf(e), e);
         } catch (RuntimeException e) {
             log.warn("Core call {} failed: {}", path, e.toString());
             throw new CoreImportException(0, "Сервер розкладу недоступний — " + what + " не передано. Спробуйте пізніше.",
@@ -126,6 +140,15 @@ public class CoreImportClient {
             text.append(text.isEmpty() ? "" : " ").append('(').append(String.join("; ", fields)).append(')');
         }
         return text.isEmpty() ? null : text.toString();
+    }
+
+    private static JsonNode problemOf(RestClientResponseException e) {
+        try {
+            JsonNode problem = e.getResponseBodyAs(JsonNode.class);
+            return problem != null && problem.isObject() ? problem : null;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     /** «items[2].groupCode» → «рядок 3»; a field without a list index → {@code null}. */

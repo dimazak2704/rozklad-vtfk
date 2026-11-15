@@ -13,16 +13,26 @@ import type {
   CalendarWeek,
   SemesterRequest,
 } from '@/api/calendar';
-import type { BellProfileSlotDto, CalendarPeriodKind, FieldErrorDto, IsoDate, PeriodScope, StudyMode, Uuid, WeekParity } from '@/api/types';
+import type { BellProfileSlotDto, CalendarPeriodKind, FieldErrorDto, IsoDate, PeriodKindDto, PeriodScope, StudyMode, Uuid, WeekParity } from '@/api/types';
 import { addDays, compareIsoDates, diffDays, formatNumericDate, isIsoDate, isoWeekday, startOfWeek, timeToMinutes } from '@/lib/date';
 import { WEEKDAY_ACCUSATIVE } from '@/lib/labels';
-import { ACADEMIC_YEAR, BELL_PROFILES, CALENDAR_PERIODS, SEMESTERS, SHIFT_WINDOWS } from '../fixtures';
+import {
+  ACADEMIC_YEAR,
+  BELL_PROFILES,
+  CALENDAR_PERIODS,
+  kindRef,
+  LEGACY_KIND_CODE,
+  legacyKindOf,
+  PERIOD_KINDS,
+  SEMESTERS,
+  SHIFT_WINDOWS,
+  type PeriodKindFixture,
+} from '../fixtures';
 import { mockId } from '../ids';
 import { apiPath, badRequest, conflict, problem, readJson } from '../kit';
 import { createMockCollection, createMockStore } from '../store';
-import { groupRefOf, groups, teachers } from './catalog';
+import { groupRefOf, groups, roomRefOf, rooms, teachers } from './catalog';
 
-const KINDS: readonly CalendarPeriodKind[] = ['HOLIDAY', 'NO_CLASSES', 'PRACTICE', 'STUDY_MODE', 'EXAM_SESSION'];
 const MODES: readonly StudyMode[] = ['OFFLINE', 'ONLINE', 'MIXED'];
 const SCOPES: readonly PeriodScope[] = ['ALL', 'COURSES', 'GROUPS'];
 const OTHER: Record<WeekParity, WeekParity> = { NUMERATOR: 'DENOMINATOR', DENOMINATOR: 'NUMERATOR' };
@@ -60,6 +70,41 @@ export const periods = createMockCollection<CalendarPeriod>('Період', () =
     version: 0,
   })),
 );
+
+/** Довідник «Види періодів» (вбудовані з графіка коледжу); `usage` рахується з періодів у `periodKindDto`. */
+export const periodKinds = createMockCollection<PeriodKindFixture>('Вид періоду', () =>
+  PERIOD_KINDS.map((kind) => ({ ...kind, aliases: [...kind.aliases] })),
+);
+
+/** Вид у відповіді API: з кількістю періодів календаря цього виду. */
+export function periodKindDto(kind: PeriodKindFixture): PeriodKindDto {
+  return { ...kind, usage: periods.all().filter((p) => p.kindId === kind.id).length };
+}
+
+/** Після зміни назви, кольору чи ефекту виду періоди показують його новим (core читає вид тим самим запитом). */
+export function refreshPeriodsOfKind(kind: PeriodKindFixture): void {
+  for (const period of periods.all().filter((p) => p.kindId === kind.id)) {
+    periods.update(period.id, (current) => ({ ...current, kind: legacyKindOf(kind), periodKind: kindRef(kind) }));
+  }
+}
+
+/** Вид для запиту періоду: `kindId`, інакше вбудований за старим `kind`; помилка — у поле `kindId`. */
+function resolveKind(body: CalendarPeriodRequest, current: CalendarPeriod | undefined, add: (field: string, message: string) => void) {
+  let kind: PeriodKindFixture | undefined;
+  if (body.kindId) {
+    kind = periodKinds.find(body.kindId);
+    if (!kind) add('kindId', 'Вид періоду не знайдено.');
+  } else if (body.kind && body.kind in LEGACY_KIND_CODE) {
+    kind = periodKinds.all().find((k) => k.code === LEGACY_KIND_CODE[body.kind as CalendarPeriodKind]);
+  } else {
+    add('kindId', 'Вкажіть вид періоду.');
+  }
+  // вимкнений вид лишається в наявних періодах, але не обирається для нового періоду чи нового виду
+  if (kind && !kind.active && current?.kindId !== kind.id) {
+    add('kindId', `Вид «${kind.name}» вимкнено: увімкніть його в «Видах періодів» або виберіть інший.`);
+  }
+  return kind;
+}
 
 // ───────────────────────── Парність ─────────────────────────
 
@@ -256,9 +301,11 @@ function saveBellProfile(body: BellProfileRequest, id?: Uuid): CalendarBellProfi
 
 function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
   const errors = fieldErrors();
+  const current = id ? periods.get(id) : undefined;
   const semester = body.semesterId ? semesters.find(body.semesterId) : undefined;
   if (!semester) errors.add('semesterId', 'Семестр не знайдено.');
-  if (!KINDS.includes(body.kind)) errors.add('kind', 'Оберіть вид періоду.');
+  const kind = resolveKind(body, current, errors.add);
+  const effect = kind?.effect;
   const title = body.title?.trim() ?? '';
   if (!title) errors.add('title', 'Назва не може бути порожньою.');
   else if (title.length > 300) errors.add('title', 'Не довше за 300 символів.');
@@ -271,10 +318,10 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
     }
   }
   const studyMode = body.studyMode ?? null;
-  if (body.kind === 'STUDY_MODE' && (!studyMode || !MODES.includes(studyMode))) {
-    errors.add('studyMode', 'Для періоду форми навчання вкажіть режим: офлайн, онлайн або змішаний.');
+  if (effect === 'ONLINE' && (!studyMode || !MODES.includes(studyMode))) {
+    errors.add('studyMode', 'Для виду з ефектом «онлайн» вкажіть режим: офлайн, онлайн або змішаний.');
   }
-  if (body.kind !== 'STUDY_MODE' && studyMode) errors.add('studyMode', 'Режим навчання задають лише для періоду форми навчання.');
+  if (effect && effect !== 'ONLINE' && studyMode) errors.add('studyMode', 'Режим навчання задають лише для виду з ефектом «онлайн».');
   const scope = body.scope ?? 'ALL';
   if (!SCOPES.includes(scope)) errors.add('scope', 'Оберіть, кого стосується період.');
   const courses = body.courses ?? [];
@@ -294,10 +341,14 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
   }
   const orderNote = body.orderNote?.trim() || null;
   if (orderNote && orderNote.length > 500) errors.add('orderNote', 'Не довше за 500 символів.');
-  // керівники практики, як у core: лише для PRACTICE, кожен — активний викладач, без повторів
+  // аудиторія періоду (у кроці 1 лише показується): лише для виду «група не на парах»
+  const room = body.roomId ? rooms.find(body.roomId) : null;
+  if (body.roomId && effect && effect !== 'SUSPEND') errors.add('roomId', 'Аудиторію вказують лише для виду, коли група не на парах.');
+  else if (body.roomId && !room) errors.add('roomId', 'Аудиторію не знайдено.');
+  // керівники, як у core: лише для SUSPEND, кожен — активний викладач, без повторів
   const supervisorIds = body.supervisorIds ?? [];
-  if (supervisorIds.length > 0 && body.kind !== 'PRACTICE') {
-    errors.add('supervisorIds', 'Керівників призначають лише для періоду практики.');
+  if (supervisorIds.length > 0 && effect && effect !== 'SUSPEND') {
+    errors.add('supervisorIds', 'Керівників призначають лише для виду, коли група не на парах (практика, НС…).');
   } else {
     supervisorIds.forEach((teacherId, i) => {
       const teacher = teachers.find(teacherId);
@@ -307,7 +358,9 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
     });
   }
   errors.throwIfAny();
-  const supervisors = body.kind === 'PRACTICE'
+  const chosen = kind as PeriodKindFixture;
+  const suspend = chosen.effect === 'SUSPEND';
+  const supervisors = suspend
     ? supervisorIds
         .map((tid) => teachers.find(tid))
         .filter((t) => t !== undefined)
@@ -316,11 +369,13 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
     : [];
   const fields = {
     semesterId: body.semesterId,
-    kind: body.kind,
+    kind: legacyKindOf(chosen),
+    kindId: chosen.id,
+    periodKind: kindRef(chosen),
     title,
     startsOn: body.startsOn,
     endsOn: body.endsOn,
-    studyMode: body.kind === 'STUDY_MODE' ? studyMode : null,
+    studyMode: chosen.effect === 'ONLINE' ? studyMode : null,
     orderNote,
     scope,
     courses: scope === 'COURSES' ? [...new Set(courses)].sort((a, b) => a - b) : null,
@@ -329,16 +384,19 @@ function savePeriod(body: CalendarPeriodRequest, id?: Uuid): CalendarPeriod {
       scope === 'GROUPS'
         ? [...new Set(groupIds)].map((gid) => groups.find(gid)).filter((g) => g !== undefined).map(groupRefOf)
         : [],
+    roomId: suspend && room ? room.id : null,
+    room: suspend && room ? roomRefOf(room) : null,
     supervisorIds: supervisors.map((t) => t.id),
     supervisors,
   };
   if (id) {
-    return periods.update(id, (current) => {
-      checkVersion(current, body.version);
-      return { ...current, ...fields, version: current.version + 1 };
+    return periods.update(id, (stored) => {
+      checkVersion(stored, body.version);
+      // правка імпортованого періоду робить його ручним (ключ лишається): наступний імпорт його не чіпає
+      return { ...stored, ...fields, source: 'MANUAL', version: stored.version + 1 };
     });
   }
-  return periods.insert({ id: mockId('calendar-period', crypto.randomUUID()), ...fields, version: 0 });
+  return periods.insert({ id: mockId('calendar-period', crypto.randomUUID()), ...fields, source: 'MANUAL', sourceKey: null, version: 0 });
 }
 
 // ───────────────────────── Обробники ─────────────────────────

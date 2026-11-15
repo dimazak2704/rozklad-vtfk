@@ -14,6 +14,8 @@ describe('визначення виду імпорту', () => {
     ['розпорядження №35.docx', 'ORDER_DOCUMENT'],
     ['order-035-2026-10-19.jpg', 'ORDER_DOCUMENT'],
     ['IMG_2041.PNG', 'ORDER_DOCUMENT'],
+    ['Графік освітнього процесу 2026-2027.xlsx', 'ACADEMIC_CALENDAR_XLSX'],
+    ['grafik_29 veresnia.xlsx', 'ACADEMIC_CALENDAR_XLSX'],
     ['план-скан.pdf', 'CURRICULUM'],
     ['програма КБ.pdf', 'DISCIPLINE_PROGRAM'],
   ])('%s → %s', (name, kind) => {
@@ -35,6 +37,8 @@ describe('визначення виду імпорту', () => {
   it('формати за видом і витрати ШІ', () => {
     expect(kindAccepts('TIMETABLE_XLSX', 'Розклад.XLSX')).toBe(true);
     expect(kindAccepts('TIMETABLE_XLSX', 'розклад.pdf')).toBe(false);
+    expect(kindAccepts('ACADEMIC_CALENDAR_XLSX', 'графік.xlsx')).toBe(true);
+    expect(kindAccepts('ACADEMIC_CALENDAR_XLSX', 'графік практик.pdf')).toBe(false);
     expect(usesVision('ORDER_DOCUMENT', 'фото.jpg')).toBe(true);
     expect(usesVision('ORDER_DOCUMENT', 'розпорядження.docx')).toBe(false);
     expect(usesVision('TIMETABLE_XLSX', 'розклад.xlsx')).toBe(false);
@@ -137,5 +141,7 @@ describe('чернетка за видом імпорту', () => {
     expect(typedDraft({ kind: 'ORDER_DOCUMENT', draft: { rows: [], notes: [], kind: 'ORDER', warnings: [] } })?.kind).toBe('ORDER_DOCUMENT');
     expect(typedDraft({ kind: 'TIMETABLE_XLSX', draft: { rows: [] } })).toBeNull();
     expect(typedDraft({ kind: 'CURRICULUM', draft: null })).toBeNull();
+    expect(typedDraft({ kind: 'ACADEMIC_CALENDAR_XLSX', draft: { groups: [], periods: [], codes: [] } })?.kind).toBe('ACADEMIC_CALENDAR_XLSX');
+    expect(typedDraft({ kind: 'ACADEMIC_CALENDAR_XLSX', draft: { rows: [] } })).toBeNull();
   });
 });

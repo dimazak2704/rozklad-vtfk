@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodRepository;
+import ua.vtc.rozklad.core.calendar.PeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodKindRepository;
 import ua.vtc.rozklad.core.calendar.Semester;
 import ua.vtc.rozklad.core.calendar.SemesterRepository;
 import ua.vtc.rozklad.core.calendar.StudyMode;
@@ -50,11 +52,14 @@ class DemoGroupPeriods {
     private final SemesterRepository semesters;
     private final CalendarPeriodRepository periods;
     private final CatalogQueries catalog;
+    private final PeriodKindRepository kinds;
 
-    DemoGroupPeriods(SemesterRepository semesters, CalendarPeriodRepository periods, CatalogQueries catalog) {
+    DemoGroupPeriods(SemesterRepository semesters, CalendarPeriodRepository periods, CatalogQueries catalog,
+                     PeriodKindRepository kinds) {
         this.semesters = semesters;
         this.periods = periods;
         this.catalog = catalog;
+        this.kinds = kinds;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -89,7 +94,8 @@ class DemoGroupPeriods {
                     .filter(candidate -> candidate.getTitle().equals(definition.title()))
                     .findFirst();
             if (period.isEmpty()) {
-                CalendarPeriod created = new CalendarPeriod(semester.get().getId(), definition.kind(),
+                PeriodKind kind = kinds.findById(definition.kind().builtinKindId()).orElseThrow();
+                CalendarPeriod created = new CalendarPeriod(semester.get().getId(), kind,
                         definition.title(), definition.startsOn(), definition.endsOn());
                 created.setStudyMode(definition.studyMode());
                 created.setOrderNote(definition.orderNote());

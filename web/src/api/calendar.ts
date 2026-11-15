@@ -76,18 +76,23 @@ export interface CalendarPeriod extends CalendarPeriodDto {
 
 export interface CalendarPeriodRequest {
   semesterId: Uuid;
-  kind: CalendarPeriodKind;
+  /** Вид з довідника «Види періодів»; якщо є, `kind` сервер не читає. */
+  kindId?: Uuid;
+  /** @deprecated Старий вид (core перекладає його на вбудований); лише коли `kindId` немає. */
+  kind?: CalendarPeriodKind;
   title: string;
   startsOn: IsoDate;
   endsOn: IsoDate;
-  /** Обовʼязковий лише для STUDY_MODE. */
+  /** Обовʼязковий лише для виду з ефектом ONLINE. */
   studyMode?: StudyMode | null;
   /** Текст примітки в розпорядженні на дати періоду. */
   orderNote?: string | null;
   scope?: PeriodScope;
   courses?: number[] | null;
   groupIds?: Uuid[] | null;
-  /** Керівники практики: лише для PRACTICE, активні викладачі. */
+  /** Аудиторія періоду: лише для виду з ефектом SUSPEND. */
+  roomId?: Uuid | null;
+  /** Керівники: лише для виду з ефектом SUSPEND, активні викладачі. */
   supervisorIds?: Uuid[] | null;
   version?: number;
 }
@@ -96,7 +101,7 @@ export interface CalendarPeriodRequest {
  * Календар впливає на все: на дати занять у публічному розкладі, дзвінки, облік годин і чернетки
  * розпоряджень (примітки періодів), тож після змін оновлюємо ці області.
  */
-function invalidateCalendar(queryClient: QueryClient): void {
+export function invalidateCalendar(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: qk.admin.calendar.all });
   void queryClient.invalidateQueries({ queryKey: qk.admin.accounting.all });
   void queryClient.invalidateQueries({ queryKey: qk.admin.orders.all });

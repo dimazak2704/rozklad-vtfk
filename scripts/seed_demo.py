@@ -7,11 +7,16 @@ make, so the seed also exercises the APIs. The steps are idempotent; a second ru
   1. structure: departments, specialties, cycle commissions (admin catalog CRUD)
   2. calendar:  semesters I/II 2026/2027 (week 1 = чисельник), bell profile check
   3. import:    seed/schedule-2025-26.xlsx -> importer job -> review -> apply -> draft version
-  4. publish:   the imported version, effective 2026-09-01; load items derived from it
-  5. periods:   calendar periods from the notes of order №35
-  6. accounts:  demo accounts of the sign-in service linked to the teachers «Кренцін» and «Непийвода»
-  7. order 35:  the changes of 19.10.2026 -> confirmations -> notes -> publication as №35
-  8. names:     full names of the teachers from seed/teacher-names.csv (public college sources)
+  4. periods:   calendar periods from the notes of order №35
+  5. academic:  seed/academic-calendar-2026-27.xlsx (the college's academic calendar) -> importer job -> check
+                -> apply: periods of national resistance, practice, sessions, holidays per group
+  6. publish:   the imported version, effective 2026-09-01; load items derived from it
+  7. accounts:  demo accounts of the sign-in service linked to the teachers «Кренцін» and «Непийвода»
+  8. order 35:  the changes of 19.10.2026 -> confirmations -> notes -> publication as №35
+  9. names:     full names of the teachers from seed/teacher-names.csv (public college sources)
+
+Periods and the academic calendar come before publication: it materializes the dated lessons around them (a group
+in a period of national resistance has no pairs in it).
 
 By name only (not in the default run): `recent` — absences and published orders for the study days after №35 up to
 18.11.2026 (then scripts/demo_day.py takes Thursday 19.11 and Friday 20.11): a living stand.
@@ -300,9 +305,8 @@ PERIODS = [
      "endsOn": "2026-10-31", "studyMode": "OFFLINE", "scope": "GROUPS",
      "groups": ["4ЕА1", "4ЕА2", "4ВЕ", "4РТ1", "4РТ2", "4ОП1", "4ОП2"],
      "orderNote": "4ЕА,4ВЕ,4РТ,4ОП навчаються очно з 01.09.26 по 31.10.26 р."},
-    {"kind": "PRACTICE", "title": "Електрорадіомонтажна практика 2КІ3", "startsOn": "2026-10-19",
-     "endsOn": "2026-10-30", "scope": "GROUPS", "groups": ["2КІ3"],
-     "orderNote": "2КІ3 – Електрорадіомонтажна практика з 19.10.26р. по 30.10.26 р."},
+    # практику 2КІ3 19.10–30.10 дає графік освітнього процесу (крок academic, НП); ручний період поруч із нею
+    # показав би два блоки «Практика: …» і дві примітки в розпорядженнях на ці дні
 ]
 
 
@@ -329,7 +333,64 @@ def step_periods(admin: Client) -> None:
     log("periods: ok")
 
 
-# ---------------------------------------------------------------- 5. publish
+# ---------------------------------------------------------------- 5. academic calendar (before publication too)
+ACADEMIC_CALENDAR = ROOT / "seed" / "academic-calendar-2026-27.xlsx"
+ACADEMIC_YEAR = "2026/2027"
+
+
+def imported_periods(admin: Client, semester_id: str) -> list[dict]:
+    periods = items(admin.get(f"/api/admin/calendar-periods?semesterId={semester_id}"))
+    return [p for p in periods if p.get("source") == "IMPORT"]
+
+
+def report_errors(job: dict) -> list[str]:
+    """Blocking rows of an import report, as the review screen shows them."""
+    return [row.get("message") or f"{row['type']} {row.get('raw')}" for row in job.get("report") or []
+            if row["severity"] == "ERROR"]
+
+
+def calendar_check_line(check: dict | None) -> str:
+    if not check:
+        return "core was not asked (the report has blocking rows)"
+    return (f"create {check['created']}, update {check['updated']}, delete {check['deleted']}, "
+            f"unchanged {check['unchanged']}, manual {check['skippedManual']}, "
+            f"outside the semesters {len(check.get('outOfSemester') or [])}")
+
+
+def step_academic(admin: Client) -> None:
+    """The academic calendar through the importer, like the dispatcher on «Імпорт»: upload, read the report
+    (unknown codes or groups and clashes with live changes block it), apply. Skipped when core already holds
+    imported periods: the importer's upsert would change nothing, and after publication a new run re-checks the
+    calendar against the changes of the dispatcher (a clash stops it with the conflicts listed)."""
+    semester = semester_by_name(admin, SEMESTER_I)
+    existing = imported_periods(admin, semester["id"])
+    if existing:
+        log(f"academic: {len(existing)} imported periods already in {SEMESTER_I}, skipped")
+        return
+    job = admin.upload("/api/import/jobs", {"kind": "ACADEMIC_CALENDAR_XLSX",
+                                            "options": json.dumps({"academicYear": ACADEMIC_YEAR})},
+                       "file", ACADEMIC_CALENDAR, XLSX_MIME)
+    job = wait_job(admin, job["id"], ("UPLOADED", "PARSING"))
+    draft = job.get("draft") or {}
+    log(f"  parsed: {job['status']}, {len(draft.get('groups') or [])} groups, "
+        f"codes {' '.join(c['code'] for c in draft.get('codes') or [])}")
+    if job["status"] != "READY":
+        raise SystemExit(f"academic calendar job {job['id']} is {job['status']}: {report_errors(job)[:5] or job.get('error')}")
+    warnings = sum(1 for row in job["report"] if row["severity"] == "WARN")
+    log(f"  check: {len(draft.get('periods') or [])} periods; {calendar_check_line(draft.get('check'))}; "
+        f"{warnings} warnings")
+    admin.post(f"/api/import/jobs/{job['id']}/apply")
+    job = wait_job(admin, job["id"], ("APPLYING",))
+    if job["status"] != "APPLIED":
+        raise SystemExit(f"academic calendar job {job['id']} is {job['status']}: "
+                         f"{report_errors(job)[:5] or job.get('error')}")
+    calendar = (job.get("result") or {}).get("calendar") or {}
+    log(f"  applied: created {calendar.get('created')}, updated {calendar.get('updated')}, "
+        f"deleted {calendar.get('deleted')}")
+    log("academic: ok")
+
+
+# ---------------------------------------------------------------- 6. publish
 def lesson_body(lesson: dict, **changes) -> dict:
     body = {"weekday": lesson["weekday"], "pair": lesson["pair"], "parity": lesson["parity"],
             "groupId": lesson["group"]["id"], "subgroup": lesson["subgroup"],
@@ -409,7 +470,7 @@ def step_publish(admin: Client) -> None:
     log("publish: ok")
 
 
-# ---------------------------------------------------------------- 6. demo accounts
+# ---------------------------------------------------------------- 7. demo accounts
 DEMO_TEACHERS = {"TEACHER_USERNAME": "Кренцін", "TEACHER2_USERNAME": "Непийвода"}
 
 
@@ -436,7 +497,7 @@ def step_accounts(admin: Client) -> None:
     log(f"accounts: ok ({me['username']} = {me['teacher']['shortName']})")
 
 
-# ---------------------------------------------------------------- 7. order №35 of 19.10.2026
+# ---------------------------------------------------------------- 8. order №35 of 19.10.2026
 # Каталог з Excel не має кількох людей і дисциплін з розпорядження: їх додає диспетчер.
 MISSING_TEACHERS = [{"lastName": "Ємельяненко", "shortName": "Ємельяненко", "displayName": "Ємельяненко"},
                     {"lastName": "Яцуба", "shortName": "Яцуба", "displayName": "Яцуба"}]
@@ -556,7 +617,7 @@ def step_order35(admin: Client) -> None:
     log("order35: ok")
 
 
-# ---------------------------------------------------------------- 8. full names of the teachers
+# ---------------------------------------------------------------- 9. full names of the teachers
 # Excel і розпорядження дають лише «Прізвище І.Б.» або прізвище. Повні імена взято з публічних сторінок
 # коледжу (циклові комісії) і з «Кадрового забезпечення» ОПП; джерело кожного рядка — у файлі.
 TEACHER_NAMES = ROOT / "seed" / "teacher-names.csv"
@@ -620,8 +681,9 @@ def step_names(admin: Client) -> None:
     log(f"names: ok ({filled} filled, {len(teachers)} teachers in the catalog)")
 
 
-STEPS = {"structure": step_structure, "calendar": step_calendar, "import": step_import,
-         "periods": step_periods, "publish": step_publish, "accounts": step_accounts, "order35": step_order35,
+# the run order matters: periods and the academic calendar shape the publication, `recent` (by name) comes after all
+STEPS = {"structure": step_structure, "calendar": step_calendar, "import": step_import, "periods": step_periods,
+         "academic": step_academic, "publish": step_publish, "accounts": step_accounts, "order35": step_order35,
          "names": step_names}
 
 
@@ -633,6 +695,8 @@ STEPS = {"structure": step_structure, "calendar": step_calendar, "import": step_
 # subgroups, a cancelled pair when nothing fits), accepted as a dispatcher would. Not in the default run: the
 # dates follow the stand's clock, and the e2e suites expect a stand with order №35 only. Run `recent` before the
 # Telegram chats are bound (or with the bot off): publishing past orders would message the bound group chats.
+# Groups in a suspending period of the academic calendar (4ОП2 19.10–30.10, 4ВЕ 02.11–13.11, 4КІ1 from 16.11 on
+# national resistance) have no dated lessons on those days, so absences and plans simply do not reach them.
 RECENT_FROM = date(2026, 10, 20)  # the day after order №35
 RECENT_UNTIL = date(2026, 11, 18)  # the day before scripts/demo_day.py's Thursday
 # (category, share, study days of the absence)

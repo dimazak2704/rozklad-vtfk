@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
+import ua.vtc.rozklad.importer.apply.CoreImportException;
 import ua.vtc.rozklad.importer.catalog.CatalogSnapshot;
 import ua.vtc.rozklad.importer.normalize.EntityCandidate;
 import ua.vtc.rozklad.importer.normalize.EntityType;
@@ -78,6 +79,45 @@ public interface ImportHandler {
      */
     default List<ReportRow> readiness(JsonNode draft, JobOptions options, NormalizationResult normalization) {
         return List.of();
+    }
+
+    /**
+     * Runs whenever the report is rebuilt (parse, mappings, options, draft revision, apply): the readiness rows
+     * and the draft as the job keeps it. A kind whose draft depends on the catalog and the options (the academic
+     * calendar: kinds of periods, scopes, core's dry-run) returns a refreshed draft; the default keeps the draft.
+     */
+    default Review review(JsonNode draft, JobOptions options, CatalogSnapshot catalog, NormalizationResult normalization) {
+        return new Review(draft, readiness(draft, options, normalization));
+    }
+
+    /** What to add after «Немає в каталозі. …» for a value this kind cannot create. */
+    default String missingHint(EntityType type) {
+        return type == EntityType.GROUP
+                ? "Навантаження додається лише наявним групам: виправте код групи в параметрах імпорту або спершу "
+                        + "імпортуйте розклад."
+                : "Зіставте значення з наявним записом каталогу.";
+    }
+
+    /**
+     * Report rows for core's rejection of the content (for example the calendar's live-change conflicts): when
+     * not empty the job returns to review with these rows added to the report; empty (the default) keeps
+     * core's answer as the job's error only.
+     */
+    default List<ReportRow> rejectionRows(CoreImportException rejection) {
+        return List.of();
+    }
+
+    /** The job's error when a re-check right before applying finds blocking rows. */
+    default String reviewAgainMessage() {
+        return "Каталог на сервері розкладу змінився після перевірки — перегляньте зіставлення і застосуйте ще раз.";
+    }
+
+    /** The draft to keep and the readiness rows of one report rebuild. */
+    record Review(JsonNode draft, List<ReportRow> rows) {
+
+        public Review {
+            rows = List.copyOf(rows);
+        }
     }
 
     record ParseInput(UUID jobId, String fileName, FileType type, byte[] content, JobOptions options) {

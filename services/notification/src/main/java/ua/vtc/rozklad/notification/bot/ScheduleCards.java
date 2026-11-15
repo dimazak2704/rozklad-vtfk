@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -34,6 +35,8 @@ import ua.vtc.rozklad.notification.text.UaDates;
 public final class ScheduleCards {
 
     private static final Locale UK = Locale.forLanguageTag("uk");
+    /** The name of the practice kind (НП) and the wording of a period without a kind (older core). */
+    private static final String PRACTICE = "Практика";
 
     private ScheduleCards() {
     }
@@ -84,20 +87,29 @@ public final class ScheduleCards {
     }
 
     /**
-     * A group at practice: «🛠 Практика: назва» with its supervisors; a teacher: «🛠 Керівництво
-     * практикою: назва, група». {@code null} when the day has no practice.
+     * A group off its pairs: «🛠 Вид: назва, ауд. 401» with its supervisors; a teacher: «🛠 Керівництво: вид:
+     * назва, група, ауд. 401». A practice (or a period from an older core, without its kind) keeps the practice
+     * wording «🛠 Практика: назва» / «🛠 Керівництво практикою: назва, група». A title that only repeats the kind
+     * name (the academic calendar import gives «Сесія» to a period of kind «Сесія») is not printed twice:
+     * «🛠 Сесія», «🛠 Керівництво: Сесія, 4КІ1». {@code null} when the day has none.
      */
     static String practices(List<Practice> practices, OwnerType perspective, TeacherLabels teachers) {
         if (practices.isEmpty() || perspective == OwnerType.ROOM) {
             return null;
         }
         return practices.stream().map(practice -> {
+            String kind = kindName(practice);
+            String what = repeatsKind(practice.title(), kind) ? kind : kind + ": " + practice.title();
+            String room = practice.room() == null || practice.room().name() == null || practice.room().name().isBlank()
+                    ? "" : ", ауд. " + practice.room().name();
             if (perspective == OwnerType.TEACHER) {
                 String whom = whom(practice);
-                return "🛠 " + b("Керівництво практикою") + ": "
-                        + escape(whom.isEmpty() ? practice.title() : practice.title() + ", " + whom);
+                String to = (whom.isEmpty() ? "" : ", " + whom) + room;
+                return PRACTICE.equals(kind)
+                        ? "🛠 " + b("Керівництво практикою") + ": " + escape(practice.title() + to)
+                        : "🛠 " + b("Керівництво") + ": " + escape(what + to);
             }
-            String text = "🛠 " + b(escape("Практика: " + practice.title()));
+            String text = "🛠 " + b(escape(what + room));
             List<String> names = practice.supervisors().stream()
                     .map(teacher -> teachers.label(teacher.id(), teacher.label()))
                     .toList();
@@ -106,18 +118,30 @@ public final class ScheduleCards {
         }).collect(Collectors.joining("\n\n"));
     }
 
-    /** «2КІ3, 2КІ4» or «2 курс»; empty for a college-wide practice. */
+    /** The kind's name («Національний спротив»); «Практика» for a period from an older core without a kind. */
+    private static String kindName(Practice practice) {
+        return practice.kind() == null || practice.kind().name() == null || practice.kind().name().isBlank()
+                ? PRACTICE : practice.kind().name().strip();
+    }
+
+    /** The period's title equals its kind name (case and outer spaces ignored). */
+    private static boolean repeatsKind(String title, String kind) {
+        return title != null && title.strip().toLowerCase(UK).equals(kind.toLowerCase(UK));
+    }
+
+    /** «2КІ3, 2КІ4», «2 курс» or «1, 2 курси»; empty for a college-wide practice. */
     private static String whom(Practice practice) {
         if (!practice.groups().isEmpty()) {
             return practice.groups().stream().map(GroupRef::code).collect(Collectors.joining(", "));
         }
         if (!practice.courses().isEmpty()) {
-            return practice.courses().stream().map(String::valueOf).collect(Collectors.joining(", ")) + " курс";
+            return practice.courses().stream().map(String::valueOf).collect(Collectors.joining(", "))
+                    + (practice.courses().size() == 1 ? " курс" : " курси");
         }
         return "";
     }
 
-    /** The day's note without the practice titles the practice block already shows. */
+    /** The day's note without the titles the block of periods (practice, НС…) already shows. */
     private static String noteWithoutPractices(ScheduleDay day) {
         if (day.note() == null || day.note().isBlank()) {
             return null;
@@ -134,12 +158,24 @@ public final class ScheduleCards {
         return UaDates.weekdayShort(date).toLowerCase(UK) + ", " + UaDates.dayMonth(date);
     }
 
-    /** Short summary for inline results: «5 пар · 1 заміна». */
+    /**
+     * Short summary for inline results: «5 пар · 1 заміна». A day off pairs names its kind («Національний спротив»,
+     * «Керівництво: Національний спротив»); several kinds on one day read «Без пар» / «Керівництво», as on the site.
+     */
     public static String summary(ScheduleDay day) {
         if (day.lessons().isEmpty()) {
             if (!day.practices().isEmpty()) {
-                // група на практиці не має навчального дня, у керівника день навчальний
-                return day.studyDay() ? "Керівництво практикою" : "Практика";
+                Set<String> kinds = day.practices().stream().map(ScheduleCards::kindName)
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                String only = kinds.size() == 1 ? kinds.iterator().next() : null;
+                // група не на парах не має навчального дня, у керівника день навчальний
+                if (!day.studyDay()) {
+                    return only != null ? only : "Без пар";
+                }
+                if (only == null) {
+                    return "Керівництво";
+                }
+                return PRACTICE.equals(only) ? "Керівництво практикою" : "Керівництво: " + only;
             }
             return day.studyDay() ? "Пар немає" : "Навчання немає";
         }

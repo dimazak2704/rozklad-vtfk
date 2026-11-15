@@ -9,6 +9,7 @@ import type {
   EntityType,
   IsoDate,
   LessonView,
+  PeriodEffect,
   PracticeDto,
   ScheduleDto,
   ScheduleOwner,
@@ -19,7 +20,7 @@ import type {
 import { addDays, compareIsoDates, diffDays, isIsoDate, isoWeekday } from '@/lib/date';
 import { weekdayName } from '@/lib/labels';
 import { mockId } from '../ids';
-import { bellSlots, CALENDAR_PERIODS, isStudyDay, parityOn, periodsOn } from './calendar';
+import { bellSlots, CALENDAR_PERIODS, closesLessons, isStudyDay, parityOn, periodEffect, periodsOn } from './calendar';
 import { findGroup, findRoom, findTeacher } from './catalog';
 import { TEMPLATE_LESSONS } from './timetable';
 
@@ -60,9 +61,9 @@ export function lessonsOn(date: IsoDate, options: ScheduleOptions = {}): LessonV
     if (template.weekday !== weekday || (template.parity !== 'BOTH' && template.parity !== parity)) continue;
     const group = findGroup(template.group.id);
     if (!group) throw new Error(`Мок-дані неузгоджені: невідома група ${template.group.code}`);
-    const periods = periodsOn(date, group);
-    // DOMAIN §2: практика групи прибирає її заняття
-    if (periods.some((p) => p.kind === 'PRACTICE')) continue;
+    const periods = periodsOn(date, group, options.periods ?? CALENDAR_PERIODS);
+    // DOMAIN §2: вихідний чи період «група не на парах» (практика, НС) прибирає заняття групи
+    if (periods.some(closesLessons)) continue;
     const bell = bells.get(template.pair);
     if (!bell) throw new Error(`Мок-дані неузгоджені: немає дзвінка на ${template.pair} пару (день ${weekday})`);
     lessons.push({
@@ -78,7 +79,7 @@ export function lessonsOn(date: IsoDate, options: ScheduleOptions = {}): LessonV
       // як core: парність рядка шаблону (BOTH — щотижня)
       parity: template.parity,
       kind: 'REGULAR',
-      online: template.online || periods.some((p) => p.kind === 'STUDY_MODE' && p.studyMode === 'ONLINE'),
+      online: template.online || periods.some((p) => periodEffect(p) === 'ONLINE' && p.studyMode === 'ONLINE'),
       original: null,
       reasonText: null,
       changeId: null,
@@ -118,24 +119,31 @@ function belongsTo(lesson: LessonView, owner: ScheduleOwner): boolean {
   }
 }
 
-/** Примітка дня групи з календарних періодів: практика, дистанційний режим. */
-function groupDayNote(date: IsoDate, groupId: Uuid): string | null {
+/** Порядок назв у примітці дня, як `note()` у core: вихідні й «не на парах», потім онлайн, потім позначки. */
+const NOTE_ORDER: Readonly<Record<PeriodEffect, number>> = { DAY_OFF: 0, SUSPEND: 0, ONLINE: 1, INFO: 2 };
+
+/** Примітка дня групи з календарних періодів: практика й НС, дистанційний режим, позначки. */
+function groupDayNote(date: IsoDate, groupId: Uuid, periods: readonly CalendarPeriodDto[]): string | null {
   const group = findGroup(groupId);
-  const titles = periodsOn(date, group)
-    .filter((p) => p.kind === 'PRACTICE' || p.kind === 'STUDY_MODE')
+  const titles = [...periodsOn(date, group, periods)]
+    .sort((a, b) => NOTE_ORDER[periodEffect(a)] - NOTE_ORDER[periodEffect(b)])
     .map((p) => p.title);
   return titles.length > 0 ? titles.join('; ') : null;
 }
 
-/** Практика дня: група бачить свою, викладач — ту, якою керує (CONTRACTS §1, DayDto.practices). */
+/**
+ * Блоки дня — періоди SUSPEND (практика, НС): група бачить свої (жодного, якщо для неї день вихідний), викладач —
+ * ті, якими керує (CONTRACTS §1, DayDto.practices).
+ */
 function dayPractices(date: IsoDate, owner: ScheduleOwner, periods: readonly CalendarPeriodDto[]): PracticeDto[] {
   if (owner.type === 'ROOM' || !isStudyDay(date)) return [];
   const group = owner.type === 'GROUP' ? findGroup(owner.id) : undefined;
   if (owner.type === 'GROUP' && !group) return [];
-  // керівник бачить практику будь-якої групи, тож для викладача беремо всі періоди дати
+  // керівник бачить блок будь-якої групи, тож для викладача беремо всі періоди дати
   const covering = owner.type === 'GROUP' ? periodsOn(date, group, periods) : periods.filter((p) => p.startsOn <= date && date <= p.endsOn);
+  if (owner.type === 'GROUP' && covering.some((p) => periodEffect(p) === 'DAY_OFF')) return [];
   return covering
-    .filter((p) => p.kind === 'PRACTICE' && (owner.type === 'GROUP' || (p.supervisorIds ?? []).includes(owner.id)))
+    .filter((p) => periodEffect(p) === 'SUSPEND' && (owner.type === 'GROUP' || (p.supervisorIds ?? []).includes(owner.id)))
     .map((p) => ({
       periodId: p.id,
       title: p.title,
@@ -144,6 +152,10 @@ function dayPractices(date: IsoDate, owner: ScheduleOwner, periods: readonly Cal
       supervisors: p.supervisors ?? [],
       groups: p.scope === 'GROUPS' ? (p.groupIds ?? []).map(findGroup).filter((g) => g !== undefined).map((g) => ({ id: g.id, code: g.code, course: g.course })) : [],
       courses: p.scope === 'COURSES' ? (p.courses ?? []) : [],
+      kind: p.periodKind
+        ? { code: p.periodKind.code, name: p.periodKind.name, color: p.periodKind.color, effect: p.periodKind.effect }
+        : { code: 'НП', name: 'Практика', color: null, effect: 'SUSPEND' },
+      room: p.room ?? null,
     }));
 }
 
@@ -173,14 +185,16 @@ export function buildSchedule(
   for (let date = from; compareIsoDates(date, to) <= 0; date = addDays(date, 1)) {
     const weekday = isoWeekday(date);
     if (weekday > 5) continue;
-    const studyDay = isStudyDay(date);
+    // як core: для групи день не навчальний і тоді, коли її пари знімає період (вихідний, практика, НС)
+    const group = owner.type === 'GROUP' ? findGroup(owner.id) : undefined;
+    const studyDay = isStudyDay(date) && !(group && periodsOn(date, group, options.periods ?? CALENDAR_PERIODS).some(closesLessons));
     days.push({
       date,
       weekday: weekday as Weekday,
       weekdayLabel: weekdayLabel(date),
       parity: parityOn(date),
       studyDay,
-      note: owner.type === 'GROUP' ? groupDayNote(date, owner.id) : null,
+      note: owner.type === 'GROUP' ? groupDayNote(date, owner.id, options.periods ?? CALENDAR_PERIODS) : null,
       lessons: studyDay ? lessonsOn(date, options).filter((lesson) => belongsTo(lesson, owner)) : [],
       practices: dayPractices(date, owner, options.periods ?? CALENDAR_PERIODS),
     });

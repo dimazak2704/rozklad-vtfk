@@ -126,8 +126,20 @@ describe('календар', () => {
     }
   });
 
-  it('містить періоди з приміток розпорядження №35', () => {
-    expect(CALENDAR_PERIODS.map((p) => p.kind)).toEqual(['PRACTICE', 'STUDY_MODE', 'STUDY_MODE']);
+  it('містить періоди з приміток розпорядження №35 і НС 4КІ1 з графіка', () => {
+    expect(CALENDAR_PERIODS.map((p) => p.periodKind?.code)).toEqual(['НП', 'ФН', 'ФН', 'НС']);
+    // старий kind, який core ще пише: НС — за ефектом «група не на парах»
+    expect(CALENDAR_PERIODS.map((p) => p.kind)).toEqual(['PRACTICE', 'STUDY_MODE', 'STUDY_MODE', 'PRACTICE']);
+  });
+
+  it('НС 4КІ1 16.11–27.11 знімає пари групи, але не інших груп і не до 16.11', () => {
+    const ki1 = groupNamed('4КІ1');
+    const ki2 = groupNamed('4КІ2');
+    const day = (code: string, date: string) => buildSchedule('GROUP', groupNamed(code).id, date, date)?.days[0];
+    expect(day('4КІ1', '2026-11-16')).toMatchObject({ lessons: [], practices: [{ kind: { code: 'НС' }, room: { name: '401' } }] });
+    expect(day('4КІ1', '2026-11-13')?.lessons.length).toBeGreaterThan(0);
+    expect(day('4КІ2', '2026-11-16')?.lessons.length).toBeGreaterThan(0);
+    expect(ki1.id).not.toBe(ki2.id);
   });
 });
 
@@ -165,7 +177,8 @@ describe('генератор розкладу', () => {
     expect(buildSchedule('GROUP', group.id, '2026-11-02', '2026-11-02')?.days[0]?.lessons.some((l) => l.online)).toBe(false);
 
     const practice = buildSchedule('GROUP', groupNamed('2КІ3').id, '2026-10-20', '2026-10-20')?.days[0];
-    expect(practice).toMatchObject({ studyDay: true, lessons: [], note: 'Електрорадіомонтажна практика' });
+    // як core: день, коли група не на парах, для неї не навчальний (блок практики стоїть замість пар)
+    expect(practice).toMatchObject({ studyDay: false, lessons: [], note: 'Електрорадіомонтажна практика', practices: [{ title: 'Електрорадіомонтажна практика' }] });
   });
 
   it('збирає розклад викладача й аудиторії з усіх груп', () => {

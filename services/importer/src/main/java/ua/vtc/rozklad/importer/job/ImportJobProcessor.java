@@ -3,6 +3,8 @@ package ua.vtc.rozklad.importer.job;
 import java.time.Clock;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -128,17 +130,16 @@ public class ImportJobProcessor {
     // ───────────────────────── розбір ─────────────────────────
 
     void parse(UUID id) {
-        ImportJob job = transaction.execute(status -> {
-            ImportJob found = jobs.findById(id).orElse(null);
-            if (found == null || found.status() != ImportJobStatus.UPLOADED) {
-                return null;
-            }
-            found.startParsing(clock.instant());
-            return found;
-        });
-        if (job == null) {
+        Optional<ImportJob> claimed = Objects.requireNonNull(transaction.execute(status -> jobs.findById(id)
+                .filter(found -> found.status() == ImportJobStatus.UPLOADED)
+                .map(found -> {
+                    found.startParsing(clock.instant());
+                    return found;
+                })));
+        if (claimed.isEmpty()) {
             return;
         }
+        ImportJob job = claimed.get();
         long started = System.nanoTime();
         try {
             ImportHandler handler = handlers.get(job.kind());
@@ -147,8 +148,10 @@ public class ImportJobProcessor {
             ImportHandler.ParseOutcome outcome = handler.parse(
                     new ImportHandler.ParseInput(id, job.fileName(), job.fileType(), content, options));
             JsonNode draft = jsonMapper.valueToTree(outcome.draft());
-            List<ReportRow> entityRows = entityRows(job, draft, options);
-            update(id, fresh -> fresh.parsed(draft, outcome.issues(), entityRows, aiUsage.usageOfJob(id), clock.instant()));
+            JobNormalizer.Normalized normalized = entityRows(job, draft, options);
+            JsonNode kept = normalized.draft();
+            List<ReportRow> entityRows = normalized.rows();
+            update(id, fresh -> fresh.parsed(kept, outcome.issues(), entityRows, aiUsage.usageOfJob(id), clock.instant()));
             log.info("Import job {} ({}) parsed in {} ms", id, job.kind(), (System.nanoTime() - started) / 1_000_000);
         } catch (ImportParseException | AiExtractionException | AiUnavailableException | AiBudgetExceededException
                  | StoredFileMissingException e) {
@@ -160,14 +163,13 @@ public class ImportJobProcessor {
         }
     }
 
-    private List<ReportRow> entityRows(ImportJob job, JsonNode draft, JobOptions options) {
-        CatalogSnapshot snapshot;
+    /** Matching of a freshly parsed draft; one blocking CATALOG row (draft as parsed) when core's catalog is down. */
+    private JobNormalizer.Normalized entityRows(ImportJob job, JsonNode draft, JobOptions options) {
         try {
-            snapshot = catalog.snapshot();
+            return normalizer.normalize(job.kind(), draft, options, job.mappings(), catalog.snapshot());
         } catch (CatalogUnavailableException e) {
-            return List.of(JobNormalizer.catalogUnavailable(e.getMessage()));
+            return new JobNormalizer.Normalized(null, List.of(JobNormalizer.catalogUnavailable(e.getMessage())), draft);
         }
-        return normalizer.normalize(job.kind(), draft, options, job.mappings(), snapshot).rows();
     }
 
     // ───────────────────────── застосування ─────────────────────────
@@ -183,25 +185,37 @@ public class ImportJobProcessor {
             log.info("Import job {} ({}) applied: core already held its data", id, job.kind());
             return;
         }
+        ImportHandler handler = handlers.get(job.kind());
+        JobNormalizer.Normalized normalized = null;
         try {
-            ImportHandler handler = handlers.get(job.kind());
             JobOptions options = JobOptions.from(job.options());
             CatalogSnapshot snapshot = catalog.snapshot();
-            JobNormalizer.Normalized normalized = normalizer.normalize(job.kind(), job.draft(), options, job.mappings(),
-                    snapshot);
-            if (handler.entitiesBlockApply() && normalized.blocking()) {
-                update(id, fresh -> fresh.needsReviewAgain(normalized.rows(), "Каталог на сервері розкладу змінився після перевірки — "
-                        + "перегляньте зіставлення і застосуйте ще раз.", clock.instant()));
+            normalized = normalizer.normalize(job.kind(), job.draft(), options, job.mappings(), snapshot);
+            JobNormalizer.Normalized checked = normalized;
+            if (handler.entitiesBlockApply() && checked.blocking()) {
+                update(id, fresh -> {
+                    fresh.needsReviewAgain(checked.rows(), handler.reviewAgainMessage(), clock.instant());
+                    fresh.derivedDraft(checked.draft());
+                });
                 return;
             }
             JobApplySteps steps = new JobApplySteps(id, job.result(),
                     result -> update(id, fresh -> fresh.checkpoint(result, clock.instant())));
-            JsonNode result = handler.apply(new ImportHandler.ApplyInput(id, job.fileName(), job.draft(), options,
-                    job.semesterId(), normalized.result(), snapshot, steps));
-            update(id, fresh -> fresh.applied(result, clock.instant()));
+            JsonNode result = handler.apply(new ImportHandler.ApplyInput(id, job.fileName(), checked.draft(), options,
+                    job.semesterId(), checked.result(), snapshot, steps));
+            update(id, fresh -> {
+                fresh.derivedDraft(checked.draft());
+                fresh.applied(result, clock.instant());
+            });
             log.info("Import job {} ({}) applied", id, job.kind());
         } catch (CoreImportException e) {
-            if (e.fixableByReview()) {
+            List<ReportRow> rejected = e.fixableByReview() ? handler.rejectionRows(e) : List.of();
+            if (!rejected.isEmpty() && normalized != null) {
+                log.info("Import job {} was rejected by core with report rows and returns to review: {}", id, e.getMessage());
+                List<ReportRow> rows = new java.util.ArrayList<>(normalized.rows());
+                rows.addAll(rejected);
+                update(id, fresh -> fresh.needsReviewAgain(rows, e.getMessage(), clock.instant()));
+            } else if (e.fixableByReview()) {
                 log.info("Import job {} was rejected by core and returns to review: {}", id, e.getMessage());
                 update(id, fresh -> fresh.rejectedByCore(e.getMessage(), clock.instant()));
             } else {

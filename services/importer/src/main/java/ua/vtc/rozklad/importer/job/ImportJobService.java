@@ -179,6 +179,7 @@ public class ImportJobService {
                 throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
             }
             fresh.remapped(decisions, normalized.rows(), clock.instant());
+            fresh.derivedDraft(normalized.draft());
             return fresh;
         });
     }
@@ -203,7 +204,8 @@ public class ImportJobService {
         JsonNode current = job.options() == null ? jsonMapper.createObjectNode() : job.options();
         JsonNode next = requested.toJson();
         List<Map.Entry<String, String>> errors = new ArrayList<>();
-        for (String name : List.of("sheet", "semesterNumber")) {
+        // academicYear: the calendar's week dates were read with it
+        for (String name : List.of("sheet", "semesterNumber", "academicYear")) {
             if (!current.path(name).equals(next.path(name))) {
                 errors.add(Map.entry("options." + name, "Цей параметр визначає, як прочитано файл, — щоб його "
                         + "змінити, завантажте файл ще раз."));
@@ -220,6 +222,7 @@ public class ImportJobService {
                 throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
             }
             fresh.reoptioned(next, normalized.rows(), clock.instant());
+            fresh.derivedDraft(normalized.draft());
             return fresh;
         });
     }
@@ -254,6 +257,7 @@ public class ImportJobService {
                 throw new OptimisticLockingFailureException("Import job " + id + " changed concurrently");
             }
             fresh.revised(draft, outcome.issues(), normalized.rows(), clock.instant());
+            fresh.derivedDraft(normalized.draft());
             return fresh;
         });
     }
@@ -285,7 +289,9 @@ public class ImportJobService {
             throw new BusinessRuleException("IMPORT_FAILED", "Файл не вдалося розібрати — завантажте його ще раз.");
         }
         UUID effectiveSemester = semesterId != null ? semesterId : job.semesterId();
-        if (job.kind() != ImportKind.ORDER_DOCUMENT && effectiveSemester == null) {
+        // розпорядження й графік не прив'язані до одного семестру (графік ділить core за семестрами року)
+        boolean needsSemester = job.kind() != ImportKind.ORDER_DOCUMENT && job.kind() != ImportKind.ACADEMIC_CALENDAR_XLSX;
+        if (needsSemester && effectiveSemester == null) {
             throw new BusinessRuleException("SEMESTER_REQUIRED", "Оберіть семестр, у який застосувати імпорт.");
         }
         boolean loadKind = job.kind() == ImportKind.DISCIPLINE_PROGRAM || job.kind() == ImportKind.CURRICULUM;

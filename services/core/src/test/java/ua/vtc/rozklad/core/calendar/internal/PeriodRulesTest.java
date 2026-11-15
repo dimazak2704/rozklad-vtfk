@@ -8,12 +8,15 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.contracts.Parity;
+import ua.vtc.rozklad.core.calendar.CalendarFixtures;
 import ua.vtc.rozklad.core.calendar.CalendarPeriod;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodEffect;
+import ua.vtc.rozklad.core.calendar.PeriodKind;
 import ua.vtc.rozklad.core.calendar.SemesterCalendar;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 
-/** Study days, group-scoped practice and study modes of DOMAIN §2. */
+/** Study days, group-scoped blocks and study modes of DOMAIN §2, decided by the effect of the period's kind. */
 class PeriodRulesTest {
 
     private static final UUID SEMESTER = UUID.randomUUID();
@@ -62,12 +65,52 @@ class PeriodRulesTest {
     }
 
     @Test
-    void studyModeAndExamSessionKeepLessons() {
+    void studyModeKeepsLessons() {
         CalendarPeriod online = period(CalendarPeriodKind.STUDY_MODE, MONDAY, MONDAY);
         online.setStudyMode(StudyMode.ONLINE);
+
+        assertThat(PeriodRules.isGroupStudyDay(MONDAY, semester, List.of(online), GROUP_4KI1, 4)).isTrue();
+        assertThat(PeriodRules.studyMode(MONDAY, List.of(online), GROUP_4KI1, 4)).isEqualTo(StudyMode.ONLINE);
+    }
+
+    /** Owner's decision of 15.11.2026: no regular pairs during the exam session (kind І, effect SUSPEND). */
+    @Test
+    void examSessionNowSuspendsTheGroupsLessonsButNotTheCollege() {
         CalendarPeriod exams = period(CalendarPeriodKind.EXAM_SESSION, MONDAY, MONDAY);
 
-        assertThat(PeriodRules.isGroupStudyDay(MONDAY, semester, List.of(online, exams), GROUP_4KI1, 4)).isTrue();
+        assertThat(exams.getEffect()).isEqualTo(PeriodEffect.SUSPEND);
+        assertThat(PeriodRules.isGroupStudyDay(MONDAY, semester, List.of(exams), GROUP_4KI1, 4)).isFalse();
+        assertThat(PeriodRules.isStudyDay(MONDAY, semester, List.of(exams))).as("коледж працює").isTrue();
+    }
+
+    /** A kind the dispatcher adds: the effect alone decides, the code means nothing to the rules. */
+    @Test
+    void customKindsBehaveByTheirEffect() {
+        CalendarPeriod block = custom("ХХ", PeriodEffect.SUSPEND);
+        block.applyToGroups(List.of(GROUP_4KI1));
+        CalendarPeriod note = custom("Р", PeriodEffect.INFO);
+        CalendarPeriod dayOff = custom("С", PeriodEffect.DAY_OFF);
+        dayOff.setPeriod(MONDAY.plusDays(1), MONDAY.plusDays(1));
+
+        assertThat(PeriodRules.isGroupStudyDay(MONDAY, semester, List.of(block, note), GROUP_4KI1, 4)).isFalse();
+        assertThat(PeriodRules.isGroupStudyDay(MONDAY, semester, List.of(block, note), GROUP_2KI3, 2))
+                .as("позначка нічого не знімає").isTrue();
+        assertThat(PeriodRules.isStudyDay(MONDAY, semester, List.of(block, note))).isTrue();
+        assertThat(PeriodRules.isStudyDay(MONDAY.plusDays(1), semester, List.of(dayOff))).isFalse();
+        assertThat(PeriodRules.isGroupStudyDay(MONDAY.plusDays(1), semester, List.of(dayOff), GROUP_2KI3, 2))
+                .isFalse();
+    }
+
+    /** Only the effect counts: a SUSPEND kind with a study mode stored by mistake decides no study mode. */
+    @Test
+    void onlyOnlineKindsDecideTheStudyMode() {
+        CalendarPeriod online = new CalendarPeriod(SEMESTER, new PeriodKind("ДН", "Дистанційне", PeriodEffect.ONLINE),
+                "Дистанційне", MONDAY, MONDAY);
+        online.setStudyMode(StudyMode.MIXED);
+
+        assertThat(PeriodRules.studyMode(MONDAY, List.of(online), GROUP_4KI1, 4)).isEqualTo(StudyMode.MIXED);
+        assertThat(PeriodRules.studyMode(MONDAY, List.of(custom("ХХ", PeriodEffect.SUSPEND)), GROUP_4KI1, 4))
+                .isEqualTo(StudyMode.OFFLINE);
     }
 
     @Test
@@ -92,6 +135,10 @@ class PeriodRulesTest {
     }
 
     private static CalendarPeriod period(CalendarPeriodKind kind, LocalDate from, LocalDate to) {
-        return new CalendarPeriod(SEMESTER, kind, kind.name(), from, to);
+        return new CalendarPeriod(SEMESTER, CalendarFixtures.transientKind(kind), kind.name(), from, to);
+    }
+
+    private static CalendarPeriod custom(String code, PeriodEffect effect) {
+        return new CalendarPeriod(SEMESTER, new PeriodKind(code, "Вид " + code, effect), code, MONDAY, MONDAY);
     }
 }

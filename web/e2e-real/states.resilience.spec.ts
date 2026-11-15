@@ -21,7 +21,8 @@ test('неіснуючий викладач (404) і зламане посила
 });
 
 test('без мережі: переглянутий тиждень зі збереженого, новий тиждень і нова сторінка — пояснення', async ({ page, context }) => {
-  await page.goto('/g/4%D0%9A%D0%861?view=week&date=2026-11-16');
+  // тиждень 09.11 з парами: з 16.11 до 27.11 4КІ1 на національному спротиві (робочий графік), пар немає
+  await page.goto('/g/4%D0%9A%D0%861?view=week&date=2026-11-09');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Розклад групи\s*4КІ1/, { timeout: 30_000 });
   const lessons = page.getByRole('main').getByRole('button', { name: /^\d пара, / });
   await expect(lessons.first()).toBeVisible();

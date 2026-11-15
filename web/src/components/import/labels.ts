@@ -8,6 +8,7 @@ export const IMPORT_KIND_LABEL: Record<ImportKind, string> = {
   DISCIPLINE_PROGRAM: 'Програма дисципліни',
   CURRICULUM: 'Навчальний план',
   ORDER_DOCUMENT: 'Розпорядження',
+  ACADEMIC_CALENDAR_XLSX: 'Графік освітнього процесу',
 };
 
 /** Що станеться після застосування — підказка у виборі виду. */
@@ -16,10 +17,11 @@ export const IMPORT_KIND_HINT: Record<ImportKind, string> = {
   DISCIPLINE_PROGRAM: 'DOCX, DOC чи PDF → години в навантаження вибраних груп',
   CURRICULUM: 'Скан чи фото плану → години на тиждень за дисциплінами',
   ORDER_DOCUMENT: 'DOCX чи фото → рядки розпорядження як історичні зміни',
+  ACADEMIC_CALENDAR_XLSX: 'Таблиця графіка (XLSX) → періоди календаря й тижні теорії груп',
 };
 
 export const IMPORT_KIND_OPTIONS: ReadonlyArray<SelectOption<ImportKind>> = (
-  ['TIMETABLE_XLSX', 'DISCIPLINE_PROGRAM', 'CURRICULUM', 'ORDER_DOCUMENT'] as const
+  ['TIMETABLE_XLSX', 'ACADEMIC_CALENDAR_XLSX', 'DISCIPLINE_PROGRAM', 'CURRICULUM', 'ORDER_DOCUMENT'] as const
 ).map((kind) => ({ value: kind, label: IMPORT_KIND_LABEL[kind], description: IMPORT_KIND_HINT[kind] }));
 
 export const IMPORT_STATUS_LABEL: Record<ImportJobStatus, string> = {
@@ -97,6 +99,8 @@ export const ROW_TYPE_LABEL: Record<ReportRowType, string> = {
   CATALOG: 'Каталог',
   FILE: 'Файл',
   OPTIONS: 'Параметри',
+  PERIOD_KIND: 'Вид періоду',
+  PERIOD: 'Період',
 };
 
 /** Знахідний відмінок для кнопок: «Створити викладача». */

@@ -1,41 +1,42 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FileText, X } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Link } from 'react-router';
 import { z } from 'zod';
 import { useDeleteCalendarPeriod, useSaveCalendarPeriod, type CalendarPeriod, type CalendarPeriodRequest, type CalendarSemester } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
+import { usePeriodKinds } from '@/api/period-kinds';
 import { qk } from '@/api/queryKeys';
-import type { CalendarPeriodKind, PeriodScope, StudyMode } from '@/api/types';
+import type { PeriodKindDto, PeriodScope, StudyMode } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
 import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
 import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
-import { PERIOD_KIND_EFFECT, PERIOD_KIND_OPTIONS, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
 import { DateInput } from './DateInput';
+import { KindSwatch } from './KindSwatch';
+import { EFFECT_HINT, EFFECT_LABEL, LEGACY_KIND, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
 import { composeOrderNote } from './notes';
 import { periodRequest } from './periods';
 
 const periodSchema = z
   .object({
-    kind: z.enum(['HOLIDAY', 'NO_CLASSES', 'PRACTICE', 'STUDY_MODE', 'EXAM_SESSION']),
-    title: z.string().trim().min(1, 'Назвіть період: «Осінні канікули», «Технологічна практика»').max(300, 'Не довше за 300 символів'),
+    kindId: z.string().min(1, 'Оберіть вид періоду'),
+    title: z.string().trim().min(1, 'Назвіть період: «Осінні канікули», «Основи національного спротиву»').max(300, 'Не довше за 300 символів'),
     startsOn: z.string().refine(isIsoDate, 'Вкажіть дату початку'),
     endsOn: z.string().refine(isIsoDate, 'Вкажіть дату кінця'),
     studyMode: z.enum(['OFFLINE', 'ONLINE', 'MIXED']).nullable(),
     scope: z.enum(['ALL', 'COURSES', 'GROUPS']),
     courses: z.array(z.number()),
     groupIds: z.array(z.string()),
+    roomId: z.string().nullable(),
     supervisorIds: z.array(z.string()),
     orderNote: z.string().trim().max(500, 'Не довше за 500 символів'),
   })
   .superRefine((value, ctx) => {
     if (isIsoDate(value.startsOn) && isIsoDate(value.endsOn) && value.endsOn < value.startsOn) {
       ctx.addIssue({ code: 'custom', path: ['endsOn'], message: 'Кінець не може бути раніше за початок' });
-    }
-    if (value.kind === 'STUDY_MODE' && !value.studyMode) {
-      ctx.addIssue({ code: 'custom', path: ['studyMode'], message: 'Оберіть форму навчання' });
     }
     if (value.scope === 'COURSES' && value.courses.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['courses'], message: 'Позначте хоча б один курс' });
@@ -46,8 +47,10 @@ const periodSchema = z
   });
 
 type PeriodValues = z.infer<typeof periodSchema>;
-const FIELDS = ['kind', 'title', 'startsOn', 'endsOn', 'studyMode', 'scope', 'courses', 'groupIds', 'supervisorIds', 'orderNote'] as const;
+const FIELDS = ['kindId', 'title', 'startsOn', 'endsOn', 'studyMode', 'scope', 'courses', 'groupIds', 'roomId', 'supervisorIds', 'orderNote'] as const;
 const COURSES = [1, 2, 3, 4] as const;
+/** Вид нового періоду за замовчуванням — практика, як було до довідника видів. */
+const DEFAULT_KIND_CODE = 'НП';
 
 interface PeriodFormDialogProps {
   semester: CalendarSemester;
@@ -56,21 +59,32 @@ interface PeriodFormDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** Вид періоду в довіднику: за `kindId`, а для періоду від старішого core — вбудований за старим `kind`. */
+function initialKindId(period: CalendarPeriod | null, kinds: readonly PeriodKindDto[]): string {
+  if (period?.kindId) return period.kindId;
+  const code = period ? LEGACY_KIND[period.kind].code : DEFAULT_KIND_CODE;
+  return kinds.find((k) => k.code === code)?.id ?? kinds.find((k) => k.active)?.id ?? '';
+}
+
 /**
- * Період календаря: канікули, практика, режим навчання. Кого стосується (усі, курси, групи) і примітка,
- * яку система додасть у розпорядження на ці дати, — з попереднім переглядом на «аркуші».
+ * Період календаря: вид з довідника (канікули, практика, НС, форма навчання…), дати, кого стосується, і поля за
+ * ефектом виду: режим для «онлайн», аудиторія й керівники для «група не на парах». Примітку, яку система додасть
+ * у розпорядження на ці дати, складає шаблон виду — з попереднім переглядом на «аркуші».
  */
 export function PeriodFormDialog({ semester, period, open, onOpenChange }: PeriodFormDialogProps) {
   const formId = useId();
   const save = useSaveCalendarPeriod();
   const remove = useDeleteCalendarPeriod();
+  const kinds = usePeriodKinds();
   const groups = useCatalogOptions('groups', { active: true });
   const teachers = useCatalogOptions('teachers', { active: true });
+  const rooms = useCatalogOptions('rooms', { active: true });
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<PeriodValues>({
     resolver: zodResolver(periodSchema),
     defaultValues: {
-      kind: period?.kind ?? 'PRACTICE',
+      // довідник уже в кеші (форму відкрили вдруге): вид одразу; інакше його підставить ефект нижче
+      kindId: period?.kindId ?? (kinds.data ? initialKindId(period, kinds.data) : ''),
       title: period?.title ?? '',
       startsOn: period?.startsOn ?? '',
       endsOn: period?.endsOn ?? '',
@@ -78,12 +92,26 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       scope: period?.scope ?? 'GROUPS',
       courses: period?.courses ?? [],
       groupIds: period?.groupIds ?? [],
+      roomId: period?.roomId ?? null,
       supervisorIds: period?.supervisorIds ?? [],
       orderNote: period?.orderNote ?? '',
     },
   });
   const { errors, isDirty } = form.formState;
   const values = useWatch({ control: form.control }) as PeriodValues;
+
+  // вид підставляємо, коли довідник завантажився: новому періоду — практику, старому періоду — його вбудований вид.
+  // resetField діє лише на зареєстроване поле, а вміст діалогу монтується після першого кадру, тому вид з кешу
+  // задано вже в defaultValues
+  const kindList = kinds.data;
+  useEffect(() => {
+    if (!kindList || form.getValues('kindId')) return;
+    const id = initialKindId(period, kindList);
+    if (id) form.resetField('kindId', { defaultValue: id });
+  }, [kindList, period, form]);
+
+  const kind = kindList?.find((k) => k.id === values.kindId) ?? null;
+  const effect = kind?.effect ?? (period ? LEGACY_KIND[period.kind].effect : null);
   const groupById = new Map((groups.items ?? []).map((g) => [g.id, g]));
   const chosenGroups = values.groupIds.map((id) => groupById.get(id)).filter((g) => g !== undefined);
   // підпис керівника: з довідника активних, а для вже призначеного — і з самого періоду
@@ -92,16 +120,25 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
     ...(teachers.items ?? []).map((t): [string, string] => [t.id, t.shortName]),
   ]);
   const chosenSupervisors = values.supervisorIds.map((id) => ({ id, name: supervisorNames.get(id) ?? '…' }));
-  const draftNote = composeOrderNote({
-    kind: values.kind,
-    title: values.title ?? '',
-    startsOn: isIsoDate(values.startsOn) ? values.startsOn : '',
-    endsOn: isIsoDate(values.endsOn) ? values.endsOn : '',
-    scope: values.scope,
-    courses: values.courses,
-    groupCodes: chosenGroups.map((g) => g.code),
-    studyMode: values.studyMode,
-  });
+  const roomOptions = [
+    ...(period?.room && !(rooms.items ?? []).some((r) => r.id === period.room?.id) ? [{ value: period.room.id, label: period.room.name }] : []),
+    ...(rooms.items ?? []).map((r) => ({ value: r.id, label: r.name })),
+  ];
+  const roomName = roomOptions.find((r) => r.value === values.roomId)?.label ?? null;
+  const draftNote = kind
+    ? composeOrderNote({
+        template: kind.noteTemplate,
+        kindName: kind.name,
+        title: values.title ?? '',
+        startsOn: isIsoDate(values.startsOn) ? values.startsOn : '',
+        endsOn: isIsoDate(values.endsOn) ? values.endsOn : '',
+        scope: values.scope,
+        courses: values.courses,
+        groupCodes: chosenGroups.map((g) => g.code),
+        studyMode: effect === 'ONLINE' ? values.studyMode : null,
+        roomName: effect === 'SUSPEND' ? roomName : null,
+      })
+    : '';
 
   /** Період — у журнал дій: доданий скасовує видалення, змінений — попередні значення з новою версією. */
   const journalPeriod = (before: CalendarPeriod | null, after: CalendarPeriodRequest, saved: CalendarPeriod) => {
@@ -120,18 +157,24 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
 
   const submit = form.handleSubmit(async (data) => {
     setFormError(null);
+    if (effect === 'ONLINE' && !data.studyMode) {
+      form.setError('studyMode', { type: 'manual', message: 'Оберіть форму навчання' });
+      return;
+    }
     try {
+      const suspend = effect === 'SUSPEND';
       const body: CalendarPeriodRequest = {
         semesterId: semester.id,
-        kind: data.kind,
+        kindId: data.kindId,
         title: data.title.trim(),
         startsOn: data.startsOn,
         endsOn: data.endsOn,
-        studyMode: data.kind === 'STUDY_MODE' ? data.studyMode : null,
+        studyMode: effect === 'ONLINE' ? data.studyMode : null,
         scope: data.scope,
         courses: data.scope === 'COURSES' ? data.courses : null,
         groupIds: data.scope === 'GROUPS' ? data.groupIds : null,
-        supervisorIds: data.kind === 'PRACTICE' ? data.supervisorIds : [],
+        roomId: suspend ? data.roomId : null,
+        supervisorIds: suspend ? data.supervisorIds : [],
         orderNote: blankToNull(data.orderNote),
         version: period?.version,
       };
@@ -140,9 +183,19 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       journalPeriod(period, body, saved);
       onOpenChange(false);
     } catch (error) {
-      setFormError(applyServerErrors(error, form.setError, FIELDS, { 'groupIds[0]': 'groupIds', 'supervisorIds[0]': 'supervisorIds' }));
+      setFormError(applyServerErrors(error, form.setError, FIELDS, { kind: 'kindId', 'groupIds[0]': 'groupIds', 'supervisorIds[0]': 'supervisorIds' }));
     }
   });
+
+  // вимкнений вид не пропонуємо, але вид самого періоду лишається у списку
+  const kindOptions = (kindList ?? [])
+    .filter((k) => k.active || k.id === period?.kindId)
+    .map((k) => ({
+      value: k.id,
+      label: k.name,
+      description: `${k.code} · ${EFFECT_LABEL[k.effect]}${k.active ? '' : ' · вимкнено'}`,
+      icon: <KindSwatch color={k.color} effect={k.effect} />,
+    }));
 
   const groupOptions = (groups.items ?? [])
     .filter((g) => !values.groupIds.includes(g.id))
@@ -151,6 +204,8 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
   const supervisorOptions = (teachers.items ?? [])
     .filter((t) => !values.supervisorIds.includes(t.id))
     .map((t) => ({ value: t.id, label: t.shortName, keywords: [t.displayName] }));
+
+  const kindName = kind?.name ?? (period ? LEGACY_KIND[period.kind].name : 'Вид');
 
   return (
     <FormDialog
@@ -167,26 +222,51 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       <form id={formId} noValidate onSubmit={(event) => void submit(event)} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="flex min-w-0 flex-col gap-4">
           <FormAlert message={formError} />
+          {period?.source === 'IMPORT' ? (
+            <p className="rounded-control border border-default bg-sunken px-3 py-2 text-caption text-secondary">
+              Період з графіка освітнього процесу. Після збереження змін імпорт графіка його більше не оновлюватиме.
+            </p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
-            <Field label="Вид" required error={errors.kind?.message} hint={PERIOD_KIND_EFFECT[values.kind]}>
+            <Field
+              label="Вид"
+              required
+              error={errors.kindId?.message ?? (kinds.isError ? 'Види періодів не завантажено. Оновіть сторінку.' : undefined)}
+              hint={
+                effect ? (
+                  <>
+                    {EFFECT_HINT[effect]}{' '}
+                    <Link to="/admin/period-kinds" className="font-semibold text-accent underline-offset-2 hover-fine:underline">
+                      Види періодів
+                    </Link>
+                  </>
+                ) : undefined
+              }
+            >
               <Controller
                 control={form.control}
-                name="kind"
+                name="kindId"
                 render={({ field }) => (
-                  <Select<CalendarPeriodKind>
-                    value={field.value}
+                  <Select<string>
+                    value={field.value || null}
+                    placeholder={kinds.isPending ? 'Завантажуємо…' : 'Оберіть вид'}
+                    disabled={kinds.isPending || kinds.isError}
                     onValueChange={(next) => {
                       field.onChange(next);
-                      if (next !== 'STUDY_MODE') form.setValue('studyMode', null);
-                      if (next !== 'PRACTICE') form.setValue('supervisorIds', []);
+                      const nextEffect = kindList?.find((k) => k.id === next)?.effect;
+                      if (nextEffect !== 'ONLINE') form.setValue('studyMode', null);
+                      if (nextEffect !== 'SUSPEND') {
+                        form.setValue('supervisorIds', []);
+                        form.setValue('roomId', null);
+                      }
                     }}
-                    options={PERIOD_KIND_OPTIONS}
+                    options={kindOptions}
                   />
                 )}
               />
             </Field>
             {/* без прикладу в полі: зразок з автофокусом читали як уже введену назву */}
-            <Field label="Назва" required error={errors.title?.message} hint={period ? undefined : 'Як у розпорядженні, напр. «Електрорадіомонтажна практика»'}>
+            <Field label="Назва" required error={errors.title?.message} hint={period ? undefined : 'Як у розпорядженні, напр. «Основи національного спротиву»'}>
               <Input {...form.register('title')} autoComplete="off" autoFocus={!period} />
             </Field>
           </div>
@@ -210,7 +290,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
               />
             </Field>
           </div>
-          {values.kind === 'STUDY_MODE' ? (
+          {effect === 'ONLINE' ? (
             <Controller
               control={form.control}
               name="studyMode"
@@ -307,49 +387,69 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
               )}
             />
           ) : null}
-          {values.kind === 'PRACTICE' ? (
-            <Controller
-              control={form.control}
-              name="supervisorIds"
-              render={({ field }) => (
-                <Field
-                  label="Керівники практики"
-                  error={errors.supervisorIds?.message}
-                  hint="Група на дні практики побачить «Практика» з керівниками, керівник — «Керівництво практикою»."
-                >
-                  <div className="flex flex-col gap-2">
+          {effect === 'SUSPEND' ? (
+            <>
+              <Field label="Аудиторія" error={errors.roomId?.message} hint={`Група побачить «${kindName}: назва, ауд. …». Аудиторію поки лише показуємо, не займаємо.`}>
+                <Controller
+                  control={form.control}
+                  name="roomId"
+                  render={({ field }) => (
                     <Combobox
-                      value={null}
-                      onValueChange={(id) => {
-                        if (id) field.onChange([...field.value, id]);
-                      }}
-                      options={supervisorOptions}
-                      placeholder="Додати керівника…"
-                      searchPlaceholder="Прізвище викладача"
-                      loading={teachers.isPending}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      options={roomOptions}
+                      placeholder="Не вказано"
+                      searchPlaceholder="Номер аудиторії"
+                      loading={rooms.isPending}
+                      clearable
+                      className="sm:max-w-56"
                     />
-                    {chosenSupervisors.length > 0 ? (
-                      <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані керівники">
-                        {chosenSupervisors.map((teacher) => (
-                          <li key={teacher.id} className="inline-flex items-center gap-0.5">
-                            <Plate size="md">{teacher.name}</Plate>
-                            <IconButton
-                              label={`Прибрати керівника ${teacher.name}`}
-                              icon={<X aria-hidden="true" className="size-3.5" />}
-                              size="sm"
-                              className="size-7"
-                              onClick={() => field.onChange(field.value.filter((id) => id !== teacher.id))}
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-caption text-muted">Керівника не призначено.</p>
-                    )}
-                  </div>
-                </Field>
-              )}
-            />
+                  )}
+                />
+              </Field>
+              <Controller
+                control={form.control}
+                name="supervisorIds"
+                render={({ field }) => (
+                  <Field
+                    label="Керівники"
+                    error={errors.supervisorIds?.message}
+                    hint="Керівник побачить у своєму розкладі «Керівництво» з назвою періоду й групою."
+                  >
+                    <div className="flex flex-col gap-2">
+                      <Combobox
+                        value={null}
+                        onValueChange={(id) => {
+                          if (id) field.onChange([...field.value, id]);
+                        }}
+                        options={supervisorOptions}
+                        placeholder="Додати керівника…"
+                        searchPlaceholder="Прізвище викладача"
+                        loading={teachers.isPending}
+                      />
+                      {chosenSupervisors.length > 0 ? (
+                        <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані керівники">
+                          {chosenSupervisors.map((teacher) => (
+                            <li key={teacher.id} className="inline-flex items-center gap-0.5">
+                              <Plate size="md">{teacher.name}</Plate>
+                              <IconButton
+                                label={`Прибрати керівника ${teacher.name}`}
+                                icon={<X aria-hidden="true" className="size-3.5" />}
+                                size="sm"
+                                className="size-7"
+                                onClick={() => field.onChange(field.value.filter((id) => id !== teacher.id))}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-caption text-muted">Керівника не призначено.</p>
+                      )}
+                    </div>
+                  </Field>
+                )}
+              />
+            </>
           ) : null}
         </div>
 

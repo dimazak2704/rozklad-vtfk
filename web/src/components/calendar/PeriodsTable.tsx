@@ -1,23 +1,14 @@
-import { Pencil, Plus, Trash } from 'lucide-react';
+import { Pencil, Plus, Tags, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { useCalendarPeriods, useDeleteCalendarPeriod, type CalendarPeriod, type CalendarSemester } from '@/api/calendar';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { EmptyValue } from '@/components/catalog/FormParts';
-import { Button, DataTable, EmptyState, RowActions, Section, Tooltip, type DataTableColumn } from '@/components/ui';
-import { cn } from '@/lib/cn';
+import { Button, buttonClass, DataTable, EmptyState, RowActions, Section, Tooltip, type DataTableColumn } from '@/components/ui';
 import { formatNumericDate } from '@/lib/date';
-import type { CalendarPeriodKind } from '@/api/types';
-import { PERIOD_KIND_LABEL, STUDY_MODE_LABEL } from './labels';
+import { KindSwatch } from './KindSwatch';
 import { PeriodFormDialog } from './PeriodForm';
-import { periodAudience, supervisorsLabel } from './periods';
-
-const KIND_DOT: Record<CalendarPeriodKind, string> = {
-  HOLIDAY: 'bg-[var(--fill-cancel)]',
-  NO_CLASSES: 'bg-[var(--fill-cancel)]',
-  PRACTICE: 'bg-[var(--fill-change)]',
-  STUDY_MODE: 'bg-[var(--fill-room)]',
-  EXAM_SESSION: 'bg-accent',
-};
+import { periodAudience, periodKindLabel, periodKindOf, supervisorsLabel } from './periods';
 
 interface PeriodsTableProps {
   semester: CalendarSemester;
@@ -26,7 +17,10 @@ interface PeriodsTableProps {
   onOpen: (period: CalendarPeriod | 'new' | null) => void;
 }
 
-/** Періоди семестру таблицею: вид, назва, дати, кого стосується, примітка для розпорядження. */
+/**
+ * Періоди семестру таблицею: вид (крапка — колір виду з графіка або тон ефекту), назва, дати, кого стосується,
+ * примітка для розпорядження. У періоду «група не на парах» під назвою — аудиторія й керівники.
+ */
 export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
   const periods = useCalendarPeriods(semester.id);
   const remove = useDeleteCalendarPeriod();
@@ -38,28 +32,33 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         id: 'kind',
         header: 'Вид',
         width: '10rem',
-        sortValue: (p) => PERIOD_KIND_LABEL[p.kind],
+        sortValue: (p) => periodKindLabel(p),
         // вид словом; колір — лише крапка, як на смузі семестру
-        cell: (p) => (
-          <span className="inline-flex items-baseline gap-2">
-            <span aria-hidden="true" className={cn('size-2 shrink-0 translate-y-[-1px] rounded-full', KIND_DOT[p.kind])} />
-            <span>
+        cell: (p) => {
+          const kind = periodKindOf(p);
+          return (
+            <span className="inline-flex items-baseline gap-2">
+              <KindSwatch color={kind.color} effect={kind.effect} className="translate-y-[-1px]" />
               {/* для форми навчання вистачає самої форми: «Дистанційно», а не «Форма навчання, дистанційно» */}
-              {p.kind === 'STUDY_MODE' && p.studyMode ? STUDY_MODE_LABEL[p.studyMode] : PERIOD_KIND_LABEL[p.kind]}
+              <span>{periodKindLabel(p)}</span>
             </span>
-          </span>
-        ),
+          );
+        },
       },
       {
         id: 'title',
         header: 'Назва',
         rowHeader: true,
         sortValue: (p) => p.title,
-        // у практики під назвою керівники; без них диспетчер бачить, що їх ще треба призначити
+        // у періоду «група не на парах» під назвою аудиторія й керівники; без керівників диспетчер бачить, що їх ще треба
+        // призначити
         cell: (p) =>
-          p.kind === 'PRACTICE' ? (
+          periodKindOf(p).effect === 'SUSPEND' ? (
             <span className="flex flex-col gap-0.5">
-              <span>{p.title}</span>
+              <span>
+                {p.title}
+                {p.room ? <span className="text-secondary">, ауд. {p.room.name}</span> : null}
+              </span>
               {p.supervisors && p.supervisors.length > 0 ? (
                 <span className="text-caption text-secondary">{supervisorsLabel(p.supervisors)}</span>
               ) : (
@@ -104,9 +103,15 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
       title="Періоди"
       headingLevel={3}
       actions={
-        <Button size="sm" variant="secondary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={() => onOpen('new')}>
-          Додати період
-        </Button>
+        <span className="flex flex-wrap gap-2">
+          <Link to="/admin/period-kinds" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
+            <Tags aria-hidden="true" className="size-4" />
+            Види періодів
+          </Link>
+          <Button size="sm" variant="secondary" iconStart={<Plus aria-hidden="true" className="size-4" />} onClick={() => onOpen('new')}>
+            Додати період
+          </Button>
+        </span>
       }
     >
       <DataTable
@@ -132,7 +137,7 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
           <EmptyState
             size="sm"
             title="Періодів немає."
-            description="Канікули, практика чи дистанційне навчання змінюють заняття на свої дати й додають примітку в розпорядження."
+            description="Канікули, практика, НС чи дистанційне навчання змінюють заняття на свої дати й додають примітку в розпорядження."
             action={
               <Button size="sm" variant="ghost" onClick={() => onOpen('new')}>
                 Додати період
@@ -153,7 +158,7 @@ export function PeriodsTable({ semester, opened, onOpen }: PeriodsTableProps) {
         />
       ) : null}
       <DeleteDialog
-        target={deleting ? { id: deleting.id, name: `${PERIOD_KIND_LABEL[deleting.kind]}: ${deleting.title}` } : null}
+        target={deleting ? { id: deleting.id, name: `${periodKindOf(deleting).name}: ${deleting.title}` } : null}
         onClose={() => setDeleting(null)}
         title="Видалити період?"
         description="Заняття на ці дати повернуться до звичайного розкладу, примітка зникне з нових розпоряджень."

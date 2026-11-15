@@ -4,8 +4,12 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * A calendar period that affects a date (holiday, practice, study mode, …). {@code orderNote} is
+ * A calendar period that affects a date (holiday, practice, study mode, НС …). {@code orderNote} is
  * the sentence copied into orders («Групи 4КІ з 01.09.26р. по 31.10.26 навчаються – дистанційно.»).
+ *
+ * @param kind       deprecated legacy kind, derived from {@code periodKind} ({@link CalendarPeriodKind#of})
+ * @param periodKind the kind with its effect
+ * @param roomId     room of a SUSPEND period (display only), {@code null} when none
  */
 public record PeriodInfo(
         UUID id,
@@ -15,10 +19,13 @@ public record PeriodInfo(
         LocalDate endsOn,
         StudyMode studyMode,
         String orderNote,
-        PeriodScope scope) {
+        PeriodScope scope,
+        PeriodKindInfo periodKind,
+        UUID roomId) {
 
     public static PeriodInfo of(CalendarPeriod period) {
-        return new PeriodInfo(period.getId(), period.getKind(), period.getTitle(), period.getStartsOn(),
-                period.getEndsOn(), period.getStudyMode(), period.getOrderNote(), period.getScope());
+        return new PeriodInfo(period.getId(), CalendarPeriodKind.of(period.getKind()), period.getTitle(),
+                period.getStartsOn(), period.getEndsOn(), period.getStudyMode(), period.getOrderNote(),
+                period.getScope(), PeriodKindInfo.of(period.getKind()), period.getRoomId());
     }
 }

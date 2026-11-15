@@ -15,9 +15,13 @@ import java.util.List;
 import java.util.UUID;
 import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.core.calendar.CalendarPeriodKind;
+import ua.vtc.rozklad.core.calendar.PeriodEffect;
+import ua.vtc.rozklad.core.calendar.PeriodKind;
 import ua.vtc.rozklad.core.calendar.PeriodScope;
+import ua.vtc.rozklad.core.calendar.PeriodSource;
 import ua.vtc.rozklad.core.calendar.StudyMode;
 import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.catalog.RoomRef;
 import ua.vtc.rozklad.core.catalog.TeacherRef;
 import ua.vtc.rozklad.core.shared.web.Ref;
 
@@ -98,8 +102,11 @@ public final class CalendarDtos {
     }
 
     /**
-     * {@code supervisorIds} / {@code supervisors} (additive): керівники практики of a PRACTICE period,
-     * empty for other kinds and for a practice nobody is assigned to yet.
+     * {@code supervisorIds} / {@code supervisors} (additive): керівники of a period of a SUSPEND kind,
+     * empty for other kinds and for a period nobody is assigned to yet. Additive since the period kinds:
+     * {@code kindId}, {@code periodKind}, {@code roomId}/{@code room} (SUSPEND only, display only),
+     * {@code source} and {@code sourceKey} (rows of the academic calendar import). {@code kind} is
+     * deprecated (kept one release): the legacy value derived from the kind ({@link CalendarPeriodKind#of}).
      */
     public record CalendarPeriodDto(
             UUID id,
@@ -116,17 +123,35 @@ public final class CalendarDtos {
             List<GroupRef> groups,
             long version,
             List<UUID> supervisorIds,
-            List<TeacherRef> supervisors) {
+            List<TeacherRef> supervisors,
+            UUID kindId,
+            PeriodKindRef periodKind,
+            UUID roomId,
+            RoomRef room,
+            PeriodSource source,
+            String sourceKey) {
+    }
+
+    /** {@code PeriodKindRef {id, code, name, color?, effect}}: the kind of a period in its DTO. */
+    public record PeriodKindRef(UUID id, String code, String name, String color, PeriodEffect effect) {
+
+        static PeriodKindRef of(PeriodKind kind) {
+            return new PeriodKindRef(kind.getId(), kind.getCode(), kind.getName(), kind.getColor(), kind.getEffect());
+        }
     }
 
     /**
-     * @param studyMode     required for STUDY_MODE, empty for other kinds
+     * @param kindId        the period's kind; when present {@code kind} is ignored
+     * @param kind          deprecated (kept one release): resolves to the builtin kind it maps to when
+     *                      {@code kindId} is absent
+     * @param studyMode     required for a kind with effect ONLINE, empty for other kinds
      * @param scope         ALL when empty; COURSES needs {@code courses}, GROUPS needs {@code groupIds}
-     * @param supervisorIds керівники практики: active teachers, only for PRACTICE (additive; empty = none)
+     * @param supervisorIds керівники: active teachers, only for a SUSPEND kind (additive; empty = none)
+     * @param roomId        room of a SUSPEND kind (НС: ауд. 401), display only
      */
     public record CalendarPeriodRequest(
             @NotNull UUID semesterId,
-            @NotNull CalendarPeriodKind kind,
+            CalendarPeriodKind kind,
             @NotBlank @Size(max = 300) String title,
             @NotNull LocalDate startsOn,
             @NotNull LocalDate endsOn,
@@ -136,14 +161,25 @@ public final class CalendarDtos {
             List<@NotNull @Min(1) @Max(6) Integer> courses,
             List<@NotNull UUID> groupIds,
             Long version,
-            @Size(max = 20) List<@NotNull UUID> supervisorIds) {
+            @Size(max = 20) List<@NotNull UUID> supervisorIds,
+            UUID kindId,
+            UUID roomId) {
 
-        /** A request without supervisors. */
+        /** A request with a legacy kind and supervisors. */
+        public CalendarPeriodRequest(UUID semesterId, CalendarPeriodKind kind, String title, LocalDate startsOn,
+                                     LocalDate endsOn, StudyMode studyMode, String orderNote, PeriodScope scope,
+                                     List<Integer> courses, List<UUID> groupIds, Long version,
+                                     List<UUID> supervisorIds) {
+            this(semesterId, kind, title, startsOn, endsOn, studyMode, orderNote, scope, courses, groupIds, version,
+                    supervisorIds, null, null);
+        }
+
+        /** A request with a legacy kind and without supervisors. */
         public CalendarPeriodRequest(UUID semesterId, CalendarPeriodKind kind, String title, LocalDate startsOn,
                                      LocalDate endsOn, StudyMode studyMode, String orderNote, PeriodScope scope,
                                      List<Integer> courses, List<UUID> groupIds, Long version) {
             this(semesterId, kind, title, startsOn, endsOn, studyMode, orderNote, scope, courses, groupIds, version,
-                    null);
+                    null, null, null);
         }
     }
 

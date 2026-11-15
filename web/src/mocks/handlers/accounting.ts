@@ -11,7 +11,7 @@ import type { AccountingStatus, IsoDate, TeacherStatsDto, TemplateLessonDto, Uui
 import { addDays, compareIsoDates, formatDayMonth, isoWeekday, kyivClock, timeToMinutes } from '@/lib/date';
 import { plural } from '@/lib/labels';
 import { ukCollator } from '@/lib/sort';
-import { TEMPLATE_LESSONS } from '../fixtures';
+import { closesLessons, TEMPLATE_LESSONS } from '../fixtures';
 import { mockId } from '../ids';
 import { apiPath, badRequest } from '../kit';
 import { bellProfiles, parityOfDate, periods, semesters, activeSemester } from './calendar';
@@ -41,11 +41,11 @@ function periodTouchesGroup(period: CalendarPeriod, groupId: Uuid, course: numbe
   }
 }
 
-/** Чи має група пари цієї дати: канікули й «без занять» знімають усі пари, практика — пари групи. */
+/** Чи має група пари цієї дати: вихідний (DAY_OFF) і «група не на парах» (SUSPEND: практика, НС) знімають її пари. */
 function groupStudiesOn(date: IsoDate, groupId: Uuid, course: number, semesterPeriods: readonly CalendarPeriod[]): boolean {
   return !semesterPeriods.some(
     (p) =>
-      (p.kind === 'HOLIDAY' || p.kind === 'NO_CLASSES' || p.kind === 'PRACTICE') &&
+      closesLessons(p) &&
       compareIsoDates(date, p.startsOn) >= 0 &&
       compareIsoDates(date, p.endsOn) <= 0 &&
       periodTouchesGroup(p, groupId, course),

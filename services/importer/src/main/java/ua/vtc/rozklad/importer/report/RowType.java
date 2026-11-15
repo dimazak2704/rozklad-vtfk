@@ -22,7 +22,11 @@ public enum RowType {
     /** The uploaded file as a whole. */
     FILE,
     /** The import parameters applying needs (groups, weekly hours); corrected with PUT …/options. */
-    OPTIONS;
+    OPTIONS,
+    /** A code of the academic calendar and the period kind it maps to (ACADEMIC_CALENDAR_XLSX). */
+    PERIOD_KIND,
+    /** A calendar period of the import as core checked it (dry-run findings, ACADEMIC_CALENDAR_XLSX). */
+    PERIOD;
 
     public static final Set<RowType> ENTITIES = EnumSet.of(TEACHER, DISCIPLINE, GROUP, ROOM);
 

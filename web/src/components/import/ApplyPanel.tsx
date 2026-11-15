@@ -24,6 +24,8 @@ const APPLY_EFFECT: Record<ImportJob['kind'], string> = {
   DISCIPLINE_PROGRAM: 'Години з програми запишуться в навантаження вибраних груп (замінять наявні для цієї дисципліни).',
   CURRICULUM: 'Години плану запишуться в навантаження вибраних груп за дисциплінами, що мають збіг.',
   ORDER_DOCUMENT: 'Рядки розпорядження запишуться як історичні зміни на його дату. Поточні заміни це не зачепить.',
+  ACADEMIC_CALENDAR_XLSX:
+    'Періоди графіка запишуться в календар: імпортовані раніше оновляться, змінені вручну лишаться як є. Пари груп перебудуються від сьогодні, тижні теорії збережуться для груп.',
 };
 
 /** Що записано в core: підсумок кроків застосування людськими словами (порожні кроки пропускаємо). */
@@ -45,6 +47,17 @@ function resultLines(result: ImportApplyResult): string[] {
       ? `, ${countLabel(timetable.hardConflicts, ['конфлікт', 'конфлікти', 'конфліктів'])}`
       : '';
     lines.push(`Чернетка «${timetable.name}»: ${countLabel(timetable.lessonCount, ['заняття', 'заняття', 'занять'])}${conflicts}.`);
+  }
+  const calendar = result.calendar;
+  if (calendar) {
+    const parts = [
+      calendar.created ? `створено ${calendar.created}` : null,
+      calendar.updated ? `оновлено ${calendar.updated}` : null,
+      calendar.deleted ? `видалено ${calendar.deleted}` : null,
+      calendar.unchanged ? `без змін ${calendar.unchanged}` : null,
+    ].filter(Boolean);
+    lines.push(`Календар ${calendar.academicYear}: ${parts.length > 0 ? parts.join(', ') : 'змін немає'}.`);
+    if (calendar.skippedManual) lines.push(`Змінені вручну не чіпали: ${calendar.skippedManual}.`);
   }
   const load = result.load;
   if (load && !isSkipped(load)) {
@@ -105,7 +118,9 @@ export function ApplyPanel({ job, onShowTab, activeTab }: ApplyPanelProps) {
           ]
         : job.kind === 'ORDER_DOCUMENT'
           ? [{ to: '/admin/orders', label: 'До розпоряджень' }]
-          : [{ to: '/admin/load', label: 'Відкрити навантаження' }];
+          : job.kind === 'ACADEMIC_CALENDAR_XLSX'
+            ? [{ to: '/admin/calendar', label: 'Відкрити календар' }]
+            : [{ to: '/admin/load', label: 'Відкрити навантаження' }];
     return (
       <section aria-label="Результат імпорту" className="flex flex-col gap-3 rounded-panel border border-add bg-add-subtle px-4 py-3.5">
         <p className="flex items-center gap-2 text-heading font-semibold text-add">

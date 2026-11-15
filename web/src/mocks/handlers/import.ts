@@ -10,6 +10,7 @@
  */
 import { http, HttpResponse } from 'msw';
 import type {
+  AcademicCalendarDraft,
   CurriculumDraft,
   ImportApplyResult,
   ImportJob,
@@ -38,6 +39,7 @@ import { mockId } from '../ids';
 import { apiPath, badRequest, businessRule, conflict, paginate, problem, readJson } from '../kit';
 import { createMockCollection } from '../store';
 import { activeSemester, semesters } from './calendar';
+import { academicCalendarDraft, importCalendarPeriods } from './calendar-import';
 import {
   disciplineRefOf,
   disciplines,
@@ -51,7 +53,7 @@ import { loadItems } from './load';
 import { extensionOf, KIND_EXTENSIONS, MAX_IMPORT_BYTES, usesVision } from '@/components/import/detect';
 import { loadPattern } from '@/components/load/pattern';
 
-const KINDS: readonly ImportKind[] = ['TIMETABLE_XLSX', 'DISCIPLINE_PROGRAM', 'CURRICULUM', 'ORDER_DOCUMENT'];
+const KINDS: readonly ImportKind[] = ['TIMETABLE_XLSX', 'DISCIPLINE_PROGRAM', 'CURRICULUM', 'ORDER_DOCUMENT', 'ACADEMIC_CALENDAR_XLSX'];
 const DAILY_BUDGET_USD = 2;
 const TEXT_MODEL = 'claude-haiku-5-5';
 const VISION_MODEL = 'claude-sonnet-5-5';
@@ -574,6 +576,7 @@ const KIND_HINT: Readonly<Record<ImportKind, string>> = {
   DISCIPLINE_PROGRAM: 'Програму дисципліни приймаємо у DOCX, DOC або PDF.',
   CURRICULUM: 'Навчальний план — PDF-скан, фото (JPG, PNG) або XLSX.',
   ORDER_DOCUMENT: 'Розпорядження — DOCX, PDF або фото (JPG, PNG).',
+  ACADEMIC_CALENDAR_XLSX: 'Графік освітнього процесу приймаємо лише як таблицю Excel (XLSX).',
 };
 
 interface ParseResult {
@@ -604,6 +607,8 @@ function parse(kind: ImportKind, fileName: string, semesterId: Uuid | null, opti
       };
     case 'CURRICULUM':
       return { report: curriculumReport(), draft: CURRICULUM_KI_7, ai: usesVision(kind, fileName) ? visionUsage(6120, 1730) : null };
+    case 'ACADEMIC_CALENDAR_XLSX':
+      return { ...academicCalendarDraft(options), ai: null };
   }
 }
 
@@ -1023,6 +1028,13 @@ function finishApply(job: StoredJob): StoredJob {
       result = { catalog, load: { ...load, unchanged: 0, ids: {} } };
       break;
     }
+    case 'ACADEMIC_CALENDAR_XLSX': {
+      // один крок `calendar`: те саме тіло, що й у перевірці, але вже з записом
+      const draft = job.draft as AcademicCalendarDraft;
+      const periodsToSend = draft.periods.map(({ cells: _cells, ...item }) => item);
+      result = { calendar: importCalendarPeriods({ academicYear: draft.academicYear, periods: periodsToSend, groupSemesters: draft.groupSemesters }, false) };
+      break;
+    }
   }
   return { ...job, status: 'APPLIED', result, updatedAt: new Date().toISOString() };
 }
@@ -1072,7 +1084,7 @@ function aiUsageToday(): AiUsageDto {
 
 // ───────────────────────── Обробники ─────────────────────────
 
-const OPTION_KEYS = ['sheet', 'versionName', 'semesterNumber', 'groupCodes', 'hoursPerWeek'] as const;
+const OPTION_KEYS = ['sheet', 'versionName', 'semesterNumber', 'groupCodes', 'hoursPerWeek', 'academicYear', 'skipCodes', 'skipGroups', 'titles', 'rooms'] as const;
 
 /**
  * Параметри завантаження — як JobOptions.from в importer: лише відомі ключі (інший → 400 на `options.<ключ>`),
@@ -1113,6 +1125,24 @@ function parseOptions(value: unknown, errors: Array<{ field: string; message: st
   if (hours !== undefined && hours !== null) {
     if (typeof hours !== 'number' || hours <= 0 || hours > 40) errors.push({ field: 'options.hoursPerWeek', message: 'Годин на тиждень — додатне число не більше 40.' });
     else options.hoursPerWeek = hours;
+  }
+  const year = raw.academicYear;
+  if (year !== undefined && year !== null) {
+    if (typeof year !== 'string' || !/^\d{4}\/\d{4}$/.test(year)) errors.push({ field: 'options.academicYear', message: 'Навчальний рік має вигляд 2026/2027.' });
+    else options.academicYear = year;
+  }
+  for (const key of ['skipCodes', 'skipGroups'] as const) {
+    const list = raw[key];
+    if (list === undefined || list === null) continue;
+    if (!Array.isArray(list) || list.some((item) => typeof item !== 'string' || !item.trim())) errors.push({ field: `options.${key}`, message: 'Масив непорожніх рядків.' });
+    else options[key] = [...new Set((list as string[]).map((item) => item.trim()))];
+  }
+  for (const key of ['titles', 'rooms'] as const) {
+    const map = raw[key];
+    if (map === undefined || map === null) continue;
+    if (typeof map !== 'object' || Array.isArray(map) || Object.values(map).some((v) => typeof v !== 'string')) {
+      errors.push({ field: `options.${key}`, message: 'Обʼєкт «код: текст», наприклад {"НС": "401"}.' });
+    } else options[key] = { ...(map as Record<string, string>) };
   }
   return options;
 }
@@ -1256,10 +1286,13 @@ export const handlers = [
       }
     }
     if (errors.length > 0) throw badRequest('Перевірте параметри.', errors);
-    const base = job.kind === 'DISCIPLINE_PROGRAM' ? programReport(groupIdsOf(options), job.semesterId) : job.report;
+    // графік перебудовує і чернетку, і звіт: невідомий код зникає, щойно вид додано чи код пропущено
+    const calendar = job.kind === 'ACADEMIC_CALENDAR_XLSX' ? academicCalendarDraft(options) : null;
+    const base = job.kind === 'DISCIPLINE_PROGRAM' ? programReport(groupIdsOf(options), job.semesterId) : (calendar?.report ?? job.report);
     const report = withReadiness(job.kind, base, options);
     const next: StoredJob = {
       ...job,
+      ...(calendar ? { draft: calendar.draft } : {}),
       options,
       report,
       summary: summaryOf(report),
@@ -1288,7 +1321,7 @@ export const handlers = [
     }
     if (!canApply(job)) throw businessRule('IMPORT_FAILED', 'Файл не вдалося розібрати — завантажте його ще раз.');
     const semesterId = body.semesterId ?? job.semesterId;
-    if (job.kind !== 'ORDER_DOCUMENT' && !semesterId) throw businessRule('SEMESTER_REQUIRED', 'Оберіть семестр, у який застосувати імпорт.');
+    if (job.kind !== 'ORDER_DOCUMENT' && job.kind !== 'ACADEMIC_CALENDAR_XLSX' && !semesterId) throw businessRule('SEMESTER_REQUIRED', 'Оберіть семестр, у який застосувати імпорт.');
     if ((job.kind === 'DISCIPLINE_PROGRAM' || job.kind === 'CURRICULUM') && !job.options?.groupCodes?.length) {
       throw businessRule('GROUPS_REQUIRED', 'Під час завантаження вкажіть групи, яким додати навантаження.');
     }

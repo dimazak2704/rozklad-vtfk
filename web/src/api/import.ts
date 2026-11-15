@@ -11,16 +11,19 @@ import { api } from './client';
 import { qk } from './queryKeys';
 import type {
   AiUsageDto,
+  Conflict,
   ControlForm,
   ImportJobDto,
   ImportJobStatus,
   ImportKind,
   ImportMapping,
+  IsoDate,
   MappingType,
   OrderKind,
   OrderRowType,
   Page,
   Parity,
+  PeriodEffect,
   ReportRow,
   RoomType,
   Uuid,
@@ -40,7 +43,11 @@ export type ReportRowType =
   | 'CURRICULUM'
   | 'CATALOG'
   | 'FILE'
-  | 'OPTIONS';
+  | 'OPTIONS'
+  /** Графік освітнього процесу: код клітинки без виду (додайте вид або пропустіть код). */
+  | 'PERIOD_KIND'
+  /** Графік освітнього процесу: період поза семестрами, ручна правка, конфлікт із заміною, підсумок. */
+  | 'PERIOD';
 
 export interface ImportReportRow extends Omit<ReportRow, 'type'> {
   type: ReportRowType;
@@ -178,6 +185,82 @@ export interface CurriculumDraft {
   warnings: string[];
 }
 
+/** Період з графіка освітнього процесу — так, як його шле importer у core (`POST /api/admin/import/calendar-periods`). */
+export interface CalendarImportPeriod {
+  /** `2026/2027|НС|2026-11-16|2026-11-27|3f9a1c2e` */
+  sourceKey: string;
+  kindCode: string;
+  title: string;
+  startsOn: IsoDate;
+  endsOn: IsoDate;
+  scope: 'ALL' | 'COURSES' | 'GROUPS';
+  groupCodes: string[] | null;
+  courses: number[] | null;
+  roomName: string | null;
+  studyMode: 'OFFLINE' | 'ONLINE' | 'MIXED' | null;
+  orderNote: string | null;
+  /** Лише в чернетці: клітинки графіка, звідки період («T61:U61»). */
+  cells?: string;
+}
+
+/** Тижні теорії й кількість іспитів групи в семестрі (`group_semester`). */
+export interface CalendarImportGroupSemester {
+  groupCode: string;
+  semesterNumber: 1 | 2;
+  theoryWeeks: number | null;
+  exams: number | null;
+}
+
+/** Відповідь core на `POST /api/admin/import/calendar-periods` (і пробну, і справжню). */
+export interface CoreCalendarImportResult {
+  dryRun: boolean;
+  academicYear: string;
+  canApply: boolean;
+  created: number;
+  updated: number;
+  unchanged: number;
+  deleted: number;
+  skippedManual: number;
+  periods: Array<{
+    sourceKey: string;
+    storedKey: string;
+    action: 'CREATE' | 'UPDATE' | 'UNCHANGED' | 'DELETE' | 'SKIP_MANUAL';
+    periodId: Uuid | null;
+    semesterId: Uuid;
+    kindCode: string;
+    startsOn: IsoDate;
+    endsOn: IsoDate;
+    groupCodes: string[];
+  }>;
+  manual: Array<{ storedKey: string; periodId: Uuid; title: string; differs: string[] }>;
+  manualOverlaps: Array<{ periodId: Uuid; kindCode: string; title: string; startsOn: IsoDate; endsOn: IsoDate; groupCodes: string[]; sourceKey: string | null }>;
+  /** Частини поза семестрами системи; `kept` — частини, які все ж збережено (у межах семестрів), може бути порожнім. */
+  outOfSemester: Array<{
+    sourceKey: string;
+    kindCode: string;
+    startsOn: IsoDate;
+    endsOn: IsoDate;
+    groupCodes: string[];
+    kept: Array<{ storedKey: string; semesterId: Uuid; startsOn: IsoDate; endsOn: IsoDate }>;
+  }>;
+  groupSemesters: { created: number; updated: number; unchanged: number; skipped: Array<{ groupCode: string; semesterNumber: number; reason: string }> };
+  conflicts: Conflict[];
+  lessons: { added: number; removed: number; updated: number };
+}
+
+/** Чернетка `ACADEMIC_CALENDAR_XLSX`: групи, коди клітинок, легенда кольорів, періоди й остання перевірка core. */
+export interface AcademicCalendarDraft {
+  academicYear: string;
+  sheet: string;
+  groups: Array<{ raw: string; code: string; row: number; theoryWeeks: Array<number | null>; exams: Array<number | null> }>;
+  codes: Array<{ code: string; kindCode: string | null; kindName: string | null; effect: PeriodEffect | null; cells: number }>;
+  legend: Array<{ code: string; color: string; title: string }>;
+  periods: CalendarImportPeriod[];
+  groupSemesters: CalendarImportGroupSemester[];
+  /** Останній dryRun core; null — core був недоступний. */
+  check: CoreCalendarImportResult | null;
+}
+
 /** Крок застосування, якому нічого було робити (наприклад, усі сутності каталогу вже є). */
 export interface SkippedStep {
   skipped: true;
@@ -211,13 +294,16 @@ export interface CoreLoadImportResult {
 
 /**
  * `result` застосованого завдання — відповіді core за кроками (importer зберігає кожен завершений крок):
- * TIMETABLE_XLSX — `catalog` + `timetable`, програма й навчальний план — `catalog` + `load`, розпорядження — `changes`.
+ * TIMETABLE_XLSX — `catalog` + `timetable`, програма й навчальний план — `catalog` + `load`, розпорядження — `changes`,
+ * графік освітнього процесу — `calendar`.
  */
 export interface ImportApplyResult {
   catalog?: CoreCatalogImportResult | SkippedStep;
   timetable?: CoreTimetableImportResult;
   load?: CoreLoadImportResult | SkippedStep;
   changes?: Record<string, unknown>;
+  /** ACADEMIC_CALENDAR_XLSX: відповідь core на масове оновлення календаря. */
+  calendar?: CoreCalendarImportResult;
 }
 
 export function isSkipped(step: object | undefined): step is SkippedStep {
@@ -229,7 +315,7 @@ export function isSkipped(step: object | undefined): step is SkippedStep {
  * будь-який інший ключ → 400 на `options.<ключ>`.
  */
 export interface ImportOptions {
-  /** TIMETABLE_XLSX: аркуш (типово «Розклад друк»), до 100 символів. */
+  /** TIMETABLE_XLSX: аркуш (типово «Розклад друк»); ACADEMIC_CALENDAR_XLSX: аркуш графіка (типово — перший з «ГРУПА»). До 100 символів. */
   sheet?: string;
   /** TIMETABLE_XLSX: назва чернетки версії, до 100 символів. */
   versionName?: string;
@@ -239,6 +325,16 @@ export interface ImportOptions {
   groupCodes?: string[];
   /** DISCIPLINE_PROGRAM: годин на тиждень, коли програма їх не каже (0 < x ≤ 40). */
   hoursPerWeek?: number;
+  /** ACADEMIC_CALENDAR_XLSX: навчальний рік «2026/2027» (типово — із заголовка графіка). */
+  academicYear?: string;
+  /** ACADEMIC_CALENDAR_XLSX: коди клітинок, які не імпортувати. */
+  skipCodes?: string[];
+  /** ACADEMIC_CALENDAR_XLSX: групи графіка, які не імпортувати (сирі назви чи коди). */
+  skipGroups?: string[];
+  /** ACADEMIC_CALENDAR_XLSX: назва періоду за кодом (типово НС → «Основи національного спротиву»). */
+  titles?: Record<string, string>;
+  /** ACADEMIC_CALENDAR_XLSX: аудиторія за кодом (типово НС → «401»). */
+  rooms?: Record<string, string>;
 }
 
 export const IMPORT_OPTION_LIMITS = {
@@ -259,7 +355,8 @@ export type TypedDraft =
   | { kind: 'TIMETABLE_XLSX'; draft: TimetableDraft }
   | { kind: 'DISCIPLINE_PROGRAM'; draft: ProgramDraft }
   | { kind: 'ORDER_DOCUMENT'; draft: OrderDraft }
-  | { kind: 'CURRICULUM'; draft: CurriculumDraft };
+  | { kind: 'CURRICULUM'; draft: CurriculumDraft }
+  | { kind: 'ACADEMIC_CALENDAR_XLSX'; draft: AcademicCalendarDraft };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -281,6 +378,10 @@ export function typedDraft(job: Pick<ImportJob, 'kind' | 'draft'>): TypedDraft |
     case 'CURRICULUM':
       return Array.isArray(draft.rows) && typeof draft.semester === 'number'
         ? { kind: job.kind, draft: draft as unknown as CurriculumDraft }
+        : null;
+    case 'ACADEMIC_CALENDAR_XLSX':
+      return Array.isArray(draft.periods) && Array.isArray(draft.groups)
+        ? { kind: job.kind, draft: draft as unknown as AcademicCalendarDraft }
         : null;
   }
 }
