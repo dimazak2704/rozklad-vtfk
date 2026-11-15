@@ -31,8 +31,9 @@ import ua.vtc.rozklad.notification.config.StandClock;
  * recipients), a {@code multipart/alternative} of plain text and HTML in UTF-8, our own {@code Message-ID}
  * (Spring keeps an explicitly set one), {@code References}/{@code In-Reply-To} for threading, and the headers
  * that stop vacation auto-replies (RFC 3834). Failures are classified for {@link EmailRetryPolicy}: a 5xx reply
- * about the recipient is permanent, a refused login is a configuration problem, everything else is retried.
- * The {@code MimeMessage} itself is never logged.
+ * to {@code RCPT TO} (the recipient) is permanent; a refused login or a refused sender ({@code MAIL FROM}, e.g. a
+ * relay that does not accept our {@code MAIL_FROM}) is a configuration problem and retried, so the queued letters
+ * wait for the fix instead of failing; everything else is retried. The {@code MimeMessage} itself is never logged.
  */
 public class SmtpMailTransport implements MailTransport {
 
@@ -66,6 +67,10 @@ public class SmtpMailTransport implements MailTransport {
             throw new MailTransportException("Лист не вдалося сформувати: " + e.getMessage(), true, false, null, e);
         } catch (MailSendException e) {
             Integer code = smtpCode(e);
+            if (refusesSender(e)) {
+                throw new MailTransportException("SMTP-сервер не прийняв адресу відправника (MAIL_FROM) або не "
+                        + "дозволяє надсилати з цього сервера" + reply(e), false, true, code, e);
+            }
             boolean recipientRefused = code != null && code >= 500 && code < 600 && refusesRecipient(e);
             throw new MailTransportException((recipientRefused ? "Сервер відхилив адресата" : "SMTP не прийняв лист")
                     + reply(e), recipientRefused, false, code, e);
@@ -137,16 +142,53 @@ public class SmtpMailTransport implements MailTransport {
         }
     }
 
-    private static boolean refusesRecipient(Throwable e) {
+    /*
+     * Angus Mail's SMTP exceptions are matched by name: angus-mail is only a runtime dependency here.
+     * SMTPAddressFailedException — RCPT TO refused; SMTPSenderFailedException — MAIL FROM refused;
+     * SMTPSendFailedException — any refused command (MAIL FROM, DATA, the end of data), nothing about the recipient.
+     */
+    private static final String ADDRESS_FAILED = "SMTPAddressFailedException";
+    private static final String SENDER_FAILED = "SMTPSenderFailedException";
+    private static final String SEND_FAILED = "SMTPSendFailedException";
+
+    /** {@code RCPT TO} refused: an address failure, or a plain {@link SendFailedException} listing invalid ones. */
+    static boolean refusesRecipient(Throwable e) {
         for (Throwable t : chain(e)) {
-            if (t instanceof SendFailedException failed
-                    && (failed.getInvalidAddresses() != null && failed.getInvalidAddresses().length > 0
-                    || t.getClass().getSimpleName().startsWith("SMTPAddressFailed")
-                    || t.getClass().getSimpleName().startsWith("SMTPSendFailed"))) {
+            String name = t.getClass().getSimpleName();
+            if (ADDRESS_FAILED.equals(name)) {
+                return true;
+            }
+            if (t instanceof SendFailedException failed && !SEND_FAILED.equals(name)
+                    && failed.getInvalidAddresses() != null && failed.getInvalidAddresses().length > 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** {@code MAIL FROM} refused: our own sender or relay setup is wrong, not the recipient. */
+    static boolean refusesSender(Throwable e) {
+        for (Throwable t : chain(e)) {
+            String name = t.getClass().getSimpleName();
+            if (SENDER_FAILED.equals(name)) {
+                return true;
+            }
+            String command = SEND_FAILED.equals(name) ? command(t) : null;
+            if (command != null && command.regionMatches(true, 0, "MAIL FROM", 0, "MAIL FROM".length())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The refused SMTP command ({@code getCommand()} of Angus' exceptions), or null. */
+    private static String command(Throwable smtp) {
+        try {
+            Object value = smtp.getClass().getMethod("getCommand").invoke(smtp);
+            return value instanceof String command ? command : null;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     private static Throwable findSmtpReply(Throwable e) {
