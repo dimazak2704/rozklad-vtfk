@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { pairsText } from '../format';
 import { formatDateRange } from '@/lib/date';
-import { LESSON_STATE, type LessonEntry } from '../model';
+import { isWaiting, LESSON_STATE, tallyEntries, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
@@ -16,8 +16,9 @@ function absenceCaption(absence: AbsenceDto): string {
 }
 
 /**
- * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, решта — нейтральні) і підпис
- * словами. Червоного тут немає: незроблене — це ще не помилка.
+ * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, ті, що чекають відповіді, — бурштинові,
+ * решта — нейтральні) і підпис словами. Червоного тут немає: незроблене — це ще не помилка. Пара, що чекає
+ * відповіді, не «вирішена»: викладач може змовчати, тож «усе вирішено» з галочкою — лише коли чекати нічого.
  */
 export function AbsenceProgress({ entries, status }: { entries: readonly LessonEntry[]; status?: LessonsStatus }) {
   // пари ще їдуть — тиха смужка тієї ж висоти, а не хибне «пар немає» чи «вирішено 1 з 3»
@@ -31,32 +32,40 @@ export function AbsenceProgress({ entries, status }: { entries: readonly LessonE
   }
   if (status === 'failed') return <span className="text-caption text-muted">пари не вдалося завантажити</span>;
   if (entries.length === 0) return <span className="text-caption text-muted">пар у цей період немає</span>;
-  const done = entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
-  const all = done === entries.length;
+  const { done, waiting, total } = tallyEntries(entries);
+  const waitingText = waiting > 0 ? `${waiting} ${waiting === 1 ? 'чекає' : 'чекають'} відповіді` : null;
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       {entries.length <= 8 ? (
         <span aria-hidden="true" className="flex shrink-0 gap-0.5">
           {entries.map((entry) => (
             <span
               key={`${entry.item.date}-${entry.item.lesson.id}`}
+              data-segment={LESSON_STATE[entry.state].needsAction ? 'open' : isWaiting(entry.state) ? 'waiting' : 'done'}
               className={cn(
                 'h-1 w-3 rounded-full',
-                LESSON_STATE[entry.state].needsAction ? 'bg-[var(--fill-track-future)]' : 'bg-[var(--fill-add)]',
+                LESSON_STATE[entry.state].needsAction
+                  ? 'bg-[var(--fill-track-future)]'
+                  : isWaiting(entry.state)
+                    ? 'bg-[var(--fill-change)]'
+                    : 'bg-[var(--fill-add)]',
               )}
             />
           ))}
         </span>
       ) : null}
-      {all ? (
+      {done === total ? (
         <span className="inline-flex items-center gap-1 text-caption text-add">
           <Check aria-hidden="true" className="size-3.5" />
           усе вирішено
         </span>
+      ) : done + waiting === total ? (
+        <span className="text-caption font-[550] text-change">{waitingText}</span>
       ) : (
         <span className="text-caption text-secondary">
-          вирішено <span className="figures">{done}</span> з <span className="figures">{entries.length}</span>
-          <span className="sr-only"> {plural(entries.length, PAIR_FORMS_GEN)}</span>
+          вирішено <span className="figures">{done}</span> з <span className="figures">{total}</span>
+          <span className="sr-only"> {plural(total, PAIR_FORMS_GEN)}</span>
+          {waitingText ? <span className="text-change"> · {waitingText}</span> : null}
         </span>
       )}
     </span>

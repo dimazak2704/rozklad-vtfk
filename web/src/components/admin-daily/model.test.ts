@@ -23,11 +23,13 @@ import {
   optionsHeading,
   optionTitle,
   pendingInfo,
+  pendingNeedsAttention,
   planActionLabel,
   poolIsEmpty,
   reasonForOption,
   requestForOption,
   rowChips,
+  tallyEntries,
   teacherAnswered,
   toEntries,
 } from './model';
@@ -68,6 +70,32 @@ const option = (patch: Partial<ChangeOption>): ChangeOption => ({
 });
 
 const ctx = { date: '2026-11-09', lesson, absenceId: 'a-1', reasonCode: 'ABSENT' as const, reasonText: null };
+
+describe('пари, що чекають відповіді', () => {
+  it('рахуються окремо від вирішених і від тих, що потребують дії', () => {
+    expect(tallyEntries([{ state: 'confirmed' }, { state: 'pending' }, { state: 'uncovered' }, { state: 'applied' }])).toEqual({
+      done: 2,
+      waiting: 1,
+      open: 1,
+      total: 4,
+    });
+  });
+
+  it('потребують уваги, коли до строку відповіді година чи менше або строк минув, але не після пари', () => {
+    const now = new Date('2026-11-20T08:00:00Z'); // 10:00 за Києвом
+    const waiting = (deadline: string, endsAt = '12:50') => ({
+      state: 'pending' as const,
+      change: { confirmDeadline: deadline },
+      item: { date: '2026-11-20', lesson: { endsAt } },
+    });
+    expect(pendingNeedsAttention(waiting('2026-11-20T08:50:00Z'), now)).toBe(true);
+    expect(pendingNeedsAttention(waiting('2026-11-20T07:50:00Z'), now)).toBe(true);
+    expect(pendingNeedsAttention(waiting('2026-11-20T10:00:00Z'), now)).toBe(false);
+    // пара вже минула — просити запізно, підганяти нічого
+    expect(pendingNeedsAttention(waiting('2026-11-20T07:50:00Z', '09:30'), now)).toBe(false);
+    expect(pendingNeedsAttention({ ...waiting('2026-11-20T08:50:00Z'), state: 'confirmed' as const }, now)).toBe(false);
+  });
+});
 
 describe('стан пари', () => {
   it('скасоване рішення — знову без рішення, відмова — потрібен інший варіант', () => {

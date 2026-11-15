@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AbsenceDto, DashboardAlert } from '@/api/types';
+import type { AbsenceDto, ChangeDto, DashboardAlert } from '@/api/types';
 import { FIXTURE_LESSON, FIXTURE_TEACHERS } from '@/mocks/fixtures/lesson-options';
 import { renderWithProviders } from '@/test/render';
 import type { LessonEntry } from '../model';
@@ -91,5 +91,29 @@ describe('«Що потребує рішення»', () => {
 
     renderWithProviders(<NeedsList date="2026-11-09" pairsKnown={false} calm="—" alerts={[uncoveredAlert]} entries={[]} />);
     expect(screen.getByRole('link', { name: '2 пари без рішення' })).toBeInTheDocument();
+  });
+
+  it('пара, що чекає відповіді, — тут, коли до строку менше години; із запасом часу — ні', () => {
+    const waiting = (id: string, deadline: string, pair: number, startsAt: string, endsAt: string): LessonEntry => ({
+      ...entry({ id, pair, startsAt, endsAt }, 'pending'),
+      change: { confirmDeadline: deadline } as ChangeDto,
+    });
+    renderWithProviders(
+      <NeedsList
+        date="2026-11-09"
+        pairsKnown
+        calm="—"
+        alerts={[]}
+        entries={[
+          // 12:00 за Києвом: строк о 12:50 — за 50 хв, о 15:00 — за 3 год
+          waiting('soon', '2026-11-09T10:50:00Z', 5, '13:30', '14:30'),
+          waiting('later', '2026-11-09T13:00:00Z', 6, '14:40', '15:40'),
+        ]}
+      />,
+    );
+    const links = screen.getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveTextContent(/Чекає відповіді · ще\s50\sхв/);
+    expect(links[0]).toHaveAttribute('href', '/admin/changes?date=2026-11-09&lesson=soon');
   });
 });
