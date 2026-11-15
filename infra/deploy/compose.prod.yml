@@ -273,11 +273,27 @@ services:
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       # WEBHOOK mode registers this URL with Telegram (Caddy routes /api/* through the gateway)
       TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-https://${DOMAIN:?}/api/notify/telegram/webhook}
+      # e-mail (docs/DEPLOY.md section 10a): an empty MAIL_HOST keeps the channel off. These replace the
+      # development Mailpit settings of the base file.
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-true}
+      MAIL_SSL: ${MAIL_SSL:-false}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      MAIL_TRUSTED_DOMAINS: ${MAIL_TRUSTED_DOMAINS:-vtc.vn.ua}
+      MAIL_ALLOW_REAL_SMTP: "false"
       # small heap on purpose: LibreOffice runs in the same container next to the JVM
       JAVA_TOOL_OPTIONS: -Xmx${NOTIFICATION_HEAP:-320m}
     stop_grace_period: 30s
     mem_limit: ${NOTIFICATION_MEM_LIMIT:-896m}
     logging: *logging
+
+  # the development SMTP catcher never runs on the server (the app profile does not include dev-only)
+  mailpit:
+    profiles: !override [dev-only]
 
   gateway:
     image: ${IMAGE_PREFIX:-localhost/rozklad}/gateway:${IMAGE_TAG:-prod}

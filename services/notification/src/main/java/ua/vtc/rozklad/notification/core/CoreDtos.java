@@ -190,6 +190,31 @@ public final class CoreDtos {
     }
 
     /**
+     * {@code GET /api/internal/mail-recipients} item: the facts of one people account core reads from the sign-in
+     * service. {@code email} is the account's own address (nullable: accounts created by invite have none),
+     * {@code googleLinked}: the account signs in with Google, {@code teacherId}: the teacher linked to the account.
+     * The verification policy of the e-mail channel is applied in notification.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MailRecipient(UUID accountId, UUID teacherId, String displayName, String username, String email,
+                                boolean googleLinked, List<String> roles, boolean enabled, boolean revoked,
+                                boolean demo) {
+
+        public MailRecipient {
+            roles = roles == null ? List.of() : List.copyOf(roles);
+        }
+
+        /** A person who may get letters at all: enabled, not revoked, not a demo account. */
+        public boolean active() {
+            return accountId != null && enabled && !revoked && !demo;
+        }
+
+        public boolean hasRole(String role) {
+            return roles.contains(role);
+        }
+    }
+
+    /**
      * Subset of {@code ChangeDto} returned by {@code POST /api/internal/changes/{id}/reply}: the status after
      * the answer, {@code approvalMode} ({@code AUTO|CONFIRM|NOTIFY}) and the recorded {@code teacherAnswer}.
      */

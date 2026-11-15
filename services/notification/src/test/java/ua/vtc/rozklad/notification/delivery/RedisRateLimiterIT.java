@@ -6,7 +6,7 @@ import java.time.Duration;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import ua.vtc.rozklad.notification.shared.TokenBuckets;
 import ua.vtc.rozklad.notification.support.IntegrationTest;
 import ua.vtc.rozklad.notification.support.MutableClock;
 
@@ -14,7 +14,7 @@ import ua.vtc.rozklad.notification.support.MutableClock;
 class RedisRateLimiterIT extends IntegrationTest {
 
     @Autowired
-    private StringRedisTemplate redis;
+    private TokenBuckets buckets;
 
     private final MutableClock time = new MutableClock();
 
@@ -67,7 +67,7 @@ class RedisRateLimiterIT extends IntegrationTest {
     }
 
     private RedisRateLimiter limiter() {
-        return new RedisRateLimiter(redis, time, RetryPolicyTest.properties(8, Duration.ofSeconds(2),
+        return new RedisRateLimiter(buckets, time, RetryPolicyTest.properties(8, Duration.ofSeconds(2),
                 Duration.ofMinutes(10)));
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.AbsenceSource;
+import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.events.AbsenceReported;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.notification.binding.ChatBinding;
@@ -19,10 +20,19 @@ import ua.vtc.rozklad.notification.delivery.DeliveryPurpose;
 import ua.vtc.rozklad.notification.delivery.OutboundDraft;
 import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
+import ua.vtc.rozklad.notification.email.EmailKind;
+import ua.vtc.rozklad.notification.email.EmailNotices;
+import ua.vtc.rozklad.notification.email.MailModels.AbsenceMail;
+import ua.vtc.rozklad.notification.email.MailModels.GenerationMail;
+import ua.vtc.rozklad.notification.email.MailModels.Penalty;
+import ua.vtc.rozklad.notification.email.MailTexts;
 import ua.vtc.rozklad.notification.text.UaDates;
 import ua.vtc.rozklad.notification.text.WebLinks;
 
-/** Service messages for admin chats: new absences and finished timetable generations. */
+/**
+ * Service messages for admin chats: new absences and finished timetable generations. The dispatchers' e-mail
+ * intents of the same events are written here too (absences only once somebody switched them on).
+ */
 @Service
 public class AdminNotices {
 
@@ -31,11 +41,13 @@ public class AdminNotices {
     private final ChatBindings bindings;
     private final Outbox outbox;
     private final WebLinks links;
+    private final EmailNotices mail;
 
-    public AdminNotices(ChatBindings bindings, Outbox outbox, WebLinks links) {
+    public AdminNotices(ChatBindings bindings, Outbox outbox, WebLinks links, EmailNotices mail) {
         this.bindings = bindings;
         this.outbox = outbox;
         this.links = links;
+        this.mail = mail;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -47,6 +59,9 @@ public class AdminNotices {
                 + "\nДжерело: " + source(event.source())
                 + "\nПідберіть заміни." + links.adminChanges(event.dateFrom());
         send(text, DeliveryPurpose.ABSENCE_ADMIN, event.eventId(), "absence");
+        mail.toAdmins(EmailKind.ABSENCE_REPORTED, new AbsenceMail(event.absenceId(), teacher, event.dateFrom(),
+                        event.dateTo(), pairs(event.pairs()), source(event.source())), event.absenceId(),
+                event.eventId(), EmailNotices.eventKey(event.eventId(), "absence"));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -70,6 +85,16 @@ public class AdminNotices {
         };
         if (text != null) {
             send(text, DeliveryPurpose.GENERATION_ADMIN, event.eventId(), "generation");
+            List<Penalty> penalties = MailTexts.topPenalties(event.analysis().stream()
+                    .filter(score -> !Boolean.TRUE.equals(score.bonus()))
+                    .map(score -> new Penalty(score.constraint(), score.matchCount()))
+                    .toList());
+            // зупинена задача з розкладом: core зберіг найкращий варіант, як і розв'язану
+            boolean keptBest = event.status() == GenerationStatus.CANCELLED && !event.assignments().isEmpty();
+            mail.toAdmins(EmailKind.GENERATION_FINISHED, new GenerationMail(event.jobId(), event.status().name(),
+                            Math.abs(event.hardScore()), Math.abs(event.softScore()), penalties, event.error(),
+                            keptBest, event.stopReason() == null ? null : event.stopReason().name()),
+                    event.jobId(), event.eventId(), EmailNotices.eventKey(event.eventId(), "generation"));
         }
     }
 

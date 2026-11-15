@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import ua.vtc.rozklad.contracts.OrderKind;
 import ua.vtc.rozklad.contracts.OrderStatus;
 import ua.vtc.rozklad.contracts.events.OrderPayload;
 import ua.vtc.rozklad.contracts.events.OrderPayload.AffectedTeacher;
@@ -30,6 +31,9 @@ import ua.vtc.rozklad.notification.documents.DocumentPrerenderer;
 import ua.vtc.rozklad.notification.documents.OrderDocuments;
 import ua.vtc.rozklad.notification.documents.PublicHistoryGate;
 import ua.vtc.rozklad.notification.documents.PublishedOrders;
+import ua.vtc.rozklad.notification.email.EmailKind;
+import ua.vtc.rozklad.notification.email.EmailNotices;
+import ua.vtc.rozklad.notification.email.MailModels.OrderMail;
 import ua.vtc.rozklad.notification.text.WebLinks;
 
 /**
@@ -51,10 +55,11 @@ public class OrderDistribution {
     private final CoreQueries queries;
     private final PublicHistoryGate history;
     private final WebLinks links;
+    private final EmailNotices mail;
 
     public OrderDistribution(PublishedOrders publishedOrders, OrderDocuments documents,
                              DocumentPrerenderer prerenderer, ChatBindings bindings, Outbox outbox,
-                             CoreQueries queries, PublicHistoryGate history, WebLinks links) {
+                             CoreQueries queries, PublicHistoryGate history, WebLinks links, EmailNotices mail) {
         this.publishedOrders = publishedOrders;
         this.documents = documents;
         this.prerenderer = prerenderer;
@@ -63,6 +68,7 @@ public class OrderDistribution {
         this.queries = queries;
         this.history = history;
         this.links = links;
+        this.mail = mail;
     }
 
     /**
@@ -126,6 +132,13 @@ public class OrderDistribution {
         for (AffectedTeacher teacher : order.affectedTeachers()) {
             Optional<ChatBinding> chat = bindings.teacherChat(teacher.teacherId());
             List<Item> rows = OrderRows.forTeacher(order, teacher.name());
+            if (!rows.isEmpty()) {
+                // opt-in: useful mostly to teachers without Telegram
+                mail.toTeacher(EmailKind.ORDER_TEACHER, teacher.teacherId(), new OrderMail(order.id(), order.number(),
+                                order.kind() == OrderKind.AMENDMENT, order.date(), order.parityLabel(),
+                                rows.stream().map(OrderTexts::plain).toList()), order.id(), null, null,
+                        event.eventId(), EmailNotices.eventKey(event.eventId(), "teacher:" + teacher.teacherId()));
+            }
             if (chat.isEmpty()) {
                 withoutTelegram.add(teacher.name());
                 continue;

@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * Stateless resource server (ARCHITECTURE.md §6). Path rules: public API and health are open,
  * {@code /api/admin/**} → ADMIN (import apply also SERVICE_IMPORTER), {@code /api/me/**} → TEACHER or
  * ADMIN, SSE → ADMIN or TEACHER. The internal API is split per service account: the bot's endpoints
- * (teacher replies, absences, teachers) → SERVICE_NOTIFICATION, the catalog snapshot →
+ * (teacher replies, absences, teachers, mail recipients) → SERVICE_NOTIFICATION, the catalog snapshot →
  * SERVICE_IMPORTER, any other {@code /api/internal/**} is denied, as is everything else. The plain
  * SERVICE role opens nothing here, so a leaked importer token cannot answer for a teacher.
  * Ownership checks (a teacher touches only own data) live in the services.
@@ -48,7 +48,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole(Roles.ADMIN)
                         .requestMatchers("/api/me", "/api/me/**").hasAnyRole(Roles.TEACHER, Roles.ADMIN)
                         .requestMatchers("/api/internal/changes/**", "/api/internal/absences",
-                                "/api/internal/absences/**", "/api/internal/teachers/**")
+                                "/api/internal/absences/**", "/api/internal/teachers/**",
+                                "/api/internal/mail-recipients")
                         .hasRole(Roles.SERVICE_NOTIFICATION)
                         .requestMatchers("/api/internal/catalog/**").hasRole(Roles.SERVICE_IMPORTER)
                         .requestMatchers("/api/internal/**").denyAll()

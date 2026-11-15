@@ -1,8 +1,8 @@
-# notification — Telegram bot, delivery and order documents
+# notification — Telegram bot, e-mail, delivery and order documents
 
 Service `services/notification` (port 8084, package `ua.vtc.rozklad.notification`). It owns the
-Telegram bot @scheduler_vtfk_bot, chat bindings, the outbound message queue with rate limits and the
-order documents (DOCX → PDF → PNG). It never writes core data: answers and absences go to core's
+Telegram bot @scheduler_vtfk_bot, chat bindings, the outbound message queue with rate limits, the e-mail channel
+(§4a) and the order documents (DOCX → PDF → PNG). It never writes core data: answers and absences go to core's
 internal REST, schedules are read from core's public REST.
 
 ## 1. Packages
@@ -19,12 +19,14 @@ internal REST, schedules are read from core's public REST.
 | `documents` | `OrderDocxRenderer` (POI, college layout), `LibreOfficeConverter`, `PdfPngRenderer` (PDFBox), `OrderDocuments` (cache, media for photos), `PublishedOrders`, `DocumentPrerenderer`, `web/DocumentsController` |
 | `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache: meta 30 s, groups/teachers 1 h — an id missing from the cached list reloads it (at most once a minute per catalog, marker `<catalog>:reload`), so a teacher or group created a minute ago gets a binding code; the cached list is replaced only after a successful load, so core being down never empties it; schedules 10 min under a generation counter), error mapping |
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
-| `text` | `Html` (escape/split), `UaDates`, `Plurals`, `WebLinks` |
+| `text` | `Html` (escape/split/`toPlain`), `UaDates`, `Plurals`, `WebLinks` |
+| `email` | the e-mail channel (§4a): `EmailKind` (kinds and defaults), `EmailNotices` (the only API other packages call: writes an intent), `EmailExpander` (intent → letters: recipients from core, settings, verified address, render, settle), `EmailWorker` (expand, then send: stale/obsolete, rate guard, transport, retry), `EmailRetryPolicy`, `EmailRateGuard` (Redis buckets + daily cap), `EmailRelevance` (port; `substitution.SubstitutionMailRelevance`), `MailTransport` → `SmtpMailTransport` / `DisabledMailTransport`, `MailTexts` + `MailTemplates` (`resources/mail/letter.html`, `letter.txt`), `MailLinks`, `MailHeaders`, `MailAddresses` (mask, parse, verification policy), `EmailRecipients` (core + Redis cache), `EmailPreferences`, `EmailSettings`, `EmailHousekeeping`, `MailChannel`; `web/EmailPreferencesController`, `web/EmailAdminController`; config `MailChannelProperties`, `MailConfig`, `MailSafetyGuard` |
+| `shared` | `ChatIds`, `Ids`, `PageResponse`, `TokenBuckets` (the Lua token-bucket script of Telegram and e-mail) |
 
 Tables (Flyway `V2`–`V7`): `chat_binding`, `binding_code`, `outbound_message`, `published_order`,
 `substitution_request` (`V6`: `no_telegram_at`, `admin_warned_at`; `V7`: `mode`, `teacher_answer`, `change_kind`,
 `original_discipline_name`, `reason_code`, purpose `SUBSTITUTION_NOTICE`), `substitution_message` (+ `processed_event`
-from `V1`).
+from `V1`). `V9`: `email_notice` (intents), `email_message` (letters = the letter log), `email_preference`.
 
 ## 2. REST (CONTRACTS §6)
 
@@ -43,6 +45,11 @@ from `V1`).
 | `POST /api/documents/orders/render?format=docx\|pdf\|png` body `OrderPayload` | ADMIN | draft preview, `no-store`; 400 `errors[format]` |
 | `GET /api/notify/events/dead-letters` | ADMIN | `{queue, count}`: events in `notification.q.events.dlq`; 503 RabbitMQ unreachable (§5) |
 | `POST /api/notify/events/dead-letters/replay` | ADMIN | `{replayed}`: moves the messages now in the DLQ back to the consumer, each once (§5) |
+| `GET /api/notify/email/me` | TEACHER, ADMIN | the caller's own e-mail settings (§4a): `{channel:{enabled, reason?}, address?, addressStatus: VERIFIED\|UNVERIFIED\|MISSING, verifiedBy?: GOOGLE\|TRUSTED_DOMAIN, enabled, version?, kinds:[{kind, audience, label, description, enabled, defaultEnabled, switchable}]}`; the account is the token's `sub`, teacher kinds for an account linked to a teacher, dispatcher kinds for ADMIN; a kind's `enabled` is the person's choice and stays as it is while the master `enabled` is off (the page shows it greyed out); 503 core down |
+| `PUT /api/notify/email/me` `{enabled, kinds?: {KIND: bool}, version?}` | TEACHER, ADMIN | 200 the same DTO; 400 `errors[enabled]`, `errors[kinds.X]` (unknown kind); 422 `email-kind-not-allowed` (another audience's kind, or one that cannot be switched); 409 outdated `version` |
+| `POST /api/notify/email/me/test` | TEACHER, ADMIN | 202 `{status: QUEUED}`: a test letter to the caller's own verified address (a dispatcher's links back to `/admin/notifications`); 422 `email-account-inactive` (disabled, revoked or demo account: the worker would drop it) / `email-missing` / `email-not-verified`; 503 `email-disabled`; 429 `email-test-limit` (3 per hour; Redis down → no limit, logged) |
+| `GET /api/notify/email/status` | ADMIN | `{enabled, mode: OFF\|DEV_CATCHER\|SMTP, host, port, from, replyTo, tls: STARTTLS\|SSL\|NONE, problem?}` — never the username or password; `problem`: why the channel is off, or the last SMTP failure of the past 15 minutes |
+| `GET /api/notify/email/deliveries?status&kind&page&size` | ADMIN | page `{items,page,size,total}` of `{id, kind, to (masked «k•••@vtc.vn.ua»), accountName, subject, status QUEUED/RETRYING/SENT/FAILED/SUPERSEDED, attempts, error, createdAt, sentAt, nextAttemptAt}`; newest first; size ≤ 200 |
 | `POST /api/notify/telegram/webhook` | open | WEBHOOK mode only (404 otherwise); `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET` (403). Both are checked before the body is read; at most 256 KB is read (400 `errors[body]` «Оновлення Telegram завелике.»), so an anonymous client cannot make the service buffer large bodies |
 
 PDF/PNG without LibreOffice: 503 ProblemDetail, title «Конвертер PDF недоступний» (DOCX still works).
@@ -268,6 +275,98 @@ another teacher or to none) is FAILED «Неактуальне: заміну п�
 * Retention: SENT/FAILED rows 30 days, processed events 30 days, expired codes 7 days, substitution requests 60
   days after the lesson (03:40 Kyiv).
 
+## 4a. E-mail
+
+Letters to the corporate mailboxes (owner's request 15.11.2026), **besides** Telegram: e-mail never replaces a
+Telegram message, never goes to group chats or subscribers (they have no accounts) and only to a person's own
+account. Empty `MAIL_HOST` = the channel is off: no intent is written, nothing is sent.
+
+**Kinds** (`EmailKind`; defaults live there, a person's deviations in `email_preference.overrides`):
+
+| Kind | To | Trigger | Default |
+|---|---|---|---|
+| `SUBSTITUTION_NOTICE` | teacher | `confirmation-requested` NOTIFY, the change is new to him (or came back to him) | on |
+| `SUBSTITUTION_REQUEST` | teacher | the same in CONFIRM mode (with «Відповісти до») | on |
+| `SUBSTITUTION_CHANGED` | teacher | what he reads changed (`confirmation-requested` with other details, `details-changed`): «Нова аудиторія: 214 (була 6)»; only after a letter of that change reached him | on |
+| `SUBSTITUTION_CANCELLED` | teacher | `status-changed` CANCELLED, or the change went to another teacher (to the previous one); only after a letter of that change reached him | on |
+| `SUBSTITUTION_REMINDER` | teacher | the deadline round (`remindOverdue` or core's re-sent request with the same passed deadline, one key `reminder:{change}:{deadline}:mail`) | on |
+| `ORDER_TEACHER` | teacher | `order.published`: his rows (the Telegram matching by name) + PDF link | off |
+| `SECURITY_TELEGRAM_RELINKED` | teacher | his Telegram chat was taken over by a newer code (`BindingFlow`); one letter per takeover, also when the same chat later takes over another teacher | always |
+| `GENERATION_FINISHED` | dispatchers | `generation.completed`: SOLVED (scores, why it stopped, «Найбільше порушень:» with the top 5 penalties, rewards excluded); hard > 0 is «з конфліктами» with «Перегляньте конфлікти перед застосуванням», as the web panel's «Готово з конфліктами»; CANCELLED with assignments = stopped, best timetable kept (scores and penalties as above), without = nothing kept; FAILED (the reason without a Java class name); `/admin/generation?job=` | on |
+| `SUBSTITUTION_DECLINED` | dispatchers | `status-changed` DECLINED | on |
+| `SUBSTITUTION_OBJECTION` | dispatchers | `teacher-replied` «Не можу» after the order | on |
+| `REQUEST_OVERDUE` | dispatchers | `remindOverdue` (CONFIRM, deadline passed, lesson not over) | on |
+| `ABSENCE_REPORTED` | dispatchers | `absence.reported` (never the reason) | off |
+| `TEACHER_UNREACHABLE` | dispatchers | `reportTeachersWithoutTelegram` (one per teacher and date) | off |
+
+The every-minute deadline jobs run while either channel is on. With the bot off they write only the e-mail
+intents: no Telegram reminder or admin row is queued (nothing would send it, and a bot switched back on within the
+day would send it late).
+
+Not offered: echoes of the teacher's own answers, «внесено до розпорядження», the morning digest, binding codes,
+order summaries for the dispatcher. «Generation finished» goes to every dispatcher who keeps it on (the job's
+requester is not in `generation.completed`). A job the watchdog of core fails publishes no `generation.completed`,
+so neither Telegram nor e-mail hears about it (generator lane).
+
+**Two steps.** Event handlers and the every-minute jobs only write an **intent** (`email_notice`, `EmailNotices`)
+in their own transaction — the one that marks the event processed, so a redelivered or replayed event queues
+nothing twice and a failing handler dead-letters the whole event as before. No HTTP call there. `EmailWorker` (own
+thread, every 2 s, whenever the channel is on — the bot may be off) then **expands** due intents: recipients from
+core `GET /api/internal/mail-recipients?teacherId|accountId|role=ADMIN` (CONTRACTS §4, cached 5 min in Redis),
+active people only (enabled, not revoked, not demo), the kind switched on, a **verified** address
+(`MailAddresses.verify`: Google sign-in, or a domain of `MAIL_TRUSTED_DOMAINS`); one rendered letter per person in
+`email_message` (dedup `{intent}:{account}`). Skipped people are counted and logged by account id
+(`no_address`, `unverified`, `opted_out`), never by address. core unreachable → the intent is RETRYING with
+backoff; Telegram is not affected. Then it **sends** due letters.
+
+**Anti-noise.** Substitution letters wait `app.mail.settle-delay` (2 min). A newer letter of the same change to the
+same person replaces the ones still waiting (SUPERSEDED): a room change within the delay gives one letter of the
+first kind with the final room, a cancellation within the delay gives nothing. «Reached him» counts only letters
+sent since the last cancellation he got, so a change that went to another teacher and came back, then was cancelled
+within the delay, sends no cancellation. The person's settings are checked against the kind the letter is finally
+written as: a change folded into a waiting notice follows the notice setting. Right before sending,
+`SubstitutionMailRelevance` drops a notice, request or reminder the change no longer needs (answered in Telegram
+during the delay, cancelled, reassigned) and a changed letter of a change no longer in force — FAILED «Неактуальне:
+…», like Telegram; every substitution letter is dropped once the lesson is over.
+
+**Sending** (`SmtpMailTransport` over Spring's `JavaMailSender`, built only when `MAIL_HOST` is set; no
+`spring.mail.*` auto-configuration and no mail health indicator, so an SMTP outage never makes the service
+unready): one `To`, `multipart/alternative` (plain text + HTML, UTF-8), `From` = `MAIL_FROM`, optional `Reply-To`,
+`Message-ID <{letter}@{domain}>`, `In-Reply-To`/`References <change-{id}@{domain}>` for the letters of one change,
+`Auto-Submitted: auto-generated`, `X-Auto-Response-Suppress: All`, `List-Unsubscribe: <…/me/notifications>` (the
+signed-in settings page; no one-click token). Every header value from data goes through `MailHeaders.clean` (no
+CR/LF), recipients are parsed strictly. Templates: Thymeleaf with SpEL, standalone (`MailConfig`), one
+`mail/letter.html` (every value through `th:text`, inline CSS, ≤ 600 px, no images or remote resources) and one
+`mail/letter.txt` for every kind; the wording is `MailTexts` (the Telegram details in plain text). Links come from
+`PUBLIC_WEB_URL` (`MailLinks`; local links are fine in e-mail). Wording: subjects read «what: which lesson»
+(«Вам поставили заміну: пн, 16 листопада, 3 пара, 4КІ1»; dispatcher letters put the teacher first), the greeting
+is a plain «Добрий день!» (an account name is a nominative full name or «Адміністратор»), teacher letters show the
+facts right after it, dispatcher letters never assume the teacher's gender. No letter says whether a reply is
+read: with `MAIL_REPLY_TO` a reply reaches that mailbox, without it nobody; the answer itself goes through the
+cabinet or Telegram, as the hints say. The test letter has no `List-Unsubscribe` (nothing to unsubscribe from).
+
+**Retries** (`EmailRetryPolicy`): connection problems, timeouts, 4xx, a 5xx after `DATA`, a refused login or a
+refused sender (`MAIL FROM`, e.g. a relay that does not accept `MAIL_FROM`; both logged once a minute as a
+configuration problem) → 30 s · 2^(n-1) up to 30 min, FAILED after 6 attempts; a 5xx refusal of the recipient
+(`RCPT TO`) or a letter that cannot be built → FAILED at once; not sent within 12 h → FAILED as stale. **Limits** (`EmailRateGuard`,
+Redis, keys hold a SHA-256 prefix of the address): 2 letters/s overall, 20/hour per address with a burst of 5 (wait,
+no attempt spent), 60 per address and day (then FAILED «Перевищено денний ліміт листів…»); Redis down → letters go
+without limits (logged). Metrics: `notification.emails{outcome=sent|retry|failed|deferred|stale|obsolete|superseded|
+not_needed|no_address|unverified|opted_out|recipients_unavailable}`, gauge `notification.emails.pending`. Retention:
+SENT/FAILED/SUPERSEDED letters and finished intents 30 days (nightly housekeeping).
+
+**Development stand.** `infra/docker-compose.yml` runs Mailpit (`axllent/mailpit`, SMTP 1025, UI
+`http://127.0.0.1:8025`) and sets every `MAIL_*` of notification itself (so a real `MAIL_*` of a developer's `.env`
+never reaches the stand; the demo domain `rozklad.local` is trusted there). `MailSafetyGuard`: with a plain-http
+`PUBLIC_WEB_URL` the channel works only with a local catcher (`mailpit`, `localhost`, loopback) unless
+`MAIL_ALLOW_REAL_SMTP=true`; https with a catcher logs a warning. Tests use `FakeMailTransport`;
+`SmtpMailTransportIT` runs Mailpit in Docker.
+
+**Addresses are personal data.** Logs and the admin log mask them (`k•••@vtc.vn.ua`); only the owner sees his own
+address (`GET /api/notify/email/me`). The address is the account's sign-in address from `auth` (through core),
+never the catalog's `teacher.email`. Accounts created by an invite have none: their page says
+«На вашому обліковому записі немає e-mail…» (editing it in «Доступи» is a later step).
+
 ## 5. Events (`notification.q.events`, DLQ `notification.q.events.dlq`)
 
 The payload type comes from the routing key. Unreadable messages are rejected to the DLQ; handler failures are
@@ -343,7 +442,15 @@ is rendered once per order no matter how many chats receive it.
 | `app.bot.code-ttl`, `app.bot.personal-code-ttl` (properties) | `24h`, `15m` | life of binding codes: group chats and subscribers; a teacher's chat and service chats |
 | `app.bot.absence-parses-per-minute`, `app.bot.absence-parses-per-day` (properties) | `5`, `20` | free-text absences of one teacher sent to the importer's parser |
 | `EVENTS_LISTENER_ENABLED` | `true` | `false` = do not consume the shared queue (manual runs) |
-| `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them) |
+| `PUBLIC_WEB_URL` | `http://localhost:5180` | links in messages (omitted for local hosts — Telegram rejects them; kept in e-mail) |
+| `MAIL_HOST`, `MAIL_PORT` | empty, `587` | SMTP server; empty = no e-mail (§4a). Compose stand: `mailpit`, `1025` |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | SMTP AUTH (Google Workspace: service mailbox + app password); empty username = no AUTH |
+| `MAIL_STARTTLS`, `MAIL_SSL` | `true`, `false` | STARTTLS required (587) / implicit TLS (465); the server identity is checked |
+| `MAIL_FROM`, `MAIL_REPLY_TO` | empty | `From` (required when `MAIL_HOST` is set: the service does not start otherwise), optional `Reply-To` |
+| `MAIL_TRUSTED_DOMAINS` | `vtc.vn.ua` | an account address on these domains counts as verified without Google sign-in; empty = Google only |
+| `MAIL_ALLOW_REAL_SMTP` | `false` | a development stand (http web URL) may use a real SMTP server only with `true` |
+| `MAIL_MESSAGE_ID_DOMAIN`, `MAIL_WORKER_ENABLED` | the domain of `MAIL_FROM`, `true` | right part of `Message-ID`; the worker |
+| `app.mail.settle-delay`, `app.mail.max-attempts`, `app.mail.max-age`, `app.mail.recipient-per-day` (properties) | `2m`, `6`, `12h`, `60` | §4a |
 
 Only ONE instance may long-poll a token (Telegram answers 409 to a second one); use WEBHOOK for replicas.
 
@@ -446,6 +553,14 @@ mvn -q -pl services/notification -am verify          # 83 unit tests + 108 Testc
   row selection/teacher matching, texts, command/menu parsing, AI validation and the calendar, the OkHttp
   adapter against a fake Bot API (429, migration, not modified, network, token never in messages),
   `Update` JSON mapping.
+* E-mail: `MailTemplatesTest` (every kind: subject, HTML and text, escaping, links, footer), `MailAddressesTest`
+  (mask, strict parsing, header cleaning, verification policy), `EmailChannelRulesTest` (defaults, preferences,
+  retry policy, the development-stand guard, sender checks); `EmailFlowIT` (every hook end to end with
+  `FakeMailTransport`: settle and replacement, relevance, settings, unverified/missing address logged without it,
+  core down → retry, duplicate event → one letter, SMTP retry and refusal, dispatcher letters, opt-in kinds, the
+  security letter), `EmailPreferencesApiIT` (the REST API), `EmailRateGuardIT` (Redis limits), `SmtpMailTransportIT`
+  (Mailpit in Docker: multipart/alternative, UTF-8 subject, headers, no header injection, 5xx vs. unreachable).
+  Every other IT runs with the channel on as well, so the Telegram path is checked with the e-mail hooks in place.
 * Integration (`*IT`, one shared context, Postgres/RabbitMQ/Redis in Docker, `FakeTelegramClient`, fake core/importer,
   PDFBox stand-in for LibreOffice, controllable clock): every private/group/inline flow with exact texts and
   keyboards, the absence wizard (buttons, calendar, AI, core errors), substitution requests (confirm, decline,
@@ -495,3 +610,9 @@ image and rasterized by `PdfPngRenderer`; the PNG matches the layout of `seed/or
   bell profiles), not by notification.
 * «One warning per teacher and date» means a second change of the same teacher on the same date, created after
   the warning, is not announced in Telegram again; the dispatcher sees it as pending in the web panel.
+* E-mail: accounts created by an invite have no address, so they get no letters until «Доступи» can add one
+  (core + auth, later). «Generation finished» goes to every dispatcher who keeps it on, not only to whoever
+  started the job (the requester is not in `generation.completed`). A job failed by core's watchdog publishes no
+  `generation.completed`: no Telegram message and no letter. Import results have no event yet, so there is no
+  «import finished» letter. Bounces are not parsed (they reach the `MAIL_FROM` mailbox). A letter is sent at least
+  once: a crash between the SMTP call and its record resends it after the lease (2 min).

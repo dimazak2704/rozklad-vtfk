@@ -11,11 +11,12 @@ PC (Windows 11 + Git Bash + Docker Desktop); the server setup is in `docs/DEPLOY
 | postgres 18 | 5433 | — | databases `core`, `scheduler`, `importer`, `notification`, `auth` (`infra/postgres/init.sql`) |
 | rabbitmq 4.4 | 5672, UI 15672 | — | `rozklad` / `rozklad` |
 | redis 8 | 6379 | — | |
+| mailpit | SMTP 1025, UI **8025** | — | SMTP catcher: every letter of the stand lands at `http://127.0.0.1:8025`, nothing reaches a real mailbox |
 | auth | 8085 (management 8086 in the container) | 256 / 512 MB | sign-in service (OIDC issuer `http://localhost:8088/auth`), database `auth` |
 | core | 8081 | heap 512 MB, limit 900 MB | domain, SSE `/api/events/stream`, Swagger `/swagger-ui.html` |
 | scheduler | 8082 | 512 / 900 MB | Timefold |
 | importer | 8083 | 384 / 900 MB | parsers (Apache POI, PDFBox), AI with `ANTHROPIC_API_KEY` |
-| notification | 8084 | 384 / 900 MB | Telegram bot, documents (LibreOffice) |
+| notification | 8084 | 384 / 900 MB | Telegram bot, e-mail (to Mailpit), documents (LibreOffice) |
 | gateway | **8080** | 256 / 512 MB | the only entry point for clients: `http://localhost:8080/api/...` |
 | web | 8088 | — | nginx with the SPA, `/api` → gateway, `/auth` → auth; every sign-in goes through it (also from `npm run dev` on 5180) |
 
@@ -49,7 +50,7 @@ scripts/dev-stack.sh up --no-web        # without the nginx SPA on :8088 (then n
 scripts/dev-stack.sh up --google-mock   # automated tests only: a fake Google (mock-oauth2-server, :8090)
 scripts/dev-stack.sh up --no-build --time 2026-11-20T10:00   # the stand lives at that Kyiv time (below)
 scripts/dev-stack.sh up --no-build --lan                     # phones on the LAN: https://<this PC's IP> (below)
-scripts/dev-stack.sh status             # containers, health, memory, URLs
+scripts/dev-stack.sh status             # containers, health, memory, URLs (Mailpit UI: http://127.0.0.1:8025)
 scripts/dev-stack.sh logs core          # follow one service
 scripts/dev-stack.sh seed               # real data through the API (idempotent, ~3 min)
 scripts/dev-stack.sh down               # stop the app services (infra and data stay)
@@ -151,6 +152,13 @@ shown and the passwords remain. `--google-mock` replaces Google with `mock-oauth
 **«Доступи».** The admin page `/admin/access` grants access by e-mail (Google, or a password link the admin
 copies from the row menu), changes roles, revokes and restores access. A password link opens `/password/:token`.
 
+**E-mail.** The demo accounts have the addresses `admin@rozklad.local`, `krentsin@rozklad.local` and
+`nepyivoda@rozklad.local`; the stand trusts that domain (`MAIL_TRUSTED_DOMAINS` in `infra/docker-compose.yml`), so
+their letters arrive in Mailpit (`http://127.0.0.1:8025`). The compose file sets every `MAIL_*` of notification
+itself, so real SMTP settings in `.env` never reach the stand; the service also refuses a real SMTP server while
+`PUBLIC_WEB_URL` is plain http (`MAIL_ALLOW_REAL_SMTP=true` overrides that deliberately). A service run on the host
+has no letters unless `MAIL_HOST=localhost MAIL_PORT=1025 MAIL_STARTTLS=false MAIL_FROM=rozklad@rozklad.local`.
+
 ## 5. What the seed creates (`scripts/seed_demo.py`)
 
 Every step is a call to the running system (no SQL); a repeated run skips what exists.
@@ -220,6 +228,11 @@ python scripts/smoke_workflows.py substitution generation # creates data on 12.1
 python scripts/smoke_workflows.py ai                      # ONE paid Anthropic call (curriculum scan)
 ```
 
+E-mail by hand: as `admin`, give Кренцін a substitution (NOTIFY, the default); two minutes later (the settle delay
+that lets a quick correction replace the first letter) «Вам поставили заміну: …» from «Розклад ВТФК» is in Mailpit,
+with «Відкрити кабінет» pointing to `http://localhost:8088/me?change=…`. «Надіслати тестовий лист» on «Сповіщення»
+(`POST /api/notify/email/me/test`) arrives within seconds; the dispatcher's log is `GET /api/notify/email/deliveries`.
+
 `substitution`: absence of Непийвода → affected lessons → ranked options → change for Кренцін (NOTIFY:
 confirmed at once; CONFIRM: pending) → he declines in the cabinet → asked again → confirms → the rest cancelled → dashboard → order №36 → teacher's own schedule →
 PDF; SSE events `absence.created`, `change.updated`, `order.published`, `schedule.changed` are checked on
@@ -281,6 +294,12 @@ starts the container again and waits until it is healthy (about a minute).
 * `GET /api/documents/orders/{id}.pdf` is 404 for a moment after publication: notification gets the order
   through the `order.published` event.
 * Port 5432 belongs to a local PostgreSQL, therefore Docker Postgres is on 5433.
+* No letter in Mailpit: substitution letters wait two minutes first. Then, as the person,
+  `GET /api/notify/email/me` says whether the address is `VERIFIED` and which kinds are on; as an ADMIN,
+  `GET /api/notify/email/status` shows the channel (`DEV_CATCHER` on the stand) and
+  `GET /api/notify/email/deliveries` every letter with its status and error («Неактуальне: …» = the change moved on
+  before the letter left). notification logs skipped people by account id (`no_address`, `unverified`,
+  `opted_out`), never by address.
 * notification logs «… event(s) in notification.q.events.dlq failed every retry»: some events (an order, a
   substitution, an admin notice) were not handled, usually because notification's database was down for more
   than about a minute. Fix the cause, then, as an ADMIN, `GET /api/notify/events/dead-letters` shows how many and

@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { usePublicMeta } from '@/api/meta';
 import { useSettings } from '@/api/settings';
 import { AiInfo, NumberingInfo } from '@/components/admin-daily/settings/ReadOnlyBlocks';
@@ -31,7 +32,18 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Налаштування" meta="Зміни діють одразу після збереження." />
+      <PageHeader
+        title="Налаштування"
+        meta={
+          <>
+            Зміни діють одразу після збереження. Листи на пошту —{' '}
+            <Link to="/admin/notifications" className="font-[650] text-accent underline-offset-2 hover:underline">
+              у «Сповіщеннях»
+            </Link>
+            .
+          </>
+        }
+      />
       {/*
         Форма живе в admin-daily; тут лише розкладка (DESIGN §11.4):
         - опис розділу над полями до 1024 px, а не вузькою колонкою поруч (інакше поля по 160 px і «Заступник директор|»);

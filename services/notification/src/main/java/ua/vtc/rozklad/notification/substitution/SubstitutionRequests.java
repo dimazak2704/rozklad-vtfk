@@ -47,6 +47,8 @@ import ua.vtc.rozklad.notification.delivery.OutboundMessageSent;
 import ua.vtc.rozklad.notification.delivery.OutboundRelevance;
 import ua.vtc.rozklad.notification.delivery.Outbox;
 import ua.vtc.rozklad.notification.delivery.Recipient;
+import ua.vtc.rozklad.notification.email.EmailKind;
+import ua.vtc.rozklad.notification.email.EmailNotices;
 import ua.vtc.rozklad.notification.telegram.ReplyMarkup.InlineKeyboard;
 import ua.vtc.rozklad.notification.text.WebLinks;
 
@@ -64,6 +66,10 @@ import ua.vtc.rozklad.notification.text.WebLinks;
  * <p>A request, notice or reminder can wait in the outbound queue (rate limits, Telegram retries) while the
  * change moves on. The worker asks {@link #obsoleteReason(OutboundMessage)} right before sending, and a message
  * Telegram accepted in that window is corrected at once by {@link #onSent(OutboundMessageSent)}.
+ *
+ * <p>The same moments also write e-mail intents ({@link SubstitutionMails}), whether or not the teacher has
+ * Telegram: the notice or request, a change of what he reads, the cancellation or reassignment, the deadline
+ * reminder, and for the dispatchers the refusal, the objection and the unanswered request.
  */
 @Service
 public class SubstitutionRequests implements OutboundRelevance {
@@ -89,11 +95,12 @@ public class SubstitutionRequests implements OutboundRelevance {
     private final TransactionTemplate transactions;
     private final BotProperties properties;
     private final Clock clock;
+    private final SubstitutionMails mails;
 
     public SubstitutionRequests(SubstitutionRequestRepository requests, SubstitutionMessageRepository messages,
                                 ChatBindings bindings, Outbox outbox, CoreClient core, CoreQueries queries,
                                 WebLinks links, TransactionTemplate transactions, BotProperties properties,
-                                Clock clock) {
+                                Clock clock, SubstitutionMails mails) {
         this.requests = requests;
         this.messages = messages;
         this.bindings = bindings;
@@ -104,6 +111,7 @@ public class SubstitutionRequests implements OutboundRelevance {
         this.transactions = transactions;
         this.properties = properties;
         this.clock = clock;
+        this.mails = mails;
     }
 
     /**
@@ -139,8 +147,17 @@ public class SubstitutionRequests implements OutboundRelevance {
         SubstitutionRequest.Details before = told ? existing.get().details() : null;
         boolean sameDeadlinePassed = told && event.deadline() != null && !event.deadline().isAfter(now)
                 && Objects.equals(existing.get().getDeadline(), event.deadline());
+        // e-mail does not depend on Telegram: the teacher "holds" the change while it still waits for him
+        boolean mailTold = sameTeacher && existing.get().getMode() == event.effectiveMode()
+                && (notice ? existing.get().isNoticeInForce() : existing.get().isPending());
+        SubstitutionRequest.Details mailBefore = mailTold ? existing.get().details() : null;
+        boolean mailDeadlinePassed = mailTold && event.deadline() != null && !event.deadline().isAfter(now)
+                && Objects.equals(existing.get().getDeadline(), event.deadline());
         if (existing.isPresent() && !sameTeacher) {
             retireMessages(existing.get(), event.eventId());
+            // the previous teacher hears by e-mail too (only if a letter about the change reached him)
+            mails.toTeacher(EmailKind.SUBSTITUTION_CANCELLED, existing.get(), existing.get().getTeacherId(), null,
+                    true, event.eventId(), EmailNotices.eventKey(event.eventId(), "reassigned"));
         }
         SubstitutionRequest request = existing.map(found -> {
             found.refresh(event, now);
@@ -158,6 +175,7 @@ public class SubstitutionRequests implements OutboundRelevance {
             // диспетчер вносить це для обліку
             return;
         }
+        mailTeacher(request, notice, mailTold, mailBefore, mailDeadlinePassed, event.eventId());
         Optional<ChatBinding> chat = bindings.teacherChat(event.teacherId());
         if (chat.isPresent()) {
             request.markSent(now);
@@ -176,6 +194,29 @@ public class SubstitutionRequests implements OutboundRelevance {
             return;
         }
         request.markNoTelegram(now);
+    }
+
+    /**
+     * The teacher's letter of a {@code confirmation-requested}: a notice or request when the change is new to him,
+     * «Заміну змінено» when what he reads changed, a reminder at the passed deadline; a pure repeat writes nothing.
+     */
+    private void mailTeacher(SubstitutionRequest request, boolean notice, boolean told,
+                             SubstitutionRequest.Details before, boolean deadlinePassed, UUID eventId) {
+        boolean updated = told && SubstitutionTexts.differs(before, request.details());
+        EmailKind kind;
+        if (!told) {
+            kind = notice ? EmailKind.SUBSTITUTION_NOTICE : EmailKind.SUBSTITUTION_REQUEST;
+        } else if (updated) {
+            kind = EmailKind.SUBSTITUTION_CHANGED;
+        } else if (!notice && deadlinePassed) {
+            kind = EmailKind.SUBSTITUTION_REMINDER;
+        } else {
+            return;
+        }
+        mails.toTeacher(kind, request, request.getTeacherId(),
+                updated ? SubstitutionTexts.changeSummary(before, request.details()) : null, false, eventId,
+                kind == EmailKind.SUBSTITUTION_REMINDER ? reminderKey(request) + ":mail"
+                        : EmailNotices.eventKey(eventId, "request"));
     }
 
     /**
@@ -225,8 +266,13 @@ public class SubstitutionRequests implements OutboundRelevance {
 
     /** «✏️ Заміну змінено» of a confirmed request whose details already moved from {@code before}. */
     private void sendInfoUpdate(SubstitutionRequest request, SubstitutionRequest.Details before, UUID eventId) {
-        if (messages.findByChangeId(request.getChangeId()).isEmpty()
-                || lessonOver(request.details().lessonDate(), request.details().endsAt())) {
+        if (lessonOver(request.details().lessonDate(), request.details().endsAt())) {
+            return;
+        }
+        mails.toTeacher(EmailKind.SUBSTITUTION_CHANGED, request, request.getTeacherId(),
+                SubstitutionTexts.changeSummary(before, request.details()), false, eventId,
+                EmailNotices.eventKey(eventId, "details"));
+        if (messages.findByChangeId(request.getChangeId()).isEmpty()) {
             return;
         }
         bindings.teacherChat(request.getTeacherId()).ifPresent(chat -> outbox.enqueue(
@@ -257,6 +303,10 @@ public class SubstitutionRequests implements OutboundRelevance {
             if (changed && text != null) {
                 editMessages(found, text, keyboardOf(found), null, null, event.eventId());
             }
+            if (changed && event.status() == ChangeStatus.CANCELLED) {
+                mails.toTeacher(EmailKind.SUBSTITUTION_CANCELLED, found, found.getTeacherId(), null, false,
+                        event.eventId(), EmailNotices.eventKey(event.eventId(), "cancelled"));
+            }
         });
         if (event.status() == ChangeStatus.DECLINED) {
             String name = teacherName != null ? teacherName : teacherName(event.teacherId());
@@ -265,6 +315,9 @@ public class SubstitutionRequests implements OutboundRelevance {
                     .orElseGet(() -> SubstitutionTexts.adminDeclinedUnknown(name, event.date(), event.groupCode(),
                             event.date() == null ? "" : links.adminChanges(event.date())));
             notifyAdmins(text, event.eventId(), "declined");
+            mails.toAdmins(EmailKind.SUBSTITUTION_DECLINED, name, event.changeId(), request.orElse(null),
+                    event.date(), null, event.groupCode(), null, event.eventId(),
+                    EmailNotices.eventKey(event.eventId(), "declined"));
         }
     }
 
@@ -293,6 +346,9 @@ public class SubstitutionRequests implements OutboundRelevance {
             String text = SubstitutionTexts.adminObjection(name, event.pair(), event.groupCode(), event.date(),
                     links.adminChanges(event.date()));
             notifyAdmins(text, event.eventId(), "objection");
+            mails.toAdmins(EmailKind.SUBSTITUTION_OBJECTION, name, event.changeId(), request.orElse(null),
+                    event.date(), event.pair(), event.groupCode(), null, event.eventId(),
+                    EmailNotices.eventKey(event.eventId(), "objection"));
         }
     }
 
@@ -505,22 +561,38 @@ public class SubstitutionRequests implements OutboundRelevance {
      * looked up before the rows are locked, so no call to core holds the locks.
      */
     public int remindOverdue() {
+        return remindOverdue(true);
+    }
+
+    /**
+     * @param telegram the bot is on: with it off only the e-mail intents are written — a Telegram row would wait
+     *                 in the queue for nobody and could go out a day late if the bot came back
+     */
+    public int remindOverdue(boolean telegram) {
         Instant now = clock.instant();
         Map<UUID, String> names = teacherNames(requests.findOverdueTeachers(now));
         if (names.isEmpty()) {
             return 0;
         }
-        return count(transactions.execute(tx -> remindOverdue(now, names)));
+        return count(transactions.execute(tx -> remindOverdue(now, names, telegram)));
     }
 
-    private int remindOverdue(Instant now, Map<UUID, String> names) {
+    private int remindOverdue(Instant now, Map<UUID, String> names, boolean telegram) {
         List<SubstitutionRequest> overdue = requests.findOverdue(now);
         for (SubstitutionRequest request : overdue) {
             request.markReminded(now);
-            if (request.isWithoutTelegram() || lessonOver(request.getLessonDate(), request.details().endsAt())) {
+            String key = request.getChangeId() + ":" + request.getDeadline().toEpochMilli();
+            if (!lessonOver(request.getLessonDate(), request.details().endsAt())) {
+                // e-mail also reaches a teacher without Telegram (his request may have come by e-mail)
+                mails.toTeacher(EmailKind.SUBSTITUTION_REMINDER, request, request.getTeacherId(), null, false, null,
+                        reminderKey(request) + ":mail");
+                mails.toAdmins(EmailKind.REQUEST_OVERDUE, name(names, request.getTeacherId()), request.getChangeId(),
+                        request, null, null, null, request.getDeadline(), null, "overdue:" + key + ":mail");
+            }
+            if (!telegram || request.isWithoutTelegram()
+                    || lessonOver(request.getLessonDate(), request.details().endsAt())) {
                 continue;
             }
-            String key = request.getChangeId() + ":" + request.getDeadline().toEpochMilli();
             bindings.teacherChat(request.getTeacherId()).ifPresent(chat -> outbox.enqueue(
                     OutboundDraft.text(Recipient.of(chat), DeliveryPurpose.SUBSTITUTION_REMINDER,
                                     SubstitutionTexts.request(request, true))
@@ -550,15 +622,20 @@ public class SubstitutionRequests implements OutboundRelevance {
      * @return number of (teacher, date) warnings queued
      */
     public int reportTeachersWithoutTelegram() {
+        return reportTeachersWithoutTelegram(true);
+    }
+
+    /** @param telegram the bot is on; with it off only the dispatchers' e-mail intents are written */
+    public int reportTeachersWithoutTelegram(boolean telegram) {
         Instant noticedBefore = clock.instant().minus(properties.noTelegramNoticeDelay());
         Map<UUID, String> names = teacherNames(requests.findUnreportedWithoutTelegramTeachers(noticedBefore));
         if (names.isEmpty()) {
             return 0;
         }
-        return count(transactions.execute(tx -> reportTeachersWithoutTelegram(noticedBefore, names)));
+        return count(transactions.execute(tx -> reportTeachersWithoutTelegram(noticedBefore, names, telegram)));
     }
 
-    private int reportTeachersWithoutTelegram(Instant noticedBefore, Map<UUID, String> names) {
+    private int reportTeachersWithoutTelegram(Instant noticedBefore, Map<UUID, String> names, boolean telegram) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
         // рядки заблоковано в порядку change id (як і в remindOverdue), групуємо ж за викладачем, датою, парою
@@ -575,12 +652,15 @@ public class SubstitutionRequests implements OutboundRelevance {
         if (byTeacherAndDate.isEmpty()) {
             return 0;
         }
-        List<ChatBinding> admins = bindings.adminChats();
+        List<ChatBinding> admins = telegram ? bindings.adminChats() : List.of();
         int warnings = 0;
         for (Map.Entry<TeacherDate, List<SubstitutionRequest>> entry : byTeacherAndDate.entrySet()) {
             TeacherDate key = entry.getKey();
             String text = SubstitutionTexts.adminNoTelegram(name(names, key.teacherId()), entry.getValue(),
                     links.adminChanges(key.date()));
+            mails.teacherUnreachable(key.teacherId(), name(names, key.teacherId()), key.date(), key.notice(),
+                    entry.getValue(), "no-telegram:" + key.teacherId() + ":" + key.date()
+                            + (key.notice() ? ":notice" : "") + ":mail");
             boolean queued = false;
             for (ChatBinding admin : admins) {
                 queued |= !outbox.enqueue(OutboundDraft.text(Recipient.of(admin), DeliveryPurpose.SUBSTITUTION_ADMIN,

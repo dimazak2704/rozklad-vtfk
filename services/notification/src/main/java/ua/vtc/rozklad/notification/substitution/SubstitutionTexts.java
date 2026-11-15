@@ -77,8 +77,13 @@ public final class SubstitutionTexts {
         return !details(before).equals(details(after));
     }
 
-    /** «Нова аудиторія: 214 (була 108)», «Змінено: дату, пару» or both in one line. */
+    /** «Нова аудиторія: 214 (була 108)», «Змінено: дату, пару» or both in one line (Telegram HTML). */
     static String whatChanged(Details before, Details after) {
+        return escape(changeSummary(before, after));
+    }
+
+    /** The same line as {@link #whatChanged} in plain text (e-mail). */
+    public static String changeSummary(Details before, Details after) {
         List<String> other = new ArrayList<>();
         if (!Objects.equals(before.lessonDate(), after.lessonDate())) {
             other.add("дату");
@@ -114,9 +119,9 @@ public final class SubstitutionTexts {
             return null;
         }
         if (now == null) {
-            return "Аудиторію більше не вказано (була " + escape(was) + ")";
+            return "Аудиторію більше не вказано (була " + was + ")";
         }
-        return "Нова аудиторія: " + escape(now) + (was == null ? "" : " (була " + escape(was) + ")");
+        return "Нова аудиторія: " + now + (was == null ? "" : " (була " + was + ")");
     }
 
     private static void appendDeadline(StringBuilder text, SubstitutionRequest request) {

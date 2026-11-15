@@ -17,13 +17,15 @@
 | `/me` | `pages/teacher/MyDayPage.tsx` | Нові заміни: прохання (підтвердити / «не можу») і призначені заміни NOTIFY («Добре» / «не можу»), «не можу» з коментарем, оптимістично, нові — наживо через SSE з підсвіткою й сповіщенням), мої пари (день/тиждень), мої заміни, Telegram (одноразове посилання + QR), календар, друк |
 | `/me/absences` | `pages/teacher/MyAbsencesPage.tsx` | Форма (діапазон у календарі, увесь день / окремі пари, причина, коментар) з попереднім переглядом зачеплених пар; список «попереду» (майбутні можна видалити з підтвердженням) і «минулі» |
 | `/me/preferences` | `pages/teacher/MyPreferencesPage.tsx` | Сітка день × пара: порожньо → небажано → неможливо (клік, Enter, 1/2/0, стрілки), мої пари за поточним розкладом у клітинках, легенда, панель «не збережено» й попередження при переході |
+| `/me/notifications` | `pages/teacher/MyNotificationsPage.tsx` | «Сповіщення»: листи на корпоративну пошту про мої заміни. Адреса облікового запису лише для читання й що робити, коли її немає чи не підтверджено; загальний перемикач і по перемикачу на вид з одним реченням (діють одразу, PUT несе стан усіх перемикачів); тестовий лист собі. Спільний компонент — `components/notifications/EmailPreferences.tsx` (його ж показує `/admin/notifications` разом зі станом пошти й журналом листів) |
 
 Спільний каркас розкладу — `components/public/schedule/`: `SchedulePage` (заголовок, дії, друк, QR),
 `ScheduleExplorer` (День/Тиждень, `DateNav`/`WeekNav`, дні тижня, підгрупи, «зараз», зміни тижня, офлайн),
 `ScheduleActions` (обране, Web Share, календар, друк, QR, копіювати посилання), `schedule-params.ts` (стан в адресі),
 `schedule-utils.ts` (чиста логіка). Друк — `components/public/print/`. Кабінет — `components/teacher/`.
 
-API: `src/api/public.ts`, `src/api/me.ts`. Мок-API: `src/mocks/handlers/public.ts`, `src/mocks/handlers/me.ts`.
+API: `src/api/public.ts`, `src/api/me.ts`, `src/api/email.ts`. Мок-API: `src/mocks/handlers/public.ts`, `src/mocks/handlers/me.ts`,
+`src/mocks/handlers/email.ts`. Посилання з листа `/me?change={id}` прокручує до цього запиту й підсвічує його.
 
 ## Рішення
 

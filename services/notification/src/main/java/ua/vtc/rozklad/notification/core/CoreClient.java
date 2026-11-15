@@ -9,6 +9,7 @@ import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.notification.core.CoreDtos.BellSchedule;
 import ua.vtc.rozklad.notification.core.CoreDtos.ChangeSummary;
 import ua.vtc.rozklad.notification.core.CoreDtos.CurrentUser;
+import ua.vtc.rozklad.notification.core.CoreDtos.MailRecipient;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicGroup;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicMeta;
 import ua.vtc.rozklad.notification.core.CoreDtos.PublicTeacher;
@@ -55,6 +56,33 @@ public interface CoreClient {
      * when core does not know the id (404).
      */
     TeacherStatus teacherStatus(UUID teacherId);
+
+    /**
+     * {@code GET /api/internal/mail-recipients?teacherId=|accountId=|role=} (SERVICE_NOTIFICATION): the people accounts
+     * of a teacher, one account, or every account with a role. An unknown teacher or account → empty list.
+     */
+    List<MailRecipient> mailRecipients(MailRecipientQuery query);
+
+    /** Exactly one filter of {@code GET /api/internal/mail-recipients}. */
+    record MailRecipientQuery(String parameter, String value) {
+
+        public static MailRecipientQuery teacher(UUID teacherId) {
+            return new MailRecipientQuery("teacherId", teacherId.toString());
+        }
+
+        public static MailRecipientQuery account(UUID accountId) {
+            return new MailRecipientQuery("accountId", accountId.toString());
+        }
+
+        public static MailRecipientQuery role(String role) {
+            return new MailRecipientQuery("role", role);
+        }
+
+        /** Cache key part: {@code teacherId:…}. */
+        public String key() {
+            return parameter + ":" + value;
+        }
+    }
 
     enum TeacherStatus {
         ACTIVE,

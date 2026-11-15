@@ -198,14 +198,15 @@ an inactive teacher reports nothing himself: 422 `TEACHER_INACTIVE`);
 
 ## 4. Core — internal (service roles, client credentials)
 
-Per service account: `changes/{id}/reply`, `absences` and `teachers/{id}` → SERVICE_NOTIFICATION (the bot);
+Per service account: `changes/{id}/reply`, `absences`, `teachers/{id}` and `mail-recipients` → SERVICE_NOTIFICATION (the bot);
 `catalog/snapshot` → SERVICE_IMPORTER; any other `/api/internal/**` → 403. The plain SERVICE role opens none of them.
 
 
 `POST /api/internal/changes/{id}/reply` `{teacherId, decision: CONFIRM|DECLINE, comment?}` → `ChangeDto` (403 if teacher mismatch; CONFIRM requests: 409 if not pending; NOTIFY changes (DOMAIN §7): CONFIRM keeps the status, DECLINE declines a CONFIRMED change or records an objection to an APPLIED one, the same answer again → 200 unchanged, another answer once declined/objected or a cancelled change → 409); the same rules for `POST /api/me/changes/{id}/confirm|decline`;
 `POST /api/internal/absences` `{teacherId, dateFrom, dateTo, pairs?, reasonCategory, comment?, source:"BOT"}` → 201;
 `GET /api/internal/catalog/snapshot` → `{groups:[{id,code,course,subgroups}], teachers:[{id,shortName,displayName,lastName,aliases}], disciplines:[{id,shortName,name,aliases}], rooms:[{id,name,type}], semesters:[...], periodKinds:[{id, code, name, effect, color, aliases, noteTemplate, active}]}` (`periodKinds`: every kind, inactive ones too);
-`GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens).
+`GET /api/internal/teachers/{id}` → `{id, lastName, firstName, middleName, shortName, displayName, cycleCommission, active, accountId, linked}` (`accountId` = `sub` of the account's tokens);
+`GET /api/internal/mail-recipients?teacherId={uuid}` | `?accountId={uuid}` | `?role=ADMIN` (exactly one; other roles → 400) → `[{accountId, teacherId?, displayName, username?, email?, googleLinked, roles[], enabled, revoked, demo}]`: the people accounts of `auth` an e-mail would reach (`email` = the sign-in address, lower case, `null` for accounts created by invite; `googleLinked` = Google confirmed it). Facts only: disabled, revoked and demo accounts are listed, the mail channel decides. An unknown teacher or account, a teacher without an account and an account `auth` lost → `[]`; `auth` down → 503 `identity-unavailable`.
 
 ## 5. Importer (role ADMIN; `ai/parse-absence` also SERVICE)
 
@@ -235,6 +236,11 @@ run); one apply step `calendar` → `POST /api/admin/import/calendar-periods` wi
 | `DELETE /api/notify/bindings/me` (TEACHER, ADMIN with a linked teacher) | 204: the caller's own TEACHER chat is unlinked (also when none); 422 `teacher-not-linked` |
 | `GET /api/notify/deliveries?orderId&status` | delivery log |
 | `POST /api/notify/test` | sends a test message to `TELEGRAM_OWNER_CHAT_ID` |
+| `GET /api/notify/email/me` (TEACHER, ADMIN; the account is the token's `sub`) | `{channel:{enabled, reason?}, address?, addressStatus: VERIFIED\|UNVERIFIED\|MISSING, verifiedBy?: GOOGLE\|TRUSTED_DOMAIN, enabled, version?, kinds:[{kind, audience: TEACHER\|ADMIN, label, description, enabled, defaultEnabled, switchable}]}`: own e-mail settings; teacher kinds for an account linked to a teacher, dispatcher kinds for ADMIN; a kind's `enabled` is the person's choice and is kept while the master `enabled` is off (a letter goes only when both are on); 503 core down |
+| `PUT /api/notify/email/me` `{enabled, kinds?: {KIND: bool}, version?}` (TEACHER, ADMIN) | 200 the same; 400 `errors[enabled]`, `errors[kinds.X]` (unknown kind); 422 `email-kind-not-allowed`; 409 outdated `version` |
+| `POST /api/notify/email/me/test` (TEACHER, ADMIN) | 202 `{status: "QUEUED"}`: a test letter to the caller's own verified address; 422 `email-account-inactive` (disabled, revoked or demo account) \| `email-missing` \| `email-not-verified`; 503 `email-disabled`; 429 `email-test-limit` (3 an hour) |
+| `GET /api/notify/email/status` | `{enabled, mode: OFF\|DEV_CATCHER\|SMTP, host, port, from, replyTo, tls: STARTTLS\|SSL\|NONE, problem?}` (never the SMTP username or password) |
+| `GET /api/notify/email/deliveries?status&kind&page&size` | letter log, newest first: page of `{id, kind, to (masked), accountName, subject, status: QUEUED\|RETRYING\|SENT\|FAILED\|SUPERSEDED, attempts, error, createdAt, sentAt, nextAttemptAt}` |
 | `GET /api/notify/events/dead-letters` (ADMIN) | `{queue, count}`: events in `notification.q.events.dlq` (failed every retry); 503 when RabbitMQ cannot be asked |
 | `POST /api/notify/events/dead-letters/replay` (ADMIN) | `{replayed}`: moves the messages now in the DLQ back to `notification.q.events`, each once; 503 when RabbitMQ cannot be asked |
 | `GET /api/documents/orders/{orderId}.{docx\|pdf\|png}` (public for PUBLISHED orders; visitors only for orders dated from core's `publicHistoryFrom`, else 404 `history-not-public`; ADMIN or TEACHER token: any; `Vary: Authorization`, staff answers `private`; core unreachable for a past-dated order of a visitor → 503) | file |

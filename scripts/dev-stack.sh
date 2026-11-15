@@ -350,6 +350,7 @@ Site            http://localhost:8088
 Sign-in         http://localhost:8088/auth/login   (service auth; host-run services: http://localhost:8085/auth)
 Token (scripts) python scripts/rozklad_auth.py token --user admin
 RabbitMQ UI     http://localhost:15672  (rozklad / rozklad)    PostgreSQL localhost:5433 (postgres / postgres)
+Mail (Mailpit)  http://127.0.0.1:8025   (every letter of the stand lands here; nothing reaches real mailboxes)
 Demo users      infra/dev/demo-users.env (admin = ADMIN, krentsin / nepyivoda = TEACHER)
 EOF
 }
