@@ -21,6 +21,11 @@ package ua.vtc.rozklad.contracts.events;
  * what the hard rule cannot demand: one teacher's two subgroups on neighbouring pairs and a lone subgroup lesson.
  * {@code studentOnePairDay} and {@code specialRooms} are confirmed college rules kept soft; the web sends their
  * defaults and does not offer them, nor {@code subgroupsTogether}, as priorities.
+ *
+ * <p>Owner's answers, round 2 (15.11.2026): groups must have no windows («краще викладачам вікна»), so group windows
+ * became a hard rule of the scheduler with no weight. {@code windows} stays in the schema for compatibility: it no
+ * longer weighs any constraint, an older request without {@code teacherWindows} still takes it for teacher windows,
+ * and the web sends its default and does not offer it as a priority.
  */
 public record GenerationWeights(int windows, int brokenDays, int latePairs, int preferences, int homeRoom,
         Integer teacherWindows, Integer teacherShiftWait, Integer stability, Integer subgroupsTogether,

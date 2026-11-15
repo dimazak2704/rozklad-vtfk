@@ -34,12 +34,25 @@ public record ProblemSnapshot(
     public record ShiftWindow(int shift, int weekday, int firstPair, int lastPair) {
     }
 
-    /** {@code subgroups} lists stored subgroup numbers (1..n); 0 (whole group) is implicit. */
-    public record Group(UUID id, String code, int size, int shift, List<Integer> subgroups) {
+    /**
+     * {@code subgroups} lists stored subgroup numbers (1..n); 0 (whole group) is implicit. {@code fridayMaxPairs}
+     * (additive, nullable) is the most pairs the group may have on Friday, a hard rule of the scheduler for the
+     * group-days it may change (owner's rule of 15.11.2026: Friday is an unloading day); {@code null} means no limit
+     * (snapshots before it). Core sends the college setting {@code generation.fridayMaxPairs} for every group.
+     */
+    public record Group(UUID id, String code, int size, int shift, List<Integer> subgroups, Integer fridayMaxPairs) {
 
         public Group {
             Objects.requireNonNull(id, "id");
             subgroups = EventLists.copy(subgroups);
+            if (fridayMaxPairs != null && fridayMaxPairs < 1) {
+                throw new IllegalArgumentException("fridayMaxPairs must be positive");
+            }
+        }
+
+        /** A group without a Friday limit (snapshots before the limit). */
+        public Group(UUID id, String code, int size, int shift, List<Integer> subgroups) {
+            this(id, code, size, shift, subgroups, null);
         }
     }
 

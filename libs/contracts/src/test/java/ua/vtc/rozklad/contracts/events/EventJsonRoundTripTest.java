@@ -3,6 +3,7 @@ package ua.vtc.rozklad.contracts.events;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -203,6 +204,22 @@ class EventJsonRoundTripTest {
         assertThat(teacher.maxPairsPerDay()).as("no limit").isNull();
         assertThat(unit.siblingKey()).isNull();
         assertThat(unit.online()).isFalse();
+    }
+
+    /** Owner's rule of 15.11.2026: {@code fridayMaxPairs} is additive; an older group reads without a limit. */
+    @Test
+    void snapshotGroupReadsWithAndWithoutTheFridayLimit() {
+        String old = """
+                {"id":"3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f","code":"4КІ1","size":25,"shift":1,"subgroups":[1,2]}
+                """;
+        ProblemSnapshot.Group group = mapper.readValue(old, ProblemSnapshot.Group.class);
+        assertThat(group.fridayMaxPairs()).as("no limit").isNull();
+
+        ProblemSnapshot.Group limited = new ProblemSnapshot.Group(group.id(), "4КІ1", 25, 1, List.of(1, 2), 3);
+        assertThat(mapper.readValue(mapper.writeValueAsString(limited), ProblemSnapshot.Group.class))
+                .isEqualTo(limited);
+        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ProblemSnapshot.Group(group.id(), "4КІ1", 25, 1, List.of(), 0));
     }
 
     /** genfix: an analysis row of the first schema reads as a non-bonus row with unknown scope matches. */
