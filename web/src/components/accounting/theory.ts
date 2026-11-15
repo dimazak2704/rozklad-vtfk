@@ -50,21 +50,28 @@ export function graphDiffers(theory: Pick<GroupTheoryDto, 'theoryWeeks' | 'graph
   return theory.graphTheoryWeeks != null && theory.graphTheoryWeeks !== theory.theoryWeeks;
 }
 
-/** «У графіку освітнього процесу — 20 тижнів теорії: …» або null, коли числа збігаються чи графіка немає. */
+/**
+ * «У графіку освітнього процесу — 20 тижнів теорії: …» або null, коли числа збігаються чи графіка немає. Причину
+ * система не знає: межі семестру в графіку можуть бути інші, а може, якийсь період (НС, практику) не внесено в календар —
+ * саме це звірка й має показати.
+ */
 export function graphWarning(theory: GroupTheoryDto): string | null {
   if (!graphDiffers(theory)) return null;
   const weeks = theory.graphTheoryWeeks as number;
-  return `У графіку освітнього процесу — ${countLabel(weeks, WEEK_FORMS)} теорії: там інші межі семестру. План рахується за календарем системи.`;
+  return `У графіку освітнього процесу — ${countLabel(weeks, WEEK_FORMS)} теорії: межі семестру там інші або не всі періоди внесено в календар. План рахується за календарем системи.`;
 }
 
-/** Підказка до числа плану в рядку обліку чи навантаження. */
+/**
+ * Підказка до числа плану в рядку обліку чи навантаження. Без формули: з розкладом сервер рахує пари на днях теорії,
+ * без нього — години на тиждень за днями теорії (load/LoadPlan); обидва — лише тижні теорії групи.
+ */
 export function planHint(
   row: { planSource: PlanSource | 'MIXED'; hoursPerWeek: number },
   theory?: Pick<GroupTheoryDto, 'theoryWeeks' | 'semesterWeeks'> | null,
 ): string {
   if (row.planSource === 'FIXED') return 'План задано числом (вручну чи з програми дисципліни) — система його не змінює.';
   const weeks = theory ? ` (${theoryWeeksLabel(theory)})` : '';
-  const auto = `${formatHours(row.hoursPerWeek)} год на тиждень лише за тижні теорії групи${weeks}, за парами розкладу.`;
+  const auto = `${formatHours(row.hoursPerWeek)} год на тиждень лише за тижні теорії групи${weeks}.`;
   return row.planSource === 'MIXED' ? `Частину плану задано числом, решту рахує система: ${auto}` : `План рахує система: ${auto}`;
 }
 

@@ -41,7 +41,10 @@ describe('тижні теорії групи', () => {
 
   it('графік — лише звірка: попередження, коли числа різні або графіка немає', () => {
     expect(graphDiffers(ki2)).toBe(true);
-    expect(graphWarning(ki2)).toContain('20\u00a0тижнів теорії');
+    // причину система не знає: інші межі семестру чи не внесений у календар період — каже обидві
+    expect(graphWarning(ki2)).toBe(
+      'У графіку освітнього процесу — 20\u00a0тижнів теорії: межі семестру там інші або не всі періоди внесено в календар. План рахується за календарем системи.',
+    );
     expect(graphWarning({ ...ki2, graphTheoryWeeks: 15 })).toBeNull();
     expect(graphWarning({ ...ki2, graphTheoryWeeks: null })).toBeNull();
     expect(graphMismatchCount(13)).toBe('13\u00a0груп розходяться з графіком');
@@ -50,7 +53,11 @@ describe('тижні теорії групи', () => {
 
   it('підказка до плану каже, звідки число', () => {
     expect(planHint({ planSource: 'AUTO', hoursPerWeek: 3 }, ki2)).toBe(
-      'План рахує система: 3 год на тиждень лише за тижні теорії групи (15\u00a0тижнів теорії з 18), за парами розкладу.',
+      'План рахує система: 3 год на тиждень лише за тижні теорії групи (15\u00a0тижнів теорії з 18).',
+    );
+    // без розкладу план рахується за днями теорії, тож підказка не обіцяє «за парами розкладу»
+    expect(planHint({ planSource: 'AUTO', hoursPerWeek: 3 }, null)).toBe(
+      'План рахує система: 3 год на тиждень лише за тижні теорії групи.',
     );
     expect(planHint({ planSource: 'FIXED', hoursPerWeek: 2 })).toContain('задано числом');
     expect(planHint({ planSource: 'MIXED', hoursPerWeek: 4 })).toMatch(/^Частину плану задано числом/);
