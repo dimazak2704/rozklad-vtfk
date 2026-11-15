@@ -143,6 +143,9 @@ describe('генератор розкладу', () => {
     expect(monday?.lessons[0]).toMatchObject({ startsAt: '08:30', endsAt: '09:30', kind: 'REGULAR', online: false });
     // DOMAIN §5: у середу чисельника є ще перша пара ДК
     expect(pairsOf(wednesday?.lessons ?? [])[0]).toBe('1:ДК:0');
+    // як core: пара несе парність свого рядка шаблону — ДК лише по чисельниках, решта щотижня
+    expect(wednesday?.lessons[0]?.parity).toBe('NUMERATOR');
+    expect(monday?.lessons.map((l) => l.parity)).toEqual(['BOTH', 'BOTH', 'BOTH', 'BOTH']);
     // у четвер 4 пара — дві підгрупи іноземної мови
     expect(thursday?.lessons.filter((l) => l.pair === 4).map((l) => l.subgroup)).toEqual([1, 2]);
     expect(friday?.lessons.map((l) => l.discipline.shortName)).toEqual(['СП', 'КБ', 'НДЕКСМ']);

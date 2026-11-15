@@ -1,6 +1,6 @@
 import { LogIn } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { isSilentRenewError, loginErrorText } from '@/auth/authErrors';
 import { isSafeReturnPath, postLoginPath } from '@/auth/postLogin';
 import { clearRejectedToken } from '@/auth/rejectedToken';
@@ -56,6 +56,7 @@ export default function LoginPage() {
   if (!problem) {
     return (
       <AuthTransition
+        fullScreen
         text="Відкриваємо сторінку входу…"
         slow={
           slow ? (
@@ -72,7 +73,7 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="mx-auto flex min-h-[min(60dvh,28rem)] w-full max-w-sm flex-col items-center justify-center gap-4 px-4 text-center">
+    <section className="mx-auto flex min-h-dvh w-full max-w-sm flex-col items-center justify-center gap-4 px-4 text-center">
       <BrandMark size={40} />
       <h1 className="text-title font-semibold text-primary">Сторінка входу не відкрилася</h1>
       <p role="alert" className="text-ui text-balance text-secondary">
@@ -81,7 +82,14 @@ export default function LoginPage() {
       <Button variant="primary" iconStart={<LogIn aria-hidden="true" className="size-4" />} onClick={retry}>
         Спробувати ще раз
       </Button>
+      {/* сторінка без шапки сайту: шлях назад до розкладу — тут */}
       <p className="text-caption text-muted">Розклад, заміни й дзвінки відкриті для всіх без входу.</p>
+      <Link
+        to="/"
+        className="-mt-2 inline-flex min-h-9 items-center rounded-control px-2 text-ui font-semibold text-accent underline-offset-4 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+      >
+        До розкладу
+      </Link>
     </section>
   );
 }

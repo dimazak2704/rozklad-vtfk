@@ -8,6 +8,7 @@ import { timeToMinutes } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
 import { LESSON_STATE, type LessonEntry } from '../model';
 import { StateText } from '../StateBadge';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 const MAX_PAIRS = 6;
 
@@ -59,6 +60,7 @@ interface NeedsListProps {
  */
 export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAlerts = [] }: NeedsListProps) {
   const { clock } = useNow();
+  const name = useTeacherLabel();
   const today = clock.date === date;
   const open = entries
     .filter((entry) => LESSON_STATE[entry.state].needsAction)
@@ -96,7 +98,7 @@ export function NeedsList({ entries, alerts, date, pairsKnown, calm, serviceAler
                   {/* головне в рядку — яка група й що в неї зависло: на крок більше й жирніше за решту */}
                   <span className="truncate text-cell font-[650] text-primary">
                     <span className="font-display font-semibold tracking-[0.01em]">{lesson.group.code}</span> · {lesson.discipline.shortName}
-                    <span className="text-ui font-[500] text-secondary"> · {entry.absence.teacher.shortName}</span>
+                    <span className="text-ui font-[500] text-secondary"> · {name(entry.absence.teacher)}</span>
                   </span>
                   <StateText state={entry.state}>
                     {entry.state === 'declined' ? 'Відмова — потрібен інший варіант' : 'Потрібне рішення'}

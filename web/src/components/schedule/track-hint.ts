@@ -18,3 +18,9 @@ export function segmentHint(slot: Pick<TimedSlot, 'pair' | 'startsAt' | 'endsAt'
         : null;
   return [`${slot.pair} пара`, `${slot.startsAt}–${slot.endsAt}`, tail].filter(Boolean).join(' · ');
 }
+
+/** Зсув пігулки «зараз» у колонці пари: від лівого краю (0) до правого (1), пігулка ніколи не виходить за колонку. */
+export function pillShift(progress: number): string {
+  const clamped = Math.min(1, Math.max(0, progress));
+  return `translateX(calc((100cqw - 3.5rem) * ${clamped}))`;
+}

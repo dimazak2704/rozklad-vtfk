@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronRight, FilePlus2, Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
 import { Button, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -6,6 +6,7 @@ import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { pairsText } from '../format';
 import { formatDateRange } from '@/lib/date';
 import { LESSON_STATE, type LessonEntry } from '../model';
+import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
 /** «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». */
@@ -70,13 +71,16 @@ interface AbsenceListProps {
   selectedId: Uuid | null;
   onSelect: (id: Uuid) => void;
   onAdd: () => void;
+  /** Телефон: «Нова зміна» поруч із «Додати відсутність» — у шапці на вузькому екрані її немає. */
+  onAddChange?: () => void;
   loading: boolean;
   /** Телефон: рядок веде на наступний рівень (стрілка), а не просто підсвічується. */
   drill?: boolean;
 }
 
 /** Колонка «Відсутні»: хто, коли й чому, і скільки пар уже вирішено. Вибір показує пари цього викладача. */
-export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, loading, drill = false }: AbsenceListProps) {
+export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd, onAddChange, loading, drill = false }: AbsenceListProps) {
+  const name = useTeacherLabel();
   if (loading && absences.length === 0) {
     return (
       <div className="flex flex-col gap-1 px-1" aria-hidden="true">
@@ -109,7 +113,7 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
                 )}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="truncate text-cell font-[650] text-primary">{absence.teacher.shortName}</span>
+                  <span className="truncate text-cell font-[650] text-primary">{name(absence.teacher)}</span>
                   <span className="text-caption text-secondary">{absenceCaption(absence)}</span>
                   <AbsenceProgress entries={own} status={lessonsStatus?.get(absence.id)} />
                 </span>
@@ -119,9 +123,16 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
           );
         })}
       </ul>
-      <Button variant="ghost" size="sm" className="self-start" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-        Додати відсутність
-      </Button>
+      <div className="flex flex-wrap gap-1">
+        <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+          Додати відсутність
+        </Button>
+        {onAddChange ? (
+          <Button variant="ghost" size="sm" onClick={onAddChange} iconStart={<FilePlus2 aria-hidden="true" className="size-4" />}>
+            Нова зміна
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

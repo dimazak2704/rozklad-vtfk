@@ -18,11 +18,12 @@ import {
   ownLessons,
   withRequest,
 } from './my-day';
+import { useAssignedScheduleState } from './useAssignedSchedule';
 
 interface MyNowProps {
   teacherId: string;
   today: IsoDate;
-  /** Дні поточного тижня викладача (з замінами). */
+  /** Дні поточного тижня викладача з опублікованого розкладу; підтверджені заміни MyNow додає сам. */
   days: readonly DayDto[];
   /** Дзвінки на сьогодні; у вихідний — порожньо. */
   bells: readonly BellSlotDto[];
@@ -63,23 +64,29 @@ export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   const { status, clock } = useNow(bells, { date: today, onlyPairs });
 
   const done = status === null || status.kind === 'after-day' || status.kind === 'no-classes';
-  const thisWeek = done ? nextDaySentence(days, today, teacherId) : null;
+  // «що далі» — за тим самим розкладом, що й сітка нижче: разом із підтвердженими, ще не опублікованими замінами.
+  // Сьогоднішній день беремо з опублікованого розкладу вище: заміни сьогодні фраза «зараз» називає окремо, без повтору.
+  const week = useMemo(() => ({ days: [...days] }), [days]);
+  const merged = useAssignedScheduleState(week);
+  const weekDays = merged.data?.days ?? days;
+  const thisWeek = done ? nextDaySentence(weekDays, today, teacherId) : null;
   // у цьому тижні моїх пар більше немає — перша пара наступного тижня
   const nextWeek = studyWeek(addDays(studyWeek(today).from, 7));
-  const later = useMySchedule(nextWeek.from, nextWeek.to, { enabled: done && thisWeek === null });
+  const later = useMySchedule(nextWeek.from, nextWeek.to, { enabled: done && !merged.pending && thisWeek === null });
+  const laterMerged = useAssignedScheduleState(later.data && !later.isPlaceholderData ? later.data : undefined);
   const request = done && changes.data ? nextRequest(changes.data, today, { bells, minutes: clock.minutes }) : null;
   const requestBells = useBells(request?.date);
   const requestStart = requestBells.data?.slots.find((slot) => slot.pair === request?.pairFrom)?.startsAt;
 
-  // доки не знаємо моїх замін, не кажемо «пар немає»: підтверджена заміна сьогодні це речення спростувала б
-  if (done && changes.isPending) return null;
+  // доки не знаємо моїх замін (і дзвінків до них), не кажемо «пар немає»: підтверджена заміна це речення спростувала б
+  if (done && (changes.isPending || merged.pending)) return null;
 
   if (done) {
-    const laterData = later.data && !later.isPlaceholderData ? later.data : null;
+    const laterData = laterMerged.data && !laterMerged.pending ? laterMerged.data : null;
     const own =
       thisWeek ??
       (laterData ? (nextDaySentence(laterData.days, today, teacherId) ?? 'Наступного тижня пар у вас немає.') : null);
-    const ownDay = nextOwnDay(days, today, teacherId) ?? (laterData ? nextOwnDay(laterData.days, today, teacherId) : null);
+    const ownDay = nextOwnDay(weekDays, today, teacherId) ?? (laterData ? nextOwnDay(laterData.days, today, teacherId) : null);
     // поки наступний тиждень вантажиться, речення немає зовсім: запит до нього не чіпляємо, щоб текст не «стрибав»
     const next = own === null ? null : withRequest(own, request, today, ownDay?.day.date ?? null, requestStart);
     const title = status?.kind === 'after-day' ? 'На сьогодні все' : isWeekend(today) ? 'Сьогодні вихідний' : 'Сьогодні пар немає';

@@ -37,6 +37,7 @@ import { sortRows } from '@/lib/sort';
 import { useRowCursor } from '@/components/catalog/useRowCursor';
 import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 const PAGE_SIZE = 50;
 const ALL = 'all';
@@ -44,6 +45,7 @@ const SOURCES: readonly LoadSource[] = ['TIMETABLE_DERIVED', 'MANUAL', 'CURRICUL
 
 /** Навантаження: години на тиждень за групою × дисципліною, тижневий шаблон «1 + ½», викладачі, джерело годин. */
 export default function LoadPage() {
+  const name = useTeacherLabel();
   const table = useTableUrlState(null, ['group', 'source']);
   const semesters = useSemesters();
   const semester = semesters.data?.find((s) => s.id === table.get('semester')) ?? activeSemesterOf(semesters.data);
@@ -174,7 +176,7 @@ export default function LoadPage() {
               {item.teachers.map((t) => (
                 <span key={t.subgroup} className="whitespace-nowrap">
                   {t.subgroup > 0 ? <span className="text-caption text-muted">{t.subgroup} п. · </span> : null}
-                  {t.teacher.shortName}
+                  {name(t.teacher)}
                 </span>
               ))}
             </span>
@@ -198,7 +200,7 @@ export default function LoadPage() {
           ),
       },
     ],
-    [groupId, groupStarts],
+    [groupId, groupStarts, name],
   );
 
   // сортуємо всі знайдені записи, а не лише сторінку, і лише потім ділимо на сторінки
@@ -395,7 +397,7 @@ export default function LoadPage() {
           title: groupId ? item.discipline.shortName : `${item.group.code} · ${item.discipline.shortName}`,
           caption: [
             `${formatHours(item.hoursPerWeek)} год/тиж`,
-            item.teachers.length === 0 ? 'викладача не призначено' : item.teachers.map((t) => t.teacher.shortName).join(', '),
+            item.teachers.length === 0 ? 'викладача не призначено' : item.teachers.map((t) => name(t.teacher)).join(', '),
           ].join(' · '),
         })}
         rowActions={(item) => (

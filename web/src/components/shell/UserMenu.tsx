@@ -62,7 +62,10 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
         {variant === 'block' ? (
           <>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-ui font-[650] text-primary">{user.name}</span>
+              {/* довге імʼя в рейці 232 px обрізається — повне в підказці */}
+              <span title={user.name} className="truncate text-ui font-[650] text-primary">
+                {user.name}
+              </span>
               <span className="truncate text-caption text-muted">{roleLabel}</span>
             </span>
             <ChevronsUpDown aria-hidden="true" className="size-4 text-muted" />
@@ -80,7 +83,9 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
           <div className="flex items-center gap-2.5 px-2.5 py-2">
             <Avatar name={user.name} size="lg" />
             <div className="flex min-w-0 flex-col">
-              <span className="truncate text-ui font-[650]">{user.name}</span>
+              <span title={user.name} className="truncate text-ui font-[650]">
+                {user.name}
+              </span>
               <span className="truncate text-caption text-muted">
                 {roleLabel}
                 {user.username ? ` · ${user.username}` : ''}

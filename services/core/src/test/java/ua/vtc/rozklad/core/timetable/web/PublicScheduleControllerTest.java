@@ -1,6 +1,7 @@
 package ua.vtc.rozklad.core.timetable.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -110,6 +111,9 @@ class PublicScheduleControllerTest {
                 .andExpect(jsonPath("$.days[0].lessons[0].kind").value("SUBSTITUTED"))
                 .andExpect(jsonPath("$.days[0].lessons[0].original.teacher.shortName").value("Кренцін М.Д."))
                 .andExpect(jsonPath("$.days[0].lessons[0].reasonText").value("Зв.зам."))
+                .andExpect(jsonPath("$.days[0].lessons[0].parity").value(nullValue()))
+                .andExpect(jsonPath("$.days[0].lessons[1].kind").value("REGULAR"))
+                .andExpect(jsonPath("$.days[0].lessons[1].parity").value("DENOMINATOR"))
                 .andReturn();
 
         mockMvc.perform(get("/api/public/schedule/group/{id}", GROUP)
@@ -246,12 +250,16 @@ class PublicScheduleControllerTest {
                 new DisciplineRef(UUID.randomUUID(), "НДЕКСМ", "Надійність, діагностика та експлуатація", null),
                 new TeacherRef(UUID.randomUUID(), "Непийвода М.В.", "Непийвода"),
                 new RoomRef(UUID.randomUUID(), "6", RoomType.COMPUTER_LAB), new GroupRef(GROUP, "4КІ1", 4), 0,
-                LessonViewKind.SUBSTITUTED, false,
+                null, LessonViewKind.SUBSTITUTED, false,
                 new LessonView.Original(new DisciplineRef(UUID.randomUUID(), "СТП", "Сучасні технології", null),
                         new TeacherRef(UUID.randomUUID(), "Кренцін М.Д.", "Кренцін"), null, null),
                 "Зв.зам.", UUID.randomUUID());
+        // пара лише по знаменниках (як і сам день): парність рядка шаблону
+        LessonView denominatorOnly = new LessonView(UUID.randomUUID(), 3, LocalTime.of(11, 0), LocalTime.of(12, 0),
+                new DisciplineRef(UUID.randomUUID(), "СТП", "Сучасні технології", null), null, null,
+                new GroupRef(GROUP, "4КІ1", 4), 0, Parity.DENOMINATOR, LessonViewKind.REGULAR, false, null, null, null);
         return new ScheduleView(new ScheduleView.Owner(ScheduleOwnerType.GROUP, GROUP, "4КІ1"), MONDAY, MONDAY,
                 List.of(new ScheduleView.Day(MONDAY, 1, "ПОНЕДІЛОК", Parity.DENOMINATOR, true, null,
-                        List.of(lesson))));
+                        List.of(lesson, denominatorOnly))));
     }
 }

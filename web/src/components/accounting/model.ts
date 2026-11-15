@@ -100,6 +100,8 @@ export function changesLink(row: AccountingRow): string | null {
     suggest: suggestion.kind,
   });
   if (suggestion.fromDate) params.set('date', suggestion.fromDate);
+  // скільки пар бракує — форма «Додаткова пара» нагадує про це диспетчеру
+  if (suggestion.kind === 'ADDITIONAL' && suggestion.lessons > 0) params.set('lessons', String(suggestion.lessons));
   return `/admin/changes?${params.toString()}`;
 }
 

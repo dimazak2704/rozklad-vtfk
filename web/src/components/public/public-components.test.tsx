@@ -116,3 +116,15 @@ describe('useDocumentTitle', () => {
     expect(document.title).toBe('Розклад ВТФК');
   });
 });
+
+describe('ScheduleFinder: «Нещодавно» на дотику', () => {
+  it('коротке посилання («1ВЕ») має ціль більшу за текст: невидимий псевдоелемент і 44 px заввишки на дотику', () => {
+    useFavoritesStore.setState({ favorites: [], recent: [{ type: 'GROUP', id: 'x', label: '1ВЕ', url: '/g/1ВЕ' }] });
+    renderFinder();
+    const link = screen.getByRole('link', { name: '1ВЕ' });
+    expect(link).toHaveAttribute('data-target-link');
+    for (const token of ['relative', 'pointer-coarse:min-h-11', 'before:absolute', 'before:-inset-x-1', 'before:-inset-y-1']) {
+      expect(link.className.split(/\s+/)).toContain(token);
+    }
+  });
+});

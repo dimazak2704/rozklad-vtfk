@@ -1,6 +1,6 @@
 import { ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router';
+import { Link, useLocation, useMatch } from 'react-router';
 import { navFor, type AppRoute, type NavMeta } from '@/app/routes';
 import { cn } from '@/lib/cn';
 import { IconButton } from '../ui/IconButton';
@@ -52,42 +52,38 @@ function NavItem({
   const { pathname } = useLocation();
   const label = item.nav.sidebarLabel ?? item.nav.label;
   const prefixActive = item.nav.activePrefix ? pathname.startsWith(item.nav.activePrefix) : false;
+  // «Сьогодні» (/admin) — лише точний збіг, інші — і їхні підсторінки (як `end` у NavLink)
+  const routeActive = Boolean(useMatch({ path: item.path, end: item.path === '/admin' }));
+  const active = routeActive || prefixActive;
   const needsDecision = Boolean(count?.unresolved && count.value > 0);
+  // клас — рядком, а не функцією NavLink: у згорнутій рейці посилання стоїть у Tooltip (Radix Slot), а Slot
+  // склеює className як рядки — функція губилася, і з нею центрування, тло й підсвітка вибраного пункту
   const link = (
-    <NavLink
+    <Link
       to={item.path}
-      end={item.path === '/admin'}
       onClick={onNavigate}
+      // підсвічений розділ («Довідники» на сторінці викладачів) читач екрана теж чує як поточний: це не сама
+      // сторінка посилання, тож `true`, а не `page`
+      aria-current={routeActive ? 'page' : prefixActive ? 'true' : undefined}
       aria-label={collapsed ? (needsDecision ? `${label}: потрібне рішення` : label) : undefined}
-      className={({ isActive }) =>
-        cn(
-          'group/item relative flex h-9 items-center gap-3 rounded-control text-ui transition-[background-color,color] duration-150',
-          'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus pointer-coarse:h-11',
-          collapsed ? 'justify-center px-0' : 'px-3',
-          isActive || prefixActive
-            ? 'bg-selected font-[650] text-primary'
-            : 'font-[550] text-secondary hover:bg-hover hover:text-primary active:bg-active',
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <item.nav.icon
-            aria-hidden="true"
-            className={cn('size-4', isActive || prefixActive ? 'text-accent' : 'text-muted group-hover/item:text-secondary')}
-          />
-          {!collapsed ? <span className="truncate">{label}</span> : null}
-          {needsDecision ? (
-            <span
-              aria-hidden={collapsed || undefined}
-              className={cn('size-2 shrink-0 rounded-full bg-change', collapsed ? 'absolute end-2.5 top-2' : 'ms-auto')}
-            >
-              {!collapsed ? <span className="sr-only">потрібне рішення</span> : null}
-            </span>
-          ) : null}
-        </>
+      className={cn(
+        'group/item relative flex h-9 items-center gap-3 rounded-control text-ui transition-[background-color,color] duration-150',
+        'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus pointer-coarse:h-11',
+        collapsed ? 'justify-center px-0' : 'px-3',
+        active ? 'bg-selected font-[650] text-primary' : 'font-[550] text-secondary hover:bg-hover hover:text-primary active:bg-active',
       )}
-    </NavLink>
+    >
+      <item.nav.icon aria-hidden="true" className={cn('size-4 shrink-0', active ? 'text-accent' : 'text-muted group-hover/item:text-secondary')} />
+      {!collapsed ? <span className="truncate">{label}</span> : null}
+      {needsDecision ? (
+        <span
+          aria-hidden={collapsed || undefined}
+          className={cn('size-2 shrink-0 rounded-full bg-change', collapsed ? 'absolute end-1.5 top-1.5' : 'ms-auto')}
+        >
+          {!collapsed ? <span className="sr-only">потрібне рішення</span> : null}
+        </span>
+      ) : null}
+    </Link>
   );
   return (
     <li>

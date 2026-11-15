@@ -15,6 +15,7 @@ import { sameRequest } from '@/lib/undo/records';
 import { compareIsoDates, diffDays, formatNumericDate, formatShortWeekdayDate } from '@/lib/date';
 import { ABSENCE_REASON_LABEL } from '@/lib/labels';
 import { pairsCountGenitive } from '../format';
+import { useTeacherLabel } from '../useTeacherLabel';
 
 const REASONS = Object.keys(ABSENCE_REASON_LABEL) as AbsenceReasonCategory[];
 const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -87,6 +88,7 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
   const editing = Boolean(absence);
   const schema = useMemo(() => buildSchema(semester), [semester]);
   const teachers = usePublicTeachers();
+  const name = useTeacherLabel();
   const create = useCreateAbsence();
   const update = useUpdateAbsence();
   const [formError, setFormError] = useState<string | null>(null);
@@ -174,11 +176,11 @@ export function AbsenceDialog({ open, onOpenChange, date, semester, absence, onS
     () =>
       (teachers.data ?? []).map((t) => ({
         value: t.id,
-        label: t.shortName,
-        keywords: [t.displayName],
+        label: name(t),
+        keywords: [t.shortName, t.displayName],
         description: t.cycleCommission ?? undefined,
       })),
-    [teachers.data],
+    [teachers.data, name],
   );
   const pending = formState.isSubmitting;
 

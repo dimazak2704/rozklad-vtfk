@@ -13,13 +13,25 @@ import { renderWithProviders } from '@/test/render';
 import { absenceSchema, toAbsenceRequest } from './absence-schema';
 import { AbsenceForm } from './AbsenceForm';
 import { AbsenceList } from './AbsenceList';
-import { awaitingAnswer, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
-import { assignmentPairs, assignmentPhrase, confirmedAssignments, endSentence, lessonPhrase, nextDaySentence, nextRequest, withRequest } from './my-day';
+import { awaitingAnswer, changePassed, changeReplaced, changeStatusBadge, changeWhen, deadlineDay, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
+import {
+  assignmentLessons,
+  assignmentPairs,
+  assignmentPhrase,
+  confirmedAssignments,
+  endSentence,
+  lessonPhrase,
+  nextDaySentence,
+  nextRequest,
+  withAssignments,
+  withRequest,
+} from './my-day';
 import { MyNow } from './MyNow';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
 import { cellKey, changedCells, nextKind, shorterDaysNote, toList, toMap, type CellKey } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
+import { useAssignedSchedule } from './useAssignedSchedule';
 import { answered } from '@/api/me';
 
 const krentsin = teacherNamed('Кренцін');
@@ -739,6 +751,9 @@ describe('мій день реченням', () => {
     expect(nextDaySentence([day('2026-11-16', [gym])], '2026-11-13', 'me')).toMatch(/^У понеділок, 16\sлистопада, перша о 08:30 — ФВ, 4КІ2, с\.з\.$/);
     expect(nextDaySentence([day('2026-11-12', [gym])], '2026-11-11', 'me')).toBe('Завтра перша о 08:30 — ФВ, 4КІ2, с.з.');
     expect(endSentence('ауд. 14')).toBe('ауд. 14.');
+    // пара без дзвінків (заміна, дзвінки ще не прийшли) — номером, а не «о null»
+    const untimed = { ...lesson(2, '08:30', 'me'), startsAt: null };
+    expect(nextDaySentence([day('2026-11-12', [untimed])], '2026-11-11', 'me')).toMatch(/^Завтра перша — 2\u00a0пара, СТП, 4КІ2, ауд\.\s14\.$/);
   });
 
   it('запит на заміну, що чекає відповіді, — у реченні «що далі», а не поруч із «завтра пар немає»', () => {
@@ -960,5 +975,176 @@ describe('відповідь на заміну (як у core)', () => {
       { ...base, id: 'auto', date: '2026-11-10', pairFrom: 4, approvalMode: 'AUTO' },
     ] as ChangeDto[];
     expect(awaitingAnswer(list, '2026-11-09').map((c) => c.id)).toEqual(['request', 'notice']);
+  });
+});
+
+describe('одне правило в кабінеті: підтверджена, ще не опублікована заміна — моя пара всюди', () => {
+  const today = '2026-11-20';
+  const bells: BellSlotDto[] = [
+    { pair: 1, startsAt: '08:30', endsAt: '09:30' },
+    { pair: 2, startsAt: '09:40', endsAt: '10:40' },
+  ];
+  const friday = { date: today, weekday: 5, weekdayLabel: 'ПЯТНИЦЯ', parity: 'DENOMINATOR', studyDay: true, note: null, lessons: [] } as unknown as DayDto;
+  const change = (patch: Partial<ChangeDto>): ChangeDto =>
+    ({
+      id: 'c',
+      kind: 'REPLACE_DISCIPLINE',
+      date: today,
+      pairFrom: 2,
+      pairTo: 2,
+      subgroup: 0,
+      status: 'CONFIRMED',
+      approvalMode: 'NOTIFY',
+      teacherAnswer: null,
+      supersededBy: null,
+      printedReason: 'Зв.зам.',
+      group: { id: 'g', code: '4КІ1', course: 4 },
+      original: {
+        discipline: { id: 'd1', shortName: 'КБ', name: 'Кібербезпека' },
+        teacher: { id: 't0', shortName: 'Непийвода', displayName: 'Непийвода' },
+        room: { id: 'r', name: '14' },
+      },
+      new: {
+        discipline: { id: 'd2', shortName: 'СТП', name: 'Сучасні технології проєктування' },
+        teacher: { id: krentsin.id, shortName: 'Кренцін', displayName: 'Кренцін' },
+        room: null,
+      },
+      ...patch,
+    }) as unknown as ChangeDto;
+
+  it('заняття із заміни стоїть у розкладі дня так, як його покаже розпорядження', () => {
+    const merged = withAssignments({ days: [friday] }, [change({})], new Map([[today, bells]]));
+    const lesson = merged.days[0]!.lessons[0]!;
+    expect(lesson).toMatchObject({
+      pair: 2,
+      startsAt: '09:40',
+      endsAt: '10:40',
+      kind: 'SUBSTITUTED',
+      changeId: 'c',
+      reasonText: 'Зв.зам.',
+      discipline: { shortName: 'СТП' },
+      room: { name: '14' },
+      group: { code: '4КІ1' },
+    });
+    expect(lesson.original).toMatchObject({ discipline: { shortName: 'КБ' }, teacher: { shortName: 'Непийвода' } });
+  });
+
+  it('не додає запит, що ще чекає відповіді, відхилену, передану доповненням чи вже опубліковану заміну', () => {
+    const published = { ...friday, lessons: [{ id: 'l', pair: 2, changeId: 'c', subgroup: 0 } as LessonView] };
+    const schedule = { days: [friday] };
+    expect(withAssignments(schedule, [change({ status: 'PENDING_CONFIRMATION' })])).toBe(schedule);
+    expect(withAssignments(schedule, [change({ teacherAnswer: 'DECLINE' })])).toBe(schedule);
+    expect(withAssignments(schedule, [change({ supersededBy: { changeId: 'x', orderId: 'o', kind: 'CANCEL' } as unknown as ChangeDto['supersededBy'] })])).toBe(schedule);
+    expect(withAssignments({ days: [published] }, [change({})]).days[0]!.lessons).toHaveLength(1);
+    // без дзвінків — пара без часу, а не вигаданий час
+    expect(withAssignments(schedule, [change({})]).days[0]!.lessons[0]).toMatchObject({ startsAt: null, endsAt: null });
+  });
+
+  it('блок — одне заняття на кілька пар, додаткова пара — «Додано» на кожну пару', () => {
+    const [block] = assignmentLessons(change({ kind: 'BLOCK', pairFrom: 1, pairTo: 2 }), bells);
+    expect(block).toMatchObject({ pair: 1, startsAt: '08:30', endsAt: '10:40', kind: 'BLOCK' });
+    expect(assignmentLessons(change({ kind: 'ADDITIONAL', pairFrom: 1, pairTo: 2 }), bells).map((l) => [l.pair, l.kind])).toEqual([
+      [1, 'ADDITIONAL'],
+      [2, 'ADDITIONAL'],
+    ]);
+  });
+
+  it('зміна моєї ж пари (аудиторія, дисципліна, скасування) — не друга клітинка «Заміна»', () => {
+    const me = { id: krentsin.id, shortName: 'Кренцін', displayName: 'Кренцін' };
+    const own = change({}).original;
+    const mine = { ...own, teacher: me };
+    const schedule = { days: [friday] };
+    expect(withAssignments(schedule, [change({ kind: 'ROOM_CHANGE', original: mine, new: { discipline: null, teacher: me, room: { id: 'r2', name: '301' } } as ChangeDto['new'] })])).toBe(schedule);
+    expect(withAssignments(schedule, [change({ original: mine, new: { ...change({}).new, teacher: null } })])).toBe(schedule);
+    expect(withAssignments(schedule, [change({ kind: 'CANCEL', original: mine })])).toBe(schedule);
+    // а пара іншого викладача, яку веду я, — так
+    expect(withAssignments(schedule, [change({})]).days[0]!.lessons).toHaveLength(1);
+  });
+
+  it('після останньої пари «що далі» бачить завтрашню підтверджену заміну, як і сітка', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // четвер, 19 листопада, 16:00 за Києвом: сьогодні пар немає, завтра — лише заміна
+    vi.setSystemTime(new Date('2026-11-19T14:00:00Z'));
+    try {
+      const thursday = { ...friday, date: '2026-11-19', weekday: 4, weekdayLabel: 'ЧЕТВЕР' } as DayDto;
+      server.use(
+        http.get(apiPath('/me/changes'), () => Response.json([change({})])),
+        http.get(apiPath('/public/bells'), () => Response.json({ profile: { id: 'p', name: 'Основний' }, date: today, weekday: 5, studyDay: true, slots: bells })),
+      );
+      renderWithProviders(<MyNow teacherId={krentsin.id} today="2026-11-19" days={[thursday, friday]} bells={bells} />);
+      expect(await screen.findByText('Завтра перша о 09:40 — СТП, 4КІ1, ауд. 14.')).toBeInTheDocument();
+      expect(screen.queryByText(/Завтра пар немає/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('«Мої пари» показують ту саму заміну, яку «зараз» називає поточною парою (з часом із дзвінків)', async () => {
+    server.use(
+      http.get(apiPath('/me/changes'), () => Response.json([change({})])),
+      http.get(apiPath('/public/bells'), () => Response.json({ profile: { id: 'p', name: 'Основний' }, date: today, weekday: 5, studyDay: true, slots: bells })),
+    );
+    const schedule = { days: [friday] };
+    function Probe() {
+      const merged = useAssignedSchedule(schedule);
+      return <p>{merged?.days[0]?.lessons.map((lesson) => `${lesson.pair}:${lesson.discipline.shortName}:${lesson.startsAt ?? '-'}`).join(',')}</p>;
+    }
+    renderWithProviders(<Probe />);
+    expect(await screen.findByText('2:СТП:09:40')).toBeInTheDocument();
+  });
+});
+
+describe('рядки запитів про минулу пару', () => {
+  it('пара минула за дзвінком — сьогодні після кінця останньої пари заміни або в минулий день', () => {
+    const bells = [
+      { pair: 1, endsAt: '09:30' },
+      { pair: 2, endsAt: '10:40' },
+    ];
+    expect(changePassed({ date: '2026-11-20', pairTo: 1 }, '2026-11-20', { bells, minutes: 10 * 60 })).toBe(true);
+    expect(changePassed({ date: '2026-11-20', pairTo: 2 }, '2026-11-20', { bells, minutes: 10 * 60 })).toBe(false);
+    expect(changePassed({ date: '2026-11-19', pairTo: 2 }, '2026-11-20', null)).toBe(true);
+    // без дзвінків не знаємо — тож ні
+    expect(changePassed({ date: '2026-11-20', pairTo: 1 }, '2026-11-20', null)).toBe(false);
+  });
+
+  it('прохання про минулу пару не буває найтерміновішим: заповнена кнопка не стоїть у рядку без «Не можу»', () => {
+    const now = new Date('2026-11-20T08:00:00Z');
+    const list = [
+      { id: 'past', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-20T09:00:00Z' },
+      { id: 'later', status: 'PENDING_CONFIRMATION', confirmDeadline: '2026-11-21T09:00:00Z' },
+    ] as ChangeDto[];
+    expect(mostUrgent(list, now)).toBe('past');
+    expect(mostUrgent(list, now, (change) => change.id === 'past')).toBe('later');
+    expect(mostUrgent(list.slice(0, 1), now, () => true)).toBeNull();
+  });
+
+  describe('у списку', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 10:05 за Києвом — 1 пара 9 листопада вже скінчилася
+      vi.setSystemTime(new Date('2026-11-09T08:05:00Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('минула пара: звичайна «Підтверджую» і пояснення замість «Не можу»; заповнена — у живому рядку', async () => {
+      const request = changesForTeacher(krentsin.id, new Date()).find((change) => change.status === 'PENDING_CONFIRMATION');
+      if (!request) throw new Error('у фікстурах немає запиту CONFIRM');
+      server.use(
+        http.get(apiPath('/me/changes'), () =>
+          Response.json([
+            { ...request, id: 'over', date: '2026-11-09', pairFrom: 1, pairTo: 1, confirmDeadline: '2026-11-09T12:00:00Z', supersededBy: null },
+            { ...request, id: 'ahead', date: '2026-11-10', pairFrom: 2, pairTo: 2, confirmDeadline: '2026-11-10T05:00:00Z', supersededBy: null },
+          ]),
+        ),
+      );
+      renderWithProviders(<SubstitutionRequests teacherId={krentsin.id} />);
+      const over = await screen.findByRole('article', { name: /1 пара$/ });
+      await waitFor(() => expect(within(over).getByText('Відмовитися вже не можна')).toBeInTheDocument());
+      expect(within(over).queryByRole('button', { name: 'Не можу' })).not.toBeInTheDocument();
+      await waitFor(() => expect(within(over).getByRole('button', { name: 'Підтверджую' }).className).not.toMatch(/bg-accent/));
+      const ahead = screen.getByRole('article', { name: /2 пара$/ });
+      await waitFor(() => expect(within(ahead).getByRole('button', { name: 'Підтверджую' }).className).toMatch(/bg-accent/));
+      expect(within(ahead).getByRole('button', { name: 'Не можу' })).toBeInTheDocument();
+    });
   });
 });

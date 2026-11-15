@@ -1,7 +1,7 @@
 /** Тексти для карток запитів на заміну: що саме треба провести і замість кого. */
 import type { ChangeDto, IsoDate, Uuid } from '@/api/types';
 import type { BadgeTone } from '@/components/ui';
-import { compareIsoDates, formatDayMonth, formatWeekdayDate, isoWeekday, relativeDayLabel, todayInKyiv } from '@/lib/date';
+import { compareIsoDates, formatDayMonth, formatWeekdayDate, isoWeekday, relativeDayLabel, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { weekdayShort } from '@/lib/labels';
 import { roomLabel } from '@/lib/schedule';
 
@@ -115,13 +115,29 @@ export function awaitingAnswer(changes: readonly ChangeDto[], today: IsoDate): C
 export const REPLY_UNDO_MS = 8_000;
 
 /**
+ * Пара заміни вже скінчилася: дата в минулому або сьогодні після дзвінка з останньої пари заміни.
+ * Без дзвінків на сьогодні не знаємо — тоді ні. Відмовитися від такої заміни вже нічого не змінить.
+ */
+export function changePassed(
+  change: Pick<ChangeDto, 'date' | 'pairTo'>,
+  today: IsoDate,
+  clock?: { bells: readonly { pair: number; endsAt: string }[]; minutes: number } | null,
+): boolean {
+  if (compareIsoDates(change.date, today) < 0) return true;
+  if (change.date !== today || !clock) return false;
+  const slot = clock.bells.find((s) => s.pair === change.pairTo);
+  return slot ? clock.minutes >= timeToMinutes(slot.endsAt) : false;
+}
+
+/**
  * Найтерміновіший рядок — єдиний із заповненою кнопкою: прохання з найближчим строком відповіді (строк
  * стоїть першим рядком і пояснює, чому саме воно). Немає відкритих строків — немає й заповненої кнопки:
- * без пояснення вона лише вносила б нерівність між однаковими рядками.
+ * без пояснення вона лише вносила б нерівність між однаковими рядками. Прохання про пару, що вже минула,
+ * не найтерміновіше: у його рядку лише «Підтверджую» без «Не можу», і заповнена кнопка там збивала б ієрархію.
  */
-export function mostUrgent(waiting: readonly ChangeDto[], now: Date): Uuid | null {
+export function mostUrgent(waiting: readonly ChangeDto[], now: Date, passed: (change: ChangeDto) => boolean = () => false): Uuid | null {
   const open = waiting
-    .filter((c) => c.status === 'PENDING_CONFIRMATION' && c.confirmDeadline && new Date(c.confirmDeadline).getTime() > now.getTime())
+    .filter((c) => c.status === 'PENDING_CONFIRMATION' && c.confirmDeadline && new Date(c.confirmDeadline).getTime() > now.getTime() && !passed(c))
     .sort((a, b) => new Date(a.confirmDeadline ?? 0).getTime() - new Date(b.confirmDeadline ?? 0).getTime());
   return open[0]?.id ?? null;
 }

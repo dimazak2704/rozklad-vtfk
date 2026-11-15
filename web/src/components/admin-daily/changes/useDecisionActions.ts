@@ -16,6 +16,8 @@ import { track, trackFinal } from '@/lib/undo/actions';
 import { JournalBlockedError } from '@/lib/undo/errors';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
+import type { TeacherLabel } from '../teacher-label';
+import { useTeacherLabel } from '../useTeacherLabel';
 import { manualTeacherRequest, optionKey, reasonForOption, requestForOption, type LessonEntry, type PickContext, type PlanChoice } from '../model';
 
 /** Скільки часу вважати подію SSE «своєю» (щоб не показувати тост про власну дію вдруге). */
@@ -34,9 +36,9 @@ function lessonLabel(entry: LessonEntry): string {
  * Речення про рішення для тосту й журналу: прохання пішло (CONFIRM) чи призначено одразу (інші режими).
  * «Призначено Коваль — 4КІ1, 2 пара».
  */
-function decidedMessage(created: ChangeDto, where: string): string {
+export function decidedMessage(created: ChangeDto, where: string, name: TeacherLabel): string {
   if (created.kind === 'CANCEL') return `Знято пару — ${where}`;
-  const who = created.new.teacher?.shortName ?? created.new.discipline?.shortName ?? 'зміну';
+  const who = created.new.teacher ? name(created.new.teacher) : (created.new.discipline?.shortName ?? 'зміну');
   const what = created.kind === 'MERGE_SUBGROUPS' ? `${who} на обидві підгрупи` : who;
   if (created.status === 'PENDING_CONFIRMATION') return `Надіслано прохання в Telegram: ${what} — ${where}`;
   if (created.kind === 'SWAP') return `Переставлено пари — ${where}`;
@@ -94,6 +96,7 @@ function contextOf(entry: LessonEntry, reason: ReasonInput): PickContext {
  * не дублювали тости.
  */
 export function useDecisionActions() {
+  const name = useTeacherLabel();
   const create = useCreateChange();
   const createBatch = useCreateChangesBatch();
   const cancel = useCancelChange();
@@ -154,7 +157,7 @@ export function useDecisionActions() {
       try {
         // створення не позначаємо «своїм»: відповідь викладача на цю заміну має показатися тостом
         const created = await create.mutateAsync(body);
-        offerUndo(decidedMessage(created, lessonLabel(entry)), [created]);
+        offerUndo(decidedMessage(created, lessonLabel(entry), name), [created]);
         return true;
       } catch (error) {
         const conflicts = conflictText(error);
@@ -168,7 +171,7 @@ export function useDecisionActions() {
         setPickingKey(null);
       }
     },
-    [create, offerUndo],
+    [create, name, offerUndo],
   );
 
   const pick = useCallback(
@@ -230,12 +233,15 @@ export function useDecisionActions() {
       try {
         if (kind === 'resend') {
           await resend.mutateAsync(change.id);
-          notify.success(`Нагадування надіслано: ${change.new.teacher?.shortName ?? 'викладачу'}`);
-          trackFinal(`Надіслано нагадування в Telegram: ${change.new.teacher?.shortName ?? 'викладачу'}`, 'Повідомлення в Telegram не відкликається');
+          notify.success(`Нагадування надіслано: ${change.new.teacher ? name(change.new.teacher) : 'викладачу'}`);
+          trackFinal(
+            `Надіслано нагадування в Telegram: ${change.new.teacher ? name(change.new.teacher) : 'викладачу'}`,
+            'Повідомлення в Telegram не відкликається',
+          );
         } else {
           await confirmChange.mutateAsync(change.id);
-          notify.success(`Заміну підтверджено: ${change.new.teacher?.shortName ?? change.group.code}`);
-          trackFinal(`Підтверджено заміну: ${change.new.teacher?.shortName ?? change.group.code}`, 'Підтвердження не скасовується');
+          notify.success(`Заміну підтверджено: ${change.new.teacher ? name(change.new.teacher) : change.group.code}`);
+          trackFinal(`Підтверджено заміну: ${change.new.teacher ? name(change.new.teacher) : change.group.code}`, 'Підтвердження не скасовується');
         }
       } catch (error) {
         notify.error(error, kind === 'resend' ? 'Не вдалося надіслати нагадування' : 'Не вдалося підтвердити заміну');
@@ -243,12 +249,12 @@ export function useDecisionActions() {
         setBusy(null);
       }
     },
-    [confirmChange, markOwn, resend],
+    [confirmChange, markOwn, name, resend],
   );
 
   const cancelDecision = useCallback(
     async (change: ChangeDto, entry: LessonEntry) => {
-      const teacher = change.new.teacher?.shortName;
+      const teacher = change.new.teacher ? name(change.new.teacher) : null;
       const ok = await confirm({
         title: 'Скасувати рішення?',
         description:
@@ -273,7 +279,7 @@ export function useDecisionActions() {
         setBusy(null);
       }
     },
-    [cancel, markOwn],
+    [cancel, markOwn, name],
   );
 
   return {

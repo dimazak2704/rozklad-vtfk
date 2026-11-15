@@ -1,23 +1,26 @@
-import { CalendarPlus, ChevronLeft, FileText, Plus } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, FilePlus2, FileText, Plus } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { qk } from '@/api/queryKeys';
-import { useCancelAbsence, useDailyLiveSync, useUpdateAbsence, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
+import { useCancelAbsence, useCancelChange, useDailyLiveSync, useUpdateAbsence, useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
 import { useSettings } from '@/api/settings';
-import type { AbsenceDto, AbsenceRequest, ReasonCode, Uuid } from '@/api/types';
+import type { AbsenceDto, AbsenceRequest, ChangeDto, ReasonCode, Uuid } from '@/api/types';
 import { AbsenceDialog } from '@/components/admin-daily/changes/AbsenceDialog';
 import { AbsenceList } from '@/components/admin-daily/changes/AbsenceList';
 import { AbsenceStrip } from '@/components/admin-daily/changes/AbsenceStrip';
 import { LessonList } from '@/components/admin-daily/changes/LessonList';
+import { prefillFromParams, standaloneChanges, standaloneHeading, type NewChangePrefill } from '@/components/admin-daily/changes/new-change';
+import { NewChangeDialog } from '@/components/admin-daily/changes/NewChangeDialog';
+import { StandaloneChanges } from '@/components/admin-daily/changes/StandaloneChanges';
 import { OptionsPanel } from '@/components/admin-daily/changes/OptionsPanel';
 import { useChangesWorkspace, type Period } from '@/components/admin-daily/changes/useChangesWorkspace';
 import { useDecisionActions } from '@/components/admin-daily/changes/useDecisionActions';
-import { absencePeriod } from '@/components/admin-daily/format';
+import { absencePeriod, decisionSummary } from '@/components/admin-daily/format';
 import {
+  answerToast,
   effectiveOptionKey,
-  isObjection,
   isOpen,
   lessonButtonId,
   LESSON_STATE,
@@ -31,6 +34,7 @@ import {
 import { OfflineState } from '@/components/admin-daily/OfflineState';
 import { ResolvedProgress } from '@/components/admin-daily/ResolvedProgress';
 import { useContainerWidth } from '@/components/admin-daily/useContainerWidth';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 import {
   Button,
   buttonClass,
@@ -42,6 +46,7 @@ import {
   PageHeader,
   SegmentedControl,
   Skeleton,
+  Tooltip,
   notify,
 } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
@@ -58,17 +63,109 @@ const TWO_PANES = 760;
 const THREE_PANES = 1080;
 const PULSE_MS = 2_400;
 
-const STICKY = 'lg:sticky lg:top-[calc(var(--sticky-top)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-top)-2rem)] lg:overflow-y-auto lg:overscroll-contain';
+/**
+ * Колонка варіантів тримається під верхньою панеллю, а прокручується всередині себе. Смуга прокрутки відступає
+ * від заокругленого кута панелі (my/me), місце під неї зарезервоване (без стрибка ширини), а низ тихо згасає —
+ * видно, що далі є ще варіанти.
+ */
+const STICKY = 'lg:sticky lg:top-[calc(var(--sticky-top)+1rem)] lg:my-2.5 lg:me-1.5';
+const STICKY_SCROLL =
+  'lg:max-h-[calc(100dvh-var(--sticky-top)-2.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-gutter:stable] lg:[scrollbar-width:thin] ' +
+  // slop-allow: маска прозорості (не колір): низ колонки тихо згасає, показуючи, що далі є ще варіанти
+  'lg:pb-8 lg:[mask-image:linear-gradient(to_bottom,#000_calc(100%-1.5rem),transparent)]';
 
-function WorkspaceSkeleton({ columns }: { columns: number }) {
+/** Рядок відсутнього в силуеті: імʼя, підпис і смужка «вирішено». */
+function AbsenceRowSkeleton() {
   return (
-    <div aria-hidden="true" className={cn('grid gap-4 p-4', columns === 3 && 'grid-cols-[28fr_32fr_40fr]', columns === 2 && 'grid-cols-2')}>
-      {Array.from({ length: columns }, (_, column) => (
-        <div key={column} className="flex flex-col gap-3">
-          {[0, 1, 2].map((key) => (
-            <Skeleton key={key} className="h-14 w-full rounded-popover" />
+    <div className="flex flex-col gap-2 px-3 py-2.5">
+      <Skeleton className="h-4 w-2/3" />
+      <Skeleton className="h-3 w-1/2" />
+      <Skeleton className="h-2.5 w-28" />
+    </div>
+  );
+}
+
+/** Рядок пари в силуеті: час ліворуч, група з дисципліною й стан праворуч. */
+function LessonRowSkeleton() {
+  return (
+    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 px-3 py-2.5">
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-4 w-11" />
+        <Skeleton className="h-3 w-9" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+/** Силует колонки варіантів: заголовок, підпис і картка найкращого варіанта. */
+function OptionsSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <Skeleton className="h-5 w-2/3" />
+      <Skeleton className="h-3 w-1/2" />
+      <Skeleton className="mt-2 h-36 w-full rounded-popover" />
+      <Skeleton className="h-12 w-full rounded-popover" />
+    </div>
+  );
+}
+
+/**
+ * Силует тієї самої форми, що й робоча панель (відсутні · пари · варіанти; на ноутбуці — рядок відсутніх над
+ * двома колонками; на телефоні — список): поки не прийшли всі запити, панель не показується наполовину.
+ */
+function WorkspaceSkeleton({ panes }: { panes: number }) {
+  const lessons = (
+    <div className="flex flex-col gap-1 p-3 pt-5">
+      <div className="flex flex-col gap-1.5 px-3 pb-2">
+        <Skeleton className="h-5 w-1/2" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+      {[0, 1, 2].map((key) => (
+        <LessonRowSkeleton key={key} />
+      ))}
+    </div>
+  );
+  if (panes === 3) {
+    return (
+      <div aria-hidden="true" className="grid grid-cols-[28fr_32fr_40fr] rounded-panel border border-default bg-surface">
+        <div className="flex flex-col gap-1 p-3">
+          <Skeleton className="mx-3 mt-2 mb-1 h-4 w-20" />
+          {[0, 1, 2, 3].map((key) => (
+            <AbsenceRowSkeleton key={key} />
           ))}
         </div>
+        <div className="border-s border-separator">{lessons}</div>
+        <div className="border-s border-separator">
+          <OptionsSkeleton />
+        </div>
+      </div>
+    );
+  }
+  if (panes === 2) {
+    return (
+      <div aria-hidden="true" className="flex flex-col gap-4">
+        <div className="flex gap-1.5">
+          {[0, 1, 2, 3].map((key) => (
+            <Skeleton key={key} className="h-9 w-28 rounded-full" />
+          ))}
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] rounded-panel border border-default bg-surface">
+          {lessons}
+          <div className="border-s border-separator">
+            <OptionsSkeleton />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div aria-hidden="true" className="rounded-panel border border-default bg-surface p-2 pt-3">
+      {[0, 1, 2, 3].map((key) => (
+        <AbsenceRowSkeleton key={key} />
       ))}
     </div>
   );
@@ -123,13 +220,27 @@ export default function ChangesPage() {
 
   useDailyLiveSync();
   const navigate = useNavigate();
+  const name = useTeacherLabel();
   const workspace = useChangesWorkspace(date, period);
   const actions = useDecisionActions();
   const cancelAbsence = useCancelAbsence();
   const updateAbsence = useUpdateAbsence();
   // напис дії залежить від режиму погодження; будь-який інший за CONFIRM — «Призначити»
   const approvalMode = useSettings().data?.approvalMode ?? null;
-  const [dialog, setDialog] = useState<{ open: boolean; absence: AbsenceDto | null; seq: number }>({ open: false, absence: null, seq: 0 });
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    absence: AbsenceDto | null;
+    seq: number;
+  }>({ open: false, absence: null, seq: 0 });
+  const [changeDialog, setChangeDialog] = useState<{
+    open: boolean;
+    prefill: NewChangePrefill | null;
+    seq: number;
+  }>({ open: false, prefill: null, seq: 0 });
+  const cancelChange = useCancelChange();
+  // з «Обліку годин» («Додати 2 пари», «Оформити «Вичит.»») — одразу форма зміни для цієї групи й дисципліни,
+  // а не перша-ліпша відсутність
+  const urlPrefill = prefillFromParams(params);
   const [pulsing, setPulsing] = useState<ReadonlySet<Uuid>>(new Set());
   // причину диспетчер може змінити сам (code), інакше вона йде за видом обраного варіанта
   const [reason, setReason] = useState<{ lessonId: string | null; code: ReasonCode | null; text: string }>({
@@ -234,6 +345,18 @@ export default function ChangesPage() {
 
   const openDialog = (absence: AbsenceDto | null) => setDialog((prev) => ({ open: true, absence, seq: prev.seq + 1 }));
   const openNewAbsence = () => openDialog(null);
+  const openChangeWith = (prefill: NewChangePrefill | null) =>
+    setChangeDialog((prev) => ({
+      open: true,
+      prefill,
+      seq: prev.seq + 1,
+    }));
+  // без аргументів: кнопки й гарячі клавіші передають сюди подію, а не заготовку форми
+  const openNewChange = () => openChangeWith(null);
+  const closeNewChange = () => {
+    setChangeDialog((prev) => ({ ...prev, open: false }));
+    if (urlPrefill) updateParams({ group: null, discipline: null, suggest: null, lessons: null });
+  };
 
   useHotkeys([
     { keys: 'j', handler: () => move(1), description: 'Наступна пара', group: 'Заміни' },
@@ -245,12 +368,46 @@ export default function ChangesPage() {
       helpKeys: n === 1 ? '1–9' : undefined,
       group: 'Заміни',
     })),
-    { keys: 'n', handler: openNewAbsence, description: 'Нова відсутність', group: 'Заміни' },
+    {
+      keys: 'n',
+      handler: openNewAbsence,
+      description: 'Нова відсутність',
+      group: 'Заміни',
+    },
+    {
+      keys: 'c',
+      handler: openNewChange,
+      description: 'Нова зміна без відсутності (додаткова пара, аудиторія…)',
+      group: 'Заміни',
+    },
   ]);
 
   useRegisterCommands([
-    { id: 'new-absence', label: 'Нова відсутність', group: 'Заміни', icon: CalendarPlus, shortcut: 'n', perform: openNewAbsence, keywords: ['лікарняний', 'відсутній'] },
-    { id: 'order-draft', label: 'Відкрити чернетку розпорядження', group: 'Заміни', icon: FileText, perform: () => void navigate(`/admin/orders?date=${date}`) },
+    {
+      id: 'new-absence',
+      label: 'Нова відсутність',
+      group: 'Заміни',
+      icon: CalendarPlus,
+      shortcut: 'n',
+      perform: openNewAbsence,
+      keywords: ['лікарняний', 'відсутній'],
+    },
+    {
+      id: 'new-change',
+      label: 'Нова зміна: додаткова пара, аудиторія, викладач',
+      group: 'Заміни',
+      icon: FilePlus2,
+      shortcut: 'c',
+      perform: openNewChange,
+      keywords: ['додаткова пара', 'відпрацювання', 'аудиторія', 'вичитано', 'заміна без відсутності'],
+    },
+    {
+      id: 'order-draft',
+      label: 'Відкрити чернетку розпорядження',
+      group: 'Заміни',
+      icon: FileText,
+      perform: () => void navigate(`/admin/orders?date=${date}`),
+    },
   ]);
 
   // відповідь викладача в Telegram: тост одним реченням і короткий «пульс» на рядку пари
@@ -259,17 +416,8 @@ export default function ChangesPage() {
     if (!last || !teacherAnswered(last.from, last.to, change.approvalMode)) return;
     if (actions.isOwn(change.id) || change.date < workspace.from || change.date > workspace.to) return;
     const entry = workspace.entries.find((e) => e.item.decision?.changeId === change.id);
-    const teacher = change.new.teacher?.shortName ?? 'Викладач';
-    const where = `${change.group.code}, ${change.pairFrom} пара`;
-    if (isObjection(change)) {
-      notify.warning(`${teacher} не може (${where}), а заміна вже в розпорядженні — потрібне доповнення`);
-    } else if (last.to === 'DECLINED') {
-      notify.warning(`${teacher} відмовився (${where}) — оберіть інший варіант`);
-    } else if (change.approvalMode === 'NOTIFY') {
-      notify.info(`${teacher}: «Добре» (${where})`);
-    } else {
-      notify.success(`Підтверджено в Telegram: ${teacher} (${where})`);
-    }
+    const toast = answerToast(change, change.new.teacher ? name(change.new.teacher) : 'Викладач');
+    notify[toast.tone](toast.text);
     if (entry) {
       const lessonId = entry.item.lesson.id;
       setPulsing((prev) => new Set(prev).add(lessonId));
@@ -289,7 +437,7 @@ export default function ChangesPage() {
    * скасувала, не повертаються — про це каже примітка.
    */
   const journalAbsence = (before: AbsenceDto | null, saved: AbsenceDto) => {
-    const where = `${saved.teacher.shortName}, ${absencePeriod(saved)}`;
+    const where = `${name(saved.teacher)}, ${absencePeriod(saved)}`;
     const invalidate = [qk.admin.all];
     if (!before) {
       track({
@@ -318,7 +466,7 @@ export default function ChangesPage() {
     const ok = await confirm({
       title: 'Викладач на місці — скасувати відсутність?',
       description: 'Рішення за цією відсутністю, ще не внесені в розпорядження, теж скасуються.',
-      objectName: `${absence.teacher.shortName}, ${absencePeriod(absence)}`,
+      objectName: `${name(absence.teacher)}, ${absencePeriod(absence)}`,
       confirmLabel: 'Скасувати відсутність',
       cancelLabel: 'Залишити',
       tone: 'danger',
@@ -327,12 +475,48 @@ export default function ChangesPage() {
     try {
       await cancelAbsence.mutateAsync(absence.id);
       if (selectedAbsenceId === absence.id) updateParams({ absence: null, lesson: null });
-      notify.success(`Відсутність скасовано: ${absence.teacher.shortName}`);
-      trackFinal(`Скасовано відсутність — ${absence.teacher.shortName}, ${absencePeriod(absence)}`, 'Скасовану відсутність не повернути: додайте її знову');
+      notify.success(`Відсутність скасовано: ${name(absence.teacher)}`);
+      trackFinal(
+        `Скасовано відсутність — ${name(absence.teacher)}, ${absencePeriod(absence)}`,
+        'Скасовану відсутність не повернути: додайте її знову',
+      );
     } catch (error) {
       notify.error(error, 'Не вдалося скасувати відсутність');
     }
   };
+
+  const others = standaloneChanges(workspace.changesById.values());
+  const cancelStandalone = async (change: ChangeDto) => {
+    const declined = change.status === 'DECLINED';
+    const ok = await confirm({
+      title: declined ? 'Прибрати зміну з відмовою?' : 'Скасувати зміну?',
+      description: declined
+        ? 'Викладач уже відмовився, тож у розкладі групи цієї зміни немає. Її просто приберемо зі списку — нікому нічого не надішлемо.'
+        : change.status === 'PENDING_CONFIRMATION' || change.status === 'CONFIRMED'
+          ? 'Розклад групи повернеться як був. Якщо викладачу вже надіслали запит, бот повідомить про скасування.'
+          : 'Розклад групи повернеться як був.',
+      objectName: `${standaloneHeading(change, true)} — ${decisionSummary(change, name)}`,
+      confirmLabel: declined ? 'Прибрати' : 'Скасувати зміну',
+      cancelLabel: 'Залишити',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await cancelChange.mutateAsync(change.id);
+      notify.success(`Зміну скасовано: ${standaloneHeading(change, true)}`);
+      trackFinal(`Скасовано зміну — ${standaloneHeading(change, true)}`, 'Скасовану зміну не повернути: додайте її знову');
+    } catch (error) {
+      notify.error(error, 'Не вдалося скасувати зміну');
+    }
+  };
+  const othersList = (
+    <StandaloneChanges
+      changes={others}
+      showDates={period === 'week'}
+      onCancel={(change) => void cancelStandalone(change)}
+      onReplace={openChangeWith}
+    />
+  );
 
   const done = workspace.entries.filter((e) => !LESSON_STATE[e.state].needsAction).length;
   const weekend = period === 'day' && isWeekend(date);
@@ -367,6 +551,13 @@ export default function ChangesPage() {
       />
     ) : null;
 
+  // перше завантаження дати чи періоду: панель чекає на всі запити (відсутні, їхні пари, рішення) і доти
+  // показує силует тієї ж форми — без «напівзаповненої» панелі, що потім стрибає. Живі оновлення вже не ховають її.
+  const viewKey = `${date}|${period}`;
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+  if (!workspace.loading && settledKey !== viewKey) setSettledKey(viewKey);
+  const settling = workspace.loading && settledKey !== viewKey;
+
   const showDates = period === 'week' || workspace.absences.some((a) => a.dateFrom !== a.dateTo);
   // пари обраного відсутнього ще в дорозі (чи не прийшли) — не порожня колонка, а силует чи пояснення
   const selectedLessons = selectedAbsenceId ? workspace.lessonsStatus.get(selectedAbsenceId) : undefined;
@@ -384,8 +575,8 @@ export default function ChangesPage() {
         ) : (
           <p className="px-3 py-2 text-body text-secondary">
             {selectedLessons === 'failed'
-              ? `Пари ${selectedAbsence.teacher.shortName} не вдалося завантажити.`
-              : `У ${selectedAbsence.teacher.shortName} пар у цей період немає.`}
+              ? `Пари ${name(selectedAbsence.teacher)} не вдалося завантажити.`
+              : `У ${name(selectedAbsence.teacher)} пар у цей період немає.`}
           </p>
         )}
       </div>
@@ -414,6 +605,7 @@ export default function ChangesPage() {
       selectedId={selectedAbsenceId}
       onSelect={(id) => selectAbsence(id)}
       onAdd={openNewAbsence}
+      onAddChange={narrow ? openNewChange : undefined}
       loading={workspace.loading}
       drill={drill}
     />
@@ -441,22 +633,30 @@ export default function ChangesPage() {
     );
   } else if (workspace.offline) {
     body = <OfflineState />;
-  } else if (!workspace.loading && workspace.absences.length === 0) {
+  } else if (settling) {
     body = (
-      <EmptyState
-        title={period === 'day' ? `На ${formatWeekdayDateAfterNa(date)} ніхто не відсутній.` : 'Цього тижня ніхто не відсутній.'}
-        description="Коли викладач повідомить про відсутність через бота чи кабінет, його пари зʼявляться тут разом з варіантами заміни."
-        action={
-          <Button variant="ghost" className="-ms-3" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-            Додати відсутність
-          </Button>
-        }
-      />
+      <LoadingRegion label="Завантажуємо відсутніх і їхні пари…">
+        <WorkspaceSkeleton panes={panes} />
+      </LoadingRegion>
     );
-  } else if (workspace.loading && workspace.absences.length === 0) {
+  } else if (workspace.absences.length === 0) {
     body = (
-      <div className="rounded-panel border border-default bg-surface">
-        <WorkspaceSkeleton columns={panes} />
+      <div className="flex flex-col gap-4">
+        <EmptyState
+          title={period === 'day' ? `На ${formatWeekdayDateAfterNa(date)} ніхто не відсутній.` : 'Цього тижня ніхто не відсутній.'}
+          description="Коли викладач повідомить про відсутність через бота чи кабінет, його пари зʼявляться тут разом з варіантами заміни. Додаткову пару, іншу аудиторію чи ручну заміну без відсутності додає «Нова зміна»."
+          action={
+            <Button variant="ghost" className="-ms-3" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+              Додати відсутність
+            </Button>
+          }
+          secondaryAction={
+            <Button variant="ghost" onClick={openNewChange} iconStart={<FilePlus2 aria-hidden="true" className="size-4" />}>
+              Нова зміна
+            </Button>
+          }
+        />
+        {others.length > 0 ? <div className="rounded-panel border border-default bg-surface p-3">{othersList}</div> : null}
       </div>
     );
   } else if (panes === 3) {
@@ -467,10 +667,13 @@ export default function ChangesPage() {
             Відсутні
           </h2>
           {absenceList(false)}
+          {othersList}
         </section>
         <div className="min-w-0 border-s border-separator p-3 pt-5">{lessons()}</div>
         <aside aria-label="Рішення" className="min-w-0 border-s border-separator">
-          <div className={cn('p-5', STICKY)}>{optionsPanel(true)}</div>
+          <div className={STICKY}>
+            <div className={cn('p-5 lg:py-2.5 lg:ps-5 lg:pe-3.5', STICKY_SCROLL)}>{optionsPanel(true)}</div>
+          </div>
         </aside>
       </div>
     );
@@ -488,27 +691,35 @@ export default function ChangesPage() {
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-stretch rounded-panel border border-default bg-surface">
           <div className="min-w-0 p-3 pt-5">{lessons()}</div>
           <aside aria-label="Рішення" className="min-w-0 border-s border-separator">
-            <div className={cn('p-5', STICKY)}>{optionsPanel(true)}</div>
+            <div className={STICKY}>
+              <div className={cn('p-5 lg:py-2.5 lg:ps-5 lg:pe-3.5', STICKY_SCROLL)}>{optionsPanel(true)}</div>
+            </div>
           </aside>
         </div>
+        {others.length > 0 ? <div className="rounded-panel border border-default bg-surface p-3">{othersList}</div> : null}
       </div>
     );
   } else {
     // телефон і вузький планшет: по рівнях, і з кожного видно дорогу назад
     body = (
       <div className="rounded-panel border border-default bg-surface p-2 pt-3">
-        {selectedAbsence
-          ? lessons(
-              <button
-                type="button"
-                onClick={() => selectAbsence(null)}
-                className="ms-1 inline-flex min-h-9 w-fit items-center gap-0.5 rounded-control pe-2 text-ui font-[550] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
-              >
-                <ChevronLeft aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
-                Усі відсутні
-              </button>,
-            )
-          : absenceList(true)}
+        {selectedAbsence ? (
+          lessons(
+            <button
+              type="button"
+              onClick={() => selectAbsence(null)}
+              className="ms-1 inline-flex min-h-9 w-fit items-center gap-0.5 rounded-control pe-2 text-ui font-[550] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+            >
+              <ChevronLeft aria-hidden="true" className="size-[1.125rem] rtl:rotate-180" />
+              Усі відсутні
+            </button>,
+          )
+        ) : (
+          <>
+            {absenceList(true)}
+            {othersList}
+          </>
+        )}
       </div>
     );
   }
@@ -524,7 +735,7 @@ export default function ChangesPage() {
       <PageHeader
         title="Заміни"
         meta={
-          weekend || workspace.absences.length === 0 ? null : workspace.loading ? (
+          weekend || (!settling && workspace.absences.length === 0) ? null : settling ? (
             // поки пари й рішення їдуть, лічильник збрехав би («1 з 3» замість «4 з 8») — тримаємо місце
             <span aria-hidden="true" className="flex h-[1.375rem] items-center">
               <Skeleton className="h-3 w-48" />
@@ -544,7 +755,23 @@ export default function ChangesPage() {
                 { value: 'week', label: 'Тиждень' },
               ]}
             />
-            <Link to={`/admin/orders?date=${date}`} className={buttonClass({ variant: 'secondary', className: 'max-sm:hidden' })}>
+            <Tooltip content="Додаткова пара, інша аудиторія чи заміна без відсутності" shortcut="c">
+              <Button
+                variant="secondary"
+                onClick={openNewChange}
+                iconStart={<FilePlus2 aria-hidden="true" className="size-4" />}
+                className="max-sm:hidden"
+              >
+                Нова зміна
+              </Button>
+            </Tooltip>
+            <Link
+              to={`/admin/orders?date=${date}`}
+              className={buttonClass({
+                variant: 'secondary',
+                className: 'max-sm:hidden',
+              })}
+            >
               <FileText aria-hidden="true" className="size-4" />
               Розпорядження
             </Link>
@@ -554,9 +781,28 @@ export default function ChangesPage() {
         // вона потрібна тільки на телефоні на рівні пар; кнопка «Розпорядження» ховається на вузькому
         more={[
           ...(panes === 1 && selectedAbsence && !weekend
-            ? [{ label: 'Нова відсутність', icon: <CalendarPlus aria-hidden="true" />, onSelect: openNewAbsence }]
+            ? [
+                {
+                  label: 'Нова відсутність',
+                  icon: <CalendarPlus aria-hidden="true" />,
+                  onSelect: openNewAbsence,
+                },
+              ]
             : []),
-          ...(narrow ? [{ label: 'Розпорядження', icon: <FileText aria-hidden="true" />, to: `/admin/orders?date=${date}` }] : []),
+          ...(narrow
+            ? [
+                {
+                  label: 'Нова зміна',
+                  icon: <FilePlus2 aria-hidden="true" />,
+                  onSelect: openNewChange,
+                },
+                {
+                  label: 'Розпорядження',
+                  icon: <FileText aria-hidden="true" />,
+                  to: `/admin/orders?date=${date}`,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -570,6 +816,16 @@ export default function ChangesPage() {
           </DrawerContent>
         </Drawer>
       ) : null}
+
+      <NewChangeDialog
+        key={urlPrefill ? `url:${params.get('group')}:${params.get('discipline')}:${params.get('suggest')}` : `seq:${changeDialog.seq}`}
+        open={changeDialog.open || urlPrefill !== null}
+        onOpenChange={(open) => (open ? setChangeDialog((prev) => ({ ...prev, open })) : closeNewChange())}
+        date={date}
+        semester={meta.data?.semester ?? null}
+        prefill={urlPrefill ?? changeDialog.prefill}
+        approvalMode={approvalMode}
+      />
 
       <AbsenceDialog
         key={dialog.seq}

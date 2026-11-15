@@ -21,9 +21,19 @@ PROFILE.slots.push(slot(5, 1, '08:30', '09:30'));
 describe('BellsTable', () => {
   it('пише лише довгу перерву, коротку — ні', () => {
     renderWithProviders(<BellsTable profile={PROFILE} todayWeekday={null} />);
-    // текст нормалізується: нерозривний пробіл стає звичайним
-    expect(screen.getByText('потім перерва 20 хв')).toBeInTheDocument();
-    expect(screen.queryByText(/перерва 10/)).not.toBeInTheDocument();
+    const notes = [...document.querySelectorAll<HTMLElement>('[data-bell-note]')].map((note) => note.textContent?.replace(/\s/g, ' '));
+    expect(notes).toContain('потім перерва 20 хв');
+    expect(notes.some((note) => /перерва 10/.test(note ?? ''))).toBe(false);
+  });
+
+  it('на телефоні примітка коротка й не переноситься: «потім» лише від sm, стан — своїм рядком', () => {
+    renderWithProviders(<BellsTable profile={PROFILE} todayWeekday={null} />);
+    const note = document.querySelector<HTMLElement>('[data-bell-note]')!;
+    // стан і примітка стоять стовпчиком на телефоні й одним рядком від sm
+    expect(note.className).toMatch(/(^|\s)flex-col(\s|$)/);
+    expect(note.className).toMatch(/(^|\s)sm:block(\s|$)/);
+    const text = within(note).getByText((_, element) => element?.tagName === 'SPAN' && element.classList.contains('whitespace-nowrap'));
+    expect(within(text).getByText('потім')).toHaveClass('hidden', 'sm:inline');
   });
 
   it('«Пн–Чт» у заголовку — одне ціле, «сьогодні» окремо', () => {

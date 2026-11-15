@@ -32,10 +32,11 @@ const VIEW_OPTIONS_ROW = VIEW_OPTIONS.map((option) => ({
   icon: <span className="contents @max-[52rem]/toolbar:hidden">{option.icon}</span>,
 }));
 
+/** Підказка-приклад, а не значення: «Група: 4КІ1» читалося як уже ввімкнений фільтр, що не працює. */
 const SEARCH_PLACEHOLDER: Record<BoardView, string> = {
-  group: 'Група: 4КІ1',
-  teacher: 'Викладач: Кренцін',
-  room: 'Аудиторія: 301',
+  group: 'Пошук групи, напр. 4КІ1',
+  teacher: 'Пошук викладача',
+  room: 'Пошук аудиторії, напр. 301',
 };
 
 const ALL_DEPARTMENTS = 'all';
@@ -105,7 +106,7 @@ export function EditorToolbar({
   const toggleCourse = (course: number) =>
     onFiltersChange({
       ...filters,
-      courses: filters.courses.includes(course) ? filters.courses.filter((c) => c !== course) : [...filters.courses, course].sort(),
+      courses: filters.courses.includes(course) ? filters.courses.filter((c) => c !== course) : [...filters.courses, course].sort((a, b) => a - b),
     });
   const activeFilters = filters.courses.length + (filters.department !== null ? 1 : 0) + (filters.conflictsOnly ? 1 : 0);
   const filtered = activeFilters > 0 || filters.query !== '';

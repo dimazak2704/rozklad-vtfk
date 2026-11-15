@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import AboutPage from './AboutPage';
@@ -9,5 +9,17 @@ describe('AboutPage: Telegram-бот', () => {
     const bot = screen.getByRole('region', { name: /Telegram-бот/ });
     expect(bot).toHaveTextContent('Викладачам бот повідомляє про заміни, а відповісти можна однією кнопкою.');
     expect(bot).not.toHaveTextContent('Підтверджую');
+  });
+});
+
+describe('AboutPage: як читати розклад', () => {
+  it('приклад зміни аудиторії називає стан один раз — словом у самій клітинці', () => {
+    renderWithProviders(<AboutPage />);
+    const legend = screen.getByRole('region', { name: 'Як читати розклад' });
+    const sample = within(legend).getAllByRole('listitem').find((item) => item.textContent?.includes('стара → нова'))!;
+    const cell = within(sample).getByRole('button');
+    // слово стану — у клітинці; поза клітинкою його повторює лише пояснення праворуч
+    expect(within(cell).getAllByText('Інша аудиторія')).toHaveLength(1);
+    expect(within(sample).getAllByText(/Інша аудиторія/)).toHaveLength(2);
   });
 });

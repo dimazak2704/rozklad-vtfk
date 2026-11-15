@@ -347,6 +347,19 @@ body.auth {
   text-underline-offset: 0.2em;
 }
 
+/* Увесь підвал в один рядок потребує ~22em (13 px). Вужче — посилання й назва коледжу стовпчиком і без
+ * крапки, щоб «·» не висіла в кінці першого рядка. em у медіазапиті росте разом зі шрифтом користувача. */
+@media (max-width: 26em) {
+  .auth-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .auth-footer-sep {
+    display: none;
+  }
+}
+
 /* Фокус лише з клавіатури: 2 px з відступом 2 px */
 :focus-visible {
   outline: 2px solid var(--outline-color-focus);

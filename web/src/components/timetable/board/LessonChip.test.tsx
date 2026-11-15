@@ -75,6 +75,36 @@ describe('LessonChip: підгрупа на всю пару', () => {
   });
 });
 
+describe('LessonChip: вся група', () => {
+  it('довге прізвище обрізається, а аудиторія лишається цілою окремим шматком', () => {
+    renderChips([
+      {
+        lesson: lesson('a', {
+          subgroup: 0,
+          teacher: {
+            id: 't-3',
+            shortName: 'Шароварська С.П.',
+            displayName: 'Шароварська',
+          },
+        }),
+        narrow: false,
+      },
+    ]);
+    const chip = screen.getByRole('button');
+    expect(chip).toHaveTextContent(/Шароварська С\.\sП\.ауд\.\s110/);
+    // аудиторія — окремим шматком праворуч, що не стискається
+    const room = screen.getByText(/^ауд\.\s110$/);
+    expect(room.className).toContain('shrink-0');
+    expect(room.className).toContain('ms-auto');
+    expect(screen.getByText(/^Шароварська/).className).toContain('truncate');
+    // ініціали — окремим шматком, що не обрізається: не влазять — зникають цілком, а не «Шароварська С. …»
+    const initials = chip.querySelector('[data-initials]');
+    expect(initials).toHaveTextContent(/^С\.\sП\.$/);
+    expect(initials?.className).toContain('shrink-0');
+    expect(initials?.parentElement?.className).toMatch(/flex-wrap.*overflow-hidden|overflow-hidden.*flex-wrap/);
+  });
+});
+
 describe('LessonChip: картка при наведенні', () => {
   beforeEach(() => {
     vi.useFakeTimers();

@@ -12,6 +12,7 @@ import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { useAssignedSchedule } from './useAssignedSchedule';
 
 const VIEW_OPTIONS = [
   { value: 'day' as const, label: 'День' },
@@ -35,7 +36,8 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const { date, today, homeDate, view, week, setDate, setView } = params;
   const bells = useBells(view === 'day' ? date : null);
   const placeholder = query.isPlaceholderData;
-  const schedule = query.data;
+  // разом із підтвердженими, ще не опублікованими замінами: що «зараз» називає моєю парою, те є й тут
+  const schedule = useAssignedSchedule(query.data);
   const day = placeholder ? undefined : dayOf(schedule, date);
   const parity: WeekParity | null = placeholder ? null : (schedule?.days.find((d) => d.parity)?.parity ?? null);
   const awayFromNow = homeDate < week.from || homeDate > week.to;

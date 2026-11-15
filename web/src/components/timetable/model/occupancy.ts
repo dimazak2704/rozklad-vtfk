@@ -6,6 +6,7 @@
  */
 import type { Parity, RoomType, ShiftWindowDto, TemplateLessonDto, Uuid } from '@/api/types';
 import { roomLabel } from '@/lib/schedule';
+import { formatTeacherName } from '@/lib/teacher-name';
 
 export type BusyKind = 'TEACHER' | 'GROUP' | 'ROOM' | 'SHIFT';
 
@@ -98,8 +99,13 @@ export class SlotIndex {
     }
     const teacher = this.teacherLessons(query);
     if (teacher.length > 0) {
-      const name = teacher[0]?.teacher?.shortName ?? 'Викладач';
-      issues.push({ kind: 'TEACHER', message: `${name} у цей час веде ${teacher.map(tag).join(', ')}`, lessons: teacher });
+      const first = teacher[0]?.teacher;
+      const name = first ? formatTeacherName(first, 'grid') : 'Викладач';
+      issues.push({
+        kind: 'TEACHER',
+        message: `${name} у цей час веде ${teacher.map(tag).join(', ')}`,
+        lessons: teacher,
+      });
     }
     if (!query.roomType || !SHARED_ROOM_TYPES.has(query.roomType)) {
       const room = this.roomLessons(query);

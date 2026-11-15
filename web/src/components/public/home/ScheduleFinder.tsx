@@ -14,13 +14,19 @@ import { findItems, fromSearchResult, groupItems, roomItems, teacherItems, type 
 const TYPE_ICON: Record<EntityType, LucideIcon> = { GROUP: Users, TEACHER: UserRound, ROOM: DoorOpen };
 const TYPE_LABEL: Record<EntityType, string> = { GROUP: 'група', TEACHER: 'викладач', ROOM: 'аудиторія' };
 
-/** «4КІ1» чи «Кренцін» — тихе текстове посилання в рядку «Нещодавно: …»; ціль 44 px на дотику. */
+/**
+ * «4КІ1» чи «Кренцін» — тихе текстове посилання в рядку «Нещодавно: …». Сам текст малий (1ВЕ — 25 px завширшки),
+ * тож ціль більша за нього: невидимий псевдоелемент додає по 4 px з боків і зверху-знизу (не менше 32 px заввишки,
+ * сусідні посилання через кому не перекриваються), на дотику — 44 px заввишки. Вигляд рядка не змінюється.
+ */
 function TargetLink({ target }: { target: ScheduleTarget }) {
   return (
     <Link
       to={target.url}
+      data-target-link=""
       className={cn(
-        'inline-flex min-h-6 items-center rounded-tag font-[650] text-accent pointer-coarse:min-h-11',
+        'relative inline-flex min-h-6 items-center rounded-tag font-[650] text-accent pointer-coarse:min-h-11',
+        "before:absolute before:-inset-x-1 before:-inset-y-1 before:content-['']",
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         target.type !== 'TEACHER' && 'figures',
       )}

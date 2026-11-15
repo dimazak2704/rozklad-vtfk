@@ -75,6 +75,8 @@ export function lessonsOn(date: IsoDate, options: ScheduleOptions = {}): LessonV
       room: template.room ?? null,
       group: template.group,
       subgroup: template.subgroup,
+      // як core: парність рядка шаблону (BOTH — щотижня)
+      parity: template.parity,
       kind: 'REGULAR',
       online: template.online || periods.some((p) => p.kind === 'STUDY_MODE' && p.studyMode === 'ONLINE'),
       original: null,

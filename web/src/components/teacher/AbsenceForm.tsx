@@ -25,6 +25,7 @@ import {
 import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
 import { DAY_PICKER_CLASSES } from '../public/schedule/day-picker-classes';
 import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
+import { useAssignedSchedule } from './useAssignedSchedule';
 
 const FIELDS: ReadonlyArray<keyof AbsenceFormValues> = ['dateFrom', 'dateTo', 'pairs', 'reasonCategory', 'comment'];
 const STUDY_DAY_FORMS = ['навчальний день', 'навчальні дні', 'навчальних днів'] as const;
@@ -215,7 +216,8 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   }, [autoFocus]);
 
   // useMySchedule тримає попередню відповідь, поки вантажиться нова: її дні — не ті, що обрано
-  const previewData = previewable && !preview.isPlaceholderData ? preview.data : undefined;
+  // пари, які зачепить відсутність, — і ті, що я мав узяти за ще не опублікованою заміною (DOMAIN §7)
+  const previewData = useAssignedSchedule(previewable && !preview.isPlaceholderData ? preview.data : undefined);
   // перевірити розклад не вийде: номери пар 1–8 і чесне речення замість «Перевіряємо…»
   const previewFailed = previewable && preview.isError && !preview.isPlaceholderData;
   const unchecked = tooLong || previewFailed;

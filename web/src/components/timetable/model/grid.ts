@@ -18,6 +18,7 @@ import type {
 import { roomLabel } from '@/lib/schedule';
 import { matchScore } from '@/lib/search';
 import { ukCollator } from '@/lib/sort';
+import { formatTeacherName } from '@/lib/teacher-name';
 
 export type BoardView = 'group' | 'teacher' | 'room';
 export const BOARD_VIEWS: readonly BoardView[] = ['group', 'teacher', 'room'];
@@ -74,7 +75,13 @@ function bucketBy(lessons: readonly TemplateLessonDto[], key: (lesson: TemplateL
 export function buildEntities(
   view: BoardView,
   lessons: readonly TemplateLessonDto[],
-  catalog: { groups: readonly PublicGroupDto[]; teachers: readonly PublicTeacherDto[]; rooms: readonly PublicRoomDto[] },
+  catalog: {
+    groups: readonly PublicGroupDto[];
+    teachers: readonly PublicTeacherDto[];
+    rooms: readonly PublicRoomDto[];
+  },
+  /** Підпис викладача (у панелі — «Прізвище І. Б.» з іменами каталогу). */
+  teacherLabel: (teacher: PublicTeacherDto | NonNullable<TemplateLessonDto['teacher']>) => string = (teacher) => formatTeacherName(teacher, 'grid'),
 ): BoardEntity[] {
   const groupsById = new Map(catalog.groups.map((group) => [group.id, group]));
   if (view === 'group') {
@@ -100,13 +107,13 @@ export function buildEntities(
   const byOwner = bucketBy(lessons, (l) => entityIdOf(view, l));
   const meta =
     view === 'teacher'
-      ? new Map(catalog.teachers.map((t) => [t.id, { label: t.shortName, sublabel: t.cycleCommission }]))
+      ? new Map(catalog.teachers.map((t) => [t.id, { label: teacherLabel(t), sublabel: t.cycleCommission }]))
       : new Map(catalog.rooms.map((r) => [r.id, { label: roomLabel(r.name) ?? r.name, sublabel: r.building }]));
   const entities: BoardEntity[] = [];
   for (const [id, own] of byOwner) {
     const sample = own[0] as TemplateLessonDto;
     const known = meta.get(id);
-    const fallbackLabel = view === 'teacher' ? (sample.teacher?.shortName ?? '') : (roomLabel(sample.room?.name) ?? '');
+    const fallbackLabel = view === 'teacher' ? (sample.teacher ? teacherLabel(sample.teacher) : '') : (roomLabel(sample.room?.name) ?? '');
     const groups = [...new Set(own.map((l) => l.group.id))].map((groupId) => groupsById.get(groupId)).filter(Boolean) as PublicGroupDto[];
     const disciplines = [...new Set(own.map((l) => l.discipline.shortName))].sort((a, b) => ukCollator.compare(a, b));
     entities.push({

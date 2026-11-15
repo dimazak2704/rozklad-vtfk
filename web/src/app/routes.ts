@@ -169,7 +169,8 @@ export const ROUTES: readonly AppRoute[] = [
     path: '/login',
     title: 'Вхід',
     description: 'Вхід для викладачів і диспетчерів через обліковий запис коледжу.',
-    layout: 'public',
+    // без оболонки, як /login/callback: сторінка лише веде на вхід, шапка й підвал блимали б перед переходом
+    layout: 'bare',
     page: () => import('@/pages/auth/LoginPage'),
   },
   {

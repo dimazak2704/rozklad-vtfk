@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useServerEvent } from '@/api/live';
+import { useBells } from '@/api/meta';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
+import { useNow } from '@/hooks/useNow';
 import { now as clockNow } from '@/lib/clock';
 import { formatDayMonth, relativeDayLabel, todayInKyiv } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
-import { awaitingAnswer, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
+import { awaitingAnswer, changePassed, isUnansweredNotice, mostUrgent, REPLY_UNDO_MS } from './change-text';
 import { SubstitutionCard } from './SubstitutionCard';
 
 const REQUEST_FORMS = ['заміна чекає', 'заміни чекають', 'замін чекають'] as const;
@@ -145,8 +147,13 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
     notify.info(`${notice ? 'Вам поставили заміну' : 'Новий запит на заміну'}: ${shortTitle(change)}`);
   });
 
-  const waiting = awaitingAnswer(changes.data ?? [], todayInKyiv()).filter((change) => !held.has(change.id));
-  const urgent = mostUrgent(waiting, clockNow());
+  const { clock } = useNow();
+  const today = clock.date;
+  const todayBells = useBells(today);
+  const waiting = awaitingAnswer(changes.data ?? [], today).filter((change) => !held.has(change.id));
+  const dayClock = todayBells.data ? { bells: todayBells.data.slots, minutes: clock.minutes } : null;
+  // пара минула — рядок лише «Підтверджую», без заповненої кнопки: однакова ієрархія в усіх рядках
+  const urgent = mostUrgent(waiting, clockNow(), (change) => changePassed(change, today, dayClock));
 
   // помилку й завантаження показує сторінка (одна на всіх); тут — лише те, що треба вирішити
   return (

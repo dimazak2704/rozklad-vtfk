@@ -24,6 +24,7 @@ import type {
 import type { BadgeTone } from '@/components/ui';
 import { compareIsoDates, kyivClock, timeToMinutes } from '@/lib/date';
 import { countLabel, durationLabel } from '@/lib/labels';
+import { gridTeacherName, withTeacherLabel, withTeacherLabels, type TeacherLabel } from './teacher-label';
 
 // ───────────────────────── Стан пари ─────────────────────────
 
@@ -119,6 +120,24 @@ export function teacherAnswered(from: ChangeStatus | null, to: ChangeStatus, mod
   if (from === 'PENDING_CONFIRMATION') return to === 'CONFIRMED' || to === 'DECLINED';
   if (mode !== 'NOTIFY') return false;
   return (from === 'CONFIRMED' && (to === 'CONFIRMED' || to === 'DECLINED')) || (from === 'APPLIED' && to === 'APPLIED');
+}
+
+/**
+ * Тост диспетчеру про відповідь викладача в Telegram. Відмова від зміни без відсутності (додаткова пара, ручна
+ * заміна) — інша дорога: варіантів сервера там немає, зміна чекає в «Інших змінах» на іншого викладача.
+ */
+export function answerToast(
+  change: Pick<ChangeDto, 'status' | 'teacherAnswer' | 'approvalMode' | 'absenceId' | 'pairFrom'> & { group: Pick<ChangeDto['group'], 'code'> },
+  teacher: string,
+): { tone: 'warning' | 'info' | 'success'; text: string } {
+  const where = `${change.group.code}, ${change.pairFrom} пара`;
+  if (isObjection(change)) return { tone: 'warning', text: `${teacher} не може (${where}), а заміна вже в розпорядженні — потрібне доповнення` };
+  if (change.status === 'DECLINED' && change.absenceId === null) {
+    return { tone: 'warning', text: `${teacher} відмовився (${where}) — в «Інших змінах» оберіть іншого викладача або приберіть зміну` };
+  }
+  if (change.status === 'DECLINED') return { tone: 'warning', text: `${teacher} відмовився (${where}) — оберіть інший варіант` };
+  if (change.approvalMode === 'NOTIFY') return { tone: 'info', text: `${teacher}: «Добре» (${where})` };
+  return { tone: 'success', text: `Підтверджено в Telegram: ${teacher} (${where})` };
 }
 
 /**
@@ -318,10 +337,13 @@ export const OPTION_KIND_LABEL: Partial<Record<ChangeKind, string>> = {
   REPLACE_TEACHER: 'Інший викладач',
 };
 
-/** Назва варіанта. Обʼєднання формулюємо як дію викладача: «Обʼєднати підгрупи — Можаровська веде обидві». */
-export function optionTitle(option: ChangeOption): string {
-  if (option.kind === 'MERGE_SUBGROUPS' && option.teacher) return `Обʼєднати підгрупи — ${option.teacher.shortName} веде обидві`;
-  return option.title;
+/**
+ * Назва варіанта. Обʼєднання формулюємо як дію викладача: «Обʼєднати підгрупи — Можаровська І. В. веде обидві».
+ * Викладача в назві сервера («КМ — Колесник А.») пишемо так само, як усюди в панелі («Колесник А. І.»).
+ */
+export function optionTitle(option: ChangeOption, name: TeacherLabel = gridTeacherName): string {
+  if (option.kind === 'MERGE_SUBGROUPS' && option.teacher) return `Обʼєднати підгрупи — ${name(option.teacher)} веде обидві`;
+  return withTeacherLabel(option.title, option.teacher ?? option.swapLesson?.teacher, name);
 }
 
 export interface OptionChip {
@@ -329,10 +351,23 @@ export interface OptionChip {
   warning: boolean;
 }
 
+/**
+ * Причини й застереження варіанта з тим самим підписом викладача, що й у назві: сервер пише коротку форму
+ * («Харченко О.А. уже веде Ін.мова»), а панель — «Харченко О. А.».
+ */
+export function optionNotes(option: ChangeOption, name: TeacherLabel = gridTeacherName): { reasons: string[]; warnings: string[] } {
+  const teachers = [option.teacher, option.swapLesson?.teacher];
+  return {
+    reasons: option.reasons.map((text) => withTeacherLabels(text, teachers, name)),
+    warnings: option.warnings.map((text) => withTeacherLabels(text, teachers, name)),
+  };
+}
+
 /** Чипи рядка: перша причина, перше «⚠», далі ще один (наступна причина або «⚠»). Решта — у «Чому?». */
-export function rowChips(option: ChangeOption): OptionChip[] {
-  const reasons = option.reasons.map((text) => ({ text, warning: false }));
-  const warnings = option.warnings.map((text) => ({ text, warning: true }));
+export function rowChips(option: ChangeOption, name: TeacherLabel = gridTeacherName): OptionChip[] {
+  const notes = optionNotes(option, name);
+  const reasons = notes.reasons.map((text) => ({ text, warning: false }));
+  const warnings = notes.warnings.map((text) => ({ text, warning: true }));
   const chips: OptionChip[] = [];
   const firstReason = reasons.shift();
   const firstWarning = warnings.shift();
@@ -428,9 +463,24 @@ export interface PlanChoice {
 
 const REQUEST_FORMS = ['прохання', 'прохання', 'прохань'] as const;
 
+/**
+ * Хто відмовився від пари, крім того, про кого вже сказано в рядку пари («Кренцін М. Д. відмовився о 10:30»):
+ * одна відмова — одне речення в одному місці, а панель варіантів додає лише давніші.
+ */
+export function otherDecliners<D extends { teacher: { id: Uuid } }>(
+  declined: readonly D[],
+  entry: Pick<LessonEntry, 'state' | 'change'>,
+): { earlier: D[]; lastShownInList: boolean } {
+  const last = entry.state === 'declined' ? entry.change?.new.teacher?.id : undefined;
+  return {
+    earlier: declined.filter((d) => d.teacher.id !== last),
+    lastShownInList: last !== undefined,
+  };
+}
+
 /** Підсумок перед дією: кому піде прохання (CONFIRM) чи кого призначимо, і скільки пар скасуємо. */
-export function planSummary(choices: readonly PlanChoice[], approvalMode: string | null | undefined): string[] {
-  const teachers = choices.filter((c) => assignsTeacher(c.option)).map((c) => c.option.teacher?.shortName ?? '');
+export function planSummary(choices: readonly PlanChoice[], approvalMode: string | null | undefined, name: TeacherLabel = gridTeacherName): string[] {
+  const teachers = choices.filter((c) => assignsTeacher(c.option)).map((c) => (c.option.teacher ? name(c.option.teacher) : ''));
   const cancels = choices.filter((c) => c.option.kind === 'CANCEL').length;
   const lines: string[] = [];
   if (teachers.length > 0) {
@@ -459,13 +509,20 @@ export interface FeedItem {
   href: string | null;
 }
 
+/** «4КІ1, 3 пара (ДК)»: число з «пара» й дисципліна не розриваються між рядками («3 / пара»). */
 function changeLine(change: ChangeDto): string {
   const discipline = change.original.discipline?.shortName ?? change.new.discipline?.shortName ?? '';
-  return `${change.group.code}, ${change.pairFrom} пара${discipline ? ` (${discipline})` : ''}`;
+  return `${change.group.code}, ${change.pairFrom}\u00a0пара${discipline ? `\u00a0(${discipline})` : ''}`;
 }
 
 /** Події дня зі змін (історія станів), відсутностей і опублікованих розпоряджень — найновіші першими. */
-export function buildFeed(changes: readonly ChangeDto[], absences: readonly AbsenceDto[], orders: readonly OrderSummaryDto[], date: IsoDate): FeedItem[] {
+export function buildFeed(
+  changes: readonly ChangeDto[],
+  absences: readonly AbsenceDto[],
+  orders: readonly OrderSummaryDto[],
+  date: IsoDate,
+  name: TeacherLabel = gridTeacherName,
+): FeedItem[] {
   const items: FeedItem[] = [];
   const changesHref = `/admin/changes?date=${date}`;
   for (const absence of absences) {
@@ -476,14 +533,15 @@ export function buildFeed(changes: readonly ChangeDto[], absences: readonly Abse
       sourceId: absence.id,
       at: absence.createdAt,
       kind: 'absence',
-      text: `Відсутність: ${absence.teacher.shortName}${via}`,
+      text: `Відсутність: ${name(absence.teacher)}${via}`,
       href: `${changesHref}&absence=${absence.id}`,
     });
   }
   for (const change of changes) {
     change.history.forEach((entry, index) => {
       // хто веде пару: новий викладач, а коли зміна його не міняє (аудиторія, вичитана дисципліна) — свій
-      const teacher = change.new.teacher?.shortName ?? change.original.teacher?.shortName ?? null;
+      const person = change.new.teacher ?? change.original.teacher;
+      const teacher = person ? name(person) : null;
       const who = teacher ? `${teacher} — ` : '';
       let kind: FeedKind | null = null;
       let text = '';

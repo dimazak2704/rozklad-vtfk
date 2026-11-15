@@ -4,7 +4,6 @@ import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode, TeacherRef } from '@/api/types';
 import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
-import { formatInstantTime } from '@/lib/date';
 import { plural } from '@/lib/labels';
 import {
   actionLabel,
@@ -17,6 +16,7 @@ import {
   optionButtonId,
   optionKey,
   optionsHeading,
+  otherDecliners,
   poolIsEmpty,
   VISIBLE_OPTIONS,
   type LessonEntry,
@@ -27,6 +27,8 @@ import { DecisionCard } from './DecisionCard';
 import { OptionRow } from './OptionRow';
 import { OtherTeacherDialog } from './OtherTeacherDialog';
 import { ReasonPicker } from './ReasonPicker';
+import { momentText } from '../format';
+import { useTeacherLabel } from '../useTeacherLabel';
 import { MANUAL_KEY, PLAN_KEY } from './useDecisionActions';
 
 const OPTION_FORMS = ['варіант', 'варіанти', 'варіантів'] as const;
@@ -34,6 +36,7 @@ const OPTION_FORMS = ['варіант', 'варіанти', 'варіантів'
 /** Шапка колонки: яку пару вирішуємо, одним реченням — замість чого, коли й де. */
 function LessonHeading({ entry, open, showTitle }: { entry: LessonEntry; open: boolean; showTitle: boolean }) {
   const { lesson } = entry.item;
+  const name = useTeacherLabel();
   const what = `${lesson.group.code}${lesson.subgroup > 0 ? ` (${lesson.subgroup} п/г)` : ''}, ${lesson.pair} пара`;
   const where = [lesson.startsAt ? `о ${lesson.startsAt}` : null, lesson.room ? `ауд. ${lesson.room.name}` : null, lesson.online ? 'дистанційно' : null]
     .filter(Boolean)
@@ -42,7 +45,7 @@ function LessonHeading({ entry, open, showTitle }: { entry: LessonEntry; open: b
     <header className="flex flex-col gap-1">
       {showTitle ? <h3 className="text-heading font-bold text-pretty text-primary">{open ? `Варіанти для ${what}` : what}</h3> : null}
       <p className="text-caption text-secondary">
-        Замість <span className="font-semibold text-primary">{lesson.discipline.shortName}</span> · {entry.absence.teacher.shortName}
+        Замість <span className="font-semibold text-primary">{lesson.discipline.shortName}</span> · {name(entry.absence.teacher)}
         {where ? <span className="figures"> {where}</span> : null}
       </p>
     </header>
@@ -96,7 +99,8 @@ export function OptionsPanel(props: OptionsPanelProps) {
 
   const list = options.data?.options ?? [];
   const past = options.data?.past ?? false;
-  const declined = options.data?.declined ?? [];
+  const name = useTeacherLabel();
+  const { earlier: declined, lastShownInList } = otherDecliners(options.data?.declined ?? [], entry);
   const shown = expanded ? list : list.slice(0, VISIBLE_OPTIONS);
   const hidden = list.length - shown.length;
   const heading = optionsHeading(list, past);
@@ -136,7 +140,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
               {heading ? <p className="text-ui text-secondary">{heading}</p> : null}
               {declined.length > 0 ? (
                 <p className="text-caption text-muted">
-                  Відмовились: {declined.map((d) => `${d.teacher.shortName} (${formatInstantTime(d.at)})`).join(', ')}
+                  {lastShownInList ? 'Раніше відмовились' : 'Відмовились'}: {declined.map((d) => `${name(d.teacher)} ${momentText(d.at)}`).join(', ')}
                 </p>
               ) : null}
               {poolIsEmpty(list) ? <p className="text-caption text-secondary">{EMPTY_POOL_TEXT}</p> : null}

@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { ArrowLeftRight } from 'lucide-react';
+import { DropdownMenu } from 'radix-ui';
+import { useMemo, type ComponentPropsWithRef, type ReactElement } from 'react';
 import type { CalendarPeriod, CalendarWeek } from '@/api/calendar';
 import type { CalendarPeriodKind, IsoDate } from '@/api/types';
 import { HoverDetails, ParityMark, Tooltip } from '@/components/ui';
@@ -6,13 +8,17 @@ import { cn } from '@/lib/cn';
 import { addDays, compareIsoDates, formatDateRange, formatNumericDate, parseIsoDate, startOfWeek } from '@/lib/date';
 import { MONTHS_NOMINATIVE, PARITY_LABEL } from '@/lib/labels';
 import { PERIOD_KIND_LABEL, STUDY_MODE_LABEL } from './labels';
+import { parityActionLabel } from './parity-confirmation';
 import { periodAudience } from './periods';
 
 interface SemesterTimelineProps {
   weeks: readonly CalendarWeek[];
   periods: readonly CalendarPeriod[];
   today: IsoDate;
-  /** Перемкнути парність тижня (null — недоступно, наприклад під час збереження). */
+  /**
+   * Поміняти парність тижня (null — недоступно, наприклад під час збереження). Натиск на тиждень лише відкриває
+   * меню з цією дією, а сторінка ще перепитує: парність міняють рідко, і випадковий клік не має перебудувати розклад.
+   */
   onToggleWeek: ((week: CalendarWeek) => void) | null;
   onOpenPeriod: (period: CalendarPeriod) => void;
 }
@@ -23,6 +29,52 @@ interface SemesterTimelineProps {
  */
 const PARITY_SHORT_WORD = { NUMERATOR: 'чис', DENOMINATOR: 'знам' } as const;
 
+const MENU_ITEM = cn(
+  'flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-control px-2.5 py-2 text-ui text-primary outline-none',
+  'data-highlighted:bg-hover data-disabled:text-disabled pointer-coarse:min-h-11',
+);
+
+/**
+ * Меню тижня: що це за тиждень і одна дія — поміняти парність (з підтвердженням на сторінці).
+ * Решту пропсів і ref пропускаємо на тригер: зовнішній `Tooltip` (Slot) вішає свої обробники й ref саме
+ * сюди, і без цього підказка тижня ніколи не відкривається.
+ */
+function WeekMenu({
+  week,
+  onToggleWeek,
+  children,
+  ...triggerProps
+}: Omit<ComponentPropsWithRef<'button'>, 'children'> & {
+  week: CalendarWeek;
+  onToggleWeek: ((week: CalendarWeek) => void) | null;
+  children: ReactElement;
+}) {
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild {...triggerProps}>
+        {children}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={6}
+          collisionPadding={8}
+          className="anim-pop z-50 min-w-60 rounded-popover border border-default bg-raised p-1.5 text-primary shadow-popover"
+        >
+          <DropdownMenu.Label className="px-2.5 pt-1.5 pb-1 text-caption text-muted">
+            {week.weekNumber} тиждень · {formatDateRange(week.weekStart, week.weekEnd)} · {PARITY_LABEL[week.parity]}
+            {week.overridden ? ' (вручну)' : ''}
+          </DropdownMenu.Label>
+          <DropdownMenu.Item disabled={!onToggleWeek} onSelect={() => onToggleWeek?.(week)} className={MENU_ITEM}>
+            <ArrowLeftRight aria-hidden="true" className="size-4 text-muted" />
+            {parityActionLabel(week)}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 const BAR_TONE: Record<CalendarPeriodKind, string> = {
   HOLIDAY: 'border-cancel bg-cancel-subtle text-cancel',
   NO_CLASSES: 'border-cancel bg-cancel-subtle text-cancel',
@@ -32,7 +84,7 @@ const BAR_TONE: Record<CalendarPeriodKind, string> = {
 };
 
 /**
- * Семестр смугою тижнів з чисельником/знаменником (натиск міняє парність тижня вручну) і під ними —
+ * Семестр смугою тижнів з чисельником/знаменником (меню тижня — змінити парність вручну) і під ними —
  * періоди календаря смугами. Видно одразу, де практика, де дистанційка. На телефоні — список тижнів.
  */
 export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPeriod }: SemesterTimelineProps) {
@@ -71,7 +123,6 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
     <ol aria-label="Тижні семестру" className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface lg:hidden">
       {weeks.map((week) => {
         const isCurrent = week.weekStart === currentWeek;
-        const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
         // період називаємо один раз — у тижні, коли він починається (або в першому тижні семестру)
         const during = periods.filter(
           (p) =>
@@ -102,20 +153,20 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
                 </span>
               ) : null}
             </span>
-            <button
-              type="button"
-              onClick={onToggleWeek ? () => onToggleWeek(week) : undefined}
-              aria-disabled={onToggleWeek ? undefined : true}
-              aria-label={`${week.weekNumber} тиждень: ${PARITY_LABEL[week.parity]}${week.overridden ? ' (змінено вручну)' : ''}. Зробити ${PARITY_LABEL[next]}ом`}
-              className={cn(
-                'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui font-[550]',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                week.overridden ? 'text-accent' : 'text-secondary',
-              )}
-            >
-              <ParityMark parity={week.parity} className="h-3.5 w-3" />
-              {PARITY_LABEL[week.parity]}
-            </button>
+            <WeekMenu week={week} onToggleWeek={onToggleWeek}>
+              <button
+                type="button"
+                aria-label={`${week.weekNumber} тиждень: ${PARITY_LABEL[week.parity]}${week.overridden ? ' (змінено вручну)' : ''}. Меню тижня`}
+                className={cn(
+                  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui font-[550] hover-fine:bg-hover',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                  week.overridden ? 'text-accent' : 'text-secondary',
+                )}
+              >
+                <ParityMark parity={week.parity} className="h-3.5 w-3" />
+                {PARITY_LABEL[week.parity]}
+              </button>
+            </WeekMenu>
           </li>
         );
       })}
@@ -137,41 +188,37 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
         ))}
         {weeks.map((week, index) => {
           const isCurrent = week.weekStart === currentWeek;
-          const next = week.parity === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR';
           const hint = `${week.weekNumber} тиждень, ${formatDateRange(week.weekStart, week.weekEnd)}: ${PARITY_LABEL[week.parity]}${
             week.overridden ? ' (змінено вручну)' : ''
           }.`;
           return (
-            <Tooltip
-              key={week.weekStart}
-              content={onToggleWeek ? `${hint} Натисніть, щоб зробити ${PARITY_LABEL[next]}ом.` : hint}
-            >
-              <button
-                type="button"
-                onClick={onToggleWeek ? () => onToggleWeek(week) : undefined}
-                aria-disabled={onToggleWeek ? undefined : true}
-                aria-current={isCurrent ? 'date' : undefined}
-                aria-label={`${hint}${onToggleWeek ? ` Зробити ${PARITY_LABEL[next]}ом` : ''}`}
-                style={{ gridRow: 2, gridColumn: index + 1 }}
-                className={cn(
-                  'group relative flex h-12 flex-col items-center justify-center gap-1 rounded-control border text-center',
-                  'transition-[background-color,border-color] duration-150 ease-out',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                  week.parity === 'DENOMINATOR' ? 'bg-sunken' : 'bg-surface',
-                  week.overridden ? 'border-accent' : 'border-default hover-fine:border-strong',
-                  onToggleWeek ? 'cursor-pointer hover-fine:bg-hover' : 'cursor-default',
-                  isCurrent && 'ring-2 ring-[var(--border-color-accent)] ring-offset-1 ring-offset-[var(--background-color-surface)]',
-                )}
-              >
-                <span className="text-heading leading-none font-bold figures text-primary">{week.weekNumber}</span>
-                {/* номер і коротке слово парності — читається з першого погляду; дата — у підказці */}
-                <span aria-hidden="true" className={cn('text-meta leading-none font-[550]', week.overridden ? 'text-accent' : 'text-secondary')}>
-                  {PARITY_SHORT_WORD[week.parity]}
-                </span>
-                {week.overridden ? (
-                  <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-[var(--background-color-surface)] bg-accent" />
-                ) : null}
-              </button>
+            <Tooltip key={week.weekStart} content={hint}>
+              <WeekMenu week={week} onToggleWeek={onToggleWeek}>
+                <button
+                  type="button"
+                  aria-current={isCurrent ? 'date' : undefined}
+                  aria-label={`${hint} Меню тижня`}
+                  style={{ gridRow: 2, gridColumn: index + 1 }}
+                  // `data-state` на кнопці ставить підказка, тож відкрите меню видно за `aria-expanded`
+                  className={cn(
+                    'group relative flex h-12 cursor-pointer flex-col items-center justify-center gap-1 rounded-control border text-center',
+                    'transition-[background-color,border-color] duration-150 ease-out hover-fine:bg-hover aria-expanded:bg-hover',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                    week.parity === 'DENOMINATOR' ? 'bg-sunken' : 'bg-surface',
+                    week.overridden ? 'border-accent' : 'border-default hover-fine:border-strong',
+                    isCurrent && 'ring-2 ring-[var(--border-color-accent)] ring-offset-1 ring-offset-[var(--background-color-surface)]',
+                  )}
+                >
+                  <span className="text-heading leading-none font-bold figures text-primary">{week.weekNumber}</span>
+                  {/* номер і коротке слово парності — читається з першого погляду; дата — у підказці */}
+                  <span aria-hidden="true" className={cn('text-meta leading-none font-[550]', week.overridden ? 'text-accent' : 'text-secondary')}>
+                    {PARITY_SHORT_WORD[week.parity]}
+                  </span>
+                  {week.overridden ? (
+                    <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-[var(--background-color-surface)] bg-accent" />
+                  ) : null}
+                </button>
+              </WeekMenu>
             </Tooltip>
           );
         })}

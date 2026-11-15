@@ -65,22 +65,24 @@ export function PasswordLinkDialog({ access, open, onOpenChange }: PasswordLinkD
               )}
               . Ми показуємо його лише зараз.
             </p>
-            <Input
-              aria-label="Посилання для пароля"
-              readOnly
-              value={link.data.url}
-              onFocus={(event) => event.currentTarget.select()}
-              endSlot={
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void copy()}
-                  iconStart={copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
-                >
-                  {copied ? 'Скопійовано' : 'Копіювати'}
-                </Button>
-              }
-            />
+            {/* кнопка — поруч із полем, а не всередині: довге посилання обрізається трикрапкою й ніколи не лягає під неї */}
+            <div className="flex min-w-0 items-center gap-2">
+              <Input
+                aria-label="Посилання для пароля"
+                readOnly
+                value={link.data.url}
+                onFocus={(event) => event.currentTarget.select()}
+                className="min-w-0 flex-1 text-ellipsis font-mono text-body sm:text-ui"
+              />
+              <Button
+                variant="secondary"
+                onClick={() => void copy()}
+                className="shrink-0"
+                iconStart={copied ? <Check aria-hidden="true" className="size-4 text-add" /> : <Copy aria-hidden="true" className="size-4" />}
+              >
+                {copied ? 'Скопійовано' : 'Копіювати'}
+              </Button>
+            </div>
             <p className="text-caption text-muted">
               Діє до <span className="figures">{formatInstant(link.data.expiresAt)}</span>. Попереднє посилання вже не працює.
             </p>

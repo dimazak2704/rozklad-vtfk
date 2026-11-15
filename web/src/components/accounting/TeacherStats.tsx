@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useTeacherStats } from '@/api/accounting';
 import type { TeacherStatsDto } from '@/api/types';
 import { paths } from '@/app/routes';
+import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 import { Button, DataTable, EmptyState, IconButton, Panel, type DataTableColumn } from '@/components/ui';
 import { monthLabel, shiftMonth } from './model';
 
@@ -17,6 +18,8 @@ interface TeacherStatsProps {
 /** Хто скільки замін провів за місяць і скільки власних пар пропустив. */
 export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStatsProps) {
   const stats = useTeacherStats(month);
+  // «Стахова О. А.» — те саме написання, що й в інших списках адмінки
+  const name = useTeacherLabel();
   const max = Math.max(1, ...(stats.data ?? []).map((s) => s.substitutionsCount));
 
   const columns = useMemo<Array<DataTableColumn<TeacherStatsDto>>>(
@@ -25,13 +28,13 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         id: 'teacher',
         header: 'Викладач',
         rowHeader: true,
-        sortValue: (s) => s.teacher.shortName,
+        sortValue: (s) => name(s.teacher),
         cell: (s) => (
           <Link
             to={paths.teacher(s.teacher.id)}
             className="rounded-tag font-semibold text-primary underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
-            {s.teacher.shortName}
+            {name(s.teacher)}
           </Link>
         ),
       },
@@ -69,7 +72,7 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         cell: (s) => (s.missedCount > 0 ? <span className="font-semibold text-change">{s.missedCount}</span> : <span className="text-muted">—</span>),
       },
     ],
-    [max],
+    [max, name],
   );
 
   return (

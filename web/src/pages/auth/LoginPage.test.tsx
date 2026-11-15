@@ -29,6 +29,8 @@ describe('LoginPage', () => {
     expect(alert).not.toHaveTextContent('Failed to fetch');
     expect(signIn).toHaveBeenCalledWith('/admin');
     expect(screen.getByRole('button', { name: 'Спробувати ще раз' })).toBeEnabled();
+    // сторінка без шапки сайту: назад до розкладу — посиланням на самій сторінці
+    expect(screen.getByRole('link', { name: 'До розкладу' })).toHaveAttribute('href', '/');
   });
 
   it('після невдалого фонового оновлення (сесії немає) просто веде на вхід, без помилки', async () => {

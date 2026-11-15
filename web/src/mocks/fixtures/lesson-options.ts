@@ -37,6 +37,7 @@ const lessonBase: LessonView = {
   room: ROOMS.r110,
   group: { id: 'g-1m', code: '1М', course: 1 },
   subgroup: 1,
+  parity: 'BOTH',
   kind: 'REGULAR',
   online: false,
   original: null,

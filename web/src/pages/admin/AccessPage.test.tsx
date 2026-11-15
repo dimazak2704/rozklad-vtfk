@@ -123,6 +123,21 @@ describe('Доступи', () => {
     await waitFor(() => expect(url.value).toMatch(/\/password\/demo-password-\d+$/));
     expect(dialog).toHaveTextContent('для логіна krentsin');
     expect(dialog).toHaveTextContent(/Діє до/);
+    // «Копіювати» — поруч із полем, а не поверх нього: довге посилання обрізається й не ховає кнопку
+    const copy = within(dialog).getByRole('button', { name: 'Копіювати' });
+    expect(url.contains(copy)).toBe(false);
+    expect(url.parentElement?.contains(copy)).toBe(true);
+    expect(url.className).toMatch(/text-ellipsis/);
+    expect(url.className).toMatch(/min-w-0/);
+    expect(copy.className).toMatch(/shrink-0/);
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    await user.click(copy);
+    expect(writeText).toHaveBeenCalledWith(url.value);
+    expect(await within(dialog).findByRole('button', { name: 'Скопійовано' })).toBeInTheDocument();
   });
 
   it('фільтр без результатів пропонує показати всіх', async () => {

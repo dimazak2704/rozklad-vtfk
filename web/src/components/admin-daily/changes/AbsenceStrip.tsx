@@ -3,6 +3,7 @@ import type { AbsenceDto, Uuid } from '@/api/types';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { LESSON_STATE, type LessonEntry } from '../model';
+import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
 
 interface AbsenceStripProps {
@@ -20,6 +21,7 @@ interface AbsenceStripProps {
  * у кого ще є пари без рішення (число — у підписі для читача екрана).
  */
 export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onSelect, onAdd }: AbsenceStripProps) {
+  const name = useTeacherLabel();
   const open = (absenceId: Uuid) => entries.filter((e) => e.absence.id === absenceId && LESSON_STATE[e.state].needsAction).length;
   return (
     <div role="group" aria-label="Відсутні викладачі" className="flex flex-wrap items-center gap-1.5">
@@ -32,7 +34,7 @@ export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onS
             key={absence.id}
             type="button"
             aria-pressed={selected}
-            aria-label={`${absence.teacher.shortName}${unknown ? '' : left > 0 ? `, без рішення: ${left}` : ', усе вирішено'}`}
+            aria-label={`${name(absence.teacher)}${unknown ? '' : left > 0 ? `, без рішення: ${left}` : ', усе вирішено'}`}
             onClick={() => onSelect(absence.id)}
             className={cn(
               'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',
@@ -40,7 +42,7 @@ export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onS
               selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover-fine:bg-hover hover-fine:text-primary',
             )}
           >
-            {absence.teacher.shortName}
+            {name(absence.teacher)}
             {left > 0 ? <span aria-hidden="true" className="size-2 rounded-full bg-[var(--fill-change)]" /> : null}
           </button>
         );

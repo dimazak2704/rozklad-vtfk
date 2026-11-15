@@ -6,7 +6,6 @@ import { bellColumns, breakAfter, pairMinutes, usualBreakMinutes, usualPairMinut
 /** Нерозривний пробіл: «20 хв» не розривається між рядками. */
 const NBSP = String.fromCharCode(0xa0);
 
-
 interface BellsTableProps {
   profile: BellProfileDto;
   /** День тижня ISO (1..7) сьогодні: його колонка виділена; null — без виділення. */
@@ -83,12 +82,8 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                 }
                 const gap = breakAfter(column.slots, pair);
                 const minutes = pairMinutes(slot);
-                const note = [
-                  minutes !== usual ? `${minutes}${NBSP}хв` : null,
-                  gap !== null && usualBreak !== null && gap > usualBreak ? `потім перерва${NBSP}${gap}${NBSP}хв` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
+                const longPair = minutes !== usual;
+                const longBreak = gap !== null && usualBreak !== null && gap > usualBreak;
                 const state = now ? 'зараз' : upcoming ? 'далі' : null;
                 return (
                   <td
@@ -101,11 +96,25 @@ export function BellsTable({ profile, todayWeekday, live = false, className }: B
                       <span className="font-normal text-muted">–</span>
                       {slot.endsAt}
                     </span>
-                    {state || note ? (
-                      <span className="mt-0.5 block text-caption text-muted figures">
+                    {state || longPair || longBreak ? (
+                      // телефон: колонка вужча за «потім перерва 20 хв», тож примітка — коротка й одним рядком
+                      // («перерва 20 хв» під часом пари і так читається як після неї), а стан — своїм рядком над нею;
+                      // ширше — усе одним рядком через «·»
+                      <span data-bell-note="" className="mt-0.5 flex flex-col text-caption text-muted figures sm:block">
                         {state ? <span className={cn('font-semibold', now ? 'text-accent' : 'text-secondary')}>{state}</span> : null}
-                        {state && note ? ' · ' : null}
-                        {note}
+                        {state && (longPair || longBreak) ? <span className="hidden sm:inline">{' · '}</span> : null}
+                        {longPair || longBreak ? (
+                          <span className="whitespace-nowrap">
+                            {longPair ? `${minutes}${NBSP}хв` : null}
+                            {longPair && longBreak ? ' · ' : null}
+                            {longBreak ? (
+                              <>
+                                <span className="hidden sm:inline">потім </span>
+                                {`перерва${NBSP}${gap}${NBSP}хв`}
+                              </>
+                            ) : null}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
                   </td>

@@ -330,9 +330,10 @@ export interface LessonView {
   changeId: Nullable<Uuid>;
   /**
    * Парність рядка шаблону, з якого пара: NUMERATOR чи DENOMINATOR — пара лише по чисельниках чи знаменниках,
-   * BOTH — щотижня. Старіший core поля не має: тоді картка просто не показує позначку.
+   * BOTH — щотижня (і для скасованої пари шаблону). null — разова пара (заміна, додаткова, блок).
+   * Старіший core поля не має: тоді картка просто не показує позначку.
    */
-  parity?: Parity;
+  parity?: Nullable<Parity>;
 }
 
 export interface DayDto {

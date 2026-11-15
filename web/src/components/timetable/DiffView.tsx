@@ -20,6 +20,7 @@ import { matchScore } from '@/lib/search';
 import { ukCollator } from '@/lib/sort';
 import { VERSION_STATUS_LABEL } from './model/labels';
 import { slotShort } from './model/text';
+import { formatTeacherName } from '@/lib/teacher-name';
 
 type DiffKind = 'moved' | 'added' | 'removed';
 type DiffFilter = 'all' | DiffKind;
@@ -52,7 +53,13 @@ const KIND_META: Record<DiffKind, { label: string; tone: string; icon: ReactNode
 };
 
 const who = (lesson: TemplateLessonDto) =>
-  [lesson.discipline.shortName, lesson.subgroup > 0 ? `${lesson.subgroup} п/г` : null, lesson.teacher?.shortName].filter(Boolean).join(' · ');
+  [
+    lesson.discipline.shortName,
+    lesson.subgroup > 0 ? `${lesson.subgroup} п/г` : null,
+    lesson.teacher ? formatTeacherName(lesson.teacher, 'grid') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 const where = (lesson: TemplateLessonDto) => [slotShort(lesson), roomLabel(lesson.room?.name)].filter(Boolean).join(', ');
 
 /**

@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import ua.vtc.rozklad.contracts.Parity;
 import ua.vtc.rozklad.contracts.RoomType;
 import ua.vtc.rozklad.core.calendar.BellProfile;
 import ua.vtc.rozklad.core.calendar.BellTimes;
@@ -47,6 +48,41 @@ class LessonViewAssemblerTest {
         assertThat(view.original()).isNull();
         assertThat(view.reasonText()).isNull();
         assertThat(view.changeId()).isNull();
+    }
+
+    @Test
+    void lessonOfTheBaseTimetableCarriesTheParityOfItsTemplateRow() {
+        LessonRow weekly = row(2, LessonStatus.SCHEDULED, LessonOrigin.TEMPLATE, STP, KRENTSIN, ROOM_301, null);
+
+        assertThat(LessonViewAssembler.view(weekly, bells).parity()).isEqualTo(Parity.BOTH);
+        assertThat(LessonViewAssembler.view(withTemplateParity(weekly, Parity.NUMERATOR), bells).parity())
+                .isEqualTo(Parity.NUMERATOR);
+        assertThat(LessonViewAssembler.view(withTemplateParity(weekly, Parity.DENOMINATOR), bells).parity())
+                .isEqualTo(Parity.DENOMINATOR);
+    }
+
+    @Test
+    void cancelledTemplateLessonKeepsItsParity() {
+        LessonRow.Change cancel = change("CANCEL", "ABSENT", null, 2, 2, null, null, null, 2);
+        LessonRow cancelled = withTemplateParity(row(2, LessonStatus.CANCELLED, LessonOrigin.TEMPLATE, STP,
+                KRENTSIN, ROOM_301, cancel), Parity.DENOMINATOR);
+
+        assertThat(LessonViewAssembler.view(cancelled, bells).parity()).isEqualTo(Parity.DENOMINATOR);
+    }
+
+    @Test
+    void lessonsCreatedByAChangeAdditionalPairOrBlockHaveNoParity() {
+        LessonRow.Change substitution = change("REPLACE_TEACHER", "ABSENT", null, 2, 2, null, KRENTSIN, null, 2);
+        LessonRow.Change additional = change("ADDITIONAL", null, null, 3, 3, null, null, null, null);
+        LessonRow.Change block = change("BLOCK", null, null, 1, 2, null, null, null, null);
+        for (LessonRow row : List.of(
+                row(2, LessonStatus.SCHEDULED, LessonOrigin.CHANGE, STP, NEPYIVODA, ROOM_301, substitution),
+                row(3, LessonStatus.SCHEDULED, LessonOrigin.ADDITIONAL, STP, KRENTSIN, ROOM_6, additional),
+                row(1, LessonStatus.SCHEDULED, LessonOrigin.BLOCK, NDKS, NEPYIVODA, ROOM_6, block))) {
+            // навіть якщо рядок шаблону відомий, одноразова пара не має парності
+            assertThat(LessonViewAssembler.view(withTemplateParity(row, Parity.NUMERATOR), bells).parity())
+                    .as(row.origin().name()).isNull();
+        }
     }
 
     @Test
@@ -206,7 +242,14 @@ class LessonViewAssemblerTest {
     private static LessonRow row(int pair, LessonStatus status, LessonOrigin origin, DisciplineRef discipline,
                                  TeacherRef teacher, RoomRef room, LessonRow.Change change, UUID createdBy) {
         return new LessonRow(UUID.randomUUID(), MONDAY, pair, 0, status, origin, false,
-                Instant.parse("2026-10-16T12:00:00Z"), GROUP, discipline, teacher, room, change, createdBy);
+                Instant.parse("2026-10-16T12:00:00Z"), GROUP, discipline, teacher, room, change, createdBy,
+                origin == LessonOrigin.TEMPLATE ? Parity.BOTH : null);
+    }
+
+    private static LessonRow withTemplateParity(LessonRow row, Parity parity) {
+        return new LessonRow(row.id(), row.date(), row.pair(), row.subgroup(), row.status(), row.origin(),
+                row.online(), row.updatedAt(), row.group(), row.discipline(), row.teacher(), row.room(), row.change(),
+                row.createdBy(), parity);
     }
 
     private static LessonRow.Change change(String kind, String reasonCode, String reasonText, int pairFrom,

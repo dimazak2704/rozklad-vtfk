@@ -109,13 +109,8 @@ export default function AboutPage() {
               {LEGEND.map(({ lesson, text }) => (
                 <li key={lesson.id} className="grid items-center gap-x-5 gap-y-2 p-3 sm:grid-cols-[17rem_minmax(0,1fr)]">
                   {/* «список», а не клітинка сітки: у навчальному прикладі назва не обрізається */}
+                  {/* слово стану («Інша аудиторія» теж) пише сама клітинка — приклад його не дублює */}
                   <div className="flex min-w-0 flex-col">
-                    {lesson.kind === 'ROOM_CHANGED' ? (
-                      // клітинка розкладу пише лише нову аудиторію; у легенді назвемо стан, як і для інших прикладів
-                      <span aria-hidden="true" className="-mb-2.5 px-3.5 pt-3 text-meta font-semibold text-room">
-                        {LESSON_VIEW_KIND_LABEL[lesson.kind]}
-                      </span>
-                    ) : null}
                     <LessonCell lesson={lesson} perspective="group" variant="list" />
                   </div>
                   <p className="text-ui text-secondary">
