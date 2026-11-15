@@ -226,6 +226,42 @@ class LoadApiIT {
         expectPlan(item, 50, "AUTO");
     }
 
+    /**
+     * A parity override and new semester dates are calendar edits too: they change which weeks are numerator ones and
+     * which days are in the semester, so the plan follows them (the same lessons: Monday every week, Wednesday
+     * numerator).
+     */
+    @Test
+    void parityOverrideAndSemesterDatesRecountThePlan() throws Exception {
+        UUID item = id(create("/api/admin/load", """
+                {"semesterId":"%s","groupId":"%s","disciplineId":"%s","hoursPerWeek":3}""".formatted(semester, group, stp))
+                .andReturn());
+        TimetableVersion version = versions.save(new TimetableVersion(semester, "Імпорт Excel", VersionSource.IMPORT));
+        lesson(version, 1, 1, Parity.BOTH, 0, stp, krentsin);
+        lesson(version, 3, 2, Parity.NUMERATOR, 0, stp, krentsin);
+        mvc.perform(post("/api/admin/timetable/versions/{id}/publish", version.getId()).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"effectiveFrom\":\"2026-09-01\"}"))
+                .andExpect(status().isOk());
+        // 17 понеділків + 9 серед чисельника = 26 пар
+        expectPlan(item, 52, "AUTO");
+
+        // 8-й тиждень (19.10) — знаменник; чисельником він дає ще одну середу
+        mvc.perform(put("/api/admin/semesters/{id}/weeks/2026-10-19", semester).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"parity\":\"NUMERATOR\"}"))
+                .andExpect(status().isOk());
+        expectPlan(item, 54, "AUTO");
+
+        // семестр до 18.12: без понеділків 21.12 і 28.12 та середи чисельника 23.12 — 15 + 9 = 24 пари
+        Integer semesterVersion = ApiTestSupport.read(mvc.perform(get("/api/admin/semesters/{id}", semester)
+                .with(TestJwts.admin())).andReturn(), "$.version");
+        mvc.perform(put("/api/admin/semesters/{id}", semester).with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"number":1,"startsOn":"2026-09-01","endsOn":"2026-12-18","version":%d}"""
+                                .formatted(semesterVersion)))
+                .andExpect(status().isOk());
+        expectPlan(item, 48, "AUTO");
+    }
+
     @Test
     void splitLoadNeedsExistingSubgroupsAndBlocksTheirDeletion() throws Exception {
         create("/api/admin/load", """
