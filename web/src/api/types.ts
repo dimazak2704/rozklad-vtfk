@@ -1834,7 +1834,10 @@ export interface EmailPreferencesRequest {
   version?: Nullable<number>;
 }
 
-/** POST /api/notify/email/me/test → 202. 422 `email-missing`/`email-not-verified`, 503 `email-disabled`, 429 `email-test-limit`. */
+/**
+ * POST /api/notify/email/me/test → 202. 422 `email-account-inactive`/`email-missing`/`email-not-verified`,
+ * 503 `email-disabled`, 429 `email-test-limit`.
+ */
 export interface EmailTestResultDto {
   status: string;
 }

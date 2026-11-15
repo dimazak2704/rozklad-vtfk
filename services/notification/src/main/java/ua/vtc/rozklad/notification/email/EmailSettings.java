@@ -89,14 +89,21 @@ public class EmailSettings {
      *
      * @param tokenRoles the caller's roles: a dispatcher's test letter links to the dispatcher's settings page
      * @throws ServiceUnavailableException {@code email-disabled} while the channel is off
-     * @throws BusinessRuleException       {@code email-missing} / {@code email-not-verified}
+     * @throws BusinessRuleException       {@code email-account-inactive} (a disabled, revoked or demo account gets
+     *                                     no letters, so the worker would drop this one) / {@code email-missing} /
+     *                                     {@code email-not-verified}
      * @throws TooManyRequestsException    {@code email-test-limit} over the hourly limit
      */
     public void sendTest(UUID accountId, Set<String> tokenRoles) {
         if (!channel.enabled()) {
             throw new ServiceUnavailableException("email-disabled", "Надсилання листів на сервері не налаштовано.");
         }
-        MailAddresses.Verification address = verification(recipients.account(accountId));
+        Optional<MailRecipient> me = recipients.account(accountId);
+        if (me.isPresent() && !me.get().active()) {
+            throw new BusinessRuleException("email-account-inactive", "Листи на цей обліковий запис не надсилаються: "
+                    + "його вимкнено або це демонстраційний доступ.");
+        }
+        MailAddresses.Verification address = verification(me);
         if (address.status() == MailAddresses.Status.MISSING) {
             throw new BusinessRuleException("email-missing", "На вашому обліковому записі немає e-mail — "
                     + "попросіть навчальну частину додати корпоративну адресу.");

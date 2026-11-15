@@ -162,6 +162,20 @@ class EmailPreferencesApiIT extends IntegrationTest {
     }
 
     @Test
+    void aDisabledRevokedOrDemoAccountGetsNoTestLetter() throws Exception {
+        UUID demo = UUID.fromString("99999999-9999-4999-8999-999999999999");
+        core.addMailRecipient(new MailRecipient(demo, null, "Демо", "demo", "demo@vtc.vn.ua", true,
+                List.of("ADMIN"), true, false, true));
+
+        // the worker would drop the letter of an inactive account: say so instead of «queued»
+        mockMvc.perform(post("/api/notify/email/me/test").with(as(demo, "ADMIN")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("email-account-inactive"));
+        mailWorker.drain();
+        assertThat(mail.sent()).isEmpty();
+    }
+
+    @Test
     void coreDownIsA503() throws Exception {
         core.setMailRecipientsUnavailable(true);
         mockMvc.perform(get("/api/notify/email/me").with(as(TEACHER, "TEACHER")))
