@@ -1,4 +1,5 @@
 import { buildUrl } from '@/api/client';
+import { isApiError } from '@/api/errors';
 import { useBells, usePublicMeta } from '@/api/meta';
 import { publicSchedulePath, usePublicChanges, usePublicGroups, usePublicSchedule } from '@/api/public';
 import { GroupsDirectory } from '@/components/public/home/GroupsDirectory';
@@ -10,6 +11,7 @@ import { ScheduleFinder } from '@/components/public/home/ScheduleFinder';
 import { TodayChanges } from '@/components/public/home/TodayChanges';
 import { useHomeDay } from '@/components/public/home/useHomeDay';
 import { useRememberedGroup } from '@/components/public/home/useRememberedGroup';
+import { useRepairSavedTargets } from '@/components/public/home/useRepairSavedTargets';
 import { useDocumentTitle } from '@/components/public/useDocumentTitle';
 import { PageErrorScope } from '@/components/ui';
 
@@ -57,7 +59,11 @@ export default function HomePage() {
   const groups = usePublicGroups();
   const changes = usePublicChanges(home.date);
   const day = usePublicSchedule('GROUP', group?.id, home.date, home.date, { enabled: Boolean(group) });
-  const queries = [meta, bells, groups, changes, group ? day : null];
+  // збережена група зникла (перевантаження бази): це не збій сторінки, а застаріла закладка — довідник
+  // перенесе її на новий id або забуде, а сира відповідь сервера з id на головну не потрапляє
+  const staleGroup = isApiError(day.error) && day.error.isNotFound && !day.error.isHistoryNotPublic;
+  useRepairSavedTargets();
+  const queries = [meta, bells, groups, changes, group && !staleGroup ? day : null];
   // що з цього могло прийти зі збереженої копії Service Worker (адреси — як у клієнта API)
   const range = nowPanelRange(meta.data);
   const savedUrls = [

@@ -84,7 +84,8 @@ describe('Сторінка групи', () => {
     it('рядок контексту каже стан дня: яка пара зараз і скільки лишилося', async () => {
       vi.setSystemTime(new Date('2026-11-12T10:32:00Z')); // 12:32 у Києві, 4 пара (12:10–13:10)
       renderGroup('/g/4КІ1?view=week&date=2026-11-12');
-      expect(await screen.findByText(/^Зараз 4-та пара · ще 38/)).toBeInTheDocument();
+      // «4 пара», як у герої головної, а не «4-та пара»
+      expect(await screen.findByText(/^Зараз 4 пара · ще 38/)).toBeInTheDocument();
     });
 
     it('після пар — коли вони закінчилися, а не тиша', async () => {

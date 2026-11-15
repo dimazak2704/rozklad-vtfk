@@ -4,10 +4,10 @@ import type { ChangeDto } from '@/api/types';
 import { Button, Popover, PopoverClose, PopoverContent, PopoverTrigger, Textarea } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
-import { compareIsoDates, formatInstantTime, timeToMinutes, todayInKyiv } from '@/lib/date';
+import { formatInstantTime, todayInKyiv } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
 import { subgroupLabel } from '@/lib/labels';
-import { changeDay, changeDisciplineTitle, changeReplaced, changeRoom, changeWhen, deadlineDay } from './change-text';
+import { changeDay, changeDisciplineTitle, changePassed, changeReplaced, changeRoom, changeWhen, deadlineDay } from './change-text';
 
 const COMMENT_MAX = 500;
 
@@ -42,10 +42,7 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
   const notice = change.approvalMode === 'NOTIFY';
   const subgroup = change.subgroup > 0 ? subgroupLabel(change.subgroup) : null;
   // пара вже скінчилася: «Не можу» нічого не змінить, лишається тільки сказати, що бачили
-  const lastSlot = bells.data?.slots.find((s) => s.pair === change.pairTo);
-  const past =
-    compareIsoDates(change.date, today) < 0 ||
-    (change.date === today && lastSlot !== undefined && clock.minutes >= timeToMinutes(lastSlot.endsAt));
+  const past = changePassed(change, today, bells.data ? { bells: bells.data.slots, minutes: clock.minutes } : null);
 
   // одне речення про стан замість трьох табличок: що це, до коли відповісти; строк — одним шматком, без переносу
   const due = deadline ? (
@@ -131,11 +128,15 @@ export function SubstitutionCard({ change, onConfirm, onDecline, primary = false
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 sm:col-start-2 lg:col-start-auto">
-        <Button variant={primary ? 'primary' : 'secondary'} onClick={onConfirm}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:col-start-2 lg:col-start-auto">
+        {/* заповнена лише в найтерміновішому рядку, і ніколи — у рядку про пару, що минула */}
+        <Button variant={primary && !past ? 'primary' : 'secondary'} onClick={onConfirm}>
           Підтверджую
         </Button>
-        {past ? null : (
+        {past ? (
+          // замість «Не можу» — чому його немає: пару вже провели, відмова нічого не змінить
+          <span className="text-caption text-muted">Відмовитися вже не можна</span>
+        ) : (
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost">Не можу</Button>

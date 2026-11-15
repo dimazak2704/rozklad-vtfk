@@ -180,14 +180,22 @@ function LessonCellView({
           {byGroup ? (
             <span className={cn('min-w-0 truncate text-cell', groupCode)}>{lesson.group.code}</span>
           ) : isList ? (
-            <span className={cn('min-w-0 text-cell font-[650] text-pretty', !stateWord && 'line-clamp-2', titleTone)}>{title}</span>
+            // список: до трьох рядків — «Надійність, діагностика та експлуатація компʼютерних систем і мереж»
+            // вміщається повністю навіть на 375 px; довше обрізається трьома крапками, повна назва — у картці
+            <span data-lesson-title="" className={cn('line-clamp-3 min-w-0 text-cell font-[650] text-pretty wrap-break-word', titleTone)}>
+              {title}
+            </span>
           ) : (
             <>
-              {/* вузька колонка — коротка назва; від ~200 px — повна, до двох рядків (повна — у картці) */}
+              {/* вузька колонка — коротка назва; від ~200 px — повна, до двох рядків (повна — у картці при наведенні) */}
               <span className={cn('min-w-0 truncate text-cell font-[650] @[12.5rem]/cell:hidden', titleTone)}>
                 {lesson.discipline.shortName}
               </span>
-              <span aria-hidden="true" className={cn('hidden min-w-0 text-cell font-[650] text-pretty @[12.5rem]/cell:line-clamp-2', titleTone)}>
+              <span
+                aria-hidden="true"
+                data-lesson-title=""
+                className={cn('hidden min-w-0 text-cell font-[650] text-pretty wrap-break-word @[12.5rem]/cell:line-clamp-2', titleTone)}
+              >
                 {title}
               </span>
             </>
@@ -207,7 +215,14 @@ function LessonCellView({
           )}
         >
           {byGroup ? (
-            <span className="min-w-0 truncate">{isList ? title : lesson.discipline.shortName}</span>
+            // викладачу в списку — повна назва дисципліни до двох рядків (не обрізана одним рядком); у сітці — скорочення
+            isList ? (
+              <span data-lesson-title="" className="line-clamp-2 min-w-0 flex-1 basis-40 wrap-break-word">
+                {title}
+              </span>
+            ) : (
+              <span className="min-w-0 truncate">{lesson.discipline.shortName}</span>
+            )
           ) : counterpart && perspective !== 'group' ? (
             // аудиторії головне, яка група: її код — шрифтом цифр і чорнилом, а не тихим підписом
             <span className="min-w-0 truncate">

@@ -76,9 +76,10 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
           </ul>
         </nav>
 
-        <div className="ms-auto flex min-w-0 items-center gap-2">
+        {/* праворуч — усе, що лишилося після розділів: поле пошуку тягнеться до 16–18 rem і стискається, коли тісно */}
+        <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">
           <StandTimeBadge />
-          {onHome ? null : <SearchTrigger className="hidden w-64 lg:flex xl:w-72" />}
+          {onHome ? null : <SearchTrigger className="hidden max-w-64 min-w-28 flex-1 lg:flex xl:max-w-72" />}
           <IconButton
             label="Пошук розкладу"
             shortcut="mod+k"

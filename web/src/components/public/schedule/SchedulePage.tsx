@@ -81,7 +81,7 @@ export function SchedulePage({
   const changes = useMemo(() => (placeholder ? [] : changedLessons(visible)), [visible, placeholder]);
   const parity = placeholder ? null : (visible?.days[0]?.parity ?? null);
   const weekNumber = semesterWeekOf(params.date, meta.data?.semester);
-  // тиждень, у якому є сьогодні: стан дня одним тихим рядком у рядку контексту («Зараз 2-га пара · ще 35 хв»,
+  // тиждень, у якому є сьогодні: стан дня одним тихим рядком у рядку контексту («Зараз 2 пара · ще 35 хв»,
   // «Пари закінчилися о 13:10»). Подання «День» показує його над списком, аудиторія має свій рядок стану
   const today = meta.data?.today ?? null;
   const todayDay = placeholder || !today || params.view !== 'week' || perspective === 'room' ? undefined : dayOf(visible, today);

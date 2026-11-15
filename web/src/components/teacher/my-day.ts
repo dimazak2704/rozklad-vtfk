@@ -46,7 +46,10 @@ export function nextOwnDay(days: readonly DayDto[], today: IsoDate, teacherId: s
 export function nextDaySentence(days: readonly DayDto[], today: IsoDate, teacherId: string): string | null {
   const next = nextOwnDay(days, today, teacherId);
   if (!next) return null;
-  const fact = `перша о ${next.first.startsAt} — ${lessonPhrase(next.first)}`;
+  // пара із заміни без дзвінків дня — номером пари, а не «о null»
+  const fact = next.first.startsAt
+    ? `перша о ${next.first.startsAt} — ${lessonPhrase(next.first)}`
+    : `перша — ${next.first.pair}\u00a0пара, ${lessonPhrase(next.first)}`;
   if (relativeDayLabel(next.day.date, today) === 'Завтра') return endSentence(`Завтра ${fact}`);
   const when = `У ${WEEKDAY_ACCUSATIVE[isoWeekday(next.day.date)] ?? ''}, ${formatDayMonth(next.day.date)}, ${fact}`;
   const tomorrow = addDays(today, 1);
@@ -88,8 +91,18 @@ export function nextRequest(changes: readonly ChangeDto[], today: IsoDate, clock
  */
 export function confirmedAssignments(changes: readonly ChangeDto[], date: IsoDate): ChangeDto[] {
   return changes
-    .filter((c) => c.date === date && c.status === 'CONFIRMED' && !c.supersededBy && c.teacherAnswer !== 'DECLINE')
+    .filter((c) => c.date === date && c.status === 'CONFIRMED' && !c.supersededBy && c.teacherAnswer !== 'DECLINE' && !keepsOwnPair(c))
     .sort((a, b) => a.pairFrom - b.pairFrom);
+}
+
+/**
+ * Зміна моєї ж пари, а не нова пара: інша аудиторія, інша дисципліна чи перестановка, де викладач лишається тим самим
+ * (або нового не вказано), і скасування. Така пара вже стоїть у моєму розкладі — другою клітинкою «Заміна» вона не стає.
+ */
+function keepsOwnPair(change: ChangeDto): boolean {
+  if (change.kind === 'CANCEL' || change.kind === 'DISCIPLINE_FINISHED') return true;
+  const was = change.original.teacher;
+  return was !== null && (change.new.teacher === null || change.new.teacher.id === was.id);
 }
 
 /** Пари, які займають заміни (BLOCK/ADDITIONAL — кілька поспіль). */
@@ -130,4 +143,66 @@ export function withRequest(
   }
   if (ownDate && compareIsoDates(request.date, ownDate) > 0) return next;
   return [next, `Є запит на заміну на ${formatWeekdayDateAfterNa(request.date)}\u00a0— ${pair}.`].filter(Boolean).join(' ');
+}
+
+/** Вид заняття, яким заміна стоятиме в розкладі після публікації. */
+function assignedKind(change: ChangeDto): LessonView['kind'] {
+  if (change.kind === 'ADDITIONAL') return 'ADDITIONAL';
+  if (change.kind === 'BLOCK') return 'BLOCK';
+  return 'SUBSTITUTED';
+}
+
+/**
+ * Заняття з підтвердженої, але ще не опублікованої заміни — так, як його покаже розклад після публікації:
+ * «Заміна», закреслене «замість кого», група й аудиторія. BLOCK — одне заняття на кілька пар, решта — по одному на пару.
+ * Час — з дзвінків дня; без них — null (клітинка покаже пару без часу).
+ */
+export function assignmentLessons(change: ChangeDto, bells?: readonly BellSlotDto[]): LessonView[] {
+  const discipline = change.new.discipline ?? change.original.discipline;
+  if (!discipline) return [];
+  const block = change.kind === 'BLOCK';
+  const pairs = block ? [change.pairFrom] : assignmentPairs([change]);
+  return pairs.map((pair) => {
+    const last = block ? change.pairTo : pair;
+    return {
+      id: `assigned-${change.id}-${pair}`,
+      pair,
+      startsAt: bells?.find((slot) => slot.pair === pair)?.startsAt ?? null,
+      endsAt: bells?.find((slot) => slot.pair === last)?.endsAt ?? null,
+      discipline,
+      teacher: change.new.teacher,
+      room: change.new.room ?? change.original.room,
+      group: change.group,
+      subgroup: change.subgroup,
+      kind: assignedKind(change),
+      online: false,
+      original: { discipline: change.original.discipline, teacher: change.original.teacher, room: change.original.room, pair: null },
+      reasonText: change.printedReason,
+      changeId: change.id,
+    };
+  });
+}
+
+/**
+ * Мій розклад разом із підтвердженими замінами, яких ще немає в опублікованому розпорядженні (`confirmedAssignments`).
+ * Одне правило для всього кабінету: що «зараз» називає моєю парою, те стоїть і в сітці, і в денному списку, і в
+ * переліку пар, які зачепить відсутність (DOMAIN §7: «lessons the teacher was to take over by a not yet published
+ * change»). Заміна, що вже є серед занять дня (той самий `changeId`), не дублюється.
+ */
+export function withAssignments<T extends { days: DayDto[] }>(
+  schedule: T,
+  changes: readonly ChangeDto[],
+  bellsByDate: ReadonlyMap<IsoDate, readonly BellSlotDto[]> = new Map(),
+): T {
+  let touched = false;
+  const days = schedule.days.map((day) => {
+    const known = new Set(day.lessons.map((lesson) => lesson.changeId).filter(Boolean));
+    const extra = confirmedAssignments(changes, day.date)
+      .filter((change) => !known.has(change.id))
+      .flatMap((change) => assignmentLessons(change, bellsByDate.get(day.date)));
+    if (extra.length === 0) return day;
+    touched = true;
+    return { ...day, lessons: [...day.lessons, ...extra].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup) };
+  });
+  return touched ? { ...schedule, days } : schedule;
 }

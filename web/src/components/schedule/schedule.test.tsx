@@ -14,6 +14,8 @@ import { LessonCell } from './LessonCell';
 import { LessonDetails } from './LessonDetails';
 import { LessonLinksContext, type LessonLinks } from './lesson-links';
 import { NowIndicator } from './NowIndicator';
+import { pillShift } from './track-hint';
+import { VacatedSlot } from './VacatedSlot';
 import { WeekGrid } from './WeekGrid';
 
 const monday = DEMO_WEEK.days[0]!;
@@ -291,35 +293,47 @@ describe('WeekGrid', () => {
     expect(rowHeaders[2]!.className).toMatch(/(^|\s)z-\[5\]/);
   });
 
-  it('лінія «зараз» — лише в колонці сьогодні: у попередніх днях немає уривків над порожніми клітинками', () => {
+  it('«зараз» — лише в колонці сьогодні: у попередніх днях немає уривків над порожніми клітинками', () => {
     renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-11" at={10 * 60} />);
     const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
-    const lines = table.querySelectorAll<HTMLElement>('[data-now-line]');
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toHaveAttribute('data-now-line', 'strong');
+    expect(table.querySelectorAll('[data-now-progress]')).toHaveLength(1);
+    expect(table.querySelectorAll('[data-now-marker]')).toHaveLength(1);
+    const todayColumn = within(table).getAllByRole('columnheader').findIndex((th) => th.getAttribute('aria-current') === 'date');
+    const cell = table.querySelector('[data-now-progress]')!.closest('td')!;
+    expect((cell.parentElement as HTMLTableRowElement).cells[todayColumn]).toBe(cell);
   });
 
-  it('лінія «зараз» не йде через текст заняття: лежить під вмістом, а в зайнятій клітинці — лише крапка на краю', () => {
-    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60} />);
+  it('під час пари «зараз» видно й над заняттям: смуга на краю клітинки росте до пройденої частки, лінії через текст немає', () => {
+    // 10:10 — середина 2 пари; у понеділок у цей час є заняття
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={10 * 60 + 10} />);
     const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
-    const line = table.querySelector<HTMLElement>('[data-now-line="strong"]');
-    expect(line).not.toBeNull();
-    // без z-index і перед вмістом у DOM: клітинка з тим самим тлом малюється поверх лінії
-    const layer = line!.parentElement!;
-    expect(layer.className).not.toMatch(/(^|\s)z-/);
-    // лінія ковзає лише transform: шар висотою з клітинку зсунуто на пройдену частку пари
-    expect(layer.style.transform).toMatch(/^translateY\(/);
-    expect(layer.style.top).toBe('');
-    const cell = line!.closest('td')!;
-    const content = cell.querySelector(':scope > div');
-    expect(content).not.toBeNull();
-    expect(layer.compareDocumentPosition(content!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(content!.className).toMatch(/relative/);
-    expect(content!.className).toMatch(/bg-today-wash/);
-    // над заняттям від лінії лишається крапка на краю колонки, з ореолом «пара почалась»
+    // горизонтальна лінія лягала б під картку (лишалась «сирітська» крапка) або через текст (читалась би закресленням)
+    expect(table.querySelector('[data-now-line]')).toBeNull();
+    const progress = table.querySelector<HTMLElement>('[data-now-progress]')!;
+    expect(progress).not.toBeNull();
+    // росте лише transform (scaleY), без анімації висоти
+    expect(progress.style.transform).toBe('scaleY(0.5)');
+    const bar = progress.parentElement!;
+    // смуга — на лівому краї клітинки й над її вмістом (z-index), а не під карткою заняття
+    expect(bar.className).toMatch(/(^|\s)start-0(\s|$)/);
+    expect(bar.className).toMatch(/(^|\s)z-\[1\](\s|$)/);
+    const cell = progress.closest('td')!;
+    expect(within(cell).getByRole('button')).toBeInTheDocument();
+    // крапка на точній хвилині — кінець смуги, з ореолом «пара почалась»
     const marker = cell.querySelector('[data-now-marker]');
     expect(marker).not.toBeNull();
     expect(marker!.className).toMatch(/anim-halo/);
+  });
+
+  it('у перерві «зараз» — лінія 2 px на межі рядків, поверх клітинки, і без смуги прогресу', () => {
+    // 09:35 — перерва між 1 і 2 парою
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-09" at={9 * 60 + 35} />);
+    const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
+    const line = table.querySelector<HTMLElement>('[data-now-line="strong"]')!;
+    expect(line).not.toBeNull();
+    expect(line.parentElement!.style.transform).toBe('translateY(0%)');
+    expect(line.parentElement!.className).toMatch(/z-\[1\]/);
+    expect(table.querySelector('[data-now-progress]')).toBeNull();
   });
 
   it('пʼятнична пара з іншим дзвінком показує свій час', () => {
@@ -434,5 +448,98 @@ describe('пара, звільнена перенесенням, і зміна �
     expect(pair2).toBeDefined();
     expect(pair2).toHaveTextContent('Пари не буде');
     expect(pair2).toHaveTextContent('перенесено на 1 пару');
+  });
+});
+
+describe('NowIndicator: одна форма пари й пігулка в межах колонки', () => {
+  it('рядок у заголовку сторінки пише «2 пара», як герой, а не «2-га пара»', () => {
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={10 * 60 + 17} variant="inline" />);
+    expect(visibleText(/^Зараз/).textContent).toBe('Зараз 2\u00a0пара · ще 23\u00a0хв');
+    cleanup();
+    renderWithProviders(<NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={9 * 60 + 35} variant="inline" />);
+    expect(visibleText(/^Перерва/).textContent).toBe('Перерва · 2\u00a0пара о\u00a009:40');
+  });
+
+  it('пігулка «зараз» рухається сама й ніколи не виходить за колонку пари (сторінка не гортається вбік)', () => {
+    // кінець пари: раніше невидима доріжка завширшки з колонку зсувалася на всю свою ширину й розширювала сторінку
+    const { container } = renderWithProviders(
+      <NowIndicator bells={BELLS_MON_THU} lessonPairs={[1, 2, 3, 4]} at={10 * 60 + 39.9} variant="strip" />,
+    );
+    expect(container.querySelector('[data-now-pill-track]')).toBeNull();
+    const pill = container.querySelector<HTMLElement>('[data-now-pill]')!;
+    expect(pill).not.toBeNull();
+    // зсув — частка «колонка мінус пігулка» (56 px): при progress → 1 правий край пігулки на краю колонки
+    expect(pill.style.transform).toMatch(/^translateX\(calc\(.*cqw.*rem\)\)$/);
+    expect(pill.className).toMatch(/(^|\s)w-14(\s|$)/);
+    const cell = pill.parentElement!;
+    expect(cell).toHaveAttribute('data-now-pill-cell');
+    expect(cell.className).toMatch(/(^|\s)@container(\s|$)/);
+    expect(cell.className).toMatch(/(^|\s)overflow-x-clip(\s|$)/);
+  });
+});
+
+describe('pillShift', () => {
+  it('зсуває пігулку на частку «колонка мінус пігулка» й тримає її в колонці', () => {
+    expect(pillShift(0)).toBe('translateX(calc((100cqw - 3.5rem) * 0))');
+    expect(pillShift(0.5)).toBe('translateX(calc((100cqw - 3.5rem) * 0.5))');
+    expect(pillShift(1)).toBe('translateX(calc((100cqw - 3.5rem) * 1))');
+    // поза межами (годинник трохи випередив дзвінок) — не далі краю
+    expect(pillShift(1.2)).toBe('translateX(calc((100cqw - 3.5rem) * 1))');
+    expect(pillShift(-0.1)).toBe('translateX(calc((100cqw - 3.5rem) * 0))');
+  });
+});
+
+describe('довга назва дисципліни в клітинці й картці', () => {
+  const LONG = 'Надійність, діагностика та експлуатація компʼютерних систем і мереж';
+  const longLesson = { ...monday.lessons[0]!, discipline: { ...monday.lessons[0]!.discipline, name: LONG, shortName: 'НДЕКСМ' } };
+
+  it('у списку — до трьох рядків із переносом довгого слова, і зі словом стану теж (не без обмеження)', () => {
+    renderWithProviders(<LessonCell lesson={{ ...longLesson, kind: 'SUBSTITUTED' }} variant="list" />);
+    const title = screen.getByText(LONG);
+    expect(title).toHaveAttribute('data-lesson-title');
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['line-clamp-3', 'min-w-0', 'wrap-break-word']));
+  });
+
+  it('у сітці — скорочення у вузькій колонці, повна назва до двох рядків у широкій; повна — у картці при наведенні', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<LessonCell lesson={longLesson} variant="grid" />);
+    const full = screen.getByText(LONG);
+    expect(full.className.split(/\s+/)).toEqual(expect.arrayContaining(['@[12.5rem]/cell:line-clamp-2', 'wrap-break-word', 'min-w-0']));
+    expect(screen.getByText('НДЕКСМ').className.split(/\s+/)).toContain('truncate');
+    await user.hover(screen.getByRole('button', { name: /1 пара/ }));
+    const details = await screen.findByRole('dialog', { name: /Деталі/ });
+    expect(within(details).getByText(LONG)).toBeInTheDocument();
+  });
+
+  it('викладачу в денному списку — повна назва до двох рядків, а не обрізана одним', () => {
+    renderWithProviders(<LessonCell lesson={longLesson} variant="list" perspective="teacher" />);
+    const title = screen.getByText(LONG);
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-break-word']));
+    expect(title.className.split(/\s+/)).not.toContain('truncate');
+  });
+
+  it('звільнена перенесенням пара: повна назва в підказці, у списку — до двох рядків', () => {
+    renderWithProviders(<VacatedSlot lessons={[{ ...longLesson, pair: 2, kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 2 } }]} fullTitle />);
+    const struck = screen.getByText(LONG);
+    expect(struck).toHaveAttribute('title', LONG);
+    expect(struck.className.split(/\s+/)).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-break-word']));
+  });
+});
+
+describe('«зараз» на сторінці дзвінків', () => {
+  it('на телефоні — одна смуга поточної пари з часом, як у герої; доріжка дня — від md', () => {
+    const { container } = renderWithProviders(<NowIndicator bells={BELLS_MON_THU} at={10 * 60 + 17} variant="strip" />);
+    const phone = container.querySelector<HTMLElement>('[data-now-phone]')!;
+    expect(phone).not.toBeNull();
+    expect(phone.className.split(/\s+/)).toContain('md:hidden');
+    expect(within(phone).getByText('09:40')).toBeInTheDocument();
+    expect(within(phone).getByText('10:40')).toBeInTheDocument();
+    const track = screen.getByRole('img', { name: /Стан навчального дня/ });
+    expect(track.parentElement!.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'md:block']));
+  });
+
+  it('до першої пари смуги на телефоні немає — порожнього блоку теж', () => {
+    const { container } = renderWithProviders(<NowIndicator bells={BELLS_MON_THU} at={8 * 60} variant="strip" />);
+    expect(container.querySelector('[data-now-phone]')).toBeNull();
   });
 });

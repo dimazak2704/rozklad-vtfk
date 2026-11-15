@@ -23,15 +23,24 @@ export function VacatedSlot({ lessons, perspective = 'group', fullTitle = false,
   return (
     <div data-vacated="" className={cn('flex min-w-0 flex-col gap-1 px-3.5 py-3', className)}>
       <span className="text-meta font-semibold text-cancel">Пари не буде</span>
-      {lessons.map((lesson) => (
-        <span
-          key={lesson.id}
-          className="min-w-0 truncate text-cell font-[650] text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2"
-        >
-          <span className="sr-only">Було: </span>
-          {perspective === 'teacher' ? lesson.group.code : fullTitle ? lesson.discipline.name || lesson.discipline.shortName : lesson.discipline.shortName}
-        </span>
-      ))}
+      {lessons.map((lesson) => {
+        const full = lesson.discipline.name || lesson.discipline.shortName;
+        const shown = perspective === 'teacher' ? lesson.group.code : fullTitle ? full : lesson.discipline.shortName;
+        return (
+          <span
+            key={lesson.id}
+            // картки деталей тут немає, тож повну назву показує підказка; у списку — до двох рядків, а не обрізана одним
+            title={perspective === 'teacher' ? undefined : full}
+            className={cn(
+              'min-w-0 text-cell font-[650] text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2',
+              fullTitle && perspective !== 'teacher' ? 'line-clamp-2 wrap-break-word' : 'truncate',
+            )}
+          >
+            <span className="sr-only">Було: </span>
+            {shown}
+          </span>
+        );
+      })}
       <span className="flex items-center gap-1 text-caption text-secondary">
         <CornerDownRight aria-hidden="true" className="size-3.5 shrink-0 text-muted rtl:-scale-x-100" />
         перенесено на {targets.join(', ')} пару

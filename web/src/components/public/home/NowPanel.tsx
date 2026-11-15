@@ -127,7 +127,7 @@ function GroupFocus({ group, lessons, when }: { group: ScheduleTarget; lessons: 
         const repeated = index > 0 && lessons[index - 1]?.discipline.id === lesson.discipline.id;
         return (
           <Fragment key={lesson.id}>
-            {repeated ? null : <p className="text-heading font-bold text-balance text-primary">{name}</p>}
+            {repeated ? null : <p className="text-heading font-bold text-balance wrap-break-word text-primary">{name}</p>}
             <p className="text-ui text-secondary">{placeLine(lesson)}</p>
           </Fragment>
         );

@@ -148,11 +148,10 @@ function PairGutter({
 /**
  * Тижнева сітка (DESIGN.md, «Тижнева сітка») — справжня таблиця на одній панелі з горизонтальними лініями:
  * ліворуч колонка часу 88 px (номер пари, початок, кінець — кожне своїм рядком), дні — рівні колонки.
- * Сьогодні — тонована колонка й число в акцентній пігулці. «Зараз» — лінія 2 px через колонку сьогодні
- * на точній хвилині з крапкою ліворуч; пігулка з часом стоїть у колонці часу й не закриває заняття.
- * Лінія лежить під вмістом клітинки й через текст не йде (інакше заняття читалося б закресленим, тобто
- * скасованим): у зайнятій клітинці від неї лишається лише крапка на краю колонки. Від колонки часу
- * до сьогодні веде ледь помітна лінія 1 px — теж лише порожніми клітинками.
+ * Сьогодні — тонована колонка й число в акцентній пігулці. «Зараз» — як у денному списку: у перерві лінія
+ * 2 px через колонку сьогодні на межі рядків, а під час пари — смуга на лівому краї клітинки, що росте до
+ * пройденої частки, з крапкою на точній хвилині. Через текст заняття ніщо не йде (інакше воно читалося б
+ * закресленим, тобто скасованим). Пігулка з часом стоїть у колонці часу й не закриває заняття.
  * Рядки ростуть під вміст — нічого не обрізається.
  */
 export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, className }: WeekGridProps) {
@@ -325,22 +324,19 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                   }
                   const past = isLiveDay && rowEnd !== null && nowMinutes >= rowEnd;
                   const cellBg = isToday ? 'bg-today-wash' : 'bg-surface';
-                  // лінія «зараз» — лише в колонці сьогодні (2 px); у днях до неї вона ховалася б під заняттями
-                  // й виринала уривками над порожніми клітинками, тож час біля неї показує пігулка в колонці часу
-                  const nowRule = line && isLiveDay ? 'strong' : null;
+                  // «зараз» — лише в колонці сьогодні; у днях до неї лінія ховалася б під заняттями й виринала
+                  // уривками над порожніми клітинками, тож час біля неї показує пігулка в колонці часу.
+                  // Як у денному списку: у перерві — лінія 2 px на межі рядків (там тексту немає), а під час пари —
+                  // смуга на лівому краї клітинки, що росте зверху до пройденої частки. Горизонтальна лінія під
+                  // заняттям ховалася б під карткою (лишалася б «сирітська» крапка), а поверх — читалась би закресленням.
+                  const nowHere = line && isLiveDay;
+                  const nowBreak = nowHere && nowTop === 0;
+                  const nowPair = nowHere && nowTop > 0;
                   return (
                     <td key={day.date} className={cn('relative h-px p-0 align-top', !lastRow && 'border-b border-separator', cellBg)}>
-                      {/* лінія йде першою й без z-index: вміст клітинки (з тим самим тлом) малюється поверх неї */}
-                      {nowRule ? (
-                        // у перерві лінія лежить на межі рядків, де тексту немає, — тож поверх
-                        <AtNow fraction={nowTop} className={cn(nowTop === 0 && 'z-[1]')}>
-                          <span
-                            data-now-line={nowRule}
-                            className={cn(
-                              'absolute inset-x-0 top-0 -translate-y-1/2 bg-[var(--fill-now)]',
-                              'h-0.5',
-                            )}
-                          />
+                      {nowBreak ? (
+                        <AtNow fraction={0} className="z-[1]">
+                          <span data-now-line="strong" className="absolute inset-x-0 top-0 h-0.5 -translate-y-1/2 bg-[var(--fill-now)]" />
                         </AtNow>
                       ) : null}
                       {lessons.length === 0 ? (
@@ -379,8 +375,19 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                           })}
                         </div>
                       )}
-                      {/* крапка 8 px на лівому краї колонки сьогодні: початок лінії, видна й над зайнятою клітинкою */}
-                      {nowRule === 'strong' ? (
+                      {/* пара йде: смуга 2 px на лівому краї клітинки заповнюється акцентом — повз текст заняття;
+                          росте лише transform (scaleY від верху, 1 с лінійно) */}
+                      {nowPair ? (
+                        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-0 z-[1] w-0.5 -translate-x-1/2 rtl:translate-x-1/2">
+                          <span
+                            data-now-progress=""
+                            className="absolute inset-0 origin-top rounded-full bg-[var(--fill-now)] transition-transform duration-1000 ease-linear"
+                            style={{ transform: `scaleY(${Math.max(0.04, nowTop)})` }}
+                          />
+                        </span>
+                      ) : null}
+                      {/* крапка 8 px на лівому краї колонки сьогодні: «зараз» на точній хвилині, кінець смуги */}
+                      {nowHere ? (
                         <AtNow fraction={nowTop} className="z-[1]">
                           <span
                             // нова пара — новий ключ: ореол крапки розходиться двічі й затихає

@@ -17,6 +17,7 @@ import { MyNow } from '@/components/teacher/MyNow';
 import { MyUpcomingChanges } from '@/components/teacher/MyUpcomingChanges';
 import { SubstitutionRequests } from '@/components/teacher/SubstitutionRequests';
 import { TelegramConnect } from '@/components/teacher/TelegramConnect';
+import { useAssignedSchedule } from '@/components/teacher/useAssignedSchedule';
 import {
   EmptyState,
   PageErrorBanner,
@@ -54,6 +55,8 @@ export default function MyDayPage() {
   const bells = useBells(weekend ? null : params.today);
   const changes = useMyChanges();
   const binding = useMyBinding({ waiting: false });
+  // друк — ті самі пари, що й у сітці: з підтвердженими, ще не опублікованими замінами
+  const printable = useAssignedSchedule(schedule.isPlaceholderData ? undefined : schedule.data);
   const { mode, print } = usePrintMode();
 
   useDocumentTitle(teacher ? `${teacher.shortName} — мій розклад` : null);
@@ -148,7 +151,7 @@ export default function MyDayPage() {
 
       <SchedulePrint
         mode={mode}
-        schedule={schedule.isPlaceholderData ? undefined : schedule.data}
+        schedule={printable}
         perspective="teacher"
         kindLabel="Розклад викладача"
         title={teacher.shortName}

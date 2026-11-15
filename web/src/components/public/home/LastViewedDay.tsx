@@ -1,4 +1,6 @@
+import { isApiError } from '@/api/errors';
 import { useBells } from '@/api/meta';
+import { usePublicGroups } from '@/api/public';
 import { usePublicSchedule } from '@/api/public';
 import { DayList, GridNamesProvider } from '@/components/schedule';
 import { EmptyState, ErrorState, useErrorCovered } from '@/components/ui';
@@ -19,6 +21,7 @@ export function LastViewedDay() {
   const query = usePublicSchedule('GROUP', group?.id, home.date, home.date, { enabled: Boolean(group) });
   const bells = useBells(group ? home.date : null);
   const stall = useStalled([group ? query : null]);
+  const groups = usePublicGroups();
 
   if (!group || (query.isError && !query.data && covered) || (query.isPending && stall)) return null;
   const day = query.data?.days[0];
@@ -34,6 +37,14 @@ export function LastViewedDay() {
     );
   } else if (day) {
     body = <EmptyState size="sm" title={`У ${group.label} ${when}${dated ? ',' : ''} пар немає.`} className="py-2" />;
+  } else if (isApiError(query.error) && query.error.isNotFound && !query.error.isHistoryNotPublic) {
+    // закладка застаріла: поки довідник груп вантажиться, він її ще перенесе на новий id — тоді силует;
+    // якщо ні — одне спокійне речення, без «Спробувати ще раз» і без тексту сервера з id
+    body = groups.isPending ? (
+      <ScheduleSkeleton view="day" />
+    ) : (
+      <EmptyState size="sm" align="start" title={`Збережену групу ${group.label} більше не знайдено.`} description="Знайдіть її в пошуку вище." className="py-2" />
+    );
   } else if (query.isError) {
     body = (
       <ErrorState

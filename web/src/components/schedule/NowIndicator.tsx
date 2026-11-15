@@ -4,9 +4,9 @@ import { useNow } from '@/hooks/useNow';
 import { describePairStatus, pairStatus, toTimedSlots, type PairStatus, type TimedSlot } from '@/lib/bells';
 import { cn } from '@/lib/cn';
 import { durationLabel } from '@/lib/labels';
-import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
+import { pairOrdinalGenitive } from '@/lib/ordinal';
 import { Tooltip } from '../ui/Tooltip';
-import { segmentHint, type SegmentState } from './track-hint';
+import { pillShift, segmentHint, type SegmentState } from './track-hint';
 
 export interface NowIndicatorProps {
   /** Дзвінки дня (профіль, що діє). */
@@ -45,18 +45,18 @@ export interface NowIndicatorProps {
 
 /** Текст для aria-live: змінюється лише зі зміною стану, а не щохвилини. */
 function liveText(status: PairStatus): string {
-  if (status.kind === 'in-pair') return `Зараз ${pairOrdinalLabel(status.current.pair)}`;
+  if (status.kind === 'in-pair') return `Зараз ${status.current.pair}\u00a0пара`;
   if (status.kind === 'break') return `Перерва до ${status.next.startsAt}`;
   return describePairStatus(status);
 }
 
-/** Один рядок: «Зараз 2-га пара · ще 35 хв». */
+/** Один рядок: «Зараз 2 пара · ще 35 хв» — та сама форма «N пара», що й у герої, сітці та списку. */
 function inlineText(status: PairStatus): string {
   switch (status.kind) {
     case 'in-pair':
-      return `Зараз ${pairOrdinalLabel(status.current.pair)} · ще ${status.minutesLeft}\u00a0хв`;
+      return `Зараз ${status.current.pair}\u00a0пара · ще ${status.minutesLeft}\u00a0хв`;
     case 'break':
-      return `Перерва · ${pairOrdinalLabel(status.next.pair)} о\u00a0${status.next.startsAt}`;
+      return `Перерва · ${status.next.pair}\u00a0пара о\u00a0${status.next.startsAt}`;
     case 'before-day':
       return status.minutesUntil <= 180
         ? `Перша пара о\u00a0${status.next.startsAt} · за\u00a0${durationLabel(status.minutesUntil)}`
@@ -262,20 +262,22 @@ export function DayTrack({
         {/* рядок пігулки: лише «зараз», усередині колонки поточної пари або проміжку перерви */}
         {showPill ? (
           <span
-            className="relative row-start-1 min-w-0"
+            data-now-pill-cell=""
+            // колонка — контейнер для 100cqw; overflow-x-clip — запобіжник: ніщо з пігулки не розширює сторінку,
+            // а по вертикалі не обрізає (clip, на відміну від hidden, не вмикає прокрутку другої осі)
+            className="@container relative row-start-1 min-w-0 overflow-x-clip"
             style={{ gridColumn: currentIndex >= 0 ? column(currentIndex) : column(breakIndex) + 1 }}
           >
             {currentIndex >= 0 ? (
-              // доріжка пігулки — колонка без її ширини: зсув на частку пари лишає пігулку в межах колонки,
-              // а ковзає вона лише transform (1 с лінійно), без перерахунку макета
+              // рухається сама пігулка (56 px), а не невидима доріжка завширшки з колонку: зсув — частка
+              // «колонка мінус пігулка», тож при progress = 1 правий край пігулки рівно на краю колонки.
+              // Ковзає лише transform (1 с лінійно), без перерахунку макета.
               <span
-                data-now-pill-track=""
-                className="absolute inset-y-0 start-0 w-[calc(100%-3.5rem)] transition-transform duration-1000 ease-linear"
-                style={{ transform: `translateX(${progress * 100}%)` }}
+                data-now-pill=""
+                className="absolute start-0 top-0 flex h-5 w-14 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures transition-transform duration-1000 ease-linear"
+                style={{ transform: pillShift(progress) }}
               >
-                <span className="absolute start-0 top-0 flex h-5 w-14 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures">
-                  {clock}
-                </span>
+                {clock}
               </span>
             ) : (
               <span className="absolute top-0 left-1/2 flex h-5 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-accent text-meta font-semibold text-on-accent figures">
@@ -461,14 +463,22 @@ export function NowIndicator({
     ) : null;
 
   if (variant === 'strip') {
+    // телефон: як у герої головної — одна смуга поточної пари з часом початку й кінця, під нею речення «що далі».
+    // Доріжка з вісьмох смуг у 340 px дає крихітні сегменти, пігулку ширшу за пару й підписи впритул
     return (
       <section aria-label="Стан навчального дня" className={cn('flex w-full flex-col gap-5', className)}>
         {/* як у герої: речення «що далі» — одразу під відліком, а не на іншому краї рядка */}
         <div className="flex min-w-0 flex-col gap-1.5">
           <Headline status={shown} afterDay={afterDay} compact={false} />
-          {hasSentence ? <p className="text-body text-secondary">{sentence}</p> : null}
+          {hasSentence ? <p className="hidden text-body text-secondary md:block">{sentence}</p> : null}
         </div>
-        {track}
+        {track ? <div className="hidden md:block">{track}</div> : null}
+        {hasSentence ? (
+          <div data-now-phone="" className="flex flex-col gap-3 md:hidden">
+            <PairBar status={shown} />
+            <p className="text-ui text-secondary">{sentence}</p>
+          </div>
+        ) : null}
         {announcement}
       </section>
     );
