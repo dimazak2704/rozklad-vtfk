@@ -1,4 +1,5 @@
-import type { Uuid } from '@/api/types';
+// відносний шлях: модуль імпортує й e2e (tsconfig.node без псевдоніма «@»)
+import type { Uuid } from '../api/types';
 
 /** 32-бітний хеш FNV-1a з «перемішуванням» murmur3 — швидкий і стабільний між запусками. */
 function hash32(text: string, seed: number): number {

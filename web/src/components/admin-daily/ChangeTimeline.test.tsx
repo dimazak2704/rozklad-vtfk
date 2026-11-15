@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { ChangeDto, ChangeHistoryEntry } from '@/api/types';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { renderWithProviders } from '@/test/render';
-import { ChangeTimeline, historyActor } from './ChangeTimeline';
+import { ChangeTimeline } from './ChangeTimeline';
+import { historyActor } from './history-actor';
+import type { TeacherLabel } from './teacher-label';
 
 const krentsin = { id: 't-k', shortName: 'Кренцін М.Д.', displayName: 'Кренцін' };
 const ordynskyi = { id: 't-o', shortName: 'Ординський В.П.', displayName: 'Ординський' };
 const parties = { original: { discipline: null, teacher: ordynskyi, room: null }, new: { discipline: null, teacher: krentsin, room: null } };
-const name = (teacher: { shortName: string; displayName?: string }) => formatTeacherName(teacher as never, 'grid');
+const name: TeacherLabel = (teacher) => formatTeacherName(teacher, 'grid');
 
 const entry = (patch: Partial<ChangeHistoryEntry>): ChangeHistoryEntry => ({
   at: '2026-11-20T07:00:00Z',

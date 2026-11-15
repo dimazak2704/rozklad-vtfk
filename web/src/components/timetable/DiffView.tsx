@@ -18,23 +18,12 @@ import { cn } from '@/lib/cn';
 import { roomLabel } from '@/lib/schedule';
 import { matchScore } from '@/lib/search';
 import { ukCollator } from '@/lib/sort';
+import { movedKind, type DiffKind } from './model/diff';
 import { VERSION_STATUS_LABEL } from './model/labels';
 import { slotShort } from './model/text';
 import { formatTeacherName } from '@/lib/teacher-name';
 
-export type DiffKind = 'moved' | 'room' | 'roomAssigned' | 'added' | 'removed';
 type DiffFilter = 'all' | DiffKind;
-
-/**
- * Що сталося з парою, яку сервер повернув як «переміщену»: інший день, пару чи тиждень — «Переміщено»; той самий
- * слот, але інша аудиторія — «Інша аудиторія»; аудиторію дали там, де її не було, — «Аудиторію призначено».
- * Ті самі три види рахує й підсумок генерації (`outcomeSentence`).
- */
-export function movedKind(from: TemplateLessonDto, to: TemplateLessonDto): 'moved' | 'room' | 'roomAssigned' {
-  const sameSlot = from.weekday === to.weekday && from.pair === to.pair && from.parity === to.parity;
-  if (!sameSlot) return 'moved';
-  return !from.room && to.room ? 'roomAssigned' : 'room';
-}
 
 const KIND_ORDER: readonly DiffKind[] = ['moved', 'room', 'roomAssigned', 'added', 'removed'];
 

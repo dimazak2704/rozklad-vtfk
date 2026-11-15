@@ -82,7 +82,7 @@ describe('примітка періоду для розпорядження', ()
         groups: [{ id: 'g', code: '4КІ1', course: 4 }],
         kind: 'NO_CLASSES',
         periodKind: { id: 'k', code: 'НС', name: 'Національний спротив', color: null, effect: 'SUSPEND' },
-      } as Parameters<typeof periodChipLabel>[0]),
+      }),
     ).toBe('4КІ1 · НС');
     expect(periodAudience({ scope: 'COURSES', courses: [4, 3], groups: [] })).toBe('3, 4 курси');
     const groups = ['1КІ1', '1КІ2', '1КІ3', '1ТК1', '1ТК2'].map((code, i) => ({ id: String(i), code, course: 1 }));

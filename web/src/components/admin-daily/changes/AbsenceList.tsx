@@ -2,23 +2,11 @@ import { Check, ChevronRight, FilePlus2, Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
 import { Button, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { ABSENCE_REASON_LABEL, PAIR_FORMS_GEN, plural } from '@/lib/labels';
-import { pairsText } from '../format';
-import { formatDateRange, formatShortWeekdayDate } from '@/lib/date';
+import { PAIR_FORMS_GEN, plural } from '@/lib/labels';
+import { absenceCaption } from './absence-caption';
 import { isWaiting, LESSON_STATE, tallyEntries, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
 import type { LessonsStatus } from './useChangesWorkspace';
-
-/**
- * «увесь день · лікарняний», а для кількох днів — «11–13 листопада · лікарняний». У поданні «Тиждень» одноденна
- * відсутність каже й день («Пт, 20.11 · увесь день · лікарняний»): той самий викладач буває у списку двічі.
- */
-export function absenceCaption(absence: AbsenceDto, withDate = false): string {
-  const single = absence.dateFrom === absence.dateTo;
-  const when = single ? pairsText(absence.pairs) : formatDateRange(absence.dateFrom, absence.dateTo);
-  const day = single && withDate ? `${formatShortWeekdayDate(absence.dateFrom)} · ` : '';
-  return `${day}${when} · ${ABSENCE_REASON_LABEL[absence.reasonCategory].toLocaleLowerCase('uk')}`;
-}
 
 /**
  * Скільки пар відсутності вже вирішено: короткі відрізки (вирішені — зелені, ті, що чекають відповіді, — бурштинові,

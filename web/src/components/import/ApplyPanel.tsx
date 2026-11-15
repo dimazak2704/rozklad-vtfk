@@ -1,12 +1,12 @@
 import { ArrowRight, CircleCheck, CircleX, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { isSkipped, typedDraft, useApplyImport, type ImportApplyResult, type ImportJob } from '@/api/import';
+import { isSkipped, useApplyImport, type ImportApplyResult, type ImportJob } from '@/api/import';
 import { Button, buttonClass, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { confirm } from '@/stores/confirm';
-import { blockingReason, type ReviewTab } from './decisions';
+import { blockingReason, nothingToApply, type ReviewTab } from './decisions';
 import { trackFinal } from '@/lib/undo/actions';
 
 interface ApplyPanelProps {
@@ -29,22 +29,6 @@ const APPLY_EFFECT: Record<ImportJob['kind'], string> = {
 };
 
 const NOTHING_TO_APPLY = 'Застосування нічого не запише: періоди, пари груп і тижні теорії вже такі, як у файлі.';
-
-/**
- * Остання перевірка core каже, що файл нічого не змінить (графік уже в календарі): тоді не обіцяємо перебудувати
- * пари й не кличемо головною кнопкою «Застосувати».
- */
-export function nothingToApply(job: Pick<ImportJob, 'kind' | 'draft'>): boolean {
-  const typed = typedDraft(job);
-  if (typed?.kind !== 'ACADEMIC_CALENDAR_XLSX' || !typed.draft.check) return false;
-  const check = typed.draft.check;
-  const groups = check.groupSemesters;
-  return (
-    check.created + check.updated + check.deleted === 0 &&
-    check.lessons.added + check.lessons.removed + check.lessons.updated === 0 &&
-    (groups ? groups.created + groups.updated === 0 : true)
-  );
-}
 
 /** Що записано в core: підсумок кроків застосування людськими словами (порожні кроки пропускаємо). */
 function resultLines(result: ImportApplyResult): string[] {

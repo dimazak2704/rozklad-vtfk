@@ -16,7 +16,8 @@ import { LessonLinksContext, type LessonLinks } from './lesson-links';
 import { NowIndicator } from './NowIndicator';
 import { pillShift } from './track-hint';
 import { VacatedSlot } from './VacatedSlot';
-import { nowPillShift, WeekGrid } from './WeekGrid';
+import { nowPillShift } from './now-pill';
+import { WeekGrid } from './WeekGrid';
 
 const monday = DEMO_WEEK.days[0]!;
 // підпис сітки так, як його бачить getByText: нерозривні пробіли — звичайними

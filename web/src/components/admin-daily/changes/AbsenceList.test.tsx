@@ -5,7 +5,8 @@ import type { AbsenceDto } from '@/api/types';
 import { FIXTURE_LESSON, FIXTURE_TEACHERS } from '@/mocks/fixtures/lesson-options';
 import { renderWithProviders } from '@/test/render';
 import type { LessonEntry, LessonState } from '../model';
-import { absenceCaption, AbsenceList, AbsenceProgress } from './AbsenceList';
+import { absenceCaption } from './absence-caption';
+import { AbsenceList, AbsenceProgress } from './AbsenceList';
 
 const absence: AbsenceDto = {
   id: 'a-1',

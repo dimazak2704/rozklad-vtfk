@@ -354,7 +354,7 @@ describe('побажання', () => {
 
   it('мої пари — з базового розкладу семестру: половинка з позначкою тижня, обидві половинки й щотижнева — без', () => {
     const group = { id: 'g1', code: '4КІ1', course: 4 };
-    const discipline = { id: 'd1', name: 'Сучасні технології проєктування', shortName: 'СТП' };
+    const discipline = { id: 'd1', name: 'Сучасні технології проєктування', shortName: 'СТП', color: null };
     const cells = templateCells([
       { weekday: 2, pair: 3, parity: 'BOTH', group, subgroup: 0, discipline },
       { weekday: 3, pair: 1, parity: 'NUMERATOR', group, subgroup: 0, discipline },

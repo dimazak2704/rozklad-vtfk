@@ -5,7 +5,8 @@ import type { TemplateLessonDto, TimetableVersionDto, VersionDiffDto } from '@/a
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
-import { DiffView, movedKind } from './DiffView';
+import { DiffView } from './DiffView';
+import { movedKind } from './model/diff';
 
 const lesson = (patch: Partial<TemplateLessonDto>): TemplateLessonDto => ({
   id: 'l',
@@ -14,7 +15,7 @@ const lesson = (patch: Partial<TemplateLessonDto>): TemplateLessonDto => ({
   parity: 'BOTH',
   group: { id: 'g-4ki2', code: '4КІ2', course: 4 },
   subgroup: 0,
-  discipline: { id: 'd-ukr', name: 'Українська мова', shortName: 'Укр.мова' },
+  discipline: { id: 'd-ukr', name: 'Українська мова', shortName: 'Укр.мова', color: null },
   teacher: null,
   room: null,
   lessonKind: 'MIXED',
@@ -28,7 +29,7 @@ const version = (id: string, name: string, status: TimetableVersionDto['status']
 
 describe('порівняння версій: що сталося з парою', () => {
   it('інший слот — «Переміщено», той самий слот з іншою аудиторією — «Інша аудиторія», аудиторія там, де не було, — «Аудиторію призначено»', () => {
-    const room = (name: string) => ({ id: name, name });
+    const room = (name: string) => ({ id: name, name, type: 'CLASSROOM' as const });
     expect(movedKind(lesson({ weekday: 1, pair: 4 }), lesson({ weekday: 1, pair: 1 }))).toBe('moved');
     expect(movedKind(lesson({ parity: 'NUMERATOR' }), lesson({ parity: 'DENOMINATOR' }))).toBe('moved');
     expect(movedKind(lesson({ room: room('301') }), lesson({ room: room('108') }))).toBe('room');
@@ -41,8 +42,8 @@ describe('порівняння версій: що сталося з парою',
       added: [],
       removed: [],
       moved: [
-        { from: lesson({ id: 'a', weekday: 1, pair: 4, room: { id: '301', name: '301' } }), to: lesson({ id: 'a2', weekday: 1, pair: 1, room: { id: '10', name: '10' } }) },
-        { from: lesson({ id: 'b' }), to: lesson({ id: 'b2', room: { id: '108', name: '108' } }) },
+        { from: lesson({ id: 'a', weekday: 1, pair: 4, room: { id: '301', name: '301', type: 'CLASSROOM' } }), to: lesson({ id: 'a2', weekday: 1, pair: 1, room: { id: '10', name: '10', type: 'CLASSROOM' } }) },
+        { from: lesson({ id: 'b' }), to: lesson({ id: 'b2', room: { id: '108', name: '108', type: 'CLASSROOM' } }) },
       ],
     };
     server.use(http.get(apiPath('/admin/timetable/versions/:a/diff/:b'), () => HttpResponse.json(diff)));
