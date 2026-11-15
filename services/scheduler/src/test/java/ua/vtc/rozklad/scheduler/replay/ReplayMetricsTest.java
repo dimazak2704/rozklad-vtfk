@@ -72,8 +72,12 @@ class ReplayMetricsTest {
         values.put("broken", 1L);   // 4КІ1 Fri: numerator {1,2}, denominator {2}
         values.put("late", 4L);     // 4КІ1 Wed p4, 1КІ2 Thu p4 (Friday p6 of the 2nd shift is not late)
         values.put("grp1p", 7L);    // 4КІ1 Tue ×2 and Fri denominator, 2ЕА1 Mon ×2 and Wed ×2
+        values.put("grp2p", 5L);    // 4КІ1 Mon ×2 and Fri numerator, 2ЕА1 Fri ×2
+        values.put("spread", 18L);  // per week 4КІ1 4−0, 1КІ2 3−0, 2ЕА1 2−0 (days without lessons count 0)
         values.put("coh1p", 7L);
         values.put("lone", 4L);     // 1КІ2 Thu p2 (subgroup 1) and p4 (subgroup 2), both weeks
+        values.put("loneScope", 4L); // every unit is free, so every group is in the scope
+        values.put("sibApart", 2L); // the two 1КІ2 lab subgroups of Т3 are not on neighbouring pairs (p2, p4), BOTH
         values.put("twice", 4L);    // 4КІ1 Wed maths p1+p2, 2ЕА1 Fri PE p4+p6
         values.put("maxDay", 4L);
         values.put("tchWin", 6L);   // Т1 Mon p2, Т3 Thu p3, Т5 Fri p5 (2ЕА1 both)
@@ -103,8 +107,8 @@ class ReplayMetricsTest {
         units.add(placed("wed4", KI1, UUID.randomUUID(), T2, 3, 4, Parity.BOTH, R2).build());
         units.add(placed("wed5", EA1, UUID.randomUUID(), T2, 3, 5, Parity.BOTH, R2).build());
         units.add(placed("thu1", KI2, UUID.randomUUID(), T3, 4, 1, Parity.BOTH, R1).build());
-        units.add(placed("thu2", KI2, LAB, T3, 4, 2, Parity.BOTH, R1).subgroup(1).build());
-        units.add(placed("thu4", KI2, LAB, T3, 4, 4, Parity.BOTH, R1).subgroup(2).build());
+        units.add(placed("thu2", KI2, LAB, T3, 4, 2, Parity.BOTH, R1).subgroup(1).siblingKey("lab:w1").build());
+        units.add(placed("thu4", KI2, LAB, T3, 4, 4, Parity.BOTH, R1).subgroup(2).siblingKey("lab:w1").build());
         units.add(placed("fri1", KI1, UUID.randomUUID(), T4, 5, 1, Parity.NUMERATOR, R1)
                 .base(new Timeslot(5, 1), Parity.NUMERATOR, R2.getId()).build());
         units.add(placed("fri2", KI1, UUID.randomUUID(), T4, 5, 2, Parity.BOTH, R1)

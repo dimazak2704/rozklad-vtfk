@@ -207,6 +207,8 @@ public final class SnapshotReplay {
         check(checks, "grp1p", rows.get(TimetableConstraint.GROUP_ONE_PAIR_DAY).impact(), metrics.get("grp1p"));
         check(checks, "tch1p", rows.get(TimetableConstraint.TEACHER_ONE_PAIR_DAY).impact(), metrics.get("tch1p"));
         check(checks, "lone", rows.get(TimetableConstraint.SUBGROUP_ALONE).impact(), metrics.get("lone"));
+        check(checks, "sibApart", rows.get(TimetableConstraint.SUBGROUPS_APART).impact()
+                + rows.get(TimetableConstraint.SIBLINGS_APART).impact(), metrics.get("sibApart"));
         check(checks, "twice", rows.get(TimetableConstraint.DISCIPLINE_TWICE).impact(), metrics.get("twice"));
         return checks;
     }

@@ -43,8 +43,14 @@ public record ReplayMetrics(Map<String, Long> values) {
         columns.put("broken", "broken group-days: numerator and denominator differ in count or first pair (core)");
         columns.put("late", "group-day-weeks with a pair at the 4th position of the shift or later (LatePairs, core)");
         columns.put("grp1p", "group-day-weeks with one occupied pair, cohorts united (core studentOnePairDays)");
+        columns.put("grp2p", "group-day-weeks with two occupied pairs, cohorts united (short days)");
+        columns.put("spread", "per group and kind of week the most minus the fewest occupied pairs over the weekdays "
+                + "of its shift (a day without lessons counts 0), summed: 0 = every day equally long");
         columns.put("coh1p", "cohort-day-weeks with one pair (genRun «student one-pair days»)");
         columns.put("lone", "group-slot-weeks where some, not all, subgroups study (genRun «without sibling»)");
+        columns.put("loneScope", "lone, counted only in groups with a free unit (the scope of the run)");
+        columns.put("sibApart", "week occurrences of subgroup copies of one occurrence (sibling key, one of them free) "
+                + "that are not together: not in one slot and week, or, with one teacher, not on neighbouring pairs");
         columns.put("twice", "group-day-week-disciplines a student attends twice or more (busiest cohort)");
         columns.put("maxDay", "most pairs of one cohort in one day-week");
         columns.put("tchWin", "teacher windows inside a shift (core teacherWindows)");
@@ -123,6 +129,7 @@ public record ReplayMetrics(Map<String, Long> values) {
         }
         groupMetrics(values, placements, subgroups);
         teacherMetrics(values, placements);
+        siblingMetrics(values, placements);
         for (Placement placement : placements) {
             LessonUnit unit = placement.unit();
             if (unit.hasTeacher() && unit.getTeacher().isUnwantedAt(placement.slot())) {
@@ -158,6 +165,7 @@ public record ReplayMetrics(Map<String, Long> values) {
         }
         long maxDay = 0;
         for (Map.Entry<UUID, Map<Integer, List<Placement>>> group : byGroupDay.entrySet()) {
+            addSpread(values, group.getValue());
             SortedSet<Integer> subgroups = subgroupsByGroup.getOrDefault(group.getKey(), new TreeSet<>());
             List<Integer> cohorts = subgroups.isEmpty() ? List.of(0) : List.copyOf(subgroups);
             for (Map.Entry<Integer, List<Placement>> dayEntry : group.getValue().entrySet()) {
@@ -193,6 +201,8 @@ public record ReplayMetrics(Map<String, Long> values) {
                     add(values, "grpWin", worstWindows);
                     if (occupied.size() == 1) {
                         add(values, "grp1p", 1);
+                    } else if (occupied.size() == 2) {
+                        add(values, "grp2p", 1);
                     }
                     int firstPair = studentGroup.getWindow().firstPairOn(weekday);
                     if (occupied.stream().anyMatch(pair -> LatePairs.isLate(pair, firstPair))) {
@@ -200,11 +210,13 @@ public record ReplayMetrics(Map<String, Long> values) {
                     }
                     add(values, "twice", busiestDiscipline.values().stream().filter(count -> count >= 2).count());
                     if (!subgroups.isEmpty()) {
+                        boolean inScope = hasFreeUnit(group.getValue());
                         for (int pair : occupied) {
                             Set<Integer> present = active.stream().filter(placement -> placement.slot().pair() == pair)
                                     .map(placement -> placement.unit().getSubgroup()).collect(Collectors.toSet());
                             if (!present.contains(0) && !present.equals(subgroups)) {
                                 add(values, "lone", 1);
+                                add(values, "loneScope", inScope ? 1 : 0);
                             }
                         }
                     }
@@ -215,6 +227,64 @@ public record ReplayMetrics(Map<String, Long> values) {
             }
         }
         values.put("maxDay", maxDay);
+    }
+
+    /** Most minus fewest occupied pairs over the weekdays of the group's shift, per kind of week. */
+    private static void addSpread(Map<String, Long> values, Map<Integer, List<Placement>> days) {
+        StudentGroup group = days.values().iterator().next().getFirst().unit().getGroup();
+        for (int week = NUMERATOR; week <= DENOMINATOR; week++) {
+            int currentWeek = week;
+            int most = 0;
+            int fewest = Integer.MAX_VALUE;
+            for (int weekday = 1; weekday <= Timeslot.MAX_WEEKDAY; weekday++) {
+                if (group.getWindow().pairsOn(weekday) == 0) {
+                    continue;
+                }
+                int pairs = pairs(days.getOrDefault(weekday, List.of()).stream()
+                        .filter(placement -> placement.activeIn(currentWeek)).toList()).size();
+                most = Math.max(most, pairs);
+                fewest = Math.min(fewest, pairs);
+            }
+            if (fewest != Integer.MAX_VALUE) {
+                add(values, "spread", most - fewest);
+            }
+        }
+    }
+
+    private static boolean hasFreeUnit(Map<Integer, List<Placement>> days) {
+        return days.values().stream().flatMap(List::stream).anyMatch(placement -> !placement.unit().isPinned());
+    }
+
+    /**
+     * Subgroup copies of one weekly occurrence (equal sibling key) that are not together: with different teachers
+     * they must share the slot and the week, with one teacher they must stand on neighbouring pairs of one day in
+     * the same week. Pairs where both copies are pinned are left out, like the hard rule does.
+     */
+    private static void siblingMetrics(Map<String, Long> values, List<Placement> placements) {
+        Map<String, List<Placement>> byKey = new HashMap<>();
+        for (Placement placement : placements) {
+            if (placement.unit().hasSiblingKey()) {
+                byKey.computeIfAbsent(placement.unit().getSiblingKey(), key -> new ArrayList<>()).add(placement);
+            }
+        }
+        for (List<Placement> siblings : byKey.values()) {
+            for (int i = 0; i < siblings.size(); i++) {
+                for (int j = i + 1; j < siblings.size(); j++) {
+                    Placement a = siblings.get(i);
+                    Placement b = siblings.get(j);
+                    if (a.unit().isPinned() && b.unit().isPinned()) {
+                        continue;
+                    }
+                    boolean oneTeacher = a.unit().hasTeacher() && a.unit().getTeacherId().equals(b.unit().getTeacherId());
+                    boolean together = a.parity() == b.parity() && (oneTeacher
+                            ? a.slot().weekday() == b.slot().weekday() && Math.abs(a.slot().pair() - b.slot().pair()) == 1
+                            : a.slot().equals(b.slot()));
+                    if (!together) {
+                        add(values, "sibApart", Math.max(a.weeks().length, b.weeks().length));
+                    }
+                }
+            }
+        }
     }
 
     private static void teacherMetrics(Map<String, Long> values, List<Placement> placements) {
