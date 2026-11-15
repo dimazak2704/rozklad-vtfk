@@ -183,12 +183,16 @@ are acceptable is open (§13).
 **Generator rules (owner's answers, 15.11.2026; §13 Q1, Q4–Q7 and the Friday rule).**
 - **Groups have no windows** (hard; Q7: «Вікна групам не варто лишати, краще викладачам вікна»): per kind of week the
   worst subgroup's free pairs between its lessons, the same count as the core metric «Вікна груп», with one exemption: a
-  free pair where another subgroup studies, before the first or after the last pair at which every subgroup is at a
-  lesson, is not a window (a lone subgroup pair at the edge of the day, e.g. one teacher's two subgroups one after the
-  other at the end of the day). Between two whole-group pairs such a pair stays a window. Only group-days with a lesson
-  the run may move count, so lessons pinned outside the scope never make a run infeasible. Teacher windows stay a soft
-  trade-off (`teacherWindows`); the request weight `windows` weighs nothing now. The core conflict check keeps group
-  windows as warnings: a manual edit may leave one, and publication is not blocked. The published timetable has none.
+  free pair where another subgroup studies, between the pairs at which every subgroup is at a lesson and the subgroup's
+  own nearest lesson on that side of them, is not a window (a lone subgroup pair at the edge of the day, e.g. one
+  teacher's two subgroups one after the other at the end of the day). A subgroup that waits between two whole-group
+  pairs, or between two of its own lessons (sub 1, sub 2, sub 1, with or without a whole-group pair that day), has a
+  window. Only group-days with a lesson the run may move count, so lessons pinned outside the scope never make a run
+  infeasible. Teacher windows stay a soft trade-off (`teacherWindows`); the request weight `windows` weighs nothing now.
+  The core conflict check keeps group windows as warnings: a manual edit may leave one, and publication is not blocked.
+  The published timetable has none (560 group-day-weeks). Its replay snapshot shows 1, 2КІ1 Thursday pair 6 in the
+  numerator week: the published «Матем.» there names Овчар Ін.М., the load unit Овчар Ів.М. (different people, §10),
+  so core sends that unit without a base lesson and the snapshot's base has a free pair where the timetable has none.
 - **Friday is an unloading day: at most 3 pairs for every group** (hard): the setting «Максимум пар у пʼятницю»
   (`generation.fridayMaxPairs`, 1..8, default 3) counts the pairs of the group's row (any subgroup at a lesson) in each kind
   of week, on group-days the run may change. The published 2025/26 timetable has 4 Friday pairs in 1КІ1, 1М, 4РТ1 and

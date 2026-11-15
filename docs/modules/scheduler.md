@@ -103,7 +103,7 @@ in `generation.completed` uses the Ukrainian titles.
 | Outside shift window | Пара поза межами зміни | hard | unit, week occurrences | — |
 | Teacher unavailable | Викладач недоступний у цей час | hard | unit, week occurrences | — |
 | Subgroups not together | Підгрупи дисципліни не одночасно | hard | two copies with one sibling key (at least one free) and different teachers not in one slot with one parity; the larger week occurrences of the two. A key whose copies cannot all be parallel by the data (one teacher for two of three or more copies; no common allowed slot or parity) is left to «Subgroups apart» (§2 «Sibling keys») | — |
-| Group windows | Вікна в розкладі групи | hard | group-day with a free unit: free pairs between lessons, per kind of week the **worst cohort** (B10, as the core metric), summed over both kinds of week, except a lone subgroup pair at the edge of the day (another subgroup studies there and no pair with every cohort at a lesson lies before it, or none after it) | — (`windows` weighs nothing since round 2) |
+| Group windows | Вікна в розкладі групи | hard | group-day with a free unit: free pairs between lessons, per kind of week the **worst cohort** (B10, as the core metric), summed over both kinds of week, except a lone subgroup pair at the edge of the day (another subgroup studies there, between the pairs with every cohort at a lesson and the cohort's own nearest lesson on that side; a wait between two own lessons counts) | — (`windows` weighs nothing since round 2) |
 | Friday overload | Забагато пар у пʼятницю | hard | group-day on Friday with a free unit: occupied pairs (any cohort) above the group's `fridayMaxPairs`, per kind of week | — |
 | Teacher windows | Вікна у викладача | soft | teacher-day: free pairs between lessons per kind of week, **except waits between shifts** | `teacherWindows` (absent → `windows`) |
 | Teacher shift wait | Очікування викладача між змінами | soft | teacher-day: free pairs of a gap a < b where every lesson at a is with groups of one shift and every lesson at b with groups of the other shift (one definition with the core metric) | `teacherShiftWait` |
@@ -140,14 +140,16 @@ weights as priorities. The 4th pair of the shift is normal: «4-та пара з
 **Owner's answers, round 2 (15.11.2026, DOMAIN §5, §13 Q7).** «Вікна групам не варто лишати, краще викладачам вікна»:
 group windows are **hard**; teacher windows and waits between shifts stay soft trade-offs. The count is the worst cohort as
 before, with one exemption so that the soft rule for one teacher's two subgroups (neighbouring pairs) is not made
-impossible: a free pair of a cohort where another subgroup studies does not count when it lies before the first or after
-the last pair at which every cohort has a lesson (a lone subgroup pair at the edge of the day). Between two whole-group
-pairs it still counts, and «Subgroup alone» still weighs every lone slot. Friday is an unloading day: at most
+impossible: a free pair of a cohort where another subgroup studies does not count when it lies between the pairs at which
+every cohort has a lesson and the cohort's own nearest lesson on that side of them (a lone subgroup pair at the edge of
+the day). Between two whole-group pairs, or between two of the cohort's own lessons (sub 1, sub 2, sub 1, also on a day
+without a full pair), it still counts, and «Subgroup alone» still weighs every lone slot. Friday is an unloading day: at most
 `fridayMaxPairs` occupied pairs (default 3, setting «Максимум пар у пʼятницю»), **hard**. Both rules judge only a group-day
 with a free unit (`GroupDay.hasFreeUnit`), so a window or a 4-pair Friday between lessons pinned outside the scope never
 makes a run infeasible; a free unit that joins such a day makes it the run's. The published version has 4 Friday pairs in
 1КІ1, 1М, 4РТ1 and 4РТ2, so the whole-college run ends its construction heuristic at −11 hard (those 8 Friday pairs, the
-2 sibling keys without a base, 1 window where the base misses a unit) and moves them (§11 «Owner's rules, round 2»). The usual 3–4 pairs a day is left to the soft day-balance rules (no hard minimum).
+2 sibling keys without a base, 1 window where the base misses a unit: 2КІ1 Thursday pair 6 numerator, whose published
+lesson names Овчар Ін.М. and the load unit Овчар Ів.М.; the published timetable itself has no window) and moves them (§11 «Owner's rules, round 2»). The usual 3–4 pairs a day is left to the soft day-balance rules (no hard minimum).
 
 The other rules added after the generator review (shift wait, teacher days and overload, a discipline twice,
 stability) are **preferences with a weight**: `0` switches them off, and the defaults come from the college's real
@@ -354,7 +356,8 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
   teacher (neighbouring pairs; a gap, another day or alternating numerator/denominator are penalized), the pinned
   exemption and that no request weight changes the hard rule. `Windows` (round 2): hard whatever the weights, a day of
   pinned lessons only is exempt and a free lesson makes it count, the worst subgroup, lone subgroup pairs at the edge of
-  the day are no window, between two whole-group pairs they are, parallel subgroups are a full pair. `FridayLimit`: a 4th
+  the day are no window, between two whole-group pairs they are, a subgroup waiting between two of its own lessons (sub
+  1, sub 2, sub 1, with and without a whole-group pair) has one, parallel subgroups are a full pair. `FridayLimit`: a 4th
   pair in both weeks, a half in its week, subgroups on different pairs are two pairs of the group, other days and groups
   without a limit, the pinned exemption until a free lesson joins, the limit follows the setting, hard whatever the
   weights.
@@ -384,10 +387,10 @@ mvn -q -pl services/scheduler -am test -Dtest=SnapshotReplayTest -Dsurefire.fail
   (`datasets=… weights=name=v,… label=… out=results.jsonl seed=…`).
 * `ReplayMetricsTest` — the harness's metric definitions on a hand-made week (hand-counted values), including
   `grpWinH` (group windows of the hard rule: without the lone subgroup pairs at the edge of the day, in group-days with a
-  free unit), `fri4` (group-weeks above the Friday limit) and `friOver` (Friday pairs above it, the hard rule),
-  `sibApart` (copies of one sibling key not together, the hard rule counted independently), `loneScope` (lone subgroup
-  slots of groups with a free unit), `grp2p` (two-pair group days) and `spread` (most minus fewest pairs over the
-  weekdays of a group, a balance measure).
+  free unit; a subgroup waiting between two of its own lessons counts), `fri4` (group-weeks above the Friday limit) and
+  `friOver` (Friday pairs above it, the hard rule), `sibApart` (copies of one sibling key not together, the hard rule
+  counted independently), `loneScope` (lone subgroup slots of groups with a free unit), `grp2p` (two-pair group days)
+  and `spread` (most minus fewest pairs over the weekdays of a group, a balance measure).
 * `ShapedCollegeTest` — every synthetic shape plants a timetable without hard violations and has its feature
   (pairs a week, a full second shift, parallel and crossed subgroups with sibling keys, UNAVAILABLE/unwanted
   slots and part-time teachers, pinned streams with followers without teacher and room).
@@ -685,9 +688,10 @@ The solver's own counts equal the metrics in every run (`grpWinH`, `friOver` inc
 | | **final** | **119.5** | 408 | −1420 | 0 | 0 | 0 | 82 | 192 | 18 | 369 | 23 | 10 | 115 | 349 | 36 | 41 | — |
 
 The published version, scored by the new rules, is −9 hard: the 8 Friday pairs of 1КІ1, 1М, 4РТ1 and 4РТ2 and 1 window
-where the base misses a unit; the construction heuristic ends at −11 (2 more: the sibling keys without a base). Every
-run ends at 0 hard: the whole college moves those Friday pairs (`fri4` 0), the scopes leave the groups outside them pinned
-(`ki4` all four outside, `fri4` 8, `friOver` 0; `course4` moves 4РТ1 and 4РТ2, leaves 1КІ1 and 1М). No group window in any
+where the base misses a unit (2КІ1 Thursday pair 6 numerator: the published lesson names Овчар Ін.М., the load unit
+Овчар Ів.М., so the unit has no base; the timetable itself has no window); the construction heuristic ends at −11 (2
+more: the sibling keys without a base). Every run ends at 0 hard: the whole college moves those Friday pairs (`fri4`
+0), the scopes leave the groups outside them pinned (`ki4` all four outside, `fri4` 8, `friOver` 0; `course4` moves 4РТ1 and 4РТ2, leaves 1КІ1 and 1М). No group window in any
 run. Days stay even (spread 173 vs 178 published, two-pair days 80 vs 75). With the group slot swap the solver also finds
 much better teacher days (windows 7 vs 117 published, one-pair teacher days 55 vs 100) and moves more lessons: 287 of 1074
 at the default `stability` 1 (round 1: 120). Weight 5 («Не переставляти без потреби» = «Важливо») keeps it at 120 with the
@@ -767,7 +771,8 @@ pre-check gains the Friday limit (19 slots in the first shift; no real group is 
 23. **Sibling copies are placed one after another** by the construction heuristic and **move with free rooms**:
     with a hard rule the copies cannot be fixed one at a time.
 24. **Group windows are hard** (owner, round 2), with the lone subgroup pair at the edge of the day exempt, so one
-    teacher's two subgroups can stand one after the other first or last in the day; teacher windows stay soft. The core
+    teacher's two subgroups can stand one after the other first or last in the day; a subgroup that waits between two
+    of its own lessons has a window (only the wait next to the full pairs is exempt); teacher windows stay soft. The core
     metric and warnings still count every subgroup wait (worst cohort), so a one-teacher pair at the edge shows there as
     a window while the generator calls the day fine (real data has no such pair).
 25. **At most `fridayMaxPairs` pairs on Friday is hard**, counted on the group's row (any subgroup), a college setting
