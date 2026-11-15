@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -21,6 +22,7 @@ import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
 import ua.vtc.rozklad.core.catalog.Discipline;
 import ua.vtc.rozklad.core.catalog.DisciplineRepository;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.catalog.Room;
 import ua.vtc.rozklad.core.catalog.RoomRepository;
 import ua.vtc.rozklad.core.catalog.StudentGroup;
@@ -46,8 +48,9 @@ import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 /**
  * Applies scheduler results to jobs, idempotently: every event id is processed once (duplicates
  * from redelivery are ignored), events of finished or unknown jobs are ignored. A SOLVED result
- * becomes a DRAFT version (source GENERATED) with metrics «було / стало». Realtime updates go to
- * admins over SSE after commit. The catalog and the load may change during a run: a room, teacher
+ * becomes a DRAFT version (source GENERATED) with metrics «було / стало» and the outcome against the base
+ * version («Переставлено N з M пар»); its lessons are pinned only where the base pinned them (B1).
+ * Realtime updates go to admins over SSE after commit. The catalog and the load may change during a run: a room, teacher
  * or load item deleted meanwhile is left out of its lessons (with a note), a deleted group or
  * discipline fails the job, so the result never breaks a foreign key and is never lost silently.
  */
@@ -191,6 +194,7 @@ class GenerationResultHandler {
                 .orElse(null);
         version.setMetrics(mapper.json(after));
         job.setResultVersionId(version.getId());
+        job.setOutcome(mapper.json(GenerationOutcome.of(result, GenerationResultHandler::roomOf, known.groupRefs())));
         job.setMetricsAfter(mapper.json(after));
         job.setMetricsBefore(mapper.json(before));
         job.finish(GenerationStatus.SOLVED, now, null);
@@ -209,8 +213,8 @@ class GenerationResultHandler {
                 rooms.findAllById(roomIds).stream().map(Room::getId).collect(Collectors.toSet()),
                 teachers.findAllById(ids(units, PlanUnit::teacherId)).stream().map(Teacher::getId)
                         .collect(Collectors.toSet()),
-                groups.findAllById(ids(units, PlanUnit::groupId)).stream().map(StudentGroup::getId)
-                        .collect(Collectors.toSet()),
+                groups.findAllById(ids(units, PlanUnit::groupId)).stream()
+                        .collect(Collectors.toMap(StudentGroup::getId, GroupRef::of)),
                 disciplines.findAllById(ids(units, PlanUnit::disciplineId)).stream().map(Discipline::getId)
                         .collect(Collectors.toSet()),
                 loadItems.lockExisting(loadItemIds));
@@ -247,7 +251,8 @@ class GenerationResultHandler {
         lesson.setLessonKind(unit.lessonKind());
         lesson.setStreamId(unit.streamId());
         lesson.setOnline(unit.online());
-        lesson.setPinned(unit.pinned() != null);
+        // B1: закріплене лише те, що закріпив диспетчер у базовій версії (поза вибором — лише «для розв'язувача»)
+        lesson.setPinned(unit.pinnedInDraft());
         return lesson;
     }
 
@@ -305,8 +310,12 @@ class GenerationResultHandler {
     }
 
     /** Ids of the referenced rows that still exist when the result is applied. */
-    private record Known(Set<UUID> rooms, Set<UUID> teachers, Set<UUID> groups, Set<UUID> disciplines,
+    private record Known(Set<UUID> rooms, Set<UUID> teachers, Map<UUID, GroupRef> groupRefs, Set<UUID> disciplines,
                          Set<UUID> loadItems) {
+
+        Set<UUID> groups() {
+            return groupRefs.keySet();
+        }
     }
 
     /** SSE data of {@code generation.progress}. */

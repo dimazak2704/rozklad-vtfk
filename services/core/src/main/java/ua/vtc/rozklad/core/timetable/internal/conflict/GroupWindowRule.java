@@ -23,7 +23,8 @@ final class GroupWindowRule implements ConflictRule {
     public void check(LessonIndex index, ConflictFacts facts, ConflictSink sink) {
         index.byGroupDay().forEach((key, lessons) -> {
             LessonDay day = key.day();
-            List<Integer> cohorts = DayShape.cohorts(lessons, facts.group(key.ownerId()));
+            List<Integer> cohorts = DayShape.cohorts(lessons, facts.group(key.ownerId()),
+                    index.subgroupsOf(key.ownerId()));
             Map<Gap, Map<WeekType, SortedSet<Integer>>> cohortsWithGap = new LinkedHashMap<>();
             for (WeekType week : day.weeks()) {
                 for (int cohort : cohorts) {

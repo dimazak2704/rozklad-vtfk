@@ -32,6 +32,7 @@ final class EventSamples {
     private static final UUID ROOM_6 = UUID.fromString("4d5e6f7a-8b9c-4d4e-9f5a-6b7c8d9e0f1a");
     private static final UUID DISCIPLINE_STP = UUID.fromString("5e6f7a8b-9c0d-4e5f-8a6b-7c8d9e0f1a2b");
     private static final UUID JOB = UUID.fromString("6f7a8b9c-0d1e-4f6a-9b7c-8d9e0f1a2b3c");
+    private static final UUID LOAD_ITEM_STP = UUID.fromString("8c9d0e1f-2a3b-4c8d-9e0f-1a2b3c4d5e6f");
     private static final UUID CHANGE = UUID.fromString("7a8b9c0d-1e2f-4a7b-8c8d-9e0f1a2b3c4d");
     private static final LocalDate DATE = LocalDate.of(2026, 10, 19);
 
@@ -79,23 +80,28 @@ final class EventSamples {
                 List.of(new ProblemSnapshot.ShiftWindow(1, 1, 1, 4), new ProblemSnapshot.ShiftWindow(2, 5, 4, 6)),
                 List.of(new ProblemSnapshot.Group(GROUP_4KI1, "4КІ1", 25, 1, List.of(1, 2))),
                 List.of(new ProblemSnapshot.Room(ROOM_6, "6", RoomType.COMPUTER_LAB, 30, 1)),
-                List.of(new ProblemSnapshot.Teacher(TEACHER_KRENTSIN, "Кренцін М.Д.", List.of(slot), List.of())),
+                List.of(new ProblemSnapshot.Teacher(TEACHER_KRENTSIN, "Кренцін М.Д.", List.of(slot), List.of(), 4)),
                 List.of(
                         new ProblemSnapshot.Unit("u-1", UUID.randomUUID(), GROUP_4KI1, 0, DISCIPLINE_STP,
                                 TEACHER_KRENTSIN, UnitWeight.WHOLE, RoomType.COMPUTER_LAB, ROOM_6, null, null,
                                 new ProblemSnapshot.PinnedSlot(1, 1, Parity.BOTH, ROOM_6), ROOM_6),
                         new ProblemSnapshot.Unit("u-2", UUID.randomUUID(), GROUP_4KI1, 1, DISCIPLINE_STP, null,
                                 UnitWeight.HALF, null, null, null,
-                                new ProblemSnapshot.PinnedSlot(3, 2, Parity.NUMERATOR, null))));
-        return new GenerationRequested(envelope(), JOB, SEMESTER, 120, new GenerationWeights(10, 8, 3, 5, 1),
-                problem);
+                                new ProblemSnapshot.PinnedSlot(3, 2, Parity.NUMERATOR, null)),
+                        new ProblemSnapshot.Unit("u-3", LOAD_ITEM_STP, GROUP_4KI1, 2, DISCIPLINE_STP,
+                                TEACHER_KRENTSIN, UnitWeight.WHOLE, null, null, null, null, null, null, false,
+                                LOAD_ITEM_STP + ":w1")));
+        return new GenerationRequested(envelope(), JOB, SEMESTER, 120,
+                new GenerationWeights(10, 8, 3, 5, 1, 6, 0, 1, 5, 10, 5, 3, 1, 7), problem);
     }
 
     private static GenerationCompleted generationCompleted() {
         return new GenerationCompleted(envelope(), JOB, GenerationStatus.SOLVED, 0, -35,
                 List.of(new GenerationCompleted.Assignment("u-1", 1, 2, Parity.BOTH, ROOM_6),
                         new GenerationCompleted.Assignment("u-2", 3, 2, Parity.NUMERATOR, null)),
-                List.of(new GenerationCompleted.ConstraintScore("Вікна в групи", 3, "0hard/-30soft")),
+                List.of(new GenerationCompleted.ConstraintScore("Вікна в групи", 3, "0hard/-30soft"),
+                        new GenerationCompleted.ConstraintScore("Чисельник і знаменник в одному слоті (бонус)", 2,
+                                "0hard/20soft", "Half pairing", true, 1)),
                 null);
     }
 

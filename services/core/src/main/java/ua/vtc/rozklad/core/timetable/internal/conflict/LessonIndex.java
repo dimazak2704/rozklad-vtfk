@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -22,12 +23,14 @@ final class LessonIndex {
     private final SortedMap<SlotKey, List<SlotLesson>> bySlot;
     private final SortedMap<DayKey, List<SlotLesson>> byGroupDay;
     private final SortedMap<DayKey, List<SlotLesson>> byTeacherDay;
+    private final Map<UUID, Set<Integer>> subgroupsByGroup;
 
     private LessonIndex(List<SlotLesson> lessons) {
         this.bySlot = group(lessons, lesson -> new SlotKey(lesson.day(), lesson.pair()));
         this.byGroupDay = group(lessons, lesson -> new DayKey(lesson.day(), lesson.groupId()));
         this.byTeacherDay = group(lessons.stream().filter(lesson -> lesson.teacherId() != null).toList(),
                 lesson -> new DayKey(lesson.day(), lesson.teacherId()));
+        this.subgroupsByGroup = DayShape.subgroupsByGroup(lessons);
     }
 
     static LessonIndex of(Collection<SlotLesson> lessons) {
@@ -42,6 +45,11 @@ final class LessonIndex {
     /** Lessons of each group per day, ordered by pair. */
     SortedMap<DayKey, List<SlotLesson>> byGroupDay() {
         return byGroupDay;
+    }
+
+    /** Subgroups a group uses in any of the checked lessons (B4: cohorts are the same all week). */
+    Set<Integer> subgroupsOf(UUID groupId) {
+        return subgroupsByGroup.getOrDefault(groupId, Set.of());
     }
 
     /** Lessons of each teacher per day, ordered by pair. */

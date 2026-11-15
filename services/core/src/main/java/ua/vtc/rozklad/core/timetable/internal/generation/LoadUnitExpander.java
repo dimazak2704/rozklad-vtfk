@@ -73,6 +73,14 @@ public final class LoadUnitExpander {
                 item.preferredRoomId(), item.streamId(), false, null, null);
     }
 
+    /**
+     * Which weekly occurrence of its item a unit is ({@code w1}, {@code w2}, …, {@code h}): the last part of
+     * the unit id {@code itemId:subgroup:occurrence}. The subgroup copies of one occurrence share it.
+     */
+    static String occurrenceOf(String unitId) {
+        return unitId.substring(unitId.lastIndexOf(':') + 1);
+    }
+
     /** A split load item without subgroups. */
     public static final class SplitWithoutSubgroupsException extends RuntimeException {
 

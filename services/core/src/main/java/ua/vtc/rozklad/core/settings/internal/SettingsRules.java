@@ -9,6 +9,8 @@ import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_SIGNATORY_POSITION
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CHANGES_HISTORY_DAYS;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_CONFIRM_TIMEOUT_MINUTES;
 import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_HOURS_PER_PAIR;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MAX_TEACHER_MAX_PAIRS_PER_DAY;
+import static ua.vtc.rozklad.core.settings.SystemSettings.MIN_TEACHER_MAX_PAIRS_PER_DAY;
 
 import ua.vtc.rozklad.core.settings.SystemSettings;
 import ua.vtc.rozklad.core.shared.error.FieldErrors;
@@ -33,6 +35,11 @@ final class SettingsRules {
                 || settings.changesHistoryDays() > MAX_CHANGES_HISTORY_DAYS) {
             errors.add("changesHistoryDays", "Історія замін для відвідувачів має бути від %d до %d днів."
                     .formatted(MIN_CHANGES_HISTORY_DAYS, MAX_CHANGES_HISTORY_DAYS));
+        }
+        if (settings.teacherMaxPairsPerDay() < MIN_TEACHER_MAX_PAIRS_PER_DAY
+                || settings.teacherMaxPairsPerDay() > MAX_TEACHER_MAX_PAIRS_PER_DAY) {
+            errors.add("teacherMaxPairsPerDay", "Найбільше пар на день у викладача має бути від %d до %d."
+                    .formatted(MIN_TEACHER_MAX_PAIRS_PER_DAY, MAX_TEACHER_MAX_PAIRS_PER_DAY));
         }
         text(settings.signatoryPosition(), MAX_SIGNATORY_POSITION_LENGTH, "signatoryPosition", "Посаду підписанта",
                 errors);

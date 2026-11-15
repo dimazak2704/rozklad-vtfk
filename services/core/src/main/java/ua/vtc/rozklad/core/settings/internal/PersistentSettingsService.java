@@ -88,7 +88,9 @@ class PersistentSettingsService implements SettingsService {
                 read(stored, SettingKey.CHANGES_HISTORY_DAYS, defaults.changesHistoryDays(),
                         PersistentSettingsService::integer),
                 read(stored, SettingKey.ACTIVE_BELL_PROFILE_ID, defaults.activeBellProfileId(),
-                        PersistentSettingsService::uuidOrNull));
+                        PersistentSettingsService::uuidOrNull),
+                read(stored, SettingKey.TEACHER_MAX_PAIRS_PER_DAY, defaults.teacherMaxPairsPerDay(),
+                        PersistentSettingsService::integer));
     }
 
     @Override
@@ -119,7 +121,7 @@ class PersistentSettingsService implements SettingsService {
         SystemSettings normalized = new SystemSettings(proposed.approvalMode(), proposed.confirmTimeoutMinutes(),
                 proposed.signatoryPosition().strip(), proposed.signatoryName().strip(), proposed.collegeName().strip(),
                 proposed.hoursPerPair(), proposed.showTeacherFullNames(), proposed.changesHistoryDays(),
-                proposed.activeBellProfileId());
+                proposed.activeBellProfileId(), proposed.teacherMaxPairsPerDay());
         FieldErrors errors = new FieldErrors();
         SettingsRules.check(normalized, errors);
         constraints.forEach(constraint -> constraint.check(normalized, errors));
@@ -136,6 +138,7 @@ class PersistentSettingsService implements SettingsService {
         write(SettingKey.ACTIVE_BELL_PROFILE_ID, normalized.activeBellProfileId() == null
                 ? JSON.nullNode()
                 : JSON.stringNode(normalized.activeBellProfileId().toString()), actor);
+        write(SettingKey.TEACHER_MAX_PAIRS_PER_DAY, JSON.numberNode(normalized.teacherMaxPairsPerDay()), actor);
         Setting version = settings.findById(VERSION_KEY).orElse(null);
         if (version == null) {
             settings.save(new Setting(VERSION_KEY, JSON.numberNode(1L), actor));

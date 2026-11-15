@@ -1,12 +1,15 @@
 package ua.vtc.rozklad.core.timetable.internal.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_ENG;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_FV;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_KM;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.D_NDEKSM;
+import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.G_2KI1;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.G_4KI1;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.G_4KI2;
+import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.T_KRENTSIN;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.T_NEPYIVODA;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.at;
 import static ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFixtures.facts;
@@ -87,6 +90,108 @@ class TimetableMetricsCalculatorTest {
 
     @Test
     void emptyTimetableHasZeroMetrics() {
-        assertThat(calculator.calculate(List.of(), facts)).isEqualTo(MetricsDto.empty());
+        assertThat(calculator.calculate(List.of(), facts).withHardConflicts(0)).isEqualTo(MetricsDto.empty());
+        assertThat(calculator.calculate(List.of(), facts).hardConflicts())
+                .as("filled in by the caller that ran the conflict engine").isNull();
+    }
+
+    /**
+     * B5: one definition of «4-та пара зміни» (contracts.LatePairs): shift 1 the 4th pair, shift 2 the 8th;
+     * Friday shift 2 (pairs 4–6) has none, although p6 is the last pair of its window.
+     */
+    @Test
+    void latePairIsTheFourthPairOfTheShiftWindow() {
+        List<SlotLesson> lessons = List.of(
+                at(1, 4).build(),
+                at(2, 1).build(), at(2, 2).build(), at(2, 3).build(),
+                at(1, 5).group(G_2KI1).build(), at(1, 8).group(G_2KI1).build(),
+                at(5, 4).group(G_2KI1).build(), at(5, 5).group(G_2KI1).build(), at(5, 6).group(G_2KI1).build());
+
+        MetricsDto metrics = calculator.calculate(lessons, facts);
+
+        assertThat(metrics.perGroup()).extracting(row -> row.group().code(), MetricsDto.GroupMetrics::latePairs)
+                .containsExactly(tuple("2КІ1", 2), tuple("4КІ1", 2));
+        assertThat(metrics.latePairs()).isEqualTo(4);
+    }
+
+    /**
+     * M1: a teacher's wait between a 1st-shift and a 2nd-shift lesson is not a window; a gap inside one
+     * shift still is. Counted per kind of week.
+     */
+    @Test
+    void teacherWaitBetweenShiftsIsCountedApartFromWindows() {
+        List<SlotLesson> lessons = List.of(
+                at(2, 1).teacher(T_KRENTSIN).build(),
+                at(2, 3).teacher(T_KRENTSIN).build(),
+                at(2, 6).group(G_2KI1).teacher(T_KRENTSIN).build());
+
+        MetricsDto metrics = calculator.calculate(lessons, facts);
+
+        assertThat(metrics.teacherWindows()).as("pair 2 inside shift 1").isEqualTo(2);
+        assertThat(metrics.teacherShiftWaits()).as("pairs 4–5 between the shifts").isEqualTo(4);
+        assertThat(new ConflictEngine().check(lessons, facts).soft())
+                .filteredOn(conflict -> conflict.message().startsWith("Вікно у викладача"))
+                .singleElement()
+                .satisfies(conflict -> assertThat(conflict.message()).contains("між 1 і 3 парою"));
+    }
+
+    /**
+     * B4: the catalog stores no subgroups of 4КІ1, but its subgroups study on Tuesday, so on Monday subgroup 2
+     * sits through pairs 1 and 3 with a window at 2 while subgroup 1 has English. The lone subgroup pairs are
+     * counted too (M3 metric).
+     */
+    @Test
+    void subgroupsAreTheSameAllWeekSoAMondayWindowOfSubgroupTwoCounts() {
+        List<SlotLesson> lessons = List.of(
+                at(1, 1).build(),
+                at(1, 2).subgroup(1).discipline(D_ENG).build(),
+                at(1, 3).build(),
+                at(2, 1).subgroup(2).discipline(D_ENG).build(),
+                at(2, 2).build());
+
+        MetricsDto metrics = calculator.calculate(lessons, facts);
+
+        assertThat(metrics.groupWindows()).isEqualTo(2);
+        assertThat(metrics.loneSubgroupSlots()).as("Mon p2 and Tue p1, both weeks").isEqualTo(4);
+        assertThat(metrics.perGroup().getFirst().loneSubgroupSlots()).isEqualTo(4);
+        assertThat(new ConflictEngine().check(lessons, facts).soft())
+                .filteredOn(conflict -> conflict.kind() == ConflictKind.WINDOW)
+                .singleElement()
+                .satisfies(conflict -> assertThat(conflict.message()).contains("4КІ1").contains("між 1 і 3 парою"));
+    }
+
+    @Test
+    void parallelSubgroupsAreNotLone() {
+        List<SlotLesson> lessons = List.of(
+                at(1, 1).subgroup(1).discipline(D_ENG).build(),
+                at(1, 1).subgroup(2).discipline(D_ENG).teacher(T_KRENTSIN).build(),
+                at(1, 2).build());
+
+        assertThat(calculator.calculate(lessons, facts).loneSubgroupSlots()).isZero();
+    }
+
+    /** M4: one-pair days of groups and teachers, teacher days and days above the teacher's daily limit. */
+    @Test
+    void dailyBalanceOfGroupsAndTeachers() {
+        List<SlotLesson> lessons = new ArrayList<>();
+        for (int pair = 1; pair <= 4; pair++) {
+            lessons.add(at(1, pair).teacher(T_NEPYIVODA).build());
+        }
+        lessons.add(at(1, 1).group(G_4KI2).teacher(T_KRENTSIN).build());
+        lessons.add(at(1, 2).group(G_4KI2).build());
+        lessons.add(at(2, 3).group(G_4KI2).teacher(T_NEPYIVODA).build());
+        lessons.add(at(3, 1).parity(Parity.NUMERATOR).group(G_4KI2).build());
+
+        MetricsDto metrics = calculator.calculate(lessons, facts);
+        MetricsDto strict = calculator.calculate(lessons, facts, 3);
+
+        // 4КІ2: вівторок (обидва тижні) і середа (лише чисельник) мають по одній парі
+        assertThat(metrics.studentOnePairDays()).isEqualTo(3);
+        assertThat(metrics.perGroup()).extracting(MetricsDto.GroupMetrics::onePairDays).containsExactly(0, 3);
+        // Непийвода: понеділок 4 пари і вівторок 1 пара; Кренцін: понеділок 1 пара — по два тижні
+        assertThat(metrics.teacherDays()).isEqualTo(6);
+        assertThat(metrics.teacherOnePairDays()).isEqualTo(4);
+        assertThat(metrics.teacherOverloadDays()).as("4 pairs is within the default limit").isZero();
+        assertThat(strict.teacherOverloadDays()).isEqualTo(2);
     }
 }

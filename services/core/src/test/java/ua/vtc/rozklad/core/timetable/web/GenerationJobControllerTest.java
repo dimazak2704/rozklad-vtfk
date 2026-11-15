@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
+import ua.vtc.rozklad.core.catalog.GroupRef;
+import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
+import ua.vtc.rozklad.core.timetable.internal.generation.LoadFitCheck;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.support.TestJwts;
 import ua.vtc.rozklad.core.support.WebSliceTestConfiguration;
@@ -79,6 +83,58 @@ class GenerationJobControllerTest {
         verify(generation, never()).start(any(), any());
     }
 
+    /** genfix: the new weights are optional; absent ones take defaults, teacher windows follow windows. */
+    @Test
+    void newWeightsAreOptionalAndValidated() throws Exception {
+        given(generation.start(any(GenerationRequestCommand.class), eq("admin"))).willReturn(job(GenerationStatus.QUEUED));
+
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","timeLimitSeconds":120,
+                                 "weights":{"windows":12,"brokenDays":10,"latePairs":3,"preferences":5,"homeRoom":1,
+                                            "stability":0,"teacherShiftWait":2,"specialRooms":0}}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isAccepted());
+        verify(generation).start(new GenerationRequestCommand(SEMESTER, List.of(), List.of(), null, 120,
+                new GenerationWeights(12, 10, 3, 5, 1, 12, 2, 0, null, null, null, null, null, 0)), "admin");
+
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","timeLimitSeconds":120,
+                                 "weights":{"windows":10,"brokenDays":10,"latePairs":3,"preferences":5,"homeRoom":1,
+                                            "teacherOverload":-1}}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("weights.teacherOverload"));
+    }
+
+    /** B9: a load that does not fit the grid is a 422 listing every problem, so the form can show them. */
+    @Test
+    void loadThatDoesNotFitIs422WithProblems() throws Exception {
+        LoadFitCheck.Problem problem = new LoadFitCheck.Problem(LoadFitCheck.Kind.GROUP, GROUP.toString(), "2ТК", 20.5,
+                19, "Група 2ТК: 20,5 пари на тиждень, а в її зміні 19 слотів.");
+        given(generation.start(any(GenerationRequestCommand.class), eq("admin"))).willThrow(new BusinessRuleException(
+                LoadFitCheck.LOAD_EXCEEDS_SLOTS, "Навантаження не вміщується в сітку занять (1). Виправте …",
+                Map.of("problems", List.of(problem))));
+
+        mockMvc.perform(post("/api/admin/generation/jobs").with(TestJwts.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"semesterId":"%s","timeLimitSeconds":120}
+                                """.formatted(SEMESTER)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.type").value("urn:rozklad:problem:business-rule"))
+                .andExpect(jsonPath("$.title").value("Порушено правило"))
+                .andExpect(jsonPath("$.code").value("GENERATION_LOAD_EXCEEDS_SLOTS"))
+                .andExpect(jsonPath("$.problems[0].kind").value("GROUP"))
+                .andExpect(jsonPath("$.problems[0].label").value("2ТК"))
+                .andExpect(jsonPath("$.problems[0].requiredPairs").value(20.5))
+                .andExpect(jsonPath("$.problems[0].availablePairs").value(19))
+                .andExpect(jsonPath("$.problems[0].message").value(problem.message()));
+    }
+
     @Test
     void cancelIsAcceptedAndAFinishedJobIsAConflict() throws Exception {
         given(generation.cancel(JOB)).willReturn(job(GenerationStatus.CANCELLED));
@@ -101,7 +157,12 @@ class GenerationJobControllerTest {
                 .andExpect(jsonPath("$[0].status").value("RUNNING"))
                 .andExpect(jsonPath("$[0].bestScore").value("-2hard/-120soft"))
                 .andExpect(jsonPath("$[0].progress[0].t").value(2.0))
-                .andExpect(jsonPath("$[0].progress[0].hard").value(-2));
+                .andExpect(jsonPath("$[0].progress[0].hard").value(-2))
+                .andExpect(jsonPath("$[0].hardScore").value(-2))
+                .andExpect(jsonPath("$[0].scope.courses[0]").value(4))
+                .andExpect(jsonPath("$[0].groups[0].code").value("4КІ1"))
+                .andExpect(jsonPath("$[0].weights.teacherWindows").value(10))
+                .andExpect(jsonPath("$[0].weights.stability").value(1));
         mockMvc.perform(get("/api/admin/generation/jobs").with(TestJwts.teacher())).andExpect(status().isForbidden());
     }
 
@@ -109,6 +170,7 @@ class GenerationJobControllerTest {
         return new GenerationJobDto(JOB, SEMESTER, status, Instant.parse("2026-11-07T10:00:00Z"),
                 Instant.parse("2026-11-07T10:00:03Z"), null, "-2hard/-120soft",
                 List.of(new GenerationJobDto.ProgressPoint(2.0, -2, -120)), null, null, 120, null, null, null, null,
-                "admin");
+                "admin", new GenerationJobDto.Scope(List.of(GROUP), List.of(4)),
+                List.of(new GroupRef(GROUP, "4КІ1", 4)), GenerationWeights.DEFAULT, -2L, -120L, null, false);
     }
 }

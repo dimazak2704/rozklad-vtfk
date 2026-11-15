@@ -105,15 +105,15 @@ Timetable:
 | `POST/PUT/DELETE /api/admin/timetable/versions/{id}/lessons[/{lessonId}]` | edit draft; response includes `conflicts` for the touched slot |
 | `POST /api/admin/timetable/versions/{id}/lessons/{lessonId}/move` `{weekday,pair,parity,roomId?}` | 200 or 409 `conflicts` (`?dryRun=true` for DnD preview) |
 | `GET /api/admin/timetable/versions/{id}/conflicts` | `{hard:[Conflict], soft:[Conflict]}` |
-| `GET /api/admin/timetable/versions/{id}/metrics` | `MetricsDto {groupWindows, teacherWindows, brokenDays, latePairs, maxPairsPerDay, perGroup:[...]}` |
+| `GET /api/admin/timetable/versions/{id}/metrics` | `MetricsDto {groupWindows, teacherWindows, brokenDays, latePairs, maxPairsPerDay, perGroup:[{group:GroupRef, windows, brokenDays, latePairs, maxPairsPerDay, onePairDays?, loneSubgroupSlots?}], hardConflicts?, teacherShiftWaits?, studentOnePairDays?, loneSubgroupSlots?, teacherDays?, teacherOnePairDays?, teacherOverloadDays?}` (fields with `?` are additive, genfix: `null` in metrics stored before them; counts per kind of week; `latePairs` = group-days with a «4-та пара зміни», `LatePairs`; `teacherWindows` excludes waits between shifts) |
 | `GET /api/admin/timetable/versions/{a}/diff/{b}` | `{added:[..], removed:[..], moved:[{from,to}]}` |
 | `POST /api/admin/timetable/versions/{id}/publish` `{effectiveFrom}` | 200 `{materializedLessons, keptLessons, coveredByChanges, conflicts, pendingDecisions}` / 409 conflicts |
 `TemplateLessonDto {id, weekday, pair, parity, group:GroupRef, subgroup, discipline, teacher?, room?, lessonKind, loadItemId?, pinned, online, streamId?, version}`;
 `PUT …/lessons/{lessonId}` and `POST …/move` accept `version` (the lesson's version the edit is based on): an older one → 409 `stale-data`.
 
 Generation:
-| `POST /api/admin/generation/jobs` `{semesterId, scope:{groupIds?:[], courses?:[]}, baseVersionId?, timeLimitSeconds (10..600), weights?:{windows,brokenDays,latePairs,preferences,homeRoom}}` | 202 `{jobId}` |
-| `GET /api/admin/generation/jobs?semesterId` / `GET /{jobId}` | `{id,status,startedAt,finishedAt,bestScore,progress:[{t,hard,soft}],resultVersionId?,analysis?,metricsBefore?,metricsAfter?,error?}` |
+| `POST /api/admin/generation/jobs` `{semesterId, scope:{groupIds?:[], courses?:[]}, baseVersionId?, timeLimitSeconds (10..600), weights?:{windows,brokenDays,latePairs,preferences,homeRoom, teacherWindows?,teacherShiftWait?,stability?,subgroupsTogether?,studentOnePairDay?,teacherDays?,teacherOverload?,disciplineTwice?,specialRooms?}}` (each weight 0..1000; the 9 last ones are optional, absent → default, `teacherWindows` → `windows`) | 202 `{jobId}`; 422 `GENERATION_LOAD_EXCEEDS_SLOTS` with `problems:[{kind: GROUP\|TEACHER\|ROOM_TYPE, id, label, requiredPairs, availablePairs, message}]` when the load does not fit the grid (nothing is stored) |
+| `GET /api/admin/generation/jobs?semesterId` / `GET /{jobId}` | `{id,status,startedAt,finishedAt,bestScore,progress:[{t,hard,soft}],resultVersionId?,analysis?,metricsBefore?,metricsAfter?,error?}` + additive (genfix) `scope:{groupIds,courses}` (as requested), `groups:[GroupRef]` (resolved, by course and code), `weights` (all 14, normalised), `hardScore?`, `softScore?` (parsed from `bestScore`), `outcome?:{moved, roomChanged, total, perGroup:[{group:GroupRef, moved, total}]}` (SOLVED only: units with a base lesson, moved = other weekday, pair or week), `legacyWeights?` (repair: `true` when the job stored only the five weights of the first schema, so the later rules did not exist for that run; `null` without weights) |
 | `POST /api/admin/generation/jobs/{jobId}/cancel` | 202 |
 
 Substitutions:
@@ -149,7 +149,7 @@ displayName?, roles, teacherId?}` → 201, `PATCH /{accountId}`, `POST /{account
 `DELETE /{accountId}/google`;
 `GET/PUT/DELETE /api/admin/teachers/{id}/account` (`PUT {username}` links an existing account of the sign-in service → `{teacherId,
 teacherName, linked, userId, username, enabled}`; 422 `ACCOUNT_NOT_FOUND`/`ACCOUNT_DISABLED`, 409 taken, 503; `DELETE` → 204);
-`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, changesHistoryDays, activeBellProfileId, version}` (PUT needs the `version` of GET, stale → 409; `changesHistoryDays` 0..365, default 7, days of substitution history visitors see; a PUT without it keeps the stored value).
+`GET/PUT /api/admin/settings` → `{approvalMode: NOTIFY (default)|CONFIRM|AUTO, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair, showTeacherFullNames, changesHistoryDays, activeBellProfileId, teacherMaxPairsPerDay, version}` (PUT needs the `version` of GET, stale → 409; `changesHistoryDays` 0..365, default 7, days of substitution history visitors see; a PUT without it keeps the stored value; `teacherMaxPairsPerDay` 1..8, default 4, the generator's soft daily limit of a teacher, kept the same way).
 
 Import apply (role ADMIN or SERVICE_IMPORTER): `POST /api/admin/import/catalog` `{departments, specialties, teachers, disciplines, rooms, groups, aliases}`
 (upsert by natural keys: group code, teacher shortName, discipline shortName, room name) → `{created, updated, ids:{...}}`;
@@ -221,7 +221,7 @@ Records live in `libs/contracts` (`ua.vtc.rozklad.contracts.events`).
 | `generation.requested` | core → scheduler | `jobId, semesterId, timeLimitSeconds, weights, problem: ProblemSnapshot` |
 | `generation.cancel` | core → scheduler | `jobId` |
 | `generation.progress` | scheduler → core | `jobId, elapsedMs, hardScore, softScore` |
-| `generation.completed` | scheduler → core | `jobId, status SOLVED|FAILED|CANCELLED, hardScore, softScore, assignments:[{unitId, weekday, pair, parity, roomId}], analysis:[{constraint, matchCount, score}], error?` |
+| `generation.completed` | scheduler → core | `jobId, status SOLVED|FAILED|CANCELLED, hardScore, softScore, assignments:[{unitId, weekday, pair, parity, roomId}], analysis:[{constraint, matchCount, score, constraintId?, bonus?, scopeMatchCount?}], error?` (additive, genfix: `constraintId` ASCII id, `bonus` true for reward rows, absent = false; `scopeMatchCount` matches involving a free unit, absent = unknown → use `matchCount`) |
 | `substitution.confirmation-requested` | core → notification | `changeId, teacherId, date, pair, startsAt, endsAt, groupCode, subgroup, disciplineName (what the teacher teaches: the new discipline of REPLACE_DISCIPLINE), originalTeacherName, roomName?, deadline?` (MERGE_SUBGROUPS: `subgroup` 0 — the teacher takes the whole group) + additive (round 7, nullable) `mode: CONFIRM|NOTIFY` (null = CONFIRM; NOTIFY has no deadline), `kind`, `originalDisciplineName`, `reasonCode`; sent again with the same `changeId` after a reminder or a room edit of a pending request or a NOTIFY notice in force |
 | `substitution.details-changed` | core → notification | `changeId, teacherId, date, pair, startsAt?, endsAt?, groupCode, subgroup, disciplineName, originalTeacherName?, roomName?, kind, originalDisciplineName?, reasonCode?` (the fields mean the same as in `confirmation-requested`; no `mode`, no `deadline`) — information only: what the teacher reads about a CONFIRM request already CONFIRMED changed (the dispatcher gave it a new room); nothing to answer, the change stays CONFIRMED with its answer |
 | `substitution.teacher-replied` | core → notification | `changeId, teacherId, decision: CONFIRM|DECLINE, status, date, pair, groupCode` — a NOTIFY answer that kept the status: «Добре», or «Не можу» on an APPLIED change (objection, admin chats are told an amendment is needed) |
@@ -236,11 +236,25 @@ makes; a message without the header gets a new request id. Events re-sent after 
 (outbox resubmission, scheduler's resend of `generation.completed`) have no header.
 
 `ProblemSnapshot { timeslots:[{weekday,pair}], shiftWindows:[{shift,weekday,firstPair,lastPair}], groups:[{id,code,size,shift,subgroups:[n]}],
-rooms:[{id,name,type,capacity,maxParallel}], teachers:[{id,name,unavailable:[{weekday,pair}], unwanted:[{weekday,pair}]}],
+rooms:[{id,name,type,capacity,maxParallel}], teachers:[{id,name,unavailable:[{weekday,pair}], unwanted:[{weekday,pair}], maxPairsPerDay?}],
 units:[{unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight: WHOLE|HALF, requiredRoomType?, preferredRoomId?, homeRoomId?,
-pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?, online?}] }`
+pinned:{weekday,pair,parity,roomId}?, initial:{weekday,pair,parity,roomId}?, teacherRoomId?, online?, siblingKey?}] }`
 (`teacherRoomId`, round 7: the teacher's usual room for the discipline, DOMAIN §5; core sends `homeRoomId` as null since round 7;
-`online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5)
+`online` (additive, absent = false): a pinned online lesson whose room is kept for reference and occupied by nothing, DOMAIN §5;
+genfix, additive: `maxPairsPerDay` the teacher's daily limit (absent = none; core sends the setting `teacherMaxPairsPerDay`);
+`siblingKey` = `loadItemId:w1|w2|…|h`, equal on the subgroup copies of one weekly occurrence of a split item (free units of an
+item with 2+ subgroups only); `initial` is also the base placement for stability, and the `teacherId` of a unit matched to a base
+lesson is that lesson's teacher; `requiredRoomType` is only the load's own type: core derives none from the base version,
+the scheduler reads the base rooms from `initial`/`pinned` for the soft rule `specialRooms`)
+
+`GenerationWeights {windows, brokenDays, latePairs, preferences, homeRoom, teacherWindows, teacherShiftWait, stability,
+subgroupsTogether, studentOnePairDay, teacherDays, teacherOverload, disciplineTwice, specialRooms}`: soft weights, 0 = off,
+never negative. The last nine are additive: an absent one takes its default, an absent `teacherWindows` equals `windows` (one
+weight covered groups and teachers before). `DEFAULT` = (30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30), tuned by replaying
+the college's real generation requests (scheduler `SnapshotReplayTest`); the defaults and the statistics behind them are in
+CHANGELOG-CONTRACTS «Generator quality». `specialRooms`: a lesson of a load item whose base lessons with a room all stood in
+the sports hall or on the sports ground is placed in another kind of room (per week occurrence). `contracts.LatePairs` holds the one definition of a «4-та пара зміни»: a pair
+whose position in the group's shift window is 3 or more (0-based): shift 1 the 4th pair, shift 2 the 8th, none on Friday shift 2.
 
 Calendar periods (`/api/admin/calendar-periods`): request adds `supervisorIds?:[uuid]` (керівники практики:
 only for `kind=PRACTICE`, active teachers, each once; field errors `supervisorIds` / `supervisorIds[i]`);

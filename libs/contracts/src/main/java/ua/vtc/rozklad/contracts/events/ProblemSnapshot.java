@@ -50,12 +50,26 @@ public record ProblemSnapshot(
         }
     }
 
-    public record Teacher(UUID id, String name, List<Timeslot> unavailable, List<Timeslot> unwanted) {
+    /**
+     * {@code maxPairsPerDay} (additive, nullable) is the teacher's daily pair limit for the soft rule
+     * «Забагато пар на день у викладача»; {@code null} means no limit (snapshots before it). Core sends the
+     * college setting {@code generation.teacherMaxPairsPerDay} for every teacher.
+     */
+    public record Teacher(UUID id, String name, List<Timeslot> unavailable, List<Timeslot> unwanted,
+                          Integer maxPairsPerDay) {
 
         public Teacher {
             Objects.requireNonNull(id, "id");
             unavailable = EventLists.copy(unavailable);
             unwanted = EventLists.copy(unwanted);
+            if (maxPairsPerDay != null && maxPairsPerDay < 1) {
+                throw new IllegalArgumentException("maxPairsPerDay must be positive");
+            }
+        }
+
+        /** A teacher without a daily limit (snapshots before the limit). */
+        public Teacher(UUID id, String name, List<Timeslot> unavailable, List<Timeslot> unwanted) {
+            this(id, name, unavailable, unwanted, null);
         }
     }
 
@@ -73,6 +87,12 @@ public record ProblemSnapshot(
      * template lesson (DOMAIN §5): its {@code pinned.roomId} is kept for reference only, so the
      * scheduler lets it occupy no room, checks no capacity or room type for it and returns the room
      * unchanged in the assignment. Free units are always placed in a room, whatever the flag says.
+     *
+     * <p>{@code initial} is also the base placement: the scheduler measures stability against it, and the
+     * {@code teacherId} of a unit matched to a base lesson is that lesson's teacher. {@code siblingKey}
+     * (additive, nullable) is equal on the subgroup copies of one weekly occurrence of a split load item
+     * ({@code loadItemId:w1}, {@code :w2}, {@code :h}); core sets it on free units of an item with two or
+     * more subgroups, otherwise {@code null}.
      */
     public record Unit(
             String unitId,
@@ -88,7 +108,8 @@ public record ProblemSnapshot(
             PinnedSlot pinned,
             PinnedSlot initial,
             UUID teacherRoomId,
-            Boolean online) {
+            Boolean online,
+            String siblingKey) {
 
         public Unit {
             Objects.requireNonNull(unitId, "unitId");
@@ -97,6 +118,14 @@ public record ProblemSnapshot(
             Objects.requireNonNull(weight, "weight");
             // Jackson 3 refuses an absent primitive: the wrapper reads older snapshots, null means in person
             online = Boolean.TRUE.equals(online);
+        }
+
+        /** A unit without a sibling key (snapshots before subgroup siblings). */
+        public Unit(String unitId, UUID loadItemId, UUID groupId, int subgroup, UUID disciplineId, UUID teacherId,
+                    UnitWeight weight, RoomType requiredRoomType, UUID preferredRoomId, UUID homeRoomId,
+                    PinnedSlot pinned, PinnedSlot initial, UUID teacherRoomId, Boolean online) {
+            this(unitId, loadItemId, groupId, subgroup, disciplineId, teacherId, weight, requiredRoomType,
+                    preferredRoomId, homeRoomId, pinned, initial, teacherRoomId, online, null);
         }
 
         /** An in-person unit (snapshots before the online flag). */

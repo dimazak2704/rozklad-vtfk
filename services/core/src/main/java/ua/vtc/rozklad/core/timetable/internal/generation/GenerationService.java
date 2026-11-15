@@ -82,6 +82,8 @@ public class GenerationService {
         TimetableVersion base = baseVersion(command);
         List<StudentGroup> scope = scope(command);
         ProblemSnapshotBuilder.Built built = snapshotBuilder.build(command.semesterId(), scope, base);
+        // B9: навантаження, що не вміщується в сітку, не відправляємо — розв'язувач марно відпрацював би весь ліміт
+        LoadFitCheck.check(built.snapshot()).throwIfAny();
         GenerationWeights weights = command.weights() == null ? GenerationWeights.DEFAULT : command.weights();
 
         GenerationJob job = new GenerationJob(command.semesterId(), params(command, scope, base, weights), actor);
@@ -102,7 +104,7 @@ public class GenerationService {
     public List<GenerationJobDto> list(UUID semesterId) {
         List<GenerationJob> found = semesterId == null ? jobs.findTop50ByOrderByCreatedAtDesc()
                 : jobs.findAllBySemesterIdOrderByCreatedAtDesc(semesterId);
-        return found.stream().map(mapper::toDto).toList();
+        return mapper.toDtos(found);
     }
 
     @Transactional(readOnly = true)

@@ -9,7 +9,11 @@ import ua.vtc.rozklad.core.shared.error.ConflictDto.Severity;
 import ua.vtc.rozklad.core.shared.error.ConflictKind;
 import ua.vtc.rozklad.core.timetable.internal.conflict.DayShape.Gap;
 
-/** «Вікно» of a teacher: a free pair between their lessons of a day, per kind of week. */
+/**
+ * «Вікно» of a teacher: a free pair between their lessons of a day, per kind of week. A wait between a
+ * lesson of a 1st-shift group and one of a 2nd-shift group is not a window ({@link DayShape#isShiftWait}),
+ * as in the metrics.
+ */
 final class TeacherWindowRule implements ConflictRule {
 
     @Override
@@ -18,8 +22,11 @@ final class TeacherWindowRule implements ConflictRule {
             LessonDay day = key.day();
             Map<Gap, Set<WeekType>> gaps = new LinkedHashMap<>();
             for (WeekType week : day.weeks()) {
-                for (Gap gap : DayShape.gaps(DayShape.pairs(DayShape.active(lessons, week)))) {
-                    gaps.computeIfAbsent(gap, ignored -> EnumSet.noneOf(WeekType.class)).add(week);
+                List<SlotLesson> active = DayShape.active(lessons, week);
+                for (Gap gap : DayShape.gaps(DayShape.pairs(active))) {
+                    if (!DayShape.isShiftWait(at(active, gap.first() - 1), at(active, gap.last() + 1), facts)) {
+                        gaps.computeIfAbsent(gap, ignored -> EnumSet.noneOf(WeekType.class)).add(week);
+                    }
                 }
             }
             gaps.forEach((gap, weeks) -> {
@@ -34,5 +41,9 @@ final class TeacherWindowRule implements ConflictRule {
                         day, gap.first()));
             });
         });
+    }
+
+    private static List<SlotLesson> at(List<SlotLesson> lessons, int pair) {
+        return lessons.stream().filter(lesson -> lesson.pair() == pair).toList();
     }
 }

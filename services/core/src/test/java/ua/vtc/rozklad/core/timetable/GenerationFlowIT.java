@@ -40,16 +40,21 @@ import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.Assignment;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
 import ua.vtc.rozklad.contracts.events.GenerationRequested;
+import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.contracts.events.ProblemSnapshot;
 import ua.vtc.rozklad.contracts.events.RozkladEvents;
+import ua.vtc.rozklad.core.catalog.GroupRef;
 import ua.vtc.rozklad.core.load.LoadItem;
+import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.substitution.PreferenceKind;
 import ua.vtc.rozklad.core.substitution.TeacherPreference;
 import ua.vtc.rozklad.core.support.CoreIntegrationTest;
 import ua.vtc.rozklad.core.timetable.internal.generation.GenerationJobDto;
+import ua.vtc.rozklad.core.timetable.internal.generation.GenerationOutcome;
 import ua.vtc.rozklad.core.timetable.internal.generation.GenerationRequestCommand;
 import ua.vtc.rozklad.core.timetable.internal.generation.GenerationService;
+import ua.vtc.rozklad.core.timetable.internal.generation.LoadFitCheck;
 import ua.vtc.rozklad.core.timetable.internal.importing.ImportTimetableCommand;
 import ua.vtc.rozklad.core.timetable.internal.importing.TimetableImportService;
 
@@ -152,6 +157,8 @@ class GenerationFlowIT {
         assertThat(problem.teachers()).filteredOn(teacher -> teacher.id().equals(data.krentsin.getId()))
                 .singleElement()
                 .satisfies(teacher -> assertThat(teacher.unavailable()).containsExactly(new ProblemSnapshot.Timeslot(1, 1)));
+        assertThat(problem.teachers()).as("the college setting, default 4")
+                .allSatisfy(teacher -> assertThat(teacher.maxPairsPerDay()).isEqualTo(4));
         Map<String, ProblemSnapshot.Unit> units = problem.units().stream()
                 .collect(Collectors.toMap(ProblemSnapshot.Unit::unitId, Function.identity()));
         assertThat(units.values()).extracting(ProblemSnapshot.Unit::weight)
@@ -159,6 +166,8 @@ class GenerationFlowIT {
         ProblemSnapshot.Unit pinnedKm = units.values().stream()
                 .filter(unit -> unit.disciplineId().equals(data.km.getId())).findFirst().orElseThrow();
         assertThat(pinnedKm.pinned()).isEqualTo(new ProblemSnapshot.PinnedSlot(4, 2, Parity.BOTH, data.lab6.getId()));
+        assertThat(pinnedKm.requiredRoomType()).as("no hard room type is derived from the base (genfix repair)")
+                .isNull();
         ProblemSnapshot.Unit outsideScope = units.values().stream()
                 .filter(unit -> unit.groupId().equals(data.group4ki2.getId())).findFirst().orElseThrow();
         assertThat(outsideScope.pinned()).isEqualTo(new ProblemSnapshot.PinnedSlot(2, 1, Parity.BOTH,
@@ -187,6 +196,15 @@ class GenerationFlowIT {
                 .containsExactly("Вікна груп");
         assertThat(solved.metricsBefore()).isNotNull();
         assertThat(solved.metricsAfter()).isNotNull();
+        assertThat(solved.metricsBefore().hardConflicts()).isZero();
+        assertThat(solved.metricsAfter().hardConflicts()).isZero();
+        assertThat(solved.hardScore()).isZero();
+        assertThat(solved.softScore()).isEqualTo(-12L);
+        assertThat(solved.groups()).extracting(GroupRef::code).containsExactly("4КІ1");
+        assertThat(solved.scope().groupIds()).containsExactly(data.group4ki1.getId());
+        assertThat(solved.weights()).isEqualTo(GenerationWeights.DEFAULT);
+        assertThat(solved.outcome()).as("no free base lesson of the scope to compare with")
+                .isEqualTo(new GenerationOutcome(0, 0, 0, List.of()));
         TimetableVersion generated = versions.findById(solved.resultVersionId()).orElseThrow();
         assertThat(generated.getSource()).isEqualTo(VersionSource.GENERATED);
         assertThat(generated.getStatus()).isEqualTo(VersionStatus.DRAFT);
@@ -196,7 +214,12 @@ class GenerationFlowIT {
         assertThat(lessons).filteredOn(lesson -> lesson.getDisciplineId().equals(data.stp.getId()))
                 .extracting(TemplateLesson::getParity)
                 .containsExactlyInAnyOrder(Parity.BOTH, Parity.DENOMINATOR);
-        assertThat(lessons).filteredOn(TemplateLesson::isPinned).hasSize(2);
+        // B1: лише КМ групи 4КІ1 закріпив диспетчер; заняття 4КІ2 поза вибором
+        // надсилалися закріпленими лише для розв'язувача
+        assertThat(lessons).filteredOn(TemplateLesson::isPinned).singleElement()
+                .satisfies(lesson -> assertThat(lesson.getDisciplineId()).isEqualTo(data.km.getId()));
+        assertThat(lessons).filteredOn(lesson -> lesson.getGroupId().equals(data.group4ki2.getId())).singleElement()
+                .satisfies(lesson -> assertThat(lesson.isPinned()).isFalse());
 
         // повторна доставка того самого результату: нової версії не з'являється
         send(RozkladEvents.GENERATION_COMPLETED, completed);
@@ -292,6 +315,72 @@ class GenerationFlowIT {
                     assertThat(lesson.getWeekday()).isEqualTo(4);
                     assertThat(lesson.getPairNumber()).isEqualTo(2);
                 });
+    }
+
+    /**
+     * B3 and M2: the base has 4КІ1's СТП with Непийвода, the load names Кренцін. The unit keeps the base
+     * teacher and starts at the base slot; the result moves it, and the job says «Переставлено 1 з 1».
+     */
+    @Test
+    void aBaseLessonKeepsItsTeacherAndTheOutcomeCountsTheMove() {
+        transaction.executeWithoutResult(status -> {
+            TemplateLesson stpWithNepyivoda = new TemplateLesson(baseVersionId, 1, 3, Parity.BOTH,
+                    data.group4ki1.getId(), 0, data.stp.getId());
+            stpWithNepyivoda.setTeacherId(data.nepyivoda.getId());
+            stpWithNepyivoda.setRoomId(data.room304.getId());
+            em.persist(stpWithNepyivoda);
+        });
+        Queue requests = probe(RozkladEvents.GENERATION_REQUESTED);
+
+        GenerationJobDto job = generation.start(command(), "admin");
+
+        GenerationRequested request = (GenerationRequested) rabbitTemplate.receiveAndConvert(requests.getName(),
+                15_000);
+        assertThat(request).isNotNull();
+        assertThat(request.problem().units())
+                .filteredOn(unit -> unit.disciplineId().equals(data.stp.getId()) && unit.weight() == UnitWeight.WHOLE)
+                .singleElement()
+                .satisfies(unit -> {
+                    assertThat(unit.teacherId()).isEqualTo(data.nepyivoda.getId());
+                    assertThat(unit.initial()).isEqualTo(new ProblemSnapshot.PinnedSlot(1, 3, Parity.BOTH,
+                            data.room304.getId()));
+                });
+
+        send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
+                GenerationStatus.SOLVED, 0, -3, assignments(request.problem()), List.of(), null));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
+                .isEqualTo(GenerationStatus.SOLVED));
+
+        GenerationJobDto solved = generation.get(job.id());
+        assertThat(solved.outcome()).isEqualTo(new GenerationOutcome(1, 0, 1, List.of(
+                new GenerationOutcome.GroupOutcome(GroupRef.of(data.group4ki1), 1, 1))));
+        assertThat(templateLessons.findAllByVersionId(solved.resultVersionId()))
+                .filteredOn(lesson -> lesson.getDisciplineId().equals(data.stp.getId())
+                        && lesson.getParity() == Parity.BOTH)
+                .singleElement()
+                .satisfies(lesson -> assertThat(lesson.getTeacherId()).isEqualTo(data.nepyivoda.getId()));
+    }
+
+    /** B9: 4КІ1 (shift 1, 20 slots) cannot take 21,5 pairs a week: a 422 before any job is stored. */
+    @Test
+    void loadThatDoesNotFitTheGridIsRefusedBeforeTheJobIsStored() {
+        transaction.executeWithoutResult(status -> {
+            LoadItem extra = new LoadItem(data.semester.getId(), data.group4ki1.getId(), data.ndeksm.getId(),
+                    BigDecimal.valueOf(36), 792);
+            extra.assignTeacher(0, data.nepyivoda.getId());
+            em.persist(extra);
+        });
+        long before = jobs.count();
+
+        assertThatThrownBy(() -> generation.start(command(), "admin"))
+                .isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                    assertThat(error.getCode()).isEqualTo("GENERATION_LOAD_EXCEEDS_SLOTS");
+                    assertThat(error.getProperties().get("problems")).asInstanceOf(
+                                    org.assertj.core.api.InstanceOfAssertFactories.list(LoadFitCheck.Problem.class))
+                            .extracting(LoadFitCheck.Problem::label)
+                            .contains("4КІ1");
+                });
+        assertThat(jobs.count()).isEqualTo(before);
     }
 
     @Test

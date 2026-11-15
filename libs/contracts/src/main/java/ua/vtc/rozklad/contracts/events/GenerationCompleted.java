@@ -51,7 +51,23 @@ public record GenerationCompleted(
         }
     }
 
-    /** Score analysis row; {@code score} is the solver's formatted score, e.g. {@code 0hard/-35soft}. */
-    public record ConstraintScore(String constraint, int matchCount, String score) {
+    /**
+     * Score analysis row; {@code score} is the solver's formatted score, e.g. {@code 0hard/-35soft}.
+     * Additive: {@code constraintId} is the constraint's ASCII id (Latin letters and spaces);
+     * {@code bonus} marks a reward row (absent reads as {@code false}); {@code scopeMatchCount} counts the
+     * matches that involve at least one free (non-pinned) unit, {@code null} when unknown (older jobs), in
+     * which case clients use {@code matchCount}.
+     */
+    public record ConstraintScore(String constraint, int matchCount, String score, String constraintId,
+                                  Boolean bonus, Integer scopeMatchCount) {
+
+        public ConstraintScore {
+            bonus = Boolean.TRUE.equals(bonus);
+        }
+
+        /** A row of the first schema: no id, not a bonus, scope matches unknown. */
+        public ConstraintScore(String constraint, int matchCount, String score) {
+            this(constraint, matchCount, score, null, false, null);
+        }
     }
 }
