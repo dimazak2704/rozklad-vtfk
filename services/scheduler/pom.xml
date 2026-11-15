@@ -15,6 +15,11 @@
     <name>rozklad-scheduler</name>
     <description>Timetable generation with Timefold Solver (consumes generation.requested)</description>
 
+    <properties>
+        <!-- Opt-in test tags the build skips: SnapshotReplayTest (replay) runs with -Dscheduler.excludedTags=none -->
+        <scheduler.excludedTags>replay</scheduler.excludedTags>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>ua.vtc.rozklad</groupId>
@@ -106,6 +111,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>${scheduler.excludedTags}</excludedGroups>
+                </configuration>
             </plugin>
         </plugins>
     </build>

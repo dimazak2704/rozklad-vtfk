@@ -12,18 +12,11 @@ import type {
   GenerationJobRequest,
   GenerationJobStatus,
   GenerationProgressPoint,
-  GenerationWeights,
   Uuid,
 } from './types';
 
-/** Ваги за замовчуванням — ті самі, що підставляє core для `weights: null` (GenerationWeights.DEFAULT). */
-export const DEFAULT_WEIGHTS: Readonly<GenerationWeights> = {
-  windows: 10,
-  brokenDays: 10,
-  latePairs: 3,
-  preferences: 5,
-  homeRoom: 1,
-};
+// ваги — в окремому модулі без HTTP-клієнта: його імпортує й мок-API (як settings-limits)
+export { DEFAULT_WEIGHTS, normalizeWeights, WEIGHT_LIMIT } from './generation-weights';
 
 /** Межі ліміту часу з контракту (timeLimitSeconds 10..600). */
 export const TIME_LIMIT_MIN = 10;
@@ -41,6 +34,20 @@ export function parseScore(score: string | null | undefined): { hard: number; so
   const match = /^\s*(-?\d+)hard\/(-?\d+)soft\s*$/i.exec(score);
   if (!match) return null;
   return { hard: Number(match[1]), soft: Number(match[2]) };
+}
+
+/**
+ * Жорсткий бал задачі: з `hardScore`, а для старих задач — з рядка `bestScore`. null — розкладу ще немає.
+ */
+export function jobHardScore(job: Pick<GenerationJobDto, 'hardScore' | 'bestScore'>): number | null {
+  if (typeof job.hardScore === 'number') return job.hardScore;
+  return parseScore(job.bestScore)?.hard ?? null;
+}
+
+/** Готово, але з жорсткими конфліктами (hard < 0): не зелена галочка, а попередження. */
+export function solvedWithConflicts(job: Pick<GenerationJobDto, 'status' | 'hardScore' | 'bestScore'>): boolean {
+  const hard = jobHardScore(job);
+  return job.status === 'SOLVED' && hard !== null && hard < 0;
 }
 
 const jobsPath = '/admin/generation/jobs';

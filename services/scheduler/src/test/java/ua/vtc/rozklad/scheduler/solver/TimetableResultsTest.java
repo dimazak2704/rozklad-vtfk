@@ -66,4 +66,22 @@ class TimetableResultsTest {
             assertThat(row.score()).isEqualTo("0hard/0soft");
         });
     }
+
+    /** B7: rows carry the ASCII id, the bonus flag and the matches that involve a free unit. */
+    @Test
+    void analysisRowsCarryIdBonusAndScopeMatches() {
+        Timetable planted = Placements.apply(factory.create(college.snapshot(), GenerationWeights.DEFAULT),
+                college.planted());
+
+        List<ConstraintScore> analysis = TimetableResults.analysis(planted);
+
+        assertThat(analysis).extracting(ConstraintScore::constraintId)
+                .containsExactlyElementsOf(Arrays.stream(TimetableConstraint.values())
+                        .map(TimetableConstraint::id).toList())
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z ]+"));
+        assertThat(analysis).filteredOn(ConstraintScore::bonus).extracting(ConstraintScore::constraintId)
+                .containsExactly(TimetableConstraint.HALF_PAIRING.id());
+        assertThat(analysis).allSatisfy(row -> assertThat(row.scopeMatchCount())
+                .as("no unit is pinned, so every match is in scope").isEqualTo(row.matchCount()));
+    }
 }

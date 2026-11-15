@@ -1,6 +1,6 @@
 /** Підписи області «Базовий розклад»: види конфліктів, статуси й джерела версій, пояснення метрик. */
 import type { TimetableConflictKind } from '@/api/timetable';
-import type { MetricsDto, Parity, TimetableVersionSource, TimetableVersionStatus } from '@/api/types';
+import type { Parity, TimetableVersionSource, TimetableVersionStatus } from '@/api/types';
 
 export const CONFLICT_KIND_LABEL: Record<TimetableConflictKind, string> = {
   TEACHER: 'Викладач',
@@ -37,7 +37,8 @@ export const PARITY_SHORT: Record<Parity, string> = {
   DENOMINATOR: 'знаменник',
 };
 
-export type MetricKey = Exclude<keyof MetricsDto, 'perGroup'>;
+/** Пʼять основних показників табло; нові (genfix §3.3) можуть бути null у старих метриках і тут не показуються. */
+export type MetricKey = 'groupWindows' | 'teacherWindows' | 'brokenDays' | 'latePairs' | 'maxPairsPerDay';
 
 /** Метрики версії: назва, пояснення для підказки і чи «менше — краще». */
 export const METRICS: ReadonlyArray<{ key: MetricKey; label: string; hint: string }> = [
@@ -58,8 +59,8 @@ export const METRICS: ReadonlyArray<{ key: MetricKey; label: string; hint: strin
   },
   {
     key: 'latePairs',
-    label: 'Пізні пари',
-    hint: 'Заняття після 16:00 — 7-ма і 8-ма пари (друга зміна, пн–чт). Генератор ставить їх лише тоді, коли інакше не виходить.',
+    label: '4-та пара зміни',
+    hint: 'Дні груп (окремо чисельник і знаменник) з 4-ю парою зміни: у 1-й зміні — 4 пара, у 2-й — 8 пара; у пʼятницю 2-га зміна має лише 3 пари. Це не правило коледжу: у чинному розкладі 4-та пара зміни є в 57 % днів груп.',
   },
   {
     key: 'maxPairsPerDay',

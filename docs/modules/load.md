@@ -40,6 +40,10 @@ per subgroup, weekly pattern; derivation from a timetable version; import by nat
   teacher = the one with most pairs (ties → smallest id); kind = the shared kind, else MIXED. Derived
   items of the semester are upserted by group × discipline × split; derived items the version no longer
   implies are removed; a group × discipline with load from another source is skipped and reported.
+  Derivation keeps one teacher and no room type per item. Generation does not lose what it drops (genfix,
+  timetable.md «Generation»): a unit matched to a base lesson keeps that lesson's teacher (B3); the base rooms
+  go to the scheduler in `initial`, which keeps PE in the hall with the soft rule `specialRooms` (no hard room
+  type is derived); the stored item is not changed.
 - **Template lessons are read with SQL** (`TemplateLessonReader`), not through the timetable module: the
   timetable module depends on load (generation), so a Java dependency back would be a module cycle.
 - `LoadSubgroupUsage` implements the catalog SPI: a subgroup with a load teacher cannot be deleted.

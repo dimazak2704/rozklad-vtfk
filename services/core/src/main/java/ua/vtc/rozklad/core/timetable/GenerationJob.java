@@ -20,7 +20,7 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
  * Timetable generation job as seen by core: request {@code params} (JSON), live {@code progress}
  * points ({@code [{t, hard, soft}]}, {@code t} in seconds), result version. {@code plan} keeps the
  * units sent to the scheduler so that its assignments can be turned into template lessons;
- * {@code analysis}, {@code metricsBefore} and {@code metricsAfter} are filled on completion.
+ * {@code analysis}, {@code metricsBefore}, {@code metricsAfter} and {@code outcome} are filled on completion.
  * The scheduler keeps its own job table.
  */
 @Entity
@@ -83,6 +83,10 @@ public class GenerationJob extends BaseEntity {
 
     @Column(name = "last_progress_at")
     private Instant lastProgressAt;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "outcome", columnDefinition = "jsonb")
+    private JsonNode outcome;
 
     protected GenerationJob() {
     }
@@ -241,5 +245,14 @@ public class GenerationJob extends BaseEntity {
 
     public Instant getLastProgressAt() {
         return lastProgressAt;
+    }
+
+    /** What a SOLVED result moved against the base version (moved, room changed, per group); else {@code null}. */
+    public JsonNode getOutcome() {
+        return outcome;
+    }
+
+    public void setOutcome(JsonNode outcome) {
+        this.outcome = outcome;
     }
 }

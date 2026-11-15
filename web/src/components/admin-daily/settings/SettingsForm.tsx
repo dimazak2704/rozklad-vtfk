@@ -212,7 +212,7 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
         {numbering}
       </SettingsSection>
 
-      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, і скільки академічних годин зараховується за одну пару в обліку.">
+      <SettingsSection title="Розклад" description="Профіль дзвінків, що діє зараз, скільки академічних годин зараховується за одну пару в обліку і межа пар на день для генератора.">
         <Field
           label="Профіль дзвінків"
           hint="Зміна профілю оновить час пар на сайті, у боті й у розпорядженнях."
@@ -254,6 +254,29 @@ export function SettingsForm({ settings, guardNavigation = true, numbering, ai }
             )}
           />
         </Field>
+        {settings.teacherMaxPairsPerDay !== undefined ? (
+          <Field
+            label="Найбільше пар на день у викладача"
+            hint="Для генератора розкладу: більше пар за день — мʼяке порушення «Рівномірні дні», а не заборона. У чинному розкладі 5–6 пар бувають у 35 з 781 робочого дня викладачів."
+            error={formState.errors.teacherMaxPairsPerDay?.message}
+            required
+          >
+            <Controller
+              control={control}
+              name="teacherMaxPairsPerDay"
+              render={({ field }) => (
+                <NumberInput
+                  value={field.value === undefined || Number.isNaN(field.value) ? null : field.value}
+                  onValueChange={(value) => field.onChange(value ?? Number.NaN)}
+                  onBlur={field.onBlur}
+                  min={LIMITS.teacherMaxPairsPerDay.min}
+                  max={LIMITS.teacherMaxPairsPerDay.max}
+                  className="w-36"
+                />
+              )}
+            />
+          </Field>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Публічний сайт" description="Що бачать студенти й батьки без входу.">

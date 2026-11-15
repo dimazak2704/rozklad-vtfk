@@ -79,8 +79,14 @@ const PARITY_VALUES: readonly Parity[] = ['BOTH', 'NUMERATOR', 'DENOMINATOR'];
 const LESSON_KINDS: readonly LessonKind[] = ['LECTURE', 'PRACTICE', 'LAB', 'SEMINAR', 'MIXED'];
 const PARITY_TEXT: Record<WeekParity, string> = { NUMERATOR: 'чисельник', DENOMINATOR: 'знаменник' };
 
-/** Пізня пара — після 16:00 (7-ма і 8-ма за профілем «2 зміни, 60 хв»). */
-export const LATE_PAIR_FROM = 7;
+/**
+ * «4-та пара зміни» (contracts `LatePairs`, genfix §1.4): пара з позиції 3 (від 0) у вікні зміни групи —
+ * у 1-й зміні 4 пара, у 2-й пн–чт 8 пара, у пʼятницю 2-га зміна (4–6) такої не має. Це не правило коледжу.
+ */
+export const FIRST_LATE_POSITION = 3;
+export const isLatePair = (pair: number, windowFirstPair: number): boolean => pair - windowFirstPair >= FIRST_LATE_POSITION;
+/** Типове `teacherMaxPairsPerDay` (genfix §3.4): більше пар на день у викладача — перевантаження. */
+export const TEACHER_MAX_PAIRS_PER_DAY = 4;
 /** Більше стількох пар на день — перевантаження (DOMAIN §5). */
 const MAX_COMFORT_PAIRS = 4;
 /** Дисципліна стільки разів за день — повтор (DOMAIN §5). */
@@ -300,10 +306,60 @@ export function brokenDayOf(day: DayPresence): { counts: Record<WeekParity, numb
   };
 }
 
-export function latePairsOf(day: DayPresence): number {
-  const late = new Set<number>();
-  for (const week of WEEK_PARITIES) for (const pair of day.weeks[week].keys()) if (pair >= LATE_PAIR_FROM) late.add(pair);
-  return late.size;
+/** Скільки тижнів (чисельник, знаменник) у дні групи є 4-та пара зміни: 0..2. */
+export function latePairsOf(day: DayPresence, windowFirstPair: number | null): number {
+  if (windowFirstPair === null) return 0;
+  return WEEK_PARITIES.filter((week) => [...day.weeks[week].keys()].some((pair) => isLatePair(pair, windowFirstPair))).length;
+}
+
+/** Зміна групи заняття (1 чи 2); невідома група — 0. */
+const shiftOfLesson = (lesson: TemplateLessonDto): number => groupsById.get(lesson.group.id)?.shift ?? 0;
+
+/**
+ * Порожні пари викладача за день (genfix §2): проміжок між сусідніми парами a < b — «очікування між
+ * змінами», коли всі заняття на a — групи однієї зміни, а всі на b — групи іншої; решта — вікна.
+ * Пара, що хоч в один тиждень є вікном, рахується вікном.
+ */
+export function teacherGaps(day: DayPresence): { windows: Array<{ pair: number; weeks: WeekParity[] }>; waits: number[] } {
+  const windows = new Map<number, WeekParity[]>();
+  const waits = new Set<number>();
+  const shiftsAt = (week: WeekParity, pair: number) => new Set((day.weeks[week].get(pair) ?? []).map(shiftOfLesson));
+  for (const week of WEEK_PARITIES) {
+    const pairs = sortedPairs(day.weeks[week]);
+    for (let i = 1; i < pairs.length; i += 1) {
+      const a = pairs[i - 1] ?? 0;
+      const b = pairs[i] ?? 0;
+      if (b - a < 2) continue;
+      const sa = shiftsAt(week, a);
+      const sb = shiftsAt(week, b);
+      const wait = sa.size === 1 && sb.size === 1 && [...sa][0] !== [...sb][0];
+      for (let pair = a + 1; pair < b; pair += 1) {
+        if (wait) waits.add(pair);
+        else windows.set(pair, [...(windows.get(pair) ?? []), week]);
+      }
+    }
+  }
+  return {
+    windows: [...windows].map(([pair, weeks]) => ({ pair, weeks })).sort((x, y) => x.pair - y.pair),
+    waits: [...waits].filter((pair) => !windows.has(pair)),
+  };
+}
+
+/**
+ * Слоти-тижні, де підгрупа на парі, а інша підгрупа без заняття (genfix §2 SUBGROUP_ALONE). Підгрупи групи —
+ * усі, що трапляються в її заняттях за тиждень (B4), а не лише цього дня.
+ */
+export function loneSubgroupSlotsOf(day: DayPresence, cohorts: ReadonlySet<number>): number {
+  if (cohorts.size < 2) return 0;
+  let count = 0;
+  for (const week of WEEK_PARITIES) {
+    for (const list of day.weeks[week].values()) {
+      const active = new Set(list.map((lesson) => lesson.subgroup));
+      if (active.has(0)) continue;
+      if ([...cohorts].some((cohort) => !active.has(cohort))) count += 1;
+    }
+  }
+  return count;
 }
 
 function weekSummary(count: number, first: number | null): string {
@@ -338,13 +394,18 @@ export function analyzeLessons(lessons: readonly TemplateLessonDto[]): LessonsAn
   let brokenDays = 0;
   let latePairs = 0;
   let maxPairsPerDay = 0;
+  let studentOnePairDays = 0;
+  let loneSubgroupSlots = 0;
 
   const groupDays = presenceBy(lessons, groupKey);
   const orderedGroups = GROUPS.filter((group) => groupDays.has(group.id));
   for (const group of orderedGroups) {
     const days = groupDays.get(group.id) ?? new Map<number, DayPresence>();
-    const stats = { windows: 0, brokenDays: 0, latePairs: 0, maxPairsPerDay: 0 };
+    const stats = { windows: 0, brokenDays: 0, latePairs: 0, maxPairsPerDay: 0, onePairDays: 0, loneSubgroupSlots: 0 };
+    const cohorts = new Set<number>();
+    for (const day of days.values()) for (const lesson of day.lessons) if (lesson.subgroup > 0) cohorts.add(lesson.subgroup);
     for (const [weekday, day] of [...days].sort((a, b) => a[0] - b[0])) {
+      stats.loneSubgroupSlots += loneSubgroupSlotsOf(day, cohorts);
       for (const cell of windowCells(day)) {
         stats.windows += 1;
         soft.push(
@@ -365,9 +426,10 @@ export function analyzeLessons(lessons: readonly TemplateLessonDto[]): LessonsAn
           ),
         );
       }
-      stats.latePairs += latePairsOf(day);
+      stats.latePairs += latePairsOf(day, shiftWindowOf(group, weekday)?.firstPair ?? null);
       for (const week of WEEK_PARITIES) {
         const pairs = sortedPairs(day.weeks[week]);
+        if (pairs.length === 1) stats.onePairDays += 1;
         stats.maxPairsPerDay = Math.max(stats.maxPairsPerDay, pairs.length);
         if (pairs.length > MAX_COMFORT_PAIRS) {
           soft.push(
@@ -397,15 +459,29 @@ export function analyzeLessons(lessons: readonly TemplateLessonDto[]): LessonsAn
     groupWindows += stats.windows;
     brokenDays += stats.brokenDays;
     latePairs += stats.latePairs;
+    studentOnePairDays += stats.onePairDays;
+    loneSubgroupSlots += stats.loneSubgroupSlots;
     maxPairsPerDay = Math.max(maxPairsPerDay, stats.maxPairsPerDay);
     perGroup.push({ group: groupRef(group), ...stats });
   }
 
   let teacherWindows = 0;
+  let teacherShiftWaits = 0;
+  let teacherDays = 0;
+  let teacherOnePairDays = 0;
+  let teacherOverloadDays = 0;
   for (const days of presenceBy(lessons, teacherKey).values()) {
     for (const [weekday, day] of [...days].sort((a, b) => a[0] - b[0])) {
       const name = day.lessons[0]?.teacher?.shortName ?? '';
-      for (const cell of windowCells(day)) {
+      for (const week of WEEK_PARITIES) {
+        const pairs = day.weeks[week].size;
+        if (pairs > 0) teacherDays += 1;
+        if (pairs === 1) teacherOnePairDays += 1;
+        if (pairs > TEACHER_MAX_PAIRS_PER_DAY) teacherOverloadDays += 1;
+      }
+      const gaps = teacherGaps(day);
+      teacherShiftWaits += gaps.waits.length;
+      for (const cell of gaps.windows) {
         teacherWindows += 1;
         soft.push(
           softConflict('WINDOW', `${name}: вікно на ${cell.pair} парі — ${weekdayName(weekday)}${weeksText(cell.weeks)}`, day.lessons, weekday, cell.pair),
@@ -414,10 +490,25 @@ export function analyzeLessons(lessons: readonly TemplateLessonDto[]): LessonsAn
     }
   }
 
+  const hard = findHardConflicts(lessons);
   const analysis: LessonsAnalysis = {
-    hard: findHardConflicts(lessons),
+    hard,
     soft,
-    metrics: { groupWindows, teacherWindows, brokenDays, latePairs, maxPairsPerDay, perGroup },
+    metrics: {
+      groupWindows,
+      teacherWindows,
+      brokenDays,
+      latePairs,
+      maxPairsPerDay,
+      perGroup,
+      hardConflicts: hard.length,
+      teacherShiftWaits,
+      studentOnePairDays,
+      loneSubgroupSlots,
+      teacherDays,
+      teacherOnePairDays,
+      teacherOverloadDays,
+    },
   };
   analysisCache.set(lessons, analysis);
   return analysis;

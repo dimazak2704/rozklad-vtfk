@@ -7,63 +7,47 @@ import java.util.function.Supplier;
 import ua.vtc.rozklad.scheduler.solver.domain.LessonUnit;
 
 /**
- * Incremental collectors over the lessons of one day (grouped by group or teacher and weekday).
- * Each lesson adds its pair to the lanes it occupies; the collector undoes exactly that when the
- * lesson moves, so the values stay correct during local search.
+ * Incremental collectors over the lessons of one day or week (grouped by group or teacher). Each
+ * lesson adds its pair to the lanes it occupies; the collector undoes exactly that when the lesson
+ * moves, so the values stay correct during local search. Every collector is a single shared instance,
+ * so constraints that group the same way share one node (Bavet shares equal streams).
  */
 public final class DayCollectors {
+
+    private static final UniConstraintCollector<LessonUnit, ?, GroupDay> GROUP_DAY =
+            new UnitCollector<>(GroupDay.Counts::new, GroupDay.Counts::add, GroupDay.Counts::result);
+    private static final UniConstraintCollector<LessonUnit, ?, TeacherDay> TEACHER_DAY =
+            new UnitCollector<>(TeacherDay.Counts::new, TeacherDay.Counts::add, TeacherDay.Counts::result);
+    private static final UniConstraintCollector<LessonUnit, ?, TeacherWeek> TEACHER_WEEK =
+            new UnitCollector<>(TeacherWeek.Counts::new, TeacherWeek.Counts::add, TeacherWeek.Counts::result);
+    private static final UniConstraintCollector<LessonUnit, ?, DisciplineDay> DISCIPLINE_DAY =
+            new UnitCollector<>(DisciplineDay.Counts::new, DisciplineDay.Counts::add, DisciplineDay.Counts::result);
 
     private DayCollectors() {
     }
 
-    /** Windows of the students: per cohort and week type (a whole-group lesson counts for all cohorts). */
-    public static UniConstraintCollector<LessonUnit, ?, Integer> cohortGaps() {
-        return new LaneCollector<>(LaneCounts.COHORT_LANES, LessonUnit::cohortLanes, LaneCounts::gaps);
+    /** Windows (worst cohort), broken day, one-pair weeks and lone subgroup slots of a group-day. */
+    public static UniConstraintCollector<LessonUnit, ?, GroupDay> groupDay() {
+        return GROUP_DAY;
     }
 
-    /** Windows per week type, e.g. of a teacher's day. */
-    public static UniConstraintCollector<LessonUnit, ?, Integer> weekGaps() {
-        return new LaneCollector<>(LessonUnit.WEEK_TYPES, LessonUnit::weekLanes, LaneCounts::gaps);
+    /** Pairs, windows and waits between shifts of a teacher-day. */
+    public static UniConstraintCollector<LessonUnit, ?, TeacherDay> teacherDay() {
+        return TEACHER_DAY;
     }
 
-    /** Distinct pairs and the first pair of the numerator and of the denominator week. */
-    public static UniConstraintCollector<LessonUnit, ?, WeekBalance> weekBalance() {
-        return new LaneCollector<>(LessonUnit.WEEK_TYPES, LessonUnit::weekLanes, counts -> new WeekBalance(
-                counts.distinctPairs(LessonUnit.NUMERATOR_WEEK), counts.firstPair(LessonUnit.NUMERATOR_WEEK),
-                counts.distinctPairs(LessonUnit.DENOMINATOR_WEEK), counts.firstPair(LessonUnit.DENOMINATOR_WEEK)));
+    /** Teaching days of a teacher per kind of week. */
+    public static UniConstraintCollector<LessonUnit, ?, TeacherWeek> teacherWeek() {
+        return TEACHER_WEEK;
     }
 
-    private static final class LaneCollector<R> implements UniConstraintCollector<LessonUnit, LaneCounts, R> {
+    /** Pairs of one discipline in a group-day, for the group and for its busiest cohort. */
+    public static UniConstraintCollector<LessonUnit, ?, DisciplineDay> disciplineDay() {
+        return DISCIPLINE_DAY;
+    }
 
-        private final int lanes;
-        private final Function<LessonUnit, int[]> lanesOfUnit;
-        private final Function<LaneCounts, R> result;
-
-        private LaneCollector(int lanes, Function<LessonUnit, int[]> lanesOfUnit, Function<LaneCounts, R> result) {
-            this.lanes = lanes;
-            this.lanesOfUnit = lanesOfUnit;
-            this.result = result;
-        }
-
-        @Override
-        public Supplier<LaneCounts> supplier() {
-            return () -> new LaneCounts(lanes);
-        }
-
-        @Override
-        public BiFunction<LaneCounts, LessonUnit, Runnable> accumulator() {
-            return (counts, unit) -> {
-                // значення фіксуємо зараз: на момент відкату заняття вже може стояти деінде
-                int pair = unit.getPair();
-                int[] unitLanes = lanesOfUnit.apply(unit);
-                counts.add(unitLanes, pair);
-                return () -> counts.remove(unitLanes, pair);
-            };
-        }
-
-        @Override
-        public Function<LaneCounts, R> finisher() {
-            return result;
-        }
+    /** A collector whose state undoes each lesson's contribution with the returned runnable. */
+    private record UnitCollector<S, R>(Supplier<S> supplier, BiFunction<S, LessonUnit, Runnable> accumulator,
+                                       Function<S, R> finisher) implements UniConstraintCollector<LessonUnit, S, R> {
     }
 }

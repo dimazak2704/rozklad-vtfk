@@ -33,13 +33,24 @@ final class GenerationRequests {
     record Scope(List<@NotNull UUID> groupIds, List<@NotNull @Min(1) @Max(6) Integer> courses) {
     }
 
-    /** Soft constraint weights; 0 switches a constraint off. */
+    /**
+     * Soft constraint weights; 0 switches a constraint off. The first five are required (the original
+     * schema); the rest are optional (genfix): absent ones take their defaults and an absent
+     * {@code teacherWindows} follows {@code windows} (CONTRACTS.md, {@code GenerationWeights}).
+     */
     record Weights(@NotNull @Min(0) @Max(1000) Integer windows, @NotNull @Min(0) @Max(1000) Integer brokenDays,
                    @NotNull @Min(0) @Max(1000) Integer latePairs, @NotNull @Min(0) @Max(1000) Integer preferences,
-                   @NotNull @Min(0) @Max(1000) Integer homeRoom) {
+                   @NotNull @Min(0) @Max(1000) Integer homeRoom,
+                   @Min(0) @Max(1000) Integer teacherWindows, @Min(0) @Max(1000) Integer teacherShiftWait,
+                   @Min(0) @Max(1000) Integer stability, @Min(0) @Max(1000) Integer subgroupsTogether,
+                   @Min(0) @Max(1000) Integer studentOnePairDay, @Min(0) @Max(1000) Integer teacherDays,
+                   @Min(0) @Max(1000) Integer teacherOverload, @Min(0) @Max(1000) Integer disciplineTwice,
+                   @Min(0) @Max(1000) Integer specialRooms) {
 
         GenerationWeights toWeights() {
-            return new GenerationWeights(windows, brokenDays, latePairs, preferences, homeRoom);
+            return new GenerationWeights(windows, brokenDays, latePairs, preferences, homeRoom, teacherWindows,
+                    teacherShiftWait, stability, subgroupsTogether, studentOnePairDay, teacherDays, teacherOverload,
+                    disciplineTwice, specialRooms);
         }
     }
 }

@@ -167,6 +167,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = body(HttpStatus.UNPROCESSABLE_CONTENT, ProblemTypes.BUSINESS_RULE,
                 "Порушено правило", ex.getMessage(), request);
         body.setProperty("code", ex.getCode());
+        ex.getProperties().forEach(body::setProperty);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(body);
     }
 

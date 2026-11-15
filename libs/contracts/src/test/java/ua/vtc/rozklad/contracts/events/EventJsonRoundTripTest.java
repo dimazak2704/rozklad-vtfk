@@ -129,6 +129,95 @@ class EventJsonRoundTripTest {
                 .as("the 13-argument constructor stays and means in person").isFalse();
     }
 
+    /** genfix: the 8 new weights are additive; a request of the 5-weight schema reads with defaults. */
+    @Test
+    void weightsOfTheFiveFieldSchemaReadWithDefaultsAndTeacherWindowsFollowWindows() {
+        String json = """
+                {"windows":7,"brokenDays":10,"latePairs":3,"preferences":5,"homeRoom":1}
+                """;
+
+        GenerationWeights weights = mapper.readValue(json, GenerationWeights.class);
+
+        assertThat(weights.teacherWindows()).as("one weight covered both before").isEqualTo(7);
+        assertThat(weights.teacherShiftWait()).isEqualTo(GenerationWeights.DEFAULT_TEACHER_SHIFT_WAIT);
+        assertThat(weights.stability()).isEqualTo(GenerationWeights.DEFAULT_STABILITY);
+        assertThat(weights.subgroupsTogether()).isEqualTo(GenerationWeights.DEFAULT_SUBGROUPS_TOGETHER);
+        assertThat(weights.studentOnePairDay()).isEqualTo(GenerationWeights.DEFAULT_STUDENT_ONE_PAIR_DAY);
+        assertThat(weights.teacherDays()).isEqualTo(GenerationWeights.DEFAULT_TEACHER_DAYS);
+        assertThat(weights.teacherOverload()).isEqualTo(GenerationWeights.DEFAULT_TEACHER_OVERLOAD);
+        assertThat(weights.disciplineTwice()).isEqualTo(GenerationWeights.DEFAULT_DISCIPLINE_TWICE);
+        assertThat(weights.specialRooms()).isEqualTo(GenerationWeights.DEFAULT_SPECIAL_ROOMS);
+        assertThat(weights).isEqualTo(new GenerationWeights(7, 10, 3, 5, 1));
+    }
+
+    /** genfix repair: {@code specialRooms} is additive to the 13-weight schema; absent → default, 0 switches it off. */
+    @Test
+    void weightsOfTheThirteenFieldSchemaReadWithTheSpecialRoomsDefault() {
+        String json = """
+                {"windows":30,"brokenDays":10,"latePairs":9,"preferences":5,"homeRoom":1,"teacherWindows":10,
+                 "teacherShiftWait":3,"stability":1,"subgroupsTogether":10,"studentOnePairDay":10,"teacherDays":5,
+                 "teacherOverload":3,"disciplineTwice":10}
+                """;
+
+        GenerationWeights weights = mapper.readValue(json, GenerationWeights.class);
+
+        assertThat(weights.specialRooms()).isEqualTo(GenerationWeights.DEFAULT_SPECIAL_ROOMS);
+        assertThat(weights).isEqualTo(GenerationWeights.DEFAULT);
+        assertThat(mapper.readValue(json.replace("}", ",\"specialRooms\":0}"), GenerationWeights.class).specialRooms())
+                .as("0 switches the rule off").isZero();
+        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> new GenerationWeights(10, 10, 3, 5, 1, null, null, null, null, null, null, null, null, -1));
+    }
+
+    @Test
+    void weightsDefaultIsCompleteAndNegativeWeightsAreRefused() {
+        assertThat(GenerationWeights.DEFAULT)
+                .isEqualTo(new GenerationWeights(30, 10, 9, 5, 1, 10, 3, 1, 10, 10, 5, 3, 10, 30));
+        assertThat(new GenerationWeights(10, 10, 3, 5, 1, 0, null, 0, null, null, null, null, null))
+                .satisfies(weights -> {
+                    assertThat(weights.teacherWindows()).as("an explicit 0 switches teacher windows off").isZero();
+                    assertThat(weights.stability()).isZero();
+                    assertThat(weights.subgroupsTogether()).isEqualTo(10);
+                });
+        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> new GenerationWeights(10, 10, 3, 5, 1, null, null, -1, null, null, null, null, null));
+    }
+
+    /** genfix: {@code maxPairsPerDay} and {@code siblingKey} are additive; older snapshots read without them. */
+    @Test
+    void snapshotTeacherAndUnitOfTheOldSchemaReadWithoutTheNewFields() {
+        String teacherJson = """
+                {"id":"3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f","name":"Кренцін М.Д.","unavailable":[],"unwanted":[]}
+                """;
+        String unitJson = """
+                {"unitId":"u-1","groupId":"3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f",
+                 "disciplineId":"7a8b9c0d-1e2f-4a7b-8c8d-9e0f1a2b3c4d","subgroup":1,"weight":"WHOLE",
+                 "teacherRoomId":null,"online":false}
+                """;
+
+        ProblemSnapshot.Teacher teacher = mapper.readValue(teacherJson, ProblemSnapshot.Teacher.class);
+        ProblemSnapshot.Unit unit = mapper.readValue(unitJson, ProblemSnapshot.Unit.class);
+
+        assertThat(teacher.maxPairsPerDay()).as("no limit").isNull();
+        assertThat(unit.siblingKey()).isNull();
+        assertThat(unit.online()).isFalse();
+    }
+
+    /** genfix: an analysis row of the first schema reads as a non-bonus row with unknown scope matches. */
+    @Test
+    void constraintScoreOfTheFirstSchemaIsNotABonus() {
+        String json = """
+                {"constraint":"Вікна груп","matchCount":3,"score":"0hard/-30soft"}
+                """;
+
+        GenerationCompleted.ConstraintScore row = mapper.readValue(json, GenerationCompleted.ConstraintScore.class);
+
+        assertThat(row.bonus()).isFalse();
+        assertThat(row.constraintId()).isNull();
+        assertThat(row.scopeMatchCount()).isNull();
+        assertThat(row).isEqualTo(new GenerationCompleted.ConstraintScore("Вікна груп", 3, "0hard/-30soft"));
+    }
+
     @Test
     void objectionIsADeclineOfAnAppliedChange() {
         SubstitutionTeacherReplied objection = (SubstitutionTeacherReplied) EventSamples.all().get(9);

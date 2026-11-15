@@ -18,7 +18,7 @@ export interface EditorUrlState {
 
 function parseCourses(raw: string | null): number[] {
   if (!raw) return [];
-  return [...new Set(raw.split(',').map(Number))].filter((n) => Number.isInteger(n) && n >= 1 && n <= 6).sort();
+  return [...new Set(raw.split(',').map(Number))].filter((n) => Number.isInteger(n) && n >= 1 && n <= 6).sort((a, b) => a - b);
 }
 
 export function useEditorUrlState() {

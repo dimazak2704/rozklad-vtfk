@@ -66,6 +66,15 @@ class PersistentSettingsServiceTest {
         assertThat(settings.changesHistoryDays()).isZero();
         assertThat(settings.activeBellProfileId()).isEqualTo(profile);
         assertThat(settings.collegeName()).isEqualTo(SystemSettings.DEFAULTS.collegeName());
+        assertThat(settings.teacherMaxPairsPerDay()).as("no row: the default").isEqualTo(4);
+    }
+
+    @Test
+    void teacherDailyLimitIsReadFromItsRow() {
+        given(repository.findAll()).willReturn(List.of(
+                new Setting("generation.teacherMaxPairsPerDay", JSON.numberNode(5), "admin")));
+
+        assertThat(service().current().teacherMaxPairsPerDay()).isEqualTo(5);
     }
 
     @Test
@@ -84,20 +93,23 @@ class PersistentSettingsServiceTest {
         given(repository.findById("substitution.approvalMode"))
                 .willReturn(Optional.of(new Setting("substitution.approvalMode", JSON.stringNode("CONFIRM"), "system")));
         SystemSettings proposed = new SystemSettings(ChangeApprovalMode.CONFIRM, 60, "  Директор ", "Світлана ВАСИЛЮК",
-                "ВТФК", 2, true, 14, null);
+                "ВТФК", 2, true, 14, null, 5);
 
         SystemSettings saved = service().update(proposed, "admin");
 
         assertThat(saved.signatoryPosition()).isEqualTo("Директор");
         ArgumentCaptor<Setting> stored = ArgumentCaptor.forClass(Setting.class);
-        // 8 змінених значень + рядок версії налаштувань (його ще не було)
-        verify(repository, org.mockito.Mockito.times(9)).save(stored.capture());
+        // 9 змінених значень + рядок версії налаштувань (його ще не було)
+        verify(repository, org.mockito.Mockito.times(10)).save(stored.capture());
         assertThat(stored.getAllValues()).extracting(Setting::getKey)
                 .doesNotContain("substitution.approvalMode")
                 .contains("substitution.confirmTimeoutMinutes", "public.changesHistoryDays",
                         "calendar.activeBellProfileId", "settings.version");
         assertThat(stored.getAllValues()).filteredOn(setting -> setting.getKey().equals("public.changesHistoryDays"))
                 .singleElement().satisfies(setting -> assertThat(setting.getValue().intValue()).isEqualTo(14));
+        assertThat(stored.getAllValues())
+                .filteredOn(setting -> setting.getKey().equals("generation.teacherMaxPairsPerDay"))
+                .singleElement().satisfies(setting -> assertThat(setting.getValue().intValue()).isEqualTo(5));
         assertThat(stored.getAllValues()).allSatisfy(setting -> assertThat(setting.getUpdatedBy()).isEqualTo("admin"));
     }
 
@@ -115,13 +127,13 @@ class PersistentSettingsServiceTest {
     void invalidValuesAndConstraintsAreFieldErrors() {
         SettingsConstraint unknownProfile = (proposed, errors) -> errors.add("activeBellProfileId", "Профіль дзвінків не знайдено.");
         SystemSettings proposed = new SystemSettings(ChangeApprovalMode.AUTO, 1, " ", "Ім'я", "Коледж", 9, false,
-                366, UUID.randomUUID());
+                366, UUID.randomUUID(), 9);
 
         assertThatThrownBy(() -> new PersistentSettingsService(repository, List.of(unknownProfile)).update(proposed, "admin"))
                 .isInstanceOfSatisfying(FieldValidationException.class, error -> assertThat(error.getErrors())
                         .extracting(FieldErrorDto::field)
                         .containsExactly("activeBellProfileId", "changesHistoryDays", "confirmTimeoutMinutes",
-                                "hoursPerPair", "signatoryPosition"));
+                                "hoursPerPair", "signatoryPosition", "teacherMaxPairsPerDay"));
         verify(repository, never()).save(any());
     }
 

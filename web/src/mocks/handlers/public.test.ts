@@ -210,7 +210,15 @@ describe('архів лише для персоналу (publicHistoryFrom)', ()
     expect(saved.changesHistoryDays).toBe(365);
     const { changesHistoryDays, ...oldClient } = saved;
     expect(changesHistoryDays).toBe(365);
-    expect((await api.put<SettingsDto>('/admin/settings', oldClient)).changesHistoryDays).toBe(365);
+    const kept = await api.put<SettingsDto>('/admin/settings', oldClient);
+    expect(kept.changesHistoryDays).toBe(365);
+    // genfix §3.4: найбільше пар на день у викладача — 1..8, типово 4; без поля в PUT лишається збережене
+    expect(kept.teacherMaxPairsPerDay).toBe(4);
+    const tooMany = await failure(api.put('/admin/settings', { ...kept, teacherMaxPairsPerDay: 9 }));
+    expect(tooMany?.fieldErrors()).toEqual({ teacherMaxPairsPerDay: 'Від 1 до 8 пар' });
+    const six = await api.put<SettingsDto>('/admin/settings', { ...kept, teacherMaxPairsPerDay: 6 });
+    const { teacherMaxPairsPerDay: _omit, ...withoutLimit } = six;
+    expect((await api.put<SettingsDto>('/admin/settings', withoutLimit)).teacherMaxPairsPerDay).toBe(6);
   });
 });
 

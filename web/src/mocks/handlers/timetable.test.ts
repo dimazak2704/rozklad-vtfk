@@ -37,7 +37,21 @@ describe('правила конфліктів і метрики (DOMAIN §5)', (
     const { hard, metrics } = analyzeLessons(TEMPLATE_LESSONS);
     expect(hard.filter((c) => c.kind === 'ROOM')).toHaveLength(73);
     expect(hard.filter((c) => c.kind === 'TEACHER')).toHaveLength(2);
-    expect(metrics).toMatchObject({ groupWindows: 0, teacherWindows: 180, brokenDays: 34, latePairs: 106, maxPairsPerDay: 4 });
+    // вікна викладачів — лише в межах зміни; проміжки між 1-ю і 2-ю зміною — окремо (genfix §2, §3.3);
+    // 4-та пара зміни — дні груп (чисельник і знаменник окремо), де вона є (genfix §1.4)
+    expect(metrics).toMatchObject({
+      groupWindows: 0,
+      teacherWindows: 70,
+      teacherShiftWaits: 110,
+      brokenDays: 34,
+      latePairs: 291,
+      maxPairsPerDay: 4,
+      hardConflicts: 75,
+      studentOnePairDays: 3,
+      loneSubgroupSlots: 2,
+      teacherOnePairDays: 98,
+      teacherOverloadDays: 41,
+    });
     expect(metrics.perGroup).toHaveLength(56);
   });
 

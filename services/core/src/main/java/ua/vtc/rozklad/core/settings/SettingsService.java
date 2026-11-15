@@ -68,6 +68,10 @@ public interface SettingsService {
         return current().changesHistoryDays();
     }
 
+    default int teacherMaxPairsPerDay() {
+        return current().teacherMaxPairsPerDay();
+    }
+
     default Optional<UUID> activeBellProfileId() {
         return Optional.ofNullable(current().activeBellProfileId());
     }

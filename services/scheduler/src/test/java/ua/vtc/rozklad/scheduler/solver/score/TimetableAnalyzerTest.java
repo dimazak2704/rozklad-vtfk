@@ -57,6 +57,22 @@ class TimetableAnalyzerTest {
         CONSTRAINTS.put(TimetableConstraint.UNWANTED_SLOT, TimetableConstraintProvider::unwantedSlots);
         CONSTRAINTS.put(TimetableConstraint.ROOM_PREFERENCE, TimetableConstraintProvider::roomPreference);
         CONSTRAINTS.put(TimetableConstraint.HALF_PAIRING, TimetableConstraintProvider::halfPairing);
+        CONSTRAINTS.put(TimetableConstraint.TEACHER_SHIFT_WAIT, TimetableConstraintProvider::teacherShiftWait);
+        CONSTRAINTS.put(TimetableConstraint.GROUP_ONE_PAIR_DAY, TimetableConstraintProvider::groupOnePairDays);
+        CONSTRAINTS.put(TimetableConstraint.SUBGROUP_ALONE, TimetableConstraintProvider::subgroupAlone);
+        CONSTRAINTS.put(TimetableConstraint.SIBLINGS_APART, TimetableConstraintProvider::siblingsApart);
+        CONSTRAINTS.put(TimetableConstraint.TEACHER_ONE_PAIR_DAY, TimetableConstraintProvider::teacherOnePairDays);
+        CONSTRAINTS.put(TimetableConstraint.TEACHER_EXTRA_DAY, TimetableConstraintProvider::teacherExtraDays);
+        CONSTRAINTS.put(TimetableConstraint.TEACHER_OVERLOAD, TimetableConstraintProvider::teacherOverload);
+        CONSTRAINTS.put(TimetableConstraint.DISCIPLINE_TWICE, TimetableConstraintProvider::disciplineTwice);
+        CONSTRAINTS.put(TimetableConstraint.UNIT_MOVED, TimetableConstraintProvider::unitMoved);
+        CONSTRAINTS.put(TimetableConstraint.ROOM_CHANGED, TimetableConstraintProvider::roomChanged);
+        CONSTRAINTS.put(TimetableConstraint.SPECIAL_ROOM_LOST, TimetableConstraintProvider::specialRoomLost);
+    }
+
+    @Test
+    void everyConstraintIsCrossChecked() {
+        assertThat(CONSTRAINTS).containsOnlyKeys(TimetableConstraint.values());
     }
 
     @Test
@@ -79,6 +95,11 @@ class TimetableAnalyzerTest {
 
         assertThat(results).filteredOn(result -> result.constraint().isHard())
                 .allSatisfy(result -> assertThat(result.matchCount()).isPositive());
+        assertThat(results).filteredOn(result -> result.constraint() == TimetableConstraint.UNIT_MOVED
+                        || result.constraint() == TimetableConstraint.ROOM_CHANGED
+                        || result.constraint() == TimetableConstraint.TEACHER_OVERLOAD
+                        || result.constraint() == TimetableConstraint.SUBGROUP_ALONE)
+                .allSatisfy(result -> assertThat(result.matchCount()).as(result.constraint().name()).isPositive());
         assertThat(TimetableAnalyzer.totalScore(results)).isEqualTo(solutionManager.update(messy));
         assertImpactsMatchTheSolver(messy, results);
     }
@@ -93,6 +114,37 @@ class TimetableAnalyzerTest {
 
         assertThat(windows.matchCount()).isPositive();
         assertThat(windows.score()).isEqualTo(HardSoftScore.ZERO);
+    }
+
+    /** A small week built so that every rule added after the generator review matches. */
+    @Test
+    void everyNewSoftRuleIsAnalysedLikeTheSolverScoresIt() {
+        Timetable week = NewRulesWeek.timetable(false);
+
+        List<TimetableAnalyzer.ConstraintResult> results = TimetableAnalyzer.analyze(week);
+
+        assertThat(results).filteredOn(result -> NewRulesWeek.RULES.contains(result.constraint()))
+                .hasSize(NewRulesWeek.RULES.size())
+                .allSatisfy(result -> assertThat(result.impact()).as(result.constraint().name()).isPositive());
+        assertThat(TimetableAnalyzer.totalScore(results)).isEqualTo(solutionManager.update(week));
+        assertImpactsMatchTheSolver(week, results);
+    }
+
+    /** B7: a match that involves only pinned units is not counted in scope. */
+    @Test
+    void matchesOfPinnedUnitsAloneAreOutOfScope() {
+        List<TimetableAnalyzer.ConstraintResult> pinned = TimetableAnalyzer.analyze(NewRulesWeek.timetable(true));
+        List<TimetableAnalyzer.ConstraintResult> free = TimetableAnalyzer.analyze(NewRulesWeek.timetable(false));
+
+        assertThat(pinned).filteredOn(result -> NewRulesWeek.PINNABLE_RULES.contains(result.constraint()))
+                .hasSize(NewRulesWeek.PINNABLE_RULES.size())
+                .allSatisfy(result -> {
+                    assertThat(result.matchCount()).as(result.constraint().name()).isPositive();
+                    assertThat(result.scopeMatchCount()).as(result.constraint().name()).isZero();
+                });
+        assertThat(free).filteredOn(result -> result.matchCount() > 0)
+                .allSatisfy(result -> assertThat(result.scopeMatchCount()).as(result.constraint().name())
+                        .isEqualTo(result.matchCount()));
     }
 
     @Test
@@ -122,8 +174,9 @@ class TimetableAnalyzerTest {
     }
 
     /**
-     * Moves a share of the units to random slots, rooms and parities. The solver checks values
-     * against value ranges, so the copies get the widest ranges (any slot, room and parity).
+     * Moves a share of the units to random slots, rooms and parities and half as many to another room
+     * only; the planted placement becomes the base. The solver checks values against value ranges, so
+     * the copies get the widest ranges (any slot, room and parity).
      */
     private static Timetable perturb(Timetable timetable, double share) {
         Random random = new Random(11);
@@ -131,9 +184,11 @@ class TimetableAnalyzerTest {
         List<Room> rooms = timetable.getRooms();
         List<LessonUnit> units = new ArrayList<>();
         for (LessonUnit unit : timetable.getUnits()) {
-            boolean moved = random.nextDouble() < share;
+            double draw = random.nextDouble();
+            boolean moved = draw < share;
+            boolean roomOnly = !moved && draw < share * 1.5;
             Timeslot slot = moved ? timeslots.get(random.nextInt(timeslots.size())) : unit.getTimeslot();
-            Room room = moved ? rooms.get(random.nextInt(rooms.size())) : unit.getRoom();
+            Room room = moved || roomOnly ? rooms.get(random.nextInt(rooms.size())) : unit.getRoom();
             Parity parity = moved && unit.isHalf()
                     ? (random.nextBoolean() ? Parity.NUMERATOR : Parity.DENOMINATOR)
                     : unit.getParity();
@@ -144,6 +199,8 @@ class TimetableAnalyzerTest {
                     .weight(unit.getWeight())
                     .requiredRoomType(unit.getRequiredRoomType())
                     .desiredRoom(unit.getDesiredRoom())
+                    .siblingKey(unit.getSiblingKey())
+                    .base(unit.getTimeslot(), unit.getParity(), unit.getRoom().getId())
                     .timeslotRange(timeslots)
                     .roomRange(rooms)
                     .parityRange(List.of(Parity.values()))

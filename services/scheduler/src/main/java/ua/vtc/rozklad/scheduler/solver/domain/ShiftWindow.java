@@ -45,7 +45,18 @@ public final class ShiftWindow {
      * (from pair 1 when the shift has no lessons that day).
      */
     public int positionOf(Timeslot timeslot) {
-        int first = firstPair[timeslot.weekday()];
-        return timeslot.pair() - (first == 0 ? 1 : first);
+        return timeslot.pair() - firstPairOn(timeslot.weekday());
+    }
+
+    /** First pair of the shift on a weekday (1 when the shift has no lessons that day). */
+    public int firstPairOn(int weekday) {
+        int first = firstPair[weekday];
+        return first == 0 ? 1 : first;
+    }
+
+    /** Pairs of the shift on a weekday (0 when the shift has no lessons that day). */
+    public int pairsOn(int weekday) {
+        int first = firstPair[weekday];
+        return first == 0 ? 0 : lastPair[weekday] - first + 1;
     }
 }

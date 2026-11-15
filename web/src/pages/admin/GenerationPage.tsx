@@ -13,12 +13,20 @@ import {
 import { useServerEvent } from '@/api/live';
 import { usePublicMeta } from '@/api/meta';
 import { usePlanningCatalog, useTimetableVersions } from '@/api/timetable';
-import type { Uuid } from '@/api/types';
+import type { LoadProblemDto, Uuid } from '@/api/types';
 import { BaselinePanel } from '@/components/generation/BaselinePanel';
 import { GenerationForm } from '@/components/generation/GenerationForm';
 import { JobHistory } from '@/components/generation/JobHistory';
 import { JobPanel } from '@/components/generation/JobPanel';
-import { initialForm, toJobRequest, validateForm, type GenerationFormState } from '@/components/generation/model';
+import {
+  completionNotice,
+  formFromJob,
+  initialForm,
+  jobHasParams,
+  toJobRequest,
+  validateForm,
+  type GenerationFormState,
+} from '@/components/generation/model';
 import { publishedVersion } from '@/components/timetable/model/versions';
 import { Button, EmptyState, LoadingRegion, notify, PageErrorBanner, PageHeader, Skeleton } from '@/components/ui';
 import { useRegisterCommands } from '@/stores/commands';
@@ -41,19 +49,28 @@ export default function GenerationPage() {
   const cancel = useCancelGeneration();
   const [draft, setDraft] = useState<GenerationFormState | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [loadProblems, setLoadProblems] = useState<readonly LoadProblemDto[]>([]);
   useGenerationLiveUpdates(selectedJobId);
 
   const published = publishedVersion(versions.data ?? []);
-  const form = draft ?? initialForm(published?.id ?? null);
+  const activeJob = isJobActive(job.data?.status) ? job.data : (jobs.data ?? []).find((j) => isJobActive(j.status));
+  const busy = Boolean(activeJob);
+  // поки задача йде, ліва панель показує її власні параметри, а не форму (genfix B8)
+  const showsJob = Boolean(activeJob && jobHasParams(activeJob));
+  const form = activeJob && showsJob ? formFromJob(activeJob) : (draft ?? initialForm(published?.id ?? null));
   const baseVersion = (versions.data ?? []).find((v) => v.id === form.baseVersionId) ?? published;
-  const busy = (jobs.data ?? []).some((j) => isJobActive(j.status)) || isJobActive(job.data?.status);
+  const versionNames = new Map((versions.data ?? []).map((v) => [v.id, v.name]));
+  const jobBase = job.data?.baseVersionId ? (versions.data ?? []).find((v) => v.id === job.data?.baseVersionId) : undefined;
+
+  const editForm = (next: GenerationFormState) => {
+    setDraft(next);
+    setLoadProblems([]);
+  };
 
   useServerEvent('generation.completed', (event) => {
-    if (event.status === 'SOLVED') {
-      notify.success('Генерацію завершено', {
-        description: 'Результат збережено як нову чернетку — відкрийте й перегляньте її.',
-      });
-    }
+    // з жорсткими конфліктами — попередження, а не зелена галочка (genfix B6)
+    const notice = completionNotice(event);
+    if (notice) notify[notice.level](notice.title, { description: notice.description });
   });
 
   const selectJob = (jobId: Uuid) =>
@@ -71,6 +88,7 @@ export default function GenerationPage() {
     // помилки полів показуємо лише після спроби запуску; невалідну форму не відправляємо
     setSubmitted(true);
     if (Object.keys(validateForm(form)).length > 0) return;
+    setLoadProblems([]);
     try {
       const created = await start.mutateAsync(toJobRequest(form, semesterId));
       selectJob(created.jobId);
@@ -78,6 +96,8 @@ export default function GenerationPage() {
         description: 'Хід розвʼязання видно на графіку; сторінку можна закрити — задача працює на сервері.',
       });
     } catch (error) {
+      // 422: навантаження не вміщується в сітку — список того, що саме, лишається під формою
+      if (isApiError(error) && error.problems.length > 0) setLoadProblems(error.problems);
       const fields = isApiError(error) ? error.errors.map((e) => e.message).join('; ') : '';
       notify.error(error, 'Генерацію не запущено', fields ? { description: fields } : undefined);
     }
@@ -162,12 +182,14 @@ export default function GenerationPage() {
         ) : (
           <GenerationForm
             form={form}
-            onChange={setDraft}
+            onChange={editForm}
             groups={catalog.data?.groups ?? []}
             versions={versions.data ?? []}
             busy={busy}
             submitted={submitted}
             submit={launchButton}
+            title={showsJob ? 'Параметри запуску' : 'Параметри'}
+            loadProblems={loadProblems}
           />
         )}
 
@@ -186,9 +208,17 @@ export default function GenerationPage() {
             <JobPanel
               job={job.data}
               publishedId={published?.id ?? null}
-              baseMetrics={(versions.data ?? []).find((v) => v.id === job.data?.baseVersionId)?.metrics ?? published?.metrics ?? null}
+              base={jobBase ?? null}
               cancelling={cancel.isPending}
               onCancel={() => job.data && stop(job.data.id)}
+              onUseParams={
+                job.data && jobHasParams(job.data)
+                  ? () => {
+                      if (job.data) editForm(formFromJob(job.data));
+                      notify.info('Параметри перенесено у форму', { description: 'Змініть, що треба, і запустіть генерацію.' });
+                    }
+                  : undefined
+              }
             />
           ) : (
             <div className="flex flex-col gap-6 lg:pt-2">
@@ -201,7 +231,7 @@ export default function GenerationPage() {
               />
             </div>
           )}
-          {jobs.data && jobs.data.length > 0 ? <JobHistory jobs={jobs.data} selectedId={selectedJobId} onSelect={selectJob} /> : null}
+          {jobs.data && jobs.data.length > 0 ? <JobHistory jobs={jobs.data} selectedId={selectedJobId} onSelect={selectJob} versionNames={versionNames} /> : null}
         </div>
       </div>
     </div>

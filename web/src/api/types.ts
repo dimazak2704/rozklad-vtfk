@@ -168,6 +168,8 @@ export interface ProblemDetail {
   requestId?: string;
   /** Лише в 404 `history-not-public`: з якої дати гість бачить заміни й розклад (як у meta). */
   publicHistoryFrom?: IsoDate;
+  /** Лише в 422 `GENERATION_LOAD_EXCEEDS_SLOTS` (genfix §3.6): що саме не вміщується в сітку. */
+  problems?: LoadProblemDto[];
 }
 
 export interface PageQuery {
@@ -713,18 +715,43 @@ export interface LoadItemDto {
 
 export interface MetricsDto {
   groupWindows: number;
+  /** Вікна викладачів у межах однієї зміни; очікування між змінами — окремо (`teacherShiftWaits`). */
   teacherWindows: number;
   brokenDays: number;
+  /** Дні груп (окремо чисельник і знаменник) з 4-ю парою зміни (contracts `LatePairs`). */
   latePairs: number;
   maxPairsPerDay: number;
   /** @inferred — склад рядка контракт не описує */
-  perGroup: Array<{
-    group: GroupRef;
-    windows: number;
-    brokenDays: number;
-    latePairs: number;
-    maxPairsPerDay: number;
-  }>;
+  perGroup: Array<GroupMetricsDto>;
+  /*
+   * Адитивно (genfix §3.3): у збережених раніше метриках полів немає або вони null — тоді показник не показуємо.
+   * Усі лічильники — окремо для чисельника і знаменника, як і решта.
+   */
+  /** Жорсткі конфлікти версії (VersionAnalysis). */
+  hardConflicts?: Nullable<number>;
+  /** Порожні пари викладача між парою групи однієї зміни і парою групи іншої зміни. */
+  teacherShiftWaits?: Nullable<number>;
+  /** Дні груп з однією парою. */
+  studentOnePairDays?: Nullable<number>;
+  /** Слоти, де одна підгрупа на парі, а інша без заняття. */
+  loneSubgroupSlots?: Nullable<number>;
+  /** Робочі дні викладачів. */
+  teacherDays?: Nullable<number>;
+  /** Дні викладачів з однією парою. */
+  teacherOnePairDays?: Nullable<number>;
+  /** Дні викладачів, коли пар більше за налаштування `teacherMaxPairsPerDay`. */
+  teacherOverloadDays?: Nullable<number>;
+}
+
+export interface GroupMetricsDto {
+  group: GroupRef;
+  windows: number;
+  brokenDays: number;
+  latePairs: number;
+  maxPairsPerDay: number;
+  /** Адитивно (genfix §3.3), null у старих метриках. */
+  onePairDays?: Nullable<number>;
+  loneSubgroupSlots?: Nullable<number>;
 }
 
 /** GET /api/admin/timetable/versions?semesterId (адитивно: semesterId, publishedBy, generationJobId, notes, createdAt). */
@@ -841,13 +868,42 @@ export interface PublishVersionResponse {
 
 // ───────────────────────── 2. Admin: генерація ─────────────────────────
 
+/**
+ * Ваги мʼяких правил генератора (contracts `GenerationWeights`, 0 — не враховувати, 0..1000).
+ * Перші пʼять — з першої версії контракту; решта адитивні (genfix §1.1): у запиті їх можна не надсилати
+ * (core підставить типові, `teacherWindows` — як `windows`), у відповіді core віддає всі 14.
+ */
 export interface GenerationWeights {
+  /** Вікна груп. */
   windows: number;
   brokenDays: number;
+  /** 4-та пара зміни. */
   latePairs: number;
   preferences: number;
   homeRoom: number;
+  /** Вікна викладачів у межах зміни. */
+  teacherWindows: number;
+  /** Очікування викладача між парою 1-ї зміни і парою 2-ї. */
+  teacherShiftWait: number;
+  /** Не переставляти пари без потреби (відносно базової версії). */
+  stability: number;
+  subgroupsTogether: number;
+  studentOnePairDay: number;
+  teacherDays: number;
+  teacherOverload: number;
+  disciplineTwice: number;
+  /**
+   * Пара предмета, який у базовій версії стояв лише в спортзалі чи на спортмайданчику, в іншій аудиторії
+   * (адитивно, genfix repair; замінює колишній жорсткий тип аудиторії, виведений з бази).
+   */
+  specialRooms: number;
 }
+
+/** Ваги так, як їх може віддати старий сервер чи стара задача: лише перші пʼять. */
+type FirstWeightKey = 'windows' | 'brokenDays' | 'latePairs' | 'preferences' | 'homeRoom';
+export type GenerationWeightsWire = Pick<GenerationWeights, FirstWeightKey> & {
+  [K in Exclude<keyof GenerationWeights, FirstWeightKey>]?: Nullable<GenerationWeights[K]>;
+};
 
 /** POST /api/admin/generation/jobs → 202 {jobId} */
 export interface GenerationJobRequest {
@@ -856,7 +912,8 @@ export interface GenerationJobRequest {
   baseVersionId?: Nullable<Uuid>;
   /** 10..600 */
   timeLimitSeconds: number;
-  weights?: Nullable<GenerationWeights>;
+  /** Можна надіслати лише частину нових ваг: решту core підставить типовими. */
+  weights?: Nullable<GenerationWeightsWire>;
 }
 
 export interface GenerationJobCreated {
@@ -874,6 +931,23 @@ export interface ConstraintAnalysisDto {
   constraint: string;
   matchCount: number;
   score: string;
+  /** Адитивно (genfix §1.3): стабільний латинський id обмеження. */
+  constraintId?: Nullable<string>;
+  /** Рядок-винагорода (половинки в парі): це досягнення, а не порушення. null — false. */
+  bonus?: Nullable<boolean>;
+  /** Скільки з `matchCount` зачіпає пари, які генератор міг рухати. null — невідомо (стара задача). */
+  scopeMatchCount?: Nullable<number>;
+}
+
+/** Що змінилось відносно базової версії (genfix §3.2): лише для SOLVED. */
+export interface GenerationOutcomeDto {
+  /** Пари з базовим місцем, які стали в інший день, пару чи тиждень. */
+  moved: number;
+  /** Пари на тому самому місці, але в іншій аудиторії. */
+  roomChanged: number;
+  /** Пари, що мали базове місце. */
+  total: number;
+  perGroup: Array<{ group: GroupRef; moved: number; total: number }>;
 }
 
 /**
@@ -899,6 +973,35 @@ export interface GenerationJobDto {
   metricsAfter: Nullable<MetricsDto>;
   error: Nullable<string>;
   requestedBy: Nullable<string>;
+  /*
+   * Адитивно (genfix §3.2): власні параметри задачі. Старий сервер їх не надсилає — тоді інтерфейс
+   * не вигадує їх із поточної форми, а пише «невідомо».
+   */
+  /** Як просили: `{[], []}` — усі групи. */
+  scope?: Nullable<{ groupIds: Uuid[]; courses: number[] }>;
+  /** Групи, які генератор міг рухати, за курсом і кодом. */
+  groups?: Nullable<GroupRef[]>;
+  weights?: Nullable<GenerationWeightsWire>;
+  /** З `bestScore`; null — ще немає повного розкладу. */
+  hardScore?: Nullable<number>;
+  softScore?: Nullable<number>;
+  outcome?: Nullable<GenerationOutcomeDto>;
+  /**
+   * Адитивно (genfix repair): true — задача зберегла лише пʼять ваг першої схеми, тож інших правил для неї не
+   * було, а `weights` показує їхні типові значення лише для форми. null — сервер старий або ваг немає.
+   */
+  legacyWeights?: Nullable<boolean>;
+}
+
+/** Рядок `problems[]` у 422 `GENERATION_LOAD_EXCEEDS_SLOTS` (genfix §3.6): навантаження не вміщується в сітку. */
+export interface LoadProblemDto {
+  kind: 'GROUP' | 'TEACHER' | 'ROOM_TYPE';
+  id: string;
+  label: string;
+  /** Пар на тиждень (може бути 18,5 — половинки). */
+  requiredPairs: number;
+  availablePairs: number;
+  message: string;
 }
 
 // ───────────────────────── 2. Admin: заміни ─────────────────────────
@@ -1305,6 +1408,11 @@ export interface SettingsDto {
    * PUT без поля (старий клієнт) лишає збережене значення.
    */
   changesHistoryDays: number;
+  /**
+   * Найбільше пар на день у викладача для генератора (1..8, типово 4; genfix §3.4). Старий сервер не надсилає —
+   * тоді поля в формі немає; PUT без поля лишає збережене значення.
+   */
+  teacherMaxPairsPerDay?: number;
   activeBellProfileId: Nullable<Uuid>;
   /** Версія налаштувань з GET; PUT зі старішою — 409 `stale-data` (хтось зберіг раніше). */
   version: number;

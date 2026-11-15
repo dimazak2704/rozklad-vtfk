@@ -374,6 +374,31 @@ describe('налаштування', () => {
     expect(top).toHaveValue('0');
   });
 
+  it('найбільше пар на день у викладача (genfix §3.4): 1..8, іде на сервер; старий сервер без поля — поля немає', async () => {
+    let sent: unknown;
+    server.use(
+      http.put(apiPath('/admin/settings'), async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ ...settings, ...(sent as object), version: 1 });
+      }),
+    );
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(
+      <SettingsForm settings={{ ...settings, teacherMaxPairsPerDay: 4 }} guardNavigation={false} numbering={null} ai={null} />,
+    );
+    const pairs = screen.getByRole('spinbutton', { name: /^Найбільше пар на день у викладача/ });
+    expect(pairs).toHaveValue('4');
+    expect(pairs).toHaveAttribute('aria-valuemin', '1');
+    expect(pairs).toHaveAttribute('aria-valuemax', '8');
+    await user.click(within(pairs.parentElement as HTMLElement).getByRole('button', { name: 'Збільшити' }));
+    await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+    await waitFor(() => expect(sent).toMatchObject({ teacherMaxPairsPerDay: 5 }));
+    unmount();
+
+    renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);
+    expect(screen.queryByRole('spinbutton', { name: /^Найбільше пар на день у викладача/ })).not.toBeInTheDocument();
+  });
+
   it('перевіряє поля до відправки й показує живий підпис', async () => {
     const user = userEvent.setup();
     renderWithProviders(<SettingsForm settings={settings} guardNavigation={false} numbering={null} ai={null} />);

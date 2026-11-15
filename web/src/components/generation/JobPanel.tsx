@@ -1,32 +1,38 @@
-import { CircleCheck, CircleStop, CircleX, FileDiff, FolderOpen, Hourglass, LoaderCircle } from 'lucide-react';
+import { CircleCheck, CircleStop, CircleX, FileDiff, FolderOpen, Hourglass, LoaderCircle, RotateCcw, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router';
-import { isJobActive, parseScore } from '@/api/generation';
-import type { GenerationJobDto, MetricsDto, Uuid } from '@/api/types';
+import { isJobActive, jobHardScore, normalizeWeights, parseScore, solvedWithConflicts } from '@/api/generation';
+import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, buttonClass, Panel, StatusDot } from '@/components/ui';
 import { formatInstant } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
 import { Disclosure } from './Disclosure';
-import { comparisonRows, elapsedSeconds, formatSeconds } from './model';
-import { ConstraintAnalysis, MetricsComparison } from './ResultSummary';
+import {
+  comparisonRows,
+  elapsedSeconds,
+  formatSeconds,
+  groupComparison,
+  jobHasParams,
+  jobPrioritiesText,
+  jobScopeText,
+  jobStatusTitle,
+  outcomeSentence,
+  type BaseVersionInfo,
+} from './model';
+import { changedPriorities } from './priorities';
+import { ConstraintAnalysis, GroupComparison, MetricsComparison } from './ResultSummary';
 import { ScoreCharts } from './ScoreCharts';
 
 interface JobPanelProps {
   job: GenerationJobDto;
   /** Опублікована версія — для «Порівняти з поточним». */
   publishedId: Uuid | null;
-  /** Метрики базової версії — «Було», якщо задача їх не принесла. */
-  baseMetrics?: MetricsDto | null;
+  /** Базова версія задачі (зі списку версій): «Було», якщо задача його не принесла, і її назва. null — версії вже немає. */
+  base?: (BaseVersionInfo & { name: string }) | null;
   cancelling: boolean;
   onCancel: () => void;
+  /** «Взяти ці параметри»: перенести параметри задачі у форму. */
+  onUseParams?: () => void;
 }
-
-const STATUS_TITLE: Record<GenerationJobDto['status'], string> = {
-  QUEUED: 'У черзі',
-  RUNNING: 'Розвʼязується',
-  SOLVED: 'Готово',
-  FAILED: 'Не вдалося',
-  CANCELLED: 'Скасовано',
-};
 
 const HARD_FORMS = ['жорстке порушення', 'жорсткі порушення', 'жорстких порушень'] as const;
 
@@ -38,19 +44,24 @@ function resultSentence(job: GenerationJobDto, elapsed: number): string {
     return job.timeLimitSeconds ? `Минуло ${time} з ${formatSeconds(job.timeLimitSeconds)}.` : `Минуло ${time}.`;
   }
   if (job.status === 'QUEUED') return 'Збираємо групи, викладачів, аудиторії й закріплені пари.';
-  if (!score) return `Тривало ${time}.`;
-  const hard = Math.abs(score.hard);
+  const hardScore = jobHardScore(job);
+  if (!score || hardScore === null) return `Тривало ${time}.`;
+  const hard = Math.abs(hardScore);
   const soft = Math.abs(score.soft).toLocaleString('uk-UA');
   const hardText = hard === 0 ? 'жорстких порушень немає' : countLabel(hard, HARD_FORMS);
   return `Тривало ${time}: ${hardText}, мʼякий штраф ${soft}.`;
 }
 
 /** Поточна (або вибрана з історії) задача: стан, хід розвʼязання наживо, результат і що з ним робити. */
-export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }: JobPanelProps) {
+export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUseParams }: JobPanelProps) {
   const active = isJobActive(job.status);
   const limit = job.timeLimitSeconds;
   const elapsed = elapsedSeconds(job);
-  const rows = comparisonRows(job, baseMetrics);
+  const rows = comparisonRows(job, base);
+  const groups = groupComparison(job, base);
+  const outcome = job.status === 'SOLVED' ? outcomeSentence(job.outcome) : null;
+  const withConflicts = solvedWithConflicts(job);
+  const scoped = Boolean(job.scope && (job.scope.groupIds.length > 0 || job.scope.courses.length > 0));
   const charts =
     job.progress.length > 0 ? (
       <ScoreCharts progress={job.progress} limitSeconds={limit} live={active} endSeconds={active ? undefined : elapsed} />
@@ -62,10 +73,11 @@ export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }
         <span className="flex items-center gap-2" aria-live="polite">
           {job.status === 'QUEUED' ? <Hourglass aria-hidden="true" className="size-4 text-muted" /> : null}
           {job.status === 'RUNNING' ? <StatusDot tone="live" pulse label="Наживо" /> : null}
-          {job.status === 'SOLVED' ? <CircleCheck aria-hidden="true" className="size-4 text-add" /> : null}
+          {job.status === 'SOLVED' && !withConflicts ? <CircleCheck aria-hidden="true" className="size-4 text-add" /> : null}
+          {withConflicts ? <TriangleAlert aria-hidden="true" className="size-4 text-change" /> : null}
           {job.status === 'FAILED' ? <CircleX aria-hidden="true" className="size-4 text-danger" /> : null}
           {job.status === 'CANCELLED' ? <CircleStop aria-hidden="true" className="size-4 text-muted" /> : null}
-          {STATUS_TITLE[job.status]}
+          {jobStatusTitle(job)}
         </span>
       }
       description={job.startedAt ? `Запущено ${formatInstant(job.startedAt)}` : undefined}
@@ -89,6 +101,12 @@ export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }
             {job.status === 'QUEUED' ? <LoaderCircle aria-hidden="true" className="size-4 shrink-0 text-accent motion-safe:animate-spin" /> : null}
             <span>{resultSentence(job, elapsed)}</span>
           </p>
+          {withConflicts ? (
+            <p className="text-ui text-change">
+              Розвʼязувач не прибрав усі жорсткі конфлікти. Чернетку збережено — перегляньте конфлікти в редакторі перед публікацією.
+            </p>
+          ) : null}
+          {outcome ? <p className="text-ui text-secondary">{outcome}</p> : null}
           {active && limit ? (
             <div aria-hidden="true" className="h-1.5 max-w-md overflow-hidden rounded-full bg-[var(--fill-track-future)]">
               <div
@@ -98,6 +116,8 @@ export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }
             </div>
           ) : null}
         </div>
+
+        <JobParams job={job} baseName={base?.name ?? null} onUseParams={active ? undefined : onUseParams} />
 
         {/* наживо графік — головне; після кінця — подробиця на вимогу */}
         {charts && active ? charts : null}
@@ -131,9 +151,11 @@ export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }
         {job.status === 'SOLVED' && (rows.length > 0 || job.analysis) ? (
           <div className="grid gap-6 border-t border-separator pt-5 xl:grid-cols-2">
             {rows.length > 0 ? <MetricsComparison rows={rows} /> : null}
-            {job.analysis ? <ConstraintAnalysis items={job.analysis} /> : null}
+            {job.analysis ? <ConstraintAnalysis items={job.analysis} scoped={scoped} /> : null}
           </div>
         ) : null}
+
+        {job.status === 'SOLVED' && groups.length > 0 ? <GroupComparison rows={groups} /> : null}
 
         {charts && !active ? (
           <Disclosure summary="Хід розвʼязання" className="border-t border-separator pt-3">
@@ -142,5 +164,43 @@ export function JobPanel({ job, publishedId, baseMetrics, cancelling, onCancel }
         ) : null}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Власні параметри задачі (genfix B8): які групи, від якої версії, скільки часу і які пріоритети змінено.
+ * Стара задача їх не має — тоді так і пишемо, а не підставляємо поточну форму.
+ */
+function JobParams({ job, baseName, onUseParams }: { job: GenerationJobDto; baseName: string | null; onUseParams?: () => void }) {
+  if (!jobHasParams(job)) {
+    return <p className="text-caption text-muted">Параметри цього запуску невідомі: сервер їх не зберіг.</p>;
+  }
+  const weights = normalizeWeights(job.weights);
+  const changed = weights ? changedPriorities(weights) : [];
+  const base = job.baseVersionId ? (baseName ? `«${baseName}»` : 'версія, якої вже немає') : 'без базової — з навантаження';
+  return (
+    <div className="flex flex-col gap-2 rounded-control bg-sunken px-3 py-2.5">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-caption">
+        <dt className="text-secondary">Групи</dt>
+        <dd className="text-primary">{jobScopeText(job)}</dd>
+        <dt className="text-secondary">Базова версія</dt>
+        <dd className="text-primary">{base}</dd>
+        {job.timeLimitSeconds ? (
+          <>
+            <dt className="text-secondary">Ліміт часу</dt>
+            <dd className="text-primary">{formatSeconds(job.timeLimitSeconds)}</dd>
+          </>
+        ) : null}
+        <dt className="text-secondary">Пріоритети</dt>
+        <dd className="text-primary">
+          {jobPrioritiesText(job, changed)}
+        </dd>
+      </dl>
+      {onUseParams ? (
+        <Button size="sm" variant="ghost" className="self-start" onClick={onUseParams} iconStart={<RotateCcw aria-hidden="true" className="size-3.5" />}>
+          Взяти ці параметри
+        </Button>
+      ) : null}
+    </div>
   );
 }

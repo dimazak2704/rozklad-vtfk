@@ -21,7 +21,8 @@ final class DayOverloadRule implements ConflictRule {
     public void check(LessonIndex index, ConflictFacts facts, ConflictSink sink) {
         index.byGroupDay().forEach((key, lessons) -> {
             LessonDay day = key.day();
-            List<Integer> cohorts = DayShape.cohorts(lessons, facts.group(key.ownerId()));
+            List<Integer> cohorts = DayShape.cohorts(lessons, facts.group(key.ownerId()),
+                    index.subgroupsOf(key.ownerId()));
             Map<Integer, Overload> byCount = new LinkedHashMap<>();
             for (WeekType week : day.weeks()) {
                 List<SlotLesson> busiest = List.of();

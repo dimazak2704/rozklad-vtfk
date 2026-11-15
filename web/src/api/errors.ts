@@ -1,4 +1,4 @@
-import type { Conflict, FieldErrorDto, ProblemDetail } from './types';
+import type { Conflict, FieldErrorDto, LoadProblemDto, ProblemDetail } from './types';
 
 export type ApiErrorKind = 'http' | 'network' | 'timeout' | 'aborted' | 'parse';
 
@@ -55,6 +55,8 @@ export interface ApiErrorInit {
   requestId?: string;
   /** З 404 `history-not-public`: з якої дати гість бачить заміни й розклад. */
   publicHistoryFrom?: string;
+  /** З 422 `GENERATION_LOAD_EXCEEDS_SLOTS`: що саме не вміщується в сітку занять. */
+  problems?: LoadProblemDto[];
   cause?: unknown;
 }
 
@@ -70,6 +72,7 @@ export class ApiError extends Error {
   readonly code: string | undefined;
   readonly requestId: string | undefined;
   readonly publicHistoryFrom: string | undefined;
+  readonly problems: LoadProblemDto[];
 
   constructor(init: ApiErrorInit) {
     const kind = init.kind ?? 'http';
@@ -87,6 +90,7 @@ export class ApiError extends Error {
     this.code = init.code;
     this.requestId = init.requestId;
     this.publicHistoryFrom = init.publicHistoryFrom;
+    this.problems = init.problems ?? [];
   }
 
   get isValidation(): boolean {
@@ -145,6 +149,12 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
   return typeof value === 'object' && value !== null;
 }
 
+function isLoadProblem(value: unknown): value is LoadProblemDto {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Partial<LoadProblemDto>;
+  return typeof row.label === 'string' && typeof row.message === 'string';
+}
+
 /** Будує ApiError з HTTP-відповіді (problem+json, json або порожнє тіло). */
 export async function errorFromResponse(response: Response): Promise<ApiError> {
   const headerRequestId = response.headers.get('X-Request-Id') ?? undefined;
@@ -168,6 +178,7 @@ export async function errorFromResponse(response: Response): Promise<ApiError> {
     code: typeof problem.code === 'string' ? problem.code : undefined,
     requestId: headerRequestId ?? (typeof problem.requestId === 'string' ? problem.requestId : undefined),
     publicHistoryFrom: typeof problem.publicHistoryFrom === 'string' ? problem.publicHistoryFrom : undefined,
+    problems: Array.isArray(problem.problems) ? problem.problems.filter(isLoadProblem) : [],
   });
 }
 

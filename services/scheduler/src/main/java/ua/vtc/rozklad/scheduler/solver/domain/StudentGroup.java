@@ -62,6 +62,11 @@ public final class StudentGroup {
         return !cohorts.equals(List.of(0));
     }
 
+    /** Number of student cohorts: the stored subgroups, or 1 when the group is not split. */
+    public int cohortCount() {
+        return cohorts.size();
+    }
+
     public boolean hasSubgroup(int subgroup) {
         return subgroup == 0 || (isSplit() && cohorts.contains(subgroup));
     }

@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.RoomType;
+import ua.vtc.rozklad.core.settings.SettingsService;
 import ua.vtc.rozklad.core.timetable.TemplateLesson;
 import ua.vtc.rozklad.core.timetable.internal.conflict.ConflictEngine;
 import ua.vtc.rozklad.core.timetable.internal.conflict.ConflictFacts;
@@ -21,7 +22,11 @@ import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
 import ua.vtc.rozklad.core.timetable.internal.metrics.TimetableMetricsCalculator;
 import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 
-/** Conflicts and metrics of weekly templates (one facts load for any number of versions). */
+/**
+ * Conflicts and metrics of weekly templates (one facts load for any number of versions). The metrics carry
+ * the hard conflict count of the same check and count overloaded teacher days against the setting
+ * {@code teacherMaxPairsPerDay}.
+ */
 @Component
 public class VersionAnalysis {
 
@@ -29,13 +34,15 @@ public class VersionAnalysis {
     private final ConflictFactsLoader factsLoader;
     private final LoadReadRepository loads;
     private final TimetableMetricsCalculator metricsCalculator;
+    private final SettingsService settings;
 
     public VersionAnalysis(ConflictEngine engine, ConflictFactsLoader factsLoader, LoadReadRepository loads,
-                           TimetableMetricsCalculator metricsCalculator) {
+                           TimetableMetricsCalculator metricsCalculator, SettingsService settings) {
         this.engine = engine;
         this.factsLoader = factsLoader;
         this.loads = loads;
         this.metricsCalculator = metricsCalculator;
+        this.settings = settings;
     }
 
     /** Engine view of template lessons, with the room type their load item requires. */
@@ -63,7 +70,7 @@ public class VersionAnalysis {
     public Result analyze(UUID semesterId, Collection<TemplateLesson> lessons) {
         List<SlotLesson> slotLessons = slotLessons(lessons);
         ConflictFacts facts = factsLoader.load(slotLessons, semesterId);
-        return new Result(engine.check(slotLessons, facts), metricsCalculator.calculate(slotLessons, facts), facts);
+        return result(slotLessons, facts, settings.teacherMaxPairsPerDay());
     }
 
     /** Analysis of several versions of one semester, keyed like the input. */
@@ -71,6 +78,7 @@ public class VersionAnalysis {
         List<TemplateLesson> all = lessonsByVersion.values().stream().flatMap(List::stream).toList();
         List<SlotLesson> slotLessons = slotLessons(all);
         ConflictFacts facts = factsLoader.load(slotLessons, semesterId);
+        int teacherMaxPairsPerDay = settings.teacherMaxPairsPerDay();
         Map<UUID, List<SlotLesson>> byLessonVersion = new LinkedHashMap<>();
         Map<UUID, UUID> versionOfLesson = all.stream()
                 .collect(Collectors.toMap(TemplateLesson::getId, TemplateLesson::getVersionId));
@@ -78,8 +86,14 @@ public class VersionAnalysis {
         slotLessons.forEach(lesson -> byLessonVersion.get(versionOfLesson.get(lesson.id())).add(lesson));
         Map<UUID, Result> results = new LinkedHashMap<>();
         byLessonVersion.forEach((versionId, lessons) -> results.put(versionId,
-                new Result(engine.check(lessons, facts), metricsCalculator.calculate(lessons, facts), facts)));
+                result(lessons, facts, teacherMaxPairsPerDay)));
         return results;
+    }
+
+    private Result result(List<SlotLesson> lessons, ConflictFacts facts, int teacherMaxPairsPerDay) {
+        ConflictReport report = engine.check(lessons, facts);
+        return new Result(report, metricsCalculator.calculate(lessons, facts, teacherMaxPairsPerDay)
+                .withHardConflicts(report.hard().size()), facts);
     }
 
     /** @param facts catalog facts the analysis used (reused by publication for names and rooms) */

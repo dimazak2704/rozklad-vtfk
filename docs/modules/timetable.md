@@ -102,9 +102,14 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   the change row plus the original pair when moved. A cancelled original is hidden when its replacement (same change)
   is in the same view (group view shows the substitution once; the absent teacher still sees the cancelled pair).
   `reasonText` is the public order text («Відп.», «Зв.зам.», «Вичит.», «Відр.», or the free text of OTHER).
-- **Metrics**: per group, weekday and kind of week: windows of the worst cohort, late pair = the last pair of the
-  group's shift window (1st shift 4th, 2nd shift 8th / Friday 6th), max pairs of a cohort per day, broken days per
-  group-day; teacher windows per weekday and kind of week.
+- **Metrics**: per group, weekday and kind of week: windows of the worst cohort, late pair = a «4-та пара зміни»
+  (`contracts.LatePairs`: 1st shift the 4th pair, 2nd shift the 8th, none on Friday shift 2), max pairs of a cohort
+  per day, broken days per group-day, one-pair days, lone subgroup pairs (a subgroup studies and another cohort of
+  the group has nothing); per teacher, weekday and kind of week: windows, waits between shifts (`DayShape.isShiftWait`,
+  not windows), teaching days, one-pair days and days above the setting `teacherMaxPairsPerDay`. Cohorts are the same
+  all week (stored subgroups ∪ those used on any day; also in the window, overload and repeat warnings). The hard
+  conflict count of the same check is added by `VersionAnalysis` (`hardConflicts`). The soft warning «Вікно у
+  викладача» skips waits between shifts too.
 - **Import**: exact name first, then a normalized key (NFC, lower case, apostrophes, Latin look-alikes → Cyrillic in
   Cyrillic names incl. short initials, dots/spaces removed; group codes canonical «ІКІ1» → «1КІ1», «4КИ1» → «4КІ1»)
   over names and aliases (also the stored `normalized`). A key shared by two entities is ambiguous and never guessed.
@@ -113,8 +118,20 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   - units per DOMAIN §4 with `accounting.hoursPerPair` (default 2); split items give units per subgroup (subgroup
     teachers, otherwise the catalog subgroups with the whole-group teacher; neither → 422);
   - scope = listed groups ∪ active groups of listed courses (all active groups when empty); base version = given one
-    (same semester) or the published one; base lessons of groups outside the scope are pinned units, pinned lessons
-    of in-scope groups pin the matching unit (by load item, else by discipline and teacher) or stay as their own unit;
+    (same semester) or the published one; base lessons of groups outside the scope are pinned units, pinned (or
+    stream) lessons of in-scope groups pin the matching unit or stay as their own unit, the other lessons of the scope
+    give their unit a warm start (`initial`, also the baseline of stability). Matching
+    (`ProblemSnapshotBuilder.match`): by load item, else by discipline and teacher, for pinned and then free lessons;
+    only then the rest by discipline alone. A matched unit takes the base lesson's teacher (B3; a lesson without a
+    teacher keeps the load's), because load derivation keeps one teacher per group × discipline × subgroup;
+  - no room type is derived from the base (B11 withdrawn by the genfix repair: a derived type was hard, no weight
+    switched it off, and the B9 pre-check blamed the load for it); the base rooms reach the scheduler in
+    `initial`/`pinned`, and keeping PE in the hall is its soft rule `specialRooms`;
+  - free units of a split item with 2+ subgroups carry `siblingKey = loadItemId:w1|…|h`; every teacher carries
+    `maxPairsPerDay` = the setting `teacherMaxPairsPerDay`;
+  - pre-check before the job is stored (`LoadFitCheck`, B9): per group cohort, per teacher and per required room
+    type, week occurrences (BOTH 2, a half 1) against 2 × slots of the shift windows (teachers minus UNAVAILABLE,
+    room types × Σ maxParallel); any excess → 422 `GENERATION_LOAD_EXCEEDS_SLOTS` with `problems[]`;
   - unknown group size → 0, unknown room capacity → `Integer.MAX_VALUE` in the snapshot (no invented violations);
     timeslots = union of the shift windows;
   - every free unit carries `teacherRoomId` = `TeacherRooms.forDiscipline(teacher, discipline)` over the published
@@ -125,6 +142,13 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
   - SOLVED → DRAFT «Згенеровано dd.MM.yyyy HH:mm» (WHOLE → BOTH, HALF → returned parity; a pinned unit left out stays
     at its pin; unplaced units are noted in the version notes); an invalid answer (unknown/duplicate unit, off-grid
     slot, HALF without week) fails the job instead of being repaired;
+  - a draft lesson is pinned only when its base lesson was pinned (`PlanUnit.pinnedInBase`, B1): out-of-scope and
+    stream lessons are sent pinned so the solver works around them, but they stay free in the draft; plans stored
+    before the flag keep the old rule;
+  - the job's `outcome` (`generation_job.outcome`, `GenerationOutcome`): free units with a base lesson (`total`), those
+    on another weekday, pair or week or unplaced (`moved`), those in their slot with another room than the base's
+    (`roomChanged`), per group of the scope; the job DTO also shows its scope, resolved groups (one batch query per
+    list), normalised weights and the parsed score;
   - the load and the catalog may change during a run: a room, teacher or load item deleted meanwhile is left out of its
     lessons (null) and counted in the version notes; load items are read `FOR SHARE`, so a delete that starts while the
     result is applied waits for it; a deleted group or discipline fails the job with «Під час генерації з каталогу
@@ -143,7 +167,8 @@ substitutions, swaps, extra pairs), the view records (`ScheduleView`, `LessonVie
 
 `application.yml` → `app.timetable.generation.timeout-grace` (`GENERATION_TIMEOUT_GRACE`, default `10m`),
 `watchdog-interval` (`GENERATION_WATCHDOG_INTERVAL`, default `PT1M`). Migration `V1_401__generation_results.sql`
-(job plan, analysis, metrics before/after, base version, last progress; one active job per semester).
+(job plan, analysis, metrics before/after, base version, last progress; one active job per semester),
+`V1_808__generation_job_outcome.sql` (`outcome jsonb`). Setting `generation.teacherMaxPairsPerDay` (settings.md).
 
 ## 5. How to test
 
@@ -158,12 +183,16 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
   `MaterializationPlannerTest` (parity, overrides, holidays, practice, online, kept changes), `TimetableMetricsCalculatorTest`
   (4КІ1-like week: two halves in one slot remove both broken days), `VersionDiffCalculatorTest`, `LoadUnitExpanderTest`,
   `GeneratedLessonsBuilderTest`, `GenerationJobMapperTest`, `IcsCalendarWriterTest`, `LessonViewAssemblerTest`,
-  `NameKeysTest`, `CatalogNameIndexTest`.
+  `NameKeysTest`, `CatalogNameIndexTest`; genfix: `BaseVersionMatchingTest` (B1, B3, no derived room type, sibling keys),
+  `LoadFitCheckTest` (B9), `GenerationOutcomeTest`, `TimetableMetricsCalculatorTest` (late pairs, shift waits,
+  week-wide cohorts, daily balance). Opt-in `RealSnapshotLoadFitTest`: `-Dgenfix.snapshots=<dir>` with the real
+  `generation.requested` snapshots (not committed); the four of 15.11.2026 pass the pre-check.
 - Web slices: version, lesson (409 payloads, dryRun), public schedule (ETag/304, ranges, ICS), generation, import (SERVICE, 422).
 - Integration (Testcontainers): `TimetablePublicationIT` (import → publish → materialization, REST schedule and ICS,
   applied substitution kept on republication with a reported conflict, events on RabbitMQ, 409/422 rules),
   `GenerationFlowIT` (snapshot on RabbitMQ, teacher rooms in the units, progress/completed consumption, generated
-  draft, redelivery ignored, cancel, invalid and failed results). `TeacherRoomsTest` (weights, ties by room number,
+  draft, redelivery ignored, cancel, invalid and failed results; base teacher kept and the outcome, the 422 pre-check,
+  draft pins only where the base pinned, no derived room type, teachers' daily limit, job DTO fields). `TeacherRoomsTest` (weights, ties by room number,
   fallbacks).
 
 ## 6. Known gaps
@@ -171,6 +200,11 @@ mvn -q -pl services/core -am verify -Dit.test='TimetablePublicationIT,Generation
 - Calendar edits (new holiday, practice) do not re-materialize published lessons yet: the calendar module should
   publish an application event that timetable listens to (no Java dependency from calendar to timetable).
 - Streams are not in the `ProblemSnapshot` contract (no field), so the solver plans stream units separately.
+  A stream survives generation only as pinned base lessons (one leader unit with teacher and room, followers
+  without). Generating from an empty base therefore loses every stream (genRun B12): no load item has `stream_id` on
+  the stand, load derivation sets none, and free units that share a load-item stream would be placed
+  independently. Keeping streams without a base needs a follower unit in the solver; until then generate from a
+  base that has the stream lessons (pinned or not).
 - `GET /api/me/schedule` is mapped by `MyScheduleController` (integration): the teacher view of `ScheduleQueries`
   for the signed-in teacher (`CurrentUserService.requireTeacherId()`, 403 without a linked teacher), same
   `from`/`to` defaults and 31-day limit as the public schedule.

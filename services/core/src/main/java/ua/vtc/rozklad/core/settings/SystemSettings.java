@@ -18,6 +18,9 @@ import java.util.UUID;
  * @param changesHistoryDays    how many days back anonymous visitors see substitutions and orders
  *                              ({@link PublicHistory}); 0 = today and the future only
  * @param activeBellProfileId   bell profile used when the semester has none ({@code null} = not set)
+ * @param teacherMaxPairsPerDay a teacher's daily pair limit for the generator's soft rule «Забагато пар на день
+ *                              у викладача» and the metric of overloaded teacher days (not a college rule: in
+ *                              the real timetable 35 of 781 teacher-days have 5–6 pairs, so 4 is the norm)
  */
 public record SystemSettings(
         ChangeApprovalMode approvalMode,
@@ -28,7 +31,8 @@ public record SystemSettings(
         int hoursPerPair,
         boolean showTeacherFullNames,
         int changesHistoryDays,
-        UUID activeBellProfileId) {
+        UUID activeBellProfileId,
+        int teacherMaxPairsPerDay) {
 
     public static final int MIN_CONFIRM_TIMEOUT_MINUTES = 5;
     public static final int MAX_CONFIRM_TIMEOUT_MINUTES = 1440;
@@ -39,6 +43,9 @@ public record SystemSettings(
     public static final int MAX_COLLEGE_NAME_LENGTH = 200;
     public static final int MIN_CHANGES_HISTORY_DAYS = 0;
     public static final int MAX_CHANGES_HISTORY_DAYS = 365;
+    public static final int MIN_TEACHER_MAX_PAIRS_PER_DAY = 1;
+    public static final int MAX_TEACHER_MAX_PAIRS_PER_DAY = 8;
+    public static final int DEFAULT_TEACHER_MAX_PAIRS_PER_DAY = 4;
 
     /**
      * Values from the college documents (orders №35, №96, №105) and DOMAIN §7–§9. The approval mode is
@@ -54,13 +61,22 @@ public record SystemSettings(
             2,
             false,
             7,
-            null);
+            null,
+            DEFAULT_TEACHER_MAX_PAIRS_PER_DAY);
 
     public SystemSettings {
         Objects.requireNonNull(approvalMode, "approvalMode");
         Objects.requireNonNull(signatoryPosition, "signatoryPosition");
         Objects.requireNonNull(signatoryName, "signatoryName");
         Objects.requireNonNull(collegeName, "collegeName");
+    }
+
+    /** Settings with the default teacher daily limit (callers that do not deal with generation). */
+    public SystemSettings(ChangeApprovalMode approvalMode, int confirmTimeoutMinutes, String signatoryPosition,
+                          String signatoryName, String collegeName, int hoursPerPair, boolean showTeacherFullNames,
+                          int changesHistoryDays, UUID activeBellProfileId) {
+        this(approvalMode, confirmTimeoutMinutes, signatoryPosition, signatoryName, collegeName, hoursPerPair,
+                showTeacherFullNames, changesHistoryDays, activeBellProfileId, DEFAULT_TEACHER_MAX_PAIRS_PER_DAY);
     }
 
     public boolean requiresConfirmation() {
