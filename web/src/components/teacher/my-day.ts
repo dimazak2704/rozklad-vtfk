@@ -74,14 +74,25 @@ function pairOver(pair: number, clock: DayClock): boolean {
  * не має вказувати на пару, яка минула.
  */
 export function nextRequest(changes: readonly ChangeDto[], today: IsoDate, clock?: DayClock): ChangeDto | null {
-  const open = changes.filter(
-    (c) =>
-      c.status === 'PENDING_CONFIRMATION' &&
-      !c.supersededBy &&
-      compareIsoDates(c.date, today) >= 0 &&
-      !(clock && c.date === today && pairOver(c.pairTo, clock)),
-  );
+  const open = changes.filter((c) => isOpenRequest(c, today, clock) && compareIsoDates(c.date, today) >= 0);
   return open.sort((a, b) => compareIsoDates(a.date, b.date) || a.pairFrom - b.pairFrom)[0] ?? null;
+}
+
+/** Запит (CONFIRM), що ще чекає моєї відповіді й не про пару, яка сьогодні вже скінчилася. */
+function isOpenRequest(change: ChangeDto, today: IsoDate, clock?: DayClock): boolean {
+  return (
+    change.status === 'PENDING_CONFIRMATION' &&
+    !change.supersededBy &&
+    !(clock && change.date === today && pairOver(change.pairTo, clock))
+  );
+}
+
+/**
+ * Сьогоднішні запити на заміну, що ще чекають моєї відповіді, на пари, які ще не скінчилися. Такої пари ще немає
+ * в моєму розкладі, але вести її, можливо, мені: «зараз» не каже «Це остання пара» чи «На сьогодні все», доки вона попереду.
+ */
+export function pendingRequests(changes: readonly ChangeDto[], today: IsoDate, clock?: DayClock): ChangeDto[] {
+  return changes.filter((c) => c.date === today && isOpenRequest(c, today, clock)).sort((a, b) => a.pairFrom - b.pairFrom);
 }
 
 /**
@@ -112,9 +123,24 @@ export function assignmentPairs(assignments: readonly ChangeDto[]): number[] {
 
 /** «заміна: СТП, 4КІ1, ауд. 14» — пара із заміни так само, як власна пара в реченні «зараз». */
 export function assignmentPhrase(change: ChangeDto): string {
+  return `заміна: ${changeParts(change)}`;
+}
+
+/** «СТП, 4КІ1, ауд. 14» — що саме вестиму за заміною: нова дисципліна й аудиторія, а якщо їх не міняли — давні. */
+function changeParts(change: ChangeDto): string {
   const discipline = (change.new.discipline ?? change.original.discipline)?.shortName;
   const room = roomLabel((change.new.room ?? change.original.room)?.name);
-  return `заміна: ${[discipline, change.group.code, room].filter(Boolean).join(', ')}`;
+  return [discipline, change.group.code, room].filter(Boolean).join(', ');
+}
+
+/** «запит на заміну: СТП, 4КІ2 — чекає вашої відповіді» — пара з запиту, коли «зараз» саме про неї. */
+export function requestPhrase(change: ChangeDto): string {
+  return `запит на заміну: ${changeParts(change)}\u00a0— чекає вашої відповіді`;
+}
+
+/** «Ще чекає вашої відповіді запит на заміну — 3 пара: СТП, 4КІ2.» — запит на пізнішу пару сьогодні. */
+export function laterRequestSentence(change: ChangeDto): string {
+  return `Ще чекає вашої відповіді запит на заміну\u00a0— ${change.pairFrom}\u00a0пара: ${changeParts(change)}.`;
 }
 
 /**
