@@ -1,15 +1,16 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { IsoDate, ScheduleDto } from '@/api/types';
+import type { BellSlotDto, IsoDate, ScheduleDto } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
-import { capitalize, PARITY_LABEL, weekdayName, weekdayShort } from '@/lib/labels';
-import { lessonsByPair, pairRange, rowTimes, vacatedPairs, type Perspective } from '@/lib/schedule';
+import { capitalize, PARITY_LABEL, WEEKDAY_ACCUSATIVE, weekdayName, weekdayShort } from '@/lib/labels';
+import { lessonsByPair, pairRange, vacatedPairs, type Perspective } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
 import { nowPillShift } from './now-pill';
 import { blocksLabel, dayPractices, noteWithoutPractices } from './practice';
 import { PeriodBlock } from './PeriodBlock';
 import { VacatedSlot } from './VacatedSlot';
+import { weekTimes, type PairTime } from './week-times';
 
 export interface WeekGridProps {
   schedule: ScheduleDto;
@@ -21,7 +22,13 @@ export interface WeekGridProps {
   stickyTop?: string;
   /** Заняття, зміна в яких щойно прийшла наживо (`useArrivedChanges`). */
   arrived?: ReadonlySet<string>;
+  /** Дзвінки за днями тижня (ISO 1..7, `bellsByWeekday`): у пʼятницю пари йдуть в інший час. */
+  bells?: ReadonlyMap<number, readonly BellSlotDto[]> | null;
   className?: string;
+}
+
+function weekdayAccusative(isoWeekday: number): string {
+  return WEEKDAY_ACCUSATIVE[isoWeekday] ?? '';
 }
 
 function clockLabel(minutes: number): string {
@@ -53,11 +60,14 @@ function AtNow({ fraction, className, children }: { fraction: number; className?
 function PairGutter({
   pair,
   time,
+  exceptions = [],
   current,
   now,
 }: {
   pair: number;
-  time: { startsAt: string; endsAt: string } | undefined;
+  time: PairTime | undefined;
+  /** Дні з іншим часом цієї пари — окремим підписом під основним: «Пт 12:20 / 13:20». */
+  exceptions?: ReadonlyArray<{ weekday: number; time: PairTime }>;
   current: boolean;
   now: { fraction: number; label: string } | null;
 }) {
@@ -105,6 +115,19 @@ function PairGutter({
             </span>
           </>
         ) : null}
+        {exceptions.map(({ weekday, time: other }) => (
+          <span key={weekday} data-weekday-time={weekday} className="mt-1.5 flex flex-col text-meta text-muted figures">
+            <span>
+              <span className="sr-only">{`у ${weekdayAccusative(weekday)} `}</span>
+              <span aria-hidden="true">{weekdayShort(weekday)} </span>
+              {other.startsAt}
+            </span>
+            <span>
+              <span className="sr-only">до </span>
+              {other.endsAt}
+            </span>
+          </span>
+        ))}
       </span>
       {now ? (
         <>
@@ -135,12 +158,13 @@ function PairGutter({
  * закресленим, тобто скасованим). Пігулка з часом стоїть у колонці часу й не закриває заняття.
  * Рядки ростуть під вміст — нічого не обрізається.
  */
-export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, className }: WeekGridProps) {
+export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, bells, className }: WeekGridProps) {
   const days = schedule.days;
   // керівник бачить свої блоки (практика, НС) окремим рядком над парами; група — у клітинці замість пар
   const supervisedRow = perspective === 'teacher' && days.some((day) => dayPractices(day, perspective).length > 0);
   const range = useMemo(() => pairRange(days, { withVacated: true }), [days]);
-  const times = useMemo(() => rowTimes(days), [days]);
+  // колонка часу — найчастіший час пари; дні з іншими дзвінками (пʼятниця) — підписом під ним і власним часом у «зараз»
+  const { rows: times, byDay: dayTimes, exceptions } = useMemo(() => weekTimes(days, bells), [days, bells]);
   const byDay = useMemo(() => days.map((day) => lessonsByPair(day.lessons)), [days]);
   // пари, які звільнило перенесення: «Пари не буде», а не порожня клітинка
   const vacatedByDay = useMemo(() => days.map((day) => vacatedPairs(day.lessons)), [days]);
@@ -161,13 +185,14 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
   const pairs = Array.from({ length: range.last - range.first + 1 }, (_, i) => range.first + i);
   const liveDayIndex = days.findIndex((day) => day.date === liveDate);
   const liveDay = liveDayIndex >= 0 ? days[liveDayIndex] : undefined;
+  const liveTimes = liveDayIndex >= 0 ? dayTimes[liveDayIndex] : undefined;
 
   // рядок і місце лінії «зараз»: усередині пари — частка її тривалості; у перерві — верхній край наступної пари
   let nowRow: number | null = null;
   let nowTop = 0;
   if (liveDay?.studyDay) {
     for (const pair of pairs) {
-      const time = times.get(pair);
+      const time = liveTimes?.get(pair);
       if (!time) continue;
       const start = timeToMinutes(time.startsAt);
       const end = timeToMinutes(time.endsAt);
@@ -259,7 +284,6 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
           {pairs.map((pair, rowIndex) => {
             const time = times.get(pair);
             const lastRow = rowIndex === pairs.length - 1;
-            const rowEnd = time ? timeToMinutes(time.endsAt) : null;
             const currentRow = nowRow === pair && nowTop > 0;
             const line = nowRow === pair;
             return (
@@ -278,6 +302,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                   <PairGutter
                     pair={pair}
                     time={time}
+                    exceptions={exceptions.get(pair)}
                     current={currentRow}
                     now={line ? { fraction: nowTop, label: clockLabel(nowMinutes) } : null}
                   />
@@ -303,7 +328,8 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                       </td>
                     ) : null;
                   }
-                  const past = isLiveDay && rowEnd !== null && nowMinutes >= rowEnd;
+                  const dayTime = dayTimes[dayIndex]?.get(pair);
+                  const past = isLiveDay && dayTime !== undefined && nowMinutes >= timeToMinutes(dayTime.endsAt);
                   const cellBg = isToday ? 'bg-today-wash' : 'bg-surface';
                   // «зараз» — лише в колонці сьогодні; у днях до неї лінія ховалася б під заняттями й виринала
                   // уривками над порожніми клітинками, тож час біля неї показує пігулка в колонці часу.
@@ -348,7 +374,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                   now={current}
                                   past={lessonPast}
                                   arrived={arrived?.has(lesson.id)}
-                                  showTime={Boolean(time && (time.startsAt !== lesson.startsAt || time.endsAt !== lesson.endsAt))}
+                                  showTime={Boolean(dayTime && (dayTime.startsAt !== lesson.startsAt || dayTime.endsAt !== lesson.endsAt))}
                                   className="flex-1"
                                 />
                               </Fragment>

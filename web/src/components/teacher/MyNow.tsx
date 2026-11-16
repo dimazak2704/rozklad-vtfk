@@ -11,11 +11,14 @@ import {
   assignmentPairs,
   assignmentPhrase,
   confirmedAssignments,
+  laterRequestSentence,
   lessonPhrase,
   nextDaySentence,
   nextOwnDay,
   nextRequest,
   ownLessons,
+  pendingRequests,
+  requestPhrase,
   withRequest,
 } from './my-day';
 import { useAssignedScheduleState } from './useAssignedSchedule';
@@ -43,6 +46,13 @@ function DayDone({ title, dateLine, next }: { title: string; dateLine: string; n
   );
 }
 
+/** Початок речення «що я веду» за станом дня. */
+function focusLead(kind: 'in-pair' | 'break' | 'before-day'): string {
+  if (kind === 'in-pair') return 'Зараз у вас ';
+  if (kind === 'break') return 'Далі у вас ';
+  return 'У вас ';
+}
+
 /**
  * «Зараз» для викладача: відлік до дзвінка, доріжка його власних пар (разом із підтвердженими замінами, яких
  * ще немає в опублікованому розкладі) і одне речення про те, що він веде зараз або далі. Єдине, що рухається на сторінці. Після останньої пари й у дні без пар — що буде далі:
@@ -56,9 +66,19 @@ export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   const changes = useMyChanges();
   // підтверджена заміна сьогодні — теж моя пара, хоч розпорядження ще не опубліковане
   const assignments = useMemo(() => confirmedAssignments(changes.data ?? [], today), [changes.data, today]);
+  // запит на пізнішу пару сьогодні, що чекає відповіді, — теж пара, яку я, можливо, вестиму: поки вона попереду,
+  // день не «скінчився». Пару, що вже минула, не рахуємо — годинник без дзвінків, щоб не залежати від `pairs`.
+  const { clock: wall } = useNow();
+  const requests = useMemo(
+    () => pendingRequests(changes.data ?? [], today, { bells, minutes: wall.minutes }),
+    [changes.data, today, bells, wall.minutes],
+  );
   const pairs = useMemo(
-    () => [...new Set([...activePairs(day ? { ...day, lessons } : undefined), ...assignmentPairs(assignments)])].sort((a, b) => a - b),
-    [day, lessons, assignments],
+    () =>
+      [...new Set([...activePairs(day ? { ...day, lessons } : undefined), ...assignmentPairs(assignments), ...assignmentPairs(requests)])].sort(
+        (a, b) => a - b,
+      ),
+    [day, lessons, assignments, requests],
   );
   const onlyPairs = useMemo(() => new Set(pairs), [pairs]);
   const { status, clock } = useNow(bells, { date: today, onlyPairs });
@@ -98,12 +118,22 @@ export function MyNow({ teacherId, today, days, bells }: MyNowProps) {
   const focus = [
     ...lessons.filter((lesson) => lesson.pair === focusPair).map(lessonPhrase),
     ...assignments.filter((c) => c.pairFrom <= focusPair && focusPair <= c.pairTo).map(assignmentPhrase),
+    ...requests.filter((c) => c.pairFrom <= focusPair && focusPair <= c.pairTo).map(requestPhrase),
   ];
+  // запит на пару після тієї, про яку речення: відлік уже веде до неї, тож кажемо, що це за пара
+  const laterRequest = requests.find((c) => c.pairFrom > focusPair);
+  const lead = focusLead(status.kind);
   const aside =
-    focus.length > 0 ? (
+    focus.length > 0 || laterRequest ? (
       <>
-        {status.kind === 'in-pair' ? 'Зараз у вас ' : status.kind === 'break' ? 'Далі у вас ' : 'У вас '}
-        <span className="font-[650] text-primary">{focus.join('; ')}</span>
+        {focus.length > 0 ? (
+          <>
+            {lead}
+            <span className="font-[650] text-primary">{focus.join('; ')}</span>
+            {laterRequest ? '. ' : null}
+          </>
+        ) : null}
+        {laterRequest ? laterRequestSentence(laterRequest) : null}
       </>
     ) : null;
 

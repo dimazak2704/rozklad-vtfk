@@ -22,6 +22,7 @@ import { JobPanel } from '@/components/generation/JobPanel';
 import {
   completionNotice,
   formFromJob,
+  generationToastId,
   initialForm,
   jobHasParams,
   toJobRequest,
@@ -74,7 +75,8 @@ export default function GenerationPage() {
   useServerEvent('generation.completed', (event) => {
     // з жорсткими конфліктами — попередження, а не зелена галочка (genfix B6)
     const notice = completionNotice(event);
-    if (notice) notify[notice.level](notice.title, { description: notice.description });
+    // той самий id, що й «запущено» / «зупиняємо»: сповіщення заміняє їх, а не стає в стос над результатом
+    if (notice) notify[notice.level](notice.title, { id: notice.id, description: notice.description });
   });
 
   const selectJob = (jobId: Uuid) =>
@@ -97,6 +99,7 @@ export default function GenerationPage() {
       const created = await start.mutateAsync(toJobRequest(form, semesterId));
       selectJob(created.jobId);
       notify.info('Генерацію запущено', {
+        id: generationToastId(created.jobId),
         description: 'Хід розвʼязання видно на графіку; сторінку можна закрити — задача працює на сервері.',
       });
     } catch (error) {
@@ -108,14 +111,17 @@ export default function GenerationPage() {
   };
 
   // задача, що розвʼязується, зупиняється з найкращим варіантом; у черзі — скасовується без чернетки
-  const stop = (jobId: Uuid) =>
+  // одне сповіщення на задачу (id): «зупиняємо» заміняє «запущено», а потім його заміняє «зупинено»
+  const stop = (jobId: Uuid) => {
+    const id = generationToastId(jobId);
     cancel.mutate(jobId, {
       onSuccess: (stopped) =>
         stopped.status === 'CANCELLED'
-          ? notify.info('Генерацію скасовано', { description: 'Розклад ще не склався, тож чернетку не створено.' })
-          : notify.info('Зупиняємо генерацію', { description: 'Найкращий варіант на цей момент збережеться як чернетка.' }),
-      onError: (error) => notify.error(error, 'Не вдалося зупинити генерацію'),
+          ? notify.info('Генерацію скасовано', { id, description: 'Розклад ще не склався, тож чернетку не створено.' })
+          : notify.info('Зупиняємо генерацію', { id, description: 'Найкращий варіант на цей момент збережеться як чернетка.' }),
+      onError: (error) => notify.error(error, 'Не вдалося зупинити генерацію', { id }),
     });
+  };
 
   useRegisterCommands([
     {
@@ -202,8 +208,10 @@ export default function GenerationPage() {
     </div>
   );
 
+  // поки видно сповіщення (запущено / зупиняємо / готово), низ сторінки має запас на його висоту:
+  // блок «Що лишилось» і історію запусків можна прокрутити над карткою (toastReserveRef)
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-(--toast-reserve)">
       {header}
       <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
         {resultFirst ? null : formColumn}

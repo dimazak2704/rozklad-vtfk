@@ -868,6 +868,8 @@ function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
     legacyWeights: false,
     stopRequested: job.stopRequestedAt !== null,
     stopReason: null,
+    baseHardScore: null,
+    baseSoftScore: null,
   };
   if (status === 'CANCELLED' && job.cancelledAt !== null) view.finishedAt = iso(job.cancelledAt);
   if (!solution || startedAtMs === null || now < startedAtMs) return view;
@@ -884,6 +886,10 @@ function jobView(job: JobRecord, now = Date.now()): GenerationJobDto {
     const finishedAt = finishedAtMs(job, startedAtMs);
     view.finishedAt = iso(finishedAt);
     view.stopReason = stopReasonOf(job, startedAtMs);
+    // як core: оцінка бази тими ж правилами (перша точка розвʼязку — ще база) приходить із завершенням
+    const [start] = solution.trajectory;
+    view.baseHardScore = start?.hard ?? null;
+    view.baseSoftScore = start?.soft ?? null;
     // мок зберігає лише кінцевий розклад: зупинена задача теж отримує його як чернетку (спрощення демо)
     view.resultVersionId = materializeResult(job, solution, finishedAt);
     view.analysis = constraintAnalysis(solution.lessons, job.weights, job.scopeGroupIds);

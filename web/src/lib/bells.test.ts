@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BellSlotDto } from '@/api/types';
-import { describePairStatus, pairStatus } from './bells';
+import type { BellProfileDto, BellSlotDto } from '@/api/types';
+import { bellsByWeekday, describePairStatus, pairStatus } from './bells';
 
 // Профіль «2 зміни, 60 хв», понеділок–четвер (DOMAIN §2)
 const MON_THU: BellSlotDto[] = [
@@ -54,5 +54,38 @@ describe('describePairStatus', () => {
   it('формує український текст', () => {
     expect(describePairStatus(pairStatus(MON_THU, at(10, 0)))).toBe('Зараз 2 пара, до кінця 40\u00a0хв');
     expect(describePairStatus(pairStatus(MON_THU, at(10, 50)))).toBe('Перерва до 11:00, далі 3 пара');
+  });
+});
+
+describe('bellsByWeekday', () => {
+  const profile = (id: string, slots: BellProfileDto['slots']): BellProfileDto => ({
+    id,
+    name: id,
+    active: true,
+    defaultProfile: false,
+    slots,
+    version: 0,
+  });
+  const profiles = [
+    profile('other', [{ weekday: 1, pair: 4, startsAt: '11:40', endsAt: '12:30' }]),
+    profile('main', [
+      { weekday: 5, pair: 10, startsAt: '18:00', endsAt: '19:00' },
+      { weekday: 5, pair: 4, startsAt: '12:20', endsAt: '13:20' },
+      { weekday: 1, pair: 4, startsAt: '12:10', endsAt: '13:10' },
+      { weekday: 5, pair: 2, startsAt: '09:40', endsAt: '10:40' },
+    ]),
+  ];
+
+  it('групує слоти профілю, що діє, за днями тижня; пари — за номером, не за рядком (10 після 4)', () => {
+    const byDay = bellsByWeekday('main', profiles);
+    expect(byDay?.get(1)).toEqual([{ pair: 4, startsAt: '12:10', endsAt: '13:10' }]);
+    expect(byDay?.get(5)?.map((slot) => slot.pair)).toEqual([2, 4, 10]);
+    expect(byDay?.get(5)?.[1]).toEqual({ pair: 4, startsAt: '12:20', endsAt: '13:20' });
+  });
+
+  it('профілю немає серед переданих або вони ще вантажаться — null', () => {
+    expect(bellsByWeekday('missing', profiles)).toBeNull();
+    expect(bellsByWeekday(undefined, profiles)).toBeNull();
+    expect(bellsByWeekday('main', undefined)).toBeNull();
   });
 });

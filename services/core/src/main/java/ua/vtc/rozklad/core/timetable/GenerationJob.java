@@ -15,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.GenerationStopReason;
+import ua.vtc.rozklad.contracts.events.GenerationCompleted.BaseScore;
 import ua.vtc.rozklad.core.shared.domain.BaseEntity;
 
 /**
@@ -23,7 +24,9 @@ import ua.vtc.rozklad.core.shared.domain.BaseEntity;
  * units sent to the scheduler so that its assignments can be turned into template lessons;
  * {@code analysis}, {@code metricsBefore}, {@code metricsAfter} and {@code outcome} are filled on completion.
  * A running job the dispatcher stopped stays active ({@code stopRequestedAt}) until the scheduler returns its best
- * timetable; {@code stopReason} says why a job with a timetable stopped. The scheduler keeps its own job table.
+ * timetable; {@code stopReason} says why a job with a timetable stopped. {@code baseHardScore} / {@code baseSoftScore}
+ * are the solver's score of the timetable the run started from, before solving ({@code null} from scratch, for older
+ * jobs and from older schedulers). The scheduler keeps its own job table.
  */
 @Entity
 @Table(name = "generation_job")
@@ -96,6 +99,12 @@ public class GenerationJob extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 16)
     private GenerationStopReason stopReason;
+
+    @Column(name = "base_hard_score")
+    private Long baseHardScore;
+
+    @Column(name = "base_soft_score")
+    private Long baseSoftScore;
 
     protected GenerationJob() {
     }
@@ -227,6 +236,21 @@ public class GenerationJob extends BaseEntity {
 
     public void setStopReason(GenerationStopReason stopReason) {
         this.stopReason = stopReason;
+    }
+
+    /** Hard score of the starting timetable under the solver's rules; {@code null} when unknown. */
+    public Long getBaseHardScore() {
+        return baseHardScore;
+    }
+
+    public Long getBaseSoftScore() {
+        return baseSoftScore;
+    }
+
+    /** The scheduler's score of the starting timetable; {@code null} clears it (from scratch, older scheduler). */
+    public void setBaseScore(BaseScore baseScore) {
+        this.baseHardScore = baseScore == null ? null : baseScore.hardScore();
+        this.baseSoftScore = baseScore == null ? null : baseScore.softScore();
     }
 
     /** No time limit in the request: the scheduler stops when the timetable stops getting better. */

@@ -118,7 +118,9 @@ test.describe('генератор', () => {
 
     const table = page.getByRole('table', { name: 'Було і стало' });
     await expect(table).toBeVisible({ timeout: 30_000 });
-    await expect(table.getByRole('row', { name: /Жорсткі конфлікти\s*75\s*0/ })).toBeVisible();
+    // конфлікти редактора бази й результату; жорсткі правила розвʼязувача — лише «Стало» (оцінки бази сервер поки не передає)
+    await expect(table.getByRole('row', { name: /Конфлікти в редакторі\s*75\s*0/ })).toBeVisible();
+    await expect(table.getByRole('row', { name: /Жорсткі порушення\s*—\s*\d/ })).toBeVisible();
     await expect(table.getByRole('row', { name: /Рвані дні/ })).toBeVisible();
 
     await page.getByRole('link', { name: 'Відкрити чернетку' }).click();

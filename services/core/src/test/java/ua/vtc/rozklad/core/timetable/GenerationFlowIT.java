@@ -197,6 +197,8 @@ class GenerationFlowIT {
         assertThat(solved.resultVersionId()).isNotNull();
         assertThat(solved.timeLimitSeconds()).as("an old request keeps its limit").isEqualTo(30);
         assertThat(solved.stopReason()).as("a completion of the first schema has none").isNull();
+        assertThat(solved.baseHardScore()).as("nor a base score").isNull();
+        assertThat(solved.baseSoftScore()).isNull();
         assertThat(solved.stopRequested()).isFalse();
         assertThat(solved.bestScore()).isEqualTo("0hard/-12soft");
         assertThat(solved.analysis()).extracting(GenerationCompleted.ConstraintScore::constraint)
@@ -443,12 +445,15 @@ class GenerationFlowIT {
 
         send(RozkladEvents.GENERATION_COMPLETED, new GenerationCompleted(EventEnvelope.create(clock), job.id(),
                 GenerationStatus.SOLVED, 0, -8, assignments(request.problem()), List.of(), null,
-                GenerationStopReason.NO_IMPROVEMENT));
+                GenerationStopReason.NO_IMPROVEMENT, new GenerationCompleted.BaseScore(-2, -40)));
         await().atMost(WAIT).untilAsserted(() -> assertThat(generation.get(job.id()).status())
                 .isEqualTo(GenerationStatus.SOLVED));
 
         assertThat(generation.get(job.id())).satisfies(solved -> {
             assertThat(solved.stopReason()).isEqualTo(GenerationStopReason.NO_IMPROVEMENT);
+            // «Було» жорстких порушень — з оцінки бази розвʼязувачем, збереженої на задачі
+            assertThat(solved.baseHardScore()).isEqualTo(-2L);
+            assertThat(solved.baseSoftScore()).isEqualTo(-40L);
             assertThat(solved.resultVersionId()).isNotNull();
         });
     }

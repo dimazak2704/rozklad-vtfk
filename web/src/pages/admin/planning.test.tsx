@@ -8,6 +8,7 @@ import { apiPath, problem } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { renderWithProviders } from '@/test/render';
 import { AUTO_STOP_SENTENCE } from '@/components/generation/model';
+import { notify } from '@/components/ui';
 import GenerationPage from './GenerationPage';
 import TimetablePage from './TimetablePage';
 
@@ -223,7 +224,7 @@ describe('Генератор розкладу', () => {
     expect(screen.getByText(/^10\sхв · ліміт 10\sхв/)).toBeInTheDocument();
     // без бази «Було» не вигадується з першої точки прогресу (34)
     const table = screen.getByRole('table', { name: 'Що вийшло' });
-    expect(within(table).getByRole('row', { name: /Жорсткі конфлікти\s*1$/ })).toBeInTheDocument();
+    expect(within(table).getByRole('row', { name: /Жорсткі порушення\s*1$/ })).toBeInTheDocument();
     // бонус — не «що лишилось»
     expect(screen.getByRole('heading', { name: 'Що вдалося' })).toBeInTheDocument();
     // готовий результат — перед формою параметрів (на телефоні він інакше під усією формою)
@@ -248,11 +249,20 @@ describe('Генератор розкладу', () => {
   it('«Зупинити» — панель чекає найкращий варіант, а потім показує чернетку й причину', async () => {
     const user = userEvent.setup();
     renderWithProviders(<GenerationPage />, { route: '/admin/generation' });
+    const info = vi.spyOn(notify, 'info');
     await user.click(await screen.findByRole('button', { name: 'Запустити генерацію' }, LONG));
     await user.click(await screen.findByRole('button', { name: 'Зупинити' }, LONG));
     expect(await screen.findByText('Зупинено вручну — збережено найкращий варіант на той момент.', undefined, LONG)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Відкрити чернетку' })).toBeInTheDocument();
-    // історія оновлюється своїм опитуванням — чекаємо й на неї
-    expect(await screen.findByText(/ · зупинено вручну/, undefined, LONG)).toBeInTheDocument();
+    // заголовок картки — «Зупинено» (мок зупиняється й з конфліктами), а не «Готово» поруч із «Зупинено вручну»
+    expect(screen.getByText(/^Зупинено( з конфліктами)?$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Готово/)).not.toBeInTheDocument();
+    // історія оновлюється своїм опитуванням — чекаємо й на неї (рядки історії перевіряє JobHistory.test)
+    await waitFor(() => expect(screen.queryByText(/^(Іде|У черзі)$/)).not.toBeInTheDocument(), LONG);
+    // «запущено» і «зупиняємо» — одне сповіщення задачі (той самий id), а не стос
+    const started = info.mock.calls.find(([title]) => title === 'Генерацію запущено');
+    const stopping = info.mock.calls.find(([title]) => title === 'Зупиняємо генерацію');
+    expect(started?.[1]?.id).toMatch(/^generation-job-/);
+    expect(stopping?.[1]?.id).toBe(started?.[1]?.id);
   });
 });

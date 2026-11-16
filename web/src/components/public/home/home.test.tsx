@@ -116,7 +116,10 @@ describe('Рядок «немає звʼязку»', () => {
 });
 
 describe('Головна: збережена копія Service Worker, коли мережа є', () => {
-  afterEach(() => resetSavedCopies());
+  afterEach(() => {
+    resetSavedCopies();
+    vi.useRealTimers();
+  });
   const SAVED = { [SAVED_COPY_HEADER]: new Date('2026-11-05T06:15:00Z').toUTCString() };
   const changesOf = (date: string) => ({ date, parity: 'NUMERATOR', studyDay: true, weekdayLabel: 'Четвер', order: null, amendments: [], groups: [] });
 
@@ -139,6 +142,9 @@ describe('Головна: збережена копія Service Worker, коли
   });
 
   it('день своєї групи з кешу — теж кажемо', async () => {
+    // посеред дня: після останнього дзвінка головна показала б завтра, а не день із кешу
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     useFavoritesStore.setState({ favorites: [], recent: [], lastViewed: { type: 'GROUP', id: mockId('group', '4КІ1'), label: '4КІ1', url: '/g/4КІ1' } });
     server.use(http.get(apiPath('/public/schedule/:type/:id'), () => HttpResponse.json(DEMO_WEEK, { headers: SAVED })));

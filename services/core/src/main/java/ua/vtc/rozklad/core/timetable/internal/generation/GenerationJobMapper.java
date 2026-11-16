@@ -75,7 +75,7 @@ class GenerationJobMapper {
                 metrics(job.getMetricsBefore()), metrics(job.getMetricsAfter()), job.getError(),
                 job.getRequestedBy(), scope(params), jobGroups, weights(params), score[0], score[1],
                 outcome(job.getOutcome()), legacyWeights(params), job.getStopRequestedAt() != null,
-                job.getStopReason());
+                job.getStopReason(), job.getBaseHardScore(), job.getBaseSoftScore());
     }
 
     JsonNode json(Object value) {
