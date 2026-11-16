@@ -4,7 +4,7 @@ import type { GenerationJobDto, Uuid } from '@/api/types';
 import { Button, Panel } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatInstant } from '@/lib/date';
-import { elapsedSeconds, formatSeconds, jobScopeText, stopReasonLabel } from './model';
+import { elapsedSeconds, formatSeconds, jobScopeText, stopReasonLabel, stoppedManually } from './model';
 import { changedPriorities } from './priorities';
 
 const STATUS: Record<GenerationJobDto['status'], { label: string; dot: string }> = {
@@ -17,6 +17,15 @@ const STATUS: Record<GenerationJobDto['status'], { label: string; dot: string }>
 
 /** SOLVED з hard < 0 — не зелене «Готово» (genfix B6). */
 const WITH_CONFLICTS = { label: 'З конфліктами', dot: 'bg-[var(--fill-change)]' };
+
+/** Зупинена вручну з чернеткою — як заголовок панелі задачі, а не «Готово». */
+const STOPPED = { label: 'Зупинено', dot: 'bg-[var(--fill-add)]' };
+
+function statusOf(job: GenerationJobDto): { label: string; dot: string } {
+  if (solvedWithConflicts(job)) return WITH_CONFLICTS;
+  if (stoppedManually(job)) return STOPPED;
+  return STATUS[job.status];
+}
 
 /** Другий рядок запуску (genfix B8): групи, база, змінені пріоритети — щоб запуски можна було розрізнити. */
 function paramsLine(job: GenerationJobDto, versionNames: ReadonlyMap<Uuid, string>): string | null {
@@ -55,10 +64,11 @@ export function JobHistory({ jobs, selectedId, onSelect, versionNames = new Map(
     <Panel title="Попередні запуски" flush>
       <ul className="divide-y divide-[var(--border-color-separator)]">
         {shown.map((job) => {
-          const status = solvedWithConflicts(job) ? WITH_CONFLICTS : STATUS[job.status];
+          const status = statusOf(job);
           const hard = Math.abs(jobHardScore(job) ?? 0);
           const params = paramsLine(job, versionNames);
-          const reason = stopReasonLabel(job);
+          // «Зупинено · зупинено вручну» — двічі те саме; з конфліктами причина лишається
+          const reason = status === STOPPED ? null : stopReasonLabel(job);
           return (
             <li key={job.id}>
               <button
