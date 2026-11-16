@@ -6,6 +6,7 @@ import { usePublicGroups, usePublicRooms, usePublicTeachers } from '@/api/public
 import type { EntityType } from '@/api/types';
 import { IconButton, Plate, Spinner } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { handleSearchEscape } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { useFavoritesStore, type ScheduleTarget } from '@/stores/favorites';
@@ -106,9 +107,9 @@ export function ScheduleFinder({ autoFocus = false }: { autoFocus?: boolean }) {
         event.preventDefault();
         go(item);
       }
-    } else if (event.key === 'Escape' && query) {
-      event.preventDefault();
-      setQuery('');
+    } else {
+      // перший Esc очищає текст, Esc у порожньому полі виводить з нього фокус — і знову діє «/» та інші скорочення
+      handleSearchEscape(event, query, () => setQuery(''));
     }
   };
 
