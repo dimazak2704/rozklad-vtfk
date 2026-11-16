@@ -52,12 +52,18 @@ interface PeriodKindFormDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/** Приклад примітки за шаблоном: 4КІ1, 16–27 листопада, назва періоду — назва виду. */
-function sampleNote(template: string, values: Pick<KindValues, 'name' | 'effect'>): string {
+/**
+ * Справжня назва періоду за кодом виду — та, що стоїть у розпорядженні й яку імпорт графіка дає періоду
+ * (importer `JobOptions.DEFAULT_TITLES`): НС — курс «Основи національного спротиву», а не назва виду.
+ */
+const SAMPLE_TITLES: Readonly<Record<string, string>> = { НС: 'Основи національного спротиву' };
+
+/** Приклад примітки за шаблоном: 4КІ1, 16–27 листопада; назва періоду — справжня для відомого коду, інакше назва виду. */
+function sampleNote(template: string, values: Pick<KindValues, 'code' | 'name' | 'effect'>): string {
   return renderNoteTemplate(template, {
     template,
     kindName: values.name,
-    title: values.name || 'Назва періоду',
+    title: SAMPLE_TITLES[values.code?.trim() ?? ''] ?? (values.name || 'Назва періоду'),
     startsOn: '2026-11-16',
     endsOn: '2026-11-27',
     scope: 'GROUPS',
