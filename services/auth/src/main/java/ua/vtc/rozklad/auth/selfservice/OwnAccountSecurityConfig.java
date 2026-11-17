@@ -33,6 +33,8 @@ import ua.vtc.rozklad.auth.config.AuthServerProperties;
 @Configuration(proxyBeanMethods = false)
 public class OwnAccountSecurityConfig {
 
+    // S4502 (CSRF) і S5876 (фіксація сесії): ланцюжок лише для bearer-JWT, причини — у Javadoc і коментарі нижче
+    @SuppressWarnings({"java:S4502", "java:S5876"})
     @Bean
     @Order(2)
     SecurityFilterChain ownAccountChain(HttpSecurity http, AuthServerProperties properties) throws Exception {

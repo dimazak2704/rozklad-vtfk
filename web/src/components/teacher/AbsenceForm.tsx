@@ -228,6 +228,24 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   // а на дотику клавіатура телефона закрила б форму заради необовʼязкового поля
   const reasonByPointer = useRef(false);
   const focusComment = useRef(false);
+  const reasonsBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // слухаємо напряму, а не через JSX: обгортка не стає «інтерактивним» елементом, кнопки — у RadioGroup
+    const box = reasonsBox.current;
+    if (!box) return;
+    const onPointer = (event: PointerEvent) => {
+      reasonByPointer.current = event.pointerType !== 'touch';
+    };
+    const onKey = () => {
+      reasonByPointer.current = false;
+    };
+    box.addEventListener('pointerdown', onPointer);
+    box.addEventListener('keydown', onKey);
+    return () => {
+      box.removeEventListener('pointerdown', onPointer);
+      box.removeEventListener('keydown', onKey);
+    };
+  }, []);
   useEffect(() => {
     if (!otherReason || !focusComment.current) return;
     focusComment.current = false;
@@ -438,14 +456,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
               // помилка стає на місце підказки, а не над нею (DESIGN §11.4); групу описує те, що зараз видно
               <fieldset className="flex flex-col gap-2" data-reasons aria-describedby={reasonError ? reasonErrorId : reasonHelpId}>
                 <legend className="mb-2 text-ui font-[650] text-primary">Причина</legend>
-                <div
-                  onPointerDown={(event) => {
-                    reasonByPointer.current = event.pointerType !== 'touch';
-                  }}
-                  onKeyDown={() => {
-                    reasonByPointer.current = false;
-                  }}
-                >
+                <div ref={reasonsBox}>
                   <RadioGroup
                     value={field.value ?? null}
                     onValueChange={(value) => {
