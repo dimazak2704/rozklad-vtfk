@@ -12,6 +12,7 @@ import { FormAlert, FormDialog } from './FormParts';
 import { EMPLOYMENT_OPTIONS } from './labels';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { shortNameOf } from './names';
+import { displayNameFollow, followName, shortNameFollow, surnameMismatch, type NameFollow, type TeacherNameParts } from './TeacherForm.names';
 import { useCatalogJournal } from './useCatalogJournal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -51,6 +52,19 @@ const FIELDS = [
 
 const NONE = 'none';
 
+/** Поля, що йдуть за ПІБ, поки їх не змінили вручну. */
+const FOLLOWED = ['shortName', 'displayName'] as const;
+type FollowedField = (typeof FOLLOWED)[number];
+
+interface NameSync {
+  /** Як поле йде за ПІБ (`null` — змінене вручну чи написане інакше). */
+  follow: Record<FollowedField, NameFollow>;
+  /** ПІБ, з якого складено поточні значення полів. */
+  parts: TeacherNameParts;
+  /** Поле вже оновлено за ПІБ — підказка про це. */
+  followed: Record<FollowedField, boolean>;
+}
+
 interface TeacherFormDialogProps {
   teacher: CatalogTeacher | null;
   open: boolean;
@@ -83,6 +97,43 @@ export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDi
   const { errors, isDirty } = form.formState;
   const [lastName, firstName, middleName] = useWatch({ control: form.control, name: ['lastName', 'firstName', 'middleName'] });
   const suggestedShort = shortNameOf(lastName.trim(), blankToNull(firstName), blankToNull(middleName));
+  const shortName = useWatch({ control: form.control, name: 'shortName' });
+
+  // «Як у розкладі» і «Публічне імʼя» йдуть за ПІБ, поки адмін не змінив їх сам: інакше нове прізвище
+  // збереглося б, а розклад і розпорядження показували б старе.
+  const [names, setNames] = useState<NameSync>(() => ({
+    follow: {
+      shortName: teacher ? shortNameFollow(defaults.shortName, defaults) : null,
+      displayName: teacher ? displayNameFollow(defaults.displayName, defaults.lastName) : null,
+    },
+    parts: defaults,
+    followed: { shortName: false, displayName: false },
+  }));
+  const { followed } = names;
+  const syncNames = () => {
+    const [nextLast, nextFirst, nextMiddle] = form.getValues(['lastName', 'firstName', 'middleName']);
+    const next: TeacherNameParts = { lastName: nextLast, firstName: nextFirst, middleName: nextMiddle };
+    if (!next.lastName.trim()) return; // прізвище саме стерли — чекаємо нового, щоб замінити старе
+    const nowFollowed = { ...names.followed };
+    for (const name of FOLLOWED) {
+      const current = form.getValues(name);
+      const updated = followName(current, names.follow[name], names.parts, next);
+      if (updated !== current) {
+        form.setValue(name, updated, { shouldDirty: true });
+        nowFollowed[name] = true;
+      }
+    }
+    setNames({ ...names, parts: next, followed: nowFollowed });
+  };
+  const stopFollowing = (name: FollowedField) => () =>
+    setNames((was) => ({ ...was, follow: { ...was.follow, [name]: null }, followed: { ...was.followed, [name]: false } }));
+  const shortHint = followed.shortName
+    ? 'Оновлено разом з ПІБ — можна виправити'
+    : surnameMismatch(shortName, lastName)
+      ? 'Прізвище тут інше, ніж вище. Так буде в розкладі.'
+      : suggestedShort
+        ? `Порожньо — буде «${suggestedShort}»`
+        : 'Прізвище та ініціали: «Кренцін М.Д.»';
 
   const toBody = (values: TeacherValues): TeacherRequest => ({
       lastName: values.lastName.trim(),
@@ -144,29 +195,29 @@ export function TeacherFormDialog({ teacher, open, onOpenChange }: TeacherFormDi
         <FormAlert message={formError} />
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Прізвище" required error={errors.lastName?.message}>
-            <Input {...form.register('lastName')} autoComplete="off" autoFocus={!teacher} />
+            <Input {...form.register('lastName', { onChange: syncNames })} autoComplete="off" autoFocus={!teacher} />
           </Field>
           <Field label="Імʼя" error={errors.firstName?.message}>
-            <Input {...form.register('firstName')} autoComplete="off" />
+            <Input {...form.register('firstName', { onChange: syncNames })} autoComplete="off" />
           </Field>
           <Field label="По батькові" error={errors.middleName?.message}>
-            <Input {...form.register('middleName')} autoComplete="off" />
+            <Input {...form.register('middleName', { onChange: syncNames })} autoComplete="off" />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="Як у розкладі"
             error={errors.shortName?.message}
-            hint={suggestedShort ? `Порожньо — буде «${suggestedShort}»` : 'Прізвище та ініціали: «Кренцін М.Д.»'}
+            hint={shortHint}
           >
-            <Input {...form.register('shortName')} placeholder={suggestedShort || 'Кренцін М.Д.'} autoComplete="off" />
+            <Input {...form.register('shortName', { onChange: stopFollowing('shortName') })} placeholder={suggestedShort || 'Кренцін М.Д.'} autoComplete="off" />
           </Field>
           <Field
             label="Публічне імʼя"
             error={errors.displayName?.message}
-            hint="Його бачать студенти на сайті; порожньо — прізвище"
+            hint={followed.displayName ? 'Оновлено разом з прізвищем — можна виправити' : 'Його бачать студенти на сайті й друкують у розпорядженнях; порожньо — прізвище'}
           >
-            <Input {...form.register('displayName')} placeholder={lastName.trim() || 'Кренцін'} autoComplete="off" />
+            <Input {...form.register('displayName', { onChange: stopFollowing('displayName') })} placeholder={lastName.trim() || 'Кренцін'} autoComplete="off" />
           </Field>
           <Field
             label="Циклова комісія"

@@ -3,7 +3,18 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import type { BellSlotDto, PreferenceKind, Weekday } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { capitalize, weekdayName, weekdayShort } from '@/lib/labels';
-import { cellKey, KIND_CELL, KIND_TEXT, nextKind, shorterDaysNote, WEEKDAYS, type CellKey, type PreferenceMap } from './preferences';
+import {
+  cellKey,
+  KIND_CELL,
+  KIND_TEXT,
+  nextKind,
+  PARITY_MARK,
+  shorterDaysNote,
+  WEEKDAYS,
+  type CellKey,
+  type CellLesson,
+  type PreferenceMap,
+} from './preferences';
 
 /** Значок стану: на телефоні замість слова, ширше — поруч зі словом. */
 function KindIcon({ kind, className }: { kind: PreferenceKind; className?: string }) {
@@ -34,8 +45,25 @@ interface PreferenceGridProps {
   /** Дзвінки профілю, що діє, по днях: скільки пар і о котрій. */
   slotsByWeekday: ReadonlyMap<Weekday, readonly BellSlotDto[]>;
   /** Мої пари в клітинці за базовим розкладом семестру: «4КІ1 · СТП (чисельник)». */
-  lessons?: ReadonlyMap<CellKey, readonly string[]>;
+  lessons?: ReadonlyMap<CellKey, readonly CellLesson[]>;
   describedBy?: string;
+}
+
+/**
+ * Моя пара в клітинці: «4КІ2 · СТП» і «чис»/«знам», якщо пара лише одного тижня. На телефоні клітинка вузька,
+ * тож дисципліна йде другим рядком без крапки. Повний текст — в aria-label кнопки, тому сам рядок прихований від читача екрана.
+ */
+function CellLessonLine({ lesson }: { lesson: CellLesson }) {
+  return (
+    <span aria-hidden="true" className="flex max-w-full min-w-0 flex-col text-caption leading-4 sm:flex-row sm:items-baseline sm:gap-1">
+      <span className="shrink-0 font-[600] text-primary figures">{lesson.group}</span>
+      <span className="flex min-w-0 items-baseline gap-1 text-secondary">
+        <span className="hidden sm:inline">·</span>
+        <span className="truncate">{lesson.discipline}</span>
+        {lesson.parity ? <span className="shrink-0 text-muted">{PARITY_MARK[lesson.parity]}</span> : null}
+      </span>
+    </span>
+  );
 }
 
 /**
@@ -134,9 +162,9 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                   {WEEKDAYS.map((weekday) => {
                     if (!exists(weekday, pair)) {
                       return (
-                        <td key={weekday} className={cn('p-1', line)}>
+                        <td key={weekday} className={cn('h-px p-1', line)}>
                           {/* у цей день стільки пар за дзвінками немає: заштриховане місце, а пояснення — один раз під сіткою */}
-                          <span aria-hidden="true" className="block h-14 rounded-cell hatch" />
+                          <span aria-hidden="true" className="block h-full min-h-14 rounded-cell hatch" />
                           <span className="sr-only">пари немає</span>
                         </td>
                       );
@@ -147,7 +175,8 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                     const mine = lessons?.get(key) ?? [];
                     const state = kind ? KIND_TEXT[kind] : 'без побажань';
                     return (
-                      <td key={weekday} className={cn('p-1', line)}>
+                      // h-px + h-full у кнопці: рядок росте за найвищою клітинкою, а кольорове тло стану — на всю клітинку
+                      <td key={weekday} className={cn('h-px p-1', line)}>
                         <button
                           ref={(element) => {
                             if (element) buttons.current.set(key, element);
@@ -155,15 +184,13 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                           }}
                           type="button"
                           tabIndex={key === active ? 0 : -1}
-                          aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Ваші пари тут: ${mine.join('; ')}` : ''}`}
+                          aria-label={`${capitalize(weekdayName(weekday))}, ${pair} пара${slot ? ` (${slot.startsAt}–${slot.endsAt})` : ''}: ${state}${mine.length > 0 ? `. Ваші пари тут: ${mine.map((lesson) => lesson.label).join('; ')}` : ''}`}
                           aria-describedby={describedBy}
-                          // код групи в клітинці пояснює підказка, а не окрема примітка під сіткою
-                          title={mine.length > 0 ? `Ваша пара тут за розкладом семестру: ${mine.join('; ')}` : undefined}
                           onFocus={() => setActive(key)}
                           onClick={() => onCellChange(key, nextKind(kind))}
                           onKeyDown={(event) => onKeyDown(event, weekday, pair)}
                           className={cn(
-                            'flex h-14 w-full flex-col items-start justify-start gap-0.5 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
+                            'flex h-full min-h-14 w-full flex-col items-start justify-start gap-1 rounded-cell px-1.5 py-1.5 text-start sm:px-2',
                             'transition-[background-color] duration-100 ease-out',
                             'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                             kind ? KIND_CELL[kind] : 'hover-fine:bg-hover active:bg-active',
@@ -175,11 +202,9 @@ export function PreferenceGrid({ value, onCellChange, slotsByWeekday, lessons, d
                               <span className="hidden truncate sm:inline">{KIND_TEXT[kind]}</span>
                             </span>
                           ) : null}
-                          {mine.length > 0 ? (
-                            <span className="max-w-full truncate text-caption font-[500] text-secondary figures">
-                              {mine.map((label) => label.split(' · ')[0]).join(', ')}
-                            </span>
-                          ) : null}
+                          {mine.map((lesson) => (
+                            <CellLessonLine key={lesson.label} lesson={lesson} />
+                          ))}
                         </button>
                       </td>
                     );

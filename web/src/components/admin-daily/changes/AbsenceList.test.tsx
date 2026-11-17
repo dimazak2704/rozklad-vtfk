@@ -45,6 +45,20 @@ describe('список відсутніх', () => {
   });
 });
 
+describe('коментар викладача в списку відсутніх', () => {
+  const props = { entries: [], selectedId: null, onSelect: vi.fn(), onAdd: vi.fn(), loading: false };
+
+  it('«Інше: що саме» видно диспетчеру одразу, без діалогу', () => {
+    renderWithProviders(<AbsenceList {...props} absences={[{ ...absence, reasonCategory: 'OTHER', comment: '  Курси підвищення кваліфікації ' }]} />);
+    expect(screen.getByText('«Курси підвищення кваліфікації»')).toBeInTheDocument();
+  });
+
+  it('без коментаря — без зайвого рядка', () => {
+    renderWithProviders(<AbsenceList {...props} absences={[{ ...absence, comment: '   ' }]} />);
+    expect(screen.queryByText(/«/)).not.toBeInTheDocument();
+  });
+});
+
 describe('скільки пар відсутності вирішено', () => {
   it('пара, що чекає відповіді, — не «усе вирішено»: бурштиновий відрізок і «1 чекає відповіді»', () => {
     const { container } = renderWithProviders(<AbsenceProgress entries={[entry('l3', 'pending')]} />);

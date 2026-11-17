@@ -12,7 +12,7 @@ API (`docs/modules/identity.md`).
 |---|---|---|
 | Issuer (`AUTH_ISSUER`) | `http://localhost:8088/auth` (nginx of the `web` container) | `https://<DOMAIN>/auth` (Caddy) |
 | Process | port 8085, context path `/auth`; actuator on 8086 (health only, never proxied) | same, not published |
-| Database | `auth` in the shared PostgreSQL (Flyway `V1_0xx` accounts, `V1_1xx` OAuth and sessions) | same |
+| Database | `auth` in the shared PostgreSQL (Flyway `V1_0xx` accounts, `V1_1xx` OAuth, sessions and later changes: the next is `V1_105`) | same |
 | JWKS / token URI for the services | `http://auth:8085/auth/oauth2/jwks`, `…/oauth2/token` | same |
 
 The proxies pass `/auth/**` unchanged and close `/auth/internal/**` (404). `auth` builds its redirects from
@@ -99,6 +99,25 @@ re-encodes a stored hash, and the synchroniser rewrites older cost-12 rows at th
   `DELETE /{id}/federated/google`, `DELETE /{id}`. Errors are RFC 9457 problems with stable types
   (`username-taken`, `email-taken`, `last-admin`, `account-revoked`, `password-rejected` with `reason`).
   `X-Actor` names the admin for the audit columns.
+- **Own password** (`selfservice`, CONTRACTS §0.1): `GET/POST /auth/api/account/password`, filter chain 2 beside the
+  internal API (stateless bearer of this service, only people with `ADMIN`/`TEACHER`, no CSRF; CORS with credentials
+  for `AUTH_CORS_ORIGINS` only). The SPA calls it from «Змінити пароль» in the account menu. The current password is
+  checked like a sign-in: recorded in `login_attempt` as `PASSWORD_CHANGE` under the account's identifier and network,
+  counted in the per-identifier lockout and the global gate (not the network throttle). The new one passes
+  `PasswordPolicy` and must differ from the current one. Afterwards the account's other sessions end; the session of
+  the request (its cookie comes along) stays (the chain turns session-fixation rotation off: a bearer request never
+  authenticates the sign-in session, and a rotated id would not match the stored one, so this session would end too), and OAuth2 authorizations are kept (no refresh tokens; logout keeps
+  working everywhere). Shared demo accounts get `demo-account`.
+- **First own password** of a Google-only account (`POST /auth/api/account/initial-password`, «Встановити пароль» in
+  the menu): a token alone is never enough. The request's sign-in session must still be signed in as the token's
+  account and have finished a Google sign-in of that account at most 10 minutes ago (`session.GoogleSignInMark`: the
+  attributes `auth.googleAuthenticatedAt` / `auth.googleAccountId` that `GoogleLoginHandlers` writes, a password
+  sign-in clears and a success uses up); otherwise 403 `reauth-required`. The SPA gets such a session with
+  `/auth/oauth2/authorization/google?reauth_return=<its page>?password=set` (`google.GoogleReauth`: `prompt=select_account`,
+  `max_age=0`, the return address kept in the stored authorization request and honoured only by its own callback,
+  SPA origins only; the callback rotates the session id, so the SPA renews its tokens silently on return, otherwise
+  its old ID token's `sid` would not match and logout would be refused). Attempts are `PASSWORD_SET` in `login_attempt` and count in the lockout; `PasswordPolicy`
+  applies; other sessions end as for a change. The old endpoint still answers `password-not-set` for such accounts.
 - **Request id.** `config.RequestIdFilter` (before Spring Security) keeps a safe `X-Request-Id` (core
   forwards the one of the admin's request), otherwise generates one, puts it into the MDC as `requestId`
   (console pattern `[%X{requestId:-}]`) and echoes it in the response.
@@ -133,9 +152,9 @@ logs a warning at every start: it is for a one-off run only, and both go back to
 
 Unit: `PasswordPolicyTest`, `LockoutPolicyTest`, `TokenClaimsCustomizerTest`, `SigningKeyLoaderTest`,
 `CspHeaderTest`, `ProdGuardTest`, `ClientRegistrationsTest`, `ClientSecretsTest`, `SilentAuthorizeRequestTest`,
-`GoogleUnitsTest`, `LoginUnitsTest`, `LoginThrottleFilterTest`.
+`GoogleUnitsTest`, `LoginUnitsTest`, `LoginThrottleFilterTest`, `OwnPasswordServiceTest`, `OwnAccountControllerTest` (web slice).
 ITs (Testcontainers PostgreSQL, real HTTP): `DiscoveryIT`, `AuthorizationCodeFlowIT`, `PasswordLoginIT`,
 `LockoutIT`, `ClientCredentialsIT`, `JdbcAuthorizationRoundTripIT`, `LogoutIT`, `SessionIT`, `LoginPageIT`,
 `GoogleLoginIT` (in-process mock provider), `InternalAccountsApiIT`, `LastAdminIT`, `AccountSchemaIT`,
-`ServerDemoAccountsIT`. The resource servers have `TokenIssuerTest` (unknown `kid`, wrong issuer, missing
+`ServerDemoAccountsIT`, `OwnPasswordIT`, `OwnInitialPasswordIT` (Google mock: fresh, stale and foreign sessions). The resource servers have `TokenIssuerTest` (unknown `kid`, wrong issuer, missing
 audience). `web/e2e-real/auth.spec.ts` and `google.spec.ts` drive the real page.

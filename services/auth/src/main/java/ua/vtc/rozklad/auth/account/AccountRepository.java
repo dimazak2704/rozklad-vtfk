@@ -111,6 +111,18 @@ public class AccountRepository {
                 """).params(passwordHash, Timestamp.from(now), Timestamp.from(now), actor, id).update();
     }
 
+    /**
+     * Stores the first password of an enabled account that has none; {@code false} when it has one by now (a
+     * parallel request or an admin was faster) or is disabled, and nothing changes.
+     */
+    public boolean setInitialPassword(UUID id, String passwordHash, Instant now, String actor) {
+        return jdbc.sql("""
+                UPDATE account SET password_hash = ?, password_changed_at = ?, updated_at = ?, updated_by = ?,
+                                   version = version + 1
+                 WHERE id = ? AND password_hash IS NULL AND enabled
+                """).params(passwordHash, Timestamp.from(now), Timestamp.from(now), actor, id).update() == 1;
+    }
+
     /** Enables the account and clears any disable reason, REVOKED included (callers decide whether they may). */
     public void enableClearingReason(UUID id, Instant now, String actor) {
         jdbc.sql("""

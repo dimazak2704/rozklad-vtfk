@@ -98,10 +98,13 @@ class BindingTakeoverIT extends IntegrationTest {
 
     @Test
     void theTeacherUnlinksOnlyHisOwnChat() throws Exception {
-        teacherChat(TEACHER_PHONE, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
+        var someoneElses = teacherChat(TEACHER_PHONE, CoreFixtures.TEACHER_KRENTSIN, "Кренцін М.Д.");
 
         mockMvc.perform(delete("/api/notify/bindings/me").with(teacher("teacher-token")))
                 .andExpect(status().isNoContent());
+        // another binding by id stays ADMIN-only, whoever's it is
+        mockMvc.perform(delete("/api/notify/bindings/" + someoneElses.getId()).with(teacher("teacher-token")))
+                .andExpect(status().isForbidden());
 
         assertThat(bindings.teacherChat(CoreFixtures.TEACHER_KRENTSIN)).isPresent();
     }

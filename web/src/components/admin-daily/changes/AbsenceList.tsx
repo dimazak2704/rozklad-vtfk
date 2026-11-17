@@ -119,6 +119,10 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-cell font-[650] text-primary">{name(absence.teacher)}</span>
                   <span className="text-caption text-secondary">{absenceCaption(absence, showDates)}</span>
+                  {/* коментар викладача («Інше: що саме») бачить лише диспетчер — тут, без відкриття діалогу */}
+                  {absence.comment?.trim() ? (
+                    <span className="line-clamp-2 text-caption text-muted">«{absence.comment.trim()}»</span>
+                  ) : null}
                   <AbsenceProgress entries={own} status={lessonsStatus?.get(absence.id)} />
                 </span>
                 {drill ? <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted rtl:rotate-180" /> : null}

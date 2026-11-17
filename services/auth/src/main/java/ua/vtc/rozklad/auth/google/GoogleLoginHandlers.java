@@ -2,11 +2,13 @@ package ua.vtc.rozklad.auth.google;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,10 @@ import ua.vtc.rozklad.auth.session.SessionAttributes;
  * the saved authorize request continues. A failure goes back to the sign-in page with one of two messages;
  * the saved authorize request stays in the session, so a password sign-in still completes it. Redirect
  * targets are context-relative ({@code /login?…} becomes {@code /auth/login?…}).
+ * <p>
+ * A success also marks the session with the time and account of this Google sign-in
+ * ({@link ua.vtc.rozklad.auth.session.GoogleSignInMark}); a re-authentication ({@link GoogleReauth}) then returns to
+ * the app instead of the saved request, and so does its failure.
  */
 @Component
 public class GoogleLoginHandlers {
@@ -76,7 +82,18 @@ public class GoogleLoginHandlers {
             context.setAuthentication(normalised);
             SecurityContextHolder.setContext(context);
             contexts.saveContext(context, request, response);
-            request.getSession().setAttribute(SessionAttributes.AUTHENTICATED_AT, clock.millis());
+            long now = clock.millis();
+            HttpSession session = request.getSession();
+            session.setAttribute(SessionAttributes.AUTHENTICATED_AT, now);
+            // доказ свіжого входу через Google саме цим браузером (для «Встановити пароль»): лише з сервера
+            session.setAttribute(SessionAttributes.GOOGLE_AUTHENTICATED_AT, now);
+            session.setAttribute(SessionAttributes.GOOGLE_ACCOUNT_ID, normalised.getName());
+            Optional<String> reauthReturn = GoogleReauth.returnOf(request);
+            if (reauthReturn.isPresent()) {
+                log.info("google re-authentication of account {} finished", normalised.getName());
+                redirect.sendRedirect(request, response, reauthReturn.get());
+                return;
+            }
             saved.onAuthenticationSuccess(request, response, normalised);
         };
     }
@@ -113,6 +130,12 @@ public class GoogleLoginHandlers {
                     LoginAttempts.Outcome.PROVIDER_ERROR, clock.instant());
             log.info("google sign-in failed at the provider step: {} {}", exception.getClass().getSimpleName(),
                     code.isEmpty() ? exception.getMessage() : code);
+        }
+        Optional<String> reauthReturn = GoogleReauth.returnOf(request);
+        if (reauthReturn.isPresent()) {
+            // повторне підтвердження не вдалося: назад у застосунок, вікно пароля скаже, що підтвердження немає
+            redirect.sendRedirect(request, response, reauthReturn.get());
+            return;
         }
         redirect.sendRedirect(request, response,
                 NOT_ALLOWED.contains(code) ? "/login?error=not_allowed" : "/login?error=google");

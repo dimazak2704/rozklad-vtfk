@@ -1,5 +1,6 @@
 package ua.vtc.rozklad.core.substitution.internal.absence;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -122,6 +124,34 @@ class AbsenceControllersTest {
         mockMvc.perform(post("/api/me/absences").with(TestJwts.teacher()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"dateFrom\":\"2026-11-10\",\"dateTo\":\"2026-11-10\",\"reasonCategory\":\"PERSONAL\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void teachersOwnTextForOtherReasonReachesTheServiceAsTheComment() throws Exception {
+        Teacher krentsin = new Teacher("Кренцін", "Кренцін М.Д.", "Кренцін");
+        given(currentTeacher.require(any())).willReturn(krentsin);
+        given(absences.report(eq(krentsin.getId()), any(), eq(AbsenceSource.WEB), eq("krentsin"))).willReturn(sample());
+
+        mockMvc.perform(post("/api/me/absences").with(TestJwts.teacher()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dateFrom\":\"2026-11-20\",\"dateTo\":\"2026-11-24\",\"reasonCategory\":\"OTHER\","
+                                + "\"comment\":\"  Курси підвищення кваліфікації \"}"))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<AbsenceRequests.AbsenceData> data = ArgumentCaptor.forClass(AbsenceRequests.AbsenceData.class);
+        verify(absences).report(eq(krentsin.getId()), data.capture(), eq(AbsenceSource.WEB), eq("krentsin"));
+        assertThat(data.getValue().reasonCategory()).isEqualTo(AbsenceReasonCategory.OTHER);
+        // the service stores cleanComment(): the same column the dispatcher reads, no separate «other text»
+        assertThat(data.getValue().cleanComment()).isEqualTo("Курси підвищення кваліфікації");
+    }
+
+    @Test
+    void teacherCommentLongerThanTheColumnIsRejected() throws Exception {
+        mockMvc.perform(post("/api/me/absences").with(TestJwts.teacher()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dateFrom\":\"2026-11-20\",\"dateTo\":\"2026-11-20\",\"reasonCategory\":\"OTHER\","
+                                + "\"comment\":\"" + "x".repeat(1001) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("comment"));
+        verifyNoInteractions(absences);
     }
 
     @Test
