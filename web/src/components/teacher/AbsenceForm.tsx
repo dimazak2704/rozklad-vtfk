@@ -1,34 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleExclamationPoint, Send } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState, type BaseSyntheticEvent } from 'react';
-import { DayPicker, type DateRange } from 'react-day-picker';
-import { uk } from 'react-day-picker/locale/uk';
-import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form';
+import { useEffect, useId, useMemo, useRef, useState, type BaseSyntheticEvent, type RefObject } from 'react';
+import { Controller, useForm, useWatch, type Control, type FieldErrors } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import { useCreateAbsence, useMySchedule } from '@/api/me';
 import type { DayDto, IsoDate, LessonView, Uuid } from '@/api/types';
 import { Button, Checkbox, Field, RadioGroup, Textarea, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import {
-  addDays,
-  compareIsoDates,
-  diffDays,
-  formatDateRange,
-  formatShortWeekdayDate,
-  formatWeekdayDate,
-  isIsoDate,
-  isoFromLocalDate,
-  isWeekend,
-  localDateFromIso,
-  nearestStudyDay,
-} from '@/lib/date';
+import { compareIsoDates, diffDays, formatDateRange, formatShortWeekdayDate, isIsoDate, nearestStudyDay } from '@/lib/date';
 import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
-import { DAY_PICKER_CLASSES } from '../public/schedule/day-picker-classes';
+import type { DaySelection } from './absence-days';
+import { AbsenceDayPicker } from './AbsenceDayPicker';
 import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
 import { useAssignedSchedule } from './useAssignedSchedule';
 
 const FIELDS: ReadonlyArray<keyof AbsenceFormValues> = ['dateFrom', 'dateTo', 'pairs', 'reasonCategory', 'comment'];
-const STUDY_DAY_FORMS = ['навчальний день', 'навчальні дні', 'навчальних днів'] as const;
 /** Найдовший діапазон, який віддає GET /me/schedule (core і мок: «не більше 31 дня від from»). */
 const PREVIEW_MAX_DAYS = 31;
 
@@ -51,18 +37,6 @@ function rememberReason(reason: AbsenceFormValues['reasonCategory']): void {
     // сховище вимкнене — просто не памʼятаємо
   }
 }
-
-/** Календар відсутностей: на дотику дні й стрілки — ціль 44 px. */
-const CALENDAR_CLASSES = {
-  ...DAY_PICKER_CLASSES,
-  selected: '',
-  month_caption: 'flex h-9 items-center justify-center font-[650] capitalize pointer-coarse:h-11',
-  nav: 'absolute inset-x-0 top-0 flex h-9 items-center justify-between pointer-coarse:h-11',
-  button_previous: `${DAY_PICKER_CLASSES.button_previous} pointer-coarse:size-11`,
-  button_next: `${DAY_PICKER_CLASSES.button_next} pointer-coarse:size-11`,
-  weekday: `${DAY_PICKER_CLASSES.weekday} pointer-coarse:w-11`,
-  day_button: `${DAY_PICKER_CLASSES.day_button} pointer-coarse:size-11`,
-};
 
 type OwnLesson = { day: DayDto; lesson: LessonView };
 
@@ -171,10 +145,53 @@ function OtherPairs({
   );
 }
 
-function studyDaysBetween(from: IsoDate, to: IsoDate): number {
-  let count = 0;
-  for (let cursor = from; compareIsoDates(cursor, to) <= 0; cursor = addDays(cursor, 1)) if (!isWeekend(cursor)) count += 1;
-  return count;
+/**
+ * Коментар для диспетчера. Для «Інше» це те саме поле, але під варіантами причини й з питанням «Що саме?»:
+ * два поля для одного й того самого тексту лише плутали б. Текст переживає зміну причини.
+ */
+function CommentField({
+  control,
+  inputRef,
+  other = false,
+  error,
+}: {
+  control: Control<AbsenceFormValues>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
+  other?: boolean;
+  error?: string;
+}) {
+  return (
+    <Field
+      // під «Інше» — з відступом до тексту варіантів (кружок 18 px + проміжок 12 px), щоб було видно, до чого питання
+      className={other ? 'ms-[1.875rem]' : undefined}
+      label={
+        <>
+          {other ? 'Що саме?' : 'Коментар для диспетчера'} <span className="font-[500] text-muted">(необовʼязково)</span>
+        </>
+      }
+      error={error}
+    >
+      <Controller
+        control={control}
+        name="comment"
+        render={({ field }) => (
+          <Textarea
+            name={field.name}
+            value={field.value}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            ref={(element) => {
+              field.ref(element);
+              inputRef.current = element;
+            }}
+            rows={2}
+            maxLength={COMMENT_MAX}
+            placeholder={other ? 'Наприклад, курси підвищення кваліфікації' : undefined}
+          />
+        )}
+      />
+    </Field>
+  );
 }
 
 interface AbsenceFormProps {
@@ -186,6 +203,7 @@ interface AbsenceFormProps {
 
 /**
  * Нова відсутність: дні в календарі, увесь день чи окремі пари, причина (бачить лише диспетчер) і коментар.
+ * Для причини «Інше» коментар — це «Що саме?»: він стоїть одразу під варіантами, окремого поля немає.
  * Поки людина обирає, форма показує, які її пари це зачепить.
  */
 export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceFormProps) {
@@ -202,7 +220,19 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
   const reasonError = errors.reasonCategory?.message;
   const reasonErrorId = useId();
   const reasonHelpId = useId();
-  const [dateFrom, dateTo, wholeDay] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay'] });
+  const [dateFrom, dateTo, wholeDay, reason] = useWatch({ control: form.control, name: ['dateFrom', 'dateTo', 'wholeDay', 'reasonCategory'] });
+  // «Інше»: коментар стає поясненням причини — те саме поле, лише під варіантами й з іншим підписом
+  const otherReason = reason === 'OTHER';
+  const commentRef = useRef<HTMLTextAreaElement | null>(null);
+  // фокус у поле — лише коли «Інше» обрали мишею: стрілки клавіатури мають і далі ходити варіантами,
+  // а на дотику клавіатура телефона закрила б форму заради необовʼязкового поля
+  const reasonByPointer = useRef(false);
+  const focusComment = useRef(false);
+  useEffect(() => {
+    if (!otherReason || !focusComment.current) return;
+    focusComment.current = false;
+    commentRef.current?.focus();
+  }, [otherReason]);
   const rangeValid = isIsoDate(dateFrom) && isIsoDate(dateTo) && compareIsoDates(dateFrom, dateTo) <= 0;
   // GET /me/schedule віддає щонайбільше 31 день: довшу відсутність (core приймає до року) не перевіряємо
   const tooLong = rangeValid && diffDays(dateFrom, dateTo) >= PREVIEW_MAX_DAYS;
@@ -270,11 +300,13 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
     }
   }, focusFirstError);
 
-  // перший клік обирає початок: календар має бачити діапазон без кінця, щоб другий клік його завершив
-  // (форма тим часом уже має один день, і підсумок показує «навчальних днів: 1»)
-  const selected: DateRange | undefined = isIsoDate(dateFrom)
-    ? { from: localDateFromIso(dateFrom), to: isIsoDate(dateTo) && !awaitingEnd ? localDateFromIso(dateTo) : undefined }
-    : undefined;
+  // дні в календарі: форма тримає from/to, а «чекаємо кінця» — лише стан календаря (DaySelection)
+  const days: DaySelection | null = rangeValid ? { from: dateFrom, to: dateTo, awaitingEnd } : null;
+  const pickDays = (next: DaySelection) => {
+    setAwaitingEnd(next.awaitingEnd);
+    form.setValue('dateFrom', next.from, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
+    form.setValue('dateTo', next.to, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
+  };
 
   return (
     <form ref={container} noValidate onSubmit={(event) => void submit(event)} className="@container flex scroll-mt-24 flex-col gap-5" aria-labelledby="absence-form-heading">
@@ -285,42 +317,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
       <div className="flex flex-col gap-5 @3xl:grid @3xl:grid-cols-[auto_minmax(0,1fr)] @3xl:items-start @3xl:gap-x-10">
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 text-ui font-[650] text-primary">Дні</legend>
-          <div className="-ms-px self-start rounded-popover focus-visible:outline-2 focus-visible:outline-focus" data-autofocus tabIndex={-1}>
-            <DayPicker
-              mode="range"
-              locale={uk}
-              // «Сьогодні» в календарі (і в підписі дня для читачів екрана) — за годинником застосунку, як і решта
-              today={localDateFromIso(today)}
-              selected={selected}
-              defaultMonth={localDateFromIso(first)}
-              resetOnSelect
-              onSelect={(range) => {
-                const from = range?.from ? isoFromLocalDate(range.from) : '';
-                const to = range?.to ? isoFromLocalDate(range.to) : from;
-                setAwaitingEnd(Boolean(range?.from) && !range?.to);
-                form.setValue('dateFrom', from, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
-                form.setValue('dateTo', to, { shouldValidate: form.formState.isSubmitted, shouldDirty: true });
-              }}
-              disabled={{ before: localDateFromIso(today) }}
-              modifiers={{ weekend: (date: Date) => isWeekend(isoFromLocalDate(date)), college_today: localDateFromIso(today) }}
-              modifiersClassNames={{
-                weekend: 'text-muted',
-                college_today: '[&>button]:font-bold [&>button]:underline [&>button]:decoration-2 [&>button]:underline-offset-4',
-              }}
-              classNames={CALENDAR_CLASSES}
-              showOutsideDays
-            />
-          </div>
-          <p role="status" className="text-ui text-primary figures">
-            {rangeValid ? (
-              <>
-                <span className="font-[650]">{dateFrom === dateTo ? formatWeekdayDate(dateFrom) : formatDateRange(dateFrom, dateTo)}</span>
-                {dateFrom === dateTo ? null : <span className="text-secondary">, {countLabel(studyDaysBetween(dateFrom, dateTo), STUDY_DAY_FORMS)}</span>}
-              </>
-            ) : (
-              <span className="text-secondary">Оберіть день, а для кількох днів — ще й останній.</span>
-            )}
-          </p>
+          <AbsenceDayPicker value={days} onChange={pickDays} today={today} defaultMonth={first} />
           {errors.dateFrom?.message || errors.dateTo?.message ? (
             <p className="flex items-start gap-1.5 text-caption font-medium text-danger">
               <CircleExclamationPoint aria-hidden="true" className="mt-px size-3.5" />
@@ -395,6 +392,8 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
                               description={oneDay ? undefined : choiceText(choice, false)}
                             />
                           ))}
+                          {/* core задає номери пар на весь діапазон: позначене стосується кожного дня, де ця пара є */}
+                          {oneDay ? null : <p className="pt-1 text-caption text-muted">Позначена пара — в усі обрані дні, де вона у вас є.</p>}
                         </div>
                       ) : (
                         <p className="text-ui text-secondary">У ці дні за розкладом у вас пар немає.</p>
@@ -439,11 +438,24 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
               // помилка стає на місце підказки, а не над нею (DESIGN §11.4); групу описує те, що зараз видно
               <fieldset className="flex flex-col gap-2" data-reasons aria-describedby={reasonError ? reasonErrorId : reasonHelpId}>
                 <legend className="mb-2 text-ui font-[650] text-primary">Причина</legend>
-                <RadioGroup
-                  value={field.value ?? null}
-                  onValueChange={field.onChange}
-                  options={REASONS.map((reason) => ({ value: reason, label: ABSENCE_REASON_LABEL[reason] }))}
-                />
+                <div
+                  onPointerDown={(event) => {
+                    reasonByPointer.current = event.pointerType !== 'touch';
+                  }}
+                  onKeyDown={() => {
+                    reasonByPointer.current = false;
+                  }}
+                >
+                  <RadioGroup
+                    value={field.value ?? null}
+                    onValueChange={(value) => {
+                      focusComment.current = value === 'OTHER' && reasonByPointer.current;
+                      field.onChange(value);
+                    }}
+                    options={REASONS.map((value) => ({ value, label: ABSENCE_REASON_LABEL[value] }))}
+                  />
+                </div>
+                {otherReason ? <CommentField control={form.control} inputRef={commentRef} other error={errors.comment?.message} /> : null}
                 {reasonError ? (
                   <p id={reasonErrorId} className="flex items-start gap-1.5 text-caption font-medium text-danger">
                     <CircleExclamationPoint aria-hidden="true" className="mt-px size-3.5" />
@@ -458,16 +470,7 @@ export function AbsenceForm({ teacherId, today, autoFocus = false }: AbsenceForm
             )}
           />
 
-          <Field
-            label={
-              <>
-                Коментар для диспетчера <span className="font-[500] text-muted">(необовʼязково)</span>
-              </>
-            }
-            error={errors.comment?.message}
-          >
-            <Textarea {...form.register('comment')} rows={2} maxLength={COMMENT_MAX} />
-          </Field>
+          {otherReason ? null : <CommentField control={form.control} inputRef={commentRef} error={errors.comment?.message} />}
 
           {errors.root?.server?.message ? (
             <p role="alert" className="flex items-start gap-2 rounded-control border border-cancel bg-danger-subtle px-3 py-2 text-ui text-danger">
