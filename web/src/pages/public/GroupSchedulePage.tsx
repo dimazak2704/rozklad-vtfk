@@ -81,7 +81,7 @@ export default function GroupSchedulePage() {
       <TargetNotFound
         title={`Групи «${code}» немає в розкладі`}
         description="Перевірте код: у розкладі групи записані як 4КІ1 — курс, літери спеціальності й номер."
-        suggestions={similar.map((g) => ({ label: g.code, to: paths.group(g.code), plate: true }))}
+        suggestions={similar.map((g) => ({ label: g.code, to: paths.group(g.code), plate: true, type: 'GROUP' as const }))}
         searchQuery={code}
       />
     );

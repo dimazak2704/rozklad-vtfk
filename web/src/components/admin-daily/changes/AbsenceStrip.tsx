@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
-import { Button } from '@/components/ui';
+import { Button, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { isWaiting, LESSON_STATE, type LessonEntry } from '../model';
 import { useTeacherLabel } from '../useTeacherLabel';
@@ -32,27 +32,31 @@ export function AbsenceStrip({ absences, entries, lessonsStatus, selectedId, onS
         const waits = waiting(absence.id);
         const unknown = lessonsStatus?.has(absence.id) ?? false;
         const state = left > 0 ? `, без рішення: ${left}` : waits > 0 ? `, чекає відповіді: ${waits}` : ', усе вирішено';
+        // що означає помаранчева крапка, читач екрана чує в назві; мишею — підказка з тим самим станом
         return (
-          <button
-            key={absence.id}
-            type="button"
-            aria-pressed={selected}
-            aria-label={`${name(absence.teacher)}${unknown ? '' : state}`}
-            onClick={() => onSelect(absence.id)}
-            className={cn(
-              'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',
-              'transition-[background-color,border-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-              selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover-fine:bg-hover hover-fine:text-primary',
-            )}
-          >
-            {name(absence.teacher)}
-            {left > 0 ? <span aria-hidden="true" className="size-2 rounded-full bg-[var(--fill-change)]" /> : null}
-          </button>
+          <Tooltip key={absence.id} content={left > 0 && !unknown ? `Без рішення: ${left}` : null} side="bottom" align="start">
+            <button
+              type="button"
+              aria-pressed={selected}
+              aria-label={`${name(absence.teacher)}${unknown ? '' : state}`}
+              onClick={() => onSelect(absence.id)}
+              className={cn(
+                'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-ui font-[550] pointer-coarse:h-11',
+                'transition-[background-color,border-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                selected ? 'border-transparent bg-selected text-primary' : 'border-default bg-surface text-secondary hover-fine:bg-hover hover-fine:text-primary',
+              )}
+            >
+              {name(absence.teacher)}
+              {left > 0 ? <span aria-hidden="true" className="size-2 rounded-full bg-[var(--fill-change)]" /> : null}
+            </button>
+          </Tooltip>
         );
       })}
-      <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-        Додати відсутність
-      </Button>
+      <Tooltip content={null} shortcut="n">
+        <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+          Додати відсутність
+        </Button>
+      </Tooltip>
     </div>
   );
 }

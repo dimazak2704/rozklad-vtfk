@@ -1,6 +1,6 @@
 import { Check, ChevronRight, FilePlus2, Plus } from 'lucide-react';
 import type { AbsenceDto, Uuid } from '@/api/types';
-import { Button, Skeleton } from '@/components/ui';
+import { Button, Skeleton, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { PAIR_FORMS_GEN, plural } from '@/lib/labels';
 import { absenceCaption } from './absence-caption';
@@ -128,9 +128,12 @@ export function AbsenceList({ absences, entries, lessonsStatus, selectedId, onSe
         })}
       </ul>
       <div className="flex flex-wrap gap-1">
-        <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-          Додати відсутність
-        </Button>
+        {/* текст ясний; підказка лише нагадує клавішу, як у «Нової зміни» */}
+        <Tooltip content={null} shortcut="n">
+          <Button variant="ghost" size="sm" onClick={onAdd} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+            Додати відсутність
+          </Button>
+        </Tooltip>
         {onAddChange ? (
           <Button variant="ghost" size="sm" onClick={onAddChange} iconStart={<FilePlus2 aria-hidden="true" className="size-4" />}>
             Нова зміна

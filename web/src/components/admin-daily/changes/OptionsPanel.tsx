@@ -2,7 +2,7 @@ import { CalendarRange, ChevronDown, UserRoundSearch } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode, TeacherRef } from '@/api/types';
-import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui';
+import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton, Tooltip } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { plural } from '@/lib/labels';
 import {
@@ -202,9 +202,11 @@ export function OptionsPanel(props: OptionsPanelProps) {
                   Інший викладач…
                 </Button>
                 {props.planCount >= 2 ? (
-                  <Button variant="ghost" size="sm" onClick={() => setPlanDialog(true)} iconStart={<CalendarRange aria-hidden="true" className="size-4" />}>
-                    Запропонувати план дня
-                  </Button>
+                  <Tooltip content="Вирішити всі пари викладача за раз">
+                    <Button variant="ghost" size="sm" onClick={() => setPlanDialog(true)} iconStart={<CalendarRange aria-hidden="true" className="size-4" />}>
+                      Запропонувати план дня
+                    </Button>
+                  </Tooltip>
                 ) : null}
               </div>
             </>

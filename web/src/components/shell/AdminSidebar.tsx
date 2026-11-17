@@ -128,7 +128,7 @@ export function AdminSidebar({ collapsed, onToggleCollapsed, onNavigate, counts,
   return (
     <div className={cn('flex h-full flex-col border-e border-separator bg-canvas text-primary', className)}>
       <div className={cn('flex h-16 shrink-0 items-center gap-2', collapsed ? 'justify-center px-2' : 'ps-5 pe-2')}>
-        {collapsed ? <Wordmark to="/admin" compact /> : <Wordmark to="/admin" />}
+        {collapsed ? <Wordmark to="/admin" compact tooltipSide="right" /> : <Wordmark to="/admin" />}
         {onToggleCollapsed && !collapsed ? (
           <IconButton
             label="Згорнути панель"

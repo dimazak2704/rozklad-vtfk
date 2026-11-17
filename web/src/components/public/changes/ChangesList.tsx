@@ -111,7 +111,7 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
             key={changeGroupKey(group)}
             className={cn('grid gap-x-6 gap-y-1 px-4 py-4 first:rounded-t-panel last:rounded-b-panel md:grid-cols-[7rem_minmax(0,1fr)] md:px-5', own && 'bg-selected')}
           >
-            <GroupHint code={group.code}>
+            <GroupHint code={group.code} when="на цей день">
               <Link
                 to={`/g/${encodeURIComponent(group.code)}?date=${date}&view=day`}
                 aria-label={`${group.code}${own ? ', ваша група' : ''}: розклад на цей день`}

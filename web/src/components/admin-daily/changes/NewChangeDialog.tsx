@@ -9,7 +9,7 @@ import { usePublicGroups, usePublicSchedule, usePublicTeachers } from '@/api/pub
 import { qk } from '@/api/queryKeys';
 import type { ChangeDto, IsoDate, LessonView, ReasonCode, SemesterRef, Uuid } from '@/api/types';
 import { DateInput } from '@/components/calendar/DateInput';
-import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl, Select, notify } from '@/components/ui';
+import { Button, Combobox, Dialog, DialogContent, Field, Input, SegmentedControl, Select, Tooltip, notify } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatShortWeekdayDate, isIsoDate, nearestStudyDay } from '@/lib/date';
 import { countLabel } from '@/lib/labels';
@@ -396,37 +396,37 @@ export function NewChangeDialog({ open, onOpenChange, date, semester, prefill, a
                     // у групи вже є пара — не забороняємо (буває для підгрупи), але видно до збереження
                     const busy = busyPairs.get(pair);
                     return (
-                      <button
-                        key={pair}
-                        type="button"
-                        aria-pressed={on}
-                        aria-label={[`${pair} пара`, slot?.startsAt, busy ? `у групи вже ${busy}` : null].filter(Boolean).join(', ')}
-                        title={busy ? `У групи вже ${busy}` : undefined}
-                        onClick={() =>
-                          patch({
-                            pairs: on ? state.pairs.filter((p) => p !== pair) : [...state.pairs, pair],
-                          })
-                        }
-                        className={cn(
-                          'flex h-11 min-w-14 flex-col items-center justify-center rounded-control border px-2 leading-tight',
-                          'transition-[background-color,border-color,color] duration-100 ease-out',
-                          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                          on
-                            ? 'border-accent bg-selected text-accent'
-                            : busy
-                              ? 'border-dashed border-control bg-sunken text-secondary hover-fine:border-strong'
-                              : 'border-control bg-surface text-primary hover-fine:border-strong',
-                        )}
-                      >
-                        <span className="font-condensed text-heading font-bold figures">{pair}</span>
-                        {busy ? (
-                          <span aria-hidden="true" className="max-w-16 truncate text-meta font-normal text-muted">
-                            {busy}
-                          </span>
-                        ) : slot ? (
-                          <span className="text-meta font-normal text-muted figures">{slot.startsAt}</span>
-                        ) : null}
-                      </button>
+                      <Tooltip key={pair} content={busy ? `У групи вже ${busy}` : null}>
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          aria-label={[`${pair} пара`, slot?.startsAt, busy ? `у групи вже ${busy}` : null].filter(Boolean).join(', ')}
+                          onClick={() =>
+                            patch({
+                              pairs: on ? state.pairs.filter((p) => p !== pair) : [...state.pairs, pair],
+                            })
+                          }
+                          className={cn(
+                            'flex h-11 min-w-14 flex-col items-center justify-center rounded-control border px-2 leading-tight',
+                            'transition-[background-color,border-color,color] duration-100 ease-out',
+                            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                            on
+                              ? 'border-accent bg-selected text-accent'
+                              : busy
+                                ? 'border-dashed border-control bg-sunken text-secondary hover-fine:border-strong'
+                                : 'border-control bg-surface text-primary hover-fine:border-strong',
+                          )}
+                        >
+                          <span className="font-condensed text-heading font-bold figures">{pair}</span>
+                          {busy ? (
+                            <span aria-hidden="true" className="max-w-16 truncate text-meta font-normal text-muted">
+                              {busy}
+                            </span>
+                          ) : slot ? (
+                            <span className="text-meta font-normal text-muted figures">{slot.startsAt}</span>
+                          ) : null}
+                        </button>
+                      </Tooltip>
                     );
                   })}
                 </div>

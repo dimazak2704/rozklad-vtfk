@@ -2,7 +2,7 @@ import { Check } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { LessonView } from '@/api/types';
 import { LessonCell } from '@/components/schedule';
-import { Input } from '@/components/ui';
+import { Input, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { HEX_COLOR_RE, LINE_SWATCHES, lineName, lineOf, swatchOf } from './discipline-palette';
 
@@ -56,30 +56,31 @@ export function DisciplineColorField({ value, onChange, disciplineId, shortName,
           </label>
           {LINE_SWATCHES.map((item) => {
             const checked = selected === String(item.line);
+            // лише кружечок кольору: назву каже підказка (на фокус прихованої радіокнопки — теж, фокус спливає до мітки)
             return (
-              <label
-                key={item.line}
-                data-line={item.line}
-                title={`Лінія: ${item.name}`}
-                className={cn(
-                  'relative grid size-8 cursor-pointer place-items-center rounded-full border-2 transition-[border-color] duration-100',
-                  'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus',
-                  checked ? 'border-[var(--line-dot)]' : 'border-transparent hover-fine:border-strong',
-                )}
-              >
-                <input
-                  type="radio"
-                  name={groupName}
-                  value={item.line}
-                  checked={checked}
-                  onChange={() => onChange(item.hex)}
-                  aria-label={`Лінія: ${item.name}`}
-                  className="sr-only"
-                />
-                <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-[var(--line-dot)] text-on-accent">
-                  {checked ? <Check className="size-3 stroke-[3]" /> : null}
-                </span>
-              </label>
+              <Tooltip key={item.line} content={`Лінія: ${item.name}`}>
+                <label
+                  data-line={item.line}
+                  className={cn(
+                    'relative grid size-8 cursor-pointer place-items-center rounded-full border-2 transition-[border-color] duration-100',
+                    'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus',
+                    checked ? 'border-[var(--line-dot)]' : 'border-transparent hover-fine:border-strong',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name={groupName}
+                    value={item.line}
+                    checked={checked}
+                    onChange={() => onChange(item.hex)}
+                    aria-label={`Лінія: ${item.name}`}
+                    className="sr-only"
+                  />
+                  <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-[var(--line-dot)] text-on-accent">
+                    {checked ? <Check className="size-3 stroke-[3]" /> : null}
+                  </span>
+                </label>
+              </Tooltip>
             );
           })}
         </div>

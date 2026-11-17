@@ -1,7 +1,7 @@
 import { ExternalLink, Send } from 'lucide-react';
 import { useBotStatus, useSendTestMessage } from '@/api/telegram';
 import type { ChatBindingDto } from '@/api/types';
-import { Button, ErrorState, notify, Panel, SkeletonText, StatusDot } from '@/components/ui';
+import { Button, ErrorState, notify, Panel, SkeletonText, StatusDot, Tooltip } from '@/components/ui';
 import { trackFinal } from '@/lib/undo/actions';
 
 const MODE_TEXT = {
@@ -70,15 +70,20 @@ export function BotStatusPanel({ bindings }: { bindings: readonly ChatBindingDto
             </dl>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary">
-              <a href={bot.data.link} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden="true" className="size-4" />
-                Відкрити бота
-              </a>
-            </Button>
-            <Button variant="secondary" loading={test.isPending} onClick={() => void sendTest()} iconStart={<Send aria-hidden="true" className="size-4" />}>
-              Тестове повідомлення
-            </Button>
+            <Tooltip content="Відкрити бота в Telegram">
+              <Button asChild variant="secondary">
+                <a href={bot.data.link} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink aria-hidden="true" className="size-4" />
+                  Відкрити бота
+                </a>
+              </Button>
+            </Tooltip>
+            {/* з назви не видно, кому піде повідомлення: тост скаже це лише після натискання */}
+            <Tooltip content="Надіслати тестове повідомлення власнику бота">
+              <Button variant="secondary" loading={test.isPending} onClick={() => void sendTest()} iconStart={<Send aria-hidden="true" className="size-4" />}>
+                Тестове повідомлення
+              </Button>
+            </Tooltip>
           </div>
         </div>
       )}

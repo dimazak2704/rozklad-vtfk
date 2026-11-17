@@ -28,7 +28,7 @@ import {
 } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
-import { countLabel } from '@/lib/labels';
+import { countLabel, openScheduleHint } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
@@ -253,7 +253,7 @@ export default function GroupsPage() {
             rowLabel={`група ${g.code}`}
             actions={[
               { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(g) },
-              { label: 'Розклад групи', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.group(g.code)) },
+              { label: openScheduleHint('GROUP'), icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.group(g.code)) },
               {
                 label: g.active ? 'Позначити неактивною' : 'Зробити активною',
                 icon: <Power aria-hidden="true" />,

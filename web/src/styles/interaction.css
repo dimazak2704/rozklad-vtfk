@@ -59,6 +59,14 @@
     pointer-events: none;
   }
 
+  /* ---------- Підказка, крізь яку проходить миша (`Tooltip passThrough`) ----------
+     Підказка до посилання в картці заняття лягає на сусідній рядок: курсор дістається до посилання під нею.
+     Обгортка Radix займає ту саму площу, тож і вона не ловить мишу. */
+  [data-radix-popper-content-wrapper]:has(> [data-pass-through]),
+  [data-pass-through] {
+    pointer-events: none;
+  }
+
   /* ---------- Стрілка «далі» ---------- */
   .more-arrow {
     transform: translateX(0);

@@ -1,6 +1,8 @@
 import { Search } from 'lucide-react';
 import { Link } from 'react-router';
-import { BackLink, Button } from '@/components/ui';
+import type { EntityType } from '@/api/types';
+import { BackLink, Button, Tooltip } from '@/components/ui';
+import { openScheduleHint } from '@/lib/labels';
 import { useCommandStore } from '@/stores/commands';
 
 export interface TargetSuggestion {
@@ -8,6 +10,8 @@ export interface TargetSuggestion {
   to: string;
   /** Код групи чи аудиторії: цифри — табличними (Geologica). */
   plate?: boolean;
+  /** Чий розклад: для підказки «Розклад групи». */
+  type?: EntityType;
 }
 
 interface TargetNotFoundProps {
@@ -35,12 +39,14 @@ export function TargetNotFound({ title, description, suggestions = [], searchQue
           <ul className="-ms-2 flex flex-wrap">
             {suggestions.map((suggestion) => (
               <li key={suggestion.to}>
-                <Link
-                  to={suggestion.to}
-                  className="inline-flex h-11 min-w-14 items-center justify-center rounded-control px-2 text-ui font-semibold text-accent hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
-                >
-                  <span className={suggestion.plate ? 'figures' : undefined}>{suggestion.label}</span>
-                </Link>
+                <Tooltip content={suggestion.type ? openScheduleHint(suggestion.type) : null} side="top" align="start">
+                  <Link
+                    to={suggestion.to}
+                    className="inline-flex h-11 min-w-14 items-center justify-center rounded-control px-2 text-ui font-semibold text-accent hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                  >
+                    <span className={suggestion.plate ? 'figures' : undefined}>{suggestion.label}</span>
+                  </Link>
+                </Tooltip>
               </li>
             ))}
           </ul>
