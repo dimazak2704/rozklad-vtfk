@@ -132,6 +132,8 @@ class GenerationResultHandler {
         GenerationJob job = found.get();
         job.setBestScore(GenerationJobMapper.score(event.hardScore(), event.softScore()));
         job.setAnalysis(mapper.json(event.analysis()));
+        // «Було» жорстких порушень: оцінка бази розвʼязувачем до розвʼязання (null — з нуля або старий планувальник)
+        job.setBaseScore(event.baseScore());
         Instant now = clock.instant();
         switch (event.status()) {
             case SOLVED -> applySolution(job, event, now, event.stopReason());

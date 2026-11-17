@@ -2,7 +2,7 @@ import { Command } from 'cmdk';
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { matchScore } from '@/lib/search';
+import { rankOptions } from './combobox-rank';
 import { useFieldControl } from './field-context';
 import { Popover, PopoverContent, PopoverTrigger } from './Popover';
 import { Spinner } from './Spinner';
@@ -65,6 +65,8 @@ export function Combobox({
   const a11y = useFieldControl({ ...rest, disabled });
   const selected = options.find((option) => option.value === value) ?? null;
   const remote = Boolean(onSearchChange);
+  // Фільтруємо й сортуємо самі: cmdk тоді виділяє перший (найкращий) варіант, і Enter бере саме його
+  const visible = remote ? options : rankOptions(options, query);
 
   return (
     <Popover
@@ -113,8 +115,7 @@ export function Combobox({
       </div>
       <PopoverContent width="trigger" className="min-w-64 p-0">
         <Command
-          shouldFilter={!remote}
-          filter={(_value, search, keywords) => matchScore(search, ...(keywords ?? [])) / 100}
+          shouldFilter={false}
           label={ariaLabel ?? placeholder}
         >
           <div className="flex items-center gap-2 border-b border-separator px-3">
@@ -138,11 +139,10 @@ export function Combobox({
               </Command.Loading>
             ) : null}
             <Command.Empty className="px-3 py-6 text-center text-caption text-muted">{emptyText}</Command.Empty>
-            {options.map((option) => (
+            {visible.map((option) => (
               <Command.Item
                 key={option.value}
                 value={option.value}
-                keywords={[option.label, ...(option.keywords ?? [])]}
                 disabled={option.disabled}
                 onSelect={() => {
                   onValueChange(option.value);

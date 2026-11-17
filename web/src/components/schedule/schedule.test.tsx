@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DayDto, PublicTeacherDto } from '@/api/types';
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
-import { BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
+import { BELLS_FRI, BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { renderWithProviders } from '@/test/render';
 import { resetHoverCards } from '@/components/ui/hover-intent';
@@ -365,6 +365,37 @@ describe('WeekGrid', () => {
     const rowHeaders = within(table).getAllByRole('rowheader');
     // номер пари, початок і кінець — кожне своїм рядком (кінець для читача екрана — «до 09:30»)
     expect(rowHeaders.map((h) => h.textContent?.slice(0, 14))).toEqual(['108:30до 09:30', '209:40до 10:40', '311:00до 12:00', '412:10до 13:10']);
+  });
+
+  it('пʼятниця з власними дзвінками: під часом рядка — «Пт 12:20», «зараз» у пʼятницю рахується за її часом', () => {
+    const bells = new Map([1, 2, 3, 4].map((weekday) => [weekday, BELLS_MON_THU] as const));
+    bells.set(5, BELLS_FRI);
+    // 12:15 у пʼятницю — перерва перед 4 парою (12:20), хоча пн–чт 4 пара вже йде з 12:10
+    renderWithProviders(<WeekGrid schedule={DEMO_WEEK} today="2026-11-13" at={12 * 60 + 15} bells={bells} />);
+    const table = screen.getByRole('table', { name: /Розклад 4КІ1/ });
+    const fourth = within(table).getAllByRole('rowheader')[3]!;
+    expect(fourth).toHaveTextContent(/^412:10до 13:10/);
+    const friday = fourth.querySelector('[data-weekday-time="5"]')!;
+    expect(friday).toHaveTextContent('у пʼятницю Пт 12:20до 13:20');
+    expect(within(table).getAllByRole('rowheader')[0]!.querySelector('[data-weekday-time]')).toBeNull();
+    expect(table.querySelector('[data-now-progress]')).toBeNull();
+    expect(table.querySelector('[data-now-line="strong"]')).not.toBeNull();
+    expect(fourth).toHaveAttribute('data-now-row');
+  });
+
+  it('заняття пʼятниці за пʼятничними дзвінками не повторює час у клітинці; без дзвінків — повторює', () => {
+    const fridayLesson = { ...DEMO_WEEK.days[0]!.lessons[3]!, id: 'fri-4', startsAt: '12:20', endsAt: '13:20' };
+    const week = {
+      ...DEMO_WEEK,
+      days: DEMO_WEEK.days.map((day) => (day.weekday === 5 ? { ...day, lessons: [fridayLesson] } : day)),
+    };
+    const bells = new Map([1, 2, 3, 4].map((weekday) => [weekday, BELLS_MON_THU] as const));
+    bells.set(5, BELLS_FRI);
+    const { unmount } = renderWithProviders(<WeekGrid schedule={week} today="2026-11-09" at={6 * 60} bells={bells} />);
+    expect(screen.queryByText('12:20–13:20')).not.toBeInTheDocument();
+    unmount();
+    renderWithProviders(<WeekGrid schedule={week} today="2026-11-09" at={6 * 60} />);
+    expect(screen.getByText(/12:20.13:20/)).toBeInTheDocument();
   });
 
   it('лінія «зараз» має пігулку з часом у колонці часу, а не поверх заняття', () => {

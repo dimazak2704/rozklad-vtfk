@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { buildUrl } from '@/api/client';
 import { isApiError } from '@/api/errors';
 import { useBells, usePublicHistoryFrom } from '@/api/meta';
-import { publicSchedulePath } from '@/api/public';
+import { publicSchedulePath, useBellProfiles } from '@/api/public';
 import { savedCopyTimeLabel, useSavedCopy } from '@/api/saved-copy';
 import type { PracticeDto, ScheduleDto } from '@/api/types';
 import {
@@ -22,6 +22,7 @@ import {
 import { Button, EmptyState, ErrorState, SegmentedControl } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { bellsByWeekday } from '@/lib/bells';
 import { cn } from '@/lib/cn';
 import { addDays, compareIsoDates, formatDateRange, formatDayMonth, shiftStudyDay, startOfWeek } from '@/lib/date';
 import type { Perspective } from '@/lib/schedule';
@@ -134,6 +135,12 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
   // сітка або дні списком — що одне видно, те й рендеримо: «тік» часу не перемальовує прихований варіант
   const wide = useMediaQuery(WIDE_QUERY);
   const bells = useBells(date);
+  // дзвінки профілю, що діє, за днями тижня: тиждень показує пʼятничний час пʼятниці (4 пара о 12:20, а не 12:10)
+  const profiles = useBellProfiles();
+  const weekBells = useMemo(
+    () => bellsByWeekday(bells.data?.profile.id, profiles.data?.profiles),
+    [bells.data?.profile.id, profiles.data?.profiles],
+  );
   const schedule = useMemo(() => {
     if (!query.data) return undefined;
     const filtered = filterBySubgroup(query.data, subgroup);
@@ -288,11 +295,25 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
     content = (
       <div id={WEEK_REGION_ID}>
         {wide ? (
-          <WeekGrid schedule={schedule} perspective={perspective} today={today} stickyTop="var(--header-height)" arrived={arrived} />
+          <WeekGrid
+            schedule={schedule}
+            perspective={perspective}
+            today={today}
+            stickyTop="var(--header-height)"
+            arrived={arrived}
+            bells={weekBells}
+          />
         ) : (
           <div className="flex flex-col gap-8">
             {schedule.days.map((d) => (
-              <DayList key={d.date} day={d} perspective={perspective} today={today} arrived={arrived} />
+              <DayList
+                key={d.date}
+                day={d}
+                bells={weekBells?.get(d.weekday)}
+                perspective={perspective}
+                today={today}
+                arrived={arrived}
+              />
             ))}
           </div>
         )}

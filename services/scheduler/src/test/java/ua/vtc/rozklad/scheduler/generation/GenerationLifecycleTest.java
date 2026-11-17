@@ -23,15 +23,19 @@ import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
+import ua.vtc.rozklad.contracts.events.GenerationCompleted.BaseScore;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.scheduler.config.SchedulerProperties;
 import ua.vtc.rozklad.scheduler.messaging.EventPublisher;
+import ua.vtc.rozklad.scheduler.solver.StartingScore;
 import ua.vtc.rozklad.scheduler.solver.TimetableProblemFactory;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 import ua.vtc.rozklad.scheduler.solver.score.TimetableConstraint;
+import ua.vtc.rozklad.scheduler.support.FridayBase;
 import ua.vtc.rozklad.scheduler.support.Placements;
 import ua.vtc.rozklad.scheduler.support.SyntheticCollege;
+import ua.vtc.rozklad.scheduler.support.TestSolvers;
 
 class GenerationLifecycleTest {
 
@@ -60,7 +64,7 @@ class GenerationLifecycleTest {
     void solvedJobAnnouncesEveryAssignmentAndTheAnalysis() {
         GenerationJob job = runningJob();
 
-        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -42)), SECONDS_20, false);
+        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -42)), SECONDS_20, false, null);
 
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.SOLVED);
@@ -74,12 +78,37 @@ class GenerationLifecycleTest {
         assertThat(job.getCompletionSentAt()).isEqualTo(NOW);
     }
 
+    /** The base had a 4th Friday pair: the completion says the run started at a negative hard score. */
+    @Test
+    void solvedJobAnnouncesTheScoreOfTheTimetableItStartedFrom() {
+        GenerationJob job = runningJob();
+        BaseScore base = StartingScore.of(TestSolvers.solutionManager(), new TimetableProblemFactory(4)
+                .create(FridayBase.snapshot(0), GenerationWeights.DEFAULT));
+
+        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -42)), SECONDS_20, false, base);
+
+        GenerationCompleted completed = publishedCompletion();
+        assertThat(completed.baseScore()).isEqualTo(base);
+        assertThat(completed.baseScore().hardScore()).isNegative();
+        assertThat(completed.hardScore()).isZero();
+        assertThat(job.getCompletion().get("baseScore").get("hardScore").asLong()).isEqualTo(base.hardScore());
+    }
+
+    @Test
+    void failedJobHasNoBaseScore() {
+        GenerationJob job = runningJob();
+
+        lifecycle.finishWithSolution(job.getId(), unsolved(), SECONDS_20, false, new BaseScore(-2, -30));
+
+        assertThat(publishedCompletion().baseScore()).isNull();
+    }
+
     @Test
     void cancelledJobKeepsItsBestTimetable() {
         GenerationJob job = runningJob();
         job.requestCancel();
 
-        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(-2, -100)), SECONDS_20, false);
+        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(-2, -100)), SECONDS_20, false, null);
 
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.CANCELLED);
@@ -92,7 +121,7 @@ class GenerationLifecycleTest {
     void fixedLimitJobThatRanItsLimitStoppedAtTheLimit() {
         GenerationJob job = runningJob();
 
-        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -42)), Duration.ofMillis(59_400), false);
+        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -42)), Duration.ofMillis(59_400), false, null);
 
         assertThat(publishedCompletion().stopReason()).isEqualTo(GenerationStopReason.TIME_LIMIT);
     }
@@ -107,7 +136,7 @@ class GenerationLifecycleTest {
         assertThat(lifecycle.stopReason(capped, Duration.ofSeconds(1799).plusMillis(500)))
                 .as("within the tolerance").isEqualTo(GenerationStopReason.SAFETY_CAP);
 
-        lifecycle.finishWithSolution(plateau.getId(), solved(HardSoftScore.of(0, -7)), Duration.ofMinutes(4), false);
+        lifecycle.finishWithSolution(plateau.getId(), solved(HardSoftScore.of(0, -7)), Duration.ofMinutes(4), false, null);
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.SOLVED);
         assertThat(completed.stopReason()).isEqualTo(GenerationStopReason.NO_IMPROVEMENT);
@@ -117,7 +146,7 @@ class GenerationLifecycleTest {
     void autoModeJobThatCouldNotPlaceEveryUnitAsksForTheAdministrator() {
         GenerationJob job = autoJob();
 
-        lifecycle.finishWithSolution(job.getId(), unsolved(), Duration.ofMinutes(30), false);
+        lifecycle.finishWithSolution(job.getId(), unsolved(), Duration.ofMinutes(30), false, null);
 
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.FAILED);
@@ -130,7 +159,7 @@ class GenerationLifecycleTest {
     void timetableThatIsNotFullyPlacedFailsWithTheNumberOfPlacedUnits() {
         GenerationJob job = runningJob();
 
-        lifecycle.finishWithSolution(job.getId(), unsolved(), Duration.ofSeconds(60), false);
+        lifecycle.finishWithSolution(job.getId(), unsolved(), Duration.ofSeconds(60), false, null);
 
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.FAILED);
@@ -146,7 +175,7 @@ class GenerationLifecycleTest {
         GenerationJob job = runningJob();
         job.requestCancel();
 
-        lifecycle.finishWithSolution(job.getId(), unsolved(), SECONDS_20, false);
+        lifecycle.finishWithSolution(job.getId(), unsolved(), SECONDS_20, false, null);
 
         GenerationCompleted completed = publishedCompletion();
         assertThat(completed.status()).isEqualTo(GenerationStatus.CANCELLED);
@@ -159,7 +188,7 @@ class GenerationLifecycleTest {
     void shutdownInterruptsTheJobInsteadOfReportingAShortenedResult() {
         GenerationJob job = runningJob();
 
-        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -5)), SECONDS_20, true);
+        lifecycle.finishWithSolution(job.getId(), solved(HardSoftScore.of(0, -5)), SECONDS_20, true, null);
 
         assertThat(publishedCompletion().error()).isEqualTo(GenerationLifecycle.INTERRUPTED);
         assertThat(job.getStatus()).isEqualTo(GenerationStatus.FAILED);
