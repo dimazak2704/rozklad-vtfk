@@ -1,7 +1,7 @@
 package ua.vtc.rozklad.auth.selfservice;
 
 /**
- * A refused change of one's own password. {@link Problem} carries the HTTP status, the stable problem code
+ * A refused change (or first setting) of one's own password. {@link Problem} carries the HTTP status, the stable problem code
  * ({@code urn:rozklad:auth:<code>}) and the Ukrainian text the SPA shows; {@code reason} refines
  * {@code password-rejected} (a {@code PasswordPolicy.Reason} code or {@code same-as-current}).
  */
@@ -33,9 +33,13 @@ public class OwnPasswordRefusal extends RuntimeException {
         PASSWORD_REJECTED(400, "password-rejected", "Новий пароль не підходить."),
         ACCOUNT_INACTIVE(403, "account-inactive", "Обліковий запис вимкнено."),
         DEMO_ACCOUNT(403, "demo-account", "Пароль спільного демонстраційного доступу змінити не можна."),
+        REAUTH_REQUIRED(403, "reauth-required",
+                "Щоб встановити пароль, підтвердьте вхід через Google ще раз у цьому браузері."),
         PASSWORD_NOT_SET(409, "password-not-set",
-                "У цього облікового запису немає пароля: вхід лише через Google. Попросіть у навчальній частині "
-                        + "посилання для пароля."),
+                "У цього облікового запису ще немає пароля: вхід лише через Google. Пароль можна встановити "
+                        + "в меню «Встановити пароль»."),
+        PASSWORD_ALREADY_SET(409, "password-already-set",
+                "У цього облікового запису вже є пароль. Змініть його, вказавши поточний."),
         CURRENT_PASSWORD_WRONG(422, "current-password-wrong", "Поточний пароль неправильний."),
         TOO_MANY_ATTEMPTS(429, "too-many-attempts", "Забагато невдалих спроб. Спробуйте пізніше.");
 

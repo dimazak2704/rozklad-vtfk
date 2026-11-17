@@ -1,7 +1,9 @@
 import { CalendarDays, ChevronRight, ChevronsUpDown, KeyRound, LayoutDashboard, LogOut, SunMoon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useLocation } from 'react-router';
+import { useOwnPasswordInfo } from '@/api/account';
+import { MOCK_API } from '@/api/client';
 import { paths } from '@/app/routes';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { cn } from '@/lib/cn';
@@ -9,6 +11,7 @@ import { Avatar } from '../ui/Avatar';
 import { Tooltip, TruncatedText } from '../ui/Tooltip';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { useThemeLabel } from './theme-options';
+import { useReopenAfterGoogle } from './useReopenAfterGoogle';
 import { ThemeRadioItems } from './ThemeToggle';
 
 const ITEM =
@@ -26,7 +29,9 @@ interface UserMenuProps {
 /**
  * Гостям — тихе текстове посилання «Увійти»; користувачу — меню з кабінетом, панеллю, темою, паролем і виходом.
  * Тема — один пункт «Тема» з підменю (три варіанти, поточний позначено); однакова в кабінеті й панелі диспетчера.
- * «Змінити пароль» — лише персоналу (викладач, диспетчер): вікно саме пояснює, коли пароля немає (вхід через Google).
+ * Пароль — лише персоналу (викладач, диспетчер): «Змінити пароль», а без пароля (вхід лише через Google) —
+ * «Встановити пароль». Після підтвердження через Google сервіс входу повертає сюди з `?password=set`, і вікно
+ * відкривається знову.
  */
 export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
   const { status, user, isAdmin, isTeacher, signOut, isDevBypass } = useCurrentUser();
@@ -34,6 +39,21 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
   const { pathname } = location;
   const themeLabel = useThemeLabel();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [returnedFromGoogle, setReturnedFromGoogle] = useState(false);
+  const staff = status === 'authenticated' && !!user && (isTeacher || isAdmin);
+  // стан пароля визначає назву пункту меню; той самий запит потім читає вікно
+  const passwordInfo = useOwnPasswordInfo(staff);
+  const passwordLabel = passwordInfo.data?.status === 'NO_PASSWORD' ? 'Встановити пароль' : 'Змінити пароль';
+  const reopen = useCallback(() => {
+    setReturnedFromGoogle(true);
+    setPasswordOpen(true);
+  }, []);
+  // dev без сервісу входу (VITE_DEV_AUTH_ROLES, мок-API) токенів не має: оновлювати нічого
+  useReopenAfterGoogle(staff, reopen, !isDevBypass && !MOCK_API);
+  const changePasswordOpen = (open: boolean) => {
+    setPasswordOpen(open);
+    if (!open) setReturnedFromGoogle(false);
+  };
 
   if (status !== 'authenticated' || !user) {
     const to = paths.login(pathname === '/' ? undefined : pathname + location.search);
@@ -142,7 +162,7 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
             {isTeacher || isAdmin ? (
               <DropdownMenu.Item className={ITEM} onSelect={() => setPasswordOpen(true)}>
                 <KeyRound aria-hidden="true" className="size-4 text-muted" />
-                Змінити пароль
+                {passwordLabel}
               </DropdownMenu.Item>
             ) : null}
             <DropdownMenu.Separator className="my-1 h-px bg-[var(--border-color-separator)]" />
@@ -154,7 +174,12 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       {isTeacher || isAdmin ? (
-        <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} username={user.username || undefined} />
+        <ChangePasswordDialog
+          open={passwordOpen}
+          onOpenChange={changePasswordOpen}
+          username={user.username || undefined}
+          returnedFromGoogle={returnedFromGoogle}
+        />
       ) : null}
     </>
   );

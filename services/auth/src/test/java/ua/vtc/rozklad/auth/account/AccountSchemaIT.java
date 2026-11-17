@@ -35,7 +35,7 @@ class AccountSchemaIT {
     void allMigrationsAreApplied() {
         List<String> versions = jdbc.sql("SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank")
                 .query(String.class).list();
-        assertThat(versions).containsExactly("1.001", "1.002", "1.100", "1.101", "1.102", "1.103");
+        assertThat(versions).containsExactly("1.001", "1.002", "1.100", "1.101", "1.102", "1.103", "1.104");
         assertThat(jdbc.sql("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND "
                 + "table_name IN ('account', 'account_role', 'federated_identity', 'login_attempt', "
                 + "'oauth2_authorization', 'oauth2_registered_client', 'oauth2_authorization_consent', "

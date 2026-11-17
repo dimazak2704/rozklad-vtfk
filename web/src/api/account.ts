@@ -3,6 +3,11 @@
  * іде не через gateway (`/api`), а на `<видавець>/api/account/password` — на сервері це той самий сайт під `/auth`.
  * Токен — той самий access token SPA. Cookie сесії входу (`credentials: 'include'`) лише каже сервісу, яку сесію
  * лишити: інші сесії облікового запису після зміни пароля завершуються.
+ *
+ * Обліковий запис без пароля (вхід лише через Google) встановлює перший пароль сам, але одного токена для цього
+ * замало: сесія входу цього браузера має бути свіжо підтверджена через Google (`reauthRequired` у стані). Для цього
+ * браузер іде на `<видавець>/oauth2/authorization/google?reauth_return=<ця сторінка>?password=set`, а сервіс входу
+ * повертає його сюди, і меню знову відкриває вікно пароля.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { oidcConfig } from '@/auth/config';
@@ -17,6 +22,12 @@ export interface OwnPasswordInfoDto {
   status: OwnPasswordStatus;
   minLength: number;
   maxLength: number;
+  /** Лише `NO_PASSWORD`: перш ніж встановити пароль, цей браузер має ще раз увійти через Google. */
+  reauthRequired?: boolean;
+}
+
+export interface SetInitialPasswordRequest {
+  newPassword: string;
 }
 
 export interface ChangeOwnPasswordRequest {
@@ -24,9 +35,48 @@ export interface ChangeOwnPasswordRequest {
   newPassword: string;
 }
 
+function authorityBase(): string {
+  return oidcConfig.authority.replace(/\/$/, '');
+}
+
 /** Адреса на сервісі входу: `http://localhost:8088/auth` + `/api/account/password`. */
 export function accountUrl(path: string): string {
-  return `${oidcConfig.authority.replace(/\/$/, '')}/api/account${path}`;
+  return `${authorityBase()}/api/account${path}`;
+}
+
+/** Позначка в адресі застосунку: людина повернулася з підтвердження через Google, вікно пароля відкрити знову. */
+export const PASSWORD_RETURN_PARAM = 'password';
+export const PASSWORD_RETURN_VALUE = 'set';
+
+/** Поточна сторінка з `?password=set` — куди сервіс входу поверне людину після Google. */
+export function passwordReturnUrl(href: string = window.location.href): string {
+  const url = new URL(href);
+  url.searchParams.set(PASSWORD_RETURN_PARAM, PASSWORD_RETURN_VALUE);
+  url.hash = '';
+  return url.toString();
+}
+
+/** Початок повторного входу через Google; сервіс входу приймає лише адреси походжень SPA. */
+export function googleReauthUrl(returnTo: string): string {
+  return `${authorityBase()}/oauth2/authorization/google?reauth_return=${encodeURIComponent(returnTo)}`;
+}
+
+/** Перехід сторінки (окремо, щоб тести могли його підмінити: jsdom не вміє переходити). */
+export const pageNavigation = {
+  assign: (url: string): void => window.location.assign(url),
+};
+
+/**
+ * Веде браузер на повторний вхід через Google і назад. У мок-режимі сервісу входу й Google немає: мок позначає
+ * «щойно підтверджено» і сторінка одразу повертається на ту саму адресу з позначкою.
+ */
+export async function startGoogleReauth(returnTo: string = passwordReturnUrl()): Promise<void> {
+  if (MOCK_API) {
+    await fetch(`${authorityBase()}/mock/google-reauth`, { method: 'POST' });
+    pageNavigation.assign(returnTo);
+    return;
+  }
+  pageNavigation.assign(googleReauthUrl(returnTo));
 }
 
 /** Ключі TanStack Query цієї області (не перетинаються з `qk`: інший сервіс). */
@@ -72,6 +122,14 @@ export function useOwnPasswordInfo(enabled = true) {
 export function useChangeOwnPassword() {
   return useMutation({
     mutationFn: (request: ChangeOwnPasswordRequest) => authRequest<void>('/password', { method: 'POST', body: request }),
+  });
+}
+
+/** Перший пароль облікового запису, що входить лише через Google (потрібне свіже підтвердження через Google). */
+export function useSetInitialPassword() {
+  return useMutation({
+    mutationFn: (request: SetInitialPasswordRequest) =>
+      authRequest<void>('/initial-password', { method: 'POST', body: request }),
   });
 }
 

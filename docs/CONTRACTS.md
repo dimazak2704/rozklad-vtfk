@@ -45,11 +45,20 @@ session to keep. CORS only for `AUTH_CORS_ORIGINS` (development), with credentia
 
 | Endpoint | Answer |
 |---|---|
-| `GET /auth/api/account/password` | `{status: CHANGEABLE\|NO_PASSWORD\|DEMO, minLength, maxLength}`: `NO_PASSWORD` = Google sign-in only (no form; a password link from «Доступи»), `DEMO` = a shared demo account of the server (kept); 403 `account-inactive` |
-| `POST /auth/api/account/password` `{currentPassword, newPassword}` | 204: the new password is stored and every **other** sign-in session of the account ends (this browser's stays; access tokens live until `exp`). 400 `validation` (a field missing or over 1024 characters), 400 `password-rejected` + `reason` (`too-short`, `too-long`, `same-as-username`, `same-as-email`, `too-common`, `same-as-current`), 403 `account-inactive` \| `demo-account`, 409 `password-not-set`, 422 `current-password-wrong`, 429 `too-many-attempts` |
+| `GET /auth/api/account/password` | `{status: CHANGEABLE\|NO_PASSWORD\|DEMO, minLength, maxLength, reauthRequired}`: `NO_PASSWORD` = Google sign-in only (the SPA offers «Встановити пароль»), `DEMO` = a shared demo account of the server (kept); `reauthRequired` (added 17.11.2026; `false` unless `NO_PASSWORD`) = this browser's sign-in session does not prove a fresh Google sign-in of this account, so a first password needs the Google re-authentication below; 403 `account-inactive` |
+| `POST /auth/api/account/password` `{currentPassword, newPassword}` | 204: the new password is stored and every **other** sign-in session of the account ends (this browser's stays; access tokens live until `exp`). 400 `validation` (a field missing or over 1024 characters), 400 `password-rejected` + `reason` (`too-short`, `too-long`, `same-as-username`, `same-as-email`, `too-common`, `same-as-current`), 403 `account-inactive` \| `demo-account`, 409 `password-not-set` (use the next endpoint), 422 `current-password-wrong`, 429 `too-many-attempts` |
+| `POST /auth/api/account/initial-password` `{newPassword}` (17.11.2026) | The first password of a Google-only account. Besides the token, the request must carry this browser's sign-in cookie (`credentials: 'include'`), whose session is still signed in as the token's account and finished a Google sign-in of that account at most 10 minutes ago (server-side session attributes written by the Google success handler; nothing from the client counts). 204: the password is stored (the account then signs in with Google **and** the password, login = username or e-mail), the proof is used up, every **other** sign-in session ends. 400 `validation` (missing or over 1024 characters), 400 `password-rejected` + `reason`, 403 `reauth-required` (no cookie, a session of another account, no or a stale Google sign-in), 403 `account-inactive` \| `demo-account`, 409 `password-already-set` (use the change endpoint), 429 `too-many-attempts` |
 
 Problems: `type` `urn:rozklad:auth:<code>`, the same `code` as a property, Ukrainian `detail`. A current-password
-check counts in the sign-in lockout of the account's identifier and network (`login_attempt.method = PASSWORD_CHANGE`).
+check counts in the sign-in lockout of the account's identifier and network (`login_attempt.method = PASSWORD_CHANGE`);
+so does a first-password attempt (`PASSWORD_SET`; one without a fresh Google sign-in is a failure).
+
+**Google re-authentication** (browser navigation, not an API call): `GET /auth/oauth2/authorization/google?reauth_return=<url>`
+with `<url>` an absolute address on one of the SPA origins (`AUTH_WEB_ORIGINS`; anything else is ignored and the
+sign-in is a plain one). It sends Google `prompt=select_account` and `max_age=0`; after a successful Google sign-in
+(the allowlist as always) the browser goes back to `<url>`, after a failed one too. The SPA passes its current page
+with `?password=set` and reopens the password dialog there, after a silent token renew: the callback gives the sign-in
+session a new id, and an ID token issued before it has a stale `sid` that RP-initiated logout refuses.
 
 ## 1. Core — public (no auth)
 

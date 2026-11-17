@@ -24,10 +24,10 @@ public class LoginAttempts {
     /** Outcomes that count as failures of a password sign-in. */
     private static final String FAILURES = "('BAD_CREDENTIALS', 'DISABLED', 'REVOKED')";
     /**
-     * Checks of a password that count for the lockout of its identifier: sign-ins and the current password of a
-     * password change. The network throttle counts sign-ins only: a change names one account (the token's).
+     * Checks of a password that count for the lockout of its identifier: sign-ins, the current password of a
+     * password change and the Google re-authentication of a first password ({@code PASSWORD_SET}). The network throttle counts sign-ins only: a change names one account (the token's).
      */
-    private static final String PASSWORD_CHECKS = "('PASSWORD', 'PASSWORD_CHANGE')";
+    private static final String PASSWORD_CHECKS = "('PASSWORD', 'PASSWORD_CHANGE', 'PASSWORD_SET')";
 
     private final JdbcClient jdbc;
 
@@ -132,8 +132,12 @@ public class LoginAttempts {
         }
     }
 
-    /** {@code PASSWORD_CHANGE}: the current password checked by a signed-in person changing it (V1_103). */
-    public enum Method { PASSWORD, GOOGLE, PASSWORD_CHANGE }
+    /**
+     * {@code PASSWORD_CHANGE}: the current password checked by a signed-in person changing it (V1_103);
+     * {@code PASSWORD_SET}: a Google-only account setting its first password, whose proof is a fresh Google
+     * re-authentication of this browser's session ({@code BAD_CREDENTIALS} = that proof was missing or stale; V1_104).
+     */
+    public enum Method { PASSWORD, GOOGLE, PASSWORD_CHANGE, PASSWORD_SET }
 
     public enum Outcome {
         SUCCESS, BAD_CREDENTIALS, LOCKED, THROTTLED, DISABLED, REVOKED, NOT_ALLOWED, DOMAIN_MISMATCH,

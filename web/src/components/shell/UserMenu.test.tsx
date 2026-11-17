@@ -1,12 +1,16 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
+import { useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { server } from '@/mocks/server';
 import { useThemeStore } from '@/stores/theme';
 import type * as UserManagerModule from '@/auth/userManager';
 import { renderWithProviders } from '@/test/render';
 import { UserMenu } from './UserMenu';
 
 const current = vi.hoisted(() => ({ isTeacher: true, isAdmin: false }));
+const renewSession = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock('@/auth/useCurrentUser', () => ({
   useCurrentUser: () => ({
@@ -22,7 +26,13 @@ vi.mock('@/auth/useCurrentUser', () => ({
 vi.mock('@/auth/userManager', async (importOriginal) => ({
   ...(await importOriginal<typeof UserManagerModule>()),
   getAccessToken: () => Promise.resolve('test-access-token'),
+  renewSession,
 }));
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname + location.search}</output>;
+}
 
 async function openMenu() {
   const user = userEvent.setup();
@@ -36,6 +46,8 @@ describe('меню облікового запису', () => {
   beforeEach(() => {
     current.isTeacher = true;
     current.isAdmin = false;
+    renewSession.mockReset();
+    renewSession.mockImplementation(() => Promise.resolve());
     useThemeStore.getState().setPreference('system');
   });
 
@@ -63,6 +75,66 @@ describe('меню облікового запису', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Змінити пароль' }));
     expect(await screen.findByRole('dialog', { name: 'Змінити пароль' })).toBeInTheDocument();
     expect(await screen.findByLabelText(/Поточний пароль/)).toHaveAttribute('autocomplete', 'current-password');
+  });
+
+  it('без пароля (вхід лише через Google) пункт — «Встановити пароль»', async () => {
+    server.use(
+      http.get('*/auth/api/account/password', () =>
+        HttpResponse.json({ status: 'NO_PASSWORD', minLength: 12, maxLength: 64, reauthRequired: true }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<UserMenu />, { route: '/me' });
+    await user.click(screen.getByRole('button', { name: 'Обліковий запис: Кренцін Максим Дмитрович' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Встановити пароль' }));
+    expect(screen.queryByRole('menuitem', { name: 'Змінити пароль' })).toBeNull();
+    expect(await screen.findByRole('dialog', { name: 'Встановити пароль' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Підтвердити через Google' })).toBeInTheDocument();
+  });
+
+  it('повернення з Google (?password=set) знову відкриває вікно й прибирає позначку з адреси', async () => {
+    server.use(
+      http.get('*/auth/api/account/password', () =>
+        HttpResponse.json({ status: 'NO_PASSWORD', minLength: 12, maxLength: 64, reauthRequired: false }),
+      ),
+    );
+    renderWithProviders(
+      <>
+        {/* меню буває двічі (шапка й бічна панель) — вікно має відкритися один раз */}
+        <UserMenu />
+        <UserMenu variant="block" />
+        <LocationProbe />
+      </>,
+      { route: '/me?week=2&password=set' },
+    );
+    expect(await screen.findByRole('dialog', { name: 'Встановити пароль' })).toBeInTheDocument();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(await screen.findByLabelText(/^Новий пароль/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/me?week=2'));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('password');
+    // повторний вхід дав сесії новий id: токени оновлено один раз (інакше «Вийти» не завершило б сесію)
+    expect(renewSession).toHaveBeenCalledOnce();
+  });
+
+  it('після повернення з Google вікно відкривається лише після тихого оновлення токенів і читає стан заново', async () => {
+    let finishRenew: () => void = () => undefined;
+    renewSession.mockImplementation(() => new Promise<void>((done) => (finishRenew = done)));
+    let statusReads = 0;
+    server.use(
+      http.get('*/auth/api/account/password', () => {
+        statusReads += 1;
+        return HttpResponse.json({ status: 'NO_PASSWORD', minLength: 12, maxLength: 64, reauthRequired: false });
+      }),
+    );
+    renderWithProviders(<UserMenu />, { route: '/me?password=set' });
+    await waitFor(() => expect(renewSession).toHaveBeenCalledOnce());
+    await waitFor(() => expect(statusReads).toBe(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    finishRenew();
+    expect(await screen.findByRole('dialog', { name: 'Встановити пароль' })).toBeInTheDocument();
+    // стан пароля прочитано вже з новими токенами
+    await waitFor(() => expect(statusReads).toBeGreaterThanOrEqual(2));
   });
 
   it('диспетчер теж може змінити свій пароль', async () => {

@@ -17,7 +17,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,13 +30,19 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ua.vtc.rozklad.auth.config.AuthServerProperties;
 import ua.vtc.rozklad.auth.login.ClientAddress;
 import ua.vtc.rozklad.auth.selfservice.OwnPasswordRefusal.Problem;
+import ua.vtc.rozklad.auth.session.GoogleSignInMark;
+import ua.vtc.rozklad.auth.session.SessionAttributes;
 import ua.vtc.rozklad.auth.support.PropertiesFixture;
 
 /** The own-account API over HTTP: who may call it, the request it reads and the problems it answers. */
@@ -43,6 +51,9 @@ import ua.vtc.rozklad.auth.support.PropertiesFixture;
 class OwnAccountControllerTest {
 
     private static final UUID ID = UUID.fromString("a0000000-0000-4000-8000-000000000002");
+    private static final long SIGNED_IN_AT = 1_795_000_000_000L;
+    private static final String INITIAL = """
+            {"newPassword":"Brand-New-Password-7"}""";
     private static final String BODY = """
             {"currentPassword":"Current-Password-2026","newPassword":"Brand-New-Password-7"}""";
 
@@ -89,14 +100,92 @@ class OwnAccountControllerTest {
 
     @Test
     void theStatusTellsWhetherThereIsAPasswordToChange() throws Exception {
-        given(passwords.info(ID)).willReturn(new OwnPasswordService.Info(OwnPasswordService.Status.NO_PASSWORD, 12,
-                64));
+        given(passwords.info(eq(ID), any())).willReturn(new OwnPasswordService.Info(
+                OwnPasswordService.Status.NO_PASSWORD, 12, 64, true));
 
         mockMvc.perform(get("/api/account/password").with(person("TEACHER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("NO_PASSWORD"))
                 .andExpect(jsonPath("$.minLength").value(12))
-                .andExpect(jsonPath("$.maxLength").value(64));
+                .andExpect(jsonPath("$.maxLength").value(64))
+                .andExpect(jsonPath("$.reauthRequired").value(true));
+        verify(passwords).info(ID, Optional.empty());
+    }
+
+    @Test
+    void theStatusReadsTheGoogleSignInOfThisBrowsersSessionFromTheServerSideOnly() throws Exception {
+        given(passwords.info(eq(ID), any())).willReturn(new OwnPasswordService.Info(
+                OwnPasswordService.Status.NO_PASSWORD, 12, 64, false));
+
+        mockMvc.perform(get("/api/account/password").with(person("TEACHER")).session(googleSession(ID))
+                        // заголовки й параметри клієнта нічого не доводять: лише атрибути сесії на сервері
+                        .header("X-Google-Authenticated-At", "0").param("googleAuthenticatedAt", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reauthRequired").value(false));
+
+        verify(passwords).info(ID, Optional.of(new GoogleSignInMark(ID.toString(), ID.toString(),
+                Instant.ofEpochMilli(SIGNED_IN_AT))));
+    }
+
+    @Test
+    void aFirstPasswordGoesWithTheGoogleSignInOfThisSessionWhichIsThenUsedUp() throws Exception {
+        MockHttpSession session = googleSession(ID);
+
+        mockMvc.perform(post("/api/account/initial-password").with(person("TEACHER")).session(session)
+                        .contentType(MediaType.APPLICATION_JSON).content(INITIAL))
+                .andExpect(status().isNoContent());
+
+        verify(passwords).setInitial(eq(ID), eq("Brand-New-Password-7"), any(),
+                eq(Optional.of(new GoogleSignInMark(ID.toString(), ID.toString(),
+                        Instant.ofEpochMilli(SIGNED_IN_AT)))), eq("this-browser"));
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(session.getAttribute(SessionAttributes.GOOGLE_AUTHENTICATED_AT)).isNull();
+        assertThat(session.getAttribute(SessionAttributes.GOOGLE_ACCOUNT_ID)).isNull();
+    }
+
+    @Test
+    void aFirstPasswordWithoutTheReauthenticationIsA403ProblemThatSaysSo() throws Exception {
+        willThrow(new OwnPasswordRefusal(Problem.REAUTH_REQUIRED)).given(passwords)
+                .setInitial(any(), any(), any(), any(), any());
+
+        mockMvc.perform(post("/api/account/initial-password").with(person("TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(INITIAL))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("urn:rozklad:auth:reauth-required"))
+                .andExpect(jsonPath("$.code").value("reauth-required"));
+        verify(passwords).setInitial(eq(ID), eq("Brand-New-Password-7"), any(), eq(Optional.empty()), isNull());
+
+        willThrow(new OwnPasswordRefusal(Problem.PASSWORD_ALREADY_SET)).given(passwords)
+                .setInitial(any(), any(), any(), any(), any());
+        mockMvc.perform(post("/api/account/initial-password").with(person("TEACHER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(INITIAL))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("password-already-set"));
+    }
+
+    @Test
+    void aFirstPasswordNeedsAPersonToken() throws Exception {
+        mockMvc.perform(post("/api/account/initial-password").session(googleSession(ID))
+                        .contentType(MediaType.APPLICATION_JSON).content(INITIAL))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/account/initial-password").session(googleSession(ID))
+                        .with(jwt().jwt(token -> token.subject("rozklad-notification")
+                                .claim("roles", List.of("SERVICE")))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(passwords);
+        assertThat(new OwnAccountController.InitialRequest("secret-1").toString()).doesNotContain("secret");
+    }
+
+    /** A sign-in session of this browser that a Google sign-in of {@code account} finished. */
+    private static MockHttpSession googleSession(UUID account) {
+        MockHttpSession session = new MockHttpSession(null, "this-browser");
+        var context = new SecurityContextImpl(UsernamePasswordAuthenticationToken.authenticated(
+                new User(account.toString(), "", List.of()), null, List.of()));
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        session.setAttribute(SessionAttributes.GOOGLE_AUTHENTICATED_AT, SIGNED_IN_AT);
+        session.setAttribute(SessionAttributes.GOOGLE_ACCOUNT_ID, account.toString());
+        return session;
     }
 
     @Test

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.auth.account.Account;
 import ua.vtc.rozklad.auth.account.AccountRepository;
 import ua.vtc.rozklad.auth.config.AuthServerProperties;
+import ua.vtc.rozklad.auth.session.GoogleSignInMark;
 import ua.vtc.rozklad.auth.session.SessionAttributes;
 
 /**
@@ -63,6 +64,8 @@ public class LoginOutcomeHandlers {
                 // цей браузер далі має власний лічильник блокування для цього логіна
                 devices.remember(request, response, identifier, now);
                 request.getSession().setAttribute(SessionAttributes.AUTHENTICATED_AT, now.toEpochMilli());
+                // останній вхід цієї сесії — паролем: попередній вхід через Google більше нічого не доводить
+                GoogleSignInMark.clear(request.getSession(false));
                 log.info("password sign-in succeeded for account {}", accountId);
                 super.onAuthenticationSuccess(request, response, authentication);
             }

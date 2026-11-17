@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pageNavigation } from '@/api/account';
 import { notify } from '@/components/ui';
 import { MOCK_CURRENT_PASSWORD } from '@/mocks/handlers/account';
 import { server } from '@/mocks/server';
@@ -20,6 +21,11 @@ vi.mock('@/auth/userManager', async (importOriginal) => ({
 }));
 
 const PATH = '*/auth/api/account/password';
+const INITIAL_PATH = '*/auth/api/account/initial-password';
+
+function googleOnly(reauthRequired: boolean) {
+  return { status: 'NO_PASSWORD', minLength: 12, maxLength: 64, reauthRequired };
+}
 const NEW = 'Novyi-parol-2026';
 
 function renderDialog() {
@@ -136,14 +142,97 @@ describe('зміна власного пароля', () => {
     expect(screen.queryByLabelText(/^Поточний пароль/)).toBeNull();
   });
 
-  it('вхід лише через Google — форми немає, є пояснення, де взяти пароль', async () => {
-    server.use(http.get(PATH, () => HttpResponse.json({ status: 'NO_PASSWORD', minLength: 12, maxLength: 64 })));
-    renderDialog();
-    expect(await screen.findByText(/Ви входите через Google/)).toHaveTextContent('посилання для пароля');
+  it('вхід лише через Google без свіжого підтвердження — «Встановити пароль» веде на Google і назад сюди', async () => {
+    const assign = vi.spyOn(pageNavigation, 'assign').mockImplementation(() => undefined);
+    server.use(http.get(PATH, () => HttpResponse.json(googleOnly(true))));
+    const { user } = renderDialog();
+
+    expect(await screen.findByRole('dialog', { name: 'Встановити пароль' })).toBeInTheDocument();
+    expect(screen.getByText(/Ви входите через Google, пароля поки немає/)).toBeInTheDocument();
+    // без підтвердження форми немає: одного токена сервісу входу замало
+    expect(screen.queryByLabelText(/^Новий пароль/)).toBeNull();
     expect(screen.queryByLabelText(/^Поточний пароль/)).toBeNull();
-    // хрестик угорі й кнопка в підвалі
-    expect(screen.getAllByRole('button', { name: 'Закрити' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: 'Змінити пароль' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Підтвердити через Google' }));
+
+    expect(assign).toHaveBeenCalledTimes(1);
+    const target = new URL(assign.mock.calls[0]![0]);
+    expect(target.pathname).toMatch(/\/auth\/oauth2\/authorization\/google$/);
+    const back = new URL(target.searchParams.get('reauth_return')!);
+    expect(back.origin).toBe(window.location.origin);
+    expect(back.searchParams.get('password')).toBe('set');
+  });
+
+  it('повернулися з Google, а підтвердження немає — вікно каже про це й пропонує ще раз', async () => {
+    server.use(http.get(PATH, () => HttpResponse.json(googleOnly(true))));
+    renderWithProviders(<ChangePasswordDialog open onOpenChange={vi.fn()} returnedFromGoogle />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Вхід через Google не підтверджено');
+    expect(screen.getByRole('button', { name: 'Підтвердити через Google' })).toBeInTheDocument();
+  });
+
+  it('після свіжого підтвердження через Google — пароль без поточного; успіх закриває вікно', async () => {
+    const success = vi.spyOn(notify, 'success');
+    let seen: { authorization: string | null; body: unknown } | null = null;
+    server.use(
+      http.get(PATH, () => HttpResponse.json(googleOnly(false))),
+      http.post(INITIAL_PATH, async ({ request }) => {
+        seen = { authorization: request.headers.get('Authorization'), body: await request.json() };
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const { user, onOpenChange } = renderDialog();
+
+    expect(await screen.findByRole('dialog', { name: 'Встановити пароль' })).toBeInTheDocument();
+    expect(await screen.findByText(/Вхід через Google підтверджено/)).toHaveTextContent('krentsin');
+    expect(screen.queryByLabelText(/^Поточний пароль/)).toBeNull();
+    await user.type(screen.getByLabelText(/^Новий пароль/), NEW);
+    await user.type(screen.getByLabelText(/^Повторіть пароль/), NEW);
+    await user.click(screen.getByRole('button', { name: 'Встановити пароль' }));
+
+    await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(seen).toEqual({ authorization: 'Bearer test-access-token', body: { newPassword: NEW } });
+    expect(success).toHaveBeenCalledWith('Пароль встановлено', {
+      description: 'Тепер можна входити і через Google, і з паролем. На інших пристроях доведеться увійти знову.',
+    });
+  });
+
+  it('підтвердження застаріло, поки людина вводила пароль, — вікно знову просить Google', async () => {
+    let fresh = true;
+    server.use(
+      http.get(PATH, () => HttpResponse.json(googleOnly(!fresh))),
+      http.post(INITIAL_PATH, () => {
+        fresh = false;
+        return authProblem(403, 'reauth-required', 'Підтвердьте вхід через Google ще раз.');
+      }),
+    );
+    const { user, onOpenChange } = renderDialog();
+    await user.type(await screen.findByLabelText(/^Новий пароль/), NEW);
+    await user.type(screen.getByLabelText(/^Повторіть пароль/), NEW);
+    await user.click(screen.getByRole('button', { name: 'Встановити пароль' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Підтвердження через Google застаріло');
+    expect(screen.getByRole('button', { name: 'Підтвердити через Google' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Новий пароль/)).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('перший пароль, який відхилили правила сервісу входу, — пояснення під полем', async () => {
+    server.use(
+      http.get(PATH, () => HttpResponse.json(googleOnly(false))),
+      http.post(INITIAL_PATH, () =>
+        HttpResponse.json(
+          { type: 'urn:rozklad:auth:password-rejected', status: 400, code: 'password-rejected', reason: 'too-common', detail: 'Цей пароль надто поширений. Придумайте інший.' },
+          { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    );
+    const { user } = renderDialog();
+    await user.type(await screen.findByLabelText(/^Новий пароль/), 'password1234');
+    await user.type(screen.getByLabelText(/^Повторіть пароль/), 'password1234');
+    await user.click(screen.getByRole('button', { name: 'Встановити пароль' }));
+    expect(await screen.findByText('Цей пароль надто поширений. Придумайте інший.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Новий пароль/)).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('спільний демо-доступ — пароль не змінюється', async () => {

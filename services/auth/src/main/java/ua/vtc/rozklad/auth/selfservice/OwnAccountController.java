@@ -16,10 +16,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ua.vtc.rozklad.auth.login.ClientAddress;
+import ua.vtc.rozklad.auth.session.GoogleSignInMark;
 
 /**
  * The person's own account, called by the SPA with its access token ({@link OwnAccountSecurityConfig}):
- * {@code GET /api/account/password} and {@code POST /api/account/password}. Refusals are RFC 9457 problems with a
+ * {@code GET /api/account/password}, {@code POST /api/account/password} and, for an account that signs in with
+ * Google only, {@code POST /api/account/initial-password}. Refusals are RFC 9457 problems with a
  * stable {@code type} ({@code urn:rozklad:auth:<code>}), the same {@code code} as a property and a Ukrainian
  * {@code detail}; {@code password-rejected} also carries {@code reason}.
  */
@@ -36,8 +38,8 @@ class OwnAccountController {
     }
 
     @GetMapping("/password")
-    OwnPasswordService.Info password(@AuthenticationPrincipal Jwt jwt) {
-        return passwords.info(accountId(jwt));
+    OwnPasswordService.Info password(@AuthenticationPrincipal Jwt jwt, HttpServletRequest http) {
+        return passwords.info(accountId(jwt), GoogleSignInMark.of(http.getSession(false)));
     }
 
     @PostMapping("/password")
@@ -48,6 +50,22 @@ class OwnAccountController {
         HttpSession session = http.getSession(false);
         passwords.change(accountId(jwt), body.currentPassword(), body.newPassword(), ClientAddress.of(http),
                 session == null ? null : session.getId());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * The first password of a Google-only account. Besides the token, the sign-in cookie of this browser must come
+     * along, and its session must have finished a Google sign-in of the same account shortly before
+     * ({@link OwnPasswordService#setInitial}); the session itself stays, the proof is used up.
+     */
+    @PostMapping("/initial-password")
+    ResponseEntity<Void> setInitialPassword(@AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) InitialRequest request, HttpServletRequest http) {
+        InitialRequest body = request == null ? new InitialRequest(null) : request;
+        HttpSession session = http.getSession(false);
+        passwords.setInitial(accountId(jwt), body.newPassword(), ClientAddress.of(http),
+                GoogleSignInMark.of(session), session == null ? null : session.getId());
+        GoogleSignInMark.clear(session);
         return ResponseEntity.noContent().build();
     }
 
@@ -67,6 +85,15 @@ class OwnAccountController {
     /** The chain lets only tokens whose {@code sub} is an account id through ({@link OwnAccountSecurityConfig}). */
     private static UUID accountId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
+    }
+
+    /** {@code {newPassword}}; never logged. */
+    record InitialRequest(String newPassword) {
+
+        @Override
+        public String toString() {
+            return "InitialRequest[newPassword=***]";
+        }
     }
 
     /** {@code {currentPassword, newPassword}}; never logged. */

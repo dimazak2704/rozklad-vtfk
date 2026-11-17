@@ -2,8 +2,10 @@ package ua.vtc.rozklad.auth.selfservice;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +21,7 @@ import ua.vtc.rozklad.auth.login.ClientAddress;
 import ua.vtc.rozklad.auth.login.LockoutPolicy;
 import ua.vtc.rozklad.auth.login.LoginAttempts;
 import ua.vtc.rozklad.auth.selfservice.OwnPasswordRefusal.Problem;
+import ua.vtc.rozklad.auth.session.GoogleSignInMark;
 
 /**
  * A signed-in person changes their own password (CONTRACTS §0.1). The current password is checked like a sign-in:
@@ -33,8 +36,12 @@ import ua.vtc.rozklad.auth.selfservice.OwnPasswordRefusal.Problem;
  * devices cannot renew their tokens; access tokens already issued live until {@code exp}. OAuth2 authorizations
  * are kept: the SPA has no refresh token, and the other devices' ID tokens still work for logout.
  * <p>
- * Accounts without a password (Google sign-in only) cannot set one here: that would let a stolen token add a
- * credential. They get a password link from «Доступи». Shared demo accounts of the server keep their password.
+ * Accounts without a password (Google sign-in only) set their first one with {@link #setInitial}: a token alone is
+ * not enough there, since that would turn a short-lived stolen token into a lasting credential. The request must
+ * also carry this browser's sign-in session, still signed in as the token's account, whose last Google sign-in was
+ * of that account and at most {@link #REAUTH_WINDOW} ago ({@link GoogleSignInMark}, written only by the Google
+ * success handler). The SPA gets such a session by sending the person through Google again
+ * ({@code /auth/oauth2/authorization/google?reauth_return=…}). Shared demo accounts of the server keep their password.
  */
 @Service
 public class OwnPasswordService {
@@ -42,6 +49,8 @@ public class OwnPasswordService {
     private static final Logger log = LoggerFactory.getLogger(OwnPasswordService.class);
     /** A request field longer than this is not a password anybody typed. */
     static final int MAX_INPUT_LENGTH = 1024;
+    /** How long a Google sign-in of this browser counts as a fresh re-authentication for a first password. */
+    public static final Duration REAUTH_WINDOW = Duration.ofMinutes(10);
 
     private final AccountRepository accounts;
     private final PasswordPolicy policy;
@@ -67,7 +76,17 @@ public class OwnPasswordService {
 
     /** Whether the person can change the password here, and the length limits of the policy. */
     public Info info(UUID accountId) {
-        return new Info(status(requireActive(accountId)), policy.minLength(), PasswordPolicy.MAX_LENGTH);
+        return info(accountId, Optional.empty());
+    }
+
+    /**
+     * As {@link #info(UUID)}; for an account without a password also whether this browser's session still needs a
+     * fresh Google re-authentication before {@link #setInitial} ({@code reauthRequired}).
+     */
+    public Info info(UUID accountId, Optional<GoogleSignInMark> session) {
+        Status status = status(requireActive(accountId));
+        boolean reauthRequired = status == Status.NO_PASSWORD && !fresh(session, accountId, clock.instant());
+        return new Info(status, policy.minLength(), PasswordPolicy.MAX_LENGTH, reauthRequired);
     }
 
     /**
@@ -118,6 +137,61 @@ public class OwnPasswordService {
         int ended = endOtherSessions(accountId, keepSessionId);
         log.info("own password of account {} changed: {} other sessions ended", accountId, ended);
         return ended;
+    }
+
+    /**
+     * Sets the first password of an account that signs in with Google only, then ends the account's other sign-in
+     * sessions. Needs a fresh Google re-authentication of this browser ({@code session}, see the class comment);
+     * the attempt is journalled as {@code PASSWORD_SET} and counts in the lockout of the account's identifier.
+     *
+     * @param session       the Google sign-in mark of the request's sign-in session, if its cookie came along
+     * @param keepSessionId that session's id ({@code null}: none came)
+     * @return how many other sessions ended
+     * @throws OwnPasswordRefusal when the password is not set
+     */
+    public int setInitial(UUID accountId, String newPassword, ClientAddress address,
+            Optional<GoogleSignInMark> session, String keepSessionId) {
+        if (isMissing(newPassword) || newPassword.length() > MAX_INPUT_LENGTH) {
+            throw new OwnPasswordRefusal(Problem.VALIDATION, "Вкажіть новий пароль.", null);
+        }
+        Account account = requireActive(accountId);
+        switch (status(account)) {
+            case DEMO -> throw new OwnPasswordRefusal(Problem.DEMO_ACCOUNT);
+            case CHANGEABLE -> throw new OwnPasswordRefusal(Problem.PASSWORD_ALREADY_SET);
+            case NO_PASSWORD -> { }
+        }
+        byte[] identifier = LoginAttempts.hash(account.loginName());
+        Instant now = clock.instant();
+        LockoutPolicy.Decision decision = decide(identifier, address, now);
+        if (decision == LockoutPolicy.Decision.LOCKED || decision == LockoutPolicy.Decision.THROTTLED) {
+            attempts.record(LoginAttempts.Method.PASSWORD_SET, identifier, accountId, address,
+                    decision == LockoutPolicy.Decision.LOCKED ? LoginAttempts.Outcome.LOCKED
+                            : LoginAttempts.Outcome.THROTTLED, now);
+            log.info("first own password of account {} refused: {}", accountId, decision);
+            throw new OwnPasswordRefusal(Problem.TOO_MANY_ATTEMPTS);
+        }
+        if (!fresh(session, accountId, now)) {
+            attempts.record(LoginAttempts.Method.PASSWORD_SET, identifier, accountId, address,
+                    LoginAttempts.Outcome.BAD_CREDENTIALS, now);
+            log.info("first own password of account {} refused: no fresh google re-authentication", accountId);
+            throw new OwnPasswordRefusal(Problem.REAUTH_REQUIRED);
+        }
+        attempts.record(LoginAttempts.Method.PASSWORD_SET, identifier, accountId, address,
+                LoginAttempts.Outcome.SUCCESS, now);
+        policy.check(newPassword, account.username(), account.email()).ifPresent(reason -> {
+            throw new OwnPasswordRefusal(Problem.PASSWORD_REJECTED, rejectionText(reason), reason.code());
+        });
+        if (!accounts.setInitialPassword(accountId, passwordEncoder.encode(newPassword), now, account.loginName())) {
+            // паралельний запит чи адміністратор встигли раніше: нічого не перезаписуємо
+            throw new OwnPasswordRefusal(Problem.PASSWORD_ALREADY_SET);
+        }
+        int ended = endOtherSessions(accountId, keepSessionId);
+        log.info("first own password of account {} set: {} other sessions ended", accountId, ended);
+        return ended;
+    }
+
+    private static boolean fresh(Optional<GoogleSignInMark> session, UUID accountId, Instant now) {
+        return session.filter(mark -> mark.freshFor(accountId, now, REAUTH_WINDOW)).isPresent();
     }
 
     private LockoutPolicy.Decision decide(byte[] identifier, ClientAddress address, Instant now) {
@@ -181,6 +255,10 @@ public class OwnPasswordService {
     /** {@code CHANGEABLE}: has a password; {@code NO_PASSWORD}: Google sign-in only; {@code DEMO}: shared demo. */
     public enum Status { CHANGEABLE, NO_PASSWORD, DEMO }
 
-    public record Info(Status status, int minLength, int maxLength) {
+    /**
+     * @param reauthRequired {@code NO_PASSWORD} only: this browser must confirm the account through Google again
+     *                       before it can set the first password ({@code false} for the other statuses)
+     */
+    public record Info(Status status, int minLength, int maxLength, boolean reauthRequired) {
     }
 }

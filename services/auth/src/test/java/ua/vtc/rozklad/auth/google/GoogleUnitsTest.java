@@ -16,6 +16,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -109,6 +110,76 @@ class GoogleUnitsTest {
                 .containsEntry("hd", DOMAIN);
         assertThat(GoogleLogin.resolver(clients, null).resolve(request).getAdditionalParameters())
                 .doesNotContainKey("hd");
+    }
+
+    @Test
+    void aReauthenticationAsksGoogleToPromptAndKeepsTheReturnAddressInTheStoredRequest() {
+        var google = new GoogleProperties("client", "secret", DOMAIN, false, false, null, null, null, null, null);
+        var clients = new InMemoryClientRegistrationRepository(
+                GoogleSignIn.registration(google, PropertiesFixture.dev()).orElseThrow());
+        var resolver = new GoogleReauth.Resolver(GoogleLogin.resolver(clients, DOMAIN),
+                GoogleReauth.origins(PropertiesFixture.dev().webOrigins()));
+        var request = new MockHttpServletRequest("GET", "/auth/oauth2/authorization/google");
+        request.setContextPath("/auth");
+        request.setParameter(GoogleReauth.RETURN_PARAMETER, "http://localhost:5180/me?password=set");
+
+        OAuth2AuthorizationRequest reauth = resolver.resolve(request);
+
+        assertThat(reauth.getAdditionalParameters()).containsEntry("hd", DOMAIN)
+                .containsEntry("prompt", "select_account").containsEntry("max_age", "0");
+        assertThat(reauth.getAuthorizationRequestUri()).contains("prompt=select_account").contains("max_age=0")
+                .contains("hd=" + DOMAIN).contains("state=").contains("nonce=");
+        assertThat((String) reauth.getAttribute(GoogleReauth.RETURN_ATTRIBUTE))
+                .isEqualTo("http://localhost:5180/me?password=set");
+
+        // чужа адреса повернення — звичайний вхід без підказок Google і без адреси
+        request.setParameter(GoogleReauth.RETURN_PARAMETER, "https://evil.example/me");
+        OAuth2AuthorizationRequest plain = resolver.resolve(request);
+        assertThat(plain.getAdditionalParameters()).doesNotContainKeys("prompt", "max_age");
+        assertThat(plain.getAuthorizationRequestUri()).doesNotContain("prompt=");
+        assertThat((Object) plain.getAttribute(GoogleReauth.RETURN_ATTRIBUTE)).isNull();
+    }
+
+    @Test
+    void onlyAddressesOnTheSpaOriginsAreReturnAddresses() {
+        var origins = GoogleReauth.origins(List.of(java.net.URI.create("http://localhost:5180"),
+                java.net.URI.create("https://Rozklad.Example.ua")));
+
+        assertThat(GoogleReauth.validReturn("http://localhost:5180/me?password=set", origins)).isPresent();
+        assertThat(GoogleReauth.validReturn("https://rozklad.example.ua/admin?password=set#x", origins)).isPresent();
+        assertThat(GoogleReauth.validReturn("http://localhost:5181/me", origins)).as("another port").isEmpty();
+        assertThat(GoogleReauth.validReturn("https://rozklad.example.ua.evil.example/", origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn("https://user@rozklad.example.ua/", origins)).as("user info").isEmpty();
+        assertThat(GoogleReauth.validReturn("/me", origins)).as("relative").isEmpty();
+        assertThat(GoogleReauth.validReturn("//rozklad.example.ua/me", origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn("javascript:alert(1)", origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn("https://rozklad.example.ua\\@evil.example/", origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn("https://rozklad.example.ua/\r\nSet-Cookie:x", origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn("https://rozklad.example.ua/" + "a".repeat(2100), origins)).isEmpty();
+        assertThat(GoogleReauth.validReturn(null, origins)).isEmpty();
+    }
+
+    @Test
+    void theCallbackFindsTheReturnAddressOnlyOnTheRequestItExchanged() {
+        var requests = new GoogleReauth.Requests();
+        var start = new MockHttpServletRequest("GET", "/auth/oauth2/authorization/google");
+        var response = new org.springframework.mock.web.MockHttpServletResponse();
+        OAuth2AuthorizationRequest stored = OAuth2AuthorizationRequest.authorizationCode()
+                .authorizationUri("https://accounts.google.com/o/oauth2/v2/auth").clientId("client").state("s1")
+                .attributes(attributes -> attributes.put(GoogleReauth.RETURN_ATTRIBUTE, "http://localhost:5180/me"))
+                .build();
+        requests.saveAuthorizationRequest(stored, start, response);
+
+        var callback = new MockHttpServletRequest("GET", "/auth/login/oauth2/code/google");
+        callback.setSession(start.getSession());
+        callback.setParameter("state", "s1");
+        assertThat(GoogleReauth.returnOf(callback)).isEmpty();
+        assertThat(requests.removeAuthorizationRequest(callback, response)).isNotNull();
+
+        assertThat(GoogleReauth.returnOf(callback)).contains("http://localhost:5180/me");
+        var other = new MockHttpServletRequest("GET", "/auth/login/oauth2/code/google");
+        other.setSession(start.getSession());
+        assertThat(GoogleReauth.returnOf(other)).isEmpty();
     }
 
     @Test
