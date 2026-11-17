@@ -60,7 +60,7 @@ public final class LockoutPolicy {
      * failures (2 s at 50, 20 s at 500), at most {@code maxDelay}. A guesser feeding the counter slows itself
      * down, so a day of guessing from any number of networks stays in the low thousands.
      */
-    Duration gateDelay(Stats stats) {
+    public Duration gateDelay(Stats stats) {
         long steps = Math.max(1, stats.identifierFailures() / config.slowdownFailures());
         Duration max = config.maxDelay();
         if (steps >= max.dividedBy(config.slowdownDelay())) {

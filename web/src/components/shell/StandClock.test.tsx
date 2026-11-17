@@ -64,6 +64,32 @@ describe('переведений час стенда', () => {
     expect(document.querySelector('[data-stand-time]')).toBeNull();
   });
 
+  it('у шапці сайту й кабінету повний текст залежить від ширини правої групи, а не вікна; у панелі — від 1280 px', () => {
+    const real = Date.now();
+    act(() => syncClock({ now: '2026-11-20T08:00:00Z', standTime: true }, real, real));
+    renderWithProviders(
+      <>
+        <div data-testid="header">
+          <StandTimeBadge expand="tools" />
+        </div>
+        <div data-testid="admin">
+          <StandTimeBadge />
+        </div>
+      </>,
+    );
+    const classes = (scope: string, label: string) =>
+      screen.getByTestId(scope).querySelector(`[data-stand-label="${label}"]`)!.className.split(/\s+/);
+    // кабінет із пʼятьма розділами: повний текст лише коли праворуч є 42 rem, інакше «пт 10:00 · тест»
+    expect(classes('header', 'compact')).toEqual(expect.arrayContaining(['sm:inline', '@[42rem]/tools:hidden']));
+    expect(classes('header', 'full')).toEqual(expect.arrayContaining(['hidden', '@[42rem]/tools:inline']));
+    expect(classes('header', 'full')).not.toContain('xl:inline');
+    expect(classes('admin', 'compact')).toContain('xl:hidden');
+    expect(classes('admin', 'full')).toContain('xl:inline');
+    expect(screen.getByTestId('header').querySelector('[data-stand-label="full"]')).toHaveTextContent(
+      'Час стенда: пт, 20 листопада, 10:00 (тест)',
+    );
+  });
+
   it('стрибок часу будує сторінку з нуля, щоб «сьогодні» перерахували всі', () => {
     const mounts = vi.fn();
     function Page() {

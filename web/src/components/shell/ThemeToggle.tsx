@@ -5,12 +5,7 @@ import { cn } from '@/lib/cn';
 import { useThemeStore, type ThemePreference } from '@/stores/theme';
 import { IconButton } from '../ui/IconButton';
 import { SegmentedControl } from '../ui/SegmentedControl';
-
-const OPTIONS: Array<{ value: ThemePreference; label: string; icon: typeof Sun }> = [
-  { value: 'system', label: 'Як у системі', icon: SunMoon },
-  { value: 'light', label: 'Світла', icon: Sun },
-  { value: 'dark', label: 'Темна', icon: Moon },
-];
+import { THEME_OPTIONS as OPTIONS, useThemeLabel } from './theme-options';
 
 const MENU =
   'anim-pop z-50 min-w-48 rounded-popover border border-default bg-raised p-1.5 text-primary shadow-popover';
@@ -44,7 +39,7 @@ export function ThemeToggle({ className }: { tone?: 'default' | 'on-shell'; clas
   const preference = useThemeStore((state) => state.preference);
   const resolved = useResolvedTheme();
   const Icon = preference === 'system' ? SunMoon : resolved === 'dark' ? Moon : Sun;
-  const current = OPTIONS.find((o) => o.value === preference)?.label.toLocaleLowerCase('uk') ?? '';
+  const current = useThemeLabel();
 
   return (
     <DropdownMenu.Root>
@@ -71,8 +66,7 @@ export function ThemeToggle({ className }: { tone?: 'default' | 'on-shell'; clas
  * тож більшості людей цей вибір не потрібен; він не займає місця в шапці.
  */
 export function ThemeMenu({ className }: { className?: string }) {
-  const preference = useThemeStore((state) => state.preference);
-  const current = OPTIONS.find((o) => o.value === preference)?.label.toLocaleLowerCase('uk') ?? '';
+  const current = useThemeLabel();
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger

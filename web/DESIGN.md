@@ -815,8 +815,14 @@ groups changes by group and states each one in one sentence (for example «1 п�
 - Right:
   - on home: no search in the header, because the page has the big field;
   - elsewhere: a search trigger styled as a quiet field («Група, викладач, аудиторія» with `Ctrl K`
-    in a `tag`);
-  - then «Увійти» as a text link, or the avatar menu when signed in.
+    in a `tag`). The right group is a container (`@container/tools`): what fits is decided by its width,
+    not the window's. The field shows from 22 rem of the group, else a 44 px search icon button with the
+    tooltip «Пошук розкладу · Ctrl K». Inside the field (its own container) the hint is «Пошук» below
+    13 rem of content, and `Ctrl K` shows only where it fits beside the hint, so it never covers it;
+  - the stand-time badge is «пт 10:00 · тест» unless the group has 42 rem for the full text;
+  - then «Увійти» as a text link, or the avatar menu when signed in: a 44 px circle (`shrink-0`, so
+    a crowded header cannot squeeze it into an oval). Its menu: cabinet or panel, «Тема ›» (one item
+    with a submenu of three radio items, the current one checked), «Змінити пароль» (staff), «Вийти».
 
 **Below 1024:**
 - The header is the mark, the title and a search icon button (44 px).
@@ -1204,7 +1210,7 @@ their column, not the viewport.
 | Empty and error blocks inside a bordered card | `EmptyState inset` / `ErrorState inset` (16 px side padding) |
 | Tables | `DataTable` stacks into a list below 768 px (`stackOnMobile`, default on). Give non-string headers a `mobileLabel`. |
 | Now and the day | `NowIndicator variant="hero"` (home), `"strip"` (Дзвінки), `"compact"` (phone above the day list), `"inline"`; `DayTrack` for a custom layout. All from `@/components/schedule`. |
-| Theme choice | `ThemeMenu` (footer), `ThemeRadioItems` (inside any Radix menu) from `@/components/shell/ThemeToggle` |
+| Theme choice | `ThemeMenu` (footer), `ThemeRadioItems` (inside any Radix menu, e.g. a `DropdownMenu.Sub`), `useThemeLabel()` from `@/components/shell/ThemeToggle` |
 | The mark | `BrandMark` (`size`, `draw` for the sign-in screen) from `@/components/shell/Wordmark` |
 | Undo instead of confirm | `notify.undo(message, { onUndo })` — 8 s with «Скасувати» |
 

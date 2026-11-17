@@ -36,6 +36,21 @@ Keys: `<issuer>/oauth2/jwks` (RS256, `kid` in the header). Service tokens: `clie
 in a hidden iframe `/login/silent.html`). Version 2 dropped the old `realm_access.roles` claim and the
 deprecated `keycloakUserId` of `GET /api/internal/teachers/{id}` (`docs/CHANGELOG-CONTRACTS.md`).
 
+### 0.1 Own account (`auth`, not the gateway; 17.11.2026)
+
+The SPA calls `auth` directly at `<issuer>/api/account/…` (on the server the same origin under `/auth`) with its
+access token; only people tokens (`sub` = account id, `roles` ∋ `ADMIN` or `TEACHER`) pass, service tokens → 403,
+no token → 401. No CSRF (bearer only). The sign-in cookie that comes along (`credentials: 'include'`) only names the
+session to keep. CORS only for `AUTH_CORS_ORIGINS` (development), with credentials.
+
+| Endpoint | Answer |
+|---|---|
+| `GET /auth/api/account/password` | `{status: CHANGEABLE\|NO_PASSWORD\|DEMO, minLength, maxLength}`: `NO_PASSWORD` = Google sign-in only (no form; a password link from «Доступи»), `DEMO` = a shared demo account of the server (kept); 403 `account-inactive` |
+| `POST /auth/api/account/password` `{currentPassword, newPassword}` | 204: the new password is stored and every **other** sign-in session of the account ends (this browser's stays; access tokens live until `exp`). 400 `validation` (a field missing or over 1024 characters), 400 `password-rejected` + `reason` (`too-short`, `too-long`, `same-as-username`, `same-as-email`, `too-common`, `same-as-current`), 403 `account-inactive` \| `demo-account`, 409 `password-not-set`, 422 `current-password-wrong`, 429 `too-many-attempts` |
+
+Problems: `type` `urn:rozklad:auth:<code>`, the same `code` as a property, Ukrainian `detail`. A current-password
+check counts in the sign-in lockout of the account's identifier and network (`login_attempt.method = PASSWORD_CHANGE`).
+
 ## 1. Core — public (no auth)
 
 | Method & path | Response |

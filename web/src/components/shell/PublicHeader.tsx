@@ -76,16 +76,20 @@ export function PublicHeader({ layout = 'public' }: { layout?: Extract<LayoutKin
           </ul>
         </nav>
 
-        {/* праворуч — усе, що лишилося після розділів: поле пошуку тягнеться до 16–18 rem і стискається, коли тісно */}
-        <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">
-          <StandTimeBadge />
-          {onHome ? null : <SearchTrigger className="hidden max-w-64 min-w-28 flex-1 lg:flex xl:max-w-72" />}
+        {/* праворуч — усе, що лишилося після розділів (контейнер `tools`): ширина групи, а не вікна, вирішує, що
+            влазить. Поле пошуку — лише від 22 rem групи (тоді в ньому хоча б «Пошук» і Ctrl K), інакше кнопка-іконка
+            з підказкою; повний текст годинника стенда — лише коли поруч ще вміщується повне поле */}
+        <div data-header-tools="" className="@container/tools ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+          <StandTimeBadge expand="tools" />
+          {onHome ? null : (
+            <SearchTrigger className="hidden max-w-64 min-w-0 flex-1 lg:@[22rem]/tools:flex xl:max-w-[18.5rem]" />
+          )}
           <IconButton
             label="Пошук розкладу"
             shortcut="mod+k"
             icon={<Search aria-hidden="true" className="size-5" />}
             size="lg"
-            className="lg:hidden"
+            className={cn('shrink-0', !onHome && 'lg:@[22rem]/tools:hidden', onHome && 'lg:hidden')}
             onClick={() => openSearch(true)}
           />
           <UserMenu />

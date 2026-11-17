@@ -30,8 +30,12 @@ export function ClockEpoch({ children }: { children: ReactNode }) {
  * Тиха позначка в шапці, лише на тестовому стенді з переведеним часом: щоб ніхто не плутав «пʼятницю 10:00»
  * на екрані зі справжнім часом. У звичайному режимі її немає. Вужче за 640 px — лише час («10:12»), повний
  * текст — для екранного читача.
+ *
+ * `expand` — коли показувати повний текст: `xl` — від 1280 px вікна (панель диспетчера, де праворуч лише
+ * іконки); `tools` — лише коли праву групу шапки (`@container/tools`) не тіснить нічого: у кабінеті з пʼятьма
+ * розділами повний текст забирав місце в поля пошуку, і від підказки лишалася одна літера.
  */
-export function StandTimeBadge({ className }: { className?: string }) {
+export function StandTimeBadge({ className, expand = 'xl' }: { className?: string; expand?: 'xl' | 'tools' }) {
   const { standTime } = useClockState();
   const { clock } = useNow();
   if (!standTime) return null;
@@ -51,10 +55,18 @@ export function StandTimeBadge({ className }: { className?: string }) {
       <span aria-hidden="true" className="figures sm:hidden">
         {time}
       </span>
-      <span aria-hidden="true" className="figures hidden sm:inline xl:hidden">
+      <span
+        aria-hidden="true"
+        data-stand-label="compact"
+        className={cn('figures hidden sm:inline', expand === 'xl' ? 'xl:hidden' : '@[42rem]/tools:hidden')}
+      >
         {weekday} {time} · тест
       </span>
-      <span aria-hidden="true" className="figures hidden xl:inline">
+      <span
+        aria-hidden="true"
+        data-stand-label="full"
+        className={cn('figures hidden', expand === 'xl' ? 'xl:inline' : '@[42rem]/tools:inline')}
+      >
         {full}
       </span>
     </Badge>
