@@ -648,9 +648,11 @@ export default function ChangesPage() {
           title={period === 'day' ? `На ${formatWeekdayDateAfterNa(date)} ніхто не відсутній.` : 'Цього тижня ніхто не відсутній.'}
           description="Коли викладач повідомить про відсутність через бота чи кабінет, його пари зʼявляться тут разом з варіантами заміни. Додаткову пару, іншу аудиторію чи ручну заміну без відсутності додає «Нова зміна»."
           action={
-            <Button variant="ghost" className="-ms-3" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
-              Додати відсутність
-            </Button>
+            <Tooltip content={null} shortcut="n">
+              <Button variant="ghost" className="-ms-3" onClick={openNewAbsence} iconStart={<Plus aria-hidden="true" className="size-4" />}>
+                Додати відсутність
+              </Button>
+            </Tooltip>
           }
           secondaryAction={
             <Button variant="ghost" onClick={openNewChange} iconStart={<FilePlus2 aria-hidden="true" className="size-4" />}>
@@ -767,16 +769,18 @@ export default function ChangesPage() {
                 Нова зміна
               </Button>
             </Tooltip>
-            <Link
-              to={`/admin/orders?date=${date}`}
-              className={buttonClass({
-                variant: 'secondary',
-                className: 'max-sm:hidden',
-              })}
-            >
-              <FileText aria-hidden="true" className="size-4" />
-              Розпорядження
-            </Link>
+            <Tooltip content="Відкрити розпорядження на цей день">
+              <Link
+                to={`/admin/orders?date=${date}`}
+                className={buttonClass({
+                  variant: 'secondary',
+                  className: 'max-sm:hidden',
+                })}
+              >
+                <FileText aria-hidden="true" className="size-4" />
+                Розпорядження
+              </Link>
+            </Tooltip>
           </>
         }
         // `⋯` тримає лише те, чого на екрані немає: «Додати відсутність» видно в списку відсутніх, тож у меню

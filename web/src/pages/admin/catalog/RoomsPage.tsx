@@ -33,7 +33,7 @@ import {
 } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
-import { capitalize, countLabel, ROOM_TYPE_LABEL } from '@/lib/labels';
+import { capitalize, countLabel, openScheduleHint, ROOM_TYPE_LABEL } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { lowerFirst } from '@/lib/undo/actions';
 import { useRegisterCommands } from '@/stores/commands';
@@ -225,7 +225,7 @@ export default function RoomsPage() {
             rowLabel={`аудиторія ${room.name}`}
             actions={[
               { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(room) },
-              { label: 'Розклад аудиторії', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.room(room.id)) },
+              { label: openScheduleHint('ROOM'), icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.room(room.id)) },
               {
                 label: room.active ? 'Позначити неактивною' : 'Зробити активною',
                 icon: <Power aria-hidden="true" />,

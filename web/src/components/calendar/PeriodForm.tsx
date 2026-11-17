@@ -11,7 +11,7 @@ import { qk } from '@/api/queryKeys';
 import type { PeriodKindDto, PeriodScope, StudyMode } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
-import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea } from '@/components/ui';
+import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea, Tooltip } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
 import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 import { DateInput } from './DateInput';
@@ -462,16 +462,19 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
           >
             <Textarea {...form.register('orderNote')} rows={3} />
           </Field>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="self-start"
-            iconStart={<FileText aria-hidden="true" className="size-4" />}
-            disabled={!draftNote}
-            onClick={() => form.setValue('orderNote', draftNote, { shouldDirty: true, shouldValidate: true })}
-          >
-            Скласти з полів
-          </Button>
+          {/* з назви не видно, що текст примітки буде замінено */}
+          <Tooltip content="Замінити примітку текстом із полів періоду" align="start">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="self-start"
+              iconStart={<FileText aria-hidden="true" className="size-4" />}
+              disabled={!draftNote}
+              onClick={() => form.setValue('orderNote', draftNote, { shouldDirty: true, shouldValidate: true })}
+            >
+              Скласти з полів
+            </Button>
+          </Tooltip>
           <figure className="flex flex-col gap-1.5">
             <figcaption className="text-caption text-muted">Так виглядатиме під таблицею розпорядження</figcaption>
             <div data-theme="light" className="rounded-tag border border-default bg-surface px-4 py-3 text-primary">

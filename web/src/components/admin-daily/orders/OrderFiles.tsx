@@ -2,7 +2,7 @@ import { ClipboardCopy, FileDown } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { canCopyImages, copyOrderPng, DOCUMENT_LABEL, downloadOrderFile } from '@/api/admin-daily';
 import type { DocumentFormat, OrderDto } from '@/api/types';
-import { Button, notify, type MoreMenuItem } from '@/components/ui';
+import { Button, notify, Tooltip, type MoreMenuItem } from '@/components/ui';
 
 /**
  * Файли опублікованого розпорядження (сервіс notification): PDF для друку — одна видима кнопка, а DOCX для
@@ -36,17 +36,20 @@ export function useOrderFiles(order: OrderDto | undefined): { pdfButton: ReactNo
     }
   };
 
+  // на кнопці лише назва формату: що станеться — у підказці (і в aria-label)
   const pdfButton = (
-    <Button
-      variant="secondary"
-      loading={busy === 'pdf'}
-      disabled={busy !== null}
-      onClick={() => void download('pdf')}
-      iconStart={<FileDown aria-hidden="true" className="size-4" />}
-      aria-label={`Завантажити ${DOCUMENT_LABEL.pdf}`}
-    >
-      {DOCUMENT_LABEL.pdf}
-    </Button>
+    <Tooltip content={`Завантажити ${DOCUMENT_LABEL.pdf}`}>
+      <Button
+        variant="secondary"
+        loading={busy === 'pdf'}
+        disabled={busy !== null}
+        onClick={() => void download('pdf')}
+        iconStart={<FileDown aria-hidden="true" className="size-4" />}
+        aria-label={`Завантажити ${DOCUMENT_LABEL.pdf}`}
+      >
+        {DOCUMENT_LABEL.pdf}
+      </Button>
+    </Tooltip>
   );
 
   const menu: MoreMenuItem[] = [

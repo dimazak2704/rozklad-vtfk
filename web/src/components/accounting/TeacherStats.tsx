@@ -5,7 +5,8 @@ import { useTeacherStats } from '@/api/accounting';
 import type { TeacherStatsDto } from '@/api/types';
 import { paths } from '@/app/routes';
 import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
-import { Button, DataTable, EmptyState, IconButton, Panel, type DataTableColumn } from '@/components/ui';
+import { Button, DataTable, EmptyState, IconButton, Panel, Tooltip, type DataTableColumn } from '@/components/ui';
+import { openScheduleHint } from '@/lib/labels';
 import { monthLabel, shiftMonth } from './model';
 
 interface TeacherStatsProps {
@@ -30,12 +31,15 @@ export function TeacherStats({ month, onMonthChange, currentMonth }: TeacherStat
         rowHeader: true,
         sortValue: (s) => name(s.teacher),
         cell: (s) => (
-          <Link
-            to={paths.teacher(s.teacher.id)}
-            className="rounded-tag font-semibold text-primary underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-          >
-            {name(s.teacher)}
-          </Link>
+          // імʼя веде з «Обліку» на публічний розклад викладача — не очевидно з тексту
+          <Tooltip content={openScheduleHint('TEACHER')} side="top" align="start">
+            <Link
+              to={paths.teacher(s.teacher.id)}
+              className="rounded-tag font-semibold text-primary underline-offset-2 hover-fine:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              {name(s.teacher)}
+            </Link>
+          </Tooltip>
         ),
       },
       {

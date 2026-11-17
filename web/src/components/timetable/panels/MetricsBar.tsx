@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { qk } from '@/api/queryKeys';
 import type { MetricsDto, Uuid } from '@/api/types';
 import { Disclosure } from '@/components/generation/Disclosure';
-import { Skeleton } from '@/components/ui';
+import { Skeleton, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { METRICS, type MetricKey } from '../model/labels';
@@ -114,14 +114,16 @@ export function MetricsBar({ versionId, metrics, baseline, hardConflicts, softWa
             <span className="font-[650] text-primary">{countLabel(hardConflicts, CONFLICT_FORMS)}</span>
             <span className="max-md:hidden">{publishable ? ' не дають опублікувати' : ' у цій версії'}</span>
             {' — '}
-            <button
-              type="button"
-              onClick={onShowConflicts}
-              aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
-              className="rounded-tag font-[650] text-primary underline decoration-1 underline-offset-4 hover-fine:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
-            >
-              показати
-            </button>
+            <Tooltip content="Показати список конфліктів">
+              <button
+                type="button"
+                onClick={onShowConflicts}
+                aria-label={`Конфлікти: ${hardConflicts} жорстких${softWarnings ? `, ${softWarnings} попереджень` : ''} — показати список`}
+                className="rounded-tag font-[650] text-primary underline decoration-1 underline-offset-4 hover-fine:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-11"
+              >
+                показати
+              </button>
+            </Tooltip>
             .
           </>
         ) : (

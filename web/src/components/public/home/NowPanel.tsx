@@ -12,6 +12,7 @@ import { compareIsoDates, formatLongDate, formatWeekdayDate, formatWeekdayDateAf
 import { capitalize, LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { LESSON_TONE, roomLabel } from '@/lib/schedule';
 import type { ScheduleTarget } from '@/stores/favorites';
+import { GroupHint } from '../GroupHint';
 import { useStalled } from '../useStalled';
 import { groupFocusPlan } from './group-focus';
 import { nowPanelRange } from './now-range';
@@ -72,15 +73,17 @@ function HeroSkeleton({ dateLine, withFocus, className }: { dateLine?: ReactNode
   );
 }
 
-/** Група одним посиланням у реченні героя. */
+/** Група одним посиланням у реченні героя; при наведенні — куди веде й повна назва групи. */
 function GroupLink({ group }: { group: ScheduleTarget }) {
   return (
-    <Link
-      to={group.url}
-      className="rounded-tag font-[650] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-    >
-      <span className="u-line">{group.label}</span>
-    </Link>
+    <GroupHint code={group.label}>
+      <Link
+        to={group.url}
+        className="rounded-tag font-[650] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      >
+        <span className="u-line">{group.label}</span>
+      </Link>
+    </GroupHint>
   );
 }
 

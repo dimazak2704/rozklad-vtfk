@@ -1,6 +1,7 @@
 import type { IsoDate } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
+import { Tooltip } from '../../ui/Tooltip';
 import type { ScheduleView } from './schedule-params';
 import type { ChangedLesson } from './schedule-utils';
 
@@ -31,7 +32,8 @@ interface ChangesNoteProps {
 
 /**
  * «• 2 заміни цього тижня» — один рядок замість окремої смуги над сіткою: самі зміни видно в клітинках.
- * Натискання веде фокус до першої зміненої клітинки, а на телефоні відкриває день першої зміни.
+ * Натискання веде фокус до першої зміненої клітинки, а на телефоні відкриває день першої зміни. Рядок читається як
+ * факт, а не дія, тож підказка каже, що станеться.
  */
 export function ChangesNote({ items, view, onOpenDay, className }: ChangesNoteProps) {
   const first = items[0];
@@ -46,17 +48,19 @@ export function ChangesNote({ items, view, onOpenDay, className }: ChangesNotePr
     }
   };
   return (
-    <button
-      type="button"
-      onClick={go}
-      className={cn(
-        'inline-flex min-h-8 w-fit items-center gap-2 rounded-tag text-ui font-[650] text-change pointer-coarse:min-h-11',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        className,
-      )}
-    >
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-change" />
-      <span className="u-line">{countLabel(items.length, CHANGE_FORMS)} цього тижня</span>
-    </button>
+    <Tooltip content="Показати першу заміну" side="top" align="start">
+      <button
+        type="button"
+        onClick={go}
+        className={cn(
+          'inline-flex min-h-8 w-fit items-center gap-2 rounded-tag text-ui font-[650] text-change pointer-coarse:min-h-11',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+          className,
+        )}
+      >
+        <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-change" />
+        <span className="u-line">{countLabel(items.length, CHANGE_FORMS)} цього тижня</span>
+      </button>
+    </Tooltip>
   );
 }

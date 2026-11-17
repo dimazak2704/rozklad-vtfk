@@ -1,13 +1,15 @@
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DayDto, PublicTeacherDto } from '@/api/types';
 import { apiPath } from '@/mocks/kit';
 import { server } from '@/mocks/server';
 import { BELLS_MON_THU, DEMO_WEEK } from '@/pages/dev/demo-data';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { renderWithProviders } from '@/test/render';
+import { resetHoverCards } from '@/components/ui/hover-intent';
+import { HOVER_CARD_CLOSE_DELAY_MS, HOVER_CARD_DELAY_MS, HOVER_DELAY_MS } from '@/components/ui/Tooltip.helpers';
 import { DayList } from './DayList';
 import { GridNamesProvider } from './GridNames';
 import { LessonCell } from './LessonCell';
@@ -165,6 +167,91 @@ describe('картка заняття: значення-посилання', () 
     await user.tab();
     expect(screen.getByRole('link', { name: /розклад групи/ })).toHaveFocus();
     expect(screen.getByRole('link', { name: /розклад групи/ })).toHaveClass('focus-visible:outline-2');
+  });
+});
+
+describe('картка заняття: підказки до посилань', () => {
+  const lesson = monday.lessons[0]!;
+
+  it('фокус на значенні каже, куди веде посилання', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<LessonDetails lesson={lesson} context="grid" />);
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Розклад викладача');
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Розклад аудиторії');
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Розклад групи');
+  });
+
+  it('сутність сторінки — не посилання, тож і підказки немає', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <LessonLinksContext value={{ self: { kind: 'teacher', id: lesson.teacher!.id, label: 'Непийвода' }, search: '' }}>
+        <LessonDetails lesson={lesson} context="grid" />
+      </LessonLinksContext>,
+    );
+    await user.tab();
+    // перше посилання тепер аудиторія: про викладача підказки немає
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Розклад аудиторії');
+  });
+
+  describe('у картці при наведенні', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      resetHoverCards();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const openCard = () => {
+      renderWithProviders(<LessonCell lesson={lesson} date={monday.date} />);
+      fireEvent.pointerOver(screen.getByRole('button', { name: /1 пара/ }), { pointerType: 'mouse' });
+      act(() => {
+        vi.advanceTimersByTime(HOVER_CARD_DELAY_MS);
+      });
+      return screen.getByRole('dialog');
+    };
+    const hoverLink = (link: HTMLElement) => {
+      fireEvent.pointerOver(link, { pointerType: 'mouse' });
+      fireEvent.pointerMove(link, { pointerType: 'mouse' });
+      act(() => {
+        vi.advanceTimersByTime(HOVER_DELAY_MS);
+      });
+    };
+
+    it('підказка до посилання не закриває картку, а миша проходить крізь неї', () => {
+      const card = openCard();
+      const teacher = within(card).getByRole('link', { name: /розклад викладача/ });
+      hoverLink(teacher);
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip).toHaveTextContent('Розклад викладача');
+      // підказка лежить над сусіднім рядком: курсор іде до нього крізь неї
+      const bubble = screen.getByText('Розклад викладача', { selector: '[data-side] *' }).closest('[data-side]')!;
+      expect(bubble).toHaveAttribute('data-pass-through');
+
+      // курсор зійшов із посилання на саму підказку (вона в порталі, поза карткою в DOM): картка лишається
+      fireEvent.pointerOut(teacher, { pointerType: 'mouse', relatedTarget: bubble });
+      act(() => {
+        vi.advanceTimersByTime(HOVER_CARD_CLOSE_DELAY_MS * 3);
+      });
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('Escape спершу ховає підказку, другий — закриває картку', () => {
+      const card = openCard();
+      hoverLink(within(card).getByRole('link', { name: /розклад групи/ }));
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Розклад групи');
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      act(() => {
+        vi.runAllTimers();
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -545,11 +632,23 @@ describe('довга назва дисципліни в клітинці й ка
     expect(title.className.split(/\s+/)).not.toContain('truncate');
   });
 
-  it('звільнена перенесенням пара: повна назва в підказці, у списку — до двох рядків', () => {
+  it('звільнена перенесенням пара: у списку — до двох рядків, повна назва в підказці, лише коли її обрізано', () => {
     renderWithProviders(<VacatedSlot lessons={[{ ...longLesson, pair: 2, kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 2 } }]} fullTitle />);
     const struck = screen.getByText(LONG);
-    expect(struck).toHaveAttribute('title', LONG);
+    // підказка застосунку замість рідної підказки браузера
+    expect(struck).not.toHaveAttribute('title');
     expect(struck.className.split(/\s+/)).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-break-word']));
+    Object.defineProperty(struck, 'scrollHeight', { configurable: true, value: 80 });
+    Object.defineProperty(struck, 'clientHeight', { configurable: true, value: 40 });
+    fireEvent.pointerMove(struck, { pointerType: 'mouse' });
+    return screen.findByRole('tooltip').then((tip) => expect(tip).toHaveTextContent(LONG));
+  });
+
+  it('звільнена пара в сітці: до скорочення дисципліни підказка — повна назва', async () => {
+    renderWithProviders(<VacatedSlot lessons={[{ ...longLesson, pair: 2, kind: 'MOVED', original: { discipline: null, teacher: null, room: null, pair: 2 } }]} />);
+    const struck = screen.getByText(longLesson.discipline.shortName);
+    fireEvent.pointerMove(struck, { pointerType: 'mouse' });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG);
   });
 });
 

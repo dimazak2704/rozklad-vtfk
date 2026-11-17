@@ -1,6 +1,7 @@
 import { CornerDownRight } from 'lucide-react';
 import type { LessonView } from '@/api/types';
 import { cn } from '@/lib/cn';
+import { Tooltip, TruncatedText } from '../ui/Tooltip';
 import type { Perspective } from '@/lib/schedule';
 
 interface VacatedSlotProps {
@@ -26,19 +27,29 @@ export function VacatedSlot({ lessons, perspective = 'group', fullTitle = false,
       {lessons.map((lesson) => {
         const full = lesson.discipline.name || lesson.discipline.shortName;
         const shown = perspective === 'teacher' ? lesson.group.code : fullTitle ? full : lesson.discipline.shortName;
-        return (
-          <span
-            key={lesson.id}
-            // картки деталей тут немає, тож повну назву показує підказка; у списку — до двох рядків, а не обрізана одним
-            title={perspective === 'teacher' ? undefined : full}
-            className={cn(
-              'min-w-0 text-cell font-[650] text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2',
-              fullTitle && perspective !== 'teacher' ? 'line-clamp-2 wrap-break-word' : 'truncate',
-            )}
-          >
+        const className = cn(
+          'min-w-0 text-cell font-[650] text-secondary line-through decoration-[var(--text-decoration-color-cancel)] decoration-2',
+          fullTitle && perspective !== 'teacher' ? 'line-clamp-2 wrap-break-word' : 'truncate',
+        );
+        const text = (
+          <>
             <span className="sr-only">Було: </span>
             {shown}
-          </span>
+          </>
+        );
+        // картки деталей тут немає, тож повну назву показує підказка: до скорочення («СТП») — завжди,
+        // до повної назви (у списку — до двох рядків) чи коду групи — лише коли текст справді обрізано
+        if (shown !== full && perspective !== 'teacher') {
+          return (
+            <Tooltip key={lesson.id} content={full} align="start">
+              <span className={className}>{text}</span>
+            </Tooltip>
+          );
+        }
+        return (
+          <TruncatedText key={lesson.id} full={shown} className={className}>
+            {text}
+          </TruncatedText>
         );
       })}
       <span className="flex items-center gap-1 text-caption text-secondary">

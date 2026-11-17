@@ -1,16 +1,17 @@
 import { MonitorSmartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import type { IsoDate, LessonView, WeekParity } from '@/api/types';
+import type { EntityType, IsoDate, LessonView, WeekParity } from '@/api/types';
 import { paths } from '@/app/routes';
 import { useTeacherFullName } from '@/hooks/useTeacherNames';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
 import { lineAttr } from '@/lib/discipline-color';
-import { capitalize, LESSON_VIEW_KIND_LABEL, reasonInWords, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
+import { capitalize, ENTITY_SCHEDULE, LESSON_VIEW_KIND_LABEL, openScheduleHint, reasonInWords, ROOM_TYPE_LABEL, subgroupLabel } from '@/lib/labels';
 import { pairOrdinalGenitive, pairOrdinalLabel } from '@/lib/ordinal';
 import { LESSON_TONE, lessonTime, roomLabel } from '@/lib/schedule';
 import { ParityMark } from '../ui/ParityBadge';
+import { Tooltip } from '../ui/Tooltip';
 import { useLessonLinks } from './lesson-links';
 
 const STATE_WORD = {
@@ -57,28 +58,37 @@ const PARITY_ONLY: Record<WeekParity, string> = {
   DENOMINATOR: 'лише по знаменниках',
 };
 
-/** Значення, що веде на свій розклад (з тим самим поданням і днем), або простий текст, якщо це сутність сторінки. */
+/**
+ * Значення, що веде на свій розклад (з тим самим поданням і днем), або простий текст, якщо це сутність сторінки.
+ * Риска каже, що його можна натиснути, а підказка при наведенні чи фокусі — куди: «Розклад викладача».
+ * Підказка праворуч, у тому ж рядку: сусідні рядки картки лишаються видимими. Біля краю екрана Radix перекидає
+ * її ліворуч, на підпис рядка, тож крізь неї проходить миша (`passThrough`): курсор, що йде до сусіднього
+ * посилання, не впирається в підказку, і картка під нею не закривається. На дотик підказки немає — тап одразу
+ * переходить.
+ */
 function EntityValue({
   to,
   own,
-  hint,
+  type,
   onNavigate,
   children,
 }: {
   to: string;
   own: boolean;
-  /** Для читача екрана: куди веде посилання («розклад викладача»). */
-  hint: string;
+  type: EntityType;
   onNavigate?: () => void;
   children: ReactNode;
 }) {
   const { search } = useLessonLinks();
   if (own) return <>{children}</>;
   return (
-    <Link to={{ pathname: to, search }} className={VALUE_LINK} onClick={onNavigate}>
-      {children}
-      <span className="sr-only">{`, ${hint}`}</span>
-    </Link>
+    <Tooltip content={openScheduleHint(type)} side="right" passThrough>
+      <Link to={{ pathname: to, search }} className={VALUE_LINK} onClick={onNavigate}>
+        {children}
+        {/* у режимі перегляду читач екрана підказки не відкриває: куди веде посилання — в самій назві */}
+        <span className="sr-only">{`, ${ENTITY_SCHEDULE[type]}`}</span>
+      </Link>
+    </Tooltip>
   );
 }
 
@@ -126,7 +136,7 @@ export function LessonDetails({ lesson, date, context = 'standalone', onNavigate
             <EntityValue
               to={paths.teacher(lesson.teacher.id)}
               own={self?.kind === 'teacher' && self.id === lesson.teacher.id}
-              hint="розклад викладача"
+              type="TEACHER"
               onNavigate={onNavigate}
             >
               {teacherName(lesson.teacher)}
@@ -141,7 +151,7 @@ export function LessonDetails({ lesson, date, context = 'standalone', onNavigate
               <EntityValue
                 to={paths.room(room.id)}
                 own={self?.kind === 'room' && self.id === room.id}
-                hint="розклад аудиторії"
+                type="ROOM"
                 onNavigate={onNavigate}
               >
                 {roomLabel(room.name)}
@@ -179,7 +189,7 @@ export function LessonDetails({ lesson, date, context = 'standalone', onNavigate
           <EntityValue
             to={paths.group(lesson.group.code)}
             own={self?.kind === 'group' && self.id === lesson.group.id}
-            hint="розклад групи"
+            type="GROUP"
             onNavigate={onNavigate}
           >
             {lesson.group.code}
