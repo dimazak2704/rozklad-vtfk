@@ -12,31 +12,52 @@ export type PreferenceMap = ReadonlyMap<CellKey, PreferenceKind>;
 
 export const cellKey = (weekday: number, pair: number): CellKey => `${weekday}:${pair}`;
 
+/** Пара лише по чисельниках чи знаменниках — коротка позначка в клітинці сітки. */
+export const PARITY_MARK = { NUMERATOR: 'чис', DENOMINATOR: 'знам' } as const;
+
+/** Моя пара в клітинці сітки: група (з підгрупою), коротка назва дисципліни й тиждень, якщо лише один. */
+export interface CellLesson {
+  /** «4КІ1» або «4КІ1/2» (підгрупа). */
+  group: string;
+  /** Коротка назва дисципліни з каталогу: «СТП». */
+  discipline: string;
+  /** Лише чисельник чи лише знаменник; `null` — щотижня (або обидві половинки). */
+  parity: keyof typeof PARITY_MARK | null;
+  /** Повністю, для читача екрана: «4КІ1 · СТП (чисельник)». */
+  label: string;
+}
+
 /**
  * «Мої пари» в сітці з базового розкладу семестру: клітинка → «4КІ1 · СТП», а пара лише по чисельниках чи знаменниках —
  * з позначкою тижня («(чисельник)»). Обидві половинки в одній клітинці — без позначки.
  */
-export function templateCells(lessons: readonly Pick<TemplateLessonDto, 'weekday' | 'pair' | 'parity' | 'group' | 'subgroup' | 'discipline'>[]): Map<CellKey, string[]> {
-  const byCell = new Map<CellKey, Map<string, Set<string>>>();
+export function templateCells(
+  lessons: readonly Pick<TemplateLessonDto, 'weekday' | 'pair' | 'parity' | 'group' | 'subgroup' | 'discipline'>[],
+): Map<CellKey, CellLesson[]> {
+  const byCell = new Map<CellKey, Map<string, { group: string; discipline: string; parities: Set<string> }>>();
   for (const lesson of lessons) {
     const key = cellKey(lesson.weekday, lesson.pair);
-    const labels = byCell.get(key) ?? new Map<string, Set<string>>();
-    const label = `${lesson.group.code}${lesson.subgroup > 0 ? `/${lesson.subgroup}` : ''} · ${lesson.discipline.shortName}`;
-    const parities = labels.get(label) ?? new Set<string>();
+    const entries = byCell.get(key) ?? new Map<string, { group: string; discipline: string; parities: Set<string> }>();
+    const group = `${lesson.group.code}${lesson.subgroup > 0 ? `/${lesson.subgroup}` : ''}`;
+    // без короткої назви в каталозі — повна, щоб клітинка не лишилася з самою групою
+    const discipline = lesson.discipline.shortName || lesson.discipline.name;
+    const id = `${group} · ${discipline}`;
+    const entry = entries.get(id) ?? { group, discipline, parities: new Set<string>() };
     if (lesson.parity === 'BOTH') {
-      parities.add('NUMERATOR');
-      parities.add('DENOMINATOR');
-    } else parities.add(lesson.parity);
-    labels.set(label, parities);
-    byCell.set(key, labels);
+      entry.parities.add('NUMERATOR');
+      entry.parities.add('DENOMINATOR');
+    } else entry.parities.add(lesson.parity);
+    entries.set(id, entry);
+    byCell.set(key, entries);
   }
-  const out = new Map<CellKey, string[]>();
-  for (const [key, labels] of byCell) {
+  const out = new Map<CellKey, CellLesson[]>();
+  for (const [key, entries] of byCell) {
     out.set(
       key,
-      [...labels].map(([label, parities]) =>
-        parities.size === 1 ? `${label} (${PARITY_LABEL[[...parities][0] as 'NUMERATOR' | 'DENOMINATOR']})` : label,
-      ),
+      [...entries].map(([id, { group, discipline, parities }]) => {
+        const parity = parities.size === 1 ? ([...parities][0] as keyof typeof PARITY_MARK) : null;
+        return { group, discipline, parity, label: parity ? `${id} (${PARITY_LABEL[parity]})` : id };
+      }),
     );
   }
   return out;

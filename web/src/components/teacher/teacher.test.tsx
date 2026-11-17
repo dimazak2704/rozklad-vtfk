@@ -29,7 +29,7 @@ import {
 import { MyNow } from './MyNow';
 import { MyUpcomingChanges } from './MyUpcomingChanges';
 import { PreferenceGrid, PreferenceLegend } from './PreferenceGrid';
-import { cellKey, changedCells, nextKind, shorterDaysNote, templateCells, toList, toMap, type CellKey } from './preferences';
+import { cellKey, changedCells, nextKind, shorterDaysNote, templateCells, toList, toMap, type CellKey, type CellLesson } from './preferences';
 import { SubstitutionRequests } from './SubstitutionRequests';
 import { useAssignedSchedule } from './useAssignedSchedule';
 import { answered } from '@/api/me';
@@ -376,12 +376,50 @@ describe('побажання', () => {
       { weekday: 4, pair: 2, parity: 'NUMERATOR', group, subgroup: 2, discipline },
       { weekday: 4, pair: 2, parity: 'DENOMINATOR', group, subgroup: 2, discipline },
     ]);
-    expect(cells.get(cellKey(2, 3))).toEqual(['4КІ1 · СТП']);
-    expect(cells.get(cellKey(3, 1))).toEqual(['4КІ1 · СТП (чисельник)']);
-    expect(cells.get(cellKey(4, 2))).toEqual(['4КІ1/2 · СТП']);
+    expect(cells.get(cellKey(2, 3))).toEqual([{ group: '4КІ1', discipline: 'СТП', parity: null, label: '4КІ1 · СТП' }]);
+    expect(cells.get(cellKey(3, 1))).toEqual([{ group: '4КІ1', discipline: 'СТП', parity: 'NUMERATOR', label: '4КІ1 · СТП (чисельник)' }]);
+    expect(cells.get(cellKey(4, 2))).toEqual([{ group: '4КІ1/2', discipline: 'СТП', parity: null, label: '4КІ1/2 · СТП' }]);
   });
 
-  function Harness() {
+  it('без короткої назви дисципліни в каталозі — повна назва, а не сама група', () => {
+    const cells = templateCells([
+      { weekday: 1, pair: 1, parity: 'DENOMINATOR', group: { id: 'g2', code: '3КІ2', course: 3 }, subgroup: 0, discipline: { id: 'd2', name: 'Фізкультура', shortName: '', color: null } },
+    ]);
+    expect(cells.get(cellKey(1, 1))).toEqual([{ group: '3КІ2', discipline: 'Фізкультура', parity: 'DENOMINATOR', label: '3КІ2 · Фізкультура (знаменник)' }]);
+  });
+
+  it('клітинка з моєю парою показує групу й дисципліну без підказки при наведенні; клавіатура працює як раніше', async () => {
+    const user = userEvent.setup();
+    const group = { id: 'g1', code: '4КІ2', course: 4 };
+    const discipline = { id: 'd1', name: 'Сучасні технології проєктування', shortName: 'СТП', color: null };
+    const lessons = templateCells([
+      { weekday: 1, pair: 1, parity: 'BOTH', group, subgroup: 0, discipline },
+      { weekday: 1, pair: 2, parity: 'NUMERATOR', group, subgroup: 1, discipline },
+      { weekday: 1, pair: 2, parity: 'DENOMINATOR', group: { ...group, id: 'g3', code: '3КІ1' }, subgroup: 0, discipline: { ...discipline, id: 'd3', shortName: 'КМ' } },
+    ]);
+    renderWithProviders(<Harness lessons={lessons} />);
+
+    const monday1 = screen.getByRole('button', { name: /^Понеділок, 1 пара/ });
+    expect(monday1).toHaveTextContent('4КІ2·СТП');
+    expect(monday1).toHaveAccessibleName(/Ваші пари тут: 4КІ2 · СТП$/);
+    expect(monday1).not.toHaveAttribute('title');
+
+    // дві пари різних тижнів — кожна своїм рядком із позначкою тижня
+    const monday2 = screen.getByRole('button', { name: /^Понеділок, 2 пара/ });
+    expect(monday2).toHaveTextContent('4КІ2/1·СТПчис3КІ1·КМзнам');
+    expect(monday2).toHaveAccessibleName(/Ваші пари тут: 4КІ2\/1 · СТП \(чисельник\); 3КІ1 · КМ \(знаменник\)$/);
+
+    // стан і пари в одній клітинці; стрілки й цифри — як без пар
+    await user.click(monday1);
+    expect(monday1).toHaveAccessibleName(/^Понеділок, 1 пара \(08:30–09:30\): небажано\. Ваші пари тут: 4КІ2 · СТП$/);
+    expect(monday1).toHaveTextContent('небажано4КІ2·СТП');
+    await user.keyboard('{ArrowDown}');
+    expect(monday2).toHaveFocus();
+    await act(async () => user.keyboard('2'));
+    expect(monday2).toHaveAccessibleName(/: неможливо\./);
+  });
+
+  function Harness({ lessons }: { lessons?: ReadonlyMap<CellKey, readonly CellLesson[]> }) {
     const [value, setValue] = useState<Map<CellKey, PreferenceKind>>(new Map());
     const slots = new Map<Weekday, BellSlotDto[]>(
       ([1, 2, 3, 4, 5] as const).map((d) => [d, Array.from({ length: d === 5 ? 6 : 8 }, (_, i) => ({ pair: i + 1, startsAt: '08:30', endsAt: '09:30' }))]),
@@ -390,6 +428,7 @@ describe('побажання', () => {
       <PreferenceGrid
         value={value}
         slotsByWeekday={slots}
+        lessons={lessons}
         onCellChange={(key, kind) =>
           setValue((current) => {
             const next = new Map(current);
@@ -492,7 +531,8 @@ describe('AbsenceForm: дні', () => {
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
     const day = (name: RegExp) => screen.getByRole('button', { name });
-    const summary = () => screen.getAllByRole('status').at(-1)?.textContent ?? '';
+    // перший рядок підсумку під календарем (другий — підказка, що робити далі)
+    const summary = () => screen.getAllByRole('status').at(-1)?.querySelector('[data-summary]')?.textContent ?? '';
 
     await user.click(day(/четвер, 19/));
     expect(summary()).toMatch(/^Четвер, 19\sлистопада$/);
@@ -659,7 +699,7 @@ describe('AbsenceForm: які пари зачепить', () => {
     await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
     await user.click(screen.getByRole('button', { name: /пʼятниця, 20|п’ятниця, 20|п'ятниця, 20/ }));
 
-    expect(screen.getAllByRole('status').at(-1)?.textContent).toMatch(/^П.ятниця, 20\sлистопада$/);
+    expect(screen.getAllByRole('status').at(-1)?.querySelector('[data-summary]')?.textContent).toMatch(/^П.ятниця, 20\sлистопада$/);
     expect(preview()).toBe('Перевіряємо ваші пари на ці дні…');
     expect(preview()).not.toContain('19.11');
 

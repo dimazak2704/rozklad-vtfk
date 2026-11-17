@@ -69,6 +69,23 @@ export function useMyBinding({ waiting = false }: { waiting?: boolean } = {}) {
   });
 }
 
+/**
+ * DELETE /notify/bindings/me: викладач сам відвʼязує свій Telegram (204 і тоді, коли нічого не привʼязано).
+ * Чужі привʼязки так не зачепити: викладача сервер бере з токена, а не з тіла запиту.
+ */
+export function useUnlinkMyBinding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete('/notify/bindings/me'),
+    onSuccess: () => {
+      // картка одразу пропонує підключити знову, не чекаючи повторного запиту
+      queryClient.setQueryData<MyBindingDto>(qk.notify.myBinding(), (old) => (old ? { ...old, bound: false, binding: null } : old));
+      // ['notify', 'bindings'] — і моя привʼязка, і список диспетчера (якщо це диспетчер із викладачем)
+      void queryClient.invalidateQueries({ queryKey: qk.notify.bindings() });
+    },
+  });
+}
+
 export function useDeleteBinding() {
   const queryClient = useQueryClient();
   return useMutation({

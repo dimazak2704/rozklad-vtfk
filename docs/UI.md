@@ -27,7 +27,9 @@ The main audience is students, parents and teachers who just want *the schedule 
 /me/preferences           /me?change={id} (link in e-mails) scrolls to that request and highlights it
 /me/notifications         «Сповіщення»: which e-mails about my substitutions reach the corporate mailbox
                           (one switch per kind + a master switch, applied at once), the address read-only with
-                          what to do when it is missing or unverified, a test letter
+                          what to do when it is missing or unverified, a test letter; beside it (right column on
+                          desktop, first on a phone) my Telegram: which account is linked, «Відвʼязати» with a
+                          confirmation, then the usual link to bind again
 
 /admin                    Dispatcher dashboard for today/tomorrow
 /admin/changes            Absences → affected lessons → ranked options → confirmations (main daily screen)
