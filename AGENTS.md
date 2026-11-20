@@ -34,5 +34,10 @@ On Windows use `http://127.0.0.1:8080` for the gateway: `localhost` may resolve 
 - **Secrets.** Real values live only in `.env`, which is gitignored. Never print, log or commit them. Add
   new variables to `.env.example` with a placeholder.
 - **Telegram.** One bot token can be polled by one process only. Do not message real chats from tests.
+- **Changelog and version.** `CHANGELOG.md` (Ukrainian, for users, like store release notes) gets a line under
+  «Не випущено» for every user-visible change in the same pull request. One version for the whole product
+  (`MAJOR.MINOR.PATCH`): fixes bump PATCH, new features MINOR, a break of compatibility MAJOR. A release renames
+  «Не випущено» to `[X.Y.Z] — date`, sets X.Y.Z in every `pom.xml` and `web/package.json` (commands: README, «Версії»)
+  and is tagged `vX.Y.Z` on `main`.
 - **Tests.** Every behaviour change gets a test at the lowest useful level, error paths included. Web tests sit
   next to the code (`*.test.ts(x)`); Playwright specs are in `web/e2e` and `web/e2e-real`.
