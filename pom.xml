@@ -13,7 +13,7 @@
 
     <groupId>ua.vtc.rozklad</groupId>
     <artifactId>rozklad-parent</artifactId>
-    <version>1.0.0</version>
+    <version>1.20.0</version>
     <packaging>pom</packaging>
     <name>rozklad-parent</name>
     <description>Розклад ВТФК: timetable, substitutions and orders for Vinnytsia Technical Professional College</description>
