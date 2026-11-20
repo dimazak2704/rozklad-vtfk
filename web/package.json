@@ -1,7 +1,7 @@
 {
   "name": "rozklad-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.20.0",
   "type": "module",
   "description": "SPA «Розклад ВТФК»: публічний розклад, кабінет викладача, панель диспетчера",
   "engines": {
