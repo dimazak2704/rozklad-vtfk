@@ -89,7 +89,7 @@ services:
   # Перехоплювач листів для стенду: notification надсилає сюди всі листи, справжнім адресатам нічого не йде.
   # Вебінтерфейс http://127.0.0.1:8025. Без depends_on: недоступний SMTP лише затримує листи (вони чекають у таблиці)
   mailpit:
-    image: axllent/mailpit:v1.33.1
+    image: axllent/mailpit:v1.34.0
     profiles: [infra, app]
     restart: unless-stopped
     environment:
