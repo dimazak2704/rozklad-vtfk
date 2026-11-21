@@ -49,7 +49,7 @@
         <apache-pdfbox.version>3.0.8</apache-pdfbox.version>
         <commons-text.version>1.15.0</commons-text.version>
         <archunit.version>1.5.1</archunit.version>
-        <mock-oauth2-server.version>6.1.5</mock-oauth2-server.version>
+        <mock-oauth2-server.version>7.0.1</mock-oauth2-server.version>
         <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
