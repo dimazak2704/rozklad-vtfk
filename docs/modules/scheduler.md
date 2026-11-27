@@ -261,6 +261,12 @@ problems of the run.
 * **Stop reason** (`generation.completed.stopReason`, additive, only with a timetable): `STOPPED` when the job was
   cancelled; otherwise the measured solving time decides, because Timefold 2.8 does not report which termination
   fired: within 1 s of the limit → `TIME_LIMIT` (auto mode: of the cap → `SAFETY_CAP`), earlier → `NO_IMPROVEMENT`.
+* **Base score** (`generation.completed.baseScore`, additive, only with a timetable): before a job is queued,
+  `StartingScore` scores the warm-started problem with Timefold's `SolutionManager.update(problem, UPDATE_SCORE_ONLY)`
+  — the same constraints, `ConstraintWeightOverrides` and snapshot settings as the run — and resets the problem's
+  score. Units without a starting place are skipped by the constraint streams, so the score is that of the lessons
+  the base really had. `null` from scratch (no unit placed at the start) and when scoring throws (logged). Core shows
+  it as «Було» of «Жорсткі порушення»: its own editor check has no Friday limit and treats group windows as soft.
 * **Cancel before request**: an unknown `jobId` is recorded as CANCELLED (and announced), so the
   late request is ignored.
 * **Restart**: jobs received by an earlier process and still QUEUED/RUNNING fail with «Генерацію
@@ -318,6 +324,8 @@ problems of the run.
   auto mode, `autoMode()`); `GenerationCompleted.stopReason` (`GenerationStopReason`) is new. An older scheduler fails a
   request without a limit, so the scheduler is deployed before core.
 * `hardScore`/`softScore` are 0 for FAILED and for CANCELLED without assignments.
+* Base score (additive in `libs/contracts`, 16.11.2026): `GenerationCompleted.baseScore` (`BaseScore {hardScore,
+  softScore}`), see §5.
 * Pinned units without a room come back with `roomId: null`; units of other groups that core wants
   respected (out of scope of a partial generation) should be sent as pinned units.
 * `ProblemSnapshot` has no stream id, so «one lesson for several groups» is not modelled: two units of

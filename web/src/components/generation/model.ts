@@ -240,27 +240,43 @@ function metricsBefore(job: GenerationJobDto, base: BaseVersionInfo | null | und
 }
 
 /**
- * «Було» жорстких конфліктів — з бази, а не з першої точки прогресу (genfix B2): розвʼязувач стартує
+ * «Було» конфліктів редактора — з бази, а не з першої точки прогресу (genfix B2): розвʼязувач стартує
  * зі своїх тимчасових накладок, і «34 → 0» для бази без конфліктів було б неправдою. Порядок:
  * `metricsBefore.hardConflicts`, далі конфлікти базової версії; нічого — «Було» не показуємо.
+ *
+ * Це число перевірки конфліктів core (накладки, аудиторії, зміни, недоступність), а не жорстких правил
+ * розвʼязувача: пʼятниці понад межу й вікна груп вона не рахує, тож у рядок «Жорсткі порушення» воно не йде.
  */
-export function hardBefore(job: GenerationJobDto, base?: BaseVersionInfo | null): number | null {
+export function conflictsBefore(job: GenerationJobDto, base?: BaseVersionInfo | null): number | null {
   const fromJob = numberOrNull(job.metricsBefore?.hardConflicts);
   if (fromJob !== null) return fromJob;
   return job.baseVersionId && base ? base.hardConflicts : null;
 }
 
-/** «Стало» жорстких: з метрик результату, інакше з оцінки задачі. */
+/**
+ * Жорсткі порушення результату за правилами розвʼязувача — тими самими, що й графік «Наживо», речення
+ * «N жорстких порушень» і «Готово з конфліктами». null — оцінки немає.
+ */
 export function hardAfter(job: GenerationJobDto): number | null {
-  const fromMetrics = numberOrNull(job.metricsAfter?.hardConflicts);
-  if (fromMetrics !== null) return fromMetrics;
   const hard = jobHardScore(job);
   return hard === null ? null : Math.abs(hard);
 }
 
 /**
- * Рядки «Було / Стало»: жорсткі конфлікти і метрики версії. Якщо «Було» невідоме, його не показуємо
- * зовсім, щоб «0 → 18» не виглядало погіршенням.
+ * «Було» жорстких порушень: оцінка бази розвʼязувачем до розвʼязання (`baseHardScore`) — ті самі правила й ваги,
+ * що й «Стало» (з пʼятницею понад межу й вікнами груп). null — оцінки немає (з нуля, стара задача).
+ */
+export function hardBefore(job: Pick<GenerationJobDto, 'baseHardScore'>): number | null {
+  const hard = numberOrNull(job.baseHardScore);
+  return hard === null ? null : Math.abs(hard);
+}
+
+/**
+ * Рядки «Було / Стало»: жорсткі порушення, конфлікти редактора і метрики версії. Якщо «Було» невідоме, його
+ * не показуємо зовсім, щоб «0 → 18» не виглядало погіршенням.
+ *
+ * «Було» жорстких порушень — лише з оцінки бази розвʼязувачем; число перевірки конфліктів — інший набір правил
+ * («0 → 0», коли графік показує 2 → 0), тож воно йде окремим рядком «Конфлікти в редакторі».
  */
 export function comparisonRows(job: GenerationJobDto, base?: BaseVersionInfo | null): ComparisonRow[] {
   const after = job.metricsAfter;
@@ -269,7 +285,9 @@ export function comparisonRows(job: GenerationJobDto, base?: BaseVersionInfo | n
   const before = metricsBefore(job, base);
   const rows: ComparisonRow[] = [];
   const hard = hardAfter(job);
-  if (hard !== null) rows.push({ key: 'hard', label: 'Жорсткі конфлікти', before: hardBefore(job, base), after: hard });
+  if (hard !== null) rows.push({ key: 'hard', label: 'Жорсткі порушення', before: hardBefore(job), after: hard });
+  const conflicts = numberOrNull(after.hardConflicts);
+  if (conflicts !== null) rows.push({ key: 'conflicts', label: 'Конфлікти в редакторі', before: conflictsBefore(job, base), after: conflicts });
   for (const { key, label } of METRIC_ROWS) {
     const value = numberOrNull(after[key]);
     if (value === null) continue;
@@ -481,15 +499,35 @@ const STATUS_TITLE: Record<GenerationJobDto['status'], string> = {
   CANCELLED: 'Скасовано',
 };
 
-/** Стан задачі словом; SOLVED з hard < 0 — «Готово з конфліктами» (genfix B6), а не зелене «Готово». */
+/** Диспетчер зупинив задачу, і найкращий варіант на той момент став чернеткою (core: SOLVED + `STOPPED`). */
+export function stoppedManually(job: Pick<GenerationJobDto, 'status' | 'stopReason'>): boolean {
+  return job.status === 'SOLVED' && job.stopReason === 'STOPPED';
+}
+
+/**
+ * Стан задачі словом; SOLVED з hard < 0 — «Готово з конфліктами» (genfix B6), а не зелене «Готово». Зупинена
+ * вручну — «Зупинено» (чернетку збережено), а не «Готово», яке означає, що генерація дійшла до кінця сама.
+ */
 export function jobStatusTitle(job: GenerationJobDto): string {
-  return solvedWithConflicts(job) ? 'Готово з конфліктами' : STATUS_TITLE[job.status];
+  const conflicts = solvedWithConflicts(job);
+  if (stoppedManually(job)) return conflicts ? 'Зупинено з конфліктами' : 'Зупинено';
+  return conflicts ? 'Готово з конфліктами' : STATUS_TITLE[job.status];
+}
+
+/**
+ * Один id сповіщень задачі: «запущено» → «зупиняємо» → «зупинено / завершено» замінюють одне одне,
+ * а не складаються стосом над результатом.
+ */
+export function generationToastId(jobId: Uuid): string {
+  return `generation-job-${jobId}`;
 }
 
 export interface CompletionNotice {
   level: 'success' | 'warning';
   title: string;
   description: string;
+  /** `generationToastId` задачі: заміняє її «запущено» чи «зупиняємо». */
+  id: string;
 }
 
 /**
@@ -499,22 +537,26 @@ export interface CompletionNotice {
  */
 export function completionNotice(job: GenerationJobDto): CompletionNotice | null {
   if (job.status !== 'SOLVED') return null;
+  const id = generationToastId(job.id);
   if (solvedWithConflicts(job)) {
     const hard = Math.abs(jobHardScore(job) ?? 0);
     return {
+      id,
       level: 'warning',
-      title: 'Генерацію завершено з конфліктами',
+      title: stoppedManually(job) ? 'Генерацію зупинено з конфліктами' : 'Генерацію завершено з конфліктами',
       description: `Чернетку збережено, але в ній ${countLabel(hard, ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'])}: виправте їх перед публікацією.`,
     };
   }
   if (job.stopReason === 'STOPPED') {
     return {
+      id,
       level: 'success',
       title: 'Генерацію зупинено',
       description: 'Найкращий варіант на момент зупинки збережено як нову чернетку — відкрийте й перегляньте її.',
     };
   }
   return {
+    id,
     level: 'success',
     title: 'Генерацію завершено',
     description: 'Результат збережено як нову чернетку — відкрийте й перегляньте її.',
@@ -533,15 +575,37 @@ export function timeTicks(end: number, target = 5): number[] {
 
 const BASELINE_FORMS = {
   hard: ['жорсткий конфлікт', 'жорсткі конфлікти', 'жорстких конфліктів'],
+  solverHard: ['жорстке порушення', 'жорсткі порушення', 'жорстких порушень'],
 } as const;
+
+/**
+ * Жорсткі порушення версії за правилами генератора: оцінка бази в найновішій задачі, що з неї стартувала
+ * (`baseHardScore`). Версія до запуску сервером не оцінюється, тож інакше — null. Задача з вужчим охопленням
+ * рахує лише свої групи: число тоді — нижня межа, але «порушень немає» за ним уже не скажемо.
+ */
+export function solverHardOfVersion(
+  jobs: ReadonlyArray<Pick<GenerationJobDto, 'baseVersionId' | 'baseHardScore' | 'createdAt'>>,
+  versionId: Uuid,
+): number | null {
+  const [latest] = jobs
+    .filter((job) => job.baseVersionId === versionId && typeof job.baseHardScore === 'number')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return latest ? hardBefore(latest) : null;
+}
 
 /**
  * «Було» до запуску одним реченням: що генератор намагатиметься покращити. Нулі не називаємо;
  * плитки з числами не потрібні — після запуску з'явиться таблиця «Було і стало».
+ *
+ * `solverHard` — жорсткі порушення за правилами генератора (`solverHardOfVersion`): редактор не знає ліміту пар
+ * у пʼятницю й вважає вікна груп мʼякими, тож «Конфліктів немає» при них було б неправдою.
  */
-export function baselineSentence(version: TimetableVersionDto): string {
+export function baselineSentence(version: TimetableVersionDto, solverHard: number | null = null): string {
   // одне число, що вирішує: конфлікти; вікна й рвані дні — у «Подробицях» редактора розкладу
   if (version.hardConflicts > 0) return `${countLabel(version.hardConflicts, BASELINE_FORMS.hard)}.`;
+  if (solverHard !== null && solverHard > 0) {
+    return `Редактор конфліктів не бачить, але за правилами генератора тут ${countLabel(solverHard, BASELINE_FORMS.solverHard)}.`;
+  }
   const m = version.metrics;
   // «4-та пара зміни» — не вада (коледж вважає її звичайною), тож до «лишились вікна» не входить
   const soft = m ? m.teacherWindows + m.groupWindows + m.brokenDays : 0;

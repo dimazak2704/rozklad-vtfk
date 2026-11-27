@@ -17,6 +17,7 @@ import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.EventEnvelope;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
+import ua.vtc.rozklad.contracts.events.GenerationCompleted.BaseScore;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
 import ua.vtc.rozklad.scheduler.config.SchedulerProperties;
 import ua.vtc.rozklad.scheduler.messaging.EventPublisher;
@@ -85,9 +86,11 @@ public class GenerationLifecycle {
     /**
      * The solver stopped (time limit, plateau, safety cap, cancel or shutdown) with its best timetable after
      * {@code solvingTime}. A cancelled job keeps the best timetable found so far, so the dispatcher may still apply it.
+     * {@code baseScore} is the score of the timetable the run started from ({@code null} from scratch); it is
+     * announced with the timetable.
      */
     public void finishWithSolution(UUID jobId, Timetable solution, Duration solvingTime,
-                                   boolean interruptedByShutdown) {
+                                   boolean interruptedByShutdown, BaseScore baseScore) {
         if (interruptedByShutdown) {
             complete(jobId, job -> Outcome.failed(INTERRUPTED));
             return;
@@ -103,7 +106,8 @@ public class GenerationLifecycle {
         List<GenerationCompleted.Assignment> assignments = TimetableResults.assignments(solution);
         List<GenerationCompleted.ConstraintScore> analysis = TimetableResults.analysis(solution);
         complete(jobId, job -> new Outcome(job.isCancelRequested() ? GenerationStatus.CANCELLED : GenerationStatus.SOLVED,
-                score.hardScore(), score.softScore(), assignments, analysis, null, stopReason(job, solvingTime)));
+                score.hardScore(), score.softScore(), assignments, analysis, null, stopReason(job, solvingTime),
+                baseScore));
     }
 
     /**
@@ -144,7 +148,7 @@ public class GenerationLifecycle {
             Outcome outcome = decide.apply(job);
             GenerationCompleted completed = new GenerationCompleted(EventEnvelope.create(clock), jobId,
                     outcome.status(), orZero(outcome.hardScore()), orZero(outcome.softScore()), outcome.assignments(),
-                    outcome.analysis(), outcome.error(), outcome.stopReason());
+                    outcome.analysis(), outcome.error(), outcome.stopReason(), outcome.baseScore());
             job.finish(outcome.status(), outcome.hardScore(), outcome.softScore(), outcome.error(),
                     jsonMapper.valueToTree(completed), clock.instant());
             return completed;

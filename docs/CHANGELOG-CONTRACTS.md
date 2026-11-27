@@ -714,3 +714,18 @@ and Friday is an unloading day with at most 3 pairs for every group. Both are ad
 | `ProblemSnapshot.Group.fridayMaxPairs` | Additive nullable `Integer` (positive), `null` = no limit (snapshots before it); the 5-argument constructor stays. Core sends the setting for every group. | Same mechanism as `teachers[].maxPairsPerDay`. |
 | Settings | Additive `fridayMaxPairs` (key `generation.fridayMaxPairs`, 1..8, default 3, no migration row; field error «Від 1 до 8 пар»). GET always has it; a PUT without it keeps the stored value. | A college setting the administrator can change, like `teacherMaxPairsPerDay`. |
 | 422 `GENERATION_LOAD_EXCEEDS_SLOTS` | The group check counts Friday at most `fridayMaxPairs` for a group with a free unit (or the pairs pinned there, when more): a first-shift group has 19 slots instead of 20; the message adds «(у пʼятницю не більше 3 пар)». A day without windows needs no extra slot, so the check does not count it. | The dispatcher learns before the run that the load cannot fit, instead of a hard < 0 after it. No real group is affected (most pairs: 17 in the first shift, 18,5 in the second, whose Friday window has 3 pairs anyway). |
+
+## Base score of a generation run (16.11.2026, branch fix/click-guide-findings)
+
+The generation page took «Було» of the hard violations from core's editor conflict check, which has no Friday limit
+and treats group windows as soft, so a base the solver starts at −2 hard (4th Friday pair of 1КІ1, 1М, 4РТ1, 4РТ2)
+showed «0 → 0». Now the scheduler scores the timetable it starts from with its own rules. All changes are additive;
+deploy in any order (an older scheduler sends no base score, an older core ignores it). Migration: core `V1_810`.
+
+| Area | Decision | Why |
+|---|---|---|
+| `GenerationCompleted.baseScore` | New nullable nested record `BaseScore {hardScore, softScore}` (`long`s), the last component; the 9- and 11-argument constructors (with `stopReason`) and the older ones stay and pass `null`. Set only with a timetable (SOLVED, or CANCELLED with assignments), from the warm-started problem before the solver runs: `SolutionManager.update(problem, UPDATE_SCORE_ONLY)` with the problem's own `ConstraintWeightOverrides` and snapshot settings (Friday limit, daily limits); Timefold skips units without a timeslot, so new load counts for nothing. `null` when no unit is placed at the start (from scratch) or when scoring throws (logged, the run goes on). | One set of rules for «Було» and «Стало», the live chart and «Готово з конфліктами». |
+| `generation.progress` | Not changed: the chart keeps its first fully placed point. | The table needs the base score only after the run. |
+| `generation_job` (core) | `base_hard_score`, `base_soft_score` `bigint` NULL (`V1_810`), written from every completion (`null` clears). | Old jobs keep `NULL` = unknown. |
+| `GenerationJobDto` | Additive `baseHardScore`, `baseSoftScore` (`null`: from scratch, older jobs, older scheduler). | Web «Було і стало». |
+| Web | «Жорсткі порушення»: «Було» = `|baseHardScore|`, else «—»; «Конфлікти в редакторі» stays a separate row (core's check, before and after). «Зараз у …» before a run: when the editor sees no conflicts but the newest job started from this version has `baseHardScore < 0`, it says «Редактор конфліктів не бачить, але за правилами генератора тут N жорстких порушень» instead of «Конфліктів і вікон немає». MSW: the job carries the mock solver's first trajectory point as its base score on completion. | web-planning.md. |

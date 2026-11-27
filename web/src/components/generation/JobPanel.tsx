@@ -23,6 +23,7 @@ import {
   outcomeDraftSentence,
   outcomeSentence,
   stopReasonSentence,
+  stoppedManually,
   type BaseVersionInfo,
 } from './model';
 import { changedPriorities } from './priorities';
@@ -85,6 +86,8 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
   const outcome = job.status === 'SOLVED' ? outcomeSentence(job.outcome) : null;
   const draftRest = job.status === 'SOLVED' ? outcomeDraftSentence(job.outcome) : null;
   const withConflicts = solvedWithConflicts(job);
+  // зупинена вручну — не зелена галочка «Готово»: чернетка є, але генерація не дійшла до кінця сама
+  const stopped = stoppedManually(job);
   const scoped = Boolean(job.scope && (job.scope.groupIds.length > 0 || job.scope.courses.length > 0));
   const charts =
     job.progress.length > 0 ? (
@@ -97,7 +100,8 @@ export function JobPanel({ job, publishedId, base, cancelling, onCancel, onUsePa
         <span className="flex items-center gap-2" aria-live="polite">
           {job.status === 'QUEUED' ? <Hourglass aria-hidden="true" className="size-4 text-muted" /> : null}
           {job.status === 'RUNNING' ? <StatusDot tone="live" pulse label="Наживо" /> : null}
-          {job.status === 'SOLVED' && !withConflicts ? <CircleCheck aria-hidden="true" className="size-4 text-add" /> : null}
+          {job.status === 'SOLVED' && !withConflicts && !stopped ? <CircleCheck aria-hidden="true" className="size-4 text-add" /> : null}
+          {stopped && !withConflicts ? <CircleStop aria-hidden="true" className="size-4 text-secondary" /> : null}
           {withConflicts ? <TriangleAlert aria-hidden="true" className="size-4 text-change" /> : null}
           {job.status === 'FAILED' ? <CircleX aria-hidden="true" className="size-4 text-danger" /> : null}
           {job.status === 'CANCELLED' ? <CircleStop aria-hidden="true" className="size-4 text-muted" /> : null}

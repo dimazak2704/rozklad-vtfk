@@ -201,7 +201,9 @@ class GenerationJobControllerTest {
                 .andExpect(jsonPath("$[0].weights.stability").value(1))
                 .andExpect(jsonPath("$[0].timeLimitSeconds").value(120))
                 .andExpect(jsonPath("$[0].stopRequested").value(false))
-                .andExpect(jsonPath("$[0].stopReason").doesNotExist());
+                .andExpect(jsonPath("$[0].stopReason").doesNotExist())
+                .andExpect(jsonPath("$[0].baseHardScore").value(-4))
+                .andExpect(jsonPath("$[0].baseSoftScore").value(-300));
         mockMvc.perform(get("/api/admin/generation/jobs").with(TestJwts.teacher())).andExpect(status().isForbidden());
     }
 
@@ -211,6 +213,6 @@ class GenerationJobControllerTest {
                 List.of(new GenerationJobDto.ProgressPoint(2.0, -2, -120)), null, null, 120, null, null, null, null,
                 "admin", new GenerationJobDto.Scope(List.of(GROUP), List.of(4)),
                 List.of(new GroupRef(GROUP, "4КІ1", 4)), GenerationWeights.DEFAULT, -2L, -120L, null, false, false,
-                null);
+                null, -4L, -300L);
     }
 }

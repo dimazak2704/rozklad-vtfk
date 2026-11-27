@@ -104,7 +104,7 @@ final class EventSamples {
                 List.of(new GenerationCompleted.ConstraintScore("Вікна в групи", 3, "0hard/-30soft"),
                         new GenerationCompleted.ConstraintScore("Чисельник і знаменник в одному слоті (бонус)", 2,
                                 "0hard/20soft", "Half pairing", true, 1)),
-                null, GenerationStopReason.NO_IMPROVEMENT);
+                null, GenerationStopReason.NO_IMPROVEMENT, new GenerationCompleted.BaseScore(-2, -340));
     }
 
     /** Auto mode: no time limit, the scheduler stops when the timetable stops getting better. */

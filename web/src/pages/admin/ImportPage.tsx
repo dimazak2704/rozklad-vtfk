@@ -4,11 +4,9 @@ import { Disclosure } from '@/components/generation/Disclosure';
 import { AiUsageWidget } from '@/components/import/AiUsageWidget';
 import { JobList } from '@/components/import/JobList';
 import { JobReview } from '@/components/import/JobReview';
-import { IMPORT_KIND_HINT, IMPORT_KIND_LABEL } from '@/components/import/labels';
+import { IMPORT_KIND_OPTIONS } from '@/components/import/labels';
 import { UploadPanel } from '@/components/import/UploadPanel';
 import { PageHeader, Section } from '@/components/ui';
-
-const KINDS = ['TIMETABLE_XLSX', 'DISCIPLINE_PROGRAM', 'CURRICULUM', 'ORDER_DOCUMENT'] as const;
 
 /**
  * Імпорт: завантаження таблиць, документів і фото → чернетка зі звітом → рішення щодо незнайомих назв →
@@ -43,10 +41,11 @@ export default function ImportPage() {
             <AiUsageWidget />
             <Disclosure summary="Що можна імпортувати?">
               <dl className="flex flex-col gap-2.5 ps-5.5">
-                {KINDS.map((kind) => (
-                  <div key={kind} className="flex flex-col gap-0.5">
-                    <dt className="text-caption font-[650] text-primary">{IMPORT_KIND_LABEL[kind]}</dt>
-                    <dd className="text-caption text-secondary">{IMPORT_KIND_HINT[kind]}</dd>
+                {/* ті самі види й тим самим порядком, що й у виборі «Що імпортуємо»: довідка не відстає від списку */}
+                {IMPORT_KIND_OPTIONS.map((kind) => (
+                  <div key={kind.value} className="flex flex-col gap-0.5">
+                    <dt className="text-caption font-[650] text-primary">{kind.label}</dt>
+                    <dd className="text-caption text-secondary">{kind.description}</dd>
                   </div>
                 ))}
                 <p className="text-caption text-muted">Імпорт нічого не змінює, доки ви не натиснете «Застосувати».</p>

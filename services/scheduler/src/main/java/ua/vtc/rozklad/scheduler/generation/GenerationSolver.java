@@ -1,5 +1,7 @@
 package ua.vtc.rozklad.scheduler.generation;
 
+import ai.timefold.solver.core.api.score.HardSoftScore;
+import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.solver.SolverConfigOverride;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.config.solver.termination.TerminationConfig;
@@ -12,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.contracts.events.GenerationCompleted.BaseScore;
+import ua.vtc.rozklad.scheduler.solver.StartingScore;
 import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
 
 /**
@@ -19,7 +23,8 @@ import ua.vtc.rozklad.scheduler.solver.domain.Timetable;
  * .parallel-solver-count} at once, the rest wait as QUEUED) and routes the solver's callbacks,
  * which arrive on solver threads, to the job lifecycle and the progress tracker. Lifecycle callbacks run
  * with the MDC of the request that started the job (its {@code requestId} reaches {@code generation.completed});
- * periodic progress events, sent by the tracker's own schedule, carry none.
+ * periodic progress events, sent by the tracker's own schedule, carry none. Before a job is queued, the timetable it
+ * starts from is scored ({@link StartingScore}); that base score is announced with the result.
  */
 @Component
 public class GenerationSolver {
@@ -27,13 +32,16 @@ public class GenerationSolver {
     private static final Logger log = LoggerFactory.getLogger(GenerationSolver.class);
 
     private final SolverManager<Timetable> solverManager;
+    private final SolutionManager<Timetable, HardSoftScore> solutionManager;
     private final GenerationLifecycle lifecycle;
     private final ProgressTracker progress;
     private volatile boolean shuttingDown;
 
-    public GenerationSolver(SolverManager<Timetable> solverManager, GenerationLifecycle lifecycle,
+    public GenerationSolver(SolverManager<Timetable> solverManager,
+                            SolutionManager<Timetable, HardSoftScore> solutionManager, GenerationLifecycle lifecycle,
                             ProgressTracker progress) {
         this.solverManager = solverManager;
+        this.solutionManager = solutionManager;
         this.lifecycle = lifecycle;
         this.progress = progress;
     }
@@ -43,6 +51,8 @@ public class GenerationSolver {
         Map<String, String> requestMdc = MDC.getCopyOfContextMap();
         AtomicLong startedNanos = new AtomicLong(System.nanoTime());
         try {
+            // база — до розвʼязання, за правилами й вагами самої задачі: це «Було» жорстких порушень
+            BaseScore baseScore = StartingScore.of(solutionManager, problem);
             solverManager.solveBuilder()
                     .withProblemId(jobId)
                     .withProblem(problem)
@@ -60,7 +70,7 @@ public class GenerationSolver {
                     .withFinalBestSolutionEventConsumer(event -> withMdc(requestMdc, () -> {
                         progress.untrack(jobId);
                         Duration solvingTime = Duration.ofNanos(System.nanoTime() - startedNanos.get());
-                        lifecycle.finishWithSolution(jobId, event.solution(), solvingTime, shuttingDown);
+                        lifecycle.finishWithSolution(jobId, event.solution(), solvingTime, shuttingDown, baseScore);
                     }))
                     .withExceptionHandler((id, error) -> withMdc(requestMdc, () -> {
                         progress.untrack(jobId);

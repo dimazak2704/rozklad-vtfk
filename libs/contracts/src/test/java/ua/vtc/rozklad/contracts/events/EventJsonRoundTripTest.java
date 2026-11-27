@@ -13,6 +13,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
+import ua.vtc.rozklad.contracts.GenerationStopReason;
 
 class EventJsonRoundTripTest {
 
@@ -269,6 +270,22 @@ class EventJsonRoundTripTest {
         GenerationCompleted old = mapper.readValue(json.toString(), GenerationCompleted.class);
         assertThat(old.stopReason()).isNull();
         assertThat(old.assignments()).isEqualTo(completed.assignments());
+    }
+
+    /** {@code baseScore} is additive: a completion of an older scheduler reads without it. */
+    @Test
+    void completionWithoutBaseScoreReadsAsNull() {
+        GenerationCompleted completed = (GenerationCompleted) EventSamples.all().get(5);
+        ObjectNode json = (ObjectNode) mapper.readTree(mapper.writeValueAsString(completed));
+
+        assertThat(json.get("baseScore").get("hardScore").asLong()).isEqualTo(-2);
+        assertThat(json.get("baseScore").get("softScore").asLong()).isEqualTo(-340);
+        json.remove("baseScore");
+
+        GenerationCompleted old = mapper.readValue(json.toString(), GenerationCompleted.class);
+        assertThat(old.baseScore()).isNull();
+        assertThat(old.stopReason()).isEqualTo(GenerationStopReason.NO_IMPROVEMENT);
+        assertThat(old.hardScore()).isEqualTo(completed.hardScore());
     }
 
     @Test
