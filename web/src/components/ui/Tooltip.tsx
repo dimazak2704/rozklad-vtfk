@@ -27,14 +27,20 @@ interface TooltipProps {
   children: ReactElement;
   /** Не показувати (наприклад, коли підпис уже видно поруч). */
   disabled?: boolean;
+  /**
+   * Підказка не ловить мишу: зникає, щойно курсор зійшов із тригера, і не перекриває сусідні цілі під собою.
+   * Для посилань у картці деталей: підказка праворуч від посилання; біля краю екрана Radix перекидає її
+   * на сусідній підпис — курсор має пройти крізь неї, а картка лишається відкритою. Крізь обгортку Radix миша теж проходить (interaction.css).
+   */
+  passThrough?: boolean;
   className?: string;
 }
 
 /** Підказка при наведенні та фокусі. Тригер має бути елементом, що приймає ref (кнопка, посилання). */
-export function Tooltip({ content, shortcut, side = 'top', align = 'center', children, disabled, className }: TooltipProps) {
+export function Tooltip({ content, shortcut, side = 'top', align = 'center', children, disabled, passThrough = false, className }: TooltipProps) {
   if (disabled || (!content && !shortcut)) return children;
   return (
-    <RadixTooltip.Root>
+    <RadixTooltip.Root disableHoverableContent={passThrough || undefined}>
       <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
       <RadixTooltip.Portal>
         <RadixTooltip.Content
@@ -42,14 +48,15 @@ export function Tooltip({ content, shortcut, side = 'top', align = 'center', chi
           align={align}
           sideOffset={6}
           collisionPadding={8}
+          data-pass-through={passThrough || undefined}
           className={cn(
-            'z-50 flex max-w-72 items-center gap-2 rounded-control bg-inverse px-2.5 py-1.5 text-caption font-medium text-inverse shadow-popover',
+            'z-50 flex max-w-72 items-center gap-2 rounded-control bg-raised px-2 py-1 text-meta text-secondary shadow-lift',
             'anim-tooltip origin-(--radix-tooltip-content-transform-origin)',
             className,
           )}
         >
           <span>{content}</span>
-          {shortcut ? <KbdCombo keys={shortcut} tone="inverse" /> : null}
+          {shortcut ? <KbdCombo keys={shortcut} /> : null}
         </RadixTooltip.Content>
       </RadixTooltip.Portal>
     </RadixTooltip.Root>
@@ -86,7 +93,7 @@ export function TruncatedText({ children, full, className, as: Tag = 'span', sid
           align="start"
           sideOffset={6}
           collisionPadding={8}
-          className="anim-tooltip z-50 max-w-80 origin-(--radix-tooltip-content-transform-origin) rounded-control bg-inverse px-2.5 py-1.5 text-caption font-medium text-inverse shadow-popover"
+          className="anim-tooltip z-50 max-w-80 origin-(--radix-tooltip-content-transform-origin) rounded-control bg-raised px-2 py-1 text-meta text-secondary shadow-lift"
         >
           {full ?? children}
         </RadixTooltip.Content>

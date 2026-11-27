@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { uk } from 'react-day-picker/locale/uk';
 import type { IsoDate } from '@/api/types';
-import { Button, IconButton, notify, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
+import { Button, IconButton, notify, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { cn } from '@/lib/cn';
 import {
@@ -85,15 +85,18 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
         onClick={previousWeek}
       />
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            aria-label={`Обрати тиждень. Зараз: ${isCurrent ? 'цей тиждень, ' : ''}${formatDateRange(week.from, week.to)}`}
-            className={cn('min-w-0 text-primary', compact ? 'px-1.5' : 'px-2.5')}
-          >
-            <span className="truncate font-[650] figures">{compact ? shortRange(week.from, week.to) : formatDateRange(week.from, week.to)}</span>
-          </Button>
-        </PopoverTrigger>
+        {/* дати тижня не кажуть, що під ними календар: підказка — як у стрілок поруч */}
+        <Tooltip content="Обрати тиждень">
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              aria-label={`Обрати тиждень. Зараз: ${isCurrent ? 'цей тиждень, ' : ''}${formatDateRange(week.from, week.to)}`}
+              className={cn('min-w-0 text-primary', compact ? 'px-1.5' : 'px-2.5')}
+            >
+              <span className="truncate font-[650] figures">{compact ? shortRange(week.from, week.to) : formatDateRange(week.from, week.to)}</span>
+            </Button>
+          </PopoverTrigger>
+        </Tooltip>
         <PopoverContent width="auto" align="center" className="p-2">
           <DayPicker
             mode="single"

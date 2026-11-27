@@ -142,32 +142,37 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
               {during.length > 0 ? (
                 <span className="flex min-w-0 flex-col">
                   {during.map((period) => (
-                    <button
-                      key={period.id}
-                      type="button"
-                      onClick={() => onOpenPeriod(period)}
-                      className="truncate rounded-tag text-start text-caption text-secondary hover-fine:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                    >
-                      {periodChipLabel(period)}: {period.title} — до {formatNumericDate(period.endsOn).slice(0, 5)}
-                    </button>
+                    // тихий підпис, а не кнопка на вигляд: підказка каже, що він відкриває період
+                    <Tooltip key={period.id} content="Відкрити період" align="start">
+                      <button
+                        type="button"
+                        onClick={() => onOpenPeriod(period)}
+                        className="truncate rounded-tag text-start text-caption text-secondary hover-fine:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      >
+                        {periodChipLabel(period)}: {period.title} — до {formatNumericDate(period.endsOn).slice(0, 5)}
+                      </button>
+                    </Tooltip>
                   ))}
                 </span>
               ) : null}
             </span>
-            <WeekMenu week={week} onToggleWeek={onToggleWeek}>
-              <button
-                type="button"
-                aria-label={`${week.weekNumber} тиждень: ${PARITY_LABEL[week.parity]}${week.overridden ? ' (змінено вручну)' : ''}. Меню тижня`}
-                className={cn(
-                  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui font-[550] hover-fine:bg-hover',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                  week.overridden ? 'text-accent' : 'text-secondary',
-                )}
-              >
-                <ParityMark parity={week.parity} className="h-3.5 w-3" />
-                {PARITY_LABEL[week.parity]}
-              </button>
-            </WeekMenu>
+            {/* видно стан (парність), а не дію: підказка каже, що під ним меню зміни */}
+            <Tooltip content="Змінити парність тижня" side="left">
+              <WeekMenu week={week} onToggleWeek={onToggleWeek}>
+                <button
+                  type="button"
+                  aria-label={`${week.weekNumber} тиждень: ${PARITY_LABEL[week.parity]}${week.overridden ? ' (змінено вручну)' : ''}. Меню тижня`}
+                  className={cn(
+                    'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui font-[550] hover-fine:bg-hover',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                    week.overridden ? 'text-accent' : 'text-secondary',
+                  )}
+                >
+                  <ParityMark parity={week.parity} className="h-3.5 w-3" />
+                  {PARITY_LABEL[week.parity]}
+                </button>
+              </WeekMenu>
+            </Tooltip>
           </li>
         );
       })}
@@ -193,7 +198,15 @@ export function SemesterTimeline({ weeks, periods, today, onToggleWeek, onOpenPe
             week.overridden ? ' (змінено вручну)' : ''
           }.`;
           return (
-            <Tooltip key={week.weekStart} content={hint}>
+            <Tooltip
+              key={week.weekStart}
+              content={
+                <span className="flex flex-col">
+                  <span>{hint}</span>
+                  <span className="font-normal opacity-80">Натисніть, щоб змінити парність</span>
+                </span>
+              }
+            >
               <WeekMenu week={week} onToggleWeek={onToggleWeek}>
                 <button
                   type="button"

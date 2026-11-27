@@ -29,6 +29,7 @@ import {
 } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { openScheduleHint } from '@/lib/labels';
 import { toSortParam } from '@/lib/sort';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { useRegisterCommands } from '@/stores/commands';
@@ -217,7 +218,7 @@ export default function TeachersPage() {
             rowLabel={t.shortName}
             actions={[
               { label: 'Редагувати', icon: <Pencil aria-hidden="true" />, shortcut: 'e', onSelect: () => setEditing(t) },
-              { label: 'Розклад викладача', icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.teacher(t.id)) },
+              { label: openScheduleHint('TEACHER'), icon: <CalendarDays aria-hidden="true" />, onSelect: () => void navigate(paths.teacher(t.id)) },
               {
                 label: t.active ? 'Позначити неактивним' : 'Зробити активним',
                 icon: <Power aria-hidden="true" />,

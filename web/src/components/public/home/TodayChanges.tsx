@@ -77,7 +77,7 @@ export function TodayChanges({ className }: { className?: string }) {
             {own.map(({ group }, index) => (
               <span key={group.code}>
                 {index > 0 ? ', ' : null}
-                <GroupHint code={group.code}>
+                <GroupHint code={group.code} when={words.onDay}>
                   <Link
                     to={`/g/${encodeURIComponent(group.code)}?date=${changes.data.date}&view=day`}
                     className="rounded-tag font-[650] text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"

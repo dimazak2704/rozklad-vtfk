@@ -5,7 +5,7 @@ import { useBindings, useBotStatus, useSendTestMessage } from '@/api/telegram';
 import { BindingCodeDialog } from '@/components/admin-daily/telegram/BindingCodeDialog';
 import { BindingsTable } from '@/components/admin-daily/telegram/BindingsTable';
 import { DeliveriesTable } from '@/components/admin-daily/telegram/DeliveriesTable';
-import { Button, notify, PageHeader, Panel, Skeleton, StatusDot, Tabs, TabsContent, TabsList, TabsTrigger, type MoreMenuItem } from '@/components/ui';
+import { Button, notify, PageHeader, Panel, Skeleton, StatusDot, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip, type MoreMenuItem } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
 import { trackFinal } from '@/lib/undo/actions';
@@ -60,9 +60,11 @@ export default function TelegramPage() {
         title="Telegram"
         meta={<BotLine status={bot.data} loading={bot.isPending} failed={bot.isError} />}
         primaryAction={
-          <Button variant="primary" onClick={() => setCodeOpen(true)} iconStart={<KeyRound aria-hidden="true" className="size-4" />}>
-            Код привʼязки
-          </Button>
+          <Tooltip content="Створити код привʼязки чату" shortcut="n">
+            <Button variant="primary" onClick={() => setCodeOpen(true)} iconStart={<KeyRound aria-hidden="true" className="size-4" />}>
+              Код привʼязки
+            </Button>
+          </Tooltip>
         }
         more={more}
       />

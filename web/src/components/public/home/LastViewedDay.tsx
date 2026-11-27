@@ -4,6 +4,7 @@ import { usePublicGroups } from '@/api/public';
 import { usePublicSchedule } from '@/api/public';
 import { DayList, GridNamesProvider } from '@/components/schedule';
 import { EmptyState, ErrorState, useErrorCovered } from '@/components/ui';
+import { openScheduleHint } from '@/lib/labels';
 import { MoreLink } from '../MoreLink';
 import { ScheduleSkeleton } from '../schedule/ScheduleSkeleton';
 import { useStalled } from '../useStalled';
@@ -66,7 +67,9 @@ export function LastViewedDay() {
         <h2 id="last-viewed-heading" className="font-display text-title font-semibold text-primary">
           <span className="figures">{group.label}</span> {when}
         </h2>
-        <MoreLink to={`${group.url}?view=week`}>Тиждень</MoreLink>
+        <MoreLink to={`${group.url}?view=week`} hint={openScheduleHint('GROUP', 'на тиждень')}>
+          Тиждень
+        </MoreLink>
       </div>
       {body}
     </section>

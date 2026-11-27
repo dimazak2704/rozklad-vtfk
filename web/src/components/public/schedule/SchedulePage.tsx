@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useBells, usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
 import { LessonLinksContext, lessonLinkSearch, NowIndicator, type LessonLinks, type ScheduleEntityKind } from '@/components/schedule';
-import { PageErrorScope, PageHeader } from '@/components/ui';
+import { PageErrorScope, PageHeader, Tooltip } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useTeacherNameDirectory } from '@/hooks/useTeacherNames';
 import type { Perspective } from '@/lib/schedule';
@@ -149,15 +149,17 @@ export function SchedulePage({
       {status}
       {subgroupShown !== null ? (
         // обрана підгрупа — тихо в рядку контексту, поки вона не «уся група»: інакше людина не зрозуміє, куди зникли пари
-        <button
-          type="button"
-          onClick={() => setSubgroupOpen(true)}
-          aria-label={`${subgroupShown} підгрупа — змінити`}
-          className="-mx-1.5 inline-flex h-7 items-center gap-1 rounded-control px-1.5 text-caption font-[650] whitespace-nowrap text-primary transition-[background-color] duration-150 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:h-11"
-        >
-          {subgroupShown} підгрупа
-          <ChevronDown aria-hidden="true" className="size-3.5 text-muted" />
-        </button>
+        <Tooltip content="Змінити підгрупу" side="bottom" align="start">
+          <button
+            type="button"
+            onClick={() => setSubgroupOpen(true)}
+            aria-label={`${subgroupShown} підгрупа — змінити`}
+            className="-mx-1.5 inline-flex h-7 items-center gap-1 rounded-control px-1.5 text-caption font-[650] whitespace-nowrap text-primary transition-[background-color] duration-150 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:h-11"
+          >
+            {subgroupShown} підгрупа
+            <ChevronDown aria-hidden="true" className="size-3.5 text-muted" />
+          </button>
+        </Tooltip>
       ) : null}
       <ChangesNote items={changes} view={params.view} onOpenDay={openDay} />
     </>

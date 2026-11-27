@@ -5,7 +5,7 @@ import { usePublicGroups, usePublicTeachers } from '@/api/public';
 import { isApiError } from '@/api/errors';
 import { useCreateBindingCode } from '@/api/telegram';
 import type { BindingCodeDto, BindingType, Uuid } from '@/api/types';
-import { Button, Combobox, Dialog, DialogContent, Field, IconButton, notify, Plate, RadioGroup } from '@/components/ui';
+import { Button, Combobox, Dialog, DialogContent, Field, IconButton, notify, Plate, RadioGroup, Tooltip } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { formatInstant } from '@/lib/date';
 import { durationLabel } from '@/lib/labels';
@@ -86,9 +86,20 @@ function Result({ type, result }: { type: CodeType; result: BindingCodeDto }) {
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-caption text-muted">Посилання</span>
           <span className="flex min-w-0 items-center gap-1 rounded-control border border-default bg-sunken ps-2.5">
-            <a href={link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover-fine:underline">
-              {link}
-            </a>
+            {/* посилання обрізане й веде за межі застосунку: підказка каже куди й показує його повністю */}
+            <Tooltip
+              content={
+                <span className="flex flex-col">
+                  <span>Відкрити в Telegram</span>
+                  <span className="font-mono font-normal break-all opacity-80">{link}</span>
+                </span>
+              }
+              align="start"
+            >
+              <a href={link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-mono text-caption text-accent underline-offset-4 hover-fine:underline">
+                {link}
+              </a>
+            </Tooltip>
             <CopyButton value={link} label="Копіювати посилання" />
           </span>
         </div>

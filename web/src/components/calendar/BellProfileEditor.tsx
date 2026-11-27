@@ -5,7 +5,7 @@ import type { Weekday } from '@/api/types';
 import { applyServerErrors } from '@/components/catalog/forms';
 import { FormAlert } from '@/components/catalog/FormParts';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
-import { Badge, Button, Checkbox, Field, IconButton, Input, Switch, notify } from '@/components/ui';
+import { Badge, Button, Checkbox, Field, IconButton, Input, Switch, Tooltip, notify } from '@/components/ui';
 import { TimeInput } from './TimeInput';
 import { cn } from '@/lib/cn';
 import { capitalize, countLabel, PAIR_FORMS, weekdayName, weekdayShort } from '@/lib/labels';
@@ -200,15 +200,18 @@ export function BellProfileEditor({ profile, template, onSaved, onDeleted }: Bel
                 })}
               </ol>
               <footer className="mt-auto flex items-center gap-1 border-t border-separator px-2 py-1.5">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  iconStart={<Plus aria-hidden="true" className="size-4" />}
-                  disabled={slots.length >= 8}
-                  onClick={() => updateDay(day, [...slots, nextSlot(slots)])}
-                >
-                  Пара
-                </Button>
+                {/* «+ Пара» коротке, а сусід «−» має повну підказку: кажемо так само повно */}
+                <Tooltip content={`Додати пару в кінець дня (${column.title})`}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconStart={<Plus aria-hidden="true" className="size-4" />}
+                    disabled={slots.length >= 8}
+                    onClick={() => updateDay(day, [...slots, nextSlot(slots)])}
+                  >
+                    Пара
+                  </Button>
+                </Tooltip>
                 <IconButton
                   label={`Прибрати останню пару (${column.title})`}
                   icon={<Minus aria-hidden="true" className="size-4" />}

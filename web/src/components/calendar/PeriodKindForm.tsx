@@ -9,7 +9,7 @@ import { qk } from '@/api/queryKeys';
 import type { PeriodEffect, PeriodKindDto, PeriodKindImpactDto, PeriodKindRequest } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
-import { Button, Checkbox, Chip, Field, Input, NumberInput, RadioGroup, Textarea } from '@/components/ui';
+import { Button, Checkbox, Chip, Field, Input, NumberInput, RadioGroup, Textarea, Tooltip } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
 import { trackFinal } from '@/lib/undo/actions';
@@ -385,11 +385,13 @@ function KindColorField({ value, onChange, error }: { value: string | null; onCh
         {LEGEND_COLORS.map((color) => {
           const checked = legend?.hex === color.hex;
           return (
-            <label key={color.hex} title={color.name} className={option(checked)}>
-              <input type="radio" name={name} checked={checked} onChange={() => onChange(color.hex)} aria-label={`Колір: ${color.name}`} className="sr-only" />
-              {/* вибраний колір — кільце навколо (колір графіка сталий в обох темах, тож галочку на ньому не видно) */}
-              <span aria-hidden="true" className="size-5 rounded-full border border-strong" style={{ backgroundColor: color.hex }} />
-            </label>
+            <Tooltip key={color.hex} content={`Колір: ${color.name}`}>
+              <label className={option(checked)}>
+                <input type="radio" name={name} checked={checked} onChange={() => onChange(color.hex)} aria-label={`Колір: ${color.name}`} className="sr-only" />
+                {/* вибраний колір — кільце навколо (колір графіка сталий в обох темах, тож галочку на ньому не видно) */}
+                <span aria-hidden="true" className="size-5 rounded-full border border-strong" style={{ backgroundColor: color.hex }} />
+              </label>
+            </Tooltip>
           );
         })}
         <Input

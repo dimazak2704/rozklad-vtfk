@@ -20,6 +20,7 @@ import {
   EmptyState,
   ErrorState,
   HoverDetails,
+  IconButton,
   Input,
   LoadingRegion,
   notify,
@@ -427,14 +428,13 @@ export default function ChangesPage() {
                 iconStart={<Search aria-hidden="true" className="size-4" />}
                 endSlot={
                   query ? (
-                    <button
-                      type="button"
+                    <IconButton
+                      label="Очистити пошук групи"
+                      size="sm"
+                      icon={<X aria-hidden="true" className="size-4" />}
                       onClick={() => patch({ q: null })}
-                      aria-label="Очистити пошук групи"
-                      className="inline-flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-focus pointer-coarse:size-11"
-                    >
-                      <X aria-hidden="true" className="size-4" />
-                    </button>
+                      className="size-7 text-muted hover:text-primary"
+                    />
                   ) : undefined
                 }
               />

@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { cn } from '@/lib/cn';
+import { Tooltip } from '../ui/Tooltip';
 
 interface BrandMarkProps {
   /** Розмір у px (квадрат). */
@@ -44,30 +45,34 @@ interface WordmarkProps {
   compact?: boolean;
   /** Застаріле: колишня синя смуга. Вигляд тепер один. */
   tone?: 'shell' | 'surface';
+  /** Бік підказки «На головну»: у згорнутій бічній панелі — праворуч, як у її пунктів. */
+  tooltipSide?: 'bottom' | 'right';
   className?: string;
 }
 
 /**
  * Словесний знак — один скрізь: знак-лінія і «Розклад ВТФК» (14/700). Посилання на головну свого розділу.
  */
-export function Wordmark({ to = '/', compact = false, className }: WordmarkProps) {
+export function Wordmark({ to = '/', compact = false, tooltipSide = 'bottom', className }: WordmarkProps) {
   return (
-    <Link
-      to={to}
-      aria-label="Розклад ВТФК — на головну"
-      className={cn(
-        'inline-flex min-h-10 shrink-0 items-center gap-2.5 rounded-control',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        compact && 'justify-center',
-        className,
-      )}
-    >
-      <BrandMark />
-      {compact ? null : (
-        <span aria-hidden="true" className="text-[0.9375rem] leading-5 font-bold tracking-[-0.005em] whitespace-nowrap text-primary">
-          Розклад ВТФК
-        </span>
-      )}
-    </Link>
+    <Tooltip content="На головну" side={tooltipSide} align="start">
+      <Link
+        to={to}
+        aria-label="Розклад ВТФК — на головну"
+        className={cn(
+          'inline-flex min-h-10 shrink-0 items-center gap-2.5 rounded-control',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+          compact && 'justify-center',
+          className,
+        )}
+      >
+        <BrandMark />
+        {compact ? null : (
+          <span aria-hidden="true" className="text-[0.9375rem] leading-5 font-bold tracking-[-0.005em] whitespace-nowrap text-primary">
+            Розклад ВТФК
+          </span>
+        )}
+      </Link>
+    </Tooltip>
   );
 }

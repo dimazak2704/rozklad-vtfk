@@ -5,6 +5,7 @@ import { paths } from '@/app/routes';
 import { useCurrentUser } from '@/auth/useCurrentUser';
 import { cn } from '@/lib/cn';
 import { Avatar } from '../ui/Avatar';
+import { Tooltip, TruncatedText } from '../ui/Tooltip';
 import { ThemeRadioItems } from './ThemeToggle';
 
 const ITEM =
@@ -49,29 +50,30 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger
-        aria-label={`Обліковий запис: ${user.name}`}
-        className={cn(
-          'flex items-center rounded-control transition-[background-color] duration-150',
-          'hover:bg-hover active:bg-active data-[state=open]:bg-hover',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-          variant === 'block' ? 'h-11 w-full gap-2.5 px-2 text-start' : '-m-1 size-11 justify-center rounded-full',
-        )}
-      >
-        <Avatar name={user.name} />
-        {variant === 'block' ? (
-          <>
-            <span className="flex min-w-0 flex-1 flex-col">
-              {/* довге імʼя в рейці 232 px обрізається — повне в підказці */}
-              <span title={user.name} className="truncate text-ui font-[650] text-primary">
-                {user.name}
+      {/* у шапці — лише аватар: підказка називає меню, як у сусідніх кнопок пошуку й теми; у бічній панелі імʼя видно */}
+      <Tooltip content={`Обліковий запис: ${user.name}`} side="bottom" align="end" disabled={variant === 'block'}>
+        <DropdownMenu.Trigger
+          aria-label={`Обліковий запис: ${user.name}`}
+          className={cn(
+            'flex items-center rounded-control transition-[background-color] duration-150',
+            'hover:bg-hover active:bg-active aria-expanded:bg-hover',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+            variant === 'block' ? 'h-11 w-full gap-2.5 px-2 text-start' : '-m-1 size-11 justify-center rounded-full',
+          )}
+        >
+          <Avatar name={user.name} />
+          {variant === 'block' ? (
+            <>
+              <span className="flex min-w-0 flex-1 flex-col">
+                {/* довге імʼя в рейці 232 px обрізається — повне в підказці, лише коли справді обрізане */}
+                <TruncatedText className="truncate text-ui font-[650] text-primary">{user.name}</TruncatedText>
+                <span className="truncate text-caption text-muted">{roleLabel}</span>
               </span>
-              <span className="truncate text-caption text-muted">{roleLabel}</span>
-            </span>
-            <ChevronsUpDown aria-hidden="true" className="size-4 text-muted" />
-          </>
-        ) : null}
-      </DropdownMenu.Trigger>
+              <ChevronsUpDown aria-hidden="true" className="size-4 text-muted" />
+            </>
+          ) : null}
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align={variant === 'block' ? 'start' : 'end'}
@@ -83,9 +85,7 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
           <div className="flex items-center gap-2.5 px-2.5 py-2">
             <Avatar name={user.name} size="lg" />
             <div className="flex min-w-0 flex-col">
-              <span title={user.name} className="truncate text-ui font-[650]">
-                {user.name}
-              </span>
+              <TruncatedText className="truncate text-ui font-[650]">{user.name}</TruncatedText>
               <span className="truncate text-caption text-muted">
                 {roleLabel}
                 {user.username ? ` · ${user.username}` : ''}

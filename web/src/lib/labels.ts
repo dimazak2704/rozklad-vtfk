@@ -2,6 +2,7 @@ import type {
   AbsenceReasonCategory,
   ChangeKind,
   ChangeStatus,
+  EntityType,
   LessonKind,
   LessonViewKind,
   Parity,
@@ -173,6 +174,22 @@ export const ABSENCE_REASON_LABEL: Record<AbsenceReasonCategory, string> = {
   PERSONAL: 'Особисті обставини',
   OTHER: 'Інше',
 };
+
+/** Куди веде посилання на групу, викладача чи аудиторію: «розклад групи». Читач екрана чує це після назви. */
+export const ENTITY_SCHEDULE: Record<EntityType, string> = {
+  GROUP: 'розклад групи',
+  TEACHER: 'розклад викладача',
+  ROOM: 'розклад аудиторії',
+};
+
+/**
+ * Підказка до посилання на розклад — однакова скрізь (картка заняття, «Нещодавно», заміни, облік):
+ * коротко й тихо, «Розклад викладача», з уточненням — «Розклад групи на цей день».
+ */
+export function openScheduleHint(type: EntityType, when?: string): string {
+  const text = `${ENTITY_SCHEDULE[type]}${when ? ` ${when}` : ''}`;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export const ROOM_TYPE_LABEL: Record<RoomType, string> = {
   CLASSROOM: 'аудиторія',
