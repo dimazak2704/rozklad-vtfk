@@ -20,9 +20,12 @@ import {
   assignmentPhrase,
   confirmedAssignments,
   endSentence,
+  laterRequestSentence,
   lessonPhrase,
   nextDaySentence,
   nextRequest,
+  pendingRequests,
+  requestPhrase,
   withAssignments,
   withRequest,
 } from './my-day';
@@ -955,6 +958,54 @@ describe('MyNow: підтверджена заміна сьогодні', () => 
     renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
     expect(await screen.findByText('Сьогодні пар немає')).toBeInTheDocument();
     expect(screen.queryByText(/Сьогодні ще є запит/)).not.toBeInTheDocument();
+  });
+
+  const laterRequest = () => change({ id: 'later', status: 'PENDING_CONFIRMATION', approvalMode: 'CONFIRM', pairFrom: 3, pairTo: 3, group: { id: 'g2', code: '4КІ2' } as ChangeDto['group'] });
+  const asideText = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && (element.textContent ?? '').replace(/\s+/g, ' ') === text;
+
+  it('запит на пізнішу пару чекає відповіді — це не «остання пара сьогодні»: відлік веде до неї і каже, що це запит', async () => {
+    server.use(http.get(apiPath('/me/changes'), () => Response.json([change({}), laterRequest()])));
+    renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
+    expect(
+      await screen.findByText(
+        asideText('Зараз у вас заміна: СТП, 4КІ1, ауд. 14. Ще чекає вашої відповіді запит на заміну — 3 пара: СТП, 4КІ2, ауд. 14.'),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Це остання пара сьогодні')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Далі перерва 20/).length).toBeGreaterThan(0);
+  });
+
+  it('після своїх пар лишився лише запит на пізнішу пару — не «На сьогодні все», а перерва до неї', async () => {
+    const firstPair = change({ id: 'first', pairFrom: 1, pairTo: 1 });
+    server.use(http.get(apiPath('/me/changes'), () => Response.json([firstPair, laterRequest()])));
+    renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
+    expect(await screen.findByText(asideText('Далі у вас запит на заміну: СТП, 4КІ2, ауд. 14 — чекає вашої відповіді'))).toBeInTheDocument();
+    expect(screen.queryByText('На сьогодні все')).not.toBeInTheDocument();
+    expect(screen.getByText('Перерва')).toBeInTheDocument();
+  });
+
+  it('у розкладі пар немає, є лише запит на пізнішу пару — не «Сьогодні пар немає»', async () => {
+    server.use(http.get(apiPath('/me/changes'), () => Response.json([laterRequest(), pastRequest()])));
+    renderWithProviders(<MyNow teacherId={krentsin.id} today={today} days={[friday]} bells={bells} />);
+    expect(await screen.findByText(asideText('У вас запит на заміну: СТП, 4КІ2, ауд. 14 — чекає вашої відповіді'))).toBeInTheDocument();
+    expect(screen.queryByText('Сьогодні пар немає')).not.toBeInTheDocument();
+  });
+
+  it('pendingRequests: лише сьогоднішні запити, що чекають відповіді, на пари, які ще не скінчилися', () => {
+    const clock = { bells, minutes: 10 * 60 + 10 };
+    const list = [
+      laterRequest(),
+      pastRequest(),
+      change({ id: 'confirmed', pairFrom: 3, pairTo: 3 }),
+      change({ id: 'tomorrow', status: 'PENDING_CONFIRMATION', date: '2026-11-21', pairFrom: 3, pairTo: 3 }),
+      change({ id: 'superseded', status: 'PENDING_CONFIRMATION', pairFrom: 3, pairTo: 3, supersededBy: { changeId: 'x' } as unknown as ChangeDto['supersededBy'] }),
+      change({ id: 'now', status: 'PENDING_CONFIRMATION', pairFrom: 2, pairTo: 2 }),
+    ];
+    expect(pendingRequests(list, today, clock).map((c) => c.id)).toEqual(['now', 'later']);
+    // без дзвінків не знаємо, що пара минула, — запит лишається
+    expect(pendingRequests(list, today).map((c) => c.id)).toEqual(['old', 'now', 'later']);
+    expect(laterRequestSentence(laterRequest()).replace(/\s+/g, ' ')).toBe('Ще чекає вашої відповіді запит на заміну — 3 пара: СТП, 4КІ2, ауд. 14.');
+    expect(requestPhrase(laterRequest()).replace(/\s+/g, ' ')).toBe('запит на заміну: СТП, 4КІ2, ауд. 14 — чекає вашої відповіді');
   });
 });
 

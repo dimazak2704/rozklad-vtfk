@@ -2,7 +2,7 @@
  * Стан навчального дня за розкладом дзвінків: «зараз 2 пара, до кінця 23 хв», «перерва до 11:00».
  * Чиста логіка без React — легко тестувати з фіксованим часом.
  */
-import type { BellSlotDto } from '@/api/types';
+import type { BellProfileDto, BellSlotDto } from '@/api/types';
 import { timeToMinutes } from './date';
 
 export interface TimedSlot {
@@ -111,4 +111,25 @@ export function describePairStatus(status: PairStatus): string {
     case 'after-day':
       return 'Пари на сьогодні закінчилися';
   }
+}
+
+/**
+ * Дзвінки профілю за днями тижня (ISO 1..7 → слоти за номером пари). У коледжі пʼятниця має свій розклад
+ * дзвінків (4 пара о 12:20, а не о 12:10), тож час пари без дня тижня — неповний. Профілю немає серед
+ * переданих (ще вантажиться, неактивний) — null: хай екран бере час із занять.
+ */
+export function bellsByWeekday(
+  profileId: string | null | undefined,
+  profiles: readonly BellProfileDto[] | null | undefined,
+): Map<number, BellSlotDto[]> | null {
+  const profile = profileId ? profiles?.find((candidate) => candidate.id === profileId) : undefined;
+  if (!profile) return null;
+  const out = new Map<number, BellSlotDto[]>();
+  for (const { weekday, pair, startsAt, endsAt } of profile.slots) {
+    const day = out.get(weekday) ?? [];
+    day.push({ pair, startsAt, endsAt });
+    out.set(weekday, day);
+  }
+  for (const day of out.values()) day.sort((a, b) => a.pair - b.pair);
+  return out;
 }

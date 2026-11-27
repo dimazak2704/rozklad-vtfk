@@ -6,6 +6,8 @@ import {
   baselineSentence,
   completionNotice,
   comparisonRows,
+  conflictsBefore,
+  generationToastId,
   ignoredWeights,
   formFromJob,
   groupComparison,
@@ -17,9 +19,11 @@ import {
   liveElapsedSeconds,
   outcomeDraftSentence,
   outcomeSentence,
+  solverHardOfVersion,
   splitAnalysis,
   stopReasonLabel,
   stopReasonSentence,
+  stoppedManually,
   timeTicks,
   toJobRequest,
   usableMetrics,
@@ -77,18 +81,71 @@ describe('генератор: «Було / Стало»', () => {
       hardConflicts: 0,
     });
     expect(rows.find((row) => row.key === 'latePairs')).toMatchObject({ label: '4-та пара зміни', before: 106, after: 18 });
-    // B2: «Було» жорстких — з бази (0), а не з першої точки прогресу (-3)
-    expect(rows.find((row) => row.key === 'hard')).toMatchObject({ before: 0, after: 0 });
+    // B2: «Було» не з першої точки прогресу (-3)
+    expect(rows.find((row) => row.key === 'hard')).toMatchObject({ before: null, after: 0 });
   });
 
-  it('«Було» жорстких — з metricsBefore.hardConflicts, потім з бази; перша точка прогресу — ніколи', () => {
-    expect(hardBefore(job({ metricsBefore: metrics({ hardConflicts: 75, teacherWindows: 3 }) }), { metrics: null, hardConflicts: 2 })).toBe(75);
-    expect(hardBefore(job({}), { metrics: null, hardConflicts: 2 })).toBe(2);
-    expect(hardBefore(job({}), null)).toBeNull();
+  it('«Було» конфліктів редактора — з metricsBefore.hardConflicts, потім з бази; перша точка прогресу — ніколи', () => {
+    expect(conflictsBefore(job({ metricsBefore: metrics({ hardConflicts: 75, teacherWindows: 3 }) }), { metrics: null, hardConflicts: 2 })).toBe(75);
+    expect(conflictsBefore(job({}), { metrics: null, hardConflicts: 2 })).toBe(2);
+    expect(conflictsBefore(job({}), null)).toBeNull();
     // без базової версії (з навантаження) «Було» з чужої версії не підставляємо
-    expect(hardBefore(job({ baseVersionId: null }), { metrics: null, hardConflicts: 2 })).toBeNull();
-    expect(hardAfter(job({ metricsAfter: metrics({ hardConflicts: 1, maxPairsPerDay: 4 }) }))).toBe(1);
+    expect(conflictsBefore(job({ baseVersionId: null }), { metrics: null, hardConflicts: 2 })).toBeNull();
+    const rows = comparisonRows(job({ metricsBefore: metrics({ hardConflicts: 75, teacherWindows: 3 }), metricsAfter: metrics({ hardConflicts: 0, maxPairsPerDay: 4 }) }));
+    expect(rows.find((row) => row.key === 'conflicts')).toMatchObject({ label: 'Конфлікти в редакторі', before: 75, after: 0 });
+  });
+
+  it('«Стало» жорстких — з оцінки розвʼязувача, а не з перевірки конфліктів редактора', () => {
     expect(hardAfter(job({ hardScore: -4 }))).toBe(4);
+    expect(hardAfter(job({ bestScore: '-2hard/-90soft', metricsAfter: metrics({ hardConflicts: 0, maxPairsPerDay: 4 }) }))).toBe(2);
+    expect(hardAfter(job({ bestScore: null }))).toBeNull();
+  });
+
+  it('опублікована база з пʼятницею понад межу: не «0 → 0», коли графік починає з 2 жорстких (регресія)', () => {
+    // core рахує базу своєю перевіркою конфліктів (0: пʼятниці й вікон груп вона не знає),
+    // а розвʼязувач — своїми жорсткими правилами (графік: -2 → 0)
+    const stand = job({
+      bestScore: '0hard/-1264soft',
+      progress: [
+        { t: 2, hard: -2, soft: -3000 },
+        { t: 12, hard: 0, soft: -1264 },
+      ],
+      metricsBefore: metrics({ hardConflicts: 0, teacherWindows: 117, maxPairsPerDay: 4 }),
+      metricsAfter: metrics({ hardConflicts: 0, teacherWindows: 7, maxPairsPerDay: 4 }),
+    });
+    const rows = comparisonRows(stand, { metrics: null, hardConflicts: 0 });
+    const hard = rows.find((row) => row.key === 'hard');
+    expect(hard).toMatchObject({ label: 'Жорсткі порушення', after: 0 });
+    // «Було» за правилами розвʼязувача невідоме — не нуль з іншого набору правил
+    expect(hard?.before).toBeNull();
+    expect(rows.find((row) => row.key === 'conflicts')).toMatchObject({ before: 0, after: 0 });
+    expect(rows.find((row) => row.key === 'teacherWindows')).toMatchObject({ before: 117, after: 7 });
+  });
+
+  it('«Було» жорстких — з оцінки бази розвʼязувачем: 2 → 0, а конфлікти редактора окремо 0 → 0', () => {
+    const stand = job({
+      bestScore: '0hard/-1264soft',
+      baseHardScore: -2,
+      baseSoftScore: -3100,
+      metricsBefore: metrics({ hardConflicts: 0, teacherWindows: 117, maxPairsPerDay: 4 }),
+      metricsAfter: metrics({ hardConflicts: 0, teacherWindows: 7, maxPairsPerDay: 4 }),
+    });
+    const rows = comparisonRows(stand, { metrics: null, hardConflicts: 0 });
+    expect(rows.find((row) => row.key === 'hard')).toMatchObject({ label: 'Жорсткі порушення', before: 2, after: 0 });
+    expect(rows.find((row) => row.key === 'conflicts')).toMatchObject({ before: 0, after: 0 });
+  });
+
+  it('«Було» жорстких невідоме без оцінки бази: з нуля, стара задача, старий планувальник', () => {
+    expect(hardBefore(job({ baseHardScore: -3 }))).toBe(3);
+    expect(hardBefore(job({ baseHardScore: 0 }))).toBe(0);
+    expect(hardBefore(job({ baseHardScore: null }))).toBeNull();
+    expect(hardBefore(job({}))).toBeNull();
+  });
+
+  it('жорсткі порушення розвʼязувача в результаті не стають нулем через перевірку редактора', () => {
+    const rows = comparisonRows(job({ bestScore: '-2hard/-90soft', metricsAfter: metrics({ hardConflicts: 0, maxPairsPerDay: 4 }) }));
+    expect(rows.find((row) => row.key === 'hard')?.after).toBe(2);
+    expect(rows.find((row) => row.key === 'conflicts')?.after).toBe(0);
   });
 
   it('без жодного «Було» показує лише «Стало», а не 0 → 18', () => {
@@ -121,9 +178,20 @@ describe('стан задачі (B6)', () => {
     expect(jobStatusTitle(job({ status: 'RUNNING', bestScore: '-3hard/-40soft' }))).toBe('Розвʼязується');
   });
 
+  it('зупинена вручну — «Зупинено», а не «Готово»; дійшла до кінця сама — «Готово»', () => {
+    expect(jobStatusTitle(job({ stopReason: 'STOPPED' }))).toBe('Зупинено');
+    expect(jobStatusTitle(job({ stopReason: 'STOPPED', hardScore: -2 }))).toBe('Зупинено з конфліктами');
+    expect(jobStatusTitle(job({ stopReason: 'NO_IMPROVEMENT' }))).toBe('Готово');
+    expect(jobStatusTitle(job({ status: 'CANCELLED', stopReason: null }))).toBe('Скасовано');
+    expect(stoppedManually(job({ stopReason: 'STOPPED' }))).toBe(true);
+    expect(stoppedManually(job({ stopReason: 'SAFETY_CAP' }))).toBe(false);
+    expect(stoppedManually(job({ status: 'RUNNING', stopReason: 'STOPPED' }))).toBe(false);
+  });
+
   it('сповіщення про завершення: з конфліктами — попередження з кількістю, а не зелене «завершено»', () => {
     expect(completionNotice(job({}))).toMatchObject({ level: 'success', title: 'Генерацію завершено' });
     expect(completionNotice(job({ hardScore: -21 }))).toEqual({
+      id: 'generation-job-j',
       level: 'warning',
       title: 'Генерацію завершено з конфліктами',
       description: 'Чернетку збережено, але в ній 21 жорсткий конфлікт: виправте їх перед публікацією.',
@@ -306,6 +374,17 @@ describe('генерація без ліміту часу', () => {
   it('сповіщення про зупинену задачу каже, що найкращий варіант збережено', () => {
     expect(completionNotice(job({ stopReason: 'STOPPED' }))).toMatchObject({ level: 'success', title: 'Генерацію зупинено' });
     expect(completionNotice(job({ stopReason: 'NO_IMPROVEMENT' }))).toMatchObject({ title: 'Генерацію завершено' });
+    expect(completionNotice(job({ stopReason: 'STOPPED', hardScore: -2 }))).toMatchObject({ level: 'warning', title: 'Генерацію зупинено з конфліктами' });
+    expect(completionNotice(job({ hardScore: -2 }))).toMatchObject({ title: 'Генерацію завершено з конфліктами' });
+  });
+
+  it('сповіщення задачі мають один id: «зупинено» заміняє «зупиняємо», а не стає в стос', () => {
+    const id = generationToastId('j');
+    expect(id).toBe('generation-job-j');
+    expect(generationToastId('k')).not.toBe(id);
+    expect(completionNotice(job({ stopReason: 'STOPPED' }))?.id).toBe(id);
+    expect(completionNotice(job({ hardScore: -1 }))?.id).toBe(id);
+    expect(completionNotice(job({}))?.id).toBe(id);
   });
 });
 
@@ -329,5 +408,30 @@ describe('стан базової версії', () => {
     expect(baselineSentence(version(0, {}))).toBe('Конфліктів і вікон немає.');
     // 4-та пара зміни — не вада
     expect(baselineSentence(version(0, { latePairs: 291 }))).toBe('Конфліктів і вікон немає.');
+  });
+
+  it('база з жорсткими порушеннями генератора — не «Конфліктів і вікон немає» (регресія: пʼятниця понад межу)', () => {
+    expect(baselineSentence(version(0, {}), 2)).toBe('Редактор конфліктів не бачить, але за правилами генератора тут 2 жорсткі порушення.');
+    expect(baselineSentence(version(0, { teacherWindows: 3 }), 1)).toBe('Редактор конфліктів не бачить, але за правилами генератора тут 1 жорстке порушення.');
+    // конфлікти редактора важливіші: їх видно в редакторі й виправляють там
+    expect(baselineSentence(version(3, {}), 2)).toBe('3 жорсткі конфлікти.');
+    // оцінка 0 або невідома — як раніше
+    expect(baselineSentence(version(0, {}), 0)).toBe('Конфліктів і вікон немає.');
+    expect(baselineSentence(version(0, {}), null)).toBe('Конфліктів і вікон немає.');
+  });
+
+  it('жорсткі порушення версії — з оцінки бази в найновішій задачі, що з неї стартувала', () => {
+    const run = (createdAt: string, baseVersionId: string | null, baseHardScore: number | null | undefined) => ({ createdAt, baseVersionId, baseHardScore });
+    const jobs = [
+      run('2026-11-15T10:00:00Z', 'v1', -5),
+      run('2026-11-16T10:00:00Z', 'v1', -2),
+      run('2026-11-16T11:00:00Z', 'v1', null),
+      run('2026-11-16T12:00:00Z', 'v2', -9),
+      run('2026-11-16T13:00:00Z', null, undefined),
+    ];
+    expect(solverHardOfVersion(jobs, 'v1')).toBe(2);
+    expect(solverHardOfVersion(jobs, 'v2')).toBe(9);
+    expect(solverHardOfVersion(jobs, 'v3')).toBeNull();
+    expect(solverHardOfVersion([], 'v1')).toBeNull();
   });
 });

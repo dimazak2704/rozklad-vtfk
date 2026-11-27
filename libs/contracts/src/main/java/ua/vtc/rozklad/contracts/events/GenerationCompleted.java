@@ -12,7 +12,10 @@ import ua.vtc.rozklad.contracts.Parity;
  * {@code generation.completed}: scheduler → core (and notification). {@code status} is one of
  * SOLVED, FAILED, CANCELLED; {@code error} is set only for FAILED. Additive {@code stopReason}: why a job with a
  * timetable stopped (SOLVED, or CANCELLED with assignments: {@code STOPPED}); {@code null} for FAILED, for CANCELLED
- * without a timetable and from older schedulers.
+ * without a timetable and from older schedulers. Additive {@code baseScore}: the solver's score of the timetable the
+ * run started from (the base version's lessons, warm-started), under the run's own weights and settings, before
+ * solving; units with no starting place count for nothing. {@code null} for a run from scratch (nothing placed at the
+ * start), for completions without a timetable and from older schedulers.
  */
 public record GenerationCompleted(
         UUID eventId,
@@ -25,7 +28,8 @@ public record GenerationCompleted(
         List<Assignment> assignments,
         List<ConstraintScore> analysis,
         String error,
-        GenerationStopReason stopReason) implements RozkladEvent {
+        GenerationStopReason stopReason,
+        BaseScore baseScore) implements RozkladEvent {
 
     public GenerationCompleted {
         Objects.requireNonNull(eventId, "eventId");
@@ -41,23 +45,46 @@ public record GenerationCompleted(
 
     public GenerationCompleted(EventEnvelope envelope, UUID jobId, GenerationStatus status, long hardScore,
                                long softScore, List<Assignment> assignments, List<ConstraintScore> analysis,
-                               String error, GenerationStopReason stopReason) {
+                               String error, GenerationStopReason stopReason, BaseScore baseScore) {
         this(envelope.eventId(), envelope.occurredAt(), envelope.version(), jobId, status, hardScore, softScore,
-                assignments, analysis, error, stopReason);
+                assignments, analysis, error, stopReason, baseScore);
+    }
+
+    /** A completion before the base score: no score of the starting timetable. */
+    public GenerationCompleted(UUID eventId, Instant occurredAt, int version, UUID jobId, GenerationStatus status,
+                               long hardScore, long softScore, List<Assignment> assignments,
+                               List<ConstraintScore> analysis, String error, GenerationStopReason stopReason) {
+        this(eventId, occurredAt, version, jobId, status, hardScore, softScore, assignments, analysis, error,
+                stopReason, null);
+    }
+
+    /** A completion before the base score: no score of the starting timetable. */
+    public GenerationCompleted(EventEnvelope envelope, UUID jobId, GenerationStatus status, long hardScore,
+                               long softScore, List<Assignment> assignments, List<ConstraintScore> analysis,
+                               String error, GenerationStopReason stopReason) {
+        this(envelope, jobId, status, hardScore, softScore, assignments, analysis, error, stopReason, null);
     }
 
     /** The record's first schema, kept for callers: no stop reason. */
     public GenerationCompleted(UUID eventId, Instant occurredAt, int version, UUID jobId, GenerationStatus status,
                                long hardScore, long softScore, List<Assignment> assignments,
                                List<ConstraintScore> analysis, String error) {
-        this(eventId, occurredAt, version, jobId, status, hardScore, softScore, assignments, analysis, error, null);
+        this(eventId, occurredAt, version, jobId, status, hardScore, softScore, assignments, analysis, error, null,
+                null);
     }
 
     /** A completion of the first schema: no stop reason. */
     public GenerationCompleted(EventEnvelope envelope, UUID jobId, GenerationStatus status, long hardScore,
                                long softScore, List<Assignment> assignments, List<ConstraintScore> analysis,
                                String error) {
-        this(envelope, jobId, status, hardScore, softScore, assignments, analysis, error, null);
+        this(envelope, jobId, status, hardScore, softScore, assignments, analysis, error, null, null);
+    }
+
+    /**
+     * The solver's score of the starting timetable ({@code hardScore} ≤ 0 counts hard violations, weighted like the
+     * run's final score), e.g. {@code -2} hard for two group-days over the Friday limit.
+     */
+    public record BaseScore(long hardScore, long softScore) {
     }
 
     /** Placement of a {@link ProblemSnapshot.Unit}; {@code roomId} may be {@code null}. */

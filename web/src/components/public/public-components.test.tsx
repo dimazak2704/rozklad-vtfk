@@ -50,6 +50,23 @@ describe('ScheduleFinder', () => {
     expect(input).toHaveValue('');
   });
 
+  it('перший Esc очищає текст, другий виводить фокус із поля на сторінку — і знову діє «/»', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <main id="main" tabIndex={-1}>
+        <ScheduleFinder />
+      </main>,
+    );
+    const input = screen.getByRole('combobox', { name: /Знайти розклад/ });
+    await user.type(input, '4ki1');
+    await user.keyboard('{Escape}');
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(input).not.toHaveFocus();
+    expect(document.getElementById('main')).toHaveFocus();
+  });
+
   it('без збігів пояснює, що спробувати; поки поле порожнє — обране', async () => {
     useFavoritesStore.setState({ favorites: [{ type: 'GROUP', id: 'x', label: '2КІ1', url: '/g/2КІ1' }], recent: [] });
     const user = userEvent.setup();

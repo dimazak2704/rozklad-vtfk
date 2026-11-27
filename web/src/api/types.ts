@@ -1014,6 +1014,13 @@ export interface GenerationJobDto {
   stopRequested?: Nullable<boolean>;
   /** Адитивно: чому задача з розкладом зупинилась; null — старі задачі й задачі без розкладу. */
   stopReason?: Nullable<GenerationStopReason>;
+  /**
+   * Адитивно: оцінка розвʼязувачем розкладу, з якого задача стартувала (база), за її ж правилами й вагами, до
+   * розвʼязання. Це «Було» жорстких порушень: перевірка конфліктів редактора не знає ліміту пар у пʼятницю й
+   * вважає вікна груп мʼякими. null — генерація з нуля, старі задачі й старий планувальник.
+   */
+  baseHardScore?: Nullable<number>;
+  baseSoftScore?: Nullable<number>;
 }
 
 /** Рядок `problems[]` у 422 `GENERATION_LOAD_EXCEEDS_SLOTS` (genfix §3.6): навантаження не вміщується в сітку. */

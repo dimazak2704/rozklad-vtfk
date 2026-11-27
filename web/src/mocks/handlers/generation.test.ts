@@ -120,6 +120,8 @@ describe('задачі генерації', () => {
     expect(running.status).toBe('RUNNING');
     expect(running.progress.length).toBeGreaterThan(1);
     expect(running.metricsBefore?.brokenDays).toBe(34);
+    // як core: оцінка бази приходить із завершенням
+    expect(running.baseHardScore).toBeNull();
 
     vi.setSystemTime(t0 + 15_000);
     const done = await api.get<GenerationJobDto>(`${jobsPath}/${jobId}`);
@@ -127,6 +129,10 @@ describe('задачі генерації', () => {
     // без ліміту: зупинилась сама після плато, точки прогресу — лише покращення
     expect(done).toMatchObject({ timeLimitSeconds: null, stopReason: 'NO_IMPROVEMENT', stopRequested: false });
     expect(done.progress.at(-1)?.t).toBeLessThan(12);
+    // «Було» жорстких — оцінка бази тими самими правилами (з пʼятницею й вікнами груп), що й графік
+    expect(done.baseHardScore).toBeLessThan(0);
+    expect(done.baseHardScore).toBe(done.progress[0]?.hard);
+    expect(done.baseSoftScore).toBe(done.progress[0]?.soft);
     expect(done.metricsAfter?.teacherWindows).toBeLessThan(180);
     expect(done.analysis?.find((a) => a.constraint === 'Аудиторія зайнята')).toMatchObject({ matchCount: 0 });
     const versions = await api.get<TimetableVersionDto[]>('/admin/timetable/versions', { semesterId: ACTIVE_SEMESTER.id });

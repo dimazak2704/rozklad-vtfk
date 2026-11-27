@@ -3,17 +3,19 @@ import type { CSSProperties } from 'react';
 import { Toaster as Sonner } from 'sonner';
 import { useResolvedTheme } from '@/hooks/useResolvedTheme';
 import { Spinner } from './Spinner';
-import { TOAST_CLEARANCE_VAR } from './toastClearance';
+import { TOAST_CLEARANCE_VAR, toastReserveRef } from './toastClearance';
 
 /**
  * Сповіщення (sonner) у кольорах системи. Один екземпляр у корені застосунку.
  * Показувати через `notify` з `@/components/ui/toast`. Над липкою панеллю дій унизу сторінки
- * (`toastClearanceRef`) сповіщення піднімаються, щоб не накривати її кнопки.
+ * (`toastClearanceRef`) сповіщення піднімаються, щоб не накривати її кнопки. Поки сповіщення видно,
+ * `--toast-reserve` каже сторінкам, скільки місця знизу вони займають (`toastReserveRef`).
  */
 export function Toaster() {
   const theme = useResolvedTheme();
   return (
     <Sonner
+      ref={toastReserveRef}
       theme={theme}
       position="bottom-right"
       offset={{ bottom: `calc(var(${TOAST_CLEARANCE_VAR}, 0px) + 16px)`, right: 16, left: 16, top: 16 }}

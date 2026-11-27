@@ -15,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.GenerationStopReason;
+import ua.vtc.rozklad.contracts.events.GenerationCompleted.BaseScore;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted.ConstraintScore;
 import ua.vtc.rozklad.contracts.events.GenerationWeights;
 import ua.vtc.rozklad.core.catalog.GroupRef;
@@ -77,6 +78,23 @@ class GenerationJobMapperTest {
         assertThat(dto.legacyWeights()).as("no weights stored").isNull();
         assertThat(dto.stopRequested()).isFalse();
         assertThat(dto.stopReason()).isNull();
+        assertThat(dto.baseHardScore()).as("an older job has no base score").isNull();
+        assertThat(dto.baseSoftScore()).isNull();
+    }
+
+    /** The scheduler's score of the starting timetable reaches the DTO; a later completion without it clears it. */
+    @Test
+    void baseScoreOfTheSolverIsReturned() {
+        GenerationJob job = new GenerationJob(UUID.randomUUID(), jsonMapper.readTree("{}"), "admin");
+        job.setBaseScore(new BaseScore(-2, -340));
+
+        GenerationJobDto dto = mapper.toDto(job);
+
+        assertThat(dto.baseHardScore()).isEqualTo(-2L);
+        assertThat(dto.baseSoftScore()).isEqualTo(-340L);
+        job.setBaseScore(null);
+        assertThat(mapper.toDto(job).baseHardScore()).isNull();
+        assertThat(mapper.toDto(job).baseSoftScore()).isNull();
     }
 
     /** Auto mode: no limit stored, the stop request and the reason reach the DTO. */
