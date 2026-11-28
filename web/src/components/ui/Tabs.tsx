@@ -71,8 +71,9 @@ export function TabsTrigger({ className, count, icon, children, ...props }: Tabs
       className={cn(
         'relative inline-flex h-10 shrink-0 items-center gap-2 px-3 text-ui font-[550] whitespace-nowrap pointer-coarse:h-12',
         'text-secondary transition-[color] duration-150 ease-out hover:text-primary',
-        // кільце лише з клавіатури і заокруглене, як у решти контролів (клік мишею рамки не лишає)
-        'rounded-control outline-none focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
+        // кільце лише з клавіатури і заокруглене, як у решти контролів (клік мишею рамки не лишає);
+        // outline-none у Tailwind v4 обнуляє і стиль рамки, тому на фокусі повертаємо outline-solid
+        'rounded-control outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
         'data-[state=active]:font-[650] data-[state=active]:text-primary disabled:text-disabled',
         className,
       )}

@@ -30,7 +30,8 @@ export function BottomTabBar({ layout }: { layout: Extract<LayoutKind, 'public' 
                 className={cn(
                   'group/tab flex min-w-0 flex-1 flex-col items-center justify-center gap-1 pt-1 pb-1.5 outline-none',
                   'transition-colors duration-150 active:bg-active',
-                  'focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
+                  // outline-none у Tailwind v4 обнуляє і стиль рамки: без outline-solid кільце фокуса не видно
+                  'focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-4px] focus-visible:outline-focus',
                   active ? 'text-accent' : 'text-secondary hover-fine:text-primary',
                 )}
               >
