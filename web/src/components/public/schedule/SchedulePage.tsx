@@ -135,6 +135,9 @@ export function SchedulePage({
 
   const headerMeta = (
     <>
+      {/* рядок контексту тримає висоту рядка «N замін» ще до даних: тиждень не підстрибує, коли вони приходять (CLS).
+          Нульова ширина, а -me-2 знімає проміжок flex-рядка після неї */}
+      <span aria-hidden="true" data-slot="meta-reserve" className="-me-2 min-h-8 pointer-coarse:min-h-11" />
       <HeaderParity parity={parity} />
       {liveDate && todayBells.data && todayBells.data.slots.length > 0 ? (
         <NowIndicator
