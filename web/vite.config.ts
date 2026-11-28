@@ -10,6 +10,7 @@ import { offlineShellPlugin } from './src/api/offline-shell-plugin.ts';
 import { isCachedPageNavigation } from './src/api/page-cache-route.ts';
 import { isCachedPublicApiRequest, PUBLIC_API_CACHE } from './src/api/public-api-cache.ts';
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
+import { deferAppStyles } from './src/app/app-styles.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
 /** Бібліотеки, без яких не відкривається жодна сторінка (окрема частина коду `framework`). */
@@ -132,6 +133,22 @@ function dropMockServiceWorker(): Plugin {
   };
 }
 
+/**
+ * Стилі застосунку в index.html не блокують перше малювання: його робить статична оболонка з власними
+ * вбудованими стилями, а main.tsx вмикає стилі застосунку перед рендером (src/app/app-styles.ts).
+ * Сторінку тихого оновлення входу (login/silent.html) не чіпаємо.
+ */
+function nonBlockingAppStyles(): Plugin {
+  return {
+    name: 'rozklad:non-blocking-app-styles',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, { path }) => (path === '/index.html' ? deferAppStyles(html) : html),
+    },
+  };
+}
+
 // Dev-сервер на 5180 (5173 зайнятий іншим проєктом), /api проксіюємо на gateway.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -147,7 +164,7 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [react(), tailwindcss(), dropMockServiceWorker(), ...pwa()],
+    plugins: [react(), tailwindcss(), dropMockServiceWorker(), nonBlockingAppStyles(), ...pwa()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },

@@ -9,6 +9,7 @@ import { prefetchPublicMeta } from './api/meta';
 import { dropAuthorizedCopies } from './api/public-api-cache';
 import { queryClient } from './api/queryClient';
 import { App } from './app/App';
+import { applyAppStyles } from './app/app-styles';
 import { whenRouterReady } from './app/router';
 
 /**
@@ -48,8 +49,8 @@ async function startMocksIfEnabled(): Promise<void> {
 
 /**
  * Старт: мок-API (лише dev), запит meta паралельно з кодом сторінки (meta потрібна кожній сторінці; після
- * мок-API, щоб у dev запит не пішов повз нього), далі рендер, щойно роутер має код першої сторінки. Доти
- * видно статичну оболонку з index.html, і React замінює її одразу готовою сторінкою.
+ * мок-API, щоб у dev запит не пішов повз нього), далі рендер, щойно роутер має код першої сторінки, а стилі
+ * застосунку завантажені. Доти видно статичну оболонку з index.html, і React замінює її одразу готовою сторінкою.
  */
 async function start(): Promise<void> {
   try {
@@ -61,7 +62,7 @@ async function start(): Promise<void> {
     return;
   }
   void prefetchPublicMeta(queryClient);
-  await whenRouterReady();
+  await Promise.all([applyAppStyles(), whenRouterReady()]);
   createRoot(root).render(
     <StrictMode>
       <App />
