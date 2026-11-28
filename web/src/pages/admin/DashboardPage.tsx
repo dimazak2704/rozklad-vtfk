@@ -8,6 +8,7 @@ import { waitsForNetwork } from '@/components/admin-daily/network';
 import { useChangesWorkspace } from '@/components/admin-daily/changes/useChangesWorkspace';
 import { ActivityFeed } from '@/components/admin-daily/dashboard/ActivityFeed';
 import { NeedsList } from '@/components/admin-daily/dashboard/NeedsList';
+import { nextDayForward } from '@/components/admin-daily/dashboard/next-day';
 import { useFreshSources } from '@/components/admin-daily/dashboard/useFreshSources';
 import { useServiceAlerts } from '@/components/admin-daily/dashboard/useServiceAlerts';
 import { buildFeed, tallyEntries } from '@/components/admin-daily/model';
@@ -38,7 +39,7 @@ import {
   relativeDayLabel,
   shiftStudyDay,
 } from '@/lib/date';
-import { countLabel, PAIR_FORMS, plural } from '@/lib/labels';
+import { countLabel, PAIR_FORMS } from '@/lib/labels';
 
 /** Тихе посилання «Усі заміни →» праворуч від заголовка розділу. */
 function SectionLink({ to, children }: { to: string; children: string }) {
@@ -57,25 +58,35 @@ function SectionLink({ to, children }: { to: string; children: string }) {
   );
 }
 
+/** Наступний навчальний день після `date`: дата, як його назвати і що на ньому ще відкрито. */
+function useNextStudyDay(date: IsoDate) {
+  const next = shiftStudyDay(date, 1);
+  const dashboard = useDashboard(next);
+  const summary = dashboard.isPlaceholderData ? undefined : dashboard.data;
+  const isTomorrow = relativeDayLabel(next, date) === 'Завтра';
+  // «середу, 13 листопада» → «середу»: у кнопці вистачає дня тижня
+  const weekday = formatWeekdayDateAfterNa(next).split(',')[0] ?? '';
+  return {
+    next,
+    forward: summary ? nextDayForward(summary, { isTomorrow, weekday }) : null,
+    goLabel: isTomorrow ? 'Перейти на завтра' : `Перейти на ${weekday}`,
+  };
+}
+
+function NextDayButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button variant="secondary" onClick={onClick} iconEnd={<ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />}>
+      {label}
+    </Button>
+  );
+}
+
 /**
  * Пари вже скінчилися: замість доріжки з восьми сірих смуг — один рядок, що дивиться вперед:
  * «Пари закінчилися о 18:10. Завтра 3 пари без заміни.» і перехід на наступний навчальний день.
  */
 function DayOver({ endsAt, date, onNextDay }: { endsAt: string; date: IsoDate; onNextDay: (next: IsoDate) => void }) {
-  const next = shiftStudyDay(date, 1);
-  const tomorrow = useDashboard(next);
-  const summary = tomorrow.isPlaceholderData ? undefined : tomorrow.data;
-  const isTomorrow = relativeDayLabel(next, date) === 'Завтра';
-  // «середу, 13 листопада» → «середу»: у кнопці вистачає дня тижня
-  const weekday = formatWeekdayDateAfterNa(next).split(',')[0] ?? '';
-  const onDay = isTomorrow ? 'На завтра' : `На ${weekday}`;
-  let forward: string | null = null;
-  if (summary) {
-    const open = summary.uncoveredLessons;
-    if (open > 0) forward = `${isTomorrow ? 'Завтра' : `На ${weekday}`} ${open} ${plural(open, PAIR_FORMS)} без заміни.`;
-    else if (summary.absences > 0) forward = `${onDay} усі пари вже вирішено.`;
-    else forward = `${onDay} відсутностей поки немає.`;
-  }
+  const { next, forward, goLabel } = useNextStudyDay(date);
   return (
     <section
       aria-label="Стан навчального дня"
@@ -85,17 +96,16 @@ function DayOver({ endsAt, date, onNextDay }: { endsAt: string; date: IsoDate; o
         <span className="font-[650] text-primary">
           Пари закінчилися о <span className="figures">{endsAt}</span>.
         </span>
-        {forward ? ` ${forward}` : null}
+        {forward ? ` ${forward.text}` : null}
       </p>
-      <Button variant="secondary" onClick={() => onNextDay(next)} iconEnd={<ChevronRight aria-hidden="true" className="size-4 rtl:rotate-180" />}>
-        {isTomorrow ? 'Перейти на завтра' : `Перейти на ${weekday}`}
-      </Button>
+      <NextDayButton label={goLabel} onClick={() => onNextDay(next)} />
     </section>
   );
 }
 
 /**
  * Живий стан дня диспетчера: яка пара йде і скільки до дзвінка — лише на сьогодні й лише в навчальний день.
+ * Якщо на наступний день є пари без заміни чи неопубліковане розпорядження, під доріжкою — рядок про це.
  * Після останньої пари — один рядок про наступний день замість доріжки.
  */
 function DayNow({ date, onNextDay }: { date: IsoDate; onNextDay: (next: IsoDate) => void }) {
@@ -103,6 +113,7 @@ function DayNow({ date, onNextDay }: { date: IsoDate; onNextDay: (next: IsoDate)
   const wide = useMediaQuery('(min-width: 768px)', true);
   const slots = bells.data?.slots;
   const { status } = useNow(slots && slots.length > 0 ? slots : null, { date });
+  const { next, forward, goLabel } = useNextStudyDay(date);
   // місце героя тримаємо, поки дзвінки їдуть: інакше він вставиться згори й зсуне весь екран
   if (bells.isPending) {
     return (
@@ -116,6 +127,15 @@ function DayNow({ date, onNextDay }: { date: IsoDate; onNextDay: (next: IsoDate)
   return (
     <div className="rounded-[20px] bg-today-wash px-5 py-5 md:rounded-hero md:px-8 md:py-6">
       <NowIndicator bells={slots} date={date} variant={wide ? 'strip' : 'compact'} />
+      {forward?.needsAttention ? (
+        <section
+          aria-label="Наступний навчальний день"
+          className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-separator pt-4"
+        >
+          <p className="text-body text-secondary">{forward.text}</p>
+          <NextDayButton label={goLabel} onClick={() => onNextDay(next)} />
+        </section>
+      ) : null}
     </div>
   );
 }
