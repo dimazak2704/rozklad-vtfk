@@ -386,6 +386,19 @@ class OrderPublicationIT {
         assertThat(published.title()).isEqualTo("ДОПОВНЕННЯ до розпорядження №35");
         assertThat(drafts.draftFor(MONDAY).id()).as("nothing new: the latest published document")
                 .isEqualTo(published.id());
+        // the order prints only group, pair and room; the site also names the lesson and its old room
+        visitorsLookOn(MONDAY);
+        client.get().uri("/api/public/changes?date=2026-10-19").exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.groups[?(@.group.code == '4КІ1')].items[?(@.rowType == 'ROOM_CHANGE')].from.discipline")
+                .isEqualTo(List.of("НДКС"))
+                .jsonPath("$.groups[?(@.group.code == '4КІ1')].items[?(@.rowType == 'ROOM_CHANGE')].from.teacher")
+                .isEqualTo(List.of("Непийвода"))
+                .jsonPath("$.groups[?(@.group.code == '4КІ1')].items[?(@.rowType == 'ROOM_CHANGE')].previousRoom")
+                .isEqualTo(List.of("6"))
+                .jsonPath("$.groups[?(@.group.code == '4КІ1')].items[?(@.rowType == 'ROOM_CHANGE')].room")
+                .isEqualTo(List.of("12"));
         assertThat(lessons.findAllByGroupIdAndDateBetweenOrderByDateAscPairNumberAsc(ki41.getId(), MONDAY, MONDAY))
                 .filteredOn(lesson -> lesson.isScheduled() && lesson.getPairNumber() == 3)
                 .singleElement().satisfies(lesson -> {

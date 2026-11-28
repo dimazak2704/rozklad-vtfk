@@ -668,6 +668,9 @@ export function toChangeView(change: ChangeDto): ChangeView {
     room: rowType === 'CANCELLATION' ? null : ((change.new.room ?? change.original.room)?.name ?? null),
     subgroupNote: change.subgroup > 0 ? `${change.subgroup} підгрупа` : null,
     orderNumber: null,
+    // як у core: зміна аудиторії називає заняття (уже в `from`) і аудиторію, що була за розкладом;
+    // поле є в кожному рядку (record без NON_NULL), поза зміною аудиторії — null
+    previousRoom: rowType === 'ROOM_CHANGE' ? (change.original.room?.name ?? null) : null,
   };
 }
 

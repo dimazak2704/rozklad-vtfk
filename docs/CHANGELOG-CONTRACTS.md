@@ -766,3 +766,9 @@ CONFIRM request to DECLINED or recorded an objection to a published NOTIFY chang
 |---|---|---|
 | `POST /api/internal/changes/{id}/reply`, `POST /api/me/changes/{id}/decline` | A DECLINE that would change the state once the change's pairs are over (an earlier day, or today after the end of its last pair) → 422 `business-rule`, `code: CHANGE_LESSON_OVER`, «Пара вже минула — відмовитися вже не можна.». A repeated DECLINE and the existing 409 cases are unchanged; CONFIRM stays allowed. | Same rule as the cabinet. A new additive error code. |
 | notification | Unchanged: a 422 from core is `ReplyOutcome.Rejected`, the bot shows core's message in the alert. | Already handled. |
+
+## Room-change rows name the lesson (28.11.2026, branch polish/design)
+
+| Area | Decision | Why |
+|---|---|---|
+| `GET /api/public/changes` (additive) | For a `ROOM_CHANGE` row of one change, `from` names the scheduled lesson (`discipline` short name, `teacher` display name), which the order does not print, and the new `ChangeView.previousRoom` is the room it had. Rows merged from several subgroups (`304/309`) and rows of imported paper orders keep the printed shape (`from` empty, `previousRoom: null`). | The page said «Пара за розкладом · ауд. 404» without the subject or the old room, while the group page showed «БіЕ, Кучер, ~~406~~ 404». |
