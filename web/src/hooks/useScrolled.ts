@@ -1,16 +1,22 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 
-function subscribe(onChange: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener('scroll', onChange, { passive: true });
-  return () => window.removeEventListener('scroll', onChange);
-}
-
-/** Чи прокручено сторінку хоч трохи: шапка показує лінію знизу лише тоді, коли під нею є вміст. */
+/**
+ * Чи прокручено сторінку хоч трохи: шапка показує лінію знизу лише тоді, коли під нею є вміст.
+ *
+ * `window.scrollY` не читаємо під час рендеру й коміту: на щойно вставленій сторінці це змушує браузер
+ * перерахувати розкладку всієї сторінки посеред задачі рендеру (на першому завантаженні — десятки мілісекунд).
+ * Перша перевірка — перед найближчим кадром (сторінку могли відкрити вже прокрученою), далі — подія scroll.
+ */
 export function useScrolled(threshold = 4): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => typeof window !== 'undefined' && window.scrollY > threshold,
-    () => false,
-  );
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > threshold);
+    const frame = window.requestAnimationFrame(update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', update);
+    };
+  }, [threshold]);
+  return scrolled;
 }

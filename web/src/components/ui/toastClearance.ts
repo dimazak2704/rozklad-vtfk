@@ -69,7 +69,10 @@ export function toastReserve(list: HTMLElement | null, viewportHeight: number): 
 }
 
 function updateReserve(container: HTMLElement): void {
-  const reserve = toastReserve(container.querySelector<HTMLElement>('[data-sonner-toaster]'), window.innerHeight);
+  // window.innerHeight змушує браузер одразу перерахувати розкладку всієї сторінки: без сповіщень (так майже
+  // завжди, зокрема під час першого малювання) його не читаємо
+  const list = container.querySelector<HTMLElement>('[data-sonner-toaster]');
+  const reserve = list ? toastReserve(list, window.innerHeight) : 0;
   const root = document.documentElement.style;
   if (reserve > 0) root.setProperty(TOAST_RESERVE_VAR, `${reserve}px`);
   else root.removeProperty(TOAST_RESERVE_VAR);

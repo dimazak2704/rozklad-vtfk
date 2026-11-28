@@ -1,9 +1,7 @@
 import { CalendarDays } from 'lucide-react';
 import { useState } from 'react';
-import { DayPicker } from 'react-day-picker';
-import { uk } from 'react-day-picker/locale/uk';
 import type { IsoDate } from '@/api/types';
-import { IconButton, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
+import { IconButton, LazyDayPicker, Popover, PopoverContent, PopoverTrigger, preloadDayPicker } from '@/components/ui';
 import { compareIsoDates, isoFromLocalDate, isWeekend, localDateFromIso, nearestStudyDay } from '@/lib/date';
 import { CHANGES_HISTORY_HINT } from '../history';
 import { DAY_PICKER_CLASSES } from '../schedule/day-picker-classes';
@@ -25,12 +23,18 @@ export function ChangesDatePicker({ value, today, onChange, minDate = null }: Ch
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <IconButton label="Інша дата" icon={<CalendarDays aria-hidden="true" className="size-[1.125rem]" />} />
+        {/* код календаря — окремою частиною: починаємо вантажити, щойно кнопку збираються натиснути */}
+        <IconButton
+          label="Інша дата"
+          icon={<CalendarDays aria-hidden="true" className="size-[1.125rem]" />}
+          onPointerEnter={preloadDayPicker}
+          onPointerDown={preloadDayPicker}
+          onFocus={preloadDayPicker}
+        />
       </PopoverTrigger>
       <PopoverContent width="auto" align="end" className="p-2">
-        <DayPicker
+        <LazyDayPicker
           mode="single"
-          locale={uk}
           today={localDateFromIso(today)}
           required
           selected={localDateFromIso(value)}

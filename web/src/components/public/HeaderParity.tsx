@@ -10,6 +10,8 @@ const TIP: Record<WeekParity, string> = {
 /**
  * «◐ Чисельник» у рядку контексту під заголовком сторінки. Те саме, що `ParityBadge size="sm"`, але
  * підказка відкривається вниз: угорі над рядком — назва сторінки, і підказка її не накриває.
+ * На дотику ціль 44 px, але рядок вона не розсуває (від'ємні поля): парність приходить разом із даними,
+ * і без цього все під заголовком з'їжджало б униз.
  */
 export function HeaderParity({ parity }: { parity: WeekParity | null | undefined }) {
   if (!parity) return null;
@@ -19,7 +21,7 @@ export function HeaderParity({ parity }: { parity: WeekParity | null | undefined
       <Tooltip content={TIP[parity]} side="bottom" align="start">
         <PopoverTrigger
           aria-label={`${label}. Як чергуються тижні`}
-          className="-mx-1.5 inline-flex h-7 items-center gap-1.5 rounded-control px-1.5 text-caption whitespace-nowrap transition-[background-color] duration-150 ease-out hover:bg-hover active:bg-active focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:h-11"
+          className="-mx-1.5 inline-flex h-7 items-center gap-1.5 rounded-control px-1.5 text-caption whitespace-nowrap transition-[background-color] duration-150 ease-out hover:bg-hover active:bg-active focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:-my-3 pointer-coarse:h-11"
         >
           <ParityMark parity={parity} className="text-secondary" />
           <span className="font-[650] text-primary">{label}</span>
