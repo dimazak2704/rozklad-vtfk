@@ -61,8 +61,13 @@ function pwa(): Plugin[] {
     workbox: {
       // заздалегідь — лише код оболонки; HTML не тут: збережений index.html після оновлення сайту посилався б
       // на частини коду, яких на сервері вже немає. Сторінки — NetworkFirst нижче (rozklad-pages).
-      // Поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html
-      globPatterns: ['assets/index-*.{js,css}', 'assets/modulepreload-polyfill-*.js', 'favicon.svg'],
+      // Поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html.
+      // Бібліотеки, помічники й іконки оболонки — окремі частини (codeSplitting нижче), тож беремо й їх
+      globPatterns: [
+        'assets/{index,framework,lib,icons,rolldown-runtime}-*.{js,css}',
+        'assets/modulepreload-polyfill-*.js',
+        'favicon.svg',
+      ],
       // без navigateFallback: збережений index.html після оновлення сайту посилався б на частини коду,
       // яких на сервері вже немає (порожня сторінка). Переходи — NetworkFirst нижче, оболонка лише офлайн.
       navigateFallback: undefined,
