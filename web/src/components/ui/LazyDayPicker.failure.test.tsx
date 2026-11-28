@@ -5,7 +5,7 @@ import { LazyDayPicker } from './LazyDayPicker';
 
 /** Перша спроба завантажити календар падає (немає мережі), друга вдається. */
 const attempts = vi.hoisted(() => ({ count: 0 }));
-vi.mock('./DayPickerUk', async () => {
+vi.mock('./DayPickerUk', () => {
   attempts.count += 1;
   if (attempts.count === 1) throw new Error('Failed to fetch dynamically imported module');
   return { default: () => <div role="grid" aria-label="Календар" /> };

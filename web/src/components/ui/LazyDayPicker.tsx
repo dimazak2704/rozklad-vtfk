@@ -1,36 +1,8 @@
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useState } from 'react';
 import type { DayPickerProps } from 'react-day-picker';
 import { Button } from './Button';
+import { loadDayPicker, loadedDayPicker, type DayPickerComponent } from './day-picker-loader';
 import { Spinner } from './Spinner';
-
-type DayPickerModule = typeof import('./DayPickerUk');
-
-let pending: Promise<DayPickerModule> | null = null;
-/** Завантажений календар: наступні відкриття малюють його одразу, без силуету. */
-let loaded: ComponentType<DayPickerProps> | null = null;
-
-/** Один запит на всі календарі сторінки; невдалий (немає мережі) не запамʼятовується — можна спробувати ще. */
-function loadDayPicker(): Promise<DayPickerModule> {
-  pending ??= import('./DayPickerUk').then(
-    (module) => {
-      loaded = module.default;
-      return module;
-    },
-    (error: unknown) => {
-      pending = null;
-      throw error;
-    },
-  );
-  return pending;
-}
-
-/**
- * Починає вантажити код календаря заздалегідь — коли людина наводить курсор чи фокус на кнопку, що його
- * відкриває: поки спливне вікно відкривається, календар уже готовий.
- */
-export function preloadDayPicker(): void {
-  loadDayPicker().catch(() => undefined);
-}
 
 /**
  * Календар react-day-picker (українською), що вантажиться лише тоді, коли його відкривають: бібліотека
@@ -38,7 +10,7 @@ export function preloadDayPicker(): void {
  * Поки код вантажиться — кільце на місці календаря; не завантажився — пояснення й «Спробувати ще раз».
  */
 export function LazyDayPicker(props: DayPickerProps) {
-  const [Calendar, setCalendar] = useState<ComponentType<DayPickerProps> | null>(() => loaded);
+  const [Calendar, setCalendar] = useState<DayPickerComponent | null>(loadedDayPicker);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -46,8 +18,8 @@ export function LazyDayPicker(props: DayPickerProps) {
     if (Calendar) return;
     let active = true;
     loadDayPicker().then(
-      (module) => {
-        if (active) setCalendar(() => module.default);
+      (calendar) => {
+        if (active) setCalendar(() => calendar);
       },
       () => {
         if (active) setFailed(true);

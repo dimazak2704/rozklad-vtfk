@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { LazyDayPicker, preloadDayPicker } from './LazyDayPicker';
+import { preloadDayPicker } from './day-picker-loader';
+import { LazyDayPicker } from './LazyDayPicker';
 
 /** Перше перетворення react-day-picker у vitest повільне: чекаємо календар довше за типову секунду. */
 const LOAD = { timeout: 10_000 };

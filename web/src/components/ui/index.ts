@@ -18,7 +18,8 @@ export { HoverCard, HoverCardContent, HoverCardTrigger, HoverDetails } from './H
 export { IconButton } from './IconButton';
 export { Input } from './Input';
 export { Kbd, KbdCombo } from './Kbd';
-export { LazyDayPicker, preloadDayPicker } from './LazyDayPicker';
+export { preloadDayPicker } from './day-picker-loader';
+export { LazyDayPicker } from './LazyDayPicker';
 export { NumberInput } from './NumberInput';
 export { MoreMenu, type MoreMenuItem, type MoreMenuProps } from './MoreMenu';
 export { BackLink, PageHeader, type PageHeaderProps } from './PageHeader';
