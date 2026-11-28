@@ -18,7 +18,7 @@ import { LessonDetailsCard } from './LessonDetailsCard';
 export interface LessonChipProps {
   lesson: TemplateLessonDto;
   view: BoardView;
-  /** Половинка пари (чисельник чи знаменник) — один рядок тексту. */
+  /** Половинка пари (чисельник чи знаменник): тонші поля, під назвою — викладач і аудиторія одним рядком. */
   compact: boolean;
   /** Вузька доріжка підгрупи: назва, під нею викладач і аудиторія — кожне своїм рядком (у половинці пари — лише назва). */
   narrow: boolean;
@@ -110,7 +110,8 @@ export const LessonChip = memo(function LessonChip({
           data-roving=""
           data-lesson-id={lesson.id}
           aria-pressed={selected}
-          aria-label={lessonAriaLabel(lesson, conflicts)}
+          // спершу те, що видно в клітинці (WCAG 2.5.3), далі — повні назви, слот і конфлікти
+          aria-label={`${[title, ...lines].join(', ')}. ${lessonAriaLabel(lesson, conflicts)}`}
           onFocus={() => {
             onFocusItem(`lesson:${lesson.id}`);
             onSelect(lesson);
@@ -155,9 +156,6 @@ export const LessonChip = memo(function LessonChip({
             >
               {title}
             </span>
-            {/* у половинці (чисельник/знаменник) викладач поруч — лише коли є місце; інакше назва
-                лишається цілою, а викладач — у картці й панелі «Вибрана пара» */}
-            {oneLine && !narrow && detail ? <DetailText lines={lines} room={room} teacher={teacher} className="hidden shrink @[11rem]:flex" /> : null}
             <span className="ms-auto flex shrink-0 items-center gap-0.5 text-muted">
               {lesson.pinned ? <Pin aria-hidden="true" className="size-3" /> : null}
               {lesson.streamId ? <Layers aria-hidden="true" className="size-3" /> : null}
@@ -165,7 +163,8 @@ export const LessonChip = memo(function LessonChip({
               {hasHard ? <TriangleExclamationPoint aria-hidden="true" className="size-3.5 text-danger" /> : null}
             </span>
           </span>
-          {!oneLine && detail ? <DetailText lines={lines} room={room} teacher={teacher} className="flex" /> : null}
+          {/* і на всю пару, і в половинці ч/з: хто й де видно без кліку (у вузькій доріжці підгрупи — рядками нижче) */}
+          {!narrow && detail ? <DetailText lines={lines} room={room} teacher={teacher} className="flex" /> : null}
           {stacked
             ? lines.map((line) => (
                 // довге прізвище — з трикрапкою (повне — у картці й підписі для читача екрана): рядки клітинки

@@ -175,10 +175,10 @@ export const EntityGrid = memo(function EntityGrid({
                   лише там, де пару справді поділено за тижнями: у решті рядків вони — шум */}
               {splitRows.has(pair) ? (
                 <>
-                  <span aria-hidden="true" title="чисельник" className="absolute end-1 top-1/4 -translate-y-1/2 text-meta leading-none text-muted">
+                  <span aria-hidden="true" title="чисельник" className="absolute end-1 top-1/4 -translate-y-1/2 text-caption leading-none text-muted">
                     ч
                   </span>
-                  <span aria-hidden="true" title="знаменник" className="absolute end-1 top-3/4 -translate-y-1/2 text-meta leading-none text-muted">
+                  <span aria-hidden="true" title="знаменник" className="absolute end-1 top-3/4 -translate-y-1/2 text-caption leading-none text-muted">
                     з
                   </span>
                 </>
@@ -286,7 +286,9 @@ const SlotCell = memo(function SlotCell({
       aria-label={inWindow ? undefined : `${slotText}: поза вікном зміни`}
       data-cell={`${entity.id}|${weekday}|${pair}`}
       className={cn(
-        'relative grid min-h-16 min-w-0 grid-rows-2 gap-0.5 p-0.5',
+        // половинка ч/з не стискається нижче свого вмісту (назва + викладач і аудиторія): рядок пари з поділом
+        // за тижнями стає трохи вищим, зате нічого не ховається
+        'relative grid min-h-16 min-w-0 grid-rows-[repeat(2,minmax(min-content,1fr))] gap-0.5 p-0.5',
         !lastRow && 'border-b border-separator',
         !lastColumn && 'border-e border-separator',
         inWindow ? 'bg-surface' : 'hatch bg-block-subtle',
