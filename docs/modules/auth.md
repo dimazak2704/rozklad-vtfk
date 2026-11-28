@@ -49,8 +49,10 @@ re-encodes a stored hash, and the synchroniser rewrites older cost-12 rows at th
 - Roles are read from the database at every issuance, so a role change or a revocation applies within one
   access-token lifetime; a disabled account gets `invalid_grant`.
 - Resource servers (core, importer, notification, scheduler) check `exp`/`nbf`, `iss` = `AUTH_ISSUER` and
-  `aud` ∋ `AUTH_AUDIENCE` (`rozklad-api`), and map `roles` to `ROLE_<NAME>` (`TokenRoles`). They fetch the
-  JWKS again when a token carries an unknown `kid`.
+  `aud` ∋ `AUTH_AUDIENCE` (`rozklad-api`), and map `roles` to `ROLE_<NAME>` (`TokenRoles`). They cache the
+  JWKS for 5 minutes and fetch it again when a token carries an unknown `kid`, at most twice per 30 s
+  (`JwksDecoder`, Nimbus rate limit); a token refused by the limit is a 401, so forged tokens with random
+  `kid`s cannot flood `auth`.
 - **Renewal.** The SPA renews in a hidden iframe (`/login/silent.html`, `prompt=none`) while the sign-in
   session lives; without it `auth` answers `login_required` and the SPA goes to the sign-in page.
 

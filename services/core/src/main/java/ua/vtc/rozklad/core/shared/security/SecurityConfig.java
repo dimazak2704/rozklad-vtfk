@@ -9,7 +9,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -66,12 +65,13 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** JWKS from {@code AUTH_JWKS_URI}, issuer and audience from {@link AuthProperties} (no discovery call). */
+    /**
+     * JWKS from {@code AUTH_JWKS_URI} (cached; unknown key ids refetch it at most twice per 30 s), issuer and
+     * audience from {@link AuthProperties} (no discovery call).
+     */
     @Bean
     JwtDecoder jwtDecoder(AuthProperties auth) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(auth.jwksUri().toString()).build();
-        decoder.setJwtValidator(auth.tokenValidator());
-        return decoder;
+        return JwksDecoder.create(auth.jwksUri(), auth.tokenValidator());
     }
 
     @Bean
