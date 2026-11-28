@@ -21,7 +21,7 @@ import { SubgroupDialog } from './SubgroupDialog';
 import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
 import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
-import type { ScheduleParams } from './schedule-params';
+import { isHomeWeek, type ScheduleParams } from './schedule-params';
 import { activePairs, changedLessons, dayOf, dayShareText, filterBySubgroup, ownRoomOf, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
 
 const TARGET_KIND = { GROUP: 'group', TEACHER: 'teacher', ROOM: 'room' } as const satisfies Record<ScheduleTarget['type'], ScheduleEntityKind>;
@@ -161,7 +161,7 @@ export function SchedulePage({
           </button>
         </Tooltip>
       ) : null}
-      <ChangesNote items={changes} view={params.view} onOpenDay={openDay} />
+      <ChangesNote items={changes} view={params.view} onOpenDay={openDay} currentWeek={isHomeWeek(params)} />
     </>
   );
 

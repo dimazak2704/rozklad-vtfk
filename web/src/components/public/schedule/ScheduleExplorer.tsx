@@ -32,7 +32,7 @@ import { SavedCopyNote } from '../SavedCopyNote';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
 import { ChangesNote, WEEK_REGION_ID } from './ChangesNote';
-import type { ScheduleParams, ScheduleView } from './schedule-params';
+import { isHomeWeek, type ScheduleParams, type ScheduleView } from './schedule-params';
 import { activePairs, changedLessons, dayOf, filterBySubgroup } from './schedule-utils';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
 import { WeekDayTabs } from './WeekDayTabs';
@@ -326,7 +326,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <ScheduleControls params={params} />
-          <ChangesNote items={changes} view={view} onOpenDay={openDay} className="lg:ms-auto" />
+          <ChangesNote items={changes} view={view} onOpenDay={openDay} currentWeek={isHomeWeek(params)} className="lg:ms-auto" />
         </div>
       ) : null}
 

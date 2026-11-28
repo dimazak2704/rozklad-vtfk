@@ -47,8 +47,8 @@ test.describe('публічний розклад', () => {
     // тиждень розпорядження №35: СТП Кренціна замінено на НДЕКСМ Непийводи («Зв.зам.»); давній — для персоналу
     await loginWithMockRoles(page, 'TEACHER');
     await page.goto('/g/4%D0%9A%D0%861?view=week&date=2026-10-19');
-    // зміни тижня — одним рядком у заголовку, самі зміни видно в клітинках
-    await expect(page.getByRole('button', { name: /(заміна|заміни|замін) цього тижня/ })).toBeVisible();
+    // зміни тижня — одним рядком у заголовку, самі зміни видно в клітинках; тиждень не поточний — «на тижні»
+    await expect(page.getByRole('button', { name: /(заміна|заміни|замін) на тижні/ })).toBeVisible();
     const lesson = page.getByRole('button', { name: /^2 пара, 09:40–10:40\. Надійність/ });
     if (isMobile) await lesson.click();
     else await lesson.hover();
