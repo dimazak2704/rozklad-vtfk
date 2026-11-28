@@ -4,15 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { BackLink } from '@/components/ui/PageHeader';
 import { buttonClass } from '@/components/ui/styles';
 import { canonicalGroupCode } from '@/lib/search';
+import { safeDecode } from '@/lib/url';
 import { useCommandStore } from '@/stores/commands';
-
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 /** Куди веде «‹ …»: на головну свого розділу — панелі диспетчера, кабінету чи публічного розкладу. */
 function homeOf(pathname: string): { to: string; label: string } {

@@ -1,3 +1,5 @@
+import { sessionStorageOrNull } from '@/lib/storage';
+
 /**
  * Сервер відхилив токен (401), який клієнт ще вважає дійсним: ключі realm змінилися, сесію
  * відкликали, gateway не може перевірити підпис. Такий токен треба забути, інакше сторінка входу
@@ -7,16 +9,8 @@
 const KEY = 'rozklad.auth.rejectedAt';
 export const REJECTION_WINDOW_MS = 60_000;
 
-function storageOrNull(): Storage | null {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
 /** Запамʼятовує відмову; `true`, якщо попередня була щойно (повторний вхід не допоміг). */
-export function noteRejectedToken(now: number = Date.now(), storage: Storage | null = storageOrNull()): boolean {
+export function noteRejectedToken(now: number = Date.now(), storage: Storage | null = sessionStorageOrNull()): boolean {
   if (!storage) return false;
   const previous = Number(storage.getItem(KEY));
   storage.setItem(KEY, String(now));
@@ -24,7 +18,7 @@ export function noteRejectedToken(now: number = Date.now(), storage: Storage | n
 }
 
 /** Після успішної роботи з API (або явного «спробувати ще раз») лічильник скидається. */
-export function clearRejectedToken(storage: Storage | null = storageOrNull()): void {
+export function clearRejectedToken(storage: Storage | null = sessionStorageOrNull()): void {
   storage?.removeItem(KEY);
 }
 

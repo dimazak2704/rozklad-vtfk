@@ -11,14 +11,7 @@ import { useScheduleParams } from '@/components/public/schedule/schedule-params'
 import { subgroupsIn } from '@/components/public/schedule/schedule-utils';
 import { TargetNotFound } from '@/components/public/schedule/TargetNotFound';
 import { canonicalGroupCode, fuzzyFilter } from '@/lib/search';
-
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
+import { safeDecode } from '@/lib/url';
 
 /** «Компʼютерна інженерія · 4 курс» (те саме, що в підказках до кодів). Зміну навчання не показуємо: «1 зміна» читається як «одна заміна». */
 function groupDetails(group: PublicGroupDto): string {
