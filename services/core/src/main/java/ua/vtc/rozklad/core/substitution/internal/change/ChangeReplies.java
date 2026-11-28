@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ua.vtc.rozklad.contracts.ChangeStatus;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.core.catalog.Teacher;
+import ua.vtc.rozklad.core.shared.error.BusinessRuleException;
 import ua.vtc.rozklad.core.shared.error.ConflictDto;
 import ua.vtc.rozklad.core.shared.error.ConflictException;
 import ua.vtc.rozklad.core.shared.error.NotFoundException;
@@ -38,6 +39,9 @@ import ua.vtc.rozklad.core.substitution.internal.support.CurrentTeacher;
  *   <li>repeating the answer already recorded returns the change as it is (a double tap); any other
  *       answer once the change is declined, objected to or cancelled is 409.</li>
  * </ul>
+ * «Не можу» that would change anything is refused once the change's pairs are over (422
+ * {@code CHANGE_LESSON_OVER}), in both modes, as the cabinet already hides the button then; «Добре» stays
+ * allowed.
  * Answers take the date lock before they read the change, like the dispatcher and the publication, so
  * an answer racing with a publication sees the published state and takes the objection path.
  */
@@ -49,23 +53,26 @@ public class ChangeReplies {
     static final String DECLINED_BY_TEACHER = "Викладач не може провести пару";
     static final String OBJECTED = "Викладач не може провести пару, а заміна вже в розпорядженні: "
             + "потрібне доповнення";
+    static final String LESSON_OVER = "Пара вже минула — відмовитися вже не можна.";
 
     private final ChangeRepository changes;
     private final ChangeWorkflow workflow;
     private final ChangeNotifications notifications;
     private final ChangeViews views;
+    private final ConfirmationWindow window;
     private final CatalogLookup catalog;
     private final CurrentTeacher currentTeacher;
     private final AbsentSubstitutes absentSubstitutes;
     private final Clock clock;
 
     public ChangeReplies(ChangeRepository changes, ChangeWorkflow workflow, ChangeNotifications notifications,
-                         ChangeViews views, CatalogLookup catalog, CurrentTeacher currentTeacher,
-                         AbsentSubstitutes absentSubstitutes, Clock clock) {
+                         ChangeViews views, ConfirmationWindow window, CatalogLookup catalog,
+                         CurrentTeacher currentTeacher, AbsentSubstitutes absentSubstitutes, Clock clock) {
         this.changes = changes;
         this.workflow = workflow;
         this.notifications = notifications;
         this.views = views;
+        this.window = window;
         this.catalog = catalog;
         this.currentTeacher = currentTeacher;
         this.absentSubstitutes = absentSubstitutes;
@@ -109,6 +116,7 @@ public class ChangeReplies {
                 throw ConflictException.schedule(conflicts);
             }
         }
+        requireLessonAheadForDecline(change, decision);
         change.recordAnswer(decision, clock.instant(), text);
         if (decision == ConfirmationDecision.CONFIRM) {
             workflow.moveTo(change, ChangeStatus.CONFIRMED, actor, text != null ? text : "Підтверджено викладачем");
@@ -134,6 +142,7 @@ public class ChangeReplies {
         if (change.getTeacherAnswer() == ConfirmationDecision.DECLINE) {
             throw new ConflictException("Ви вже повідомили, що не можете провести цю пару. Диспетчер внесе доповнення.");
         }
+        requireLessonAheadForDecline(change, decision);
         change.recordAnswer(decision, clock.instant(), text);
         if (decision == ConfirmationDecision.CONFIRM) {
             workflow.recordAnswerWithoutTransition(change, actor, text != null ? text : ACKNOWLEDGED);
@@ -144,6 +153,13 @@ public class ChangeReplies {
             workflow.recordAnswerWithoutTransition(change, actor, text != null ? OBJECTED + ". " + text : OBJECTED);
         }
         return finish(change);
+    }
+
+    /** A decline after the pairs are over would only make noise: the lesson has taken place (DOMAIN §7). */
+    private void requireLessonAheadForDecline(Change change, ConfirmationDecision decision) {
+        if (decision == ConfirmationDecision.DECLINE && window.lessonOver(change, clock.instant())) {
+            throw new BusinessRuleException("CHANGE_LESSON_OVER", LESSON_OVER);
+        }
     }
 
     private ChangeDto finish(Change change) {

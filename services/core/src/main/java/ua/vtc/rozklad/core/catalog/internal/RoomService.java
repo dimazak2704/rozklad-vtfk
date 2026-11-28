@@ -6,6 +6,7 @@ import static ua.vtc.rozklad.core.shared.persistence.EntityGuards.deleteOrConfli
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -48,11 +49,12 @@ public class RoomService {
     }
 
     public PageResponse<RoomDto> list(String q, RoomType type, UUID buildingId, Boolean active, PageQuery page) {
-        Page<Room> found = rooms.findAll(Specs.<Room>containsIgnoreCase(q, "name")
+        Specs.PagedSpec<Room> ordered = Specs.orderedUkrainian(Specs.<Room>containsIgnoreCase(q, "name")
                         .and(Specs.equalTo("type", type))
                         .and(Specs.equalTo("buildingId", buildingId))
                         .and(Specs.equalTo("active", active)),
-                page.toPageable(SORTABLE, Sort.by("name")));
+                page.toPageable(SORTABLE, Sort.by("name")), Set.of("name"));
+        Page<Room> found = rooms.findAll(ordered.spec(), ordered.pageable());
         Map<UUID, Ref> buildingRefs = buildings.findAllById(found.getContent().stream()
                         .map(Room::getBuildingId).filter(Objects::nonNull).collect(Collectors.toSet()))
                 .stream().collect(Collectors.toMap(Building::getId, b -> new Ref(b.getId(), b.getName())));

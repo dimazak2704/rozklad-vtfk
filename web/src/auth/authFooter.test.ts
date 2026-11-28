@@ -37,6 +37,20 @@ describe('підвал сторінок входу', () => {
     },
   );
 
+  it('«← До розкладу» має ціль дотику щонайменше 44 px, а підвал не зсувається', () => {
+    const rule = /\n\.auth-footer a \{([^}]*)\}/.exec(authCss)?.[1] ?? '';
+    const footerLine = Number(/\n\.auth-footer \{[^}]*line-height: ([\d.]+)rem;/.exec(authCss)?.[1] ?? NaN);
+    const padding = /padding: ([\d.]+)rem ([\d.]+)rem;/.exec(rule);
+    const margin = /margin: -([\d.]+)rem -([\d.]+)rem;/.exec(rule);
+    expect(rule).toMatch(/display: inline-block;/);
+    expect(padding, 'padding').not.toBeNull();
+    expect(margin, 'margin').not.toBeNull();
+    // 16 px у rem: рядок + верхнє і нижнє поле
+    expect((footerLine + 2 * Number(padding?.[1])) * 16).toBeGreaterThanOrEqual(44);
+    // від'ємні поля дорівнюють внутрішнім: посилання не зсуває підвал
+    expect(margin?.slice(1)).toEqual(padding?.slice(1));
+  });
+
   it('на вузькому екрані підвал стає стовпчиком без крапки: «·» не висить у кінці першого рядка', () => {
     const narrow = /@media \(max-width: ([\d.]+)em\) \{([\s\S]*?)\n\}/.exec(authCss);
     expect(narrow, 'медіазапит вузького підвалу').not.toBeNull();

@@ -368,6 +368,9 @@ picks every substitution; the substitute is **assigned first and informed afterw
   `substitution.teacher-replied`), admin chats are told that an amendment is needed and the web shows the lesson
   as «Потрібне доповнення» — the dispatcher marks the substitute absent at that pair and picks another option,
   which goes into the amendment. A repeated answer changes nothing; another answer once declined or objected → 409.
+  «Не можу» is refused once the change's pairs are over, in every mode (422 `CHANGE_LESSON_OVER`, «Пара вже
+  минула — відмовитися вже не можна.»; the cabinet hides the button then): the lesson has taken place. «Добре»
+  stays allowed.
   A teacher without Telegram cannot be informed: admin chats get one «{викладач} не підключив Telegram — повідомте
   про заміну самі» per teacher and date (never for past lessons).
 - **CONFIRM**: DRAFT → PENDING_CONFIRMATION → CONFIRMED | DECLINED (declined returns the lesson to «needs

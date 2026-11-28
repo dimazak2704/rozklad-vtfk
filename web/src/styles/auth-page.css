@@ -335,6 +335,10 @@ body.auth {
 }
 
 .auth-footer a {
+  /* ціль дотику 44 px заввишки (рядок 1,125rem + 2 × 0,8125rem), а від'ємні поля не зсувають підвал */
+  display: inline-block;
+  padding: 0.8125rem 0.25rem;
+  margin: -0.8125rem -0.25rem;
   color: var(--text-color-secondary);
   font-weight: 600;
   text-decoration: none;

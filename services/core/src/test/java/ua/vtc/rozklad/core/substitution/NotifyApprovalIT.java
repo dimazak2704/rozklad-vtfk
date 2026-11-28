@@ -62,6 +62,8 @@ class NotifyApprovalIT {
 
     private static final LocalDate MONDAY = LocalDate.of(2026, 10, 19);
     private static final Duration WAIT = Duration.ofSeconds(15);
+    private static final java.time.Instant FRIDAY_BEFORE = LocalDate.of(2026, 10, 16).atTime(10, 0)
+            .atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant();
 
     @Autowired
     private ua.vtc.rozklad.core.support.TestClock clock;
@@ -138,8 +140,7 @@ class NotifyApprovalIT {
      * the request is made on the Friday before, the rest of the test runs at the real time.
      */
     private <T> T beforeMonday(java.util.function.Supplier<T> call) {
-        clock.stopAt(java.time.LocalDate.of(2026, 10, 16).atTime(10, 0)
-                .atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV).toInstant());
+        clock.stopAt(FRIDAY_BEFORE);
         try {
             return call.get();
         } finally {
@@ -219,6 +220,7 @@ class NotifyApprovalIT {
 
     @Test
     void cannotBeforeTheOrderDeclinesAndTheLessonNeedsADecisionAgain() {
+        clock.stopAt(FRIDAY_BEFORE); // «Не можу» only while the pair is ahead; reset in cleanUp
         EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate, RozkladEvents.SUBSTITUTION_STATUS_CHANGED,
                 RozkladEvents.SUBSTITUTION_TEACHER_REPLIED);
         Lesson lesson = stpLesson(MONDAY, 2);
@@ -256,6 +258,7 @@ class NotifyApprovalIT {
 
     @Test
     void cannotAfterTheOrderIsAnObjectionThatKeepsThePublishedOrder() {
+        clock.stopAt(FRIDAY_BEFORE); // «Не можу» only while the pair is ahead; reset in cleanUp
         EventProbe probe = EventProbe.listen(amqpAdmin, rabbitTemplate, RozkladEvents.SUBSTITUTION_TEACHER_REPLIED,
                 RozkladEvents.SUBSTITUTION_STATUS_CHANGED);
         Lesson lesson = stpLesson(MONDAY, 2);
@@ -292,6 +295,37 @@ class NotifyApprovalIT {
                 null)).isInstanceOf(ConflictException.class).hasMessageContaining("Диспетчер внесе доповнення");
     }
 
+    /**
+     * The lesson has taken place: «Не можу» is refused (422 CHANGE_LESSON_OVER, the cabinet hides the button too)
+     * before and after the order, nothing is recorded; «Добре» is still taken.
+     */
+    @Test
+    void cannotAfterThePairIsOverIsRefusedButOkIsStillTaken() {
+        ChangeDto published = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.ABSENT), "admin");
+        ChangeDto confirmed = commands.create(otherDiscipline(stpLesson(MONDAY.plusDays(1), 2), ReasonCode.ABSENT),
+                "admin");
+        publication.publish(drafts.draftFor(MONDAY).id(), "admin");
+        assertThat(changes.findById(published.id()).orElseThrow().getStatus()).isEqualTo(ChangeStatus.APPLIED);
+        clock.stopAt(MONDAY.plusDays(2).atTime(9, 0).atZone(ua.vtc.rozklad.core.shared.time.TimeConfig.KYIV)
+                .toInstant());
+
+        for (ChangeDto change : List.of(confirmed, published)) {
+            ChangeStatus status = changes.findById(change.id()).orElseThrow().getStatus();
+            assertThatThrownBy(() -> replies.replyFromBot(change.id(), nepyivoda.getId(),
+                    ConfirmationDecision.DECLINE, null))
+                    .isInstanceOfSatisfying(ua.vtc.rozklad.core.shared.error.BusinessRuleException.class, error -> {
+                        assertThat(error.getCode()).isEqualTo("CHANGE_LESSON_OVER");
+                        assertThat(error.getMessage()).isEqualTo("Пара вже минула — відмовитися вже не можна.");
+                    });
+            assertThat(changes.findById(change.id())).get().satisfies(after -> {
+                assertThat(after.getStatus()).isEqualTo(status);
+                assertThat(after.getTeacherAnswer()).isNull();
+            });
+        }
+        assertThat(replies.replyAsUser(confirmed.id(), user(nepyivoda), ConfirmationDecision.CONFIRM, null)
+                .teacherAnswer()).isEqualTo(ConfirmationDecision.CONFIRM);
+    }
+
     @Test
     void cancelledChangeCannotBeAnswered() {
         ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY, 2), ReasonCode.ABSENT), "admin");
@@ -310,6 +344,7 @@ class NotifyApprovalIT {
      */
     @Test
     void cannotRacingWithThePublicationTakesWhicheverStateTheLockShows() throws Exception {
+        clock.stopAt(FRIDAY_BEFORE); // «Не можу» only while the pair is ahead; reset in cleanUp
         for (int round = 0; round < 3; round++) {
             LocalDate day = MONDAY.plusDays(round);
             ChangeDto created = commands.create(otherDiscipline(stpLesson(day, 2), ReasonCode.ABSENT), "admin");
@@ -340,6 +375,7 @@ class NotifyApprovalIT {
      */
     @Test
     void concurrentAnswersAndCancelQueueUp() throws Exception {
+        clock.stopAt(FRIDAY_BEFORE); // «Не можу» only while the pair is ahead; reset in cleanUp
         for (int round = 0; round < 3; round++) {
             ChangeDto created = commands.create(otherDiscipline(stpLesson(MONDAY.plusDays(round), 2),
                     ReasonCode.ABSENT), "admin");
@@ -356,11 +392,13 @@ class NotifyApprovalIT {
                 if (result instanceof RuntimeException failure) {
                     assertThat(failure).isInstanceOfAny(ConflictException.class,
                             ua.vtc.rozklad.core.shared.error.BusinessRuleException.class,
-                            org.springframework.dao.OptimisticLockingFailureException.class);
+                            org.springframework.dao.OptimisticLockingFailureException.class,
+                            jakarta.persistence.OptimisticLockException.class);
                 }
             });
             assertThat(results.subList(0, 2)).as("round %d: the answers themselves never lose on the version",
-                    round).noneMatch(result -> result instanceof org.springframework.dao.OptimisticLockingFailureException);
+                    round).noneMatch(result -> result instanceof org.springframework.dao.OptimisticLockingFailureException
+                            || result instanceof jakarta.persistence.OptimisticLockException);
             Change after = changes.findById(created.id()).orElseThrow();
             assertThat(after.getStatus()).as("round %d", round)
                     .isIn(ChangeStatus.CONFIRMED, ChangeStatus.DECLINED, ChangeStatus.CANCELLED);

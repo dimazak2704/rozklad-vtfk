@@ -291,6 +291,23 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.lastEditIn(TEACHER).text()).endsWith("✅ <b>Ви підтвердили заміну.</b> Дякуємо!");
     }
 
+    /** A late «Не можу»: core refuses it (422 CHANGE_LESSON_OVER) and the teacher reads core's reason; nothing is edited. */
+    @Test
+    void refusalAfterThePairShowsCoresReason() {
+        handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
+        worker.drain();
+        Sent request = telegram.lastSentTo(TEACHER);
+
+        core.failReplies(new UpstreamRejectedException(422, "Пара вже минула — відмовитися вже не можна.",
+                "CHANGE_LESSON_OVER"));
+        press(TEACHER, request.messageId(), request.callbackOf("❌ Не можу").orElseThrow());
+
+        assertThat(telegram.lastCallbackAnswer().text()).isEqualTo("Пара вже минула — відмовитися вже не можна.");
+        assertThat(telegram.lastCallbackAnswer().alert()).isTrue();
+        assertThat(telegram.editsIn(TEACHER)).isEmpty();
+        assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
+    }
+
     /**
      * The production race of 08.11.2026: core's {@code substitution.status-changed} for the very answer
      * is being processed (its UPDATE of the request row is flushed, not committed) while the teacher's

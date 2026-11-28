@@ -756,3 +756,13 @@ first password itself.
 | Re-authentication start | `/auth/oauth2/authorization/google?reauth_return=<SPA address>`: the stored authorization request carries the address; only that request's callback redirects there (success or failure). Google gets `prompt=select_account` and `max_age=0`. | Google documents `prompt=select_account` (the person must act at Google) but not `prompt=login`; `max_age=0` is asked for, Google may ignore it. A stale return address can never redirect a later sign-in. |
 | Lockout | Attempts are recorded as `PASSWORD_SET` (`BAD_CREDENTIALS` = no fresh proof) under the account's identifier and network and count in the per-identifier lockout and the global gate, like `PASSWORD_CHANGE`. | Same door, same limits. |
 | Tokens after the re-authentication | The Google callback rotates the sign-in session id (session-fixation protection), so the SPA's ID token from before carries a stale `sid` and RP-initiated logout refuses it (`invalid_token`, the session lives on). Back on `?password=set` the SPA first renews its tokens silently (`prompt=none`), then reopens the dialog. No server change. | Otherwise «Вийти» within the access-token lifetime would leave `RZ_AUTH` valid, and on a shared PC the next «Увійти» would enter the previous account; after picking another Google account the tab also switches to it. |
+
+## Late «Не можу» (28.11.2026)
+
+The cabinet hid «Не можу» after the pair, but core and the bot still took it: a late decline moved a pending
+CONFIRM request to DECLINED or recorded an objection to a published NOTIFY change for a lesson that had taken place.
+
+| Area | Decision | Why |
+|---|---|---|
+| `POST /api/internal/changes/{id}/reply`, `POST /api/me/changes/{id}/decline` | A DECLINE that would change the state once the change's pairs are over (an earlier day, or today after the end of its last pair) → 422 `business-rule`, `code: CHANGE_LESSON_OVER`, «Пара вже минула — відмовитися вже не можна.». A repeated DECLINE and the existing 409 cases are unchanged; CONFIRM stays allowed. | Same rule as the cabinet. A new additive error code. |
+| notification | Unchanged: a 422 from core is `ReplyOutcome.Rejected`, the bot shows core's message in the alert. | Already handled. |
