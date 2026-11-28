@@ -1,6 +1,6 @@
 import { Copy, Download, Printer } from 'lucide-react';
 import { useRef } from 'react';
-import { saveBlob } from '@/api/public';
+import { saveBlob } from '@/lib/download';
 import { Button, Dialog, DialogContent, IconButton, notify } from '@/components/ui';
 import { QrPlate } from '../QrPlate';
 
