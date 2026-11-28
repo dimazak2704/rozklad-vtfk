@@ -94,6 +94,11 @@ export interface ScheduleParams {
   setSubgroup: (subgroup: number | null) => void;
 }
 
+/** На екрані тиждень, у якому найближчий навчальний день (той, куди веде «До цього тижня»). */
+export function isHomeWeek({ homeDate, week }: Pick<ScheduleParams, 'homeDate' | 'week'>): boolean {
+  return homeDate >= week.from && homeDate <= week.to;
+}
+
 export function useScheduleParams({ rememberSubgroupFor }: ScheduleParamsOptions = {}): ScheduleParams {
   const [params, setParams] = useSearchParams();
   const today = todayInKyiv();

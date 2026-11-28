@@ -11,6 +11,7 @@
  */
 import { useMutation, useQuery, type QueryKey } from '@tanstack/react-query';
 import { usePublicViewer, type PublicViewer } from '@/auth/usePublicViewer';
+import { saveBlob } from '@/lib/download';
 import { API_BASE, api } from './client';
 import { qk } from './queryKeys';
 import type {
@@ -159,20 +160,6 @@ export function icsUrls(owner: IcsOwner, id: Uuid, origin: string = window.locat
 export async function downloadIcs(owner: IcsOwner, id: Uuid, fileName: string, viewer: PublicViewer | null): Promise<void> {
   const blob = await api.blob(icsPath(owner, id), undefined, { auth: viewer === 'staff' });
   saveBlob(blob, fileName);
-}
-
-/** Зберегти Blob як файл (посилання з атрибутом download). */
-export function saveBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.rel = 'noopener';
-  document.body.append(link);
-  link.click();
-  link.remove();
-  // браузер уже забрав файл — звільняємо памʼять у наступному кадрі
-  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /**

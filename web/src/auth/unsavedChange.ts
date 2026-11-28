@@ -1,3 +1,5 @@
+import { sessionStorageOrNull } from '@/lib/storage';
+
 /**
  * Збереження, яке сервер відхилив через завершений вхід (401 на POST/PUT/DELETE): сторінка йде на
  * вхід і повертається з порожньою формою. Позначка в sessionStorage переживає перехід через сервер
@@ -5,20 +7,12 @@
  */
 const KEY = 'rozklad.auth.unsavedChange';
 
-function storageOrNull(): Storage | null {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-export function noteUnsavedChange(storage: Storage | null = storageOrNull()): void {
+export function noteUnsavedChange(storage: Storage | null = sessionStorageOrNull()): void {
   storage?.setItem(KEY, '1');
 }
 
 /** `true` один раз після позначки (позначка знімається). */
-export function takeUnsavedChange(storage: Storage | null = storageOrNull()): boolean {
+export function takeUnsavedChange(storage: Storage | null = sessionStorageOrNull()): boolean {
   if (!storage?.getItem(KEY)) return false;
   storage.removeItem(KEY);
   return true;

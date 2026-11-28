@@ -52,6 +52,7 @@ import {
 } from '@/components/ui';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { usePulse } from '@/hooks/usePulse';
 import { useWorkingDate } from '@/hooks/useWorkingDate';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate, formatWeekdayDateAfterDo, formatWeekdayDateAfterNa, isWeekend, shiftStudyDay } from '@/lib/date';
@@ -242,7 +243,7 @@ export default function ChangesPage() {
   // з «Обліку годин» («Додати 2 пари», «Оформити «Вичит.»») — одразу форма зміни для цієї групи й дисципліни,
   // а не перша-ліпша відсутність
   const urlPrefill = prefillFromParams(params);
-  const [pulsing, setPulsing] = useState<ReadonlySet<Uuid>>(new Set());
+  const [pulsing, pulse] = usePulse<Uuid>(PULSE_MS);
   // причину диспетчер може змінити сам (code), інакше вона йде за видом обраного варіанта
   const [reason, setReason] = useState<{ lessonId: string | null; code: ReasonCode | null; text: string }>({
     lessonId: null,
@@ -419,17 +420,7 @@ export default function ChangesPage() {
     const entry = workspace.entries.find((e) => e.item.decision?.changeId === change.id);
     const toast = answerToast(change, change.new.teacher ? name(change.new.teacher) : 'Викладач');
     notify[toast.tone](toast.text);
-    if (entry) {
-      const lessonId = entry.item.lesson.id;
-      setPulsing((prev) => new Set(prev).add(lessonId));
-      window.setTimeout(() => {
-        setPulsing((prev) => {
-          const next = new Set(prev);
-          next.delete(lessonId);
-          return next;
-        });
-      }, PULSE_MS);
-    }
+    if (entry) pulse(entry.item.lesson.id);
   });
 
   /**

@@ -50,6 +50,10 @@ const LEGEND: ReadonlyArray<{ lesson: LessonView; text: string }> = [
   { lesson: example('CANCELLED', { reasonText: 'Відп.' }), text: 'Група приходить пізніше чи йде раніше.' },
   { lesson: example('ADDITIONAL', { pair: 5 }), text: 'Відпрацювання чи перенесене заняття.' },
   {
+    lesson: example('MOVED', { pair: 4, original: { discipline: null, teacher: null, room: null, pair: 2 } }),
+    text: 'Пару переставили на інший час того ж дня; на старому місці — «Пари не буде».',
+  },
+  {
     lesson: example('ROOM_CHANGED', { room: { id: 'example-room-2', name: '309', type: 'CLASSROOM' }, original: { discipline: null, teacher: null, room: { id: 'example-room', name: '301', type: 'CLASSROOM' }, pair: null } }),
     text: 'Та сама пара в іншій аудиторії: стара → нова.',
   },
@@ -119,6 +123,12 @@ export default function AboutPage() {
                 </li>
               ))}
             </ul>
+            <p className="max-w-prose text-ui text-secondary">
+              У списку замін трапляються ще два рядки розпорядження.{' '}
+              <span className="font-semibold text-primary">Вичитано</span> — години дисципліни закінчилися, пари більше не
+              буде. <span className="font-semibold text-primary">Обʼєднання підгруп</span> — викладач однієї підгрупи веде
+              пару для обох підгруп разом.
+            </p>
             <div className="flex flex-col gap-2 pt-2">
               <h3 className="flex items-center gap-2 text-heading font-semibold text-primary">
                 <ParityMark parity="NUMERATOR" className="text-secondary" />

@@ -26,8 +26,21 @@ describe('стан звʼязку у верхній панелі', () => {
     expect(screen.queryByText('Перепідключення…')).not.toBeInTheDocument();
   });
 
+  it('холодний старт: поки потік жодного разу не відкрився, довге перепідключення теж не показуємо', () => {
+    const { rerender } = render(<LiveStatus state={state('connecting')} />);
+    rerender(<LiveStatus state={state('reconnecting')} />);
+    act(() => {
+      vi.advanceTimersByTime(RECONNECTING_GRACE_MS * 3);
+    });
+    expect(screen.queryByText('Перепідключення…')).not.toBeInTheDocument();
+    // так і не підключилися — це вже «Немає звʼязку», і воно видно одразу
+    rerender(<LiveStatus state={state('closed')} />);
+    expect(screen.getByText('Немає звʼязку')).toBeInTheDocument();
+  });
+
   it('довге — тихе слово; щойно звʼязок є — зникає, а новий обрив знову чекає паузу', () => {
-    const { rerender } = render(<LiveStatus state={state('reconnecting')} />);
+    const { rerender } = render(<LiveStatus state={state('open')} />);
+    rerender(<LiveStatus state={state('reconnecting')} />);
     act(() => {
       vi.advanceTimersByTime(RECONNECTING_GRACE_MS + 10);
     });

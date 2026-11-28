@@ -79,3 +79,14 @@ describe('Картка заняття на сторінках розкладу',
     expect(group.getAttribute('href')).toMatch(/^\/g\/[^?]+\?view=week&date=2026-11-12$/);
   });
 });
+
+describe('Рядок контексту в заголовку', () => {
+  it('тримає висоту рядка «N замін» ще до завантаження розкладу, щоб тиждень не підстрибував', async () => {
+    renderSchedule('/g/4КІ1?view=week&date=2026-11-12');
+    const reserve = () => document.querySelector('header [data-slot="meta-reserve"]');
+    // заголовок зʼявляється разом із рядком-резервом, ще до клітинок тижня
+    await waitFor(() => expect(reserve()).toHaveClass('min-h-8'));
+    await waitFor(() => expect(document.querySelector('.lesson-cell')).not.toBeNull(), { timeout: 5000 });
+    expect(reserve()).toHaveClass('min-h-8');
+  });
+});

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { CircleCheck, LoaderCircle, TriangleExclamationPoint } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { errorMessage } from '@/api/errors';
 import { qk } from '@/api/queryKeys';
 import { previewMove } from '@/api/timetable';
@@ -102,12 +102,13 @@ function MoveForm({
     if (moved) onDone();
   };
 
+  const formRef = useRef<HTMLDivElement>(null);
   return (
     <DialogContent
       // фокус — на вибраний день: стрілки одразу змінюють слот
       onOpenAutoFocus={(event) => {
         event.preventDefault();
-        document.querySelector<HTMLElement>('[data-move-form] [data-state="on"]')?.focus();
+        formRef.current?.querySelector<HTMLElement>('[data-state="on"]')?.focus();
       }}
       title="Перемістити пару"
       description={lessonTitle(lesson)}
@@ -122,7 +123,7 @@ function MoveForm({
         </>
       }
     >
-      <div data-move-form="" className="flex flex-col gap-4">
+      <div ref={formRef} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-ui font-semibold text-primary">День</span>
           <SegmentedControl

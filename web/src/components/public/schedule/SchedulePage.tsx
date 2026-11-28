@@ -21,7 +21,7 @@ import { SubgroupDialog } from './SubgroupDialog';
 import type { IcsTarget } from './ScheduleActions';
 import { useScheduleMenuItems } from './useScheduleMenuItems';
 import { PHONE_QUERY, ScheduleControls, ScheduleExplorer } from './ScheduleExplorer';
-import type { ScheduleParams } from './schedule-params';
+import { isHomeWeek, type ScheduleParams } from './schedule-params';
 import { activePairs, changedLessons, dayOf, dayShareText, filterBySubgroup, ownRoomOf, semesterWeekOf, withoutOwnRoom } from './schedule-utils';
 
 const TARGET_KIND = { GROUP: 'group', TEACHER: 'teacher', ROOM: 'room' } as const satisfies Record<ScheduleTarget['type'], ScheduleEntityKind>;
@@ -135,6 +135,9 @@ export function SchedulePage({
 
   const headerMeta = (
     <>
+      {/* рядок контексту тримає висоту рядка «N замін» ще до даних: тиждень не підстрибує, коли вони приходять (CLS).
+          Нульова ширина, а -me-2 знімає проміжок flex-рядка після неї */}
+      <span aria-hidden="true" data-slot="meta-reserve" className="-me-2 min-h-8 pointer-coarse:min-h-11" />
       <HeaderParity parity={parity} />
       {liveDate && todayBells.data && todayBells.data.slots.length > 0 ? (
         <NowIndicator
@@ -161,7 +164,7 @@ export function SchedulePage({
           </button>
         </Tooltip>
       ) : null}
-      <ChangesNote items={changes} view={params.view} onOpenDay={openDay} />
+      <ChangesNote items={changes} view={params.view} onOpenDay={openDay} currentWeek={isHomeWeek(params)} />
     </>
   );
 

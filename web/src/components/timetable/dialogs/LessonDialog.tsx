@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleCheck, TriangleExclamationPoint } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import type { PlanningCatalog } from '@/api/timetable';
@@ -164,13 +164,14 @@ function LessonForm({
   const hasIssues = issues.length > 0;
   const submitting = form.formState.isSubmitting;
 
+  const formRef = useRef<HTMLFormElement>(null);
   return (
     <DialogContent
       size="lg"
       // фокус — у перше поле форми, а не на хрестик закриття
       onOpenAutoFocus={(event) => {
         event.preventDefault();
-        document.querySelector<HTMLElement>('#lesson-form [role="combobox"]')?.focus();
+        formRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
       }}
       title={editing ? 'Змінити пару' : 'Додати пару'}
       description={
@@ -189,7 +190,7 @@ function LessonForm({
         </>
       }
     >
-      <form id="lesson-form" noValidate onSubmit={(event) => void submit(event)} className="grid gap-4 sm:grid-cols-2">
+      <form ref={formRef} id="lesson-form" noValidate onSubmit={(event) => void submit(event)} className="grid gap-4 sm:grid-cols-2">
         <Field label="Група" required error={form.formState.errors.groupId?.message}>
           <Controller
             control={form.control}

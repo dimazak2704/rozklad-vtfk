@@ -8,8 +8,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 const RECONNECTING_HINT = 'Оновлення на екрані можуть запізнюватися, доки звʼязок не повернеться.';
 const CLOSED_HINT = 'Дані на екрані можуть бути застарілими.';
 /**
- * Скільки перепідключення має тривати, щоб про нього сказати. Коротке (перший вхід, поки токен ще в дорозі,
- * або обрив на секунду) минає непомітно — інакше «Перепідключення…» блимало б на кожному завантаженні сторінки.
+ * Скільки перепідключення має тривати, щоб про нього сказати: обрив на секунду минає непомітно. Перший вхід
+ * (поки потік ще жодного разу не відкрився) не рахується зовсім — інакше «Перепідключення…» блимало б на кожному
+ * холодному завантаженні сторінки.
  */
 export const RECONNECTING_GRACE_MS = 2_000;
 
@@ -56,7 +57,11 @@ export function LiveStatus({
   onRetry?: () => void;
   className?: string;
 }) {
-  const reconnecting = useLasting(state.status === 'reconnecting', RECONNECTING_GRACE_MS);
+  // до першого відкриття потоку перепідключення — це ще холодний старт (токен, перший запит), а не обрив:
+  // про нього мовчимо, а якщо потік так і не відкриється, стан стане «closed» і скаже про себе сам
+  const [everOpen, setEverOpen] = useState(state.status === 'open');
+  if (!everOpen && state.status === 'open') setEverOpen(true);
+  const reconnecting = useLasting(everOpen && state.status === 'reconnecting', RECONNECTING_GRACE_MS);
   const closed = state.status === 'closed';
   const dot = (
     <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', reconnecting ? 'bg-change' : 'bg-[var(--fill-cancel)]')} />
