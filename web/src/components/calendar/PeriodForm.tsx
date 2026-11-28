@@ -1,69 +1,30 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FileText, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
-import { z } from 'zod';
 import { useDeleteCalendarPeriod, useSaveCalendarPeriod, type CalendarPeriod, type CalendarPeriodRequest, type CalendarSemester } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
 import { usePeriodKinds } from '@/api/period-kinds';
 import { qk } from '@/api/queryKeys';
-import type { PeriodKindDto, PeriodScope, StudyMode } from '@/api/types';
+import type { StudyMode } from '@/api/types';
 import { applyServerErrors, blankToNull } from '@/components/catalog/forms';
 import { FormAlert, FormDialog } from '@/components/catalog/FormParts';
-import { Button, Chip, Combobox, Field, IconButton, Input, Plate, RadioGroup, Select, Textarea, Tooltip } from '@/components/ui';
+import { Field, Input, RadioGroup, Select } from '@/components/ui';
 import { formatNumericDate, isIsoDate } from '@/lib/date';
 import { skipUnchanged, trackSavedRecord } from '@/lib/undo/records';
 import { DateInput } from './DateInput';
+import { initialKindId, PERIOD_FIELDS, periodDefaults, periodSchema, type PeriodValues } from './period-form';
+import { OrderNotePanel, ScopeFields, SuspendFields } from './PeriodFormFields';
 import { KindSwatch } from './KindSwatch';
-import { EFFECT_HINT, EFFECT_LABEL, LEGACY_KIND, SCOPE_LABEL, STUDY_MODE_LABEL } from './labels';
+import { EFFECT_HINT, EFFECT_LABEL, LEGACY_KIND, STUDY_MODE_LABEL } from './labels';
 import { composeOrderNote } from './notes';
 import { periodRequest } from './periods';
-
-const periodSchema = z
-  .object({
-    kindId: z.string().min(1, 'Оберіть вид періоду'),
-    title: z.string().trim().min(1, 'Назвіть період: «Осінні канікули», «Основи національного спротиву»').max(300, 'Не довше за 300 символів'),
-    startsOn: z.string().refine(isIsoDate, 'Вкажіть дату початку'),
-    endsOn: z.string().refine(isIsoDate, 'Вкажіть дату кінця'),
-    studyMode: z.enum(['OFFLINE', 'ONLINE', 'MIXED']).nullable(),
-    scope: z.enum(['ALL', 'COURSES', 'GROUPS']),
-    courses: z.array(z.number()),
-    groupIds: z.array(z.string()),
-    roomId: z.string().nullable(),
-    supervisorIds: z.array(z.string()),
-    orderNote: z.string().trim().max(500, 'Не довше за 500 символів'),
-  })
-  .superRefine((value, ctx) => {
-    if (isIsoDate(value.startsOn) && isIsoDate(value.endsOn) && value.endsOn < value.startsOn) {
-      ctx.addIssue({ code: 'custom', path: ['endsOn'], message: 'Кінець не може бути раніше за початок' });
-    }
-    if (value.scope === 'COURSES' && value.courses.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['courses'], message: 'Позначте хоча б один курс' });
-    }
-    if (value.scope === 'GROUPS' && value.groupIds.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['groupIds'], message: 'Додайте хоча б одну групу' });
-    }
-  });
-
-type PeriodValues = z.infer<typeof periodSchema>;
-const FIELDS = ['kindId', 'title', 'startsOn', 'endsOn', 'studyMode', 'scope', 'courses', 'groupIds', 'roomId', 'supervisorIds', 'orderNote'] as const;
-const COURSES = [1, 2, 3, 4] as const;
-/** Вид нового періоду за замовчуванням — практика, як було до довідника видів. */
-const DEFAULT_KIND_CODE = 'НП';
 
 interface PeriodFormDialogProps {
   semester: CalendarSemester;
   period: CalendarPeriod | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-/** Вид періоду в довіднику: за `kindId`, а для періоду від старішого core — вбудований за старим `kind`. */
-function initialKindId(period: CalendarPeriod | null, kinds: readonly PeriodKindDto[]): string {
-  if (period?.kindId) return period.kindId;
-  const code = period ? LEGACY_KIND[period.kind].code : DEFAULT_KIND_CODE;
-  return kinds.find((k) => k.code === code)?.id ?? kinds.find((k) => k.active)?.id ?? '';
 }
 
 /**
@@ -82,20 +43,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<PeriodValues>({
     resolver: zodResolver(periodSchema),
-    defaultValues: {
-      // довідник уже в кеші (форму відкрили вдруге): вид одразу; інакше його підставить ефект нижче
-      kindId: period?.kindId ?? (kinds.data ? initialKindId(period, kinds.data) : ''),
-      title: period?.title ?? '',
-      startsOn: period?.startsOn ?? '',
-      endsOn: period?.endsOn ?? '',
-      studyMode: period?.studyMode ?? null,
-      scope: period?.scope ?? 'GROUPS',
-      courses: period?.courses ?? [],
-      groupIds: period?.groupIds ?? [],
-      roomId: period?.roomId ?? null,
-      supervisorIds: period?.supervisorIds ?? [],
-      orderNote: period?.orderNote ?? '',
-    },
+    defaultValues: periodDefaults(period, kinds.data),
   });
   const { errors, isDirty } = form.formState;
   const values = useWatch({ control: form.control }) as PeriodValues;
@@ -183,7 +131,7 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
       journalPeriod(period, body, saved);
       onOpenChange(false);
     } catch (error) {
-      setFormError(applyServerErrors(error, form.setError, FIELDS, { kind: 'kindId', 'groupIds[0]': 'groupIds', 'supervisorIds[0]': 'supervisorIds' }));
+      setFormError(applyServerErrors(error, form.setError, PERIOD_FIELDS, { kind: 'kindId', 'groupIds[0]': 'groupIds', 'supervisorIds[0]': 'supervisorIds' }));
     }
   });
 
@@ -309,183 +257,21 @@ export function PeriodFormDialog({ semester, period, open, onOpenChange }: Perio
               )}
             />
           ) : null}
-          <Controller
-            control={form.control}
-            name="scope"
-            render={({ field }) => (
-              <RadioGroup<PeriodScope>
-                legend="Кого стосується"
-                orientation="horizontal"
-                value={field.value}
-                onValueChange={field.onChange}
-                options={(['ALL', 'COURSES', 'GROUPS'] as const).map((scope) => ({ value: scope, label: SCOPE_LABEL[scope] }))}
-              />
-            )}
-          />
-          {values.scope === 'COURSES' ? (
-            <Controller
-              control={form.control}
-              name="courses"
-              render={({ field }) => (
-                <fieldset className="flex flex-col gap-2">
-                  <legend className="sr-only">Курси</legend>
-                  <div className="flex flex-wrap gap-2">
-                    {COURSES.map((course) => {
-                      const selected = field.value.includes(course);
-                      return (
-                        <Chip
-                          key={course}
-                          selected={selected}
-                          onToggle={() =>
-                            field.onChange(selected ? field.value.filter((c) => c !== course) : [...field.value, course].sort((a, b) => a - b))
-                          }
-                        >
-                          {course} курс
-                        </Chip>
-                      );
-                    })}
-                  </div>
-                  {errors.courses ? <p className="text-caption font-medium text-danger">{errors.courses.message}</p> : null}
-                </fieldset>
-              )}
-            />
-          ) : null}
-          {values.scope === 'GROUPS' ? (
-            <Controller
-              control={form.control}
-              name="groupIds"
-              render={({ field }) => (
-                <Field label="Групи" required error={errors.groupIds?.message}>
-                  <div className="flex flex-col gap-2">
-                    <Combobox
-                      value={null}
-                      onValueChange={(id) => {
-                        if (id) field.onChange([...field.value, id]);
-                      }}
-                      options={groupOptions}
-                      placeholder="Додати групу…"
-                      searchPlaceholder="Код групи: 2КІ3 або 2ki3"
-                      loading={groups.isPending}
-                    />
-                    {chosenGroups.length > 0 ? (
-                      <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані групи">
-                        {chosenGroups.map((group) => (
-                          <li key={group.id} className="inline-flex items-center gap-0.5">
-                            <Plate size="md">{group.code}</Plate>
-                            <IconButton
-                              label={`Прибрати групу ${group.code}`}
-                              icon={<X aria-hidden="true" className="size-3.5" />}
-                              size="sm"
-                              className="size-7"
-                              onClick={() => field.onChange(field.value.filter((id) => id !== group.id))}
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                </Field>
-              )}
-            />
-          ) : null}
+          <ScopeFields form={form} scope={values.scope} groupOptions={groupOptions} chosenGroups={chosenGroups} groupsLoading={groups.isPending} />
           {effect === 'SUSPEND' ? (
-            <>
-              <Field label="Аудиторія" error={errors.roomId?.message} hint={`Група побачить «${kindName}: назва, ауд. …». Аудиторію поки лише показуємо, не займаємо.`}>
-                <Controller
-                  control={form.control}
-                  name="roomId"
-                  render={({ field }) => (
-                    <Combobox
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      options={roomOptions}
-                      placeholder="Не вказано"
-                      searchPlaceholder="Номер аудиторії"
-                      loading={rooms.isPending}
-                      clearable
-                      className="sm:max-w-56"
-                    />
-                  )}
-                />
-              </Field>
-              <Controller
-                control={form.control}
-                name="supervisorIds"
-                render={({ field }) => (
-                  <Field
-                    label="Керівники"
-                    error={errors.supervisorIds?.message}
-                    hint="Керівник побачить у своєму розкладі «Керівництво» з назвою періоду й групою."
-                  >
-                    <div className="flex flex-col gap-2">
-                      <Combobox
-                        value={null}
-                        onValueChange={(id) => {
-                          if (id) field.onChange([...field.value, id]);
-                        }}
-                        options={supervisorOptions}
-                        placeholder="Додати керівника…"
-                        searchPlaceholder="Прізвище викладача"
-                        loading={teachers.isPending}
-                      />
-                      {chosenSupervisors.length > 0 ? (
-                        <ul className="flex flex-wrap gap-1.5" aria-label="Вибрані керівники">
-                          {chosenSupervisors.map((teacher) => (
-                            <li key={teacher.id} className="inline-flex items-center gap-0.5">
-                              <Plate size="md">{teacher.name}</Plate>
-                              <IconButton
-                                label={`Прибрати керівника ${teacher.name}`}
-                                icon={<X aria-hidden="true" className="size-3.5" />}
-                                size="sm"
-                                className="size-7"
-                                onClick={() => field.onChange(field.value.filter((id) => id !== teacher.id))}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-caption text-muted">Керівника не призначено.</p>
-                      )}
-                    </div>
-                  </Field>
-                )}
-              />
-            </>
+            <SuspendFields
+              form={form}
+              kindName={kindName}
+              roomOptions={roomOptions}
+              roomsLoading={rooms.isPending}
+              supervisorOptions={supervisorOptions}
+              chosenSupervisors={chosenSupervisors}
+              teachersLoading={teachers.isPending}
+            />
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-3 lg:border-s lg:border-separator lg:ps-5">
-          <Field
-            label="Примітка в розпорядженні"
-            error={errors.orderNote?.message}
-            hint="Друкується жирним унизу розпоряджень на дати періоду."
-          >
-            <Textarea {...form.register('orderNote')} rows={3} />
-          </Field>
-          {/* з назви не видно, що текст примітки буде замінено */}
-          <Tooltip content="Замінити примітку текстом із полів періоду" align="start">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="self-start"
-              iconStart={<FileText aria-hidden="true" className="size-4" />}
-              disabled={!draftNote}
-              onClick={() => form.setValue('orderNote', draftNote, { shouldDirty: true, shouldValidate: true })}
-            >
-              Скласти з полів
-            </Button>
-          </Tooltip>
-          <figure className="flex flex-col gap-1.5">
-            <figcaption className="text-caption text-muted">Так виглядатиме під таблицею розпорядження</figcaption>
-            <div data-theme="light" className="rounded-tag border border-default bg-surface px-4 py-3 text-primary">
-              {/* нижній край таблиці розпорядження, під яким друкується примітка */}
-              <div aria-hidden="true" className="mb-2.5 h-px bg-[var(--border-color-strong)]" />
-              <p className="text-ui font-bold">
-                {values.orderNote?.trim() || <span className="font-normal text-muted">Примітки не буде.</span>}
-              </p>
-            </div>
-          </figure>
-        </div>
+        <OrderNotePanel form={form} draftNote={draftNote} note={values.orderNote} />
       </form>
     </FormDialog>
   );

@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useBells, usePublicMeta } from '@/api/meta';
 import type { ScheduleDto } from '@/api/types';
 import { LessonLinksContext, lessonLinkSearch, NowIndicator, type LessonLinks, type ScheduleEntityKind } from '@/components/schedule';
@@ -67,6 +67,8 @@ export function SchedulePage({
   ics,
   doorSign = false,
 }: SchedulePageProps) {
+  // обгортка тижневої сітки в розкладі: за нею «2 заміни цього тижня» із заголовка знаходить першу змінену клітинку
+  const weekRegion = useRef<HTMLDivElement>(null);
   const meta = usePublicMeta();
   const phone = useMediaQuery(PHONE_QUERY);
   const { mode, print } = usePrintMode();
@@ -164,7 +166,7 @@ export function SchedulePage({
           </button>
         </Tooltip>
       ) : null}
-      <ChangesNote items={changes} view={params.view} onOpenDay={openDay} currentWeek={isHomeWeek(params)} />
+      <ChangesNote items={changes} view={params.view} weekRegion={weekRegion} onOpenDay={openDay} currentWeek={isHomeWeek(params)} />
     </>
   );
 
@@ -194,6 +196,7 @@ export function SchedulePage({
           ownerLabel={target.label}
           toolbar={false}
           select={select}
+          weekRegion={weekRegion}
         />
       </LessonLinksContext>
       <SchedulePrint

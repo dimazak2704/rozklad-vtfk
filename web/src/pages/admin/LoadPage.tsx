@@ -1,51 +1,28 @@
-import { GitMerge, ListFilter, Pencil, Plus, Search, Trash } from 'lucide-react';
+import { GitMerge, Pencil, Plus, Trash } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useGroupTheory } from '@/api/accounting';
 import { useSemesters, activeSemesterOf, useShiftWindows } from '@/api/calendar';
 import { useCatalogOptions } from '@/api/catalog';
 import { useDeleteLoadItem, useLoadItems, type LoadItem } from '@/api/load';
 import type { LoadSource } from '@/api/types';
-import { GroupTheoryNote } from '@/components/accounting/GroupTheoryNote';
-import { PLAN_RULE, planHint } from '@/components/accounting/theory';
 import { DeleteDialog } from '@/components/catalog/DeleteDialog';
 import { useTableUrlState } from '@/components/catalog/useTableUrlState';
 import { DeriveDialog } from '@/components/load/DeriveDialog';
-import { CONTROL_FORM_LABEL, LOAD_SOURCE_HINT, LOAD_SOURCE_LABEL } from '@/components/load/labels';
+import { LoadFilters } from '@/components/load/LoadFilters';
 import { LoadFormDialog } from '@/components/load/LoadForm';
-import { formatHours, pairsPerWeek, patternDescription, patternShort } from '@/components/load/pattern';
-import { teacherLoadSummary } from '@/components/load/summary';
+import { formatHours } from '@/components/load/pattern';
+import { GroupWeekSummary, TeacherLoadSummary } from '@/components/load/LoadSummaries';
+import { DEFAULT_LOAD_SOURCE, useLoadColumns } from '@/components/load/useLoadColumns';
 import { Link } from 'react-router';
-import {
-  Button,
-  buttonClass,
-  Combobox,
-  DataTable,
-  EmptyState,
-  Input,
-  PageErrorBanner,
-  PageHeader,
-  Panel,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  RowActions,
-  Select,
-  Skeleton,
-  Tooltip,
-  type DataTableColumn,
-} from '@/components/ui';
-import { disciplineLine } from '@/lib/discipline-color';
-import { countLabel, LESSON_KIND_LABEL } from '@/lib/labels';
+import { Button, buttonClass, DataTable, EmptyState, PageErrorBanner, PageHeader, Panel, RowActions, Skeleton, Tooltip } from '@/components/ui';
 import { matchScore } from '@/lib/search';
 import { sortRows } from '@/lib/sort';
 import { useRowCursor } from '@/components/catalog/useRowCursor';
-import { handleSearchEscape, useHotkeys } from '@/hooks/useHotkeys';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { useRegisterCommands } from '@/stores/commands';
 import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 const PAGE_SIZE = 50;
-const ALL = 'all';
-const SOURCES: readonly LoadSource[] = ['TIMETABLE_DERIVED', 'MANUAL', 'CURRICULUM', 'PROGRAM'];
 
 /** Навантаження: години на тиждень за групою × дисципліною, тижневий шаблон «1 + ½», викладачі, джерело годин. */
 export default function LoadPage() {
@@ -92,134 +69,7 @@ export default function LoadPage() {
   // у таблиці за групами код групи — лише в першому рядку групи: решта рядків читаються як її частина
   const [groupStarts, setGroupStarts] = useState<ReadonlySet<string> | null>(null);
 
-  const columns = useMemo<Array<DataTableColumn<LoadItem>>>(
-    () => [
-      ...(groupId
-        ? []
-        : [
-            {
-              id: 'group',
-              header: 'Група',
-              width: '6rem',
-              sortValue: (item: LoadItem) => item.group.code,
-              cell: (item: LoadItem) =>
-                !groupStarts || groupStarts.has(item.id) ? (
-                  <span className="figures font-semibold">{item.group.code}</span>
-                ) : (
-                  <span className="sr-only">{item.group.code}</span>
-                ),
-            } satisfies DataTableColumn<LoadItem>,
-          ]),
-      {
-        id: 'discipline',
-        header: 'Дисципліна',
-        rowHeader: true,
-        width: '34%',
-        sortValue: (item) => item.discipline.shortName,
-        cell: (item) => (
-          <span className="flex min-w-0 flex-col">
-            <span className="flex items-center gap-2">
-              <span data-line={disciplineLine(item.discipline)} aria-hidden="true" className="size-2 shrink-0 rounded-full bg-[var(--line-dot)]" />
-              <span className="text-cell font-[650]">{item.discipline.shortName}</span>
-            </span>
-            {/* повна назва й особливості одним тихим рядком, а не трьома «табличками» */}
-            {disciplineNote(item) ? (
-              <span className="line-clamp-1 ps-4 text-caption font-normal text-muted" title={disciplineNote(item)}>
-                {disciplineNote(item)}
-              </span>
-            ) : null}
-          </span>
-        ),
-      },
-      {
-        id: 'hours',
-        header: 'Год/тиж',
-        numeric: true,
-        width: '6rem',
-        sortValue: (item) => item.hoursPerWeek,
-        // на планшеті стовпця «Пари» немає: години й так кажуть головне, а шаблон тижня — у формі рядка
-        cell: (item) => formatHours(item.hoursPerWeek),
-      },
-      {
-        // пари словами («1 щотижня + 1 через тиждень»), а не гліфами; пояснення про чисельник — у підказці
-        id: 'pattern',
-        header: 'Пари',
-        width: '14rem',
-        hideBelow: 'lg',
-        className: 'whitespace-nowrap max-md:hidden!',
-        sortValue: (item) => pairsPerWeek(item.pattern),
-        cell: (item) => (
-          <Tooltip content={patternDescription(item.pattern)}>
-            <span
-              tabIndex={0}
-              className="rounded-tag text-ui text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-            >
-              {patternShort(item.pattern)}
-            </span>
-          </Tooltip>
-        ),
-      },
-      {
-        id: 'planned',
-        header: 'За семестр',
-        numeric: true,
-        width: '7rem',
-        // на планшеті — без нього: план за семестр видно у формі й обліку годин
-        hideBelow: 'lg',
-        className: 'max-md:hidden!',
-        sortValue: (item) => item.plannedHours,
-        // задане число — з позначкою: система його не перераховує, на відміну від автоматичного плану
-        cell: (item) => (
-          <Tooltip content={planHint(item, groupTheory)}>
-            <span
-              tabIndex={0}
-              className="inline-flex flex-col items-end rounded-tag focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-            >
-              <span>{item.plannedHours} год</span>
-              {item.planSource === 'FIXED' ? <span className="text-caption text-muted">задано</span> : null}
-            </span>
-          </Tooltip>
-        ),
-      },
-      {
-        id: 'teachers',
-        header: 'Викладачі',
-        hideBelow: 'md',
-        sortValue: (item) => item.teachers[0]?.teacher.shortName,
-        cell: (item) =>
-          item.teachers.length === 0 ? (
-            <span className="text-caption text-change">Не призначено</span>
-          ) : (
-            <span className="flex flex-col">
-              {item.teachers.map((t) => (
-                <span key={t.subgroup} className="whitespace-nowrap">
-                  {t.subgroup > 0 ? <span className="text-caption text-muted">{t.subgroup} п. · </span> : null}
-                  {name(t.teacher)}
-                </span>
-              ))}
-            </span>
-          ),
-      },
-      {
-        id: 'source',
-        header: 'Джерело',
-        // на планшеті джерело видно у фільтрі «Джерело», а ширина потрібна викладачам
-        hideBelow: 'lg',
-        className: 'max-md:hidden!',
-        sortValue: (item) => LOAD_SOURCE_LABEL[item.source],
-        // звичайне джерело («З розкладу») не повторюємо в кожному рядку — лише винятки
-        cell: (item) =>
-          item.source === DEFAULT_SOURCE && !item.note ? null : (
-          <Tooltip content={item.note ? `${LOAD_SOURCE_HINT[item.source]} ${item.note}` : LOAD_SOURCE_HINT[item.source]}>
-            <span tabIndex={0} className="inline-flex rounded-tag text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
-              {LOAD_SOURCE_LABEL[item.source]}
-            </span>
-          </Tooltip>
-          ),
-      },
-    ],
-    [groupId, groupStarts, name, groupTheory],
-  );
+  const columns = useLoadColumns({ groupId, groupStarts, groupTheory });
 
   // сортуємо всі знайдені записи, а не лише сторінку, і лише потім ділимо на сторінки
   const sorted = useMemo(() => {
@@ -233,7 +83,7 @@ export default function LoadPage() {
   const starts = useMemo(() => (sort.columnId === 'group' ? firstOfGroup(pageRows) : null), [pageRows, sort.columnId]);
   // «Джерело» показує лише винятки; якщо на сторінці їх немає, порожня колонка не займає ширину
   const visibleColumns = useMemo(
-    () => (pageRows.some((item) => item.source !== DEFAULT_SOURCE || item.note) ? columns : columns.filter((column) => column.id !== 'source')),
+    () => (pageRows.some((item) => item.source !== DEFAULT_LOAD_SOURCE || item.note) ? columns : columns.filter((column) => column.id !== 'source')),
     [columns, pageRows],
   );
   if (!sameSet(starts, groupStarts)) setGroupStarts(starts);
@@ -280,12 +130,7 @@ export default function LoadPage() {
     );
   }
 
-  const summary = groupId && items.data ? groupSummary(items.data) : null;
   const searching = table.q.trim() !== '';
-  // пошук привів до рядків одного викладача — його тиждень і семестр, як у групи
-  const teacherSummary = searching && items.data ? teacherLoadSummary(filtered) : null;
-  const extraFilters = (source ? 1 : 0) + (semester.id !== activeSemesterOf(semesters.data)?.id ? 1 : 0);
-  const capacity = group ? weeklyCapacity(shiftWindows.data ?? [], group.shift) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -301,112 +146,20 @@ export default function LoadPage() {
         more={[{ label: 'Вивести з розкладу', icon: <GitMerge aria-hidden="true" className="size-4" />, onSelect: () => setDeriving(true) }]}
       />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className={FILTER_LABEL}>
-          Група
-          <Combobox
-            className="w-full sm:w-44"
-            value={groupId}
-            onValueChange={(value) => table.set({ group: value })}
-            options={(groups.items ?? []).map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс` }))}
-            placeholder="Усі групи"
-            searchPlaceholder="Код: 4КІ1 або 4ki1"
-            loading={groups.isPending}
-            clearable
-          />
-        </label>
-        <Input
-          ref={searchRef}
-          type="search"
-          value={table.q}
-          onChange={(event) => table.set({ q: event.target.value })}
-          onKeyDown={(event) => handleSearchEscape(event, table.q, () => table.set({ q: null }))}
-          placeholder="Дисципліна або викладач"
-          iconStart={<Search aria-hidden="true" className="size-4" />}
-          aria-label="Пошук у навантаженні"
-          wrapperClassName="w-full sm:w-64"
-        />
-        {/* семестр і джерело змінюють рідко — вони за кнопкою «Фільтр», а не чотирма полями в ряд */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button iconStart={<ListFilter aria-hidden="true" className="size-4" />}>
-              Фільтр
-              {extraFilters > 0 ? (
-                <span aria-hidden="true" className="ms-0.5 inline-flex size-5 items-center justify-center rounded-full bg-accent text-meta text-on-accent figures">
-                  {extraFilters}
-                </span>
-              ) : null}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent title="Що показати" width="md">
-            <div className="flex flex-col gap-4">
-              <label className={FILTER_LABEL}>
-                Семестр
-                <Select<string>
-                  className="w-full"
-                  value={semester.id}
-                  onValueChange={(value) => table.set({ semester: value === activeSemesterOf(semesters.data)?.id ? null : value })}
-                  options={semesters.data.map((s) => ({ value: s.id, label: s.name, description: s.active ? 'Активний' : undefined }))}
-                />
-              </label>
-              <label className={FILTER_LABEL}>
-                Джерело годин
-                <Select<string>
-                  className="w-full"
-                  value={source ?? ALL}
-                  onValueChange={(value) => table.set({ source: value === ALL ? null : value })}
-                  options={[{ value: ALL, label: 'Будь-яке' }, ...SOURCES.map((s) => ({ value: s, label: LOAD_SOURCE_LABEL[s] }))]}
-                />
-              </label>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-      {/* підказка — одразу під полем «Група», а не під 50 рядками й сторінками */}
-      {(!groupId && !searching) || semester.id !== activeSemesterOf(semesters.data)?.id ? (
-        <p className="-mt-3 text-caption text-muted">
-          {semester.id !== activeSemesterOf(semesters.data)?.id ? `Показано ${semester.name}. ` : null}
-          {!groupId && !searching ? 'Оберіть групу, щоб побачити, як заповнено її тиждень.' : null}
-        </p>
-      ) : null}
+      <LoadFilters
+        table={table}
+        groupId={groupId}
+        groupOptions={(groups.items ?? []).map((g) => ({ value: g.id, label: g.code, description: `${g.course} курс` }))}
+        groupsLoading={groups.isPending}
+        searchRef={searchRef}
+        semester={semester}
+        semesters={semesters.data}
+        activeSemesterId={activeSemesterOf(semesters.data)?.id}
+        source={source}
+      />
 
-      {summary && group ? (
-        <section aria-label={`Тиждень групи ${group.code}`} className="flex max-w-3xl flex-col gap-2">
-          <p className="text-body text-secondary">
-            <span className="font-[650] text-primary">{group.code}</span>, {group.shift} зміна: {formatHours(summary.hours)} год на тиждень, у середньому{' '}
-            {formatHours(summary.pairs)} {capacity ? `пар із ${capacity} місць у сітці` : 'пар'}; за семестр {summary.planned} год.
-            {summary.unassigned > 0 ? (
-              <span className="text-change"> {countLabel(summary.unassigned, ['дисципліна', 'дисципліни', 'дисциплін'])} без викладача.</span>
-            ) : null}
-          </p>
-          {capacity ? (
-            <span
-              role="meter"
-              aria-label="Заповнення тижня групи"
-              aria-valuemin={0}
-              aria-valuemax={capacity}
-              aria-valuenow={summary.pairs}
-              className="relative h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-[var(--fill-track-future)]"
-            >
-              <span
-                className={`absolute inset-y-0 start-0 rounded-full ${summary.pairs > capacity ? 'bg-[var(--fill-cancel)]' : 'bg-accent'}`}
-                style={{ width: `${Math.min(100, (summary.pairs / capacity) * 100)}%` }}
-              />
-            </span>
-          ) : null}
-          {/* план «За семестр» — лише за тижні теорії групи: чому числа саме такі */}
-          {groupTheory ? <GroupTheoryNote theory={groupTheory} className="mt-1" /> : null}
-          <p className="text-caption text-muted">{PLAN_RULE}</p>
-        </section>
-      ) : null}
-
-      {teacherSummary ? (
-        <p aria-label={`Навантаження: ${name(teacherSummary.teacher)}`} className="max-w-3xl text-body text-secondary">
-          <span className="font-[650] text-primary">{name(teacherSummary.teacher)}</span>: {formatHours(teacherSummary.hours)} год на тиждень, за
-          семестр {formatHours(teacherSummary.planned)} год — {countLabel(teacherSummary.rows, ['рядок', 'рядки', 'рядків'])} у{' '}
-          {countLabel(teacherSummary.groups, ['групі', 'групах', 'групах'])}.
-        </p>
-      ) : null}
+      {groupId && items.data && group ? <GroupWeekSummary group={group} items={items.data} shiftWindows={shiftWindows.data} groupTheory={groupTheory} /> : null}
+      {searching && items.data ? <TeacherLoadSummary rows={filtered} /> : null}
 
       <Panel flush>
       <DataTable
@@ -498,8 +251,6 @@ export default function LoadPage() {
   );
 }
 
-const FILTER_LABEL = 'flex w-full flex-col gap-1 text-caption font-[650] text-primary sm:w-auto';
-const DEFAULT_SOURCE: LoadSource = 'TIMETABLE_DERIVED';
 
 /** Рядки, з яких починається нова група (перший рядок сторінки — завжди). */
 function firstOfGroup(rows: readonly LoadItem[]): ReadonlySet<string> {
@@ -515,30 +266,4 @@ function sameSet(a: ReadonlySet<string> | null, b: ReadonlySet<string> | null): 
   if (!a || !b || a.size !== b.size) return false;
   for (const value of a) if (!b.has(value)) return false;
   return true;
-}
-
-/** Другий рядок дисципліни: повна назва, вид занять, форма контролю, поділ на підгрупи. */
-function disciplineNote(item: LoadItem): string {
-  const parts: string[] = [];
-  if (item.discipline.name !== item.discipline.shortName) parts.push(item.discipline.name);
-  if (item.lessonKind !== 'MIXED') parts.push(LESSON_KIND_LABEL[item.lessonKind]);
-  if (item.controlForm !== 'NONE') parts.push(CONTROL_FORM_LABEL[item.controlForm].toLocaleLowerCase('uk'));
-  if (item.splitSubgroups) parts.push('за підгрупами');
-  return parts.join(' · ');
-}
-
-function groupSummary(items: readonly LoadItem[]) {
-  return {
-    hours: items.reduce((sum, item) => sum + item.hoursPerWeek, 0),
-    pairs: items.reduce((sum, item) => sum + pairsPerWeek(item.pattern), 0),
-    planned: items.reduce((sum, item) => sum + item.plannedHours, 0),
-    unassigned: items.filter((item) => item.teachers.length === 0).length,
-  };
-}
-
-/** Скільки пар на тиждень вміщує сітка зміни: 1 зміна — 4 × 5, 2 зміна — 4 × 4 + 3. */
-function weeklyCapacity(windows: ReadonlyArray<{ shift: number; firstPair: number; lastPair: number }>, shift: number): number | null {
-  const own = windows.filter((w) => w.shift === shift);
-  if (own.length === 0) return null;
-  return own.reduce((sum, w) => sum + (w.lastPair - w.firstPair + 1), 0);
 }

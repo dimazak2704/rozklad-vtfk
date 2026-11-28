@@ -526,6 +526,8 @@ describe('екран «Заміни»', () => {
 
     await user.keyboard('j');
     await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toBeInTheDocument(), WAIT);
+    // J/K переводять і фокус на обрану пару (через ref рядка, а не пошук за id)
+    await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toHaveFocus(), WAIT);
   });
 
   it('телефон: відсутні → пари → варіанти в шторці, і з кожного рівня є дорога назад', { timeout: 30_000 }, async () => {

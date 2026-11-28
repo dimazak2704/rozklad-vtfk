@@ -1,18 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CircleExclamationPoint, Send } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState, type BaseSyntheticEvent, type RefObject } from 'react';
-import { Controller, useForm, useWatch, type Control, type FieldErrors } from 'react-hook-form';
+import { useEffect, useId, useMemo, useRef, useState, type BaseSyntheticEvent } from 'react';
+import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { isApiError } from '@/api/errors';
 import { useCreateAbsence, useMySchedule } from '@/api/me';
-import type { DayDto, IsoDate, LessonView, Uuid } from '@/api/types';
-import { Button, Checkbox, Field, RadioGroup, Textarea, notify } from '@/components/ui';
-import { cn } from '@/lib/cn';
-import { compareIsoDates, diffDays, formatDateRange, formatShortWeekdayDate, isIsoDate, nearestStudyDay } from '@/lib/date';
-import { ABSENCE_REASON_LABEL, countLabel, PAIR_FORMS_ACC } from '@/lib/labels';
+import type { IsoDate, Uuid } from '@/api/types';
+import { Button, Checkbox, RadioGroup, notify } from '@/components/ui';
+import { compareIsoDates, diffDays, formatDateRange, isIsoDate, nearestStudyDay } from '@/lib/date';
+import { ABSENCE_REASON_LABEL } from '@/lib/labels';
 import type { DaySelection } from './absence-days';
 import { AbsenceDayPicker } from './AbsenceDayPicker';
-import { absenceSchema, ALL_PAIRS, COMMENT_MAX, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
+import { absenceSchema, ALL_PAIRS, REASONS, toAbsenceRequest, type AbsenceFormValues } from './absence-schema';
 import { useAssignedSchedule } from './useAssignedSchedule';
+import { choiceText, pairChoices } from './absence-choices';
+import { AffectedPreview, CommentField, OtherPairs } from './AbsenceFormParts';
 
 const FIELDS: ReadonlyArray<keyof AbsenceFormValues> = ['dateFrom', 'dateTo', 'pairs', 'reasonCategory', 'comment'];
 /** Найдовший діапазон, який віддає GET /me/schedule (core і мок: «не більше 31 дня від from»). */
@@ -38,161 +39,6 @@ function rememberReason(reason: AbsenceFormValues['reasonCategory']): void {
   }
 }
 
-type OwnLesson = { day: DayDto; lesson: LessonView };
-
-function LessonLines({ items }: { items: readonly OwnLesson[] }) {
-  return (
-    <ul className="mt-1 flex flex-col gap-0.5 text-secondary">
-      {items.slice(0, 6).map(({ day, lesson }) => (
-        <li key={`${day.date}-${lesson.id}`} className="figures">
-          {formatShortWeekdayDate(day.date)} · {lesson.pair} пара — {lesson.group.code}, {lesson.discipline.shortName}
-        </li>
-      ))}
-      {items.length > 6 ? <li>і ще {items.length - 6}</li> : null}
-    </ul>
-  );
-}
-
-/** Що зачепить відсутність на весь день: його пари в обрані дні або спокійне «пар немає». */
-function AffectedPreview({ own }: { own: readonly OwnLesson[] }) {
-  if (own.length === 0) return <p className="text-secondary">У ці дні за розкладом у вас пар немає.</p>;
-  return (
-    <>
-      <p className="font-semibold text-primary">Зачепить {countLabel(own.length, PAIR_FORMS_ACC)}:</p>
-      <LessonLines items={own} />
-    </>
-  );
-}
-
-/** Одна пара за номером у межах обраних днів: час і що саме я веду (у кожен із днів). */
-interface PairChoice {
-  pair: number;
-  startsAt: string;
-  lessons: readonly OwnLesson[];
-}
-
-/** Мої пари в обрані дні, згруповані за номером: відсутність у core задає номери пар для кожного дня діапазону. */
-function pairChoices(own: readonly OwnLesson[]): PairChoice[] {
-  const byPair = new Map<number, OwnLesson[]>();
-  for (const item of own) byPair.set(item.lesson.pair, [...(byPair.get(item.lesson.pair) ?? []), item]);
-  return [...byPair.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([pair, lessons]) => ({ pair, startsAt: lessons[0]?.lesson.startsAt ?? '', lessons }));
-}
-
-/** «4КІ2, СТП» для одного дня; «Ср, 11.11 — 4КІ2, СТП; Чт, 12.11 — 4КІ1, СТП» для кількох. */
-function choiceText(choice: PairChoice, oneDay: boolean): string {
-  const what = ({ lesson }: OwnLesson) => `${lesson.group.code}, ${lesson.discipline.shortName}`;
-  if (oneDay) return choice.lessons.map(what).join('; ');
-  return choice.lessons.map((item) => `${formatShortWeekdayDate(item.day.date)} — ${what(item)}`).join('; ');
-}
-
-/**
- * Пара, якої немає в розкладі (консультація, перенесена пара): номери лише на запит — «Інша пара…».
- * Відкрито одразу, коли своїх пар у ці дні немає або вже обрано номер поза списком.
- */
-function OtherPairs({
-  pairs,
-  selected,
-  open: forced,
-  onToggle,
-  label = 'Інша пара',
-  caption = 'Інша пара — за номером:',
-}: {
-  pairs: readonly number[];
-  selected: readonly number[];
-  open: boolean;
-  onToggle: (pair: number, on: boolean) => void;
-  /** Назва групи кнопок для зчитувача екрана. */
-  label?: string;
-  /** Підпис над кнопками; null — без підпису (його вже каже речення вище). */
-  caption?: string | null;
-}) {
-  const [opened, setOpened] = useState(false);
-  if (pairs.length === 0) return null;
-  if (!forced && !opened) {
-    return (
-      <Button variant="ghost" className="-ms-2.5 self-start" onClick={() => setOpened(true)}>
-        Інша пара…
-      </Button>
-    );
-  }
-  return (
-    <div role="group" aria-label={label} className="flex flex-col gap-2 pt-2">
-      {caption ? <p className="text-caption text-secondary">{caption}</p> : null}
-      <div className="flex flex-wrap gap-1.5">
-        {pairs.map((pair) => {
-          const on = selected.includes(pair);
-          return (
-            <button
-              key={pair}
-              type="button"
-              aria-pressed={on}
-              aria-label={`${pair} пара`}
-              onClick={() => onToggle(pair, !on)}
-              className={cn(
-                'inline-flex size-10 items-center justify-center rounded-control border text-cell font-[650] figures pointer-coarse:size-11',
-                'transition-[background-color,border-color,color] duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-                on ? 'border-accent bg-selected text-primary' : 'border-control bg-surface text-primary hover-fine:border-strong hover-fine:bg-hover',
-              )}
-            >
-              {pair}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Коментар для диспетчера. Для «Інше» це те саме поле, але під варіантами причини й з питанням «Що саме?»:
- * два поля для одного й того самого тексту лише плутали б. Текст переживає зміну причини.
- */
-function CommentField({
-  control,
-  inputRef,
-  other = false,
-  error,
-}: {
-  control: Control<AbsenceFormValues>;
-  inputRef: RefObject<HTMLTextAreaElement | null>;
-  other?: boolean;
-  error?: string;
-}) {
-  return (
-    <Field
-      // під «Інше» — з відступом до тексту варіантів (кружок 18 px + проміжок 12 px), щоб було видно, до чого питання
-      className={other ? 'ms-[1.875rem]' : undefined}
-      label={
-        <>
-          {other ? 'Що саме?' : 'Коментар для диспетчера'} <span className="font-[500] text-muted">(необовʼязково)</span>
-        </>
-      }
-      error={error}
-    >
-      <Controller
-        control={control}
-        name="comment"
-        render={({ field }) => (
-          <Textarea
-            name={field.name}
-            value={field.value}
-            onChange={field.onChange}
-            onBlur={field.onBlur}
-            ref={(element) => {
-              field.ref(element);
-              inputRef.current = element;
-            }}
-            rows={2}
-            maxLength={COMMENT_MAX}
-            placeholder={other ? 'Наприклад, курси підвищення кваліфікації' : undefined}
-          />
-        )}
-      />
-    </Field>
-  );
-}
 
 interface AbsenceFormProps {
   teacherId: Uuid;

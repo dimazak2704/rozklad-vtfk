@@ -4,6 +4,7 @@ import { useUpdateOrderNotes } from '@/api/admin-daily';
 import { isApiError } from '@/api/errors';
 import type { OrderDto, Uuid } from '@/api/types';
 import { Button, IconButton, notify, Textarea } from '@/components/ui';
+import { useElementRegistry } from '@/hooks/useElementRegistry';
 import { track } from '@/lib/undo/actions';
 import { JournalBlockedError } from '@/lib/undo/errors';
 
@@ -27,6 +28,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
   const [notes, setNotes] = useState<string[]>(order.notes);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const baseId = useId();
+  const fields = useElementRegistry();
 
   const dirty = notes.length !== order.notes.length || notes.some((note, index) => note !== order.notes[index]);
   // скасування з журналу оновить розпорядження й перемалює редактор — незбережене не губимо мовчки
@@ -41,8 +43,8 @@ export function NotesEditor({ order }: { order: OrderDto }) {
   const addNote = () => {
     setNotes((prev) => [...prev, '']);
     // фокус — у нове поле: пробіл чи Enter далі пишуть текст, а не додають ще порожніх приміток
-    const nextId = `${baseId}-note-${notes.length}`;
-    requestAnimationFrame(() => document.getElementById(nextId)?.focus());
+    const next = String(notes.length);
+    requestAnimationFrame(() => fields.get(next)?.focus());
   };
 
   const save = async (event?: FormEvent) => {
@@ -94,6 +96,7 @@ export function NotesEditor({ order }: { order: OrderDto }) {
                   </label>
                   <Textarea
                     id={id}
+                    ref={fields.register(String(index))}
                     rows={2}
                     value={note}
                     aria-invalid={errors[index] ? true : undefined}

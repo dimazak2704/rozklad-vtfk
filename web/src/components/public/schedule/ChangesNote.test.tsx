@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { createRef } from 'react';
 import { renderWithProviders } from '@/test/render';
 import { ChangesNote } from './ChangesNote';
 import { isHomeWeek } from './schedule-params';
@@ -10,12 +11,12 @@ const change = { day: { date: '2026-11-10' } } as ChangedLesson;
 
 describe('ChangesNote', () => {
   it('поточний тиждень — «цього тижня»', () => {
-    renderWithProviders(<ChangesNote items={[change, change]} view="week" onOpenDay={() => {}} currentWeek />);
+    renderWithProviders(<ChangesNote items={[change, change]} view="week" weekRegion={createRef()} onOpenDay={() => {}} currentWeek />);
     expect(screen.getByRole('button')).toHaveTextContent('2 заміни цього тижня');
   });
 
   it('інший тиждень — нейтральне «на тижні», без «цього тижня»', () => {
-    renderWithProviders(<ChangesNote items={[change]} view="week" onOpenDay={() => {}} currentWeek={false} />);
+    renderWithProviders(<ChangesNote items={[change]} view="week" weekRegion={createRef()} onOpenDay={() => {}} currentWeek={false} />);
     expect(screen.getByRole('button')).toHaveTextContent('1 заміна на тижні');
     expect(screen.queryByText(/цього тижня/)).not.toBeInTheDocument();
   });
