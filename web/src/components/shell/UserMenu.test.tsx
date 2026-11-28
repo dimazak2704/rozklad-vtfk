@@ -57,6 +57,18 @@ describe('меню облікового запису', () => {
     useThemeStore.getState().setPreference('system');
   });
 
+  it('у бічній панелі назва кнопки починається з видимих імені й ролі (WCAG 2.5.3), у шапці — «Обліковий запис»', () => {
+    renderWithProviders(
+      <>
+        <UserMenu />
+        <UserMenu variant="block" />
+      </>,
+      { route: '/me' },
+    );
+    expect(screen.getByRole('button', { name: 'Обліковий запис: Кренцін Максим Дмитрович' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Кренцін Максим Дмитрович, Викладач. Обліковий запис' })).toBeInTheDocument();
+  });
+
   it('тема — один пункт із підменю: три варіанти, поточний позначено, усе з клавіатури', async () => {
     const user = await openMenu();
     // замість трьох окремих пунктів у самому меню — один «Тема» з поточним вибором

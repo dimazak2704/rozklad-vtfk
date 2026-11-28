@@ -38,6 +38,22 @@ describe('LessonCell', () => {
     expect(within(cell).getByText('СТП · Кренцін М. Д.').tagName).toBe('S');
   });
 
+  it('заміна, що ще не остаточна, — пунктир і слово «Чекає відповіді» замість тла опублікованої', () => {
+    const { unmount } = renderWithProviders(<LessonCell lesson={substituted} provisional="pending" />);
+    const pending = screen.getByRole('button', { name: /2 пара/ });
+    expect(within(pending).getByText('Чекає відповіді')).toBeInTheDocument();
+    expect(within(pending).queryByText('Заміна')).not.toBeInTheDocument();
+    expect(pending).toHaveAccessibleName(/Запит на заміну чекає вашої відповіді\./);
+    expect(pending.className).toContain('after:border-dashed');
+    expect(pending.className).not.toContain('before:bg-change-subtle');
+    unmount();
+
+    renderWithProviders(<LessonCell lesson={substituted} provisional="unpublished" />);
+    const unpublished = screen.getByRole('button', { name: /2 пара/ });
+    expect(within(unpublished).getByText('Заміна · не опубліковано')).toBeInTheDocument();
+    expect(unpublished).toHaveAccessibleName(/Розпорядження з цією заміною ще не опубліковане\./);
+  });
+
   it('відкриває повні деталі з клавіатури', async () => {
     const user = userEvent.setup();
     renderWithProviders(<LessonCell lesson={substituted} date={monday.date} />);
@@ -392,10 +408,12 @@ describe('WeekGrid', () => {
     const bells = new Map([1, 2, 3, 4].map((weekday) => [weekday, BELLS_MON_THU] as const));
     bells.set(5, BELLS_FRI);
     const { unmount } = renderWithProviders(<WeekGrid schedule={week} today="2026-11-09" at={6 * 60} bells={bells} />);
-    expect(screen.queryByText('12:20–13:20')).not.toBeInTheDocument();
+    // видимий час у клітинці; повний опис пари для читача екрана (.sr-only) час називає завжди
+    const visible = { ignore: '.sr-only, script, style' };
+    expect(screen.queryByText('12:20–13:20', visible)).not.toBeInTheDocument();
     unmount();
     renderWithProviders(<WeekGrid schedule={week} today="2026-11-09" at={6 * 60} />);
-    expect(screen.getByText(/12:20.13:20/)).toBeInTheDocument();
+    expect(screen.getByText(/12:20.13:20/, visible)).toBeInTheDocument();
   });
 
   it('лінія «зараз» має пігулку з часом у колонці часу, а не поверх заняття', () => {

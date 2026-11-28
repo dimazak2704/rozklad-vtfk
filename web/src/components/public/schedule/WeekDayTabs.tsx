@@ -54,7 +54,8 @@ export function WeekDayTabs({ weekStart, days, value, today, onChange, className
           <ToggleGroup.Item
             key={date}
             value={date}
-            aria-label={description}
+            // назва починається з того, що на кнопці видно («Пн 30»), далі — повна дата й скільки пар (WCAG 2.5.3)
+            aria-label={`${weekdayShort(isoWeekday(date))} ${weekday.day}. ${description}`}
             className={cn(
               'group relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-control px-1 py-2 text-center',
               'transition-[background-color,color] duration-150 ease-out',

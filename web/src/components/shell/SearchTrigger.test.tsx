@@ -8,9 +8,9 @@ const classes = (element: Element | null) => element!.className.split(/\s+/);
 describe('SearchTrigger у шапці', () => {
   it('коли поле вузьке, підказка — «Пошук», а не «Група, виклада…»; повна — від ширини, де вміщається', () => {
     renderWithProviders(<SearchTrigger />);
-    const button = screen.getByRole('button', {
-      name: 'Пошук: Група, викладач, аудиторія',
-    });
+    // назва починається з видимої підказки (WCAG 2.5.3); у jsdom немає CSS, тож у ній і коротка «Пошук»
+    const button = screen.getByRole('button', { name: /^Група, викладач, аудиторія\s?— пошук/ });
+    expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
     // поле — контейнер: вибір підказки залежить від його ширини, а не від ширини вікна
     expect(classes(button)).toContain('@container/search');
     const full = button.querySelector('[data-search-label="full"]');
