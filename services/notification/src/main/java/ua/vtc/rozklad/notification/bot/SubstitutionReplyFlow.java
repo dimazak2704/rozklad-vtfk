@@ -4,8 +4,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import ua.vtc.rozklad.contracts.ConfirmationDecision;
 import ua.vtc.rozklad.notification.bot.BotUpdate.CallbackAction;
-import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
-import ua.vtc.rozklad.notification.substitution.SubstitutionRequests.ReplyOutcome;
+import ua.vtc.rozklad.notification.substitution.SubstitutionReplies;
+import ua.vtc.rozklad.notification.substitution.SubstitutionReplies.ReplyOutcome;
 import ua.vtc.rozklad.notification.substitution.SubstitutionTexts;
 
 /**
@@ -15,10 +15,10 @@ import ua.vtc.rozklad.notification.substitution.SubstitutionTexts;
 @Component
 public class SubstitutionReplyFlow {
 
-    private final SubstitutionRequests substitutions;
+    private final SubstitutionReplies substitutions;
     private final BotReplies replies;
 
-    public SubstitutionReplyFlow(SubstitutionRequests substitutions, BotReplies replies) {
+    public SubstitutionReplyFlow(SubstitutionReplies substitutions, BotReplies replies) {
         this.substitutions = substitutions;
         this.replies = replies;
     }

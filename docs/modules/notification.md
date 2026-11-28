@@ -15,7 +15,7 @@ internal REST, schedules are read from core's public REST.
 | `delivery` | persistent queue `OutboundMessage` (= delivery log), `Outbox` (enqueue, idempotent), `DeliveryWorker` (claim → limit → send → record), `RetryPolicy`, `RedisRateLimiter` (Lua token buckets), `MessageSender`, `TestMessages`, `web/DeliveryController` |
 | `events` | `EventsListener` (`notification.q.events`), `EventHandlers` (exactly-once via `processed_event`), `AdminNotices` |
 | `orders` | `OrderDistribution` (order.published), `OrderRows` (rows per group/teacher), `OrderTexts` (compact HTML) |
-| `substitution` | `SubstitutionRequests` (request, reply, edits, deadline reminders), `SubstitutionTexts` |
+| `substitution` | `SubstitutionRequests` (core's events: request, notice, edits, admin notices), `SubstitutionReplies` (the teacher's button), `SubstitutionJobs` (deadline reminders, teachers without Telegram, purge), `SubstitutionDeliveries` (last check before sending, `onSent`), `SubstitutionChats` (the messages to edit or retire), `SubstitutionTexts` |
 | `documents` | `OrderDocxRenderer` (POI, college layout), `LibreOfficeConverter`, `PdfPngRenderer` (PDFBox), `OrderDocuments` (cache, media for photos), `PublishedOrders`, `DocumentPrerenderer`, `web/DocumentsController` |
 | `core` | `CoreClient`/`RestCoreClient`, `ImporterClient`/`RestImporterClient`, `CoreQueries` (Redis read-through cache: meta 30 s, groups/teachers 1 h — an id missing from the cached list reloads it (at most once a minute per catalog, marker `<catalog>:reload`), so a teacher or group created a minute ago gets a binding code; the cached list is replaced only after a successful load, so core being down never empties it; schedules 10 min under a generation counter), error mapping |
 | `digest`, `maintenance` | `MorningDigest` (07:30 Mon–Fri), `ScheduledJobs` (one every-minute method: deadlines, then teachers without Telegram; nightly cleanup) |
@@ -201,7 +201,7 @@ blank lines/lines (≤ 4000 chars), keyboards on the last part.
   `EventHandlers` looks the name for a refusal or an objection up before it opens the event's transaction.
   **Queued while the change moved on:** a request, notice or reminder can wait in the queue (rate limits,
   Telegram retries) while the change is reassigned, cancelled or answered in the cabinet. The worker asks
-  `SubstitutionRequests` right before sending (`OutboundRelevance`): the chat's teacher is no longer the
+  `SubstitutionDeliveries` right before sending (`OutboundRelevance`): the chat's teacher is no longer the
   addressee → FAILED «Неактуальне: заміну передано іншому викладачу.»; the change no longer waits for this
   teacher's answer → FAILED «Неактуальне: заміна вже не чекає відповіді.». A message Telegram accepted in the
   window between that check and the record is corrected at once in `onSent` (row lock, so either the event

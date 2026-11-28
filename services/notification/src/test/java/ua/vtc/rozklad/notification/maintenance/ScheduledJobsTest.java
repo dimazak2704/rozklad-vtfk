@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import ua.vtc.rozklad.notification.config.TelegramProperties;
 import ua.vtc.rozklad.notification.email.MailChannel;
 import ua.vtc.rozklad.notification.support.MailTestProperties;
-import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
+import ua.vtc.rozklad.notification.substitution.SubstitutionJobs;
 
 /** The every-minute substitution jobs run one after another in one scheduled method. */
 class ScheduledJobsTest {
@@ -42,11 +42,11 @@ class ScheduledJobsTest {
                 "reportTeachersWithoutTelegram telegram=false");
     }
 
-    private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken) {
+    private ScheduledJobs jobs(SubstitutionJobs substitutions, String botToken) {
         return jobs(substitutions, botToken, mail(""));
     }
 
-    private ScheduledJobs jobs(SubstitutionRequests substitutions, String botToken, MailChannel mail) {
+    private ScheduledJobs jobs(SubstitutionJobs substitutions, String botToken, MailChannel mail) {
         TelegramProperties telegram = new TelegramProperties(botToken, "scheduler_vtfk_bot", null,
                 TelegramProperties.Mode.POLLING, null, null, TelegramProperties.Access.BOUND_ONLY);
         return new ScheduledJobs(substitutions, null, null, null, null, telegram, Clock.systemUTC(), null, mail,
@@ -59,8 +59,8 @@ class ScheduledJobsTest {
     }
 
     /** Records the calls; the jobs themselves are covered by {@code SubstitutionFlowIT}. */
-    private SubstitutionRequests substitutions(boolean firstFails) {
-        return new SubstitutionRequests(null, null, null, null, null, null, null, null, null, null, null) {
+    private SubstitutionJobs substitutions(boolean firstFails) {
+        return new SubstitutionJobs(null, null, null, null, null, null, null, null) {
             @Override
             public int remindOverdue(boolean telegram) {
                 calls.add("remindOverdue telegram=" + telegram);

@@ -54,6 +54,10 @@ class SubstitutionFlowIT extends IntegrationTest {
     @Autowired
     private SubstitutionRequests substitutions;
     @Autowired
+    private SubstitutionJobs jobs;
+    @Autowired
+    private SubstitutionDeliveries deliveries;
+    @Autowired
     private SubstitutionRequestRepository requestRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -134,10 +138,10 @@ class SubstitutionFlowIT extends IntegrationTest {
         handlers.handle(requested(CoreFixtures.TEACHER_KRENTSIN));
         worker.drain();
         assertThat(telegram.sentTo(OWNER_CHAT)).as("not right away").isEmpty();
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
 
         clock.advance(NOTICE_DELAY);
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
         worker.drain();
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).startsWith("⚠️ <b>Кренцін М.Д. не підключив Telegram</b>")
                 .contains("Запит на заміну не надіслано: понеділок, 19 жовтня · 2 пара · 4КІ1")
@@ -150,7 +154,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 2));
         handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 3));
         clock.advance(NOTICE_DELAY);
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
         worker.drain();
         assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
                 .startsWith("⚠️ <b>Кренцін М.Д. не підключив Telegram</b>\n"
@@ -163,10 +167,10 @@ class SubstitutionFlowIT extends IntegrationTest {
         handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 2));
         handlers.handle(requested(CHANGE_3, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE, 4));
         clock.advance(NOTICE_DELAY.multipliedBy(3));
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
         // минув дедлайн: викладачу нічого не надсилали, адміни вже попереджені — без «немає відповіді»
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
-        assertThat(substitutions.remindOverdue()).isEqualTo(3);
+        assertThat(jobs.remindOverdue()).isEqualTo(3);
         worker.drain();
         assertThat(telegram.sentTo(OWNER_CHAT)).hasSize(1);
         assertThat(telegram.sentTo(TEACHER)).isEmpty();
@@ -174,7 +178,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         // інша дата — окреме попередження
         handlers.handle(requested(CHANGE_4, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE.plusDays(1), 2));
         clock.advance(NOTICE_DELAY);
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
         worker.drain();
         assertThat(telegram.lastSentTo(OWNER_CHAT).text()).contains("вівторок, 20 жовтня · 2 пара");
     }
@@ -190,8 +194,8 @@ class SubstitutionFlowIT extends IntegrationTest {
         handlers.handle(requested(CHANGE_3, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE.minusDays(3), 2));
 
         clock.advance(NOTICE_DELAY.multipliedBy(5));
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
         worker.drain();
         assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
     }
@@ -221,7 +225,7 @@ class SubstitutionFlowIT extends IntegrationTest {
             tx.setRollbackOnly();
         });
 
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
         worker.drain();
         assertThat(telegram.lastSentTo(OWNER_CHAT).text())
                 .containsSubsequence("• 2 пара", "• 3 пара", "• 4 пара");
@@ -237,8 +241,8 @@ class SubstitutionFlowIT extends IntegrationTest {
         core.reset();
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
 
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
-        assertThat(substitutions.remindOverdue()).isEqualTo(2);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.remindOverdue()).isEqualTo(2);
         worker.drain();
 
         assertThat(core.teacherCalls()).isPositive();
@@ -249,8 +253,8 @@ class SubstitutionFlowIT extends IntegrationTest {
         // нічого не чекає — нічого не блокуємо і в core не ходимо
         core.reset();
         flushCaches();
-        assertThat(substitutions.remindOverdue()).isZero();
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.remindOverdue()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
         assertThat(core.teacherCalls()).isZero();
     }
 
@@ -383,11 +387,11 @@ class SubstitutionFlowIT extends IntegrationTest {
     void deadlineBringsOneReminderAndOneAdminNotice() {
         handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
         worker.drain();
-        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(jobs.remindOverdue()).isZero();
 
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
-        assertThat(substitutions.remindOverdue()).isEqualTo(1);
-        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(jobs.remindOverdue()).isEqualTo(1);
+        assertThat(jobs.remindOverdue()).isZero();
         worker.drain();
 
         assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("⏰ <b>Нагадування");
@@ -483,9 +487,9 @@ class SubstitutionFlowIT extends IntegrationTest {
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
 
         handlers.handle(requested(CHANGE_2, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 3)); // core first
-        assertThat(substitutions.remindOverdue()).isEqualTo(2);
+        assertThat(jobs.remindOverdue()).isEqualTo(2);
         handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2)); // the job first
-        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(jobs.remindOverdue()).isZero();
         worker.drain();
 
         assertThat(telegram.sentTo(TEACHER)).extracting(Sent::text)
@@ -503,7 +507,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         handlers.handle(requested(CoreFixtures.TEACHER_NEPYIVODA));
         worker.drain();
         clock.set(Instant.parse("2026-10-19T07:01:00Z"));
-        assertThat(substitutions.remindOverdue()).isEqualTo(1);
+        assertThat(jobs.remindOverdue()).isEqualTo(1);
         handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "12"));
         worker.drain();
 
@@ -512,7 +516,7 @@ class SubstitutionFlowIT extends IntegrationTest {
                 + "Нова аудиторія: 12 (була 6)\n\n").contains("🚪 Аудиторія 12");
 
         handlers.handle(requestedInRoom(SubstitutionRequestMode.CONFIRM, "12")); // core's deadline reminder
-        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(jobs.remindOverdue()).isZero();
         worker.drain();
         assertThat(telegram.sentTo(TEACHER)).hasSize(3);
     }
@@ -701,7 +705,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.sentTo(TEACHER)).singleElement().extracting(Sent::text).asString().startsWith("🙋");
         assertThat(jdbc.queryForList("select last_error from outbound_message where chat_id = ? and kind = 'TEXT' "
                 + "and purpose = 'SUBSTITUTION_STATUS'", String.class, TEACHER))
-                .containsExactly(SubstitutionRequests.NOT_IN_FORCE);
+                .containsExactly(SubstitutionDeliveries.NOT_IN_FORCE);
     }
 
     /** The info-only update reached Telegram just as the change was cancelled: it is corrected at once. */
@@ -850,7 +854,7 @@ class SubstitutionFlowIT extends IntegrationTest {
 
     /** Records that Telegram accepted a message the worker took before the change moved on (the race window). */
     private void delivered(long chatId, long messageId, DeliveryPurpose purpose) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> substitutions.onSent(
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> deliveries.onSent(
                 new OutboundMessageSent(UUID.randomUUID(), purpose, CHANGE, chatId, messageId)));
     }
 
@@ -915,7 +919,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         clock.set(Instant.parse("2026-10-19T09:31:00Z"));
         handlers.handle(requested(CHANGE, CoreFixtures.TEACHER_NEPYIVODA, Order35.DATE, 2,
                 Instant.parse("2026-10-19T09:30:00Z")));
-        substitutions.remindOverdue();
+        jobs.remindOverdue();
         worker.drain();
         assertThat(telegram.sentTo(TEACHER)).isEmpty();
         assertThat(telegram.sentTo(OWNER_CHAT)).isEmpty();
@@ -927,7 +931,7 @@ class SubstitutionFlowIT extends IntegrationTest {
         assertThat(telegram.sentTo(TEACHER)).singleElement().extracting(Sent::text).asString()
                 .startsWith("🙋 <b>Прохання про заміну</b>");
         clock.set(Instant.parse("2026-10-19T09:41:00Z"));
-        assertThat(substitutions.remindOverdue()).isPositive();
+        assertThat(jobs.remindOverdue()).isPositive();
         worker.drain();
         assertThat(telegram.lastSentTo(TEACHER).text()).startsWith("⏰ <b>Нагадування");
         assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
@@ -1083,11 +1087,11 @@ class SubstitutionFlowIT extends IntegrationTest {
                 "4КІ1"));
         // минулий день: нічого не надсилаємо і не попереджаємо
         handlers.handle(notice(CHANGE_4, CoreFixtures.TEACHER_KRENTSIN, Order35.DATE.minusDays(3), 2));
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
 
         clock.advance(NOTICE_DELAY);
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isEqualTo(1);
-        assertThat(substitutions.reportTeachersWithoutTelegram()).isZero();
+        assertThat(jobs.reportTeachersWithoutTelegram()).isEqualTo(1);
+        assertThat(jobs.reportTeachersWithoutTelegram()).isZero();
         worker.drain();
         assertThat(telegram.sentTo(OWNER_CHAT)).singleElement().extracting(Sent::text).asString()
                 .isEqualTo("⚠️ <b>Кренцін М.Д. не підключив Telegram — повідомте про заміну самі</b>\n"
@@ -1096,7 +1100,7 @@ class SubstitutionFlowIT extends IntegrationTest {
                         + "• 3 пара · 4КІ1 · Надійність, діагностика та експлуатація комп'ютерних систем і мереж");
         // без строку немає нагадувань
         clock.advance(Duration.ofDays(1));
-        assertThat(substitutions.remindOverdue()).isZero();
+        assertThat(jobs.remindOverdue()).isZero();
     }
 
     @Test
