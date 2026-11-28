@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { useLocation } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '@/mocks/server';
 import { useThemeStore } from '@/stores/theme';
 import type * as UserManagerModule from '@/auth/userManager';
@@ -43,6 +43,12 @@ async function openMenu() {
 }
 
 describe('меню облікового запису', () => {
+  // вікно пароля — окрема лінива частина коду: перше перетворення модуля (zod, react-hook-form) у vitest
+  // повільне, тож прогріваємо його заздалегідь, щоб findBy не впирався в тайм-аут
+  beforeAll(async () => {
+    await import('./ChangePasswordDialog');
+  });
+
   beforeEach(() => {
     current.isTeacher = true;
     current.isAdmin = false;

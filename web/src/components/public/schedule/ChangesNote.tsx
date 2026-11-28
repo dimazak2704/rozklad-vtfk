@@ -27,6 +27,8 @@ interface ChangesNoteProps {
   view: ScheduleView;
   /** Відкрити день першої зміни (подання «День»), коли клітинки на екрані немає. */
   onOpenDay: (date: IsoDate) => void;
+  /** На екрані тиждень, у якому сьогодні: лише тоді «цього тижня», інакше нейтральне «на тижні». */
+  currentWeek: boolean;
   className?: string;
 }
 
@@ -35,7 +37,7 @@ interface ChangesNoteProps {
  * Натискання веде фокус до першої зміненої клітинки, а на телефоні відкриває день першої зміни. Рядок читається як
  * факт, а не дія, тож підказка каже, що станеться.
  */
-export function ChangesNote({ items, view, onOpenDay, className }: ChangesNoteProps) {
+export function ChangesNote({ items, view, onOpenDay, currentWeek, className }: ChangesNoteProps) {
   const first = items[0];
   if (!first) return null;
   const go = () => {
@@ -59,7 +61,7 @@ export function ChangesNote({ items, view, onOpenDay, className }: ChangesNotePr
         )}
       >
         <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-change" />
-        <span className="u-line">{countLabel(items.length, CHANGE_FORMS)} цього тижня</span>
+        <span className="u-line">{countLabel(items.length, CHANGE_FORMS)} {currentWeek ? 'цього тижня' : 'на тижні'}</span>
       </button>
     </Tooltip>
   );

@@ -335,6 +335,34 @@ class ChangeLifecycleIT {
         assertThat(commands.confirm(created.id(), "admin").status()).isEqualTo(ChangeStatus.CONFIRMED);
     }
 
+    /** «Не можу» once the pair is over is refused (the lesson has taken place); «Добре» is still taken. */
+    @Test
+    void lateCannotIsRefusedOnceThePairIsOverButOkIsTaken() {
+        ChangeDto created = commands.create(replaceTeacher(nepyivoda), "admin");
+
+        // 2 пара 09:40–10:40: з її кінця відмовитися вже не можна
+        clock.stopAt(MONDAY.atTime(10, 40).atZone(TimeConfig.KYIV).toInstant());
+        assertThatThrownBy(() -> replies.replyAsUser(created.id(), user(nepyivoda), ConfirmationDecision.DECLINE,
+                null)).isInstanceOfSatisfying(BusinessRuleException.class, error -> {
+                    assertThat(error.getCode()).isEqualTo("CHANGE_LESSON_OVER");
+                    assertThat(error.getMessage()).isEqualTo("Пара вже минула — відмовитися вже не можна.");
+                });
+        assertThat(changes.findById(created.id()).orElseThrow().getStatus())
+                .isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
+
+        assertThat(replies.replyFromBot(created.id(), nepyivoda.getId(), ConfirmationDecision.CONFIRM, null)
+                .status()).isEqualTo(ChangeStatus.CONFIRMED);
+    }
+
+    @Test
+    void cannotWhileThePairIsGoingOnIsStillTaken() {
+        ChangeDto created = commands.create(replaceTeacher(nepyivoda), "admin");
+        clock.stopAt(MONDAY.atTime(10, 39).atZone(TimeConfig.KYIV).toInstant());
+
+        assertThat(replies.replyFromBot(created.id(), nepyivoda.getId(), ConfirmationDecision.DECLINE, null)
+                .status()).isEqualTo(ChangeStatus.DECLINED);
+    }
+
     @Test
     void autoApprovalConfirmsAtOnce() {
         fixture.setting("substitution.approvalMode", "AUTO");

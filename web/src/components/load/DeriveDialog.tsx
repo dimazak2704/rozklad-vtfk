@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { CalendarSemester } from '@/api/calendar';
 import { errorMessage } from '@/api/errors';
-import { useDeriveLoad, useTimetableVersions, type DerivedLoadResult } from '@/api/load';
+import { useDeriveLoad, type DerivedLoadResult } from '@/api/load';
+import { useTimetableVersions } from '@/api/timetable';
 import { Button, Dialog, DialogContent, EmptyState, ErrorState, Plate, Select, Skeleton, notify } from '@/components/ui';
 import { formatNumericDate } from '@/lib/date';
 import { countLabel } from '@/lib/labels';

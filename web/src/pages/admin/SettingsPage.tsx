@@ -35,13 +35,17 @@ export default function SettingsPage() {
       <PageHeader
         title="Налаштування"
         meta={
-          <>
+          // одним абзацом: рядок контексту — flex-контейнер, і окремий текстовий вузол «.» став би своїм елементом
+          // з проміжком перед ним; посилання з крапкою не розриваються
+          <span>
             Зміни діють одразу після збереження. Листи на пошту —{' '}
-            <Link to="/admin/notifications" className="font-[650] text-accent underline-offset-2 hover:underline">
-              у «Сповіщеннях»
-            </Link>
-            .
-          </>
+            <span className="whitespace-nowrap">
+              <Link to="/admin/notifications" className="font-[650] text-accent underline-offset-2 hover:underline">
+                у «Сповіщеннях»
+              </Link>
+              .
+            </span>
+          </span>
         }
       />
       {/*

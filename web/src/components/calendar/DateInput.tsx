@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { IconButton, Input, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { addDays, isIsoDate, isoWeekday, parseIsoDate, todayInKyiv, toIsoDate } from '@/lib/date';
@@ -19,8 +19,8 @@ interface DateInputProps {
   autoFocus?: boolean;
   'aria-label'?: string;
   className?: string;
-  /** Атрибути для пошуку поля в діалозі (фокус при відкритті). */
-  'data-publish-focus'?: string;
+  /** Текстове поле — щоб діалог міг поставити в нього фокус при відкритті. */
+  ref?: Ref<HTMLInputElement>;
 }
 
 const WEEK = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'] as const;
@@ -29,7 +29,7 @@ const WEEK = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'] as const;
  * Дата «11.11.2026» незалежно від мови браузера: текстом з цифровою клавіатурою або з календаря поруч.
  * Тиждень починається з понеділка, як у коледжі; дні поза `min`–`max` вимкнені.
  */
-export function DateInput({ value, onChange, onBlur, min, max, className, ...rest }: DateInputProps) {
+export function DateInput({ value, onChange, onBlur, min, max, className, ref, ...rest }: DateInputProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const shown = draft ?? isoToText(value);
@@ -51,7 +51,7 @@ export function DateInput({ value, onChange, onBlur, min, max, className, ...res
       disabled={rest.disabled}
       autoFocus={rest.autoFocus}
       aria-label={rest['aria-label']}
-      data-publish-focus={rest['data-publish-focus']}
+      ref={ref}
       value={shown}
       onChange={(event) => {
         const next = event.target.value.replace(/[^\d./\s-]/g, '');

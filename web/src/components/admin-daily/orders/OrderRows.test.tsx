@@ -28,4 +28,9 @@ describe('рядки розпорядження на телефоні', () => {
     expect(screen.getByRole('region', { name: 'Заміна аудиторій' })).toHaveTextContent('2КІ1, 3 пара — ауд. 304/309');
     expect(screen.getByText('Групи 4КІ навчаються дистанційно.')).toBeInTheDocument();
   });
+
+  it('заголовок «Заміна аудиторій» — другого рівня: на сторінці над ним лише h1', () => {
+    renderWithProviders(<OrderRows order={order} />);
+    expect(screen.getByRole('heading', { name: 'Заміна аудиторій' })).toHaveProperty('tagName', 'H2');
+  });
 });

@@ -43,6 +43,7 @@ public class TeacherService {
 
     private static final Map<String, String> SORTABLE = Map.of("lastName", "lastName", "shortName", "shortName",
             "displayName", "displayName", "employment", "employment", "active", "active");
+    private static final Set<String> TEXT_SORT = Set.of("lastName", "shortName", "displayName");
 
     private final TeacherRepository teachers;
     private final TeacherAliasRepository aliases;
@@ -66,7 +67,9 @@ public class TeacherService {
                 .and(Specs.equalTo("active", active))
                 .and(Specs.equalTo("needsReview", needsReview))
                 .and(linkedFilter(linked));
-        Page<Teacher> found = teachers.findAll(filter, page.toPageable(SORTABLE, Sort.by("shortName")));
+        Specs.PagedSpec<Teacher> ordered = Specs.orderedUkrainian(filter,
+                page.toPageable(SORTABLE, Sort.by("shortName")), TEXT_SORT);
+        Page<Teacher> found = teachers.findAll(ordered.spec(), ordered.pageable());
         Map<UUID, Ref> commissionRefs = commissionRefs(found.getContent().stream()
                 .map(Teacher::getCycleCommissionId).filter(Objects::nonNull).collect(Collectors.toSet()));
         return PageResponse.of(found, teacher -> TeacherDto.of(teacher, commissionRefs.get(teacher.getCycleCommissionId())));

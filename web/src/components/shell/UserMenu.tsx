@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronRight, ChevronsUpDown, KeyRound, LayoutDashboard, LogOut, SunMoon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useOwnPasswordInfo } from '@/api/account';
 import { MOCK_API } from '@/api/client';
@@ -9,10 +9,16 @@ import { useCurrentUser } from '@/auth/useCurrentUser';
 import { cn } from '@/lib/cn';
 import { Avatar } from '../ui/Avatar';
 import { Tooltip, TruncatedText } from '../ui/Tooltip';
-import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { useThemeLabel } from './theme-options';
 import { useReopenAfterGoogle } from './useReopenAfterGoogle';
 import { ThemeRadioItems } from './ThemeToggle';
+
+// форма пароля (zod, react-hook-form) потрібна лише персоналу і лише після кліку: окрема частина коду,
+// щоб публічна сторінка розкладу не вантажила її на старті. Код починає вантажитись, щойно меню відкрилось
+const loadChangePasswordDialog = () => import('./ChangePasswordDialog');
+const ChangePasswordDialog = lazy(() =>
+  loadChangePasswordDialog().then((module) => ({ default: module.ChangePasswordDialog })),
+);
 
 const ITEM =
   'flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-control px-2.5 text-ui text-primary outline-none data-highlighted:bg-hover pointer-coarse:min-h-11';
@@ -40,6 +46,9 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
   const themeLabel = useThemeLabel();
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [returnedFromGoogle, setReturnedFromGoogle] = useState(false);
+  // вікно монтується з першим відкриттям і далі лишається змонтованим, щоб анімація закриття не обривалась
+  const [passwordMounted, setPasswordMounted] = useState(false);
+  if (passwordOpen && !passwordMounted) setPasswordMounted(true);
   const staff = status === 'authenticated' && !!user && (isTeacher || isAdmin);
   // стан пароля визначає назву пункту меню; той самий запит потім читає вікно
   const passwordInfo = useOwnPasswordInfo(staff);
@@ -78,7 +87,11 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
 
   return (
     <>
-      <DropdownMenu.Root>
+      <DropdownMenu.Root
+        onOpenChange={(open) => {
+          if (open && staff) void loadChangePasswordDialog();
+        }}
+      >
         {/* у шапці — лише аватар: підказка називає меню, як у сусідніх кнопок пошуку й теми; у бічній панелі імʼя видно */}
         <Tooltip content={`Обліковий запис: ${user.name}`} side="bottom" align="end" disabled={variant === 'block'}>
           <DropdownMenu.Trigger
@@ -173,13 +186,15 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      {isTeacher || isAdmin ? (
-        <ChangePasswordDialog
-          open={passwordOpen}
-          onOpenChange={changePasswordOpen}
-          username={user.username || undefined}
-          returnedFromGoogle={returnedFromGoogle}
-        />
+      {(isTeacher || isAdmin) && passwordMounted ? (
+        <Suspense fallback={null}>
+          <ChangePasswordDialog
+            open={passwordOpen}
+            onOpenChange={changePasswordOpen}
+            username={user.username || undefined}
+            returnedFromGoogle={returnedFromGoogle}
+          />
+        </Suspense>
       ) : null}
     </>
   );

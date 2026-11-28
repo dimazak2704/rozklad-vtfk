@@ -12,6 +12,7 @@ import {
   type FetchStatus,
   type QueryClient,
 } from '@tanstack/react-query';
+import { saveBlob } from '@/lib/download';
 import { api } from './client';
 import { isApiError } from './errors';
 import { useServerEvent } from './live';
@@ -392,19 +393,7 @@ export function fetchOrderFile(orderId: Uuid, format: DocumentFormat): Promise<B
 
 /** Завантажує файл опублікованого розпорядження (браузер зберігає його під зрозумілою назвою). */
 export async function downloadOrderFile(order: Pick<OrderDto, 'id' | 'number' | 'date' | 'kind'>, format: DocumentFormat): Promise<void> {
-  const blob = await fetchOrderFile(order.id, format);
-  const url = URL.createObjectURL(blob);
-  try {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = orderFileName(order, format);
-    document.body.append(link);
-    link.click();
-    link.remove();
-  } finally {
-    // посилання вже клікнули: памʼять можна звільнити трохи згодом
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }
+  saveBlob(await fetchOrderFile(order.id, format), orderFileName(order, format));
 }
 
 /** Чи вміє браузер класти зображення в буфер обміну. */

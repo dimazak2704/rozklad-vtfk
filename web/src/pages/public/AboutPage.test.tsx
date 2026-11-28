@@ -22,4 +22,13 @@ describe('AboutPage: як читати розклад', () => {
     expect(within(cell).getAllByText('Інша аудиторія')).toHaveLength(1);
     expect(within(sample).getAllByText(/Інша аудиторія/)).toHaveLength(2);
   });
+
+  it('пояснює всі стани, які бачить студент: і перенесену пару, і рядки «Вичитано» та «Обʼєднання підгруп»', () => {
+    renderWithProviders(<AboutPage />);
+    const legend = screen.getByRole('region', { name: 'Як читати розклад' });
+    const moved = within(legend).getAllByRole('listitem').find((item) => item.textContent?.includes('на інший час'))!;
+    expect(within(moved).getAllByText(/Перенесено/).length).toBeGreaterThan(0);
+    expect(legend).toHaveTextContent('Вичитано — години дисципліни закінчилися');
+    expect(legend).toHaveTextContent('Обʼєднання підгруп — викладач однієї підгрупи');
+  });
 });

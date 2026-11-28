@@ -124,10 +124,12 @@ export function usePlanningCatalog() {
 
 // ───────────────────────── Запити ─────────────────────────
 
-export function useTimetableVersions(semesterId: Uuid | undefined) {
+/** Версії розкладу семестру: редактор, генерація й «Вивести з розкладу» навантаження ділять один кеш. */
+export function useTimetableVersions(semesterId: Uuid | null | undefined) {
+  const id = semesterId ?? undefined;
   return useQuery({
-    queryKey: qk.admin.timetable.versions(semesterId),
-    queryFn: ({ signal }) => api.get<TimetableVersionDto[]>(versionsPath, { semesterId }, { signal }),
+    queryKey: qk.admin.timetable.versions(id),
+    queryFn: ({ signal }) => api.get<TimetableVersionDto[]>(versionsPath, { semesterId: id }, { signal }),
     enabled: Boolean(semesterId),
   });
 }
