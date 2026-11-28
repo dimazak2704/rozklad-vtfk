@@ -311,7 +311,9 @@ Forgotten admin password (break-glass): put a new password into `AUTH_BOOTSTRAP_
 `AUTH_BOOTSTRAP_FORCE=true`, run `infra/deploy/scripts/compose.sh up -d auth`, sign in, then set
 `AUTH_BOOTSTRAP_FORCE=false`, empty the password and run the same command again.
 
-**Demo teachers.** Every start of `auth` brings these accounts in line with `.env`:
+**Demo teachers.** They are off by default (`.env.example` leaves `DEMO_TEACHER_PASSWORD` empty). For the
+defense set `DEMO_TEACHER_PASSWORD=change-me` and run `gen-secrets.sh`: it generates a password. Every start
+of `auth` brings these accounts in line with `.env`:
 
 | Login | Role | Password |
 |---|---|---|
