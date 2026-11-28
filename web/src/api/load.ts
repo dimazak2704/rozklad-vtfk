@@ -15,7 +15,6 @@ import type {
   LessonKind,
   LoadItemDto,
   RoomType,
-  TimetableVersionDto,
   Uuid,
 } from './types';
 
@@ -113,15 +112,3 @@ export function useDeriveLoad() {
   });
 }
 
-/**
- * Версії розкладу семестру — джерело для «Вивести з розкладу». Той самий ключ і ендпоінт, що й у
- * редакторі розкладу, тож кеш спільний.
- */
-export function useTimetableVersions(semesterId: Uuid | null | undefined) {
-  return useQuery({
-    queryKey: qk.admin.timetable.versions(semesterId ?? undefined),
-    queryFn: ({ signal }) =>
-      api.get<TimetableVersionDto[]>('/admin/timetable/versions', { semesterId: semesterId ?? undefined }, { signal }),
-    enabled: Boolean(semesterId),
-  });
-}
