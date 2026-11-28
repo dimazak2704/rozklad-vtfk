@@ -1,5 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { RotateCcw } from 'lucide-react';
+import { useMemo } from 'react';
 import { useBells } from '@/api/meta';
 import type { ScheduleDto, WeekParity } from '@/api/types';
 import { dayOf } from '@/components/public/schedule/schedule-utils';
@@ -12,6 +13,8 @@ import { Button, EmptyState, ErrorState, ParityBadge, SegmentedControl } from '@
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { useMyChanges } from '@/api/me';
+import { provisionalLessons } from './my-day';
 import { useAssignedSchedule } from './useAssignedSchedule';
 
 const VIEW_OPTIONS = [
@@ -38,6 +41,9 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
   const placeholder = query.isPlaceholderData;
   // разом із підтвердженими, ще не опублікованими замінами: що «зараз» називає моєю парою, те є й тут
   const schedule = useAssignedSchedule(query.data);
+  // заміни, що ще не остаточні (запит без відповіді, неопубліковане розпорядження), — пунктиром, а не тлом
+  const changes = useMyChanges();
+  const provisional = useMemo(() => provisionalLessons(schedule?.days ?? [], changes.data ?? []), [schedule, changes.data]);
   const day = placeholder ? undefined : dayOf(schedule, date);
   const parity: WeekParity | null = placeholder ? null : (schedule?.days.find((d) => d.parity)?.parity ?? null);
   const awayFromNow = homeDate < week.from || homeDate > week.to;
@@ -84,18 +90,18 @@ export function MyLessons({ query, params, weekNumber }: MyLessonsProps) {
       day.studyDay && day.lessons.length === 0 ? (
         <EmptyState title="Цього дня у вас пар немає." />
       ) : (
-        <DayList day={day} bells={bells.data?.slots} perspective="teacher" today={today} showHeader={false} arrived={arrived} />
+        <DayList day={day} bells={bells.data?.slots} perspective="teacher" today={today} showHeader={false} arrived={arrived} provisional={provisional} />
       )
     ) : (
       <ScheduleSkeleton view="day" />
     );
   } else {
     content = wide ? (
-      <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" arrived={arrived} />
+      <WeekGrid schedule={schedule} perspective="teacher" today={today} stickyTop="var(--header-height)" arrived={arrived} provisional={provisional} />
     ) : (
       <div className="flex flex-col gap-8">
         {schedule.days.map((d) => (
-          <DayList key={d.date} day={d} perspective="teacher" today={today} arrived={arrived} />
+          <DayList key={d.date} day={d} perspective="teacher" today={today} arrived={arrived} provisional={provisional} />
         ))}
       </div>
     );
