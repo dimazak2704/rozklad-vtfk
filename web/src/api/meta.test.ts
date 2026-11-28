@@ -26,7 +26,7 @@ describe('prefetchPublicMeta', () => {
 
     await prefetchPublicMeta(client);
 
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/public/meta');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/public/meta');
     expect(client.getQueryData(qk.public.meta())).toMatchObject({ collegeName: 'ВТФК', standTime: true });
     expect(clockState().standTime).toBe(true);
   });
