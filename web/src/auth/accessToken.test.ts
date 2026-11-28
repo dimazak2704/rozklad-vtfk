@@ -1,7 +1,7 @@
 import { ErrorResponse, ErrorTimeout, type User } from 'oidc-client-ts';
 import { describe, expect, it, vi } from 'vitest';
 import { takeUnsavedChange, noteUnsavedChange } from './unsavedChange';
-import { forgetEndedSession, getAccessToken, isSessionEnded } from './userManager';
+import { forgetEndedSession, getAccessToken, isSessionEnded, renewSession } from './userManager';
 
 /** Токен без refresh token: сервіс входу публічному клієнту його не видає, оновлення — через iframe. */
 function user(token: string, expiresIn: number): User {
@@ -83,5 +83,34 @@ describe('незбережена зміна після повторного вх
     noteUnsavedChange();
     expect(takeUnsavedChange()).toBe(true);
     expect(takeUnsavedChange()).toBe(false);
+  });
+});
+
+describe('renewSession (повернення з повторного входу через Google)', () => {
+  it('оновлює токени одразу, навіть якщо поточні ще дійсні', async () => {
+    const m = manager(user('fresh', 600), () => Promise.resolve(user('renewed', 900)));
+    await renewSession(m);
+    expect(m.signinSilent).toHaveBeenCalledOnce();
+    expect(m.removeUser).not.toHaveBeenCalled();
+  });
+
+  it('паралельні виклики (меню в шапці й бічній панелі) дають одне оновлення', async () => {
+    let resolve: (value: User) => void = () => undefined;
+    const m = manager(user('fresh', 600), () => new Promise<User>((done) => (resolve = done)));
+    const both = Promise.all([renewSession(m), renewSession(m)]);
+    await vi.waitFor(() => expect(m.signinSilent).toHaveBeenCalledOnce());
+    resolve(user('renewed', 900));
+    await both;
+    expect(m.signinSilent).toHaveBeenCalledOnce();
+  });
+
+  it('сесії немає — користувача забуває; мережевий збій — ні, і помилка не вилітає', async () => {
+    const ended = manager(user('fresh', 600), () => Promise.reject(loginRequired()));
+    await expect(renewSession(ended)).resolves.toBeUndefined();
+    expect(ended.removeUser).toHaveBeenCalledOnce();
+
+    const offline = manager(user('fresh', 600), () => Promise.reject(new ErrorTimeout('IFrame timed out without a response')));
+    await expect(renewSession(offline)).resolves.toBeUndefined();
+    expect(offline.removeUser).not.toHaveBeenCalled();
   });
 });

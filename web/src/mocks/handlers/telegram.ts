@@ -78,7 +78,8 @@ function teacherBinding(shortName: string, createdAt: string): ChatBindingDto {
     teacherId: teacher.id,
     digestEnabled: false,
     createdAt: at(createdAt),
-    telegramAccount: null,
+    // мок-користувач кабінету бачить, чий Telegram привʼязано (як після погашення коду в notification)
+    telegramAccount: shortName === 'Кренцін' ? 'Микола (@krentsin)' : null,
   };
 }
 
@@ -310,6 +311,15 @@ export const handlers = [
       botLink: BOT_LINK,
     };
     return HttpResponse.json(status);
+  }),
+
+  // як MyTelegramBinding.unlink: лише привʼязка TEACHER самого користувача; 204 і тоді, коли її немає.
+  // Стоїть перед /notify/bindings/:id, щоб «me» не сприйняло як id
+  http.delete(apiPath('/notify/bindings/me'), () => {
+    const teacher = teacherNamed('Кренцін');
+    const mine = bindings.all().find((b) => b.type === 'TEACHER' && b.teacherId === teacher.id);
+    if (mine) bindings.remove(mine.id);
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.get(apiPath('/notify/bindings'), () =>

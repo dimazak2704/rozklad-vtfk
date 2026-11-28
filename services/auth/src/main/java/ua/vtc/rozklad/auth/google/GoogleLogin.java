@@ -3,6 +3,7 @@ package ua.vtc.rozklad.auth.google;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Set;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.Authentication;
@@ -15,11 +16,13 @@ import org.springframework.security.oauth2.client.web.DefaultOAuth2Authorization
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.stereotype.Component;
+import ua.vtc.rozklad.auth.config.AuthServerProperties;
 
 /**
  * Adds Google to the sign-in chain when it is configured: {@code /auth/oauth2/authorization/google} starts it
  * (with {@code hd} as a hint for Google's account chooser), {@code /auth/login/oauth2/code/google} finishes it.
  * Google's tokens are not kept: the allowlist decides once and the session then holds our own principal.
+ * {@code ?reauth_return=} on the start turns it into a re-authentication for a first password ({@link GoogleReauth}).
  */
 @Component
 public class GoogleLogin {
@@ -27,11 +30,14 @@ public class GoogleLogin {
     private final GoogleSignIn google;
     private final AllowlistOidcUserService users;
     private final GoogleLoginHandlers handlers;
+    private final Set<String> webOrigins;
 
-    public GoogleLogin(GoogleSignIn google, AllowlistOidcUserService users, GoogleLoginHandlers handlers) {
+    public GoogleLogin(GoogleSignIn google, AllowlistOidcUserService users, GoogleLoginHandlers handlers,
+            AuthServerProperties properties) {
         this.google = google;
         this.users = users;
         this.handlers = handlers;
+        this.webOrigins = GoogleReauth.origins(properties.webOrigins());
     }
 
     public boolean enabled() {
@@ -61,7 +67,9 @@ public class GoogleLogin {
                 .clientRegistrationRepository(clients)
                 .authorizedClientRepository(new DiscardingAuthorizedClients())
                 .authorizationEndpoint(authorization -> authorization
-                        .authorizationRequestResolver(resolver(clients, google.properties().domain())))
+                        .authorizationRequestRepository(new GoogleReauth.Requests())
+                        .authorizationRequestResolver(new GoogleReauth.Resolver(
+                                resolver(clients, google.properties().domain()), webOrigins)))
                 .userInfoEndpoint(userInfo -> userInfo.oidcUserService(users))
                 .successHandler(handlers.successHandler())
                 .failureHandler(handlers.failureHandler()));
