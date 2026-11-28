@@ -511,12 +511,12 @@ describe('AbsenceForm: дні', () => {
     window.localStorage.removeItem('rozklad.absenceReason');
     const user = userEvent.setup();
     renderWithProviders(<AbsenceForm teacherId={teacherNamed('Непийвода').id} today="2026-11-09" />);
-    expect(screen.getByText('Причину й коментар бачить лише диспетчер.')).toBeInTheDocument();
+    expect(screen.getByText('Причину й коментар бачить лише диспетчер. На сайті й у розпорядженні буде тільки «відсутній» («Відп.») або «відрядження» («Відр.»).')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Повідомити диспетчера' }));
 
     const error = await screen.findByText('Оберіть причину');
-    expect(screen.queryByText('Причину й коментар бачить лише диспетчер.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Причину й коментар бачить лише диспетчер. На сайті й у розпорядженні буде тільки «відсутній» («Відп.») або «відрядження» («Відр.»).')).not.toBeInTheDocument();
     const group = screen.getByRole('group', { name: 'Причина' });
     expect(group).toHaveAttribute('aria-describedby', error.id);
     expect(within(group).getAllByRole('radio')[0]).toHaveFocus();
