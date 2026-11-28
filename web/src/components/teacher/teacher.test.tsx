@@ -25,6 +25,7 @@ import {
   nextDaySentence,
   nextRequest,
   pendingRequests,
+  provisionalLessons,
   requestPhrase,
   withAssignments,
   withRequest,
@@ -1158,6 +1159,18 @@ describe('одне правило в кабінеті: підтверджена,
     expect(withAssignments({ days: [published] }, [change({})]).days[0]!.lessons).toHaveLength(1);
     // без дзвінків — пара без часу, а не вигаданий час
     expect(withAssignments(schedule, [change({})]).days[0]!.lessons[0]).toMatchObject({ startsAt: null, endsAt: null });
+  });
+
+  it('сітка відрізняє неостаточні заміни: погоджена без розпорядження й запит без відповіді', () => {
+    const merged = withAssignments({ days: [friday] }, [change({})], new Map([[today, bells]]));
+    const assigned = merged.days[0]!.lessons[0]!;
+    const requested = { id: 'l-req', pair: 1, changeId: 'req', subgroup: 0 } as LessonView;
+    const published = { id: 'l-pub', pair: 3, changeId: 'pub', subgroup: 0 } as LessonView;
+    const day = { ...merged.days[0]!, lessons: [requested, assigned, published] };
+    const states = provisionalLessons([day], [change({}), change({ id: 'req', status: 'PENDING_CONFIRMATION' }), change({ id: 'pub', status: 'APPLIED' })]);
+    expect(states.get(assigned.id)).toBe('unpublished');
+    expect(states.get('l-req')).toBe('pending');
+    expect(states.has('l-pub')).toBe(false);
   });
 
   it('блок — одне заняття на кілька пар, додаткова пара — «Додано» на кожну пару', () => {

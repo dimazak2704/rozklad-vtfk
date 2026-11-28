@@ -93,7 +93,7 @@ describe('Базовий розклад', () => {
     try {
       renderWithProviders(<TimetablePage />, { route: '/admin/timetable?q=4КІ3' });
       const grid = await screen.findByRole('grid', { name: /4КІ3/ }, LONG);
-      await user.click(screen.getByRole('radio', { name: 'вівторок' }));
+      await user.click(screen.getByRole('radio', { name: 'Вт, вівторок' }));
       const headers = within(grid).getAllByRole('columnheader');
       expect(headers).toHaveLength(2);
       expect(headers[1]).toHaveTextContent('Вівторок');

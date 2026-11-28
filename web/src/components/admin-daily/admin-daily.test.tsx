@@ -526,6 +526,8 @@ describe('екран «Заміни»', () => {
 
     await user.keyboard('j');
     await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toBeInTheDocument(), WAIT);
+    // J/K переводять і фокус на обрану пару (через ref рядка, а не пошук за id)
+    await waitFor(() => expect(screen.getByRole('button', { name: /4КІ1/, current: true })).toHaveFocus(), WAIT);
   });
 
   it('телефон: відсутні → пари → варіанти в шторці, і з кожного рівня є дорога назад', { timeout: 30_000 }, async () => {
@@ -640,6 +642,29 @@ describe('екран «Заміни»', () => {
     // на завтра живого стану немає — рядок зникає, а заголовок називає день, на який дивимося
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Стан навчального дня' })).not.toBeInTheDocument(), WAIT);
     expect(screen.getByRole('heading', { level: 1, name: 'Завтра' })).toBeInTheDocument();
+  });
+
+  it('«Сьогодні» посеред дня: під доріжкою — пари без заміни на завтра й перехід на завтра', { timeout: 20_000 }, async () => {
+    // 12:00 за Києвом, пари ще йдуть; на завтра (10.11) дві пари без заміни й чернетка розпорядження
+    vi.setSystemTime(new Date('2026-11-09T10:00:00Z'));
+    server.use(
+      http.get(apiPath('/admin/dashboard'), ({ request }) => {
+        const date = new URL(request.url).searchParams.get('date');
+        if (date !== '2026-11-10') return undefined;
+        return HttpResponse.json({
+          date, parity: 'NUMERATOR', absences: 1, uncoveredLessons: 2, undecidedLessons: 2, pending: 0, confirmed: 3, declined: 0,
+          orderDraft: { id: 'd-10', itemCount: 3 }, generation: null, aiSpendToday: null, alerts: [],
+        });
+      }),
+    );
+    renderWithProviders(<DashboardPage />, { route: '/admin?date=2026-11-09' });
+    const next = await screen.findByRole('region', { name: 'Наступний навчальний день' }, WAIT);
+    expect(next).toHaveTextContent('Завтра 2 пари без заміни, розпорядження ще не опубліковане.');
+    // живий стан дня лишається: рядок «Пари закінчилися» — лише після останньої пари
+    expect(screen.queryByText(/^Пари закінчилися/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(next).getByRole('button', { name: 'Перейти на завтра' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Завтра' }, WAIT)).toBeInTheDocument();
   });
 
   it('розпорядження без мережі — пояснення замість вічного силуету аркуша', { timeout: 20_000 }, async () => {

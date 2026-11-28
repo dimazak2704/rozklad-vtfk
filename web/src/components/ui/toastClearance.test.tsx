@@ -117,6 +117,19 @@ describe('запас унизу сторінки під сповіщення', (
     container.remove();
   });
 
+  it('без сповіщень не читає висоту вікна: це змусило б браузер перерахувати розкладку під час першого малювання', () => {
+    const innerHeight = vi.spyOn(window, 'innerHeight', 'get');
+    const container = document.createElement('section');
+    document.body.append(container);
+
+    const cleanup = toastReserveRef(container);
+
+    expect(innerHeight).not.toHaveBeenCalled();
+    expect(reserve()).toBe('');
+    cleanup?.();
+    container.remove();
+  });
+
   it('без контейнера нічого не робить', () => {
     expect(toastReserveRef(null)).toBeUndefined();
   });

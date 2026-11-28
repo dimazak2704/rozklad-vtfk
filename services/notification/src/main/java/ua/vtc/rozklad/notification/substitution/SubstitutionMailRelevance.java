@@ -9,7 +9,7 @@ import ua.vtc.rozklad.notification.email.EmailRelevance;
 
 /**
  * The last check of a substitution letter, against the local copy of the change (like
- * {@link SubstitutionRequests#obsoleteReason} for Telegram): a notice, request or reminder is not sent once the
+ * {@link SubstitutionDeliveries#obsoleteReason} for Telegram): a notice, request or reminder is not sent once the
  * change went to another teacher or no longer waits for this teacher's answer (he answered in Telegram during the
  * settle delay, it was cancelled); a changed letter is not sent once the change is no longer in force. A
  * cancellation always goes (it only follows a letter that reached the teacher).
@@ -37,11 +37,11 @@ class SubstitutionMailRelevance implements EmailRelevance {
         boolean reassigned = message.getTeacherId() != null && !message.getTeacherId().equals(request.getTeacherId());
         return switch (message.getKind()) {
             case SUBSTITUTION_NOTICE, SUBSTITUTION_REQUEST, SUBSTITUTION_REMINDER -> reassigned
-                    ? Optional.of(SubstitutionRequests.REASSIGNED)
-                    : request.isAwaitingAnswer() ? Optional.empty() : Optional.of(SubstitutionRequests.NOT_AWAITING);
+                    ? Optional.of(SubstitutionDeliveries.REASSIGNED)
+                    : request.isAwaitingAnswer() ? Optional.empty() : Optional.of(SubstitutionDeliveries.NOT_AWAITING);
             case SUBSTITUTION_CHANGED -> reassigned
-                    ? Optional.of(SubstitutionRequests.REASSIGNED)
-                    : inForce(request) ? Optional.empty() : Optional.of(SubstitutionRequests.NOT_IN_FORCE);
+                    ? Optional.of(SubstitutionDeliveries.REASSIGNED)
+                    : inForce(request) ? Optional.empty() : Optional.of(SubstitutionDeliveries.NOT_IN_FORCE);
             default -> Optional.empty();
         };
     }

@@ -85,7 +85,7 @@ describe('Розклад: гість бачить лише останні тиж
     expect(screen.queryByText(/не завантажився/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Найраніший доступний тиждень' }));
-    expect(await screen.findByRole('button', { name: /^Обрати тиждень\. Зараз: 2–6\s+листопада/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^2–6\s+листопада\. Обрати тиждень$/ })).toBeInTheDocument();
     expect(previousWeek()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByText('Цей тиждень уже в архіві')).not.toBeInTheDocument();
   });
@@ -93,13 +93,13 @@ describe('Розклад: гість бачить лише останні тиж
   it('на поточному тижні «‹» веде на тиждень межі, а далі — ні', async () => {
     const user = userEvent.setup();
     renderSchedule('/g/4КІ1?view=week');
-    await screen.findByRole('button', { name: /^Обрати тиждень\. Зараз: цей тиждень/ });
+    await screen.findByRole('button', { name: /, цей тиждень\. Обрати тиждень$/ });
     expect(previousWeek()).not.toHaveAttribute('aria-disabled');
     await user.click(previousWeek());
-    expect(await screen.findByRole('button', { name: /^Обрати тиждень\. Зараз: 2–6\s+листопада/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^2–6\s+листопада\. Обрати тиждень$/ })).toBeInTheDocument();
     expect(previousWeek()).toHaveAttribute('aria-disabled', 'true');
     await user.click(previousWeek());
-    expect(screen.getByRole('button', { name: /^Обрати тиждень\. Зараз: 2–6\s+листопада/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^2–6\s+листопада\. Обрати тиждень$/ })).toBeInTheDocument();
   });
 
   it('викладач: давній тиждень — не «такого викладача немає», а те саме пояснення', async () => {
@@ -145,7 +145,7 @@ describe('Розклад: персонал бачить увесь архів', 
     });
     renderSchedule('/g/4КІ1?view=week&date=2026-10-19');
 
-    expect(await screen.findByRole('button', { name: /^Обрати тиждень\. Зараз: 19–23\s+жовтня/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^19–23\s+жовтня\. Обрати тиждень$/ })).toBeInTheDocument();
     expect(await screen.findAllByText('Понеділок')).not.toHaveLength(0);
     expect(screen.queryByText('Цей тиждень уже в архіві')).not.toBeInTheDocument();
     expect(previousWeek()).not.toHaveAttribute('aria-disabled');

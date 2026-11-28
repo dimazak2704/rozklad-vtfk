@@ -10,8 +10,12 @@ import { offlineShellPlugin } from './src/api/offline-shell-plugin.ts';
 import { isCachedPageNavigation } from './src/api/page-cache-route.ts';
 import { isCachedPublicApiRequest, PUBLIC_API_CACHE } from './src/api/public-api-cache.ts';
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
+import { deferAppStyles } from './src/app/app-styles.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
+/** Бібліотеки, без яких не відкривається жодна сторінка (окрема частина коду `framework`). */
+const FRAMEWORK_MODULES =
+  /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|@tanstack[\\/](query-core|react-query)|zustand|clsx|tailwind-merge|use-sync-external-store)[\\/]/;
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 /** Вхід збірки для стилів сторінки входу auth (/brand/auth.css). */
 const AUTH_CSS_ENTRY = 'brand-auth';
@@ -57,8 +61,13 @@ function pwa(): Plugin[] {
     workbox: {
       // заздалегідь — лише код оболонки; HTML не тут: збережений index.html після оновлення сайту посилався б
       // на частини коду, яких на сервері вже немає. Сторінки — NetworkFirst нижче (rozklad-pages).
-      // Поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html
-      globPatterns: ['assets/index-*.{js,css}', 'assets/modulepreload-polyfill-*.js', 'favicon.svg'],
+      // Поліфіл modulepreload — окремий шматок, бо його ділять index.html і login/silent.html.
+      // Бібліотеки, помічники й іконки оболонки — окремі частини (codeSplitting нижче), тож беремо й їх
+      globPatterns: [
+        'assets/{index,framework,lib,icons,rolldown-runtime}-*.{js,css}',
+        'assets/modulepreload-polyfill-*.js',
+        'favicon.svg',
+      ],
       // без navigateFallback: збережений index.html після оновлення сайту посилався б на частини коду,
       // яких на сервері вже немає (порожня сторінка). Переходи — NetworkFirst нижче, оболонка лише офлайн.
       navigateFallback: undefined,
@@ -129,6 +138,22 @@ function dropMockServiceWorker(): Plugin {
   };
 }
 
+/**
+ * Стилі застосунку в index.html не блокують перше малювання: його робить статична оболонка з власними
+ * вбудованими стилями, а main.tsx вмикає стилі застосунку перед рендером (src/app/app-styles.ts).
+ * Сторінку тихого оновлення входу (login/silent.html) не чіпаємо.
+ */
+function nonBlockingAppStyles(): Plugin {
+  return {
+    name: 'rozklad:non-blocking-app-styles',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, { path }) => (path === '/index.html' ? deferAppStyles(html) : html),
+    },
+  };
+}
+
 // Dev-сервер на 5180 (5173 зайнятий іншим проєктом), /api проксіюємо на gateway.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -144,7 +169,7 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [react(), tailwindcss(), dropMockServiceWorker(), ...pwa()],
+    plugins: [react(), tailwindcss(), dropMockServiceWorker(), nonBlockingAppStyles(), ...pwa()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
@@ -171,6 +196,30 @@ export default defineConfig(({ mode }) => {
           [AUTH_CSS_ENTRY]: resolve(rootDir, 'src/styles/auth-page.css'),
         },
         output: {
+          codeSplitting: {
+            groups: [
+              {
+                // React, роутер і кеш запитів потрібні кожній сторінці й змінюються рідко: одна частина коду
+                // замість кількох дрібних, що їх інакше автоматичне розбиття розкидало б між сторінками
+                name: 'framework',
+                test: FRAMEWORK_MODULES,
+                priority: 20,
+              },
+              {
+                // дрібні спільні помічники й іконки — по одній частині: автоматичне розбиття робило з них
+                // десятки файлів по 0,2–1 КБ, і сторінка вантажила їх окремими запитами (на HTTP/1.1 — по шість
+                // за раз). Ціна — кілька кілобайтів коду, якого конкретній сторінці не треба
+                name: 'lib',
+                test: /[\\/]src[\\/](lib|hooks|stores)[\\/]/,
+                priority: 10,
+              },
+              {
+                name: 'icons',
+                test: /[\\/]lucide-react[\\/]/,
+                priority: 9,
+              },
+            ],
+          },
           assetFileNames: (asset) =>
             asset.names.includes(`${AUTH_CSS_ENTRY}.css`) ? 'brand/auth.css' : 'assets/[name]-[hash][extname]',
         },

@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import type { IsoDate } from '@/api/types';
 import { cn } from '@/lib/cn';
 import { countLabel } from '@/lib/labels';
@@ -5,14 +6,10 @@ import { Tooltip } from '../../ui/Tooltip';
 import type { ScheduleView } from './schedule-params';
 import type { ChangedLesson } from './schedule-utils';
 
-/** Обгортка тижневої сітки: за нею «2 заміни цього тижня» знаходить першу змінену клітинку. */
-export const WEEK_REGION_ID = 'schedule-week';
-
 const CHANGE_FORMS = ['заміна', 'заміни', 'замін'] as const;
 
 /** Перша видима клітинка зі словом стану (заміна, скасування, додаткова, інша аудиторія). */
-function firstChangedCell(): HTMLElement | null {
-  const region = document.getElementById(WEEK_REGION_ID);
+function firstChangedCell(region: HTMLElement | null): HTMLElement | null {
   if (!region) return null;
   const marks = region.querySelectorAll<HTMLElement>('button .text-change, button .text-cancel, button .text-add, button .text-room');
   for (const mark of marks) {
@@ -25,6 +22,8 @@ function firstChangedCell(): HTMLElement | null {
 interface ChangesNoteProps {
   items: readonly ChangedLesson[];
   view: ScheduleView;
+  /** Обгортка тижневої сітки: у ній «2 заміни цього тижня» шукає першу змінену клітинку. */
+  weekRegion: RefObject<HTMLElement | null>;
   /** Відкрити день першої зміни (подання «День»), коли клітинки на екрані немає. */
   onOpenDay: (date: IsoDate) => void;
   /** На екрані тиждень, у якому сьогодні: лише тоді «цього тижня», інакше нейтральне «на тижні». */
@@ -37,11 +36,11 @@ interface ChangesNoteProps {
  * Натискання веде фокус до першої зміненої клітинки, а на телефоні відкриває день першої зміни. Рядок читається як
  * факт, а не дія, тож підказка каже, що станеться.
  */
-export function ChangesNote({ items, view, onOpenDay, currentWeek, className }: ChangesNoteProps) {
+export function ChangesNote({ items, view, weekRegion, onOpenDay, currentWeek, className }: ChangesNoteProps) {
   const first = items[0];
   if (!first) return null;
   const go = () => {
-    const cell = view === 'week' ? firstChangedCell() : null;
+    const cell = view === 'week' ? firstChangedCell(weekRegion.current) : null;
     if (cell) {
       cell.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       cell.focus({ preventScroll: true });

@@ -88,7 +88,7 @@ describe('підказки до кнопок лише з іконкою', () => 
 
   it('у бічній панелі імʼя видно, тож підказки до меню немає', () => {
     renderWithProviders(<UserMenu variant="block" />);
-    fireEvent.focus(screen.getByRole('button', { name: 'Обліковий запис: Кренцін Максим Дмитрович' }));
+    fireEvent.focus(screen.getByRole('button', { name: /Обліковий запис$/ }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 

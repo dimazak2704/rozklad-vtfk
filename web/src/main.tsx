@@ -3,10 +3,14 @@
 import '@fontsource-variable/manrope/wght.css';
 import '@fontsource-variable/geologica/wght.css';
 import './styles/index.css';
-import { StrictMode } from 'react';
+import { startTransition, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { prefetchPublicMeta } from './api/meta';
 import { dropAuthorizedCopies } from './api/public-api-cache';
+import { queryClient } from './api/queryClient';
 import { App } from './app/App';
+import { applyAppStyles } from './app/app-styles';
+import { whenRouterReady } from './app/router';
 
 /**
  * Сайт оновили, поки вкладка була відкрита: частини коду з новими хешами є, старих уже немає, і перехід на
@@ -43,17 +47,33 @@ async function startMocksIfEnabled(): Promise<void> {
   }
 }
 
-startMocksIfEnabled().then(
-  () => {
-    createRoot(root).render(
+/**
+ * Старт: мок-API (лише dev), запит meta паралельно з кодом сторінки (meta потрібна кожній сторінці; після
+ * мок-API, щоб у dev запит не пішов повз нього), далі рендер, щойно роутер має код першої сторінки, а стилі
+ * застосунку завантажені. Доти видно статичну оболонку з index.html, і React замінює її одразу готовою сторінкою.
+ */
+async function start(): Promise<void> {
+  try {
+    await startMocksIfEnabled();
+  } catch (error: unknown) {
+    // без мок-API сторінки пішли б до справжнього бекенду — кажемо про це прямо, а не мовчки
+    console.error('Не вдалося запустити мок-API (MSW)', error);
+    root.textContent = 'Не вдалося запустити мок-API (MSW). Подробиці — у консолі браузера.';
+    return;
+  }
+  void prefetchPublicMeta(queryClient);
+  await Promise.all([applyAppStyles(), whenRouterReady()]);
+  // перший рендер — перехідом: React будує сторінку частинами по кілька мілісекунд і між ними віддає потік
+  // браузеру, а не тримає його одним довгим завданням (на слабкому телефоні — сотні мілісекунд без відгуку).
+  // Оболонка з index.html лишається на екрані, доки сторінка не готова повністю
+  const app = createRoot(root);
+  startTransition(() => {
+    app.render(
       <StrictMode>
         <App />
       </StrictMode>,
     );
-  },
-  (error: unknown) => {
-    // без мок-API сторінки пішли б до справжнього бекенду — кажемо про це прямо, а не мовчки
-    console.error('Не вдалося запустити мок-API (MSW)', error);
-    root.textContent = 'Не вдалося запустити мок-API (MSW). Подробиці — у консолі браузера.';
-  },
-);
+  });
+}
+
+void start();

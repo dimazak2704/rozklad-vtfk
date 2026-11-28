@@ -20,7 +20,7 @@ import ua.vtc.rozklad.notification.email.EmailHousekeeping;
 import ua.vtc.rozklad.notification.email.MailChannel;
 import ua.vtc.rozklad.notification.events.DeadLetters;
 import ua.vtc.rozklad.notification.events.ProcessedEvents;
-import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
+import ua.vtc.rozklad.notification.substitution.SubstitutionJobs;
 
 /**
  * Periodic jobs: confirmation deadlines and warnings about teachers without Telegram (every minute),
@@ -35,7 +35,7 @@ public class ScheduledJobs {
 
     private static final Logger log = LoggerFactory.getLogger(ScheduledJobs.class);
 
-    private final SubstitutionRequests substitutions;
+    private final SubstitutionJobs substitutions;
     private final OutboundMessageRepository outbound;
     private final ProcessedEvents processedEvents;
     private final BindingCodes codes;
@@ -46,7 +46,7 @@ public class ScheduledJobs {
     private final MailChannel mail;
     private final EmailHousekeeping emails;
 
-    public ScheduledJobs(SubstitutionRequests substitutions, OutboundMessageRepository outbound,
+    public ScheduledJobs(SubstitutionJobs substitutions, OutboundMessageRepository outbound,
                          ProcessedEvents processedEvents, BindingCodes codes, DeliveryProperties delivery,
                          TelegramProperties telegram, Clock clock, DeadLetters deadLetters, MailChannel mail,
                          EmailHousekeeping emails) {

@@ -4,7 +4,7 @@ import type { BellSlotDto, DayDto, IsoDate } from '@/api/types';
 import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate, relativeDayLabel, timeToMinutes, todayInKyiv } from '@/lib/date';
-import { daySlots, type DaySlot, type Perspective } from '@/lib/schedule';
+import { daySlots, type DaySlot, type Perspective, type ProvisionalState } from '@/lib/schedule';
 import { EmptyState } from '../ui/EmptyState';
 import { Skeleton } from '../ui/Skeleton';
 import { LessonCell } from './LessonCell';
@@ -25,6 +25,8 @@ export interface DayListProps {
   headingLevel?: 2 | 3;
   /** Заняття, зміна в яких щойно прийшла наживо (`useArrivedChanges`). */
   arrived?: ReadonlySet<string>;
+  /** Заняття із заміною, що ще не остаточна (кабінет викладача): id → стан. */
+  provisional?: ReadonlyMap<string, ProvisionalState>;
   className?: string;
 }
 
@@ -70,6 +72,7 @@ export function DayList({
   showHeader = true,
   headingLevel = 2,
   arrived,
+  provisional,
   className,
 }: DayListProps) {
   const slots = useMemo(() => daySlots(day, bells), [day, bells]);
@@ -184,6 +187,7 @@ export function DayList({
                           now={current}
                           past={past}
                           arrived={arrived?.has(lesson.id)}
+                                  provisional={provisional?.get(lesson.id)}
                         />
                       ))
                     )}

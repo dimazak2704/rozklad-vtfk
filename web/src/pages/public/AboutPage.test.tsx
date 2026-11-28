@@ -19,8 +19,10 @@ describe('AboutPage: як читати розклад', () => {
     const sample = within(legend).getAllByRole('listitem').find((item) => item.textContent?.includes('стара → нова'))!;
     const cell = within(sample).getByRole('button');
     // слово стану — у клітинці; поза клітинкою його повторює лише пояснення праворуч
-    expect(within(cell).getAllByText('Інша аудиторія')).toHaveLength(1);
-    expect(within(sample).getAllByText(/Інша аудиторія/)).toHaveLength(2);
+    // видимий текст; опис для читача екрана (.sr-only) стан теж називає, але його не видно
+    const visible = { ignore: '.sr-only, script, style' };
+    expect(within(cell).getAllByText('Інша аудиторія', visible)).toHaveLength(1);
+    expect(within(sample).getAllByText(/Інша аудиторія/, visible)).toHaveLength(2);
   });
 
   it('пояснює всі стани, які бачить студент: і перенесену пару, і рядки «Вичитано» та «Обʼєднання підгруп»', () => {

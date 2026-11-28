@@ -1,5 +1,6 @@
 /** Мій день як речення: що я веду і коли наступна пара. Чиста логіка без React — для тестів. */
 import type { BellSlotDto, ChangeDto, DayDto, IsoDate, LessonView } from '@/api/types';
+import type { ProvisionalState } from '@/lib/schedule';
 import {
   addDays,
   compareIsoDates,
@@ -171,6 +172,9 @@ export function withRequest(
   return [next, `Є запит на заміну на ${formatWeekdayDateAfterNa(request.date)}\u00a0— ${pair}.`].filter(Boolean).join(' ');
 }
 
+/** Префікс id заняття, яке `assignmentLessons` будує з ще не опублікованої заміни. */
+const ASSIGNED_PREFIX = 'assigned-';
+
 /** Вид заняття, яким заміна стоятиме в розкладі після публікації. */
 function assignedKind(change: ChangeDto): LessonView['kind'] {
   if (change.kind === 'ADDITIONAL') return 'ADDITIONAL';
@@ -191,7 +195,7 @@ export function assignmentLessons(change: ChangeDto, bells?: readonly BellSlotDt
   return pairs.map((pair) => {
     const last = block ? change.pairTo : pair;
     return {
-      id: `assigned-${change.id}-${pair}`,
+      id: `${ASSIGNED_PREFIX}${change.id}-${pair}`,
       pair,
       startsAt: bells?.find((slot) => slot.pair === pair)?.startsAt ?? null,
       endsAt: bells?.find((slot) => slot.pair === last)?.endsAt ?? null,
@@ -231,4 +235,21 @@ export function withAssignments<T extends { days: DayDto[] }>(
     return { ...day, lessons: [...day.lessons, ...extra].sort((a, b) => a.pair - b.pair || a.subgroup - b.subgroup) };
   });
   return touched ? { ...schedule, days } : schedule;
+}
+
+/**
+ * Пари моєї сітки, що ще не остаточні: заміна, яку я погодив, але розпорядження з нею ще не опубліковане
+ * (`withAssignments` додає її як `assigned-…`), і пара із запиту, що ще чекає моєї відповіді. Клітинка
+ * показує їх пунктиром, а не тлом опублікованої заміни. Ключ — id заняття.
+ */
+export function provisionalLessons(days: readonly DayDto[], changes: readonly ChangeDto[]): ReadonlyMap<string, ProvisionalState> {
+  const waiting = new Set(changes.filter((c) => c.status === 'PENDING_CONFIRMATION' && !c.supersededBy).map((c) => c.id));
+  const result = new Map<string, ProvisionalState>();
+  for (const day of days) {
+    for (const lesson of day.lessons) {
+      if (lesson.changeId && waiting.has(lesson.changeId)) result.set(lesson.id, 'pending');
+      else if (lesson.id.startsWith(ASSIGNED_PREFIX)) result.set(lesson.id, 'unpublished');
+    }
+  }
+  return result;
 }

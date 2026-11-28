@@ -95,7 +95,8 @@ export function UserMenu({ variant = 'avatar' }: UserMenuProps) {
         {/* у шапці — лише аватар: підказка називає меню, як у сусідніх кнопок пошуку й теми; у бічній панелі імʼя видно */}
         <Tooltip content={`Обліковий запис: ${user.name}`} side="bottom" align="end" disabled={variant === 'block'}>
           <DropdownMenu.Trigger
-            aria-label={`Обліковий запис: ${user.name}`}
+            // у бічній панелі видно імʼя й роль — назва починається з них (WCAG 2.5.3); у шапці — лише аватар
+            aria-label={variant === 'block' ? `${user.name}, ${roleLabel}. Обліковий запис` : `Обліковий запис: ${user.name}`}
             className={cn(
               'flex shrink-0 items-center rounded-control transition-[background-color] duration-150',
               'hover:bg-hover active:bg-active aria-expanded:bg-hover',

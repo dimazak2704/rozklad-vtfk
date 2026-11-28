@@ -2,7 +2,7 @@
  * Запити, потрібні оболонці застосунку (шапка, пошук, «зараз»). Сторінкові області —
  * у власних файлах src/api/<область>.ts (див. src/api/README.md).
  */
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
 import { usePublicViewer } from '@/auth/usePublicViewer';
 import { syncClock } from '@/lib/clock';
 import { isIsoDate } from '@/lib/date';
@@ -22,16 +22,27 @@ export async function fetchPublicMeta(signal?: AbortSignal): Promise<PublicMetaD
   return meta;
 }
 
+/** Спільні параметри запиту meta: для хука й для запиту наперед під час старту застосунку. */
+const publicMetaQuery = queryOptions({
+  queryKey: qk.public.meta(),
+  queryFn: ({ signal }) => fetchPublicMeta(signal),
+  staleTime: 60_000,
+  // у шапці: одна повторна спроба, щоб недоступний сервер не тримав силует довго
+  retry: 1,
+});
+
 /** GET /api/public/meta — семестр, тиждень, чисельник/знаменник, поточна пара. */
 export function usePublicMeta() {
-  return useQuery({
-    queryKey: qk.public.meta(),
-    queryFn: ({ signal }) => fetchPublicMeta(signal),
-    staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
-    // у шапці: одна повторна спроба, щоб недоступний сервер не тримав силует довго
-    retry: 1,
-  });
+  return useQuery({ ...publicMetaQuery, refetchInterval: 5 * 60_000 });
+}
+
+/**
+ * Запитує meta одразу під час старту, паралельно з кодом першої сторінки, а не після нього: годинник
+ * звіряється до першого малювання, тож на стенді з переведеним часом сторінка не будується двічі
+ * (спершу за часом браузера, потім за часом стенда), а meta шапки вже в кеші. Помилку покаже сам хук.
+ */
+export function prefetchPublicMeta(client: QueryClient): Promise<void> {
+  return client.prefetchQuery(publicMetaQuery);
 }
 
 /**

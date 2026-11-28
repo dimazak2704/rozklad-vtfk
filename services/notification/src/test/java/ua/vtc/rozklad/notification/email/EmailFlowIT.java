@@ -31,7 +31,7 @@ import ua.vtc.rozklad.contracts.events.SubstitutionStatusChanged;
 import ua.vtc.rozklad.notification.binding.BindingTarget;
 import ua.vtc.rozklad.notification.core.CoreDtos.MailRecipient;
 import ua.vtc.rozklad.notification.events.EventHandlers;
-import ua.vtc.rozklad.notification.substitution.SubstitutionRequests;
+import ua.vtc.rozklad.notification.substitution.SubstitutionJobs;
 import ua.vtc.rozklad.notification.support.CoreFixtures;
 import ua.vtc.rozklad.notification.support.FakeTelegramClient.Sent;
 import ua.vtc.rozklad.notification.support.IntegrationTest;
@@ -60,7 +60,7 @@ class EmailFlowIT extends IntegrationTest {
     @Autowired
     private EventHandlers handlers;
     @Autowired
-    private SubstitutionRequests substitutions;
+    private SubstitutionJobs jobs;
     @Autowired
     private EmailMessageRepository letters;
     @Autowired
@@ -356,7 +356,7 @@ class EmailFlowIT extends IntegrationTest {
         handlers.handle(request(other, CoreFixtures.TEACHER_KRENTSIN, deadline));
         deliverMail();
         clock.set(Instant.parse("2026-10-19T06:31:00Z"));
-        substitutions.remindOverdue();
+        jobs.remindOverdue();
         // core's own re-sent request with the same passed deadline is the same reminder round
         handlers.handle(request(other, CoreFixtures.TEACHER_KRENTSIN, deadline));
         deliverMail();
@@ -378,7 +378,7 @@ class EmailFlowIT extends IntegrationTest {
         int telegramBefore = telegram.sentTo(TEACHER_CHAT).size();
 
         clock.set(Instant.parse("2026-10-19T06:31:00Z"));
-        assertThat(substitutions.remindOverdue(false)).isOne();
+        assertThat(jobs.remindOverdue(false)).isOne();
         worker.drain();
         deliverMail();
 

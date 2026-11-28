@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { useLessonOptions, type ChangeOption } from '@/api/admin-daily';
 import type { ReasonCode, TeacherRef } from '@/api/types';
 import { Button, EmptyState, ErrorState, LoadingRegion, Skeleton, Tooltip } from '@/components/ui';
+import type { RegisterRef } from '@/hooks/useElementRegistry';
 import { useNow } from '@/hooks/useNow';
 import { plural } from '@/lib/labels';
 import {
@@ -78,6 +79,8 @@ interface OptionsPanelProps {
   onCancelDecision: () => void;
   /** Заголовок «Варіанти для 4КІ1, 3 пара»; у шторці його несе заголовок шторки. */
   showTitle?: boolean;
+  /** Реєстр кнопок вибору (ключ — `optionButtonId`), щоб 1–9 переводили на них фокус. */
+  registerOption?: RegisterRef;
 }
 
 /**
@@ -162,6 +165,7 @@ export function OptionsPanel(props: OptionsPanelProps) {
                         <OptionRow
                           option={option}
                           selectId={optionButtonId(lessonId, index)}
+                          selectRef={props.registerOption?.(optionButtonId(lessonId, index))}
                           hotkey={index < 9 ? index + 1 : null}
                           selected={selected}
                           best={best}

@@ -22,7 +22,7 @@ describe('шапка кабінету: права група не стискає
     const tools = document.querySelector('[data-header-tools]')!;
     // рішення ухвалює ширина групи праворуч від розділів (контейнер), а не ширина вікна
     expect(classes(tools)).toContain('@container/tools');
-    const field = screen.getByRole('button', { name: 'Пошук: Група, викладач, аудиторія' });
+    const field = screen.getByRole('button', { name: /^Група, викладач, аудиторія\s?— пошук/ });
     expect(classes(field)).toEqual(expect.arrayContaining(['hidden', 'lg:@[22rem]/tools:flex', 'min-w-0']));
     expect(classes(field)).not.toContain('min-w-28');
     const icon = screen.getByRole('button', { name: 'Пошук розкладу' });
@@ -38,7 +38,7 @@ describe('шапка кабінету: права група не стискає
 
   it('на головній великого поля в шапці немає, а кнопка-іконка — лише вужче за 1024 px', () => {
     renderWithProviders(<PublicHeader />, { route: '/' });
-    expect(screen.queryByRole('button', { name: 'Пошук: Група, викладач, аудиторія' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Група, викладач, аудиторія\s?— пошук/ })).toBeNull();
     const icon = screen.getByRole('button', { name: 'Пошук розкладу' });
     expect(classes(icon)).toContain('lg:hidden');
     expect(classes(icon)).not.toContain('lg:@[22rem]/tools:hidden');

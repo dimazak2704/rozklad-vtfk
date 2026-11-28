@@ -106,7 +106,7 @@ LessonView  { id, pair, startsAt, endsAt, discipline:DisciplineRef, teacher:Teac
             # parity: of the template row a base-timetable lesson comes from (BOTH = every week; NUMERATOR /
             # DENOMINATOR = «лише по чисельниках / знаменниках»), also when it was cancelled; null for a lesson
             # a change, an additional pair or a block created
-ChangeView  { pairLabel, rowType, from:{discipline?,teacher?}, reasonText?, to:{discipline?,teacher?}, room?, subgroupNote?, orderNumber? }
+ChangeView  { pairLabel, rowType, from:{discipline?,teacher?}, reasonText?, to:{discipline?,teacher?}, room?, subgroupNote?, orderNumber?, previousRoom? }  // ROOM_CHANGE of one change: from = scheduled lesson, previousRoom = its room
 ```
 
 ## 2. Core — admin (role ADMIN)

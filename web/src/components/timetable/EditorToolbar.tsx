@@ -132,7 +132,8 @@ export function EditorToolbar({
         stretch
         value={String(day)}
         onValueChange={(value) => onDayChange(Number(value) as Weekday)}
-        options={WEEKDAYS.map((weekday) => ({ value: String(weekday), label: capitalize(weekdayShort(weekday)), ariaLabel: weekdayName(weekday) }))}
+        // назва починається з видимого «Пн» (WCAG 2.5.3), повну назву дня читач екрана чує далі
+        options={WEEKDAYS.map((weekday) => ({ value: String(weekday), label: capitalize(weekdayShort(weekday)), ariaLabel: `${capitalize(weekdayShort(weekday))}, ${weekdayName(weekday)}` }))}
       />
     ) : null;
 

@@ -42,9 +42,13 @@ public record PublicChangesDto(
     public record ChangeGroup(UUID id, String code, int course) {
     }
 
-    /** {@code ChangeView} of CONTRACTS.md §1. */
+    /**
+     * {@code ChangeView} of CONTRACTS.md §1. For a {@code ROOM_CHANGE} row of one change (additive)
+     * {@code from} names the scheduled lesson, which the order does not print, and
+     * {@code previousRoom} is the room it had; both stay {@code null} on imported paper rows.
+     */
     public record ChangeView(String pairLabel, OrderRowType rowType, Side from, String reasonText, Side to,
-                             String room, String subgroupNote, Integer orderNumber) {
+                             String room, String subgroupNote, Integer orderNumber, String previousRoom) {
     }
 
     public record Side(String discipline, String teacher) {

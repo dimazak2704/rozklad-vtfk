@@ -5,8 +5,6 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,15 +19,6 @@ import ua.vtc.rozklad.contracts.GenerationStatus;
 import ua.vtc.rozklad.contracts.GenerationStopReason;
 import ua.vtc.rozklad.contracts.events.GenerationCompleted;
 import ua.vtc.rozklad.contracts.events.GenerationProgress;
-import ua.vtc.rozklad.core.catalog.Discipline;
-import ua.vtc.rozklad.core.catalog.DisciplineRepository;
-import ua.vtc.rozklad.core.catalog.GroupRef;
-import ua.vtc.rozklad.core.catalog.Room;
-import ua.vtc.rozklad.core.catalog.RoomRepository;
-import ua.vtc.rozklad.core.catalog.StudentGroup;
-import ua.vtc.rozklad.core.catalog.StudentGroupRepository;
-import ua.vtc.rozklad.core.catalog.Teacher;
-import ua.vtc.rozklad.core.catalog.TeacherRepository;
 import ua.vtc.rozklad.core.shared.messaging.ProcessedEvents;
 import ua.vtc.rozklad.core.shared.security.Roles;
 import ua.vtc.rozklad.core.shared.sse.SseAfterCommit;
@@ -42,8 +31,8 @@ import ua.vtc.rozklad.core.timetable.TemplateLessonRepository;
 import ua.vtc.rozklad.core.timetable.TimetableVersion;
 import ua.vtc.rozklad.core.timetable.TimetableVersionRepository;
 import ua.vtc.rozklad.core.timetable.VersionSource;
+import ua.vtc.rozklad.core.timetable.internal.generation.GeneratedReferences.Known;
 import ua.vtc.rozklad.core.timetable.internal.metrics.MetricsDto;
-import ua.vtc.rozklad.core.timetable.internal.support.LoadReadRepository;
 import ua.vtc.rozklad.core.timetable.internal.version.VersionAnalysis;
 
 /**
@@ -70,11 +59,7 @@ class GenerationResultHandler {
     private final GenerationJobRepository jobs;
     private final TimetableVersionRepository versions;
     private final TemplateLessonRepository templateLessons;
-    private final RoomRepository rooms;
-    private final TeacherRepository teachers;
-    private final StudentGroupRepository groups;
-    private final DisciplineRepository disciplines;
-    private final LoadReadRepository loadItems;
+    private final GeneratedReferences references;
     private final VersionAnalysis analysis;
     private final GenerationJobMapper mapper;
     private final SseAfterCommit sse;
@@ -82,18 +67,13 @@ class GenerationResultHandler {
 
     GenerationResultHandler(ProcessedEvents processedEvents, GenerationJobRepository jobs,
                             TimetableVersionRepository versions, TemplateLessonRepository templateLessons,
-                            RoomRepository rooms, TeacherRepository teachers, StudentGroupRepository groups,
-                            DisciplineRepository disciplines, LoadReadRepository loadItems, VersionAnalysis analysis,
-                            GenerationJobMapper mapper, SseAfterCommit sse, Clock clock) {
+                            GeneratedReferences references, VersionAnalysis analysis, GenerationJobMapper mapper,
+                            SseAfterCommit sse, Clock clock) {
         this.processedEvents = processedEvents;
         this.jobs = jobs;
         this.versions = versions;
         this.templateLessons = templateLessons;
-        this.rooms = rooms;
-        this.teachers = teachers;
-        this.groups = groups;
-        this.disciplines = disciplines;
-        this.loadItems = loadItems;
+        this.references = references;
         this.analysis = analysis;
         this.mapper = mapper;
         this.sse = sse;
@@ -179,7 +159,7 @@ class GenerationResultHandler {
                     truncate("Планувальник повернув некоректний результат: " + invalid.getMessage()));
             return;
         }
-        Known known = known(result);
+        Known known = references.known(result);
         Set<UUID> missingGroups = missing(result, PlanUnit::groupId, known.groups());
         Set<UUID> missingDisciplines = missing(result, PlanUnit::disciplineId, known.disciplines());
         if (!missingGroups.isEmpty() || !missingDisciplines.isEmpty()) {
@@ -206,35 +186,11 @@ class GenerationResultHandler {
                 .orElse(null);
         version.setMetrics(mapper.json(after));
         job.setResultVersionId(version.getId());
-        job.setOutcome(mapper.json(GenerationOutcome.of(result, GenerationResultHandler::roomOf, known.groupRefs())));
+        job.setOutcome(mapper.json(GenerationOutcome.of(result, GeneratedReferences::roomOf, known.groupRefs())));
         job.setMetricsAfter(mapper.json(after));
         job.setMetricsBefore(mapper.json(before));
         job.setStopReason(stopReason);
         job.finish(GenerationStatus.SOLVED, now, null);
-    }
-
-    /**
-     * Which referenced rows still exist. Load items are share-locked, so a delete that starts now waits
-     * for this transaction instead of breaking its insert.
-     */
-    private Known known(GeneratedLessonsBuilder.Result result) {
-        List<PlanUnit> units = result.placements().stream().map(GeneratedLessonsBuilder.Placement::unit).toList();
-        Set<UUID> roomIds = result.placements().stream()
-                .map(GenerationResultHandler::roomOf).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<UUID> loadItemIds = ids(units, PlanUnit::loadItemId);
-        return new Known(
-                rooms.findAllById(roomIds).stream().map(Room::getId).collect(Collectors.toSet()),
-                teachers.findAllById(ids(units, PlanUnit::teacherId)).stream().map(Teacher::getId)
-                        .collect(Collectors.toSet()),
-                groups.findAllById(ids(units, PlanUnit::groupId)).stream()
-                        .collect(Collectors.toMap(StudentGroup::getId, GroupRef::of)),
-                disciplines.findAllById(ids(units, PlanUnit::disciplineId)).stream().map(Discipline::getId)
-                        .collect(Collectors.toSet()),
-                loadItems.lockExisting(loadItemIds));
-    }
-
-    private static Set<UUID> ids(List<PlanUnit> units, Function<PlanUnit, UUID> id) {
-        return units.stream().map(id).filter(Objects::nonNull).collect(Collectors.toSet());
     }
 
     private static Set<UUID> missing(GeneratedLessonsBuilder.Result result, Function<PlanUnit, UUID> id,
@@ -244,13 +200,6 @@ class GenerationResultHandler {
                 .collect(Collectors.toSet());
     }
 
-    /** The room a lesson gets: a stream follower was sent without one and takes the stream's room from the base. */
-    private static UUID roomOf(GeneratedLessonsBuilder.Placement placement) {
-        PlanUnit unit = placement.unit();
-        return placement.roomId() == null && unit.streamId() != null && unit.pinned() != null
-                ? unit.pinned().roomId() : placement.roomId();
-    }
-
     private static TemplateLesson toLesson(UUID versionId, GeneratedLessonsBuilder.Placement placement, Known known) {
         PlanUnit unit = placement.unit();
         TemplateLesson lesson = new TemplateLesson(versionId, placement.weekday(), placement.pair(), placement.parity(),
@@ -258,7 +207,7 @@ class GenerationResultHandler {
         // рядок, видалений під час генерації, не потрапляє в заняття (про це пише примітка версії)
         lesson.setTeacherId(existing(unit.teacherId(), known.teachers()));
         // учасник потоку надсилався без аудиторії (PlanUnit.toStreamFollowerUnit): аудиторія потоку з бази
-        UUID room = roomOf(placement);
+        UUID room = GeneratedReferences.roomOf(placement);
         lesson.setRoomId(existing(room, known.rooms()));
         lesson.setLoadItemId(existing(unit.loadItemId(), known.loadItems()));
         lesson.setLessonKind(unit.lessonKind());
@@ -279,7 +228,8 @@ class GenerationResultHandler {
             notes.add("Не розміщено занять: " + result.unplaced().size() + ".");
         }
         long unknownRooms = result.placements().stream()
-                .filter(placement -> roomOf(placement) != null && !known.rooms().contains(roomOf(placement)))
+                .map(GeneratedReferences::roomOf)
+                .filter(room -> room != null && !known.rooms().contains(room))
                 .count();
         if (unknownRooms > 0) {
             notes.add("Аудиторій, яких уже немає в каталозі (заняття без аудиторії): " + unknownRooms + ".");
@@ -320,15 +270,6 @@ class GenerationResultHandler {
 
     private static String truncate(String text) {
         return text.length() <= MAX_ERROR_LENGTH ? text : text.substring(0, MAX_ERROR_LENGTH);
-    }
-
-    /** Ids of the referenced rows that still exist when the result is applied. */
-    private record Known(Set<UUID> rooms, Set<UUID> teachers, Map<UUID, GroupRef> groupRefs, Set<UUID> disciplines,
-                         Set<UUID> loadItems) {
-
-        Set<UUID> groups() {
-            return groupRefs.keySet();
-        }
     }
 
     /** SSE data of {@code generation.progress}. */
