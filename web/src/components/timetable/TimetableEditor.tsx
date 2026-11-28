@@ -12,6 +12,7 @@ import { useShiftWindows } from '@/api/calendar';
 import type { MetricsDto, Parity, TemplateLessonDto, TimetableVersionDto, Uuid, Weekday } from '@/api/types';
 import { Button, buttonClass, Drawer, DrawerContent, EmptyState, LoadingRegion, PageErrorBanner, type MoreMenuItem } from '@/components/ui';
 import { isModalOpen, useHotkeys, useShortcutHints } from '@/hooks/useHotkeys';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { isoWeekday, todayInKyiv } from '@/lib/date';
 import { useRegisterCommands } from '@/stores/commands';
@@ -28,7 +29,6 @@ import { ConflictsPanel, type ConflictSeverityTab } from './panels/ConflictsPane
 import { LessonInspector } from './panels/LessonInspector';
 import { MetricsBar } from './panels/MetricsBar';
 import { useLessonEditing } from './useLessonEditing';
-import { useMediaQuery } from './useMediaQuery';
 import { useTeacherLabel } from '@/components/admin-daily/useTeacherLabel';
 
 interface TimetableEditorProps {
