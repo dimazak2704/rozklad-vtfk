@@ -12,6 +12,9 @@ import { isCachedPublicApiRequest, PUBLIC_API_CACHE } from './src/api/public-api
 import { savedCopyPlugin } from './src/api/saved-copy-plugin.ts';
 
 const DAY_SECONDS = 24 * 60 * 60;
+/** Бібліотеки, без яких не відкривається жодна сторінка (окрема частина коду `framework`). */
+const FRAMEWORK_MODULES =
+  /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|@tanstack[\\/](query-core|react-query)|zustand|clsx|tailwind-merge|use-sync-external-store)[\\/]/;
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 /** Вхід збірки для стилів сторінки входу auth (/brand/auth.css). */
 const AUTH_CSS_ENTRY = 'brand-auth';
@@ -171,6 +174,17 @@ export default defineConfig(({ mode }) => {
           [AUTH_CSS_ENTRY]: resolve(rootDir, 'src/styles/auth-page.css'),
         },
         output: {
+          codeSplitting: {
+            groups: [
+              {
+                // React, роутер і кеш запитів потрібні кожній сторінці й змінюються рідко: одна частина коду
+                // замість кількох дрібних, що їх інакше автоматичне розбиття розкидало б між сторінками
+                name: 'framework',
+                test: FRAMEWORK_MODULES,
+                priority: 20,
+              },
+            ],
+          },
           assetFileNames: (asset) =>
             asset.names.includes(`${AUTH_CSS_ENTRY}.css`) ? 'brand/auth.css' : 'assets/[name]-[hash][extname]',
         },
