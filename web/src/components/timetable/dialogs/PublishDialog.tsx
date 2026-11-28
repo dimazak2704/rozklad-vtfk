@@ -1,5 +1,5 @@
 import { Cpu, TriangleExclamationPoint } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { usePublishVersion, type TimetableConflict } from '@/api/timetable';
@@ -103,12 +103,15 @@ function PublishForm({
     }
   };
 
+  // фокус при відкритті: кнопка конфліктів, коли публікувати не можна, інакше — поле дати
+  const conflictsRef = useRef<HTMLButtonElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
   return (
     <DialogContent
       // фокус — на дату (або на пояснення конфліктів), а не на хрестик закриття
       onOpenAutoFocus={(event) => {
         event.preventDefault();
-        document.querySelector<HTMLElement>('[data-publish-focus]')?.focus();
+        (conflictsRef.current ?? dateRef.current)?.focus();
       }}
       title="Опублікувати версію"
       description={version.name}
@@ -138,7 +141,7 @@ function PublishForm({
             </ul>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" data-publish-focus="" onClick={onShowConflicts}>
+            <Button ref={conflictsRef} size="sm" onClick={onShowConflicts}>
               Показати конфлікти в сітці
             </Button>
             <Link to="/admin/generation" className={buttonClass({ size: 'sm', variant: 'ghost' })}>
@@ -155,7 +158,7 @@ function PublishForm({
             error={fieldError ?? dateError}
             hint={`Семестр: ${formatNumericDate(semester.startsOn)}–${formatNumericDate(semester.endsOn)}`}
           >
-            <DateInput data-publish-focus="" value={effectiveFrom} min={minDate} max={semester.endsOn} onChange={setEffectiveFrom} />
+            <DateInput ref={dateRef} value={effectiveFrom} min={minDate} max={semester.endsOn} onChange={setEffectiveFrom} />
           </Field>
           <ul className="flex list-disc flex-col gap-1.5 ps-5 text-ui text-secondary">
             <li>Поточна опублікована версія піде в архів — її можна буде переглядати й копіювати.</li>
