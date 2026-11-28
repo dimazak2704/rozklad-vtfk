@@ -117,6 +117,39 @@ class CatalogApiIT {
                 .andExpect(status().isConflict());
     }
 
+    /** The database sorts by code point (Є, І before А); the catalogs follow the Ukrainian alphabet instead. */
+    @Test
+    void catalogsAreSortedInUkrainianAlphabeticalOrder() throws Exception {
+        for (String lastName : new String[] {"Жук", "Єлісєєва", "Іванов", "Алексєєнко", "Ґудзь", "Гуцол"}) {
+            create("/api/admin/teachers", "{\"lastName\":\"%s\",\"shortName\":\"%s А.\"}".formatted(lastName, lastName));
+        }
+        mvc.perform(get("/api/admin/teachers").param("size", "3").with(TestJwts.admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(6))
+                .andExpect(jsonPath("$.items[*].shortName").value(
+                        org.hamcrest.Matchers.contains("Алексєєнко А.", "Гуцол А.", "Ґудзь А.")));
+        mvc.perform(get("/api/admin/teachers").param("page", "1").param("size", "3").with(TestJwts.admin()))
+                .andExpect(jsonPath("$.items[*].shortName").value(
+                        org.hamcrest.Matchers.contains("Єлісєєва А.", "Жук А.", "Іванов А.")));
+        mvc.perform(get("/api/admin/teachers").param("sort", "lastName,desc").with(TestJwts.admin()))
+                .andExpect(jsonPath("$.items[*].lastName").value(org.hamcrest.Matchers.contains(
+                        "Іванов", "Жук", "Єлісєєва", "Ґудзь", "Гуцол", "Алексєєнко")));
+
+        for (String name : new String[] {"Етика", "Інформатика", "Алгебра", "Єдиноборства"}) {
+            create("/api/admin/disciplines", "{\"name\":\"%s\",\"shortName\":\"%s\"}".formatted(name, name));
+        }
+        mvc.perform(get("/api/admin/disciplines").param("sort", "name").with(TestJwts.admin()))
+                .andExpect(jsonPath("$.items[*].name").value(org.hamcrest.Matchers.contains(
+                        "Алгебра", "Етика", "Єдиноборства", "Інформатика")));
+
+        for (String name : new String[] {"Їдальня", "Актова зала", "Єва"}) {
+            create("/api/admin/rooms", "{\"name\":\"%s\",\"type\":\"CLASSROOM\"}".formatted(name));
+        }
+        mvc.perform(get("/api/admin/rooms").with(TestJwts.admin()))
+                .andExpect(jsonPath("$.items[*].name").value(org.hamcrest.Matchers.contains(
+                        "Актова зала", "Єва", "Їдальня")));
+    }
+
     @Test
     void aliasesAndCompetencesOfTeachers() throws Exception {
         UUID garbolinska = id(create("/api/admin/teachers", "{\"lastName\":\"Гарболінська\",\"shortName\":\"Гарболінська О.\"}")

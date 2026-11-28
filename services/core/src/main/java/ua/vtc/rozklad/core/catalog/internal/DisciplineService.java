@@ -6,6 +6,7 @@ import static ua.vtc.rozklad.core.shared.persistence.EntityGuards.deleteOrConfli
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class DisciplineService {
 
     private static final Map<String, String> SORTABLE = Map.of("name", "name", "shortName", "shortName",
             "active", "active", "needsReview", "needsReview");
+    private static final Set<String> TEXT_SORT = Set.of("name", "shortName");
 
     private final DisciplineRepository disciplines;
     private final DisciplineAliasRepository aliases;
@@ -44,11 +46,12 @@ public class DisciplineService {
     }
 
     public PageResponse<DisciplineDto> list(String q, Boolean active, Boolean needsReview, PageQuery page) {
-        return PageResponse.of(disciplines.findAll(
+        Specs.PagedSpec<Discipline> ordered = Specs.orderedUkrainian(
                 Specs.<Discipline>containsIgnoreCase(q, "name", "shortName")
                         .and(Specs.equalTo("active", active))
                         .and(Specs.equalTo("needsReview", needsReview)),
-                page.toPageable(SORTABLE, Sort.by("shortName"))), DisciplineDto::of);
+                page.toPageable(SORTABLE, Sort.by("shortName")), TEXT_SORT);
+        return PageResponse.of(disciplines.findAll(ordered.spec(), ordered.pageable()), DisciplineDto::of);
     }
 
     public DisciplineDto get(UUID id) {
