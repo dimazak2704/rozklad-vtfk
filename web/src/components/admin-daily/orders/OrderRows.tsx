@@ -88,7 +88,8 @@ export function OrderRows({ order }: { order: OrderDto }) {
       ) : null}
       {order.roomChanges.length > 0 ? (
         <section aria-label="Заміна аудиторій" className="flex flex-col gap-1">
-          <h3 className="text-ui font-[650] text-secondary">Заміна аудиторій</h3>
+          {/* на сторінці рядки йдуть одразу під h1 «Розпорядження», тож рівень 2, без пропуску */}
+          <h2 className="text-ui font-[650] text-secondary">Заміна аудиторій</h2>
           <ul className="flex flex-col divide-y divide-[var(--border-color-separator)]">
             {order.roomChanges.map((item) => (
               <li key={item.id} className="py-2.5 text-ui text-primary">
