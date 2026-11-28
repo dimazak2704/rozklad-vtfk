@@ -5,6 +5,7 @@ import { useBells } from '@/api/meta';
 import { useMyChanges, useReplyToChange, type ReplyVariables } from '@/api/me';
 import type { ChangeDto, Uuid } from '@/api/types';
 import { notify } from '@/components/ui';
+import { useElementRegistry } from '@/hooks/useElementRegistry';
 import { useNow } from '@/hooks/useNow';
 import { now as clockNow } from '@/lib/clock';
 import { formatDayMonth, relativeDayLabel, todayInKyiv } from '@/lib/date';
@@ -161,11 +162,13 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
   const linked = params.get('change');
   const linkedWaiting = linked !== null && waiting.some((change) => change.id === linked);
   const scrolled = useRef<string | null>(null);
+  const cards = useElementRegistry();
+  const { get: cardFor } = cards;
   useEffect(() => {
-    if (!linkedWaiting || scrolled.current === linked) return;
+    if (!linkedWaiting || linked === null || scrolled.current === linked) return;
     scrolled.current = linked;
-    document.getElementById(`change-${linked}`)?.scrollIntoView?.({ block: 'center' });
-  }, [linked, linkedWaiting]);
+    cardFor(linked)?.scrollIntoView?.({ block: 'center' });
+  }, [linked, linkedWaiting, cardFor]);
 
   // помилку й завантаження показує сторінка (одна на всіх); тут — лише те, що треба вирішити
   return (
@@ -178,7 +181,7 @@ export function SubstitutionRequests({ teacherId }: { teacherId: Uuid }) {
           {/* пласка панель на лініях; про терміновість каже бурштиновий рядок стану, а не рамка */}
           <ul className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
             {waiting.map((change) => (
-              <li key={change.id} id={`change-${change.id}`} className="scroll-mt-(--sticky-top)">
+              <li key={change.id} id={`change-${change.id}`} ref={cards.register(change.id)} className="scroll-mt-(--sticky-top)">
                 <SubstitutionCard
                   change={change}
                   primary={change.id === urgent}
