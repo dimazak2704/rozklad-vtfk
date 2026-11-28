@@ -3,7 +3,7 @@
 import '@fontsource-variable/manrope/wght.css';
 import '@fontsource-variable/geologica/wght.css';
 import './styles/index.css';
-import { StrictMode } from 'react';
+import { startTransition, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { prefetchPublicMeta } from './api/meta';
 import { dropAuthorizedCopies } from './api/public-api-cache';
@@ -63,11 +63,17 @@ async function start(): Promise<void> {
   }
   void prefetchPublicMeta(queryClient);
   await Promise.all([applyAppStyles(), whenRouterReady()]);
-  createRoot(root).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
+  // перший рендер — перехідом: React будує сторінку частинами по кілька мілісекунд і між ними віддає потік
+  // браузеру, а не тримає його одним довгим завданням (на слабкому телефоні — сотні мілісекунд без відгуку).
+  // Оболонка з index.html лишається на екрані, доки сторінка не готова повністю
+  const app = createRoot(root);
+  startTransition(() => {
+    app.render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+  });
 }
 
 void start();
