@@ -200,6 +200,19 @@ export default defineConfig(({ mode }) => {
                 test: FRAMEWORK_MODULES,
                 priority: 20,
               },
+              {
+                // дрібні спільні помічники й іконки — по одній частині: автоматичне розбиття робило з них
+                // десятки файлів по 0,2–1 КБ, і сторінка вантажила їх окремими запитами (на HTTP/1.1 — по шість
+                // за раз). Ціна — кілька кілобайтів коду, якого конкретній сторінці не треба
+                name: 'lib',
+                test: /[\\/]src[\\/](lib|hooks|stores)[\\/]/,
+                priority: 10,
+              },
+              {
+                name: 'icons',
+                test: /[\\/]lucide-react[\\/]/,
+                priority: 9,
+              },
             ],
           },
           assetFileNames: (asset) =>
