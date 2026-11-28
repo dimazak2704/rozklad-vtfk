@@ -182,7 +182,8 @@ class OptionsGatheringIT {
                 MONDAY, 2, null, ki11.getId(), null, target.getId(), chemistry.getId(), vernyhora.getId(), null, null,
                 ReasonCode.MUTUAL, null, null), "admin"));
         assertThat(asked.status()).isEqualTo(ChangeStatus.PENDING_CONFIRMATION);
-        replies.replyFromBot(asked.id(), vernyhora.getId(), ConfirmationDecision.DECLINE, "Не можу");
+        beforeMonday(() -> replies.replyFromBot(asked.id(), vernyhora.getId(), ConfirmationDecision.DECLINE,
+                "Не можу"));
         return target;
     }
 
@@ -215,7 +216,8 @@ class OptionsGatheringIT {
                 ReasonCode.MUTUAL, null, null), "admin");
         assertThat(assigned.status()).isEqualTo(ChangeStatus.CONFIRMED);
 
-        replies.replyFromBot(assigned.id(), vernyhora.getId(), ConfirmationDecision.DECLINE, "Не можу");
+        beforeMonday(() -> replies.replyFromBot(assigned.id(), vernyhora.getId(), ConfirmationDecision.DECLINE,
+                "Не можу"));
 
         OptionDto.LessonOptions result = lessonOptions.of(target.getId());
         assertThat(result.declined()).singleElement()
