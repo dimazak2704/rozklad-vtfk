@@ -126,6 +126,26 @@ CI (`.github/workflows/ci.yml`) запускає бекенд, клієнт і �
 CodeQL (`.github/workflows/codeql.yml`) перевіряє Java і TypeScript на кожному pull request-і та щотижня,
 результати — у Security → Code scanning. Як отримати звіт покриття локально: `docs/RUNNING.md`, розділ 8.
 
+## Версії
+
+Що змінилось у кожній версії, написано в [CHANGELOG.md](CHANGELOG.md): коротко і для людей, як в описі оновлення в App Store.
+
+Версія одна на весь продукт і має вигляд `MAJOR.MINOR.PATCH`:
+
+- `PATCH` (1.0.**1**) — лише виправлення помилок;
+- `MINOR` (1.**1**.0) — нові можливості, усе старе працює як було;
+- `MAJOR` (**2**.0.0) — зміна, після якої щось старе перестає працювати. Буває дуже рідко.
+
+Кожен pull request зі зміною, яку помітить користувач, додає рядок у розділ «Не випущено». Під час релізу
+цей розділ стає `[X.Y.Z] — дата`, а номер ставиться в усі модулі:
+
+```bash
+mvn versions:set -DnewVersion=X.Y.Z -DprocessAllModules=true -DgenerateBackupPoms=false
+(cd web && npm version X.Y.Z --no-git-tag-version)
+```
+
+Реліз зливається в `main` і отримує тег `vX.Y.Z`.
+
 ## Секрети
 
 Справжні значення зберігаються лише в `.env`, а він у `.gitignore`. У репозиторії є тільки `.env.example`, `infra/deploy/.env.example` і dev-значення для локального стенда (`infra/dev/`).
