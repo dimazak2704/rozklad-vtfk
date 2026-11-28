@@ -5,7 +5,9 @@ import '@fontsource-variable/geologica/wght.css';
 import './styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { prefetchPublicMeta } from './api/meta';
 import { dropAuthorizedCopies } from './api/public-api-cache';
+import { queryClient } from './api/queryClient';
 import { App } from './app/App';
 
 /**
@@ -45,6 +47,9 @@ async function startMocksIfEnabled(): Promise<void> {
 
 startMocksIfEnabled().then(
   () => {
+    // meta (годинник стенда, семестр) потрібна кожній сторінці: просимо її паралельно з кодом сторінки,
+    // після мок-API, щоб у dev запит не пішов повз нього
+    void prefetchPublicMeta(queryClient);
     createRoot(root).render(
       <StrictMode>
         <App />
