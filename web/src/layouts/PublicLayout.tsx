@@ -15,10 +15,12 @@ export function PublicLayout() {
     <div className="flex min-h-dvh flex-col [--sticky-top:var(--header-height)]">
       <SkipLink />
       <PublicHeader />
+      {/* вміст не нижчий за екран під шапкою: підвал завжди під згином, тож коли дані приходять і сторінка
+          росте, підвал не стрибає вниз через видиму область (зсув макета, CLS) */}
       <main
         id="main"
         tabIndex={-1}
-        className="mx-auto w-full max-w-[calc(76rem+2*var(--page-gutter))] flex-1 px-(--page-gutter) pt-6 pb-12 text-body focus:outline-none lg:pt-10"
+        className="mx-auto min-h-[calc(100dvh-var(--header-height))] w-full max-w-[calc(76rem+2*var(--page-gutter))] flex-1 px-(--page-gutter) pt-6 pb-12 text-body focus:outline-none lg:pt-10"
       >
         <Outlet />
       </main>
