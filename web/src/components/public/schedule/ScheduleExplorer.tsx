@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Archive, RotateCcw, WifiOff } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useRef, type RefObject } from 'react';
 import { buildUrl } from '@/api/client';
 import { isApiError } from '@/api/errors';
 import { useBells, usePublicHistoryFrom } from '@/api/meta';
@@ -31,7 +31,7 @@ import { historyBound, isHistoryClosed, SCHEDULE_HISTORY_HINT } from '../history
 import { SavedCopyNote } from '../SavedCopyNote';
 import { useOnline } from '../useOnline';
 import { BellsCompact } from './BellsCompact';
-import { ChangesNote, WEEK_REGION_ID } from './ChangesNote';
+import { ChangesNote } from './ChangesNote';
 import { isHomeWeek, type ScheduleParams, type ScheduleView } from './schedule-params';
 import { activePairs, changedLessons, dayOf, filterBySubgroup } from './schedule-utils';
 import { ScheduleSkeleton } from './ScheduleSkeleton';
@@ -51,6 +51,11 @@ interface ScheduleExplorerProps {
   toolbar?: boolean;
   /** Перетворення розкладу лише для показу (аудиторія ховає саму себе з клітинок). */
   select?: (schedule: ScheduleDto) => ScheduleDto;
+  /**
+   * Обгортка тижневої сітки, коли рядок «2 заміни цього тижня» стоїть поза розкладом (у заголовку сторінки):
+   * за нею він знаходить першу змінену клітинку. Без неї розклад тримає власну.
+   */
+  weekRegion?: RefObject<HTMLDivElement | null>;
 }
 
 /** Телефон: тиждень і подання живуть в одному рядку над днями, а не трьома рядками керувань. */
@@ -127,8 +132,11 @@ const VIEW_OPTIONS = [
  * Розклад групи, викладача чи аудиторії: «День / Тиждень», навігація датами, фільтр підгрупи,
  * «зараз», зміни тижня. Стан — в адресі (useScheduleParams), дані — з переданого запиту.
  */
-export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolbar = true, select }: ScheduleExplorerProps) {
+export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolbar = true, select, weekRegion: outerRegion }: ScheduleExplorerProps) {
   const { date, today, homeDate, view, subgroup, week, setDate, setView } = params;
+  // обгортка тижневої сітки: за нею «2 заміни цього тижня» знаходить першу змінену клітинку
+  const ownRegion = useRef<HTMLDivElement>(null);
+  const weekRegion = outerRegion ?? ownRegion;
   const online = useOnline();
   const phone = useMediaQuery(PHONE_QUERY);
   const historyFrom = usePublicHistoryFrom();
@@ -293,7 +301,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
     );
   } else {
     content = (
-      <div id={WEEK_REGION_ID}>
+      <div ref={weekRegion}>
         {wide ? (
           <WeekGrid
             schedule={schedule}
@@ -326,7 +334,7 @@ export function ScheduleExplorer({ query, params, perspective, ownerLabel, toolb
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <ScheduleControls params={params} />
-          <ChangesNote items={changes} view={view} onOpenDay={openDay} currentWeek={isHomeWeek(params)} className="lg:ms-auto" />
+          <ChangesNote items={changes} view={view} weekRegion={weekRegion} onOpenDay={openDay} currentWeek={isHomeWeek(params)} className="lg:ms-auto" />
         </div>
       ) : null}
 
