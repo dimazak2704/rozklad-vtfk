@@ -80,7 +80,7 @@ class PublicChangesControllerTest {
                 List.of(new PublicChangesDto.GroupChanges(new PublicChangesDto.ChangeGroup(UUID.randomUUID(), "1ТК1", 1),
                         List.of(new PublicChangesDto.ChangeView("1", OrderRowType.CANCELLATION,
                                 new PublicChangesDto.Side("Ін. мова", "Крисак Л. (п.)"), "Відп.",
-                                new PublicChangesDto.Side("Пари не буде", null), null, "1 підгрупа", 36))))));
+                                new PublicChangesDto.Side("Пари не буде", null), null, "1 підгрупа", 36, null))))));
 
         mockMvc.perform(get("/api/public/changes").param("date", "2026-10-19"))
                 .andExpect(status().isOk())

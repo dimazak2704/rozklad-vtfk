@@ -4,7 +4,7 @@ import { useNow } from '@/hooks/useNow';
 import { cn } from '@/lib/cn';
 import { formatDateRange, timeToMinutes, todayInKyiv } from '@/lib/date';
 import { capitalize, PARITY_LABEL, WEEKDAY_ACCUSATIVE, weekdayName, weekdayShort } from '@/lib/labels';
-import { lessonsByPair, pairRange, vacatedPairs, type Perspective } from '@/lib/schedule';
+import { lessonsByPair, pairRange, vacatedPairs, type Perspective, type ProvisionalState } from '@/lib/schedule';
 import { LessonCell } from './LessonCell';
 import { nowPillShift } from './now-pill';
 import { blocksLabel, dayPractices, noteWithoutPractices } from './practice';
@@ -22,6 +22,8 @@ export interface WeekGridProps {
   stickyTop?: string;
   /** Заняття, зміна в яких щойно прийшла наживо (`useArrivedChanges`). */
   arrived?: ReadonlySet<string>;
+  /** Заняття із заміною, що ще не остаточна (кабінет викладача): id → стан. */
+  provisional?: ReadonlyMap<string, ProvisionalState>;
   /** Дзвінки за днями тижня (ISO 1..7, `bellsByWeekday`): у пʼятницю пари йдуть в інший час. */
   bells?: ReadonlyMap<number, readonly BellSlotDto[]> | null;
   className?: string;
@@ -158,7 +160,7 @@ function PairGutter({
  * закресленим, тобто скасованим). Пігулка з часом стоїть у колонці часу й не закриває заняття.
  * Рядки ростуть під вміст — нічого не обрізається.
  */
-export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, bells, className }: WeekGridProps) {
+export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(), at, stickyTop = '0px', arrived, provisional, bells, className }: WeekGridProps) {
   const days = schedule.days;
   // керівник бачить свої блоки (практика, НС) окремим рядком над парами; група — у клітинці замість пар
   const supervisedRow = perspective === 'teacher' && days.some((day) => dayPractices(day, perspective).length > 0);
@@ -374,6 +376,7 @@ export function WeekGrid({ schedule, perspective = 'group', today = todayInKyiv(
                                   now={current}
                                   past={lessonPast}
                                   arrived={arrived?.has(lesson.id)}
+                                  provisional={provisional?.get(lesson.id)}
                                   showTime={Boolean(dayTime && (dayTime.startsAt !== lesson.startsAt || dayTime.endsAt !== lesson.endsAt))}
                                   className="flex-1"
                                 />

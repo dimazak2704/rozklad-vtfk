@@ -6,7 +6,7 @@ import { roomLabel } from '@/lib/schedule';
 import { useEntrance } from '../entrance';
 import { GroupHint } from '../GroupHint';
 import { reasonHint } from '../schedule/schedule-utils';
-import { changeRowText, ROOM_CHANGE_TITLE, sortByPair } from './change-rows';
+import { changeRowText, movedPairHints, ROOM_CHANGE_TITLE, sortByPair } from './change-rows';
 import { changeGroupKey, isMyGroup, type ChangeGroup } from './changes-filter';
 
 /** Слово стану над рядком — у кольорі стану, без «таблички». Звичайні рядки розпорядження — тихо. */
@@ -28,20 +28,33 @@ function ChangeRow({
   item,
   mainOrderNumber,
   commonReason,
+  moved,
 }: {
   item: ChangeView;
   mainOrderNumber: number | null | undefined;
   commonReason: string | null;
+  /** «перенесено з 2-ї пари»: рядок — половина перенесеної пари. */
+  moved?: string | undefined;
 }) {
   const state = STATE[item.rowType];
   const cancelled = item.rowType === 'CANCELLATION';
   const roomChange = item.rowType === 'ROOM_CHANGE';
-  const { title, old } = changeRowText(item);
+  const { title, old, oldRoom } = changeRowText(item);
   const room = cancelled ? null : roomLabel(item.room);
+  // зміна аудиторії — так само, як у клітинці на сторінці групи: «~~ауд. 406~~ 404»
+  const roomText = room && oldRoom ? (
+    <>
+      <span className="sr-only">Замість </span>
+      <s className={cn(STRUCK, 'font-normal text-muted')}>{roomLabel(oldRoom)}</s> <span className="sr-only">тепер </span>
+      {item.room?.trim()}
+    </>
+  ) : (
+    room
+  );
   const reason = reasonHint(item.reasonText);
   const hint = reason && reason !== commonReason ? reason : null;
   const fromAmendment = item.orderNumber != null && item.orderNumber !== mainOrderNumber;
-  const note = [hint, fromAmendment ? `з доповнення №${item.orderNumber}` : null].filter(Boolean).join(' · ');
+  const note = [moved, hint, fromAmendment ? `з доповнення №${item.orderNumber}` : null].filter(Boolean).join(' · ');
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)] gap-x-4 py-3 first:pt-0 last:pb-0 sm:grid-cols-[5rem_minmax(0,1fr)_auto]">
@@ -69,11 +82,11 @@ function ChangeRow({
           </span>
         ) : null}
         {note ? <span className="text-caption text-muted">{note}</span> : null}
-        {room ? <span className={cn('text-caption sm:hidden figures', roomChange ? 'font-[650] text-room' : 'text-secondary')}>{room}</span> : null}
+        {room ? <span className={cn('text-caption sm:hidden figures', roomChange ? 'font-[650] text-room' : 'text-secondary')}>{roomText}</span> : null}
       </span>
       {room ? (
         <span className={cn('hidden pt-[1.125rem] text-ui whitespace-nowrap sm:block figures', roomChange ? 'font-[650] text-room' : 'text-secondary')}>
-          {room}
+          {roomText}
         </span>
       ) : (
         <span className="hidden sm:block" />
@@ -106,6 +119,7 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
     <ul ref={ref} className="flex flex-col divide-y divide-[var(--border-color-separator)] rounded-panel border border-default bg-surface">
       {sorted.map(({ group, items }) => {
         const own = isMyGroup(myGroupIds, group.id);
+        const moved = movedPairHints(items);
         return (
           <li
             key={changeGroupKey(group)}
@@ -122,7 +136,7 @@ export function ChangesList({ groups, date, myGroupIds, mainOrderNumber, commonR
             </GroupHint>
             <ol className="flex flex-col divide-y divide-[var(--border-color-separator)]">
               {sortByPair(items).map((item, index) => (
-                <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} commonReason={commonReason} />
+                <ChangeRow key={`${item.pairLabel}-${index}`} item={item} mainOrderNumber={mainOrderNumber} commonReason={commonReason} moved={moved.get(item)} />
               ))}
             </ol>
           </li>

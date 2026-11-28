@@ -42,7 +42,7 @@ describe('WeekNav: межа архіву для гостя', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(<WeekNav value="2026-11-11" onChange={onChange} today={TODAY} minDate={MIN_DATE} />);
-    await user.click(screen.getByRole('button', { name: /^Обрати тиждень/ }));
+    await user.click(screen.getByRole('button', { name: /Обрати тиждень$/ }));
     const grid = await screen.findByRole('grid');
     // понеділок тижня межі відкритий (тиждень показується цілим), дні перед ним — ні
     expect(within(dayCell(grid, '2026-11-02')).getByRole('button')).toBeEnabled();
@@ -62,7 +62,7 @@ describe('WeekNav: межа архіву для гостя', () => {
     expect(previous).not.toHaveAttribute('aria-disabled');
     await user.click(previous);
     expect(onChange).toHaveBeenCalledWith('2026-10-28');
-    await user.click(screen.getByRole('button', { name: /^Обрати тиждень/ }));
+    await user.click(screen.getByRole('button', { name: /Обрати тиждень$/ }));
     expect(screen.queryByText('Старіший розклад бачить лише персонал коледжу.')).not.toBeInTheDocument();
   });
 });

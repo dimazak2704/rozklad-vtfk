@@ -23,8 +23,9 @@ export function SearchTrigger({ label = 'Група, викладач, ауди�
     <button
       type="button"
       onClick={() => setOpen(true)}
-      aria-label={`Пошук: ${label}`}
+      // назва — видима підказка (WCAG 2.5.3): «Група, викладач, аудиторія — пошук» чи «Пошук» у вузькому полі
       aria-haspopup="dialog"
+      aria-keyshortcuts="Control+K Meta+K"
       className={cn(
         '@container/search flex h-10 w-full min-w-0 items-center gap-2 rounded-control border border-transparent bg-sunken px-3 text-start text-ui text-muted',
         'transition-[background-color,border-color] duration-150 ease-out hover:border-default',
@@ -35,6 +36,7 @@ export function SearchTrigger({ label = 'Група, викладач, ауди�
       <Search aria-hidden="true" className="size-4 shrink-0" />
       <span className="hidden min-w-0 flex-1 truncate @[13rem]/search:inline" data-search-label="full">
         {label}
+        <span className="sr-only"> — пошук</span>
       </span>
       <span className="min-w-0 flex-1 truncate @[13rem]/search:hidden" data-search-label="short">
         Пошук
@@ -42,11 +44,14 @@ export function SearchTrigger({ label = 'Група, викладач, ауди�
       {showShortcut ? (
         // клавіша — лише там, де вона не накриває підказку. Пороги — ширина вмісту поля (без відступів):
         // «Пошук» + Ctrl K — від 7,5 rem; повна підказка (13 rem) + Ctrl K — від 16,5 rem
-        <KbdCombo
-          keys="mod+k"
-          joined
-          className="hidden @[7.5rem]/search:inline-flex @[13rem]/search:hidden @[16.5rem]/search:inline-flex"
-        />
+        // клавішу називає aria-keyshortcuts: у назві кнопки «Ctrl K» був би зайвим словом
+        <span aria-hidden="true" className="contents">
+          <KbdCombo
+            keys="mod+k"
+            joined
+            className="hidden @[7.5rem]/search:inline-flex @[13rem]/search:hidden @[16.5rem]/search:inline-flex"
+          />
+        </span>
       ) : null}
     </button>
   );

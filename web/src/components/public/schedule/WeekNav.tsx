@@ -90,7 +90,8 @@ export function WeekNav({ value, onChange, today, hotkeys = false, returnLink = 
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
-              aria-label={`Обрати тиждень. Зараз: ${isCurrent ? 'цей тиждень, ' : ''}${formatDateRange(week.from, week.to)}`}
+              // назва починається з видимих дат (WCAG 2.5.3): голосом кнопку кличуть тим, що на ній написано
+              aria-label={`${compact ? shortRange(week.from, week.to) : formatDateRange(week.from, week.to)}${isCurrent ? ', цей тиждень' : ''}. Обрати тиждень`}
               className={cn('min-w-0 text-primary', compact ? 'px-1.5' : 'px-2.5')}
             >
               <span className="truncate font-[650] figures">{compact ? shortRange(week.from, week.to) : formatDateRange(week.from, week.to)}</span>

@@ -49,4 +49,21 @@ describe('ChangesList', () => {
     expect(replacement).toHaveTextContent('Замість: ФК, Феліксов');
     expect(screen.getByRole('link', { name: /1ВЕ/ })).toBeInTheDocument();
   });
+
+  it('перенесена пара — та сама підказка в обох рядках; зміна аудиторії — заняття і «~~ауд. 406~~ 404», як на сторінці групи', () => {
+    const withLesson = {
+      ...g1ve,
+      items: g1ve.items.map((row) =>
+        row.rowType === 'ROOM_CHANGE' ? { ...row, from: { discipline: 'БіЕ', teacher: 'Кучер' }, previousRoom: '406' } : row,
+      ),
+    };
+    const { container } = renderWithProviders(<ChangesList groups={[withLesson]} date="2026-11-19" myGroupIds={new Set()} mainOrderNumber={63} />);
+    const [placed, vacated, room] = [...container.querySelectorAll('ol > li')] as [HTMLElement, HTMLElement, HTMLElement];
+    expect(placed).toHaveTextContent('перенесено з 2-ї пари');
+    expect(vacated).toHaveTextContent('перенесено на 1-шу пару');
+    expect(room).toHaveTextContent('БіЕ, Кучер');
+    expect(room).not.toHaveTextContent('Пара за розкладом');
+    expect(room.querySelector('s')).toHaveTextContent(/^ауд.\s406$/);
+    expect(room).toHaveTextContent(/Замість ауд.\s406\s?тепер 404/);
+  });
 });

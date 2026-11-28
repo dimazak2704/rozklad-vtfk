@@ -10,7 +10,6 @@ import {
   addDays,
   formatDayMonth,
   formatDayMonthShort,
-  formatWeekdayDate,
   isoFromLocalDate,
   isoWeekday,
   isWeekend,
@@ -100,7 +99,6 @@ export function DateNav({
             variant="quiet"
             size={size}
             static
-            aria-label={`Обрати дату. Зараз: ${formatWeekdayDate(value)}`}
             // на вузькій панелі мітка скорочується (truncate), а не виштовхує сусідів за край екрана
             className="min-w-0 shrink px-2 text-primary sm:min-w-[8.25rem]"
           >
@@ -110,6 +108,8 @@ export function DateNav({
               <span className={cn('max-[399px]:hidden', relative && 'sm:font-[450] sm:text-secondary')}>{shortLabel}</span>
               <span className="min-[400px]:hidden">{compactLabel}</span>
             </span>
+            {/* назва кнопки — те, що на ній видно на цій ширині (WCAG 2.5.3), і далі — що вона робить */}
+            <span className="sr-only">. Обрати дату</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent width="auto" align="center" className="p-2">

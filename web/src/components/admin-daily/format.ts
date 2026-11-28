@@ -2,6 +2,7 @@
 import type { AbsenceDto, AbsenceSource, ChangeDto, IsoDate, ReasonCode } from '@/api/types';
 import { formatDateRange, formatInstantTime, parseIsoDate, todayInKyiv } from '@/lib/date';
 import { countLabel, PAIR_FORMS_GEN, REASON_CODE_HINT } from '@/lib/labels';
+import { pairOrdinalGenitive } from '@/lib/ordinal';
 import { gridTeacherName, type TeacherLabel } from './teacher-label';
 
 const PAIRS_FORMS = ['пара', 'пари', 'пар'] as const;
@@ -57,19 +58,28 @@ export function pairsCountGenitive(count: number): string {
   return countLabel(count, PAIR_FORMS_GEN);
 }
 
+/** «Інша аудиторія: 406 → 404»; без старої — «Інша аудиторія: 404». */
+function roomChangeText(before: string | undefined, after: string | undefined): string {
+  if (!after) return 'Інша аудиторія';
+  return before && before !== after ? `Інша аудиторія: ${before} → ${after}` : `Інша аудиторія: ${after}`;
+}
+
 /** «СТП — Кренцін» без висячих тире, коли якоїсь частини немає. */
 function partiesText(side: ChangeDto['new'], name: TeacherLabel): string {
   return [side.discipline?.shortName, side.teacher ? name(side.teacher) : null].filter(Boolean).join(' — ') || 'без змін у складі';
 }
 
-/** Що буде з парою після рішення: «Михальчук О. І.», «Пари не буде», «Переставлено 4 пару: …». */
+/**
+ * Що буде з парою після рішення: «Михальчук О. І.», «Пари не буде», «Перенесено з 4-ї пари: …»,
+ * «Інша аудиторія: 406 → 404». Ті самі слова, що на сторінці групи й на «Замінах».
+ */
 export function decisionSummary(change: ChangeDto, name: TeacherLabel = gridTeacherName): string {
   switch (change.kind) {
     case 'CANCEL':
       return 'Пари не буде';
     case 'SWAP':
       // swapFromPair — пара, з якої переставили заняття на звільнене місце (pairFrom)
-      return `${change.swapFromPair !== null ? `Переставлено ${change.swapFromPair}${NBSP}пару` : 'Перестановка'}: ${partiesText(change.new, name)}`;
+      return `${change.swapFromPair !== null ? `Перенесено з ${pairOrdinalGenitive(change.swapFromPair)}${NBSP}пари` : 'Перенесено'}: ${partiesText(change.new, name)}`;
     case 'REPLACE_DISCIPLINE':
       return partiesText(change.new, name);
     case 'MERGE_SUBGROUPS':
@@ -77,7 +87,7 @@ export function decisionSummary(change: ChangeDto, name: TeacherLabel = gridTeac
     case 'ADDITIONAL':
       return `Додаткова пара: ${partiesText(change.new, name)}`;
     case 'ROOM_CHANGE':
-      return change.new.room ? `Аудиторія ${change.new.room.name}` : 'Заміна аудиторії';
+      return roomChangeText(change.original.room?.name, change.new.room?.name);
     case 'REPLACE_TEACHER':
     case 'BLOCK':
     case 'DISCIPLINE_FINISHED':

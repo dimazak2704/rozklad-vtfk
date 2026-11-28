@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 import { lineAttr } from '@/lib/discipline-color';
 import { LESSON_VIEW_KIND_LABEL } from '@/lib/labels';
 import { pairOrdinalGenitive } from '@/lib/ordinal';
-import { LESSON_TONE, lessonCounterpart, lessonSummary, lessonTime, roomLabel, type Perspective } from '@/lib/schedule';
+import { LESSON_TONE, lessonCounterpart, lessonSummary, lessonTime, PROVISIONAL_TEXT, roomLabel, type Perspective, type ProvisionalState } from '@/lib/schedule';
 import { formatTeacherName } from '@/lib/teacher-name';
 import { Drawer, DrawerContent, DrawerTrigger } from '../ui/Drawer';
 import { HoverDetails } from '../ui/HoverCard';
@@ -33,6 +33,11 @@ export interface LessonCellProps {
    * потім проявляються тло й слово стану. Без руху — одразу кінцевий стан.
    */
   arrived?: boolean;
+  /**
+   * Заміна ще не остаточна (кабінет викладача): запит чекає відповіді чи розпорядження не опубліковане.
+   * Замість тла заміни — пунктирний контур її кольору і слово стану, що це ще не факт.
+   */
+  provisional?: ProvisionalState | undefined;
   className?: string;
 }
 
@@ -108,6 +113,7 @@ function LessonCellView({
   past = false,
   showTime = false,
   arrived = false,
+  provisional,
   className,
 }: LessonCellProps) {
   const phone = usePhoneLayout();
@@ -131,7 +137,11 @@ function LessonCellView({
   const isList = variant === 'list';
   // слово стану завжди видно (DESIGN §3.3), «Інша аудиторія» теж: інакше зміну аудиторії лічильник «N заміни»
   // рахує, а клітинка її не називає
-  const stateWord = tone === 'change' || tone === 'cancel' || tone === 'add' || tone === 'room' ? LESSON_VIEW_KIND_LABEL[lesson.kind] : null;
+  const stateWord = provisional
+    ? PROVISIONAL_TEXT[provisional].word
+    : tone === 'change' || tone === 'cancel' || tone === 'add' || tone === 'room'
+      ? LESSON_VIEW_KIND_LABEL[lesson.kind]
+      : null;
   const title = lesson.discipline.name || lesson.discipline.shortName;
   // минула пара сьогодні «осідає»: назва вторинним чорнилом (контраст лишається AA), крапка на 40 %
   const titleTone = cn('anim-settle', past || cancelled ? 'text-secondary' : 'text-primary', cancelled && STRUCK_CANCEL);
@@ -154,7 +164,6 @@ function LessonCellView({
     >
       <button
         type="button"
-        aria-label={`${lessonSummary(lesson, perspective, names)}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
         className={cn(
           'lesson-cell group/lesson relative isolate flex w-full min-w-0 flex-col items-stretch gap-1 text-start',
           // тло стану — псевдоелемент з відступом 4 px (у сітці) і радіусом 10
@@ -162,15 +171,17 @@ function LessonCellView({
           'rounded-cell px-3.5 py-3',
           isList ? 'before:inset-0' : '@container/cell h-full before:inset-1',
           'focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-          TONE_SURFACE[tone],
-          arrived && (tone === 'change' || tone === 'add') && 'anim-wash-in',
+          // ще не остаточна заміна — без тла опублікованої, лише пунктирний контур кольору заміни
+          provisional ? TONE_SURFACE.regular : TONE_SURFACE[tone],
+          arrived && !provisional && (tone === 'change' || tone === 'add') && 'anim-wash-in',
+          provisional && 'after:pointer-events-none after:absolute after:inset-1 after:rounded-cell after:border after:border-dashed after:border-[var(--border-color-change)]',
           // перенесена пара — пунктирний контур замість п'ятого кольору
           moved && 'after:pointer-events-none after:absolute after:inset-1 after:rounded-cell after:border after:border-dashed after:border-control',
           className,
         )}
       >
         {stateWord ? (
-          <span className={cn('text-meta font-semibold', STATE_WORD[tone as keyof typeof STATE_WORD], arrived && 'anim-word-in')}>
+          <span className={cn('text-meta font-semibold', provisional ? 'text-change' : STATE_WORD[tone as keyof typeof STATE_WORD], arrived && 'anim-word-in')}>
             {stateWord}
           </span>
         ) : null}
@@ -191,8 +202,8 @@ function LessonCellView({
               <span className={cn('min-w-0 truncate text-cell font-[650] @[12.5rem]/cell:hidden', titleTone)}>
                 {lesson.discipline.shortName}
               </span>
+              {/* обидві назви — у доступній назві кнопки: у браузері видно (і читається) лише одна з них */}
               <span
-                aria-hidden="true"
                 data-lesson-title=""
                 className={cn('hidden min-w-0 text-cell font-[650] text-pretty wrap-break-word @[12.5rem]/cell:line-clamp-2', titleTone)}
               >
@@ -275,6 +286,13 @@ function LessonCellView({
         ) : null}
 
         {showTime && lessonTime(lesson) ? <span className="ps-4 text-meta text-muted figures">{lessonTime(lesson)}</span> : null}
+        {/*
+          Назва кнопки починається з того, що видно (WCAG 2.5.3): голосом її викликають словами з клітинки.
+          Решту — пару, час, повні імена, причину — читач екрана чує одразу після видимого тексту.
+        */}
+        <span className="sr-only">
+          {`. ${lessonSummary(lesson, perspective, names)}${provisional ? ` ${PROVISIONAL_TEXT[provisional].sentence}` : ''}${now ? ' Іде зараз.' : ''}${past ? ' Пара завершилась.' : ''}`}
+        </span>
       </button>
     </DetailsTrigger>
   );

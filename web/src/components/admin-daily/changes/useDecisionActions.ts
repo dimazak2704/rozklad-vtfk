@@ -41,7 +41,7 @@ export function decidedMessage(created: ChangeDto, where: string, name: TeacherL
   const who = created.new.teacher ? name(created.new.teacher) : (created.new.discipline?.shortName ?? 'зміну');
   const what = created.kind === 'MERGE_SUBGROUPS' ? `${who} на обидві підгрупи` : who;
   if (created.status === 'PENDING_CONFIRMATION') return `Надіслано прохання в Telegram: ${what} — ${where}`;
-  if (created.kind === 'SWAP') return `Переставлено пари — ${where}`;
+  if (created.kind === 'SWAP') return `Перенесено пару — ${where}`;
   return `Призначено ${what} — ${where}`;
 }
 

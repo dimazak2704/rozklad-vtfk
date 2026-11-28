@@ -217,3 +217,15 @@ export function lessonSummary(lesson: LessonView, perspective: Perspective = 'gr
   if (lesson.online) parts.push('Дистанційно.');
   return parts.join(' ');
 }
+
+/**
+ * Заміна в розкладі викладача, що ще не остаточна: `pending` — запит чекає його відповіді, `unpublished` — погоджена,
+ * але розпорядження з нею ще не опубліковане. Опублікована заміна — без цієї позначки.
+ */
+export type ProvisionalState = 'pending' | 'unpublished';
+
+/** Слово стану над назвою й речення для читача екрана. */
+export const PROVISIONAL_TEXT: Record<ProvisionalState, { word: string; sentence: string }> = {
+  pending: { word: 'Чекає відповіді', sentence: 'Запит на заміну чекає вашої відповіді.' },
+  unpublished: { word: 'Заміна · не опубліковано', sentence: 'Розпорядження з цією заміною ще не опубліковане.' },
+};

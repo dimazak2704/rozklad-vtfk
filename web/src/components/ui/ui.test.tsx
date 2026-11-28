@@ -6,6 +6,7 @@ import { ApiError } from '@/api/errors';
 import { confirm } from '@/stores/confirm';
 import { renderWithProviders } from '@/test/render';
 import { ConfirmDialogHost } from './ConfirmDialog';
+import { DateNav } from './DateNav';
 import { DataTable, type DataTableColumn } from './DataTable';
 import { ErrorState } from './ErrorState';
 import { Field } from './Field';
@@ -166,3 +167,11 @@ describe('ErrorState', () => {
   });
 });
 
+describe('DateNav', () => {
+  it('назва кнопки календаря — видима дата, а далі — що кнопка робить (WCAG 2.5.3)', () => {
+    renderWithProviders(<DateNav value="2026-11-19" today="2026-11-19" onChange={() => undefined} />);
+    // у jsdom немає CSS: у назві всі варіанти мітки (кожна ширина показує один), і всі вони — до підказки
+    const button = screen.getByRole('button', { name: /^Сьогодні ·\s?чт, 19\sлистопада.*\. Обрати дату$/ });
+    expect(button).not.toHaveAttribute('aria-label');
+  });
+});
