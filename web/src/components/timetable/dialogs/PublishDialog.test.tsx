@@ -23,7 +23,7 @@ function version(hardConflicts: number): TimetableVersionDto {
     hardConflicts,
     softWarnings: 0,
     metrics: null,
-  } as TimetableVersionDto;
+  };
 }
 
 function renderDialog(hardConflicts: number) {
