@@ -2,6 +2,7 @@ import { Pencil, UserRoundCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AbsenceDto, ChangeDto, Uuid } from '@/api/types';
 import { HoverCard, HoverCardContent, HoverCardTrigger, MoreMenu } from '@/components/ui';
+import type { RegisterRef } from '@/hooks/useElementRegistry';
 import { LessonDetails } from '@/components/schedule';
 import { cn } from '@/lib/cn';
 import { formatWeekdayDate } from '@/lib/date';
@@ -92,9 +93,11 @@ interface LessonRowProps {
   pulsing: boolean;
   onSelect: (entry: LessonEntry) => void;
   name: TeacherLabel;
+  /** Ref кнопки пари: на неї J/K переводять фокус. */
+  buttonRef?: ReturnType<RegisterRef>;
 }
 
-function LessonRow({ entry, selected, pulsing, onSelect, name }: LessonRowProps) {
+function LessonRow({ entry, selected, pulsing, onSelect, name, buttonRef }: LessonRowProps) {
   const { lesson, date } = entry.item;
   const subgroup = lesson.subgroup > 0 ? `${lesson.subgroup} п/г` : null;
   const audit = entry.state === 'declined' ? declinedLine(entry.change, name) : null;
@@ -104,6 +107,7 @@ function LessonRow({ entry, selected, pulsing, onSelect, name }: LessonRowProps)
         <HoverCardTrigger asChild>
           <button
             type="button"
+            ref={buttonRef}
             id={lessonButtonId(entry)}
             aria-current={selected ? 'true' : undefined}
             onClick={() => onSelect(entry)}
@@ -157,10 +161,12 @@ interface LessonListProps {
   onCancelAbsence: (absence: AbsenceDto) => void;
   /** Рядок над заголовком: «‹ Усі відсутні» на телефоні. */
   before?: ReactNode;
+  /** Реєстр кнопок пар (ключ — `lessonButtonId`), щоб J/K переводили на них фокус. */
+  registerLesson?: RegisterRef;
 }
 
 /** Середня колонка: пари обраного відсутнього (за датою), кожна зі станом рішення одним рядком. */
-export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, onEditAbsence, onCancelAbsence, before }: LessonListProps) {
+export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, onEditAbsence, onCancelAbsence, before, registerLesson }: LessonListProps) {
   const { absence } = group;
   const headingId = `absence-${absence.id}`;
   const name = useTeacherLabel();
@@ -206,6 +212,7 @@ export function LessonList({ group, showDates, selectedKey, pulsing, onSelect, o
                   pulsing={pulsing.has(entry.item.lesson.id)}
                   onSelect={onSelect}
                   name={name}
+                  buttonRef={registerLesson?.(lessonButtonId(entry))}
                 />
               ))}
             </ul>

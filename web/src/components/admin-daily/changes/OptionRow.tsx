@@ -1,5 +1,5 @@
 import { DoorOpen } from 'lucide-react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode, RefCallback } from 'react';
 import type { ChangeOption } from '@/api/admin-daily';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -55,6 +55,8 @@ export interface OptionRowProps {
   option: ChangeOption;
   /** id кнопки вибору: на неї переводять фокус клавіші 1–9. */
   selectId: string;
+  /** Ref кнопки вибору: на неї клавіші 1–9 переводять фокус. */
+  selectRef?: RefCallback<HTMLButtonElement>;
   /** Клавіша вибору (1–9), якщо є. */
   hotkey: number | null;
   selected: boolean;
@@ -79,6 +81,7 @@ export interface OptionRowProps {
 export function OptionRow({
   option,
   selectId,
+  selectRef,
   hotkey,
   selected,
   best = false,
@@ -115,6 +118,7 @@ export function OptionRow({
     >
       <button
         type="button"
+        ref={selectRef}
         id={selectId}
         aria-pressed={selected}
         aria-keyshortcuts={hotkey ? String(hotkey) : undefined}
