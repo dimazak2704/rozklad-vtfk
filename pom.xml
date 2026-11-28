@@ -43,7 +43,7 @@
         <spring-modulith.version>2.1.2</spring-modulith.version>
         <timefold-solver.version>2.8.0</timefold-solver.version>
         <springdoc.version>3.2.0</springdoc.version>
-        <anthropic-java.version>3.8.0</anthropic-java.version>
+        <anthropic-java.version>3.10.0</anthropic-java.version>
         <telegrambots.version>10.3.0</telegrambots.version>
         <apache-poi.version>6.0.0</apache-poi.version>
         <apache-pdfbox.version>3.0.8</apache-pdfbox.version>
