@@ -93,3 +93,19 @@ export const routeTree: RouteObject[] = [
 ];
 
 export const router = createBrowserRouter(routeTree);
+
+/**
+ * Чекає, доки роутер завантажить код першої сторінки (ліниві маршрути) і буде готовий її показати. До того
+ * на екрані лишається статична оболонка з index.html: якби React почав рендер раніше, він замінив би її
+ * порожнім силуетом (hydrateFallbackElement), і людина бачила б мигання «шапка — порожньо — сторінка».
+ */
+export function whenRouterReady(target: Pick<typeof router, 'state' | 'subscribe'> = router): Promise<void> {
+  if (target.state.initialized) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = target.subscribe((state) => {
+      if (!state.initialized) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}

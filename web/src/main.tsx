@@ -9,6 +9,7 @@ import { prefetchPublicMeta } from './api/meta';
 import { dropAuthorizedCopies } from './api/public-api-cache';
 import { queryClient } from './api/queryClient';
 import { App } from './app/App';
+import { whenRouterReady } from './app/router';
 
 /**
  * Сайт оновили, поки вкладка була відкрита: частини коду з новими хешами є, старих уже немає, і перехід на
@@ -45,20 +46,27 @@ async function startMocksIfEnabled(): Promise<void> {
   }
 }
 
-startMocksIfEnabled().then(
-  () => {
-    // meta (годинник стенда, семестр) потрібна кожній сторінці: просимо її паралельно з кодом сторінки,
-    // після мок-API, щоб у dev запит не пішов повз нього
-    void prefetchPublicMeta(queryClient);
-    createRoot(root).render(
-      <StrictMode>
-        <App />
-      </StrictMode>,
-    );
-  },
-  (error: unknown) => {
+/**
+ * Старт: мок-API (лише dev), запит meta паралельно з кодом сторінки (meta потрібна кожній сторінці; після
+ * мок-API, щоб у dev запит не пішов повз нього), далі рендер, щойно роутер має код першої сторінки. Доти
+ * видно статичну оболонку з index.html, і React замінює її одразу готовою сторінкою.
+ */
+async function start(): Promise<void> {
+  try {
+    await startMocksIfEnabled();
+  } catch (error: unknown) {
     // без мок-API сторінки пішли б до справжнього бекенду — кажемо про це прямо, а не мовчки
     console.error('Не вдалося запустити мок-API (MSW)', error);
     root.textContent = 'Не вдалося запустити мок-API (MSW). Подробиці — у консолі браузера.';
-  },
-);
+    return;
+  }
+  void prefetchPublicMeta(queryClient);
+  await whenRouterReady();
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+void start();

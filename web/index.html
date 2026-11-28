@@ -39,7 +39,48 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Оболонка до старту застосунку: шапка зі знаком і силует сторінки малюються одразу з HTML і CSS, ще до
+      завантаження коду. Застосунок замінює її повністю першим рендером, коли код першої сторінки вже є
+      (main.tsx чекає на роутер), тож порожнього екрана між оболонкою і сторінкою немає. Класи — ті самі,
+      що в PublicHeader і Wordmark: знак стоїть на тому ж місці.
+    -->
+    <div id="root">
+      <div class="flex min-h-dvh flex-col" aria-busy="true">
+        <header class="sticky top-0 z-30 border-b border-transparent bg-canvas">
+          <div
+            class="mx-auto flex h-(--header-height) w-full max-w-[calc(76rem+2*var(--page-gutter))] items-center gap-2 px-(--page-gutter)"
+          >
+            <span class="-ms-1 inline-flex min-h-10 shrink-0 items-center gap-2.5 px-1">
+              <svg
+                viewBox="0 0 26 26"
+                width="26"
+                height="26"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+                class="shrink-0 text-[var(--fill-brand)]"
+              >
+                <circle cx="13" cy="13" r="11.6" />
+                <circle cx="13" cy="8.9" r="5.2" />
+                <path d="M13 4.2C12.5 10.4 11 16 7.2 21.6 10.6 19.5 15.4 19.5 18.8 21.6 15 16 13.5 10.4 13 4.2Z" />
+              </svg>
+              <span class="text-[0.9375rem] leading-5 font-bold tracking-[-0.005em] whitespace-nowrap text-primary">
+                Розклад ВТФК
+              </span>
+            </span>
+          </div>
+        </header>
+        <main
+          class="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-[calc(76rem+2*var(--page-gutter))] flex-col gap-4 px-(--page-gutter) pt-6 pb-12 lg:pt-10"
+        >
+          <span class="block h-8 w-48 rounded-tag bg-skeleton motion-safe:animate-shimmer"></span>
+          <span class="block h-5 w-64 max-w-full rounded-tag bg-skeleton motion-safe:animate-shimmer"></span>
+        </main>
+      </div>
+    </div>
     <noscript>Для роботи розкладу потрібен увімкнений JavaScript.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
